@@ -12,7 +12,7 @@ area_keywords:
   - recovery
   - recovery_policies
   - tests/unit
-status: active
+status: cancelled
 created_at: 2026-05-13T23:59:00Z
 ---
 

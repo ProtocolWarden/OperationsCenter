@@ -3,6 +3,8 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-17 — docs: mark recovery-subsystem-test-coverage spec cancelled
+
 ## 2026-05-15 — board_unblock: pre-dispatch memory check
 
 Added memory guard to board_unblock.py: skip all rules if MemAvailable < 1.7GB (pre-OOM).
