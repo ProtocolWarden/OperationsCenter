@@ -6,7 +6,7 @@ The loop is the operator for all conditions handled here.  Do not add "operator 
 required" notes for patterns this tool covers.  When a new stuck pattern emerges, add a
 rule here rather than logging it and waiting.
 
-Applies four rules on every run:
+Applies five rules on every run:
 
   Rule 1 — DEAD_REMEDIATION_CANCEL
     Tasks with label "dead-remediation" OR (executor-signal: sigkill + retry-count ≥ 3)
@@ -28,6 +28,13 @@ Applies four rules on every run:
     (blocked-by: label) is either absent or already in a terminal state → move to
     Ready for AI.  These tasks have operator approval to proceed; keeping them Blocked
     when the dependency is gone is pure queue waste.
+
+  Rule 5 — STALE_IN_REVIEW
+    Tasks in "In Review" state for longer than --stale-blocked-hours (default 4h) →
+    move to Backlog.  Catches tasks whose PR was never created, was closed without
+    merging, or whose reviewer state was set prematurely.  The pr_review_watcher only
+    processes open PRs it discovers on GitHub; orphaned In Review tasks are invisible
+    to it and will never self-resolve.
 
 Usage:
     python -m operations_center.entrypoints.maintenance.board_unblock \\
@@ -243,6 +250,19 @@ def _apply_rules(
                         "to_state": "Ready for AI",
                         "reason": reason,
                     })
+
+        # Rule 5 — orphaned In Review tasks (pr_review_watcher is PR-driven, not task-driven)
+        if state_lower == "in review":
+            updated_at = _parse_updated_at(issue)
+            if updated_at and (now - updated_at) > timedelta(hours=stale_blocked_hours):
+                actions.append({
+                    "task_id": task_id,
+                    "title": title,
+                    "rule": "STALE_IN_REVIEW",
+                    "from_state": state,
+                    "to_state": "Backlog",
+                    "reason": f"stale in In Review >{stale_blocked_hours}h — PR likely never created or already closed",
+                })
 
     return actions
 

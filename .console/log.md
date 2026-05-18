@@ -3,6 +3,18 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-18 — board_unblock: Rule 5 STALE_IN_REVIEW for orphaned In Review tasks
+
+Added Rule 5 to board_unblock.py: tasks in "In Review" state for >stale_blocked_hours
+(default 4h) are moved to Backlog. Catches tasks whose PR was never created, was closed
+without merging, or whose state was set prematurely.
+
+Root cause of pattern: pr_review_watcher is PR-driven (scans GitHub for open PRs, not
+Plane for In Review tasks) — orphaned In Review tasks are invisible to it permanently.
+
+Applied immediately to 4 orphaned In Review tasks (#12, #13, #15, #16) that had been
+stuck with no open/closed PRs, no comments, and no branches on GitHub.
+
 ## 2026-05-18 — board_unblock: fix all four rule label mismatches + Rule 3 covers goal tasks
 
 All four board_unblock rules were non-functional because label constants used wrong format.
