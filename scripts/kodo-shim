@@ -1,4 +1,6 @@
 #!/home/dev/.local/share/uv/tools/kodo/bin/python
+# Uses the ProtocolWarden/kodo fork (dev branch), not upstream ikamensh/kodo.
+# Install: uv tool install git+https://github.com/ProtocolWarden/kodo.git@dev --force
 from __future__ import annotations
 
 import sys
@@ -7,6 +9,10 @@ from kodo.cli import main
 from kodo.orchestrators.claude_code import ClaudeCodeOrchestrator
 
 
+# Compatibility shim: early upstream versions of ClaudeCodeOrchestrator.cycle
+# did not accept a `coach` kwarg.  The ProtocolWarden fork fixes this properly
+# (PR #49), so this patch is redundant but kept for safety against regressions
+# if the shim is ever run against an upstream build.
 _original_cycle = ClaudeCodeOrchestrator.cycle
 
 

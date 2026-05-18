@@ -44,9 +44,22 @@ source .env.operations-center.local
 
 ### Kodo
 
-Kodo ([github.com/ikamensh/kodo](https://github.com/ikamensh/kodo)) is the multi-agent coding engine OperationsCenter uses for task execution.
+Kodo is the multi-agent coding engine OperationsCenter uses for task execution.
+This installation uses the **ProtocolWarden fork** (`github.com/ProtocolWarden/kodo`,
+`dev` branch) rather than the upstream (`github.com/ikamensh/kodo`).
 
-- install/verify `kodo`
+The fork contains fixes that are not yet in upstream releases:
+- `--full-auto → -a never` for the Codex orchestrator (codex dropped `--full-auto`)
+
+Install command (must use fork, not upstream):
+```bash
+uv tool install git+https://github.com/ProtocolWarden/kodo.git@dev --force
+```
+
+Do **not** run `uv tool install kodo` (installs upstream from PyPI).  The setup script
+must be updated to use the fork URL when kodo is missing or needs to be reinstalled.
+
+- install/verify `kodo` (from ProtocolWarden fork, `dev` branch)
 - configure orchestrator defaults
 - persist local execution settings
 
@@ -88,10 +101,15 @@ Setup:
 
 - checks whether `kodo` is on `PATH`
 - installs `uv` if needed
-- installs Kodo if missing
+- installs Kodo from the **ProtocolWarden fork** (`dev` branch) if missing:
+  `uv tool install git+https://github.com/ProtocolWarden/kodo.git@dev --force`
 - verifies the install with `kodo --help`
 
 Setup is intended to be idempotent: it does not reinstall Kodo when the current install already works.
+
+> **Important:** The setup script's kodo install logic must use the fork URL.
+> If the script currently installs from PyPI or upstream GitHub, update it.
+> See `scripts/kodo-shim` for the runtime shim that wraps the installed kodo binary.
 
 ## Advanced Mode
 
