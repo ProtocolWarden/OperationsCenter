@@ -3,6 +3,21 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-18 — Operator cycle: unblocked frozen board, installed kodo, fixed env + redirect bugs
+
+**Status before**: Board frozen for 497+ cycles. All watchers crash-looping.
+**Root causes fixed**:
+1. Env file not re-sourced on watcher restart → `KeyError: 'PLANE_API_TOKEN'` crash-loop. Fixed in commit 4bd89a2 (added `set -a; source ENV_PATH; set +a` inside while-loop). Watchers restarted to pick up fix.
+2. kodo not installed → `No such file or directory: 'scripts/kodo-shim'`. Fixed: installed uv + kodo 0.4.272 via `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 uv tool install git+https://github.com/ikamensh/kodo`.
+3. GITHUB_TOKEN empty → reviewer watcher failing with "no GitHub token". Fixed `.env.operations-center.local`: `gh auth token 2>/dev/null || awk ...` fallback.
+4. GitHub 301 redirects for repos moved from Velascat/ to ProtocolWarden/ → reviewer watcher silent failures. Fixed `github_pr.py`: added `kwargs.setdefault("follow_redirects", True)` to `_request()` (commit 0eb2f21).
+
+**Board actions**: Cancelled dead-remediation task #3. Moved 4 stale Blocked improve tasks (#27, #26, #18, #17) → Backlog. Re-queued kodo-failed improve task #42 → Backlog.
+
+**Audits all clean**: custodian-sweep (0), ghost-audit (0), flow-audit (0 gaps), triage-scan (0), board-unblock (0), graph-doctor (OK). 15 golden tests pass.
+
+**Current board**: Watchers active, improve watcher processing task b67bc0e0 ("Fix lint regression"), reviewer following redirects cleanly. System ready for autonomous operation.
+
 ## 2026-05-17 — docs: mark recovery-subsystem-test-coverage spec cancelled
 
 ## 2026-05-15 — board_unblock: pre-dispatch memory check
