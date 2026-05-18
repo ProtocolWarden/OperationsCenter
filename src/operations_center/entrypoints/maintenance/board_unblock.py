@@ -9,21 +9,22 @@ rule here rather than logging it and waiting.
 Applies four rules on every run:
 
   Rule 1 — DEAD_REMEDIATION_CANCEL
-    Tasks with label dead-remediation OR (executor-signal:SIGKILL + retry-count ≥ 3)
+    Tasks with label "dead-remediation" OR (executor-signal: sigkill + retry-count ≥ 3)
     that are not already in a terminal state → transition to Cancelled.
 
   Rule 2 — INVESTIGATE_DEPRIORITISE
-    Tasks with label task-kind:investigate in Ready for AI → move to Backlog.
+    Tasks with label "task-kind: investigate" in Ready for AI → move to Backlog.
     (No board_worker consumer exists for this task-kind; they starve R4AI.)
 
   Rule 3 — IMPROVE_UNBLOCK
-    Tasks with label improve (or task type improve) in Blocked state:
+    Tasks with label "task-kind: improve" or "task-kind: goal" in Blocked state,
+    WITHOUT "self-modify: approved" (those are handled by Rule 4):
       - If their blocker (blocked-by: label) is Cancelled/Done → move to Backlog.
       - OR if they have been Blocked for longer than --stale-blocked-hours (default 4h)
         with no executor progress → move to Backlog.
 
   Rule 4 — SELF_MODIFY_REQUEUE
-    Tasks with label self-modify:approved in Blocked state whose blocking dependency
+    Tasks with label "self-modify: approved" in Blocked state whose blocking dependency
     (blocked-by: label) is either absent or already in a terminal state → move to
     Ready for AI.  These tasks have operator approval to proceed; keeping them Blocked
     when the dependency is gone is pure queue waste.
@@ -58,10 +59,11 @@ def _mem_available_gb() -> float:
         pass
     return float("inf")
 _DEAD_REMEDIATION_LABEL = "dead-remediation"
-_INVESTIGATE_LABEL = "task-kind:investigate"
-_IMPROVE_LABEL = "improve"
-_SELF_MODIFY_APPROVED_LABEL = "self-modify:approved"
-_SIGKILL_SIGNAL_PREFIX = "executor-signal:sigkill"
+_INVESTIGATE_LABEL = "task-kind: investigate"
+_IMPROVE_LABEL = "task-kind: improve"
+_GOAL_LABEL = "task-kind: goal"
+_SELF_MODIFY_APPROVED_LABEL = "self-modify: approved"
+_SIGKILL_SIGNAL_PREFIX = "executor-signal:"  # value checked separately
 _RETRY_COUNT_PREFIX = "retry-count:"
 _BLOCKED_BY_PREFIX = "blocked-by:"
 
@@ -152,8 +154,9 @@ def _apply_rules(
         # Rule 1 — dead-remediation cancel
         if not _is_terminal(state):
             is_dead = _has_label(labels, _DEAD_REMEDIATION_LABEL)
+            executor_signal_val = _label_value(labels, _SIGKILL_SIGNAL_PREFIX) or ""
             is_sigkill_exhausted = (
-                _has_label_prefix(labels, _SIGKILL_SIGNAL_PREFIX)
+                "sigkill" in executor_signal_val.lower()
                 and _retry_count(labels) >= 3
             )
             if is_dead or is_sigkill_exhausted:
@@ -184,8 +187,9 @@ def _apply_rules(
             })
             continue
 
-        # Rule 3 — improve tasks stuck in Blocked
-        if state_lower == "blocked" and _has_label(labels, _IMPROVE_LABEL):
+        # Rule 3 — improve/goal tasks stuck in Blocked (no self-modify gate)
+        is_workable = _has_label(labels, _IMPROVE_LABEL) or _has_label(labels, _GOAL_LABEL)
+        if state_lower == "blocked" and is_workable and not _has_label(labels, _SELF_MODIFY_APPROVED_LABEL):
             blocker_id = _blocker_task_id(labels)
             if blocker_id and _is_terminal(id_state.get(blocker_id, "")):
                 actions.append({

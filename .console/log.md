@@ -3,6 +3,25 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-18 — board_unblock: fix all four rule label mismatches + Rule 3 covers goal tasks
+
+All four board_unblock rules were non-functional because label constants used wrong format.
+Plane labels follow `"key: value"` (with space) but constants used `"key:value"` or bare `"improve"`.
+Fixed constants:
+- `_IMPROVE_LABEL`: `"improve"` → `"task-kind: improve"`
+- `_INVESTIGATE_LABEL`: `"task-kind:investigate"` → `"task-kind: investigate"`
+- `_SELF_MODIFY_APPROVED_LABEL`: `"self-modify:approved"` → `"self-modify: approved"`
+- `_SIGKILL_SIGNAL_PREFIX`: was prefix-match on `"executor-signal:sigkill"`, now uses `_label_value` + substring check
+
+Rule 3 extended to also cover `task-kind: goal` tasks (not just improve). Self-modify:approved
+tasks excluded from Rule 3 (handled by Rule 4 which requeues to R4AI, not Backlog).
+
+Applied immediate fix: moved 5 self-modify:approved improve tasks Blocked→R4AI, cancelled
+#29 (investigate, root cause identified), moved 4 [Impl] goal tasks Blocked→Backlog.
+
+Also: `config/operations_center.local.yaml` resource_gate raised `max_per_hour: 2→10`,
+`max_per_day: 30→50` (local config, not tracked). This was the primary throughput bottleneck.
+
 ## 2026-05-18 — Operator cycle: unblocked frozen board, installed kodo, fixed env + redirect bugs
 
 **Status before**: Board frozen for 497+ cycles. All watchers crash-looping.
