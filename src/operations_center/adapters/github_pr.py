@@ -40,6 +40,7 @@ class GitHubPRClient:
         advance notice before hard throttling kicks in.
         """
         kwargs.setdefault("timeout", 30)
+        kwargs.setdefault("follow_redirects", True)
         resp: httpx.Response | None = None
         for attempt in range(_GH_RATE_LIMIT_MAX_RETRIES + 1):
             resp = httpx.request(method, url, headers=self._headers, **kwargs)
