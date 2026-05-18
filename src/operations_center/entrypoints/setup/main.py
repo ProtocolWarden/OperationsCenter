@@ -197,12 +197,15 @@ def ensure_kodo_installed(binary: str, install_ref: str | None = None) -> None:
             f"[kodo] ERROR: custom kodo binary '{binary}' is not on PATH and automatic install only supports 'kodo'"
         )
     ensure_uv_installed()
-    typer.echo("[kodo] Installing via uv...")
-    target = "git+https://github.com/ikamensh/kodo"
-    if install_ref:
-        target = f"{target}@{install_ref}"
+    typer.echo("[kodo] Installing via uv (ProtocolWarden fork, dev branch)...")
+    # Use the ProtocolWarden fork which contains fixes not in upstream:
+    # - --full-auto replaced with -a never for Codex orchestrator
+    # install_ref overrides the default branch for pinned installs.
+    fork_url = "git+https://github.com/ProtocolWarden/kodo.git"
+    ref = install_ref or "dev"
+    target = f"{fork_url}@{ref}"
     proc = subprocess.run(
-        ["uv", "tool", "install", target],
+        ["uv", "tool", "install", target, "--force"],
         check=False,
         env=os.environ.copy(),
     )
