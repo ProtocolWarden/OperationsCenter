@@ -390,14 +390,15 @@ def _process_issue(issue: dict, role: str, config_path: Path, settings, client) 
 
         plan_cmd = [
             python, "-m", "operations_center.entrypoints.worker.main",
-            "--goal",           goal_text,
-            "--task-type",      _task_type_from_kind(task_kind),
-            "--execution-mode", execution_mode,
-            "--repo-key",       repo_key,
-            "--clone-url",      clone_url,
-            "--base-branch",    base_branch,
-            "--project-id",     settings.plane.project_id,
-            "--task-id",        task_id,
+            "--goal",             goal_text,
+            "--task-type",        _task_type_from_kind(task_kind),
+            "--execution-mode",   execution_mode,
+            "--repo-key",         repo_key,
+            "--clone-url",        clone_url,
+            "--base-branch",      base_branch,
+            "--project-id",       settings.plane.project_id,
+            "--task-id",          task_id,
+            "--timeout-seconds",  str(settings.kodo.timeout_seconds),
         ]
         for lbl in forwarded_labels:
             plan_cmd.extend(["--label", lbl])

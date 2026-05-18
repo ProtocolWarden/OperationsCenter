@@ -49,6 +49,10 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--label", action="append", dest="labels", default=[])
     parser.add_argument("--allowed-path", action="append", dest="allowed_paths", default=[])
     parser.add_argument("--validation-command", action="append", dest="validation_commands", default=[])
+    parser.add_argument(
+        "--timeout-seconds", type=int, default=None,
+        help="Wall-clock timeout for the execution run (overrides PlanningContext default of 300).",
+    )
     return parser
 
 
@@ -58,7 +62,7 @@ def _context_from_args(args: argparse.Namespace) -> PlanningContext:
         return PlanningContext(**payload)
     if not args.goal:
         raise SystemExit("--goal is required when --input is not provided")
-    return PlanningContext(
+    kwargs: dict = dict(
         goal_text=args.goal,
         task_type=args.task_type,
         execution_mode=args.execution_mode,
@@ -73,6 +77,9 @@ def _context_from_args(args: argparse.Namespace) -> PlanningContext:
         allowed_paths=list(args.allowed_paths),
         validation_commands=list(args.validation_commands),
     )
+    if args.timeout_seconds is not None:
+        kwargs["timeout_seconds"] = args.timeout_seconds
+    return PlanningContext(**kwargs)
 
 
 def _bundle_json(bundle) -> dict[str, Any]:
