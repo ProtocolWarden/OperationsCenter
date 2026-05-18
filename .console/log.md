@@ -7348,3 +7348,56 @@ This is a resilience improvement: watchers now recover automatically from tempor
 - Added `private_manifest_path` to `config/operations_center.local.yaml` pointing to existing PrivateManifest at standard path (`/home/dev/Documents/GitHub/PrivateManifest/manifests/videofoundry/private_manifest.yaml`)
 - Created `topology/local_manifest.yaml` in VideoFoundry from the example file (was missing, gitignored, required for graph construction)
 - Graph now builds: 11 nodes / 12 edges, graph_built=True
+
+## 2026-05-18 — watchdog cycle 6: SIGKILL retry-count fix + board healthy
+
+Board state: Cancelled=23, Backlog=21, Done=8, R4AI=5, Blocked=0, Running=0.
+Task #18 (Fix lint regression) got SIGKILL'd again; Rule 4 requeued it to R4AI.
+
+Root cause found and fixed: board_worker never incremented retry-count when
+task failed with SIGKILL, so Rule 1's `retry-count >= 3` check could never fire
+on the same task. The task would loop: Running → Blocked (SIGKILL) → R4AI → Running
+indefinitely. Fix: added `_increment_retry_count()` helper called on SIGKILL failures.
+Backfilled task #18 to retry-count: 2 (had 2 SIGKILL failures prior to fix).
+Commit: 7e5eee5.
+
+All audits clean: board_unblock=0 actions, check_regressions=0 findings.
+Triage scan found 1 priority bump (task #26 proposed→high) but not applied (dry-run only).
+All watchers healthy (goal, test, improve, intake, propose, review, spec).
+R4AI queue: #42, #27, #26, #17, #18 (5 tasks).
+
+## 2026-05-18 — watchdog cycle 7 (session restart): timeout root cause found + fixed
+
+### Root cause: 300s execution timeout killed all kodo runs
+All SIGKILL failures in this session were NOT from OOM. Root cause:
+`PlanningContext.timeout_seconds` defaults to 300s (5 minutes), and
+`worker/main.py` had no `--timeout-seconds` CLI arg. board_worker never
+passed the kodo config value (3600s) to the planner, so every kodo execution
+was killed after 5 minutes during the "Analyzing project and creating plan" phase.
+
+Evidence: every watcher log entry was `status=timed_out category=backend_error
+reason=kodo exited -9` — no OOM evidence in dmesg. Kodo was killed by
+ExecutorRuntime's timeout, not the OS.
+
+Fix:
+- Added `--timeout-seconds` arg to `worker/main.py` + passed to PlanningContext.
+- board_worker now passes `settings.kodo.timeout_seconds` (3600s) when calling planner.
+- Commit: 87fc640
+
+### Secondary fix: retry-count not incremented on SIGKILL (from cycle 6)
+board_worker added `executor-signal: SIGKILL` label but never incremented
+`retry-count:`, so Rule 1 (cancel after ≥3 SIGKILLs) could never fire on
+the same task. Added `_increment_retry_count()` called on SIGKILL failures.
+Commit: 7e5eee5. Backfilled: #18→retry-count:2, #17→retry-count:1.
+
+### Watchers restarted to pick up both fixes
+- Sent SIGTERM to goal(432164), test(432159), improve(432163) python workers
+- Bash restart loops relaunched with new code after 30s
+- TOCTOU race: all 3 watchers saw 0 kodo processes before dispatching →
+  3 concurrent executions (#17, #18, #26 now Running)
+- Memory 24GB available, 3 concurrent kodo processes safe for now
+- Design debt: watcher restart should serialize first-cycle dispatch to avoid TOCTOU
+
+### Board state at cycle end
+Running: 3 (#17, #18, #26), R4AI: 2 (#27, #42), Backlog: 21, Done: 8, Cancelled: 23
+All audits clean. Timeout fix should allow tasks to complete on this attempt.
