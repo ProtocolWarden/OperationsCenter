@@ -36,6 +36,14 @@ Applies five rules on every run:
     processes open PRs it discovers on GitHub; orphaned In Review tasks are invisible
     to it and will never self-resolve.
 
+  Rule 6 — STALE_RUNNING_REQUEUE
+    Tasks in "Running" state for longer than --stale-running-hours (default 2h) →
+    move to Ready for AI.  Catches tasks whose executor died (OOM, SIGKILL, watcher
+    restart) without updating Plane state.  The watcher startup reconciliation only
+    handles tasks Running at cycle 1; tasks that become orphaned mid-session are
+    covered here.  2h threshold is chosen to be > the kodo timeout (1h) so legitimate
+    long-running tasks are not incorrectly recovered.
+
 Usage:
     python -m operations_center.entrypoints.maintenance.board_unblock \\
         --config config/operations_center.local.yaml [--apply] [--stale-blocked-hours 4]
@@ -146,6 +154,7 @@ def _apply_rules(
     *,
     now: datetime,
     stale_blocked_hours: int,
+    stale_running_hours: int,
     mem_available_gb: float,
 ) -> list[dict[str, Any]]:
     id_state = _build_id_state_map(issues)
@@ -264,6 +273,24 @@ def _apply_rules(
                     "reason": f"stale in In Review >{stale_blocked_hours}h — PR likely never created or already closed",
                 })
 
+        # Rule 6 — stale Running tasks whose executor died without updating Plane
+        # Threshold must exceed the kodo timeout (default 3600s = 1h) so legitimate
+        # long-running tasks are not prematurely recovered.
+        if state_lower == "running":
+            updated_at = _parse_updated_at(issue)
+            if updated_at and (now - updated_at) > timedelta(hours=stale_running_hours):
+                actions.append({
+                    "task_id": task_id,
+                    "title": title,
+                    "rule": "STALE_RUNNING_REQUEUE",
+                    "from_state": state,
+                    "to_state": "Ready for AI",
+                    "reason": (
+                        f"stale in Running >{stale_running_hours}h — executor likely died "
+                        f"(OOM/SIGKILL/watcher restart) without updating Plane state"
+                    ),
+                })
+
     return actions
 
 
@@ -274,6 +301,8 @@ def main() -> int:
                         help="apply transitions (default: dry-run)")
     parser.add_argument("--stale-blocked-hours", type=int, default=4,
                         help="hours after which an improve task in Blocked is considered stale")
+    parser.add_argument("--stale-running-hours", type=int, default=2,
+                        help="hours after which a Running task is considered orphaned (must exceed kodo timeout)")
     args = parser.parse_args()
 
     settings = load_settings(args.config)
@@ -302,7 +331,8 @@ def main() -> int:
 
     now = datetime.now(UTC)
     actions = _apply_rules(
-        issues, now=now, stale_blocked_hours=args.stale_blocked_hours, mem_available_gb=mem_gb
+        issues, now=now, stale_blocked_hours=args.stale_blocked_hours,
+        stale_running_hours=args.stale_running_hours, mem_available_gb=mem_gb,
     )
 
     results = []
