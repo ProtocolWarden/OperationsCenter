@@ -861,6 +861,37 @@ def _add_label(client, issue: dict, new_label: str) -> None:
         )
 
 
+def _increment_retry_count(client, issue: dict) -> None:
+    """Bump retry-count label by 1 (adds 'retry-count: 1' if absent).
+
+    Removes the old retry-count: N label and adds retry-count: N+1 so
+    board_unblock Rule 1 can cancel tasks that SIGKILL repeatedly.
+    """
+    existing = [
+        (lab.get("name", "") if isinstance(lab, dict) else str(lab)).strip()
+        for lab in issue.get("labels", [])
+    ]
+    existing = [name for name in existing if name]
+    current = 0
+    filtered = []
+    for label in existing:
+        if label.lower().startswith("retry-count:"):
+            try:
+                current = int(label.split(":", 1)[1].strip())
+            except ValueError:
+                pass
+        else:
+            filtered.append(label)
+    filtered.append(f"retry-count: {current + 1}")
+    try:
+        client.update_issue_labels(str(issue["id"]), filtered)
+    except Exception as exc:
+        logger.warning(
+            "board_worker: failed to increment retry-count for task_id=%s — %s",
+            issue.get("id"), exc,
+        )
+
+
 def _handle_failure(
     client, issue: dict, role: str, _task_kind: str, result: dict, settings,
     *, scope_files: list[str] | None = None,
@@ -932,6 +963,8 @@ def _handle_failure(
             _add_label(client, issue, f"executor-exit-code: {executor_exit_code}")
         if executor_signal:
             _add_label(client, issue, f"executor-signal: {executor_signal}")
+            if "sigkill" in executor_signal.lower():
+                _increment_retry_count(client, issue)
     except Exception as exc:
         logger.warning("board_worker[%s]: post-failure transition failed task_id=%s — %s", role, task_id, exc)
 
