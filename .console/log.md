@@ -7232,3 +7232,73 @@ Cadence: HEALTHY → 3600s next wakeup.
 
 - Added CLAUDE.md to .gitignore
 - Added .custodian/tmp*.yaml to exclude custodian audit temp files
+
+## OC Platform Watchdog Cycle — 2026-05-18 03:17
+
+- Lock owner: pid=241799 hostname=dev-latitudee7470
+- Branch / commit: oc-watchdog/20260518-0300-spec-env-graph-fix @ (pending commit)
+- Health state: STALLED
+- Next cadence: 600s — closed-loop stagnation: 5 tasks cycling Blocked→Backlog→R4AI, triage auto-promoting despite active In Review counterparts
+- Plane status: 1 Ready-for-AI / 0 Running / 6 Blocked / 4 In-Review (after loop actions)
+- PlatformDeployment / SwitchBoard status: healthy (ok)
+- Watchers: 8/8 running | restarts this cycle: spec=1 (stopped+restarted to pick up env fix)
+- Audits run: custodian-sweep ghost-audit flow-audit graph-doctor reaudit-check regressions
+- Findings reproduced this cycle: flow=1 (F3 proposal dedup), graph=FAIL→FIXED, regressions=no-git-token
+- Blocked work: 6 items | classes: closed-loop-stagnation=5 (cycling tasks), operator-blocked=1 (9c7f4bb9 dead-remed)
+- Repeated findings (vs prior cycles): F3 dedup (proposal race producing twin lint tasks)
+- Forward progress observed: yes — spec watcher crash-loop fixed; graph doctor fixed; dead-remed blocked; duplicate lint cancelled
+- Queue movement: cb894463 Ready→Cancelled; 9c7f4bb9 Ready→Blocked; 2824d46e/fa470a1f/a969024e/b67bc0e0/925be138 Blocked→Backlog→R4AI (triage)→Blocked (loop)
+- Closed-loop stagnation detected: yes — 5 tasks with active In Review goal counterparts keep cycling Blocked→Backlog→R4AI due to missing blocked-by labels
+- Duplicate remediation churn: yes — 2 identical lint tasks created within 30ms (proposer race), 1 cancelled
+- Blocked queue deadlock suspected: no — tasks ARE moving, just not resolving
+- Stagnation detected: yes — 5 cycling tasks (structural: triage promotes without checking In Review counterparts)
+- Plane tasks opened/updated: 7 tasks updated (state transitions + comments); Backlog tasks b49dd8da/3860f469/88702733 noted as related
+- Direct fixes dispatched: none via autonomy-cycle
+- Repos touched: OperationsCenter (scripts/operations-center.sh), OperationsCenter config (local yaml), VideoFoundry (local_manifest.yaml created)
+- Repos skipped (gate failed): none
+- Validation run: pytest er000_phase0_golden (15 passed)
+- Graph status: 11 nodes / 12 edges graph_built=True (FIXED from False)
+- Regressions checked: no git token (persistent)
+- Watcher restarts / crash classifications: spec=exit1:crash-loop-fixed (env source on restart applied, restarted cleanly)
+- Anti-flap escalations: none (root cause found and fixed before escalation)
+- Autonomy-cycle outcomes: none dispatched
+- Convergence phase estimate: 3 (loop owns most recovery decisions; watcher handoff gaps identified)
+- Loop-owned recovery decisions this cycle: 9 (spec restart, graph fix, 7 board state mutations)
+- Watcher-owned recoveries this cycle: 0
+- Automatic recovery actions executed: spec watcher env fix (scripts/operations-center.sh); graph config (private_manifest_path); board: cancelled cb894463, blocked 9c7f4bb9, cycled 5 stagnation tasks
+- Manual inference required: yes — board state cycling detected manually; goal→parent blocked-by gap inferred from name matching
+- Recovery ownership migration candidates: triage watcher should check for active In Review goal counterparts before promoting Backlog→R4AI; goal watcher should add blocked-by label to parent task when creating goal task
+- Behavioral convergence: non-convergent — 5 tasks cycling without net resolution despite repeated state moves
+- Executor adaptation observed: no — spec watcher was crash-looping with same error, no adaptation occurred (design bug, not executor failure)
+- Semantic duplicate remediation suspected: yes — 2 identical lint tasks created simultaneously (proposal race)
+- Remediation lineage investigated: yes — spec watcher crash persisted from session start (20260517T215743) through full crash cycle
+- Automation self-deception detected: no — platform was genuinely broken (spec down, graph broken)
+- Retry quality: degenerate (spec watcher retried identical failing path repeatedly until loop intervened)
+- Queue evolution quality: stalled (5 tasks cycling, no net resolution)
+- Convergence promotion candidates: triage_watcher=check_in_review_before_promote; goal_watcher=add_blocked_by_label_on_goal_create; board_unblock=rule3_skip_if_in_review_counterpart_exists
+- Loop-only judgments repeated: goal→parent_blocked_by_gap=first_cycle (new this cycle), spec_env_restart=first_cycle
+- Watcher handoff gaps: goal_watcher→triage_watcher: goal tasks In Review but parent tasks not labelled blocked-by, triage promotes them; propose→dedup: race condition creates twins within 30ms
+- Missing watcher evidence: goal_watcher=blocked-by label on parent when goal task created; triage_watcher=in-review counterpart check before Backlog→R4AI promotion
+- Behavior to move out of /loop: goal→parent blocked-by wiring (promotion candidate); triage In Review gate (promotion candidate)
+- Convergence maturity metrics: loop_only_judgments_per_cycle=9, manual_inference_events=3, watcher_owned_recovery_rate=0.0, automatic_queue_heal_rate=0.57, parked_transition_accuracy=N/A, recovery_adaptation_rate=0.0 (spec was degenerate until loop intervened), operator_escalation_rate=0.0
+- Operator-blocked state: no (spec fixed; graph fixed; cycling is structural, not operator-gated)
+- Parked state active: no
+- Park reason: none
+- New evidence detected: yes — spec crash root cause identified (env sourced once, race at startup); graph missing manifests identified; cycling stagnation pattern identified
+- Safe retry condition: spec watcher running cleanly; graph built; lint task 8871f757 eligible for spec pickup
+- Last evidence-changing cycle: this cycle (first cycle of session)
+- Repeated unchanged cycles: 0
+- Active remediation suspended: no
+- Follow-ups: b49dd8da (In-Review goal tasks watcher gap); 88702733 (kodo dispatch without availability check)
+
+## 2026-05-18 — spec watcher crash-loop fix: env re-sourced in restart loop
+
+Root cause: env file sourced once at login shell startup in `start_watch_role`. If the initial source failed (or env was updated after watcher started), all subsequent restarts ran with incomplete env. Fix: added `set -a; source '${ENV_PATH}' 2>/dev/null || true; set +a` inside the restart loop for all 5 role blocks (intake, review, spec, propose, goal/test/improve).
+
+This is a resilience improvement: watchers now recover automatically from temporary env file unavailability at startup, and pick up env changes without requiring a full watcher restart cycle.
+
+## 2026-05-18 — graph doctor fixed: private_manifest_path and local_manifest.yaml
+
+- Added `private_manifest_path` to `config/operations_center.local.yaml` pointing to existing PrivateManifest at standard path (`/home/dev/Documents/GitHub/PrivateManifest/manifests/videofoundry/private_manifest.yaml`)
+- Created `topology/local_manifest.yaml` in VideoFoundry from the example file (was missing, gitignored, required for graph construction)
+- Graph now builds: 11 nodes / 12 edges, graph_built=True

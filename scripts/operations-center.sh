@@ -282,6 +282,9 @@ start_watch_role() {
       _child_pid=''
       trap 'kill \$_child_pid 2>/dev/null; exit 0' TERM INT
       while true; do
+        set -a
+        source '${ENV_PATH}' 2>/dev/null || true
+        set +a
         '${VENV_DIR}/bin/python' -m operations_center.entrypoints.intake.main \
           --config '${CONFIG_PATH}' \
           --status-dir '${WATCH_DIR}' &
@@ -302,6 +305,9 @@ start_watch_role() {
       _child_pid=''
       trap 'kill \$_child_pid 2>/dev/null; exit 0' TERM INT
       while true; do
+        set -a
+        source '${ENV_PATH}' 2>/dev/null || true
+        set +a
         '${VENV_DIR}/bin/python' -m operations_center.entrypoints.reviewer.main \
           --config '${CONFIG_PATH}' \
           --watch \
@@ -324,6 +330,9 @@ start_watch_role() {
       _child_pid=''
       trap 'kill \$_child_pid 2>/dev/null; exit 0' TERM INT
       while true; do
+        set -a
+        source '${ENV_PATH}' 2>/dev/null || true
+        set +a
         '${VENV_DIR}/bin/python' -u -m operations_center.entrypoints.spec_director.main \
           --config '${CONFIG_PATH}' \
           --status-dir '${WATCH_DIR}' &
@@ -352,6 +361,9 @@ start_watch_role() {
       done &
       _hb_pid=\$!
       while true; do
+        set -a
+        source '${ENV_PATH}' 2>/dev/null || true
+        set +a
         '${VENV_DIR}/bin/python' -m operations_center.entrypoints.pipeline_trigger.main \
           --config '${CONFIG_PATH}' \
           --execute &
@@ -374,6 +386,9 @@ start_watch_role() {
       _child_pid=''
       trap 'kill \$_child_pid 2>/dev/null; exit 0' TERM INT
       while true; do
+        set -a
+        source '${ENV_PATH}' 2>/dev/null || true
+        set +a
         '${VENV_DIR}/bin/python' -m operations_center.entrypoints.board_worker.main \
           --config '${CONFIG_PATH}' \
           --role '${role}' \
