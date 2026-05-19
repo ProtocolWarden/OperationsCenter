@@ -37,26 +37,94 @@ Capture: plane ok/error, switchboard ok/error, watcher pids and roles.
 
 ---
 
-## STEP 1 — INVESTIGATE (run all in parallel, wait for all)
+## STEP 1 — INVESTIGATE (run all in parallel, parse with python3)
+
+Run tools in parallel, saving output to temp files, then use python3 to extract values:
 
 ```bash
 source .env.operations-center.local
-.venv/bin/operations-center-custodian-sweep --config config/operations_center.local.yaml --emit 2>&1 &
-.venv/bin/operations-center-ghost-audit --config config/operations_center.local.yaml --since 1h 2>&1 &
-.venv/bin/operations-center-flow-audit --config config/operations_center.local.yaml 2>&1 &
-.venv/bin/operations-center-graph-doctor 2>&1 &
-.venv/bin/operations-center-reaudit-check --json 2>&1 &
-.venv/bin/operations-center-check-regressions --config config/operations_center.local.yaml --lookback-hours 1 --dry-run 2>&1 &
+.venv/bin/operations-center-custodian-sweep --config config/operations_center.local.yaml --emit > /tmp/oc_custodian.json 2>&1 &
+.venv/bin/operations-center-ghost-audit --config config/operations_center.local.yaml --since 1h > /tmp/oc_ghost.json 2>&1 &
+.venv/bin/operations-center-flow-audit --config config/operations_center.local.yaml > /tmp/oc_flow.json 2>&1 &
+.venv/bin/operations-center-graph-doctor > /tmp/oc_graph.txt 2>&1 &
+.venv/bin/operations-center-reaudit-check --json > /tmp/oc_reaudit.json 2>&1 &
+.venv/bin/operations-center-check-regressions --config config/operations_center.local.yaml --lookback-hours 1 --dry-run > /tmp/oc_regressions.json 2>&1 &
 wait
 ```
 
-Parse each tool's output:
-- **custodian**: all deltas zero? Any finding with delta != 0?
-- **ghost**: total_ghost_events count, active ghost IDs, fixed ghost IDs
-- **flow**: total_open_gaps count
-- **graph-doctor**: ok (exit 0, no errors) or error message
-- **reaudit-check**: which repos have needed=true
-- **regressions**: findings count
+Then extract each field with python3:
+
+```bash
+# custodian: all_zero and findings with non-zero delta
+python3 -c "
+import json, sys
+try:
+    d = json.load(open('/tmp/oc_custodian.json'))
+    repos = d.get('repos', {})
+    findings = []
+    for repo, data in repos.items():
+        if isinstance(data, dict):
+            deltas = data.get('deltas', {})
+            for check, delta in deltas.items():
+                if delta != 0:
+                    findings.append({'repo': repo, 'check': check, 'delta': delta})
+    print(json.dumps({'all_zero': len(findings)==0, 'findings': findings}))
+except Exception as e:
+    print(json.dumps({'all_zero': None, 'findings': [], 'parse_error': str(e)}))
+"
+
+# ghost: total_events, active, fixed
+python3 -c "
+import json
+try:
+    d = json.load(open('/tmp/oc_ghost.json'))
+    active = [k for k,v in d.get('ghosts',{}).items() if isinstance(v,dict) and v.get('status')=='active' and v.get('count',0)>0]
+    fixed  = [k for k,v in d.get('ghosts',{}).items() if isinstance(v,dict) and v.get('status')=='fixed']
+    print(json.dumps({'total_events': d.get('total_ghost_events',0), 'active': active, 'fixed': fixed}))
+except Exception as e:
+    print(json.dumps({'total_events': None, 'active': [], 'fixed': [], 'parse_error': str(e)}))
+"
+
+# flow: gaps
+python3 -c "
+import json
+try:
+    d = json.load(open('/tmp/oc_flow.json'))
+    print(json.dumps({'gaps': d.get('total_open_gaps', 0)}))
+except Exception as e:
+    print(json.dumps({'gaps': None, 'parse_error': str(e)}))
+"
+
+# graph: ok
+python3 -c "
+import sys
+txt = open('/tmp/oc_graph.txt').read()
+ok = 'error' not in txt.lower() and 'traceback' not in txt.lower()
+import json; print(json.dumps({'ok': ok, 'error': None if ok else txt[:200]}))
+"
+
+# reaudit: repos needing audit
+python3 -c "
+import json
+try:
+    d = json.load(open('/tmp/oc_reaudit.json'))
+    needed = [k for k,v in d.get('repos',{}).items() if isinstance(v,dict) and v.get('needed')]
+    print(json.dumps({'repos_needing_audit': needed}))
+except Exception as e:
+    print(json.dumps({'repos_needing_audit': [], 'parse_error': str(e)}))
+"
+
+# regressions: count and findings
+python3 -c "
+import json
+try:
+    d = json.load(open('/tmp/oc_regressions.json'))
+    findings = d.get('findings', [])
+    print(json.dumps({'count': len(findings), 'findings': findings[:5]}))
+except Exception as e:
+    print(json.dumps({'count': None, 'findings': [], 'parse_error': str(e)}))
+"
+```
 
 ---
 

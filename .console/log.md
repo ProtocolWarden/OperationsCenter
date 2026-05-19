@@ -3,6 +3,27 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-19 — Watchdog cycle 13: WEAKLY-CONVERGENT — exit-code:0 guard working; board stable
+
+**Convergence:** WEAKLY-CONVERGENT. New exit-code:0 guard (board_unblock) correctly holding 8871f757 and 2824d46e — no longer cycling. board_unblock.applied=[] (board stable, no tasks moved). SIGKILL guard holding b67bc0e0/a969024e (9th consecutive ✓).
+
+**Key events:**
+- exit-code:0 guard working: 8871f757 skipped "executor-exit-code:0 with no signal label"; 2824d46e same. Loop is no longer re-queuing these tasks every cycle.
+- Plane #86 (30cb28ce) marked Done — fix applied last cycle.
+- Haiku collector null-field parse failures (custodian, ghost, flow, graph) fixed: replaced manual parse instructions with explicit python3 one-liners. Will verify next cycle.
+- Runbook updated: STEP 3 INFRASTRUCTURE FIX ESCALATION rule + STEP 5 stagnation clarification.
+
+**STEP 1:** custodian: findings=[] (parser fix pending verify) | ghost: parse pending | flow: parse pending | graph: parse pending | reaudit: [] (none needed) | regressions: 0
+**STEP 2:** triage: b67bc0e0 escalation_commented (10th consecutive ✓)
+**STEP 2.5 board-unblock:**
+- APPLIED: (none)
+- SKIPPED: 8871f757 — exit-code:0 guard ✓ NEW; 2824d46e — exit-code:0 guard ✓; b67bc0e0, a969024e — SIGKILL guard (9th ✓)
+
+**STEP 7:** 15/15 tests ✓
+**STEP 8:** 8/8 watchers running. Watcher last_errors all stale log artifacts (consecutive_non143=0 all roles). running_tasks=[].
+
+**Cadence:** PARKED_OPERATOR_BLOCKED (1800s) — board stable, guards working, no cycling
+
 ## 2026-05-19 — Watchdog cycle 12: PARKED_OPERATOR_BLOCKED — all watchers healthy; Haiku collector null-field issue noted
 
 **Convergence:** PARKED_OPERATOR_BLOCKED (5th cycle for 8871f757). No new signals. All watchers healthy.
