@@ -7469,3 +7469,9 @@ Cross-repo wiring (new work order `docs/architecture/adr/0005-work-order-p5.md`)
 
 Removed unused Path/Optional imports from team_executor/adapter.py and critique_executor/adapter.py.
 Added 0005-work-order-p5.md to docs/README.md to fix DC7 orphan finding. Custodian now clean.
+
+## 2026-05-19 — ADR 0006 work order: CoreRunner rename + safe_run() consolidation
+
+- Written docs/architecture/adr/0006-corerunner-subprocess-consolidation.md
+- 6-phase plan: extract safe_run(), wire TE/DE/CE, update OC, update PlatformManifest, update remaining repos, GitHub repo rename
+- Decision: all subprocess calls in ecosystem share one process-group-safe implementation via core_runner.safe_run()
