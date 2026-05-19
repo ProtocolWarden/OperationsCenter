@@ -69,6 +69,8 @@ This directory holds OC-specific material.
     Drop external runtimes (kodo/Archon); build TeamExecutor, DAGExecutor, CritiqueExecutor.
   - [architecture/adr/0005-work-order.md](architecture/adr/0005-work-order.md) —
     4-phase work order for the owned execution topology layer (ADR 0005).
+  - [architecture/adr/0005-work-order-p5.md](architecture/adr/0005-work-order-p5.md) —
+    Phase 5 cross-repo wiring: executor adapters, LaneDecision metadata, worker_backend.
 
 ### Managed-repo audit contracts
 

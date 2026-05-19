@@ -9,7 +9,6 @@ contract. Reads topology, max_rounds, worker_backend from CritiqueExecutorSettin
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
 from operations_center.config.settings import CritiqueExecutorSettings
 from operations_center.contracts.common import ValidationSummary

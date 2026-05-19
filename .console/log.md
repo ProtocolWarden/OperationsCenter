@@ -7455,3 +7455,8 @@ Cross-repo wiring (new work order `docs/architecture/adr/0005-work-order-p5.md`)
 - DAGExecutorBackendAdapter resolves .dag_executor/workflow.yaml or falls back to single-agent GraphSpec
 - factory.py: registered TEAM_EXECUTOR, DAG_EXECUTOR, CRITIQUE_EXECUTOR in from_settings()
 - 3324 tests pass (+ new factory test updated)
+
+## 2026-05-19 — Fix Custodian findings for p5 adapter push
+
+Removed unused Path/Optional imports from team_executor/adapter.py and critique_executor/adapter.py.
+Added 0005-work-order-p5.md to docs/README.md to fix DC7 orphan finding. Custodian now clean.

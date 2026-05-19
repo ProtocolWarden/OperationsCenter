@@ -9,8 +9,6 @@ contract. Reads team_name and worker_backend from TeamExecutorSettings.
 from __future__ import annotations
 
 import logging
-from pathlib import Path
-from typing import Optional
 
 from operations_center.config.settings import TeamExecutorSettings
 from operations_center.contracts.common import ValidationSummary
