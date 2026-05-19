@@ -109,7 +109,7 @@ def _detect_g4_oversized(ctx: AuditContext) -> tuple[int, list[str]]:
 
 
 def _detect_g5_policy_blocked(ctx: AuditContext) -> tuple[int, list[str]]:
-    """Tasks blocked by policy after a kodo run.
+    """Tasks blocked by policy after a backend run.
 
     Uses the structured event iterator — when the OCLogScanner sees a
     board_worker_blocked event with category=policy_blocked, it surfaces
@@ -223,7 +223,7 @@ def _detect_workspace_pollution(ctx: AuditContext) -> tuple[int, list[str]]:
 _DETECTORS: list[Detector] = [
     Detector("G1",  "workspace pollution",                "fixed", _detect_workspace_pollution),
     Detector("G4",  "oversized diff (scope_too_wide)",    "fixed", _detect_g4_oversized),
-    Detector("G5",  "policy-blocked task burned kodo time","fixed", _detect_g5_policy_blocked),
+    Detector("G5",  "policy-blocked task burned backend time","fixed", _detect_g5_policy_blocked),
     Detector("G7",  "claim-refused thin goal",            "fixed", _detect_g7_thin_goal),
     Detector("G8",  "stale Running task",                 "fixed", _detect_g8_stale_running),
     Detector("G10", "runaway follow-up loop",             "fixed", _detect_g10_runaway_followups),

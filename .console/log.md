@@ -3,6 +3,12 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-18 — Purged stale kodo/archon prose from src (ADR 0005 follow-up)
+
+Replaced all kodo/archon conceptual references in 21 src files with backend-generic
+language (team_executor, dag_executor, execution backend, etc.); setup/main.py dataclass
+fields and function names renamed from kodo_* to executor_*; tests updated to match.
+
 ## 2026-05-18 — ADR 0005 docs indexed; Custodian pre-existing findings suppressed
 
 Added ADR 0005 (owned execution topology layer) and work order to docs/README.md.

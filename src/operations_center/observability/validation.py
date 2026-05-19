@@ -6,7 +6,7 @@ observability/validation.py — Normalized validation evidence.
 Wraps ValidationSummary from the canonical contracts into an observability-
 oriented model that can carry artifact references and a human-readable summary.
 
-If validation was skipped (the common case for the kodo adapter), the evidence
+If validation was skipped (the common case for direct_local and aider_local adapters), the evidence
 faithfully represents SKIPPED rather than inventing a pass/fail verdict.
 """
 

@@ -54,7 +54,7 @@ class ExecutionHealthRule:
                             ),
                             summary_hint=(
                                 f"Execution artifacts show {int(float(no_op_rate) * 100)}% of the last "
-                                f"{total} runs for {repo} were no-ops (kodo ran but made no material changes). "
+                                f"{total} runs for {repo} were no-ops (the backend ran but made no material changes). "
                                 "This suggests tasks being generated may be too vague, already completed, "
                                 "or scoped in a way the execution engine cannot act on. "
                                 "Investigate one representative no-op run and tighten task descriptions or "

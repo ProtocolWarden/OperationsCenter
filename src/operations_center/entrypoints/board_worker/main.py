@@ -176,7 +176,7 @@ def _claim_next(client, role: str, settings) -> dict | None:
 
     # Priority order:
     #   1. improve-suggestions first — they represent recent partially-complete
-    #      analysis that someone (kodo) just identified as worth doing. Picking
+    #      analysis that was just identified as worth doing. Picking
     #      them up while the context is fresh keeps related changes coherent
     #      and prevents stale suggestions piling up at the bottom of the queue.
     #   2. then by Plane priority field if set (urgent, high, medium, low, none)
@@ -195,8 +195,8 @@ def _claim_next(client, role: str, settings) -> dict | None:
     candidates.sort(key=_sort_key)
     issue = candidates[0]
 
-    # Ghost-work guard G7: skip tasks whose goal text is too thin for kodo to
-    # do anything meaningful. A 16-minute run on an empty description is pure
+    # Ghost-work guard G7: skip tasks whose goal text is too thin for the
+    # executor to do anything meaningful. A 16-minute run on an empty description is pure
     # quota-burn. We mark the task Blocked with a clear reason so the operator
     # (or spec_director) can fill in details and re-promote.
     desc = issue.get("description") or issue.get("description_stripped") or ""
@@ -288,7 +288,7 @@ def _process_issue(issue: dict, role: str, config_path: Path, settings, client) 
     # Rejection-pattern hint: if recent proposals in this repo were rejected
     # for a recurring reason, prepend a "common rejection patterns to avoid"
     # block to the goal text. Best-effort — no hint when the catalog is
-    # empty or unreadable. Helps kodo avoid the same mistake twice.
+    # empty or unreadable. Helps the backend avoid the same mistake twice.
     try:
         from operations_center.quality_alerts import _load_rejection_patterns_for_proposal
         patterns = _load_rejection_patterns_for_proposal(repo_key=repo_key)
@@ -303,9 +303,9 @@ def _process_issue(issue: dict, role: str, config_path: Path, settings, client) 
     except Exception:
         pass
 
-    # Improve mode: ask kodo to emit structured suggestions we can turn into
-    # concrete follow-up tasks for the propose lane. Without this prompt, the
-    # improve run is a pure-side-effect analysis that produces no downstream
+    # Improve mode: emit structured suggestions we can turn into concrete
+    # follow-up tasks for the propose lane. Without this prompt, the improve
+    # run is a pure-side-effect analysis that produces no downstream
     # signal — the duplicate-PR problem we saw with PR #55/#60.
     if role == "improve":
         goal_text = (
@@ -457,7 +457,7 @@ def _process_issue(issue: dict, role: str, config_path: Path, settings, client) 
         status  = result.get("status", "unknown")
         needs_verification = result.get("needs_verification", False)
 
-        # D1: transient kodo retry. Network blips and 502s shouldn't sink a
+        # D1: transient backend retry. Network blips and 502s shouldn't sink a
         # task — they're not authoritative outcomes. Detect by failure
         # category + reason shape; retry once with a fresh workspace before
         # giving up. Capped at 1 to avoid infinite loops.
@@ -489,7 +489,7 @@ def _process_issue(issue: dict, role: str, config_path: Path, settings, client) 
                 # the recorded outcome, not the transient blip.
                 result_file.write_text(json.dumps(outcome, ensure_ascii=False), encoding="utf-8")
 
-        # Improve mode: harvest structured suggestions from kodo's workspace
+        # Improve mode: harvest structured suggestions from the executor workspace
         # before the tempdir is cleaned. _handle_success uses these to spawn
         # focused Plane tasks that the propose lane can refine and prioritise.
         improve_suggestions: list[dict] = []
@@ -507,7 +507,7 @@ def _process_issue(issue: dict, role: str, config_path: Path, settings, client) 
             except Exception:
                 pass
 
-        # The kodo run can succeed but produce nothing shippable — e.g. the
+        # The execution run can succeed but produce nothing shippable — e.g. the
         # workspace's diff exceeded the soft cap and WorkspaceManager refused
         # to push. In that case we want the task to be Blocked with the
         # actionable reason, not silently moved to In Review with no PR.
@@ -545,11 +545,11 @@ def _fail_task(client, task_id: str, role: str, reason: str) -> None:
 
 
 def _read_improve_output(workspace: Path) -> list[dict]:
-    """Pull structured suggestions written by kodo to improve-output.json.
+    """Pull structured suggestions written by the executor to improve-output.json.
 
     Returns [] when the file is missing or malformed — a missing output is
-    common when kodo improve mode runs against a healthy module and finds
-    nothing actionable. Callers treat that as "no follow-up tasks needed".
+    common when improve mode runs against a healthy module and finds nothing
+    actionable. Callers treat that as "no follow-up tasks needed".
     """
     out_file = workspace / "improve-output.json"
     if not out_file.exists():
@@ -563,7 +563,7 @@ def _read_improve_output(workspace: Path) -> list[dict]:
     if not isinstance(raw, list):
         return []
     valid = []
-    for item in raw[:5]:  # cap at 5 — same limit we asked kodo for
+    for item in raw[:5]:  # cap at 5 — same limit stated in the improve prompt
         if isinstance(item, dict) and item.get("title"):
             valid.append(item)
     return valid
@@ -598,7 +598,7 @@ def _handle_success(client, issue: dict, role: str, _task_kind: str, needs_verif
         elif role == "improve":
             # Improve is analysis-only. Instead of mirroring the parent title
             # as a "follow-up goal" (the duplicate-PR problem), we read the
-            # structured suggestions kodo wrote to improve-output.json and
+            # structured suggestions written to improve-output.json and
             # create one focused goal task per suggestion. The propose lane
             # picks them up like any other autonomy work.
             client.transition_issue(task_id, _STATE_DONE)
@@ -615,13 +615,13 @@ def _handle_success(client, issue: dict, role: str, _task_kind: str, needs_verif
                     f"Improvement analysis complete — created {len(created_ids)} "
                     f"focused follow-up task(s): {', '.join('#' + i for i in created_ids)}"
                     if created_ids
-                    else "Improvement analysis complete — kodo wrote suggestions but none could be enqueued",
+                    else "Improvement analysis complete — backend wrote suggestions but none could be enqueued",
                 )
             else:
                 client.comment_issue(
                     task_id,
                     "Improvement analysis complete — no actionable suggestions emitted "
-                    "(kodo found nothing concrete, or improve-output.json was missing)",
+                    "(executor found nothing concrete, or improve-output.json was missing)",
                 )
 
     except Exception as exc:
@@ -762,7 +762,7 @@ def _create_split_followups(client, parent: dict, _settings, file_list: list[str
     """Spawn smaller goal tasks scoped to file subsets after a scope_too_wide block.
 
     Caps total split depth at 2 (parent retry-count >= 2 → no further split,
-    just block) so a confused kodo can't fork unboundedly.
+    just block) so the backend can't fork unboundedly.
     """
     parent_id     = str(parent["id"])
     parent_title  = parent.get("name", "")
@@ -825,7 +825,7 @@ def _create_split_followups(client, parent: dict, _settings, file_list: list[str
             logger.warning("board_worker: split create_issue failed — %s", exc)
     # Mark the parent so triage / rewrite loops don't pick at it. Without
     # this, spec_director.phase_orchestrator._handle_blocked would later
-    # call kodo to "rewrite" the parent description and re-queue it,
+    # ask the backend to "rewrite" the parent description and re-queue it,
     # producing exactly the kind of ghost work this audit is trying to
     # eliminate.
     if created:
@@ -973,11 +973,11 @@ def _handle_failure(
 def _create_improve_follow_up(
     client, parent: dict, _settings, suggestion: dict,
 ) -> str | None:
-    """Create a focused goal task from one kodo improve suggestion.
+    """Create a focused goal task from one improve suggestion.
 
     Carries forward the parent's repo + source provenance, embeds the
-    suggestion's rationale and file scope into the task description so kodo's
-    next run has concrete context. Returns the new task id, or None on error.
+    suggestion's rationale and file scope into the task description so the
+    backend's next run has concrete context. Returns the new task id, or None on error.
     """
     parent_id     = str(parent["id"])
     parent_labels = parent.get("labels", [])

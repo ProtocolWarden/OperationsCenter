@@ -138,7 +138,7 @@ def handle_awaiting_input_scan(
     """Find tasks in *state_name* with new comments since last scan.
 
     Caller decides what to do — typically transition back to Ready for AI
-    so kodo retries with the new operator context.
+    so the backend retries with the new operator context.
 
     Best-effort: per-issue comment fetch failures are skipped silently.
     """
