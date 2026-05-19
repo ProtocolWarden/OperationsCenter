@@ -116,7 +116,7 @@ def run_post_dispatch_coverage_audit(
         the Phase 7 artifact index.
     consuming_repo_root:
         Working tree of the repo Custodian should audit (e.g. the VF repo).
-        Custodian reads its own ``.custodian.yaml`` from here; the
+        Custodian reads its own ``.custodian/config.yaml`` from here; the
         ``--enable-coverage`` flag overlays the coverage adapter onto that
         config.
     custodian_executable:

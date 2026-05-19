@@ -7481,3 +7481,66 @@ Added 0005-work-order-p5.md to docs/README.md to fix DC7 orphan finding. Custodi
 - Removed backtick-quoted future symbols from ADR prose (K1/OC8 findings)
 - Fixed dead CxRP cross-ref (DC2)
 - Linked ADR from docs/README.md (DC7 orphan finding)
+
+## OC Platform Watchdog Cycle — 2026-05-19 07:54 UTC
+
+- Lock owner: pid=2090429 hostname=dev-latitudee7470 (reclaimed stale from prior session)
+- Health state: WEAKLY-CONVERGENT → DEGRADED (review watcher fixed mid-cycle)
+- Next cadence: 300s → review watcher crash now resolved; reaudit needed; rate gate still limit
+- Plane status: 4 R4AI (board-unblock applied) / 0 Running / n Blocked / n Backlog
+- PlatformDeployment / SwitchBoard status: healthy (200 OK)
+- Watchers: 8/8 running after review restart | review watcher FIXED
+- Audits run: custodian-sweep ghost-audit flow-audit graph-doctor reaudit-check regressions
+
+### STEP 1 findings
+- graph-doctor: ✓ OK — 11 nodes / 12 edges / graph_built=True
+- ghost-audit: 1 G10 (runaway follow-up: b67bc0e0 "Fix lint regression")
+- flow-audit: 0 open gaps; F8 partial
+- reaudit-check: exit 1 — DAGExecutor + TeamExecutor need reaudit (cxrp_minor_version_advanced v0.3.1)
+- regression-check: exit 1 — no git token (now FIXED by env change + gh auth token)
+- custodian-sweep: 7 repos swept (FIXED from 0) — OC=5, VF=5, OC-console=2, SB=2, PD=2, Custodian=2, CxRP=2; Plane tasks created
+
+### Direct fixes this cycle
+1. custodian_sweep/main.py: updated `_has_custodian_config()` to check `.custodian/config.yaml` first (was hardcoded to old `.custodian.yaml`) → sweep now works
+2. coverage_analysis.py: updated docstring to reference new config path
+3. TeamExecutor + DAGExecutor pip-installed into OC venv (were missing → all executor backend tasks failing)
+4. .env.operations-center.local: updated GITHUB_TOKEN source to `gh auth token` (was awk on hosts.yml which returns empty for keyring-stored tokens); added GIT_TOKEN=$GITHUB_TOKEN
+5. review watcher: restarted with corrected env → now polling GitHub APIs successfully
+
+### STEP 2 triage
+- queue_healing: b67bc0e0 "Fix lint regression" escalation_commented (SIGKILL retry budget exhausted) — safe=false
+
+### STEP 2.5 board-unblock (4 transitions Blocked→R4AI)
+- 8871f757: "Fix 7 ruff lint violation(s) (F401, E702)" — SELF_MODIFY_REQUEUE
+- 2824d46e: "Restore repeated missing test signal coverage" — SELF_MODIFY_REQUEUE
+- b67bc0e0: "Fix lint regression: +1 new ruff violations" — SELF_MODIFY_REQUEUE (note: triage also escalation_commented this)
+- a969024e: "Improve test signal visibility" — SELF_MODIFY_REQUEUE
+
+### Blocked work analysis
+- b67bc0e0: SIGKILL'd before, then team_executor not installed (FIXED this cycle) — may succeed on next dispatch
+- 8871f757, 2824d46e, a969024e: previously failed workspace prep (sandbox branch); confirmed branch exists on origin — likely safe to retry
+
+### Resource gate
+- global_rate_exceeded: hourly limit=2 hit by earlier watcher dispatches; reset per hour
+
+### Convergence assessment
+- WEAKLY-CONVERGENT: team_executor install was root cause of executor task failures → FIXED
+- Custodian sweep 0→7 repos: structural fix, not retry of same failure
+- review watcher: recurring non-143 crash (OPERATOR-BLOCKED → FIXED this cycle)
+- Rate gate: back-pressure normal under training mode (max_per_hour=2 global)
+
+### STEP 3 log history patterns
+- No new repeated cross-cycle patterns identified (first cycle of this session)
+- Prior cycles fixed: spec watcher crash-loop, graph-doctor missing manifests, kodo timeout fix (kodo removed in ADR 0005)
+- Active recurring: reaudit-check DAGExecutor+TeamExecutor (ongoing since CxRP v0.3.1 bump)
+
+### STEP 4 convergence promotion candidates
+- review_watcher: add `GIT_TOKEN` validation + fallback to `gh auth token` at startup (instead of crashing)
+- custodian_sweep: path updated this cycle — promote to watcher bootstrap check
+- executor_install: TeamExecutor/DAGExecutor pip install should be part of bootstrap
+
+### Invariant tests: 15 passed ✓
+### Watcher health: 8/8 running ✓ (review fixed)
+### Behavioral convergence: WEAKLY-CONVERGENT (5 fixes applied, forward progress clear)
+### Operator-blocked: none
+### Parked state: no

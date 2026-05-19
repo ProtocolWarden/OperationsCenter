@@ -3,7 +3,7 @@
 """Custodian sweep — run ``custodian-audit`` across every managed repo.
 
 For each repo in ``settings.repos`` that has a local checkout and a
-``.custodian.yaml`` at its root: shell out to ``custodian-audit --repo
+``.custodian/config.yaml`` (or legacy ``.custodian.yaml``): shell out to ``custodian-audit --repo
 <path> --json``, parse the envelope, and (when ``--emit`` is passed)
 create-or-comment a Plane task per repo so operators can act on
 findings during the weekly audit step of OC's autonomy cycle.
@@ -57,19 +57,30 @@ class _RepoSweep:
         return dict(self.envelope.get("patterns", {}))
 
 
-def _discover_targets(settings) -> list[_RepoTarget]:
-    """Pick repos with a local path and a ``.custodian.yaml`` at their root.
+def _has_custodian_config(path: Path) -> bool:
+    """Return True if the repo has a Custodian config in either layout.
 
-    Other repos are silently skipped — they're either not checked out
-    locally or haven't adopted Custodian yet. ``custodian-doctor`` is a
-    better surface for "should this repo have one?" than the sweep.
+    Prefers ``.custodian/config.yaml`` (current); falls back to the legacy
+    ``.custodian.yaml`` root-level file for repos that haven't migrated.
+    """
+    return (path / ".custodian" / "config.yaml").exists() or (path / ".custodian.yaml").exists()
+
+
+def _discover_targets(settings) -> list[_RepoTarget]:
+    """Pick repos with a local path and a Custodian config at their root.
+
+    Accepts both ``.custodian/config.yaml`` (current layout) and the legacy
+    ``.custodian.yaml``. Other repos are silently skipped — they're either
+    not checked out locally or haven't adopted Custodian yet.
+    ``custodian-doctor`` is a better surface for "should this repo have one?"
+    than the sweep.
     """
     out: list[_RepoTarget] = []
     for key, cfg in settings.repos.items():
         if not cfg.local_path:
             continue
         path = Path(cfg.local_path)
-        if not (path / ".custodian.yaml").exists():
+        if not _has_custodian_config(path):
             continue
         out.append(_RepoTarget(repo_key=key, local_path=path))
     return out
