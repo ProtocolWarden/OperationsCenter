@@ -7544,3 +7544,82 @@ Added 0005-work-order-p5.md to docs/README.md to fix DC7 orphan finding. Custodi
 ### Behavioral convergence: WEAKLY-CONVERGENT (5 fixes applied, forward progress clear)
 ### Operator-blocked: none
 ### Parked state: no
+
+## OC Platform Watchdog Cycle — 2026-05-19 08:29 UTC (Cycle 2)
+
+- Lock owner: pid=2090429 hostname=dev-latitudee7470 (session continuation)
+- Health state: WEAKLY-CONVERGENT
+- Next cadence: 300s — NON-CONVERGENT b67bc0e0 cycling (2 cycles); reaudit-check pending
+- Plane status: 4 R4AI (from board-unblock) / 0 Running / Blocked / Backlog
+- PlatformDeployment / SwitchBoard status: healthy (ok)
+- Watchers: 8/8 running | review watcher healthy (polling GitHub APIs, heartbeat 08:33 UTC)
+- Audits run: custodian-sweep ghost-audit flow-audit graph-doctor reaudit-check regressions
+
+### STEP 1 findings
+- graph-doctor: ✓ OK — 11 nodes / 12 edges / graph_built=True
+- ghost-audit: 1 G10 (b67bc0e0 "Fix lint regression" — NON-CONVERGENT, 2nd consecutive cycle)
+- flow-audit: 0 open gaps; F8 partial (persistent, non-critical)
+- reaudit-check: exit 1 — DAGExecutor + TeamExecutor need reaudit (persistent, CxRP v0.3.1)
+- regression-check: 0 findings ✓ (FIXED in cycle 1 — gh auth token + GIT_TOKEN)
+- custodian-sweep: 7 repos swept, all delta=0, all plane-commented ✓
+
+### STEP 2 triage
+- b67bc0e0 "Fix lint regression": escalation_commented, safe=false (SIGKILL retry budget exhausted)
+
+### STEP 2.5 board-unblock (4 transitions Blocked→R4AI via SELF_MODIFY_REQUEUE)
+- 8871f757: "Fix 7 ruff lint violation(s)"
+- 2824d46e: "Restore repeated missing test signal coverage"
+- b67bc0e0: "Fix lint regression" (CONFLICT: triage=safe=false but board-unblock re-queued anyway)
+- a969024e: "Improve test signal visibility"
+
+### STEP 3 — Convergence analysis (last 3 cycles)
+- Cycle 1 (2026-05-19 07:54): WEAKLY-CONVERGENT — 5 direct fixes; review watcher fixed; custodian sweep fixed; team/dag executor install fixed; regression-check fixed; b67bc0e0 G10 appeared (first)
+- Cycle N-1 (2026-05-18: cycles 6+7): SIGKILL timeout root cause identified and fixed (300s→3600s); ADR 0005 Phase 4/5 landed
+- Cycle N-2 (2026-05-18 03:17): STALLED — spec crash-loop, graph broken; structural fixes applied
+
+Cross-cycle repeating patterns:
+- b67bc0e0 "Fix lint regression" G10: cycles 1 + 2 = NON-CONVERGENT (2 consecutive)
+- reaudit-check DAGExecutor+TeamExecutor: multiple cycles (CxRP v0.3.1, ongoing)
+- F8 partial (back-pressure): persistent non-critical
+
+### STEP 4 — Convergence promotion candidates
+- NON-CONVERGENT (2 cycles): board-unblock SELF_MODIFY_REQUEUE re-queues b67bc0e0 despite triage marking safe=false/escalation_commented → promote to Plane task (OperationsCenter fix)
+- reaudit-check: 2+ cycles → ensure DAGExecutor/TeamExecutor reaudit is tracked in Plane
+
+### STEP 7 — Invariant tests
+- pytest tests/unit/er000_phase0_golden/ -q: 15 passed ✓
+
+### STEP 8 — Watcher health
+- 8/8 watchers running; all heartbeats fresh; review watcher active (log 20260519T035408_review.log)
+- Old 03:52 error logs: pre-fix (pr_review_watcher with no token); replaced by reviewer.main after cycle 1 fix
+- No new non-143 crashes this cycle
+
+### Blocked work classification
+- b67bc0e0: NON-CONVERGENT (2 cycles, safe=false from triage, board-unblock conflict)
+- reaudit DAGExecutor+TeamExecutor: validation-blocked (CxRP schema version gate, non-critical)
+
+### Behavioral convergence: WEAKLY-CONVERGENT
+- All cycle 1 direct fixes held (regression-check, review watcher, custodian sweep, executor installs)
+- No new custodian findings (delta=0 across 7 repos)
+- b67bc0e0 cycling is the only unresolved repeating pattern
+- Rate gate (max_per_hour=2): normal back-pressure, not stagnation
+
+### Operator-blocked: none
+### Parked state: no
+
+### Convergence promotion candidates
+- board_unblock: SELF_MODIFY_REQUEUE should respect triage safe=false label before re-queuing
+- reaudit_watcher: add DAGExecutor+TeamExecutor to reaudit queue as tracked Plane task
+
+### Watcher handoff gaps
+- board_unblock ↔ triage: SELF_MODIFY_REQUEUE conflicts with escalation_commented; no cross-tool coordination
+
+### Convergence maturity metrics
+- loop_only_judgments_per_cycle: 2 (NON-CONVERGENT classification; watcher health)
+- manual_inference_events: 0
+- watcher_owned_recovery_rate: N/A (no crashes to recover)
+- automatic_queue_heal_rate: 1.0 (4/4 board-unblock transitions succeeded)
+- operator_escalation_rate: 0.0
+
+### Direct fixes: none (execution gate: no qualifying findings this cycle)
+### Repos touched: OperationsCenter (.console/log.md commit only)
