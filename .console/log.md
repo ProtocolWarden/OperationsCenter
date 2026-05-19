@@ -12,6 +12,14 @@ and 2 F401 (unused pytest imports) in test_run_show.py + test_sourceregistry_wir
 Audit now clean. 8/8 watchers alive; spec watcher stable (restarts count is
 historical from earlier config-file-missing crashes, not current).
 
+## 2026-05-19 — ADR 0006 Phase 3: OC imports updated to CoreRunner
+
+- direct_local/adapter.py, aider_local/adapter.py, openclaw/invoke.py: executor_runtime → core_runner, ExecutorRuntime → CoreRunner.
+- _runtime_ref.py, contracts/execution.py, observability/trace.py, entrypoints/run_show/main.py: docstring/comment references updated.
+- pyproject.toml: executor-runtime dep → core-runner.
+- Installed core-runner from local ExecutorRuntime/src into .venv.
+- 3345 tests pass.
+
 ## 2026-05-19 — Removed remaining live kodo/archon references from src (final sweep)
 
 Renamed `kodo_exit_code` → `executor_exit_code` in validation.py dataclass + builder.
