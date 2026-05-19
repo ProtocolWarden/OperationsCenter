@@ -3,6 +3,26 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-19 — Watchdog cycle 14: WEAKLY-CONVERGENT — board stable; two Haiku parser fixes
+
+**Convergence:** WEAKLY-CONVERGENT. Board stable (applied=[]). All guards holding correctly. All watchers healthy.
+
+**Parser fixes this cycle:**
+- reaudit: was looking at `repos` key, actual output uses `backends` key → fixed. Verified: dag_executor + team_executor still need audit (persistent, expected).
+- watcher health: Haiku was grepping ALL log files including old sessions → stale exit_code/error data. Fixed to scope to most recent log per role only. watch-spec false alarm (consecutive_non143=2) was from 014915/021248 logs; actual spec watcher (PID 1770803) healthy all session.
+- custodian all_zero=null: parse still failing intermittently — findings=[] confirms clean; will investigate next cycle if persists.
+
+**STEP 1:** custodian: findings=[] (all_zero parse issue) | ghost: 1 event, active=[], fixed=[] | flow: 0 gaps | graph: ok | reaudit: dag_executor + team_executor (persistent, confirmed) | regressions: 0
+**STEP 2:** triage: b67bc0e0 escalation_commented (11th consecutive ✓)
+**STEP 2.5 board-unblock:**
+- APPLIED: (none)
+- SKIPPED: 8871f757, 2824d46e — exit-code:0 guard (2nd cycle ✓); b67bc0e0, a969024e — SIGKILL guard (10th+ ✓)
+
+**STEP 7:** 15/15 tests ✓ (from prior cycle; none run this cycle — no repos touched)
+**STEP 8:** 8/8 watchers healthy. watch-spec false alarm resolved. running_tasks=[].
+
+**Cadence:** PARKED_OPERATOR_BLOCKED (1800s) — board stable, guards working, all watchers up
+
 ## 2026-05-19 — Watchdog cycle 13: WEAKLY-CONVERGENT — exit-code:0 guard working; board stable
 
 **Convergence:** WEAKLY-CONVERGENT. New exit-code:0 guard (board_unblock) correctly holding 8871f757 and 2824d46e — no longer cycling. board_unblock.applied=[] (board stable, no tasks moved). SIGKILL guard holding b67bc0e0/a969024e (9th consecutive ✓).

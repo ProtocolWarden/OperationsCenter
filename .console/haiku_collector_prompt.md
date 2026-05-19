@@ -108,7 +108,7 @@ python3 -c "
 import json
 try:
     d = json.load(open('/tmp/oc_reaudit.json'))
-    needed = [k for k,v in d.get('repos',{}).items() if isinstance(v,dict) and v.get('needed')]
+    needed = [k for k,v in d.get('backends', d.get('repos', {})).items() if isinstance(v,dict) and v.get('needed')]
     print(json.dumps({'repos_needing_audit': needed}))
 except Exception as e:
     print(json.dumps({'repos_needing_audit': [], 'parse_error': str(e)}))
@@ -161,13 +161,20 @@ Cross-reference with any "blocked" or "done" for same task IDs. Capture task IDs
 
 ```bash
 scripts/operations-center.sh watch-all-status
-grep -h "watcher_restart\|exit_code\|ERROR\|Traceback" logs/local/watch-all/*.log 2>/dev/null | tail -50
 ```
 
-For each watcher role, check:
-- Is it running? (from watch-all-status)
-- Any non-143 exit codes in logs? Count consecutive non-143 crashes.
-- Capture last error message for any crashing watcher.
+For exit codes and errors, look ONLY at the most recent log file per role (avoid stale data from prior sessions):
+```bash
+for role in intake goal test improve propose review spec watchdog; do
+  latest=$(ls logs/local/watch-all/ | grep "_${role}\.log$\|^${role}\.log$" | sort | tail -1)
+  if [ -n "$latest" ]; then
+    echo "=== $role: $latest ==="
+    grep -i "exit_code\|ERROR\|Traceback\|watcher_restart" "logs/local/watch-all/$latest" 2>/dev/null | tail -5
+  fi
+done
+```
+
+For each watcher role: running true/false (from watch-all-status), exit_code (most recent non-143 in CURRENT session log only, null if none), consecutive_non143 (count in current log), last_error (most recent ERROR/Traceback in current log, null if none).
 
 ---
 
