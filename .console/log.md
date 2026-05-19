@@ -3,6 +3,44 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-19 — Watchdog cycle 7: DEGRADED — review watcher crash-loop + backend_error pattern
+
+**Convergence:** WEAKLY-CONVERGENT (improving). G10 ghost-audit now reports status="fixed" for
+first time — ghost-audit detected SIGKILL guard is preventing recurrence. SIGKILL guard 4th
+consecutive clean cycle. Two in-flight tasks (8871f757, 2824d46e) currently Running after
+backend_error pattern (2 empty-body failures each before rate gate reset).
+
+**NEW FINDING — review watcher crash-loop (DEGRADED):**
+watch-review has been crash-looping since session start (01:49 UTC): exit_code=1,
+"no GitHub token — set GIT_TOKEN in .env", 370+ crash events. Root cause: GITHUB_TOKEN not
+propagated to watcher subprocess (watch-all started before .env sourced). Watchdog auto-restarts
+it but it crashes every ~60s. Anti-flap: created Plane task 35852f04 (seq #85). Fix: restart
+watch-all from shell with GITHUB_TOKEN exported. Do not restart while 8871f757/2824d46e are Running.
+
+**NEW FINDING — backend_error: Expecting value: line 1 column 1:**
+8871f757 "Fix 7 ruff lint violations": 2× empty-body executor response; currently Running.
+2824d46e "Restore repeated missing test signal coverage": 2× empty-body response; currently Running.
+Root cause: unknown (not OOM — 24Gi available; no dmesg signals). Watch for 3rd failure → escalate.
+
+**STEP 1:**
+- custodian: repos=7, all deltas=zero ✓ (3rd consecutive clean cycle)
+- ghost: total=1, active=['G10'] status="fixed" — first cycle ghost-audit confirmed fix
+- flow: gaps=0
+- graph-doctor: ok
+- reaudit: ['dag_executor', 'team_executor'] — persistent (non-blocking)
+- regressions: 0 ✓
+
+**STEP 2:** triage heal=1 (b67bc0e0 escalation_commented)
+**STEP 2.5 board-unblock:**
+- APPLIED: 2824d46e → R4AI (self-modify:approved, no SIGKILL label)
+- SKIPPED: b67bc0e0 — SIGKILL guard (4th consecutive ✓)
+- SKIPPED: a969024e — SIGKILL guard (4th consecutive ✓)
+
+**STEP 7:** 15/15 tests passed ✓
+**STEP 8:** 8/8 watchers running; watch-review crash-looping (exit_code=1) — Plane task 35852f04
+
+**Cadence:** DEGRADED (300s) — review watcher non-143 crash-loop; in-flight tasks uncertain.
+
 ## 2026-05-19 — Watchdog cycle 6: WEAKLY-CONVERGENT → stepping toward HEALTHY
 
 **Convergence:** WEAKLY-CONVERGENT. G10 ghost still in 1h window (aging-out pre-fix event from
