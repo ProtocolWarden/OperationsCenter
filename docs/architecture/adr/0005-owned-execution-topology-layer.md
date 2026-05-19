@@ -31,7 +31,7 @@ All three executors:
 - Accept `goal_text` verbatim (D1)
 - Produce `RuntimeResult` + `Evidence` natively (RxP)
 - Are built and governed under Custodian policies
-- Slot into ExecutorRuntime's existing dispatch path
+- Slot into CoreRunner's existing dispatch path
 
 ## Topology Inventory
 

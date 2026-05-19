@@ -1,4 +1,19 @@
 sources:
+  - name: CoreRunner
+    upstream_url: https://github.com/ProtocolWarden/CoreRunner
+    fork_url: https://github.com/ProtocolWarden/CoreRunner
+    local_path: /home/dev/Documents/GitHub/CoreRunner
+    branch: main
+    install_kind: python_package
+    install_modes:
+      prod: pip install git+ssh://git@github.com/ProtocolWarden/CoreRunner.git
+      ci: pip install git+https://github.com/ProtocolWarden/CoreRunner.git
+      dev: pip install -e {local_path}
+    local_clone_hint: ~/Documents/GitHub/CoreRunner
+    poll_cadence_hours: 24
+    auto_pr_push: false
+    auto_sync: false
+
   - name: TeamExecutor
     upstream_url: https://github.com/ProtocolWarden/TeamExecutor
     fork_url: https://github.com/ProtocolWarden/TeamExecutor

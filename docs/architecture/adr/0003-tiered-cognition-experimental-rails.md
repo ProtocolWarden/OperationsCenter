@@ -184,7 +184,7 @@ revisit by writing the change as a workflow YAML field instead.
 Adapters that can't measure stay None. Don't synthesize a number. A
 trace with `cost_usd=None` is honest; a trace with a guessed number is
 worse than no trace. The G-V01 discipline (adapters that don't invoke
-ExecutorRuntime leave `runtime_invocation_ref` None) is the precedent.
+CoreRunner leave `runtime_invocation_ref` None) is the precedent.
 
 ### G3. The experiment surface is the trace, not a new endpoint
 
