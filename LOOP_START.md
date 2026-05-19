@@ -5,6 +5,17 @@ Full runbook: [`docs/operator/watchdog_loop.md`](docs/operator/watchdog_loop.md)
 
 ---
 
+## Step 0 — Sync all repos
+
+```bash
+for repo in OperationsCenter SwitchBoard TeamExecutor DAGExecutor CritiqueExecutor ExecutorRuntime CxRP RxP PlatformDeployment PlatformManifest Custodian SourceRegistry OperatorConsole RepoGraph ProtocolWarden ProtocolWarden.github.io; do
+  dir="/home/dev/Documents/GitHub/$repo"
+  [ -d "$dir/.git" ] && echo "$repo: $(git -C "$dir" pull --ff-only 2>&1 | tail -1)"
+done
+```
+
+---
+
 ## Step 1 — Bring up the platform
 
 ```bash

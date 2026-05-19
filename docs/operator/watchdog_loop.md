@@ -28,6 +28,15 @@ with a system scheduler.
 > That file has the bring-up commands and the full `/loop` prompt as a single copy-paste block.
 > The sections below are the detailed reference behind it.
 
+**Step 0 — Sync all repos:**
+
+```bash
+for repo in OperationsCenter SwitchBoard TeamExecutor DAGExecutor CritiqueExecutor ExecutorRuntime CxRP RxP PlatformDeployment PlatformManifest Custodian SourceRegistry OperatorConsole RepoGraph ProtocolWarden ProtocolWarden.github.io; do
+  dir="/home/dev/Documents/GitHub/$repo"
+  [ -d "$dir/.git" ] && echo "$repo: $(git -C "$dir" pull --ff-only 2>&1 | tail -1)"
+done
+```
+
 **Step 1 — Bring up the platform:**
 
 ```bash
