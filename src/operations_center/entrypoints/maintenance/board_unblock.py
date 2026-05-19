@@ -28,6 +28,9 @@ Applies five rules on every run:
     (blocked-by: label) is either absent or already in a terminal state → move to
     Ready for AI.  These tasks have operator approval to proceed; keeping them Blocked
     when the dependency is gone is pure queue waste.
+    Exception: tasks with "executor-signal: SIGKILL" are skipped — a SIGKILL indicates
+    a systemic failure (timeout, OOM) that requires triage review before re-dispatch.
+    Rule 1 cancels such tasks once retry-count reaches ≥3.
 
   Rule 5 — STALE_IN_REVIEW
     Tasks in "In Review" state for longer than --stale-blocked-hours (default 4h) →
@@ -232,8 +235,22 @@ def _apply_rules(
         # Rule 4 — self-modify:approved tasks blocked on a resolved (or absent) dependency
         # Skipped when memory is below the executor dispatch threshold — requeueing to R4AI
         # when memory is low would cause the executor to get OOM-killed on the next dispatch.
+        # Also skipped when executor-signal:SIGKILL is present — SIGKILL'd tasks have a
+        # systemic failure (timeout, OOM) and should not be automatically re-dispatched;
+        # they require triage review before retrying (Rule 1 cancels at ≥3 retries).
         if state_lower == "blocked" and _has_label(labels, _SELF_MODIFY_APPROVED_LABEL):
-            if mem_available_gb < _MEM_R4AI_THRESHOLD_GB:
+            executor_signal_val = _label_value(labels, _SIGKILL_SIGNAL_PREFIX) or ""
+            if "sigkill" in executor_signal_val.lower():
+                actions.append({
+                    "task_id": task_id,
+                    "title": title,
+                    "rule": "SELF_MODIFY_REQUEUE",
+                    "from_state": state,
+                    "to_state": "Ready for AI",
+                    "reason": f"SKIPPED — executor-signal:SIGKILL present; triage review required before requeue",
+                    "skipped": True,
+                })
+            elif mem_available_gb < _MEM_R4AI_THRESHOLD_GB:
                 actions.append({
                     "task_id": task_id,
                     "title": title,
