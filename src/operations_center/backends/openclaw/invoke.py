@@ -8,7 +8,7 @@ Subclass it to provide a real implementation; use StubOpenClawRunner or a
 MagicMock(spec=OpenClawRunner) in tests.
 
 OpenClawBackendInvoker constructs an RxP ``RuntimeInvocation`` and hands
-it to ``ExecutorRuntime`` (which routes ``runtime_kind="manual"`` to a
+it to ``CoreRunner`` (which routes ``runtime_kind="manual"`` to a
 ``ManualRunner`` registered with an openclaw-specific dispatcher),
 receives an RxP ``RuntimeResult`` back, and assembles the
 ``OpenClawRunCapture`` for the normalizer.
@@ -27,8 +27,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from executor_runtime import ExecutorRuntime
-from executor_runtime.runners import ManualRunner
+from core_runner import CoreRunner
+from core_runner.runners import ManualRunner
 from rxp.contracts import RuntimeInvocation, RuntimeResult
 
 from .models import OpenClawArtifactCapture, OpenClawRunCapture, OpenClawPreparedRun
@@ -63,15 +63,15 @@ class StubOpenClawRunner(OpenClawRunner):
 
 
 class OpenClawBackendInvoker:
-    """Invokes OpenClaw via ExecutorRuntime + ManualRunner."""
+    """Invokes OpenClaw via CoreRunner + ManualRunner."""
 
     def __init__(
         self,
         runner: OpenClawRunner,
-        runtime: ExecutorRuntime | None = None,
+        runtime: CoreRunner | None = None,
     ) -> None:
         self._runner = runner
-        self._runtime = runtime or ExecutorRuntime()
+        self._runtime = runtime or CoreRunner()
 
     def invoke(self, prepared: OpenClawPreparedRun) -> OpenClawRunCapture:
         started_at = _now()

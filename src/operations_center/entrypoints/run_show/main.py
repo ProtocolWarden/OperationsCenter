@@ -138,7 +138,7 @@ def _print_trace(trace: dict) -> None:
                 table.add_row(field, rendered)
         _console.print(table)
     else:
-        _console.print("[dim](no runtime_invocation_ref — adapter did not invoke ExecutorRuntime)[/dim]")
+        _console.print("[dim](no runtime_invocation_ref — adapter did not invoke CoreRunner)[/dim]")
 
     warnings = trace.get("warnings") or []
     if warnings:
