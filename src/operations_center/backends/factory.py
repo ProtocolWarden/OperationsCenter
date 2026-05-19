@@ -18,8 +18,11 @@ from operations_center.contracts.enums import BackendName
 from operations_center.contracts.execution import ExecutionRequest, ExecutionResult
 
 from .aider_local import AiderLocalBackendAdapter
+from .critique_executor import CritiqueExecutorBackendAdapter
+from .dag_executor import DAGExecutorBackendAdapter
 from .direct_local import DirectLocalBackendAdapter
 from .openclaw import OpenClawBackendAdapter
+from .team_executor import TeamExecutorBackendAdapter
 
 
 class CanonicalBackendAdapter(Protocol):
@@ -58,6 +61,15 @@ class CanonicalBackendRegistry:
             ),
             BackendName.AIDER_LOCAL: AiderLocalBackendAdapter(
                 settings.aider_local,
+            ),
+            BackendName.TEAM_EXECUTOR: TeamExecutorBackendAdapter(
+                settings.team_executor,
+            ),
+            BackendName.DAG_EXECUTOR: DAGExecutorBackendAdapter(
+                settings.dag_executor,
+            ),
+            BackendName.CRITIQUE_EXECUTOR: CritiqueExecutorBackendAdapter(
+                settings.critique_executor,
             ),
         }
         if openclaw_runner is not None:
