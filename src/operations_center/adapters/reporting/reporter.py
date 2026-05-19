@@ -44,7 +44,7 @@ class Reporter:
         path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
         return str(path)
 
-    def write_kodo(self, run_dir: Path, command_json: str, stdout: str, stderr: str, *, prefix: str = "kodo") -> list[str]:
+    def write_backend_run(self, run_dir: Path, command_json: str, stdout: str, stderr: str, *, prefix: str = "backend") -> list[str]:
         cmd = run_dir / f"{prefix}_command.json"
         out = run_dir / f"{prefix}_stdout.log"
         err = run_dir / f"{prefix}_stderr.log"
