@@ -81,7 +81,7 @@ class ExecutionOutcomeDeriver:
 
             # Read stderr/stdout for pattern matching
             stderr = ""
-            for candidate in ("stderr.txt", "stdout.txt", "kodo_stderr.txt"):
+            for candidate in ("stderr.txt", "stdout.txt", "backend_stderr.log"):
                 p = run_dir / candidate
                 if p.exists():
                     try:

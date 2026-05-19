@@ -10,8 +10,8 @@ Usage in a backend's drift test:
 
     from operations_center.drift.testing import DriftInjectionFixture
 
-    def test_kodo_drift_runtime():
-        fix = DriftInjectionFixture(backend_id="kodo", request_id="req-1")
+    def test_team_executor_drift_runtime():
+        fix = DriftInjectionFixture(backend_id="team_executor", request_id="req-1")
         finding = fix.inject_runtime(
             bound={"kind": "cli_subscription", "model": "opus"},
             observed={"kind": "cli_subscription", "model": "sonnet"},

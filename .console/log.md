@@ -7430,3 +7430,11 @@ Fixed K1/OC8 findings: unquoted _get_kodo_version and build_command in autonomy_
 (backtick references to symbols removed in ADR 0005).
 Deleted 3 orphan docs/specs/ files (DC7) created by test-cleanup agent.
 Custodian now 0 findings.
+
+### Dead kodo code cleanup (2026-05-18)
+Removed final functional kodo remnants post ADR-0005:
+- RepoSettings.executor default: "kodo" → "team_executor" (field was read nowhere)
+- reporter.py: write_kodo() → write_backend_run() (had no callers)
+- execution_outcome.py: "kodo_stderr.txt" → "backend_stderr.log" in search candidates
+- drift/testing.py: docstring example updated from kodo to team_executor
+3324 tests pass. Integration test failure pre-existing: live SB still runs old binary.

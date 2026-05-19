@@ -312,8 +312,10 @@ class RepoSettings(BaseModel):
     # (e.g. a file-tag linter that was broken before the PR landed).  Checks
     # whose names contain any of these strings are excluded from the failed list.
     ci_ignored_checks: list[str] = Field(default_factory=list)
-    # Phase 6 — executor selection. ``"kodo"`` (default) or ``"aider"``.
-    executor: str = "kodo"
+    # Executor selection hint for this repo. Valid values: ``"team_executor"``,
+    # ``"dag_executor"``, ``"critique_executor"``, ``"aider_local"``, ``"direct_local"``.
+    # Routing decisions are made by SwitchBoard; this is an operator preference hint only.
+    executor: str = "team_executor"
 
 
 class PlatformManifestSettings(BaseModel):
