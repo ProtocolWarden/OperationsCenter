@@ -7444,3 +7444,19 @@ Removed final functional kodo remnants post ADR-0005:
 - execution_outcome.py: "kodo_stderr.txt" → "backend_stderr.log" in search candidates
 - drift/testing.py: docstring example updated from kodo to team_executor
 3324 tests pass. Integration test failure pre-existing: live SB still runs old binary.
+
+## 2026-05-19 — ADR 0005 Phase 5: executor backend adapters + settings cleanup
+
+Cross-repo wiring (new work order `docs/architecture/adr/0005-work-order-p5.md`):
+- settings.py: removed api_key from TeamExecutorSettings + CritiqueExecutorSettings;
+  added worker_backend to all three executor settings; added working_dir to CritiqueExecutorSettings
+- Created backends/team_executor/, dag_executor/, critique_executor/ canonical adapters;
+  each wraps the executor's Runner and maps RuntimeResult → ExecutionResult
+- DAGExecutorBackendAdapter resolves .dag_executor/workflow.yaml or falls back to single-agent GraphSpec
+- factory.py: registered TEAM_EXECUTOR, DAG_EXECUTOR, CRITIQUE_EXECUTOR in from_settings()
+- 3324 tests pass (+ new factory test updated)
+
+## 2026-05-19 — Fix Custodian findings for p5 adapter push
+
+Removed unused Path/Optional imports from team_executor/adapter.py and critique_executor/adapter.py.
+Added 0005-work-order-p5.md to docs/README.md to fix DC7 orphan finding. Custodian now clean.

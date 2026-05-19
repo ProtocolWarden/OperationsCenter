@@ -133,19 +133,21 @@ class ResourceGateSettings(BaseModel):
 class TeamExecutorSettings(BaseModel):
     team_name: str = "default"
     timeout_seconds: int = 3600
-    api_key: str = ""
+    worker_backend: str = "claude_code"
 
 
 class DAGExecutorSettings(BaseModel):
     timeout_seconds: int = 3600
     artifacts_dir: str = ""
+    worker_backend: str = "claude_code"
 
 
 class CritiqueExecutorSettings(BaseModel):
     topology: str = "reflexion"
     max_rounds: int = 5
     timeout_seconds: int = 3600
-    api_key: str = ""
+    worker_backend: str = "claude_code"
+    working_dir: str = ""
 
 
 class AiderSettings(BaseModel):
