@@ -3,6 +3,28 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-19 — Watchdog cycle 18: WEAKLY-CONVERGENT — board stable; Haiku prompt hardened for watcher health
+
+**Convergence:** WEAKLY-CONVERGENT. Board stable (applied=[], 4 guards). Haiku spec exit_code=1/consecutive_non143=7 false positive confirmed for 3rd time (021248_spec.log has 0 error entries; 3768 lines total). Custodian produced 0-byte file in Haiku parallel execution (intermittent; tool works fine when run directly). All watchers healthy per heartbeats (22:20-22:22). b67bc0e0/a969024e SIGKILL open (15th triage cycle).
+
+**Root causes confirmed:**
+- spec exit_code=1 (3 cycles): Haiku hallucinates spec data from 014915 session. 021248_spec.log is clean. Heartbeat: spec idle 22:22 ✓
+- custodian 0-byte output: intermittent tool failure in Haiku parallel execution context. Verified working when run directly.
+- goal/improve "testing branch" last_error: Haiku reading morning errors from 021248 log (02:18-02:31 AM). Current heartbeats: idle 22:21-22:22 ✓
+
+**Fix applied:** haiku_collector_prompt.md STEP 8 updated — adds heartbeat file reads as primary health signal; restricts log grep to exit_code/watcher_restart only (not ERROR/Traceback); adds IMPORTANT classification rules to prevent per-task errors from being misreported as watcher crashes.
+
+**STEP 1:** custodian: 0-byte (intermittent) | ghost: 1 event, active=[], fixed=7 | flow: 0 | graph: ok | reaudit: dag_executor + team_executor | regressions: 0
+**STEP 2:** triage: b67bc0e0 escalation_commented (15th consecutive ✓)
+**STEP 2.5 board-unblock:**
+- APPLIED: (none)
+- SKIPPED: 8871f757, 2824d46e — exit-code:0 guard (6th cycle); b67bc0e0, a969024e — SIGKILL guard
+
+**STEP 7:** no repos touched this cycle.
+**STEP 8:** 8/8 watchers healthy (heartbeats). Haiku watcher health prompt hardened.
+
+**Cadence:** PARKED_OPERATOR_BLOCKED (1800s) — board stable, Haiku reliability improving, SIGKILL root cause open
+
 ## 2026-05-19 — Watchdog cycle 17: WEAKLY-CONVERGENT — board stable; Haiku log-file false positives identified
 
 **Convergence:** WEAKLY-CONVERGENT. Board stable (applied=[]). Custodian all_zero=true confirmed in Haiku (parser fix working). Ghost: 7 fixed (G1/G4/G5/G7/G8/G10/G12). All watchers healthy. Haiku reported review+spec last_error="Traceback" — both verified as false positives from older log files. b67bc0e0/a969024e SIGKILL open.

@@ -164,18 +164,31 @@ Cross-reference with any "blocked" or "done" for same task IDs. Capture task IDs
 scripts/operations-center.sh watch-all-status
 ```
 
-For exit codes and errors, look ONLY at the most recent log file per role (avoid stale data from prior sessions):
+Read current heartbeat files first (most reliable source for running/idle state):
+```bash
+for role in intake goal test improve propose review spec watchdog; do
+  echo "=== heartbeat_${role} ===" && cat "logs/local/watch-all/heartbeat_${role}.json" 2>/dev/null || echo "missing"
+done
+```
+
+For exit codes, look ONLY at the most recent log file per role (stale logs from older sessions must be ignored):
 ```bash
 for role in intake goal test improve propose review spec watchdog; do
   latest=$(ls logs/local/watch-all/ | grep "_${role}\.log$\|^${role}\.log$" | sort | tail -1)
   if [ -n "$latest" ]; then
-    echo "=== $role: $latest ==="
-    grep -i "exit_code\|ERROR\|Traceback\|watcher_restart" "logs/local/watch-all/$latest" 2>/dev/null | tail -5
+    echo "=== $role latest_log=$latest ==="
+    grep -i "exit_code\|watcher_restart" "logs/local/watch-all/$latest" 2>/dev/null | grep -v "exit_code.*143" | tail -5
   fi
 done
 ```
 
-For each watcher role: running true/false (from watch-all-status), exit_code (most recent non-143 in CURRENT session log only, null if none), consecutive_non143 (count in current log), last_error (most recent ERROR/Traceback in current log, null if none).
+IMPORTANT for watcher health classification:
+- Use heartbeat timestamp to confirm a watcher is alive (updated within last 5 minutes = running)
+- Use log grep ONLY for exit_code (non-143) and watcher_restart events — do NOT include ERROR/Traceback lines in last_error (those are per-task errors, not watcher crashes)
+- If heartbeat exists and is recent but log shows no exit_code entries → running=true, exit_code=null, consecutive_non143=0, last_error=null
+- consecutive_non143: count only watcher_restart events with exit_code != 143 in the SELECTED log file
+
+For each watcher role: running true/false (from heartbeat recency + watch-all-status), exit_code (most recent non-143 watcher_restart in CURRENT log only, null if none), consecutive_non143 (count in current log), last_error (null unless a watcher_restart exit_code is present).
 
 ---
 
