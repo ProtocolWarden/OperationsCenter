@@ -2,7 +2,7 @@
 # Copyright (C) 2026 ProtocolWarden
 """ExecutionOutcomeDeriver — Phase 4 execution feedback depth.
 
-Reads retained kodo_plane execution artifacts to classify failure patterns
+Reads retained executor_plane execution artifacts to classify failure patterns
 across recent runs and emit structured insights.  Unlike ExecutionHealthDeriver
 (which only sees aggregate success/failure counts), this deriver reads the
 actual execution transcripts and classifies *why* executions failed.
@@ -32,13 +32,13 @@ class ExecutionOutcomeDeriver:
     """Derives failure-pattern insights from retained execution transcripts.
 
     Reads ``control_outcome.json`` and ``stderr.txt`` (or ``stdout.txt``) from
-    ``tools/report/kodo_plane/`` run directories.  Falls back gracefully when
+    ``tools/report/executor_plane/`` run directories.  Falls back gracefully when
     artifacts are absent.
     """
 
     def __init__(self, normalizer: InsightNormalizer, *, artifact_root: Path | None = None) -> None:
         self.normalizer = normalizer
-        self._artifact_root = artifact_root or Path("tools/report/kodo_plane")
+        self._artifact_root = artifact_root or Path("tools/report/executor_plane")
 
     def derive(self, snapshots: Sequence[RepoStateSnapshot]) -> list[DerivedInsight]:
         if not snapshots:

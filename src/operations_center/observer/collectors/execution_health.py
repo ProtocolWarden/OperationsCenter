@@ -13,7 +13,7 @@ _RECENT_RUNS_IN_SIGNAL = 10
 
 
 class ExecutionArtifactCollector:
-    """Reads retained kodo_plane execution artifacts for a specific repo and
+    """Reads retained executor_plane execution artifacts for a specific repo and
     surfaces execution health metrics (no_op rate, validation failure rate)
     that feed the downstream insight → decision → propose pipeline."""
 

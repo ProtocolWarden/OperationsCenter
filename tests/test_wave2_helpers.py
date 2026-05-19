@@ -118,7 +118,7 @@ def test_improve_triage_filters_invalid_suggestions(tmp_path):
         summary="ok",
         suggestions=[{"title": "real"}, "not-a-dict", {}, {"title": "another"}],
         workspace_path=tmp_path,
-        kodo_exit_code=0,
+        executor_exit_code=0,
     )
     assert out.success
     assert len(out.suggestions) == 2
@@ -132,6 +132,6 @@ def test_improve_triage_truncates_summary(tmp_path):
         summary="x" * 1000,
         suggestions=None,
         workspace_path=tmp_path,
-        kodo_exit_code=1,
+        executor_exit_code=1,
     )
     assert len(out.summary) == 500

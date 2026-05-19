@@ -192,16 +192,15 @@ def ensure_executor_installed(binary: str, install_ref: str | None = None) -> No
     if check_command_installed(binary):
         typer.echo("[executor] already installed")
         return
-    if binary != "kodo":
+    if binary != "team-executor":
         raise typer.BadParameter(
-            f"[executor] ERROR: custom executor binary '{binary}' is not on PATH and automatic install only supports 'kodo'"
+            f"[executor] ERROR: custom executor binary '{binary}' is not on PATH and automatic install only supports 'team-executor'"
         )
     ensure_uv_installed()
-    typer.echo("[executor] Installing via uv (ProtocolWarden fork, dev branch)...")
-    # Use the ProtocolWarden fork which contains fixes not in upstream:
-    # - --full-auto replaced with -a never for Codex orchestrator
+    typer.echo("[executor] Installing via uv (ProtocolWarden TeamExecutor)...")
+    # Use the ProtocolWarden TeamExecutor repo.
     # install_ref overrides the default branch for pinned installs.
-    fork_url = "git+https://github.com/ProtocolWarden/kodo.git"
+    fork_url = "git+https://github.com/ProtocolWarden/TeamExecutor.git"
     ref = install_ref or "dev"
     target = f"{fork_url}@{ref}"
     proc = subprocess.run(
@@ -1005,13 +1004,13 @@ def main(
         ).strip() or None
     ensure_github_ssh_setup(git_author_email, Path.cwd())
 
-    existing_executor_binary = existing_config_value(existing_config, "team_executor", "binary") or "kodo"
+    existing_executor_binary = existing_config_value(existing_config, "team_executor", "binary") or "team-executor"
     executor_install_ref = existing_env.get("OPERATIONS_CENTER_EXECUTOR_INSTALL_REF") or None
     print_section("Executor Install", "Ensure the executor CLI is available before writing config.")
     executor_binary = prompt_with_default(
         "Executor binary",
         existing_executor_binary,
-        note="Using saved value." if existing_executor_binary != "kodo" or existing_config_value(existing_config, "team_executor", "binary") else None,
+        note="Using saved value." if existing_executor_binary != "team-executor" or existing_config_value(existing_config, "team_executor", "binary") else None,
     )
     if advanced_mode:
         executor_install_ref = typer.prompt(

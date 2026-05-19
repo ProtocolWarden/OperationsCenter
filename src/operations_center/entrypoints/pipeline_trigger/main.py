@@ -8,7 +8,7 @@ watches for trigger events and fires the autonomy pipeline reactively:
 Trigger sources:
   1. Git repo fetch — ``repos[].local_path/.git/FETCH_HEAD`` mtime advances
   2. Error ingest — ``state/error_ingest_dedup.json`` is updated
-  3. CI failure sentinel — new failure files appear in ``tools/report/kodo_plane/``
+  3. CI failure sentinel — new failure files appear in ``tools/report/executor_plane/``
 
 When any trigger fires, ``autonomy-cycle --config <config> --execute`` is run
 (unless the last run was within ``min_interval_seconds`` to prevent thrash).
@@ -62,7 +62,7 @@ def _get_trigger_sources(config_path: str) -> list[Path]:
     sources.append(Path("state/error_ingest_dedup.json"))
 
     # CI failure artifacts directory (watch for new subdirs)
-    sources.append(Path("tools/report/kodo_plane"))
+    sources.append(Path("tools/report/executor_plane"))
 
     # Git repo FETCH_HEAD files
     try:

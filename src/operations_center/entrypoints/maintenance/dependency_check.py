@@ -110,31 +110,31 @@ def collect_dependency_statuses(settings: Settings, env: dict[str, str]) -> list
     )
 
     try:
-        proc = subprocess.run(["kodo", "--version"], check=False, capture_output=True, text=True, timeout=10)
-        kodo_version_raw = (proc.stdout or proc.stderr).strip() if proc.returncode == 0 else ""
+        proc = subprocess.run(["team-executor", "--version"], check=False, capture_output=True, text=True, timeout=10)
+        executor_version_raw = (proc.stdout or proc.stderr).strip() if proc.returncode == 0 else ""
     except Exception:
-        kodo_version_raw = ""
-    kodo_installed = bool(kodo_version_raw)
-    kodo_installed_version = normalize_version(kodo_version_raw)
-    kodo_pinned = normalize_version(env.get("OPERATIONS_CENTER_KODO_INSTALL_REF"))
-    kodo_latest = fetch_github_latest_release("ikamensh", "kodo")
-    kodo_notes: list[str] = []
-    if not kodo_installed:
-        kodo_notes.append("Kodo is not installed or not on PATH.")
-    if kodo_pinned and kodo_installed_version and kodo_pinned != kodo_installed_version:
-        kodo_notes.append(f"Installed version {kodo_installed_version} does not match pinned ref {kodo_pinned}.")
-    if kodo_pinned and kodo_latest and kodo_pinned != kodo_latest:
-        kodo_notes.append(f"Pinned ref {kodo_pinned} differs from upstream latest {kodo_latest}.")
+        executor_version_raw = ""
+    executor_installed = bool(executor_version_raw)
+    executor_installed_version = normalize_version(executor_version_raw)
+    executor_pinned = normalize_version(env.get("OPERATIONS_CENTER_EXECUTOR_INSTALL_REF"))
+    executor_latest = fetch_github_latest_release("ProtocolWarden", "TeamExecutor")
+    executor_notes: list[str] = []
+    if not executor_installed:
+        executor_notes.append("team-executor is not installed or not on PATH.")
+    if executor_pinned and executor_installed_version and executor_pinned != executor_installed_version:
+        executor_notes.append(f"Installed version {executor_installed_version} does not match pinned ref {executor_pinned}.")
+    if executor_pinned and executor_latest and executor_pinned != executor_latest:
+        executor_notes.append(f"Pinned ref {executor_pinned} differs from upstream latest {executor_latest}.")
     statuses.append(
         DependencyStatus(
-            key="kodo",
-            label="Kodo",
+            key="team_executor",
+            label="TeamExecutor",
             kind="cli",
-            installed_version=kodo_installed_version,
-            pinned_version=kodo_pinned,
-            upstream_latest=kodo_latest,
-            healthy=kodo_installed,
-            notes=kodo_notes,
+            installed_version=executor_installed_version,
+            pinned_version=executor_pinned,
+            upstream_latest=executor_latest,
+            healthy=executor_installed,
+            notes=executor_notes,
         )
     )
 

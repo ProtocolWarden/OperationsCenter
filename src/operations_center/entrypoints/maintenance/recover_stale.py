@@ -2,7 +2,7 @@
 # Copyright (C) 2026 ProtocolWarden
 """Recover Plane tasks stuck in `Running` state.
 
-A worker can die mid-task (OOM, restart, kodo subprocess hang) and leave
+A worker can die mid-task (OOM, restart, executor subprocess hang) and leave
 Plane showing "Running" indefinitely. The ghost-work audit detects these as
 G8 but doesn't reclaim them. This entrypoint resets stale Running tasks to
 Ready for AI with an audit comment so they can be re-claimed.

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-"""Baseline validation step — run repo's validation_commands before kodo.
+"""Baseline validation step — run repo's validation_commands before the executor.
 
 Wires the previously-dead RepoSettings fields:
 
@@ -9,14 +9,14 @@ Wires the previously-dead RepoSettings fields:
   • skip_baseline_validation  (per-repo opt-out)
 
 What this *is*: a callable function the WorkspaceManager can run after
-the clone but before kodo. It executes each configured command in
+the clone but before the executor. It executes each configured command in
 sequence; first non-zero exit aborts the chain. Returns a
 ValidationSummary the caller embeds in the eventual ExecutionResult.
 
-What this is NOT: post-execution validation (run after kodo). That's a
-separate concern — the existing kodo capture already records exit codes;
+What this is NOT: post-execution validation (run after the executor). That's a
+separate concern — the existing executor capture already records exit codes;
 adding a post-validation gate is its own design decision (which test
-failures attribute to kodo's changes vs. pre-existing? — same conundrum
+failures attribute to the executor's changes vs. pre-existing? — same conundrum
 as F10 intent verification).
 
 Invariants:

@@ -5,7 +5,7 @@
 Cited by `docs/design/autonomy/autonomy_gaps.md` Wave 2 entries (S3-2, S7-7, etc.).
 Each function is a small read-only check; together they form a
 pre-flight stage that the coordinator (or a dedicated validator) can
-run before invoking kodo.
+run before invoking the executor.
 
 None of these wire themselves into the pipeline automatically — wiring
 is a per-feature decision. They're available as building blocks.
@@ -35,7 +35,7 @@ class EnvironmentCheck:
 
 
 def _check_execution_environment(workspace_path: Path, *, required_files: tuple[str, ...] = ()) -> EnvironmentCheck:
-    """Verify the workspace looks ready for kodo to run.
+    """Verify the workspace looks ready for the executor to run.
 
     Cheap check — confirms the workspace is a populated git clone, optionally
     that key files exist. Returns a structured result rather than raising
@@ -62,7 +62,7 @@ def _collect_open_pr_files(gh_client, owner: str, repo: str, *, exclude_pr: int 
     """Return {pr_number: [file_paths]} for every open PR in the repo.
 
     Caller can use this to surface "another open PR is touching this file"
-    context to kodo, so it doesn't unknowingly create conflicting changes.
+    context to the executor, so it doesn't unknowingly create conflicting changes.
     Defensive: any per-PR fetch failure is silently dropped (best-effort).
     """
     out: dict[int, list[str]] = {}
@@ -120,17 +120,17 @@ def _has_conflict_with_active_task(
 
 @dataclass(frozen=True)
 class ImproveTriageResult:
-    """Structured outcome of an improve-mode kodo run.
+    """Structured outcome of an improve-mode executor run.
 
     Replaces the loose dict shape that downstream consumers were guessing
-    at. Carries the kodo verdict, any structured suggestions, and the
+    at. Carries the executor verdict, any structured suggestions, and the
     bookkeeping needed for follow-up task creation.
     """
     success: bool
     summary: str
     suggestions: tuple[dict, ...]
     workspace_path: str
-    kodo_exit_code: int
+    executor_exit_code: int
 
 
 def build_improve_triage_result(
@@ -139,7 +139,7 @@ def build_improve_triage_result(
     summary: str,
     suggestions: list[dict] | None,
     workspace_path: Path | str,
-    kodo_exit_code: int,
+    executor_exit_code: int,
 ) -> ImproveTriageResult:
     """Construct an ImproveTriageResult from the pieces.
 
@@ -155,5 +155,5 @@ def build_improve_triage_result(
         summary=str(summary or "")[:500],
         suggestions=tuple(valid),
         workspace_path=str(workspace_path),
-        kodo_exit_code=int(kodo_exit_code),
+        executor_exit_code=int(executor_exit_code),
     )

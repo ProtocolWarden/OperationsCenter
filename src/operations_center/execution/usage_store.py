@@ -261,7 +261,7 @@ class UsageStore:
     ) -> None:
         """Record one execution event.
 
-        ``backend`` (e.g. ``"kodo"``, ``"archon"``, ``"aider"``) is optional
+        ``backend`` (e.g. ``"team_executor"``, ``"dag_executor"``, ``"aider"``) is optional
         for backward compatibility but should be supplied by all new callers.
         It feeds ``budget_decision_for_backend()`` so the per-backend caps in
         ``Settings.backend_caps`` can be enforced. Without it, only the
@@ -303,7 +303,7 @@ class UsageStore:
         These events feed the circuit breaker in ``budget_decision``. Record
         after the task handler has determined the final outcome — not before.
 
-        ``backend`` (e.g. ``"kodo"``, ``"archon"``) tags which backend ran
+        ``backend`` (e.g. ``"team_executor"``, ``"dag_executor"``) tags which backend ran
         the work. ``backend_version`` is the binary/image version; the
         circuit breaker uses it to skip version-transition windows from
         failure-rate calculations (failures from the old version don't
@@ -332,9 +332,9 @@ class UsageStore:
         suppression_counts: dict[str, int],
         now: datetime,
     ) -> None:
-        """Record a kodo quality-erosion warning for the given task.
+        """Record an executor quality-erosion warning for the given task.
 
-        Quality warnings are emitted when a kodo run adds an above-threshold
+        Quality warnings are emitted when an executor run adds an above-threshold
         number of inline suppressions (``# noqa``, ``# type: ignore``, bare
         ``pass`` in test bodies).  These pass validation but erode code quality
         over time.  Recording them provides a queryable signal for operators and
@@ -345,7 +345,7 @@ class UsageStore:
             self._append_event(
                 data,
                 {
-                    "kind": "kodo_quality_warning",
+                    "kind": "executor_quality_warning",
                     "task_id": task_id,
                     "repo_key": repo_key,
                     "suppression_counts": suppression_counts,
@@ -364,7 +364,7 @@ class UsageStore:
     ) -> None:
         """Record a scope-policy violation for observability.
 
-        Scope violations occur when kodo modifies files outside the task's
+        Scope violations occur when the executor modifies files outside the task's
         ``allowed_paths`` after both the initial run and the policy-retry pass.
         Recording them enables the improve watcher and operators to detect
         patterns (e.g. a task family that consistently escapes its scope) via
@@ -399,7 +399,7 @@ class UsageStore:
         API key, monthly cap exhausted, billing issue), not a task-quality
         signal. The operator must top up credits or wait for a reset.
 
-        ``backend`` (e.g. ``"kodo"``, ``"archon"``) is required so
+        ``backend`` (e.g. ``"team_executor"``, ``"dag_executor"``) is required so
         ``audit_export`` and per-backend reporting can attribute the quota
         hit; quota exhaustion is meaningless without knowing which backend.
         """
@@ -887,9 +887,9 @@ class UsageStore:
         duration_seconds: float,
         now: datetime,
     ) -> None:
-        """Record the wall-clock duration of a kodo execution pass.
+        """Record the wall-clock duration of an executor execution pass.
 
-        Used to build a baseline that can detect abnormally long runs (e.g. kodo
+        Used to build a baseline that can detect abnormally long runs (e.g. the executor
         stuck in a loop) before the stale-running TTL fires.
         """
         with self._exclusive():
@@ -1001,7 +1001,7 @@ class UsageStore:
                     "duration_seconds": None,
                     "timestamp": e["timestamp"],
                 })
-            elif kind == "kodo_quality_warning":
+            elif kind == "executor_quality_warning":
                 audit_rows.append({
                     "kind": "quality_warning",
                     "task_id": e.get("task_id", ""),
@@ -1049,8 +1049,8 @@ class UsageStore:
     ) -> None:
         with self._exclusive():
             data = self.load()
-            # Only persist the signature for genuine no-op skips (kodo ran and
-            # made no changes).  Budget, cooldown, and kodo-gate skips must NOT
+            # Only persist the signature for genuine no-op skips (the executor ran and
+            # made no changes).  Budget, cooldown, and executor-gate skips must NOT
             # update last_task_signatures — they mean "worker was busy, try
             # again later", not "task is already satisfied".  Storing the
             # signature for non-noop skips causes a false noop match on the

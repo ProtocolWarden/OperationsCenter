@@ -3,6 +3,15 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-19 — Removed remaining live kodo/archon references from src (final sweep)
+
+Renamed `kodo_exit_code` → `executor_exit_code` in validation.py dataclass + builder.
+Renamed `kodo_quality_warning` event kind → `executor_quality_warning` in usage_store.py.
+Replaced kodo binary check with team-executor in dependency_check.py and setup/main.py.
+Updated executor_plane path references in pipeline_trigger, execution_outcome, observer,
+decision rules. Fixed docstrings in baseline_validation, brainstorm, triage_scan,
+recover_stale, openclaw/errors, aider_local/adapter. Updated tests to match.
+
 ## 2026-05-18 — Purged stale kodo/archon prose from src (ADR 0005 follow-up)
 
 Replaced all kodo/archon conceptual references in 21 src files with backend-generic
