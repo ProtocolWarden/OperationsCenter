@@ -247,7 +247,7 @@ def _apply_rules(
                     "rule": "SELF_MODIFY_REQUEUE",
                     "from_state": state,
                     "to_state": "Ready for AI",
-                    "reason": f"SKIPPED — executor-signal:SIGKILL present; triage review required before requeue",
+                    "reason": "SKIPPED — executor-signal:SIGKILL present; triage review required before requeue",
                     "skipped": True,
                 })
             elif mem_available_gb < _MEM_R4AI_THRESHOLD_GB:
