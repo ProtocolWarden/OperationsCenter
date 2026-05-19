@@ -7,9 +7,9 @@ This adapter runs the Aider CLI behind the canonical
 ExecutionRequest -> ExecutionResult contract for the local execution lane.
 
 Phase 2 + 3 of the OC runtime extraction: subprocess invocation is
-delegated to ``ExecutorRuntime`` (subprocess kind). The adapter
+delegated to ``CoreRunner`` (subprocess kind). The adapter
 constructs an RxP ``RuntimeInvocation``, hands it to
-``ExecutorRuntime.run``, reads stdout/stderr from the paths in the
+``CoreRunner.run``, reads stdout/stderr from the paths in the
 returned ``RuntimeResult``, and assembles the existing
 ``_DirectLocalRunResult`` for the adapter's downstream code.
 """
@@ -22,7 +22,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-from executor_runtime import ExecutorRuntime
+from core_runner import CoreRunner
 from rxp.contracts import RuntimeInvocation
 
 from operations_center.config.settings import AiderSettings
@@ -44,10 +44,10 @@ class DirectLocalBackendAdapter:
     def __init__(
         self,
         settings: AiderSettings,
-        runtime: ExecutorRuntime | None = None,
+        runtime: CoreRunner | None = None,
     ) -> None:
         self._settings = settings
-        self._runtime = runtime or ExecutorRuntime()
+        self._runtime = runtime or CoreRunner()
 
     def execute(self, request: ExecutionRequest) -> ExecutionResult:
         repo_path = Path(request.workspace_path)
@@ -205,7 +205,7 @@ class _DirectLocalRunResult:
 
 
 def _read_capture(path: str | None) -> str:
-    """Read a captured stdout/stderr file produced by ExecutorRuntime."""
+    """Read a captured stdout/stderr file produced by CoreRunner."""
     if not path:
         return ""
     p = Path(path)

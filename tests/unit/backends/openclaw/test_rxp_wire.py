@@ -1,19 +1,19 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-"""Phase 2 + 3 — RxP wire + ExecutorRuntime delegation for openclaw.
+"""Phase 2 + 3 — RxP wire + CoreRunner delegation for openclaw.
 
 OpenClaw is dispatched to an external runner (the abstract
 ``OpenClawRunner`` subclass) — same shape as archon's manual-kind
 path. These tests pin the RuntimeInvocation/RuntimeResult contract
-and verify the invoker routes through ExecutorRuntime.
+and verify the invoker routes through CoreRunner.
 """
 from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
 
-from executor_runtime import ExecutorRuntime
-from executor_runtime.runners import ManualRunner
+from core_runner import CoreRunner
+from core_runner.runners import ManualRunner
 from rxp.contracts import RuntimeInvocation
 
 from operations_center.backends.openclaw.invoke import (
@@ -107,12 +107,12 @@ class TestBuildRuntimeResult:
         assert r.status == "succeeded"
 
 
-class TestExecutorRuntimeDelegation:
-    def test_invoker_routes_through_executor_runtime(self, tmp_path):
+class TestCoreRunnerDelegation:
+    def test_invoker_routes_through_core_runner(self, tmp_path):
         runner = StubOpenClawRunner(
             OpenClawRunResult(outcome="success", exit_code=0, output_text="ok"),
         )
-        runtime = ExecutorRuntime()
+        runtime = CoreRunner()
         invoker = OpenClawBackendInvoker(runner, runtime=runtime)
         capture = invoker.invoke(_prepared(tmp_path))
         assert capture.outcome == "success"
@@ -127,7 +127,7 @@ class TestExecutorRuntimeDelegation:
     def test_dispatcher_receives_runtime_invocation(self, tmp_path):
         captured: list[RuntimeInvocation] = []
         runner = StubOpenClawRunner(OpenClawRunResult(outcome="success"))
-        runtime = ExecutorRuntime()
+        runtime = CoreRunner()
         original_register = runtime.register
 
         def _spy_register(kind, runner_obj):

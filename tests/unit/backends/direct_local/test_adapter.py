@@ -2,7 +2,7 @@
 # Copyright (C) 2026 ProtocolWarden
 """Tests for DirectLocalBackendAdapter.
 
-Phase 3 — the adapter delegates subprocess execution to ExecutorRuntime,
+Phase 3 — the adapter delegates subprocess execution to CoreRunner,
 so tests inject a fake runtime via the new ``runtime=`` parameter
 rather than patching ``subprocess.run`` globally.
 """
@@ -47,7 +47,7 @@ def _request(tmp_path: Path, **kw) -> ExecutionRequest:
 
 
 class _FakeRuntime:
-    """ExecutorRuntime stand-in that writes the configured stdout/stderr
+    """CoreRunner stand-in that writes the configured stdout/stderr
     to the invocation's artifact_directory and returns a synthetic
     RuntimeResult. The exit_code is auto-derived from status when not
     explicitly set.

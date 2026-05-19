@@ -2,7 +2,7 @@
 # Copyright (C) 2026 ProtocolWarden
 """Helper for building ``ExecutionResult.runtime_invocation_ref``.
 
-Adapters that delegate execution mechanics to ExecutorRuntime call
+Adapters that delegate execution mechanics to CoreRunner call
 ``runtime_invocation_ref(invocation, rxp_result)`` and pass the result
 into ``ExecutionResult(...)``. This is the canonical place where the OC
 ↔ RxP linkage is captured.

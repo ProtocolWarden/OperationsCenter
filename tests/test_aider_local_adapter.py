@@ -2,7 +2,7 @@
 # Copyright (C) 2026 ProtocolWarden
 """Tests for AiderLocalBackendAdapter.
 
-Phase 3 — the adapter delegates subprocess execution to ExecutorRuntime,
+Phase 3 — the adapter delegates subprocess execution to CoreRunner,
 so tests inject a fake runtime via the new ``runtime=`` parameter
 rather than patching ``subprocess.run`` for the aider invocation. Git
 diff (``_discover_changed_files``) still uses subprocess.run and is
@@ -50,7 +50,7 @@ def _request(tmp_path: Path, **kw) -> ExecutionRequest:
 
 
 class _FakeRuntime:
-    """ExecutorRuntime stand-in for the aider invocation. Captures the
+    """CoreRunner stand-in for the aider invocation. Captures the
     last invocation (so tests can assert on env / command), writes
     stdout/stderr to the artifact_directory, and returns a synthetic
     RuntimeResult.

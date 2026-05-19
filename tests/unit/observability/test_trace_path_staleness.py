@@ -2,7 +2,7 @@
 # Copyright (C) 2026 ProtocolWarden
 """Hardening arc item 4 — artifact-path staleness checks at trace build.
 
-When the temp directory holding an ExecutorRuntime stdout/stderr capture
+When the temp directory holding an CoreRunner stdout/stderr capture
 is reaped between the run and the trace build, the trace must surface a
 warning (not error) so an operator using ``operations-center-run-show``
 sees the staleness up front instead of debugging a missing path.

@@ -71,7 +71,7 @@ class ExecutionTrace(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     backend_detail_refs: list[BackendDetailRef] = Field(default_factory=list)
     # G-V03 — forward the OC ↔ RxP linkage so a single trace has the full
-    # provenance chain. None for adapters that do not invoke ExecutorRuntime
+    # provenance chain. None for adapters that do not invoke CoreRunner
     # (e.g. demo_stub).
     runtime_invocation_ref: Optional[RuntimeInvocationRef] = None
     # G-V03 — forward SwitchBoard routing provenance from
@@ -185,7 +185,7 @@ class RunReportBuilder:
             warnings.append("no primary artifacts produced by this run")
         if record.result.failure_category == FailureReasonCategory.NO_CHANGES:
             warnings.append("run completed with no file changes")
-        # Artifact-path staleness — ExecutorRuntime writes stdout/stderr
+        # Artifact-path staleness — CoreRunner writes stdout/stderr
         # and an artifact_directory under tmp; if the dir was reaped
         # between the run and the trace build, surface a warning rather
         # than silently shipping a dead path. (We intentionally do NOT

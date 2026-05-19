@@ -13,7 +13,7 @@ PrivateManifest publishes the private graph instance and boundary artifact.
 CxRP owns execution/routing contract semantics.
 RxP owns runtime invocation semantics.
 OperationsCenter owns governance and orchestration implementation.
-ExecutorRuntime performs runtime invocation for OperationsCenter.
+CoreRunner performs runtime invocation for OperationsCenter.
 PlatformDeployment (current repo: PlatformDeployment) deploys and hosts runtime environments.
 Managed private projects remain separate from OperationsCenter.
 Custodian detects leaks and hygiene violations against declared policy.
@@ -47,7 +47,7 @@ OperationsCenter does not read PlatformManifest to define:
 * `RuntimeInvocation` semantics
 * backend runtime protocol details
 
-Those stay in CxRP, RxP, SwitchBoard, and ExecutorRuntime respectively.
+Those stay in CxRP, RxP, SwitchBoard, and CoreRunner respectively.
 
 ## Base Manifest Rule
 
@@ -75,11 +75,11 @@ The execution split remains:
    execution contracts.
 2. SwitchBoard returns the routing decision.
 3. OperationsCenter binds and orchestrates execution.
-4. ExecutorRuntime performs runtime invocation using RxP semantics.
+4. CoreRunner performs runtime invocation using RxP semantics.
 5. PlatformDeployment hosts and deploys the runtime environment.
 
 That split matters because PlatformDeployment is not the OC backend, and
-ExecutorRuntime is not the topology owner.
+CoreRunner is not the topology owner.
 
 ## Managed Projects
 

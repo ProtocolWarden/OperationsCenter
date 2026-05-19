@@ -16,7 +16,7 @@ dependencies = [
   "cxrp @ git+https://github.com/ProtocolWarden/CxRP.git@v0.3.1",
   "source-registry @ git+https://github.com/ProtocolWarden/SourceRegistry.git",
   "rxp @ git+https://github.com/ProtocolWarden/RxP.git",
-  "executor-runtime @ git+https://github.com/ProtocolWarden/ExecutorRuntime.git",
+  "core-runner @ git+https://github.com/ProtocolWarden/CoreRunner.git",
   "platform-manifest @ git+https://github.com/ProtocolWarden/PlatformManifest.git@v1.0.0",
 ]
 

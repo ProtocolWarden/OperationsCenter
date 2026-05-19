@@ -31,7 +31,7 @@ with a system scheduler.
 **Step 0 — Sync all repos:**
 
 ```bash
-for repo in OperationsCenter SwitchBoard TeamExecutor DAGExecutor CritiqueExecutor ExecutorRuntime CxRP RxP PlatformDeployment PlatformManifest Custodian SourceRegistry OperatorConsole RepoGraph ProtocolWarden ProtocolWarden.github.io; do
+for repo in OperationsCenter SwitchBoard TeamExecutor DAGExecutor CritiqueExecutor CoreRunner CxRP RxP PlatformDeployment PlatformManifest Custodian SourceRegistry OperatorConsole RepoGraph ProtocolWarden ProtocolWarden.github.io; do
   dir="/home/dev/Documents/GitHub/$repo"
   [ -d "$dir/.git" ] && echo "$repo: $(git -C "$dir" pull --ff-only 2>&1 | tail -1)"
 done
@@ -235,7 +235,7 @@ Acquire/verify logs/local/watchdog_loop.lock via:
   scripts/operations-center.sh watchdog-loop-acquire
 If another live owner exists, abort. If stale, reclaim.
 Sync all repos:
-  for repo in OperationsCenter SwitchBoard TeamExecutor DAGExecutor CritiqueExecutor ExecutorRuntime CxRP RxP PlatformDeployment PlatformManifest Custodian SourceRegistry OperatorConsole RepoGraph ProtocolWarden ProtocolWarden.github.io; do
+  for repo in OperationsCenter SwitchBoard TeamExecutor DAGExecutor CritiqueExecutor CoreRunner CxRP RxP PlatformDeployment PlatformManifest Custodian SourceRegistry OperatorConsole RepoGraph ProtocolWarden ProtocolWarden.github.io; do
     dir="/home/dev/Documents/GitHub/$repo"
     [ -d "$dir/.git" ] && echo "$repo: $(git -C "$dir" pull --ff-only 2>&1 | tail -1)"
   done

@@ -2,7 +2,7 @@
 # Copyright (C) 2026 ProtocolWarden
 """G-V01 traceability tests — OC ExecutionResult ↔ RxP RuntimeResult linkage.
 
-Adapters that delegate to ExecutorRuntime must populate
+Adapters that delegate to CoreRunner must populate
 ``ExecutionResult.runtime_invocation_ref`` so an audit consumer can reach
 the underlying RxP RuntimeResult artifacts (stdout/stderr/artifact_dir)
 from the OC result alone. Adapters that do not invoke a runtime (e.g.
@@ -38,7 +38,7 @@ def _request(tmp_path: Path) -> ExecutionRequest:
 
 
 class _CapturingFakeRuntime:
-    """ExecutorRuntime stand-in that records the invocation it received."""
+    """CoreRunner stand-in that records the invocation it received."""
 
     def __init__(self, *, status: str = "succeeded") -> None:
         self.status = status
@@ -122,7 +122,7 @@ class TestRuntimeInvocationRefHelper:
 
 
 # ---------------------------------------------------------------------------
-# direct_local adapter — real path through ExecutorRuntime
+# direct_local adapter — real path through CoreRunner
 # ---------------------------------------------------------------------------
 
 
@@ -137,7 +137,7 @@ class TestDirectLocalRuntimeInvocationRef:
         assert result.runtime_invocation_ref is not None
         ref = result.runtime_invocation_ref
         # Identity invariant: ExecutionResult ref points at the
-        # exact RuntimeInvocation that ExecutorRuntime received.
+        # exact RuntimeInvocation that CoreRunner received.
         assert runtime.last_invocation is not None
         assert ref.invocation_id == runtime.last_invocation.invocation_id
         # Schema fields propagated.
@@ -187,7 +187,7 @@ class TestDirectLocalRuntimeInvocationRef:
 
 
 # ---------------------------------------------------------------------------
-# demo_stub — does not invoke ExecutorRuntime, must leave ref None
+# demo_stub — does not invoke CoreRunner, must leave ref None
 # ---------------------------------------------------------------------------
 
 

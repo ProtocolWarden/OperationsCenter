@@ -14,7 +14,7 @@ Local planning, execution, policy, and evidence service for the coding platform.
 ## What this repo is not
 
 - SwitchBoard — lane/backend selection lives there
-- ExecutorRuntime — runtime mechanics (subprocess/manual/HTTP) live there
+- CoreRunner — runtime mechanics (subprocess/manual/HTTP) live there
 - CxRP / RxP — canonical contracts live there; OC consumes them via `cxrp_mapper.py`
 - PlatformDeployment — service compose, Dockerfiles, lifecycle scripts live there
 - RepoGraph / PlatformManifest / PrivateManifest — canonical graph semantics and graph truth live there

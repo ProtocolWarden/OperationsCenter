@@ -17,7 +17,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-from executor_runtime import ExecutorRuntime
+from core_runner import CoreRunner
 from rxp.contracts import RuntimeInvocation
 
 from operations_center.config.settings import AiderLocalSettings
@@ -37,16 +37,16 @@ class AiderLocalBackendAdapter:
     """Canonical adapter for the aider_local CPU execution backend.
 
     Phase 2 + 3 of the OC runtime extraction: subprocess invocation
-    is delegated to ``ExecutorRuntime`` (subprocess kind). Same pattern
+    is delegated to ``CoreRunner`` (subprocess kind). Same pattern
     as team_executor and direct_local.
     """
 
     def __init__(
         self,
         settings: AiderLocalSettings,
-        runtime: ExecutorRuntime | None = None,
+        runtime: CoreRunner | None = None,
     ) -> None:
-        self._runtime = runtime or ExecutorRuntime()
+        self._runtime = runtime or CoreRunner()
         self._settings = settings
 
     def execute(self, request: ExecutionRequest) -> ExecutionResult:
@@ -205,7 +205,7 @@ class _AiderLocalRunResult:
 
 
 def _read_capture(path: str | None) -> str:
-    """Read a captured stdout/stderr file produced by ExecutorRuntime."""
+    """Read a captured stdout/stderr file produced by CoreRunner."""
     if not path:
         return ""
     p = Path(path)
