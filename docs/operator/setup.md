@@ -12,15 +12,41 @@ It prepares:
 
 ## Files Written
 
-Setup writes:
+Setup writes (all gitignored):
 
 - `config/operations_center.local.yaml`
 - `.env.operations-center.local`
 - `config/plane_task_template.local.md`
+- `config/managed_repos/local/*.yaml` — per-repo managed repo entries
 
-## Typical Flow
+## Backup and Restore (SS)
+
+Local configs are backed up to `~/sync/platform/config/` via Syncthing.
+
+**Backup** (run after any config change):
 
 ```bash
+scripts/backup-secrets.sh
+```
+
+**Restore on a fresh clone or new machine:**
+
+```bash
+scripts/setup-secrets.sh
+```
+
+This symlinks flat files and copies the `managed_repos/local/` tree to the correct
+target paths. Do not manually copy files — the paths are non-obvious and the
+restore script gets them right.
+
+## Typical Flow (fresh machine)
+
+```bash
+# Option A — restore from SS backup (preferred if backup exists)
+scripts/setup-secrets.sh
+source .env.operations-center.local
+
+# Option B — interactive setup from scratch
 ./scripts/operations-center.sh setup
 source .env.operations-center.local
 ```
