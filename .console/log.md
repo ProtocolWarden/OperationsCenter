@@ -3,6 +3,26 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-19 — Watchdog cycle 12: PARKED_OPERATOR_BLOCKED — all watchers healthy; Haiku collector null-field issue noted
+
+**Convergence:** PARKED_OPERATOR_BLOCKED (5th cycle for 8871f757). No new signals. All watchers healthy.
+
+**Architecture:** First cycle using two-tier Haiku/Sonnet split. Two null fields in Haiku output (custodian.all_zero, regressions.count) — Haiku failed to parse those tool outputs; both confirmed clean via empty findings arrays. Haiku also reported stale watcher errors from old log batches (spec exit_code=1, review "no GitHub token") — both false alarms confirmed by reading current logs directly. Haiku collector prompt needs tighter parsing and current-log-only scoping. Will improve.
+
+**STEP 1:** custodian: findings=[] (all_zero parse failed, clean) | ghost: G10 fixed (5th consecutive ✓) | flow: 0 gaps | graph: ok | reaudit: dag_executor + team_executor (persistent) | regressions: findings=[] (count parse failed, clean)
+
+**STEP 2:** triage: b67bc0e0 escalation_commented (9th consecutive ✓)
+
+**STEP 2.5 board-unblock:**
+- APPLIED: 8871f757 → R4AI (PARKED, 5th cycle); 2824d46e → R4AI (rate-gate reset)
+- SKIPPED: b67bc0e0, a969024e — SIGKILL guard (8th consecutive ✓)
+
+**STEP 8:** 8/8 watchers running. Spec and review watcher "errors" in Haiku output were stale log artifacts — both confirmed healthy via direct log read. running_tasks=[].
+
+**Branches:** All repos clean (main only). User confirmed — `origin` entries in branch listing are remote names, not branches. gh-pages on ProtocolWarden.github.io is intentional.
+
+**Cadence:** PARKED_OPERATOR_BLOCKED (1800s) — 8871f757 only open issue, Plane #86 exists, no new evidence
+
 ## 2026-05-19 — Watchdog cycle 11: PARKED_OPERATOR_BLOCKED — review watcher fixed; two-tier loop restructured
 
 **Convergence:** PARKED_OPERATOR_BLOCKED. 8871f757 re-queued again (4th park cycle, pattern unchanged). All other signals clean or improving.
