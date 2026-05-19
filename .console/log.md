@@ -3,6 +3,38 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-19 — Watchdog cycle 9: DEGRADED — 8871f757 PARKED; review watcher restart pending
+
+**Convergence:** NON-CONVERGENT → PARKED_OPERATOR_BLOCKED for 8871f757.
+Park criteria met 2+ cycles (cycles 8 and 9): root cause known (execute.main exits 0, empty result.json),
+Plane task 30cb28ce exists, no queue evolution, no new evidence. 8871f757 is parked.
+
+**Park decision — 8871f757:**
+3rd consecutive "Expecting value: line 1 column 1 (char 0)" at 05:57 local. Board_unblock re-queued
+to R4AI again (no exit-code:0 guard). Improve watcher claimed at 06:50. Expected to fail again.
+Classification: PARKED_OPERATOR_BLOCKED. Will continue to cycle via board_unblock (no programmatic
+stop available without code fix). Watching for Plane task 30cb28ce to be addressed.
+
+**Review watcher restart — deferred (tasks running at cycle start):**
+8871f757 and 2824d46e were claimed at 06:50 local — not safe to restart watch-all. Plan: check
+tasks completed in cycle 10, then: `watch-stop --role review` + `watch --role review` with
+GITHUB_TOKEN in env, OR restart full watch-all if cleaner. Token available in this session.
+
+**STEP 1:** custodian: all-zero (4th consecutive ✓) | ghost: G10 fixed (3rd cycle) | flow: 0 | graph: ok | reaudit: persistent | regressions: 0 ✓
+
+**STEP 2:** triage: b67bc0e0 escalation_commented (6th consecutive ✓)
+
+**STEP 2.5 board-unblock:**
+- APPLIED: dea3a194, 41bcd097, 74af58c5 → Backlog (Rule 3 stale >4h)
+- APPLIED: 8871f757 → R4AI (PARKED — no exec guard; will fail again)
+- APPLIED: 2824d46e → R4AI (temporarily-blocked, rate-gate reset pending)
+- SKIPPED: b67bc0e0, a969024e — SIGKILL guard (6th consecutive ✓)
+
+**STEP 7:** 15/15 tests ✓
+**STEP 8:** 8/8 watchers; watch-review crash-looping (exit_code=1, Plane 35852f04)
+
+**Cadence:** DEGRADED (300s) — review watcher non-143 crash + 8871f757 PARKED cycling
+
 ## 2026-05-19 — Watchdog cycle 8: DEGRADED — 8871f757 NON-CONVERGENT (exit-code:0 + empty JSON)
 
 **Convergence:** NON-CONVERGENT for 8871f757. Root cause identified: task has `executor-exit-code:0`
