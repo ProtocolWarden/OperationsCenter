@@ -49,9 +49,11 @@ Actively investigate: (a) R4AI stuck >2 cycles, (b) Blocked self-modify:approved
 
 Classify each blocked item: temporarily-blocked / infra-blocked / ownership-ambiguous / validation-blocked / structurally-blocked / crash-looping / starvation / dead-remediation / closed-loop stagnation / non-convergent / divergent / operator-blocked.
 
-**OPERATOR-BLOCKED:** classify when root cause known ≥3 cycles, Plane escalation exists, no queue evolution, no safe retry, no new evidence.
+**OPERATOR-BLOCKED:** classify when root cause known ≥3 cycles, Plane escalation exists, no queue evolution, no safe retry, no new evidence, AND no direct infrastructure fix is available.
 **PARK TRANSITION** — STALLED → PARKED_OPERATOR_BLOCKED when ALL park criteria met for 2+ cycles.
 **UNPARK CONDITIONS** — queue changed, watcher crashed, new telemetry, Plane task changed, operator acted, safe retry became true, runtime config changed, new repos in tool output, execution outcome changed.
+
+**INFRASTRUCTURE FIX ESCALATION** — before parking as OPERATOR_BLOCKED, always ask: "Is the root cause a bug in OC source code I can fix directly?" If yes → write the fix, run tests, commit. Do not park. PARKED_OPERATOR_BLOCKED is reserved for issues requiring credentials, external infra changes, or human policy decisions — not code bugs with known fixes.
 
 **EXECUTOR FAILURE INVESTIGATION** — if haiku JSON shows executor_investigation.triggered=true OR any board_unblock skipped item shows SIGKILL, analyze the investigation fields before creating a Plane task. Include root cause in task if determinable.
 
@@ -63,6 +65,8 @@ For each repeated loop-only judgment: create/update Plane task to promote into r
 
 Direct fix allowed ONLY when ALL hold:
 (a) reproduced this cycle (in Haiku JSON), (b) scoped to specific repo from tool output, (c) implementation-level, (d) not credentials/infra blocked, (e) no destructive cleanup, (f) no runtime-policy widening, (g) not dead-remediation/starvation/closed-loop stagnation.
+
+**IMPORTANT — stagnation ≠ no fix available.** Condition (g) blocks retrying the *stagnating task* via autonomy-cycle. It does NOT block writing a direct infrastructure fix to the code that causes the stagnation. If a PARKED_OPERATOR_BLOCKED pattern has a known root cause traceable to a specific bug in OC source code (board_worker, board_unblock, execute.main, watchers, etc.), that is an implementation-level fix that passes conditions (a)–(f) and MUST be attempted directly — do not wait for operator. The fix target is the infrastructure, not the stagnating task. Example: 8871f757 cycling → root cause is empty result.json handling in board_worker → fix board_worker directly.
 
 ### STEP 6 — DIRECT FIXES (only if loop owns lock)
 
@@ -155,9 +159,8 @@ Call ScheduleWakeup with:
 - **Campaign 10c50210**: STALLED. AgentTopology Done (v0.3.0). ShippingForm (2b5ff37e) Blocked (SIGKILL'd). Phase-gated tasks (3fd02e75, 60390297, 6e32031c, d126bc51) await ShippingForm Done.
 - **b67bc0e0, a969024e**: SIGKILL'd ×2+, correctly skip-listed by SIGKILL guard. Rule 1 cancels at retry-count≥3.
 - **86c8c778**: Plane task tracking board_unblock SIGKILL guard — Backlog, OperationsCenter.
-- **oc-watchdog/20260519-0842-board-unblock-sigkill-guard**: active branch with board_unblock fix + RUFF fix + cycle logs (not yet merged to main).
-- **35852f04 (#85)**: review watcher crash-loop — fixed in cycle 11. Marked Done. Verify closed.
-- **30cb28ce (#86)**: 8871f757 PARKED_OPERATOR_BLOCKED — execute.main exits 0 with empty result.json. Fix needed in execute.main + board_worker + board_unblock. Do not escalate further until operator addresses.
+- **35852f04 (#85)**: review watcher crash-loop — FIXED cycle 11. Marked Done.
+- **30cb28ce (#86)**: 8871f757 empty result.json cycling — FIXED cycle 12 (board_worker empty-file guard + board_unblock exit-code:0 guard). Mark Done next cycle if 8871f757 no longer cycles.
 - **2824d46e**: temporarily-blocked (rate-gate budget_exhausted). Normal behavior; retries hourly.
 
 ## GOVERNING PRINCIPLE
