@@ -38,9 +38,9 @@ All three executors:
 | Topology | Executor | Repo | Notes |
 |----------|----------|------|-------|
 | `single_agent` | direct dispatch | — (existing) | OC's `direct_local` backend; no new repo |
-| `sequential` | DagExecutor | DagExecutor | linear DAG subtype (chain-shaped graph); no separate repo |
+| `sequential` | DAGExecutor | DAGExecutor | linear DAG subtype (chain-shaped graph); no separate repo |
 | `team` | TeamExecutor | TeamExecutor | replaces kodo |
-| `dag` | DagExecutor | DagExecutor | replaces Archon; dynamic fan-out as loop-node subtype |
+| `dag` | DAGExecutor | DAGExecutor | replaces Archon; dynamic fan-out as loop-node subtype |
 | `adversarial` | CritiqueExecutor | CritiqueExecutor | subtype: two agents, mutual critique until consensus |
 | `reflexion` | CritiqueExecutor | CritiqueExecutor | subtype: single agent + independent self-critic loop |
 
@@ -71,7 +71,7 @@ Independent verification before accepting a cycle's output.
 
 ---
 
-### DagExecutor
+### DAGExecutor
 
 Replaces Archon. Executes a directed acyclic graph of nodes with explicit
 `depends_on` edges. Independent nodes in the same topological layer run
@@ -134,7 +134,7 @@ All three executor repos use the same Rust-backed Python library stack.
 | Library | What it is | Used for |
 |---------|-----------|----------|
 | **orjson** | JSON serialization in Rust | Contract serialization/deserialization (CxRP/RxP payloads) |
-| **rustworkx** | Directed graph library in Rust | DagExecutor — topological sort, cycle detection, layer execution |
+| **rustworkx** | Directed graph library in Rust | DAGExecutor — topological sort, cycle detection, layer execution |
 | **rapidfuzz** | Fuzzy/prefix string matching in Rust | Git-style unambiguous run ID prefix resolution |
 | **tiktoken** | BPE tokenizer in Rust (OpenAI) | TeamExecutor — context size estimation before cycle summarization |
 | **blake3** | BLAKE3 hashing in Rust | Deterministic record IDs (replaces sha256) |
@@ -170,12 +170,12 @@ When the three executors reach dispatch parity with their predecessors:
 - **PATCH-001**: abandon upstream PR gate — no longer relevant
 - **ADR 0002**: backend card axis expansion arc — replace with new executor cards
 - **SourceRegistry**: remove kodo and archon entries; register TeamExecutor,
-  DagExecutor, CritiqueExecutor
+  DAGExecutor, CritiqueExecutor
 
 ## Open Questions
 
 - [ ] What language for the three executor repos? Python (matches OC/CxRP/RxP ecosystem) or something else?
 - [ ] TeamExecutor coordinator: API-only (Gemini/Anthropic direct) or support Claude Code as coordinator too?
-- [ ] DagExecutor gate nodes: where does the operator response come from? OC poll loop? Webhook?
+- [ ] DAGExecutor gate nodes: where does the operator response come from? OC poll loop? Webhook?
 - [ ] CritiqueExecutor exchange limit: hard cap or operator-configurable per dispatch?
 - [ ] Phasing: which executor ships first?

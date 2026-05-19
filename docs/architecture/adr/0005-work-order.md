@@ -26,12 +26,12 @@ entries; OC imports compile clean.
 
 ---
 
-## Phase 1 — DagExecutor (New Repo)
+## Phase 1 — DAGExecutor (New Repo)
 
 Replaces Archon. Ships first — simpler coordination than Team.
 
 ### Repo bootstrap
-- [ ] **P1.1** — Create `DagExecutor` repo with standard structure:
+- [ ] **P1.1** — Create `DAGExecutor` repo with standard structure:
   `pyproject.toml`, `CLAUDE.md`, `.console/`, `.custodian/config.yaml`,
   `.hooks/`, `src/dag_executor/`, `tests/`.
 - [ ] **P1.2** — Wire Custodian CI (`custodian-audit.yml` + pre-push hook).
@@ -63,13 +63,13 @@ Replaces Archon. Ships first — simpler coordination than Team.
 
 ### OC adapter
 - [ ] **P1.10** — OC `backends/dag_executor/` adapter: accept `ExecutionRequest`,
-  build invocation, run DagExecutor subprocess, parse `RuntimeResult`.
+  build invocation, run DAGExecutor subprocess, parse `RuntimeResult`.
 - [ ] **P1.11** — Register `BackendName.DAG_EXECUTOR` in OC factory.
-- [ ] **P1.12** — Add `DagExecutorSettings` to OC `Settings`.
+- [ ] **P1.12** — Add `DAGExecutorSettings` to OC `Settings`.
 - [ ] **P1.13** — Author executor card: `executors/dag_executor/capability_card.yaml`
   (`agent_topology: dag`, `shipping_form: managed_cli`).
 
-**DoD:** A real DAG graph dispatched through OC → DagExecutor produces a
+**DoD:** A real DAG graph dispatched through OC → DAGExecutor produces a
 `RuntimeResult` with `Evidence`. Custodian clean.
 
 ---
@@ -79,7 +79,7 @@ Replaces Archon. Ships first — simpler coordination than Team.
 Replaces kodo.
 
 ### Repo bootstrap
-- [ ] **P2.1** — Create `TeamExecutor` repo (same standard structure as DagExecutor).
+- [ ] **P2.1** — Create `TeamExecutor` repo (same standard structure as DAGExecutor).
 - [ ] **P2.2** — Wire Custodian CI + hooks.
 - [ ] **P2.3** — Import CxRP + RxP.
 
@@ -168,7 +168,7 @@ Run after all three executors reach dispatch parity.
 
 ### SourceRegistry
 - [ ] **P4.1** — Remove kodo and archon entries from `registry/source_registry.yaml`.
-- [ ] **P4.2** — Add TeamExecutor, DagExecutor, CritiqueExecutor entries.
+- [ ] **P4.2** — Add TeamExecutor, DAGExecutor, CritiqueExecutor entries.
 
 ### SwitchBoard
 - [ ] **P4.3** — Remove `KODO`, `ARCHON`, `ARCHON_THEN_KODO` from
@@ -220,7 +220,7 @@ All suites green. Custodian clean.
 
 ```
 Phase 0  CxRP vocab                           ~5h   prerequisite
-Phase 1  DagExecutor                          ~36h  replaces Archon
+Phase 1  DAGExecutor                          ~36h  replaces Archon
 Phase 2  TeamExecutor                         ~30h  replaces kodo
 Phase 3  CritiqueExecutor                     ~23h  new capability
 Phase 4  Cutover                              ~50h  removal + integration
@@ -236,7 +236,7 @@ in parallel if capacity allows.
   try to solve problems themselves rather than delegate; raw API model stays in its
   lane. Cleaner contract: API call in, tool-call decisions out, no subprocess
   lifecycle for the coordinator.
-- [x] DagExecutor gate nodes — **OC poll loop**. Gate emits `awaiting_gate` status
+- [x] DAGExecutor gate nodes — **OC poll loop**. Gate emits `awaiting_gate` status
   in `RuntimeResult`; OC surfaces via `run-show`; operator approves/rejects via
   `operations-center-run-approve <run_id>` CLI. Executor blocks on a file/pipe OC
   writes to on approval. No webhook infrastructure needed.

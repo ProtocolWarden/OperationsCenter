@@ -3,7 +3,7 @@
 ## Status
 
 Superseded by [ADR 0005](0005-owned-execution-topology-layer.md) (2026-05-18).
-kodo and Archon were replaced by TeamExecutor, DagExecutor, and CritiqueExecutor.
+kodo and Archon were replaced by TeamExecutor, DAGExecutor, and CritiqueExecutor.
 The executor card concept survives; the specific backends do not.
 
 ## Context

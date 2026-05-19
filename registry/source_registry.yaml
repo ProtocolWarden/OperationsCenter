@@ -14,17 +14,17 @@ sources:
     auto_pr_push: false
     auto_sync: false
 
-  - name: DagExecutor
-    upstream_url: https://github.com/ProtocolWarden/DagExecutor
-    fork_url: https://github.com/ProtocolWarden/DagExecutor
-    local_path: /home/dev/Documents/GitHub/DagExecutor
+  - name: DAGExecutor
+    upstream_url: https://github.com/ProtocolWarden/DAGExecutor
+    fork_url: https://github.com/ProtocolWarden/DAGExecutor
+    local_path: /home/dev/Documents/GitHub/DAGExecutor
     branch: main
     install_kind: python_package
     install_modes:
-      prod: pip install git+ssh://git@github.com/ProtocolWarden/DagExecutor.git
-      ci: pip install git+https://github.com/ProtocolWarden/DagExecutor.git
+      prod: pip install git+ssh://git@github.com/ProtocolWarden/DAGExecutor.git
+      ci: pip install git+https://github.com/ProtocolWarden/DAGExecutor.git
       dev: pip install -e {local_path}
-    local_clone_hint: ~/Documents/GitHub/DagExecutor
+    local_clone_hint: ~/Documents/GitHub/DAGExecutor
     poll_cadence_hours: 24
     auto_pr_push: false
     auto_sync: false

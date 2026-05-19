@@ -136,7 +136,7 @@ class TeamExecutorSettings(BaseModel):
     api_key: str = ""
 
 
-class DagExecutorSettings(BaseModel):
+class DAGExecutorSettings(BaseModel):
     timeout_seconds: int = 3600
     artifacts_dir: str = ""
 
@@ -394,7 +394,7 @@ class Settings(BaseModel):
     plane: PlaneSettings
     git: GitSettings
     team_executor: TeamExecutorSettings = Field(default_factory=TeamExecutorSettings)
-    dag_executor: DagExecutorSettings = Field(default_factory=DagExecutorSettings)
+    dag_executor: DAGExecutorSettings = Field(default_factory=DAGExecutorSettings)
     critique_executor: CritiqueExecutorSettings = Field(default_factory=CritiqueExecutorSettings)
     platform_manifest: PlatformManifestSettings = Field(default_factory=PlatformManifestSettings)
     contract_change_propagation: ContractChangePropagationSettings = Field(
