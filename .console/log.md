@@ -3,6 +3,22 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-19 — Watchdog cycle 15: WEAKLY-CONVERGENT — all parsers clean; first fully clean Haiku cycle
+
+**Convergence:** WEAKLY-CONVERGENT. Board stable (applied=[]). All Haiku parsers working for first time (custodian all_zero=true ✓, ghost ✓, flow ✓, graph ✓, reaudit ✓, regressions ✓). All watchers healthy (exit_code=null, consecutive_non143=0, last_error=null all roles). No cycling. b67bc0e0/a969024e SIGKILL'd, root cause unknown (OOM ruled out — 24GB free).
+
+**STEP 1:** custodian: all_zero=true ✓ (parser fix confirmed) | ghost: 1 total event, active=[], fixed=[] | flow: 0 gaps | graph: ok | reaudit: dag_executor + team_executor (persistent, expected) | regressions: 0
+**STEP 2:** triage: b67bc0e0 escalation_commented (12th consecutive ✓)
+**STEP 2.5 board-unblock:**
+- APPLIED: (none)
+- SKIPPED: 8871f757 — exit-code:0 guard (3rd cycle ✓); 2824d46e — exit-code:0 guard; b67bc0e0, a969024e — SIGKILL guard (11th+)
+
+**Executor investigation:** triggered=true (SIGKILL labels on b67bc0e0/a969024e). oom_signals=false. memory_free_gb=24.0. SIGKILL root cause still unknown — not OOM, not resource starvation. Underlying cause requires further investigation (task content / kodo timeout / executor config).
+**STEP 7:** no repos touched this cycle; no tests run.
+**STEP 8:** 8/8 watchers running. exit_code=null, consecutive_non143=0, last_error=null for all roles. Watcher log scope fix (most-recent-log-per-role) confirmed working — zero false alarms.
+
+**Cadence:** PARKED_OPERATOR_BLOCKED (1800s) — board stable, guards working, SIGKILL root cause open
+
 ## 2026-05-19 — Watchdog cycle 14: WEAKLY-CONVERGENT — board stable; two Haiku parser fixes
 
 **Convergence:** WEAKLY-CONVERGENT. Board stable (applied=[]). All guards holding correctly. All watchers healthy.
