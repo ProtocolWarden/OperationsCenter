@@ -79,8 +79,8 @@ def test_recorded_at_is_set(recorder, successful_rich_result):
 
 
 def test_backend_propagated(recorder, successful_rich_result):
-    record = recorder.record(successful_rich_result, backend="kodo")
-    assert record.backend == "kodo"
+    record = recorder.record(successful_rich_result, backend="team_executor")
+    assert record.backend == "team_executor"
 
 
 def test_lane_propagated(recorder, successful_rich_result):

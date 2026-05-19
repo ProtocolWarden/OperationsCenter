@@ -11,7 +11,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Mapping, Protocol
 
 if TYPE_CHECKING:
-    from operations_center.backends.archon.invoke import ArchonAdapter
     from operations_center.backends.openclaw.invoke import OpenClawRunner
 
 from operations_center.config.settings import Settings
@@ -19,9 +18,7 @@ from operations_center.contracts.enums import BackendName
 from operations_center.contracts.execution import ExecutionRequest, ExecutionResult
 
 from .aider_local import AiderLocalBackendAdapter
-from .archon import ArchonBackendAdapter
 from .direct_local import DirectLocalBackendAdapter
-from .kodo import KodoBackendAdapter
 from .openclaw import OpenClawBackendAdapter
 
 
@@ -53,13 +50,9 @@ class CanonicalBackendRegistry:
         cls,
         settings: Settings,
         *,
-        archon_adapter: "ArchonAdapter | None" = None,
         openclaw_runner: "OpenClawRunner | None" = None,
     ) -> "CanonicalBackendRegistry":
         adapters: dict[BackendName, CanonicalBackendAdapter] = {
-            BackendName.KODO: KodoBackendAdapter.from_settings(
-                settings=settings.kodo,
-            ),
             BackendName.DIRECT_LOCAL: DirectLocalBackendAdapter(
                 settings.aider,
             ),
@@ -67,20 +60,6 @@ class CanonicalBackendRegistry:
                 settings.aider_local,
             ),
         }
-        if archon_adapter is None and settings.archon.enabled:
-            # Auto-wire the production HTTP adapter from settings when
-            # opted in. Callers who pass archon_adapter explicitly (e.g.
-            # tests) skip this branch.
-            from operations_center.backends.archon.invoke import HttpArchonAdapter
-            archon_adapter = HttpArchonAdapter(
-                base_url=settings.archon.base_url,
-                workflow_names=dict(settings.archon.workflow_names),
-                poll_interval_seconds=settings.archon.poll_interval_seconds,
-            )
-        if archon_adapter is not None:
-            archon_backend = ArchonBackendAdapter(archon_adapter=archon_adapter)
-            adapters[BackendName.ARCHON] = archon_backend
-            adapters[BackendName.ARCHON_THEN_KODO] = archon_backend
         if openclaw_runner is not None:
             adapters[BackendName.OPENCLAW] = OpenClawBackendAdapter(
                 runner=openclaw_runner,

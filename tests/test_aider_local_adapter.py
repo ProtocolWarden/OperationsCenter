@@ -279,7 +279,7 @@ def test_factory_registers_aider_local(tmp_path: Path) -> None:
     from operations_center.backends.factory import CanonicalBackendRegistry
     from operations_center.contracts.enums import BackendName
 
-    from operations_center.config.settings import Settings, PlaneSettings, GitSettings, KodoSettings
+    from operations_center.config.settings import Settings, PlaneSettings, GitSettings, TeamExecutorSettings
     settings = Settings(
         plane=PlaneSettings(
             base_url="http://plane.local",
@@ -288,7 +288,7 @@ def test_factory_registers_aider_local(tmp_path: Path) -> None:
             project_id="proj-1",
         ),
         git=GitSettings(),
-        kodo=KodoSettings(),
+        team_executor=TeamExecutorSettings(),
         repos={},
     )
 

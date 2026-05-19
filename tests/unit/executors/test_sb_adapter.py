@@ -14,21 +14,22 @@ _REAL_DIR = Path("src/operations_center/executors")
 def test_sb_adapter_runtime_query_round_trip():
     cat = load_catalog(_REAL_DIR)
     sb_cat = SwitchboardCatalogAdapter(cat)
-    assert "kodo" in sb_cat.backends_supporting_runtime(runtime_kind="cli_subscription")
+    assert "team_executor" in sb_cat.backends_supporting_runtime(runtime_kind="cli_subscription")
 
 
 def test_sb_adapter_capability_query():
     cat = load_catalog(_REAL_DIR)
     sb_cat = SwitchboardCatalogAdapter(cat)
     out = sb_cat.backends_supporting_capabilities(required_capabilities={"repo_read"})
-    assert {"kodo", "archon"}.issubset(set(out))
+    assert {"team_executor", "dag_executor"}.issubset(set(out))
 
 
 def test_sb_adapter_outcome_query():
     cat = load_catalog(_REAL_DIR)
     sb_cat = SwitchboardCatalogAdapter(cat)
-    # Post-spike: archon also adapter_plus_wrapper, no patch pending
-    assert sb_cat.backends_by_outcome(outcome="adapter_plus_wrapper") == ["archon", "kodo"]
+    # ADR 0005: both team_executor and dag_executor are adapter_plus_wrapper
+    result = sb_cat.backends_by_outcome(outcome="adapter_plus_wrapper")
+    assert set(result) == {"team_executor", "dag_executor"}
     assert sb_cat.backends_by_outcome(outcome="upstream_patch_pending") == []
 
 

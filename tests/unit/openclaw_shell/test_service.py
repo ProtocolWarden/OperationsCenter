@@ -70,7 +70,7 @@ def _failed_result(**kw):
 @pytest.fixture
 def stub_svc() -> OpenClawShellService:
     return OpenClawShellService.with_stub_routing(
-        lane="claude_cli", backend="kodo", confidence=0.9
+        lane="claude_cli", backend="team_executor", confidence=0.9
     )
 
 
@@ -112,7 +112,7 @@ def test_plan_handle_lane_backend(stub_svc):
     ctx = _ctx()
     handle = stub_svc.plan(ctx)
     assert handle.selected_lane == "claude_cli"
-    assert handle.selected_backend == "kodo"
+    assert handle.selected_backend == "team_executor"
 
 
 def test_plan_handle_status_planned(stub_svc):
@@ -176,7 +176,7 @@ def test_plan_with_summary_lane_backend(stub_svc):
     ctx = _ctx()
     _handle, summary = stub_svc.plan_with_summary(ctx)
     assert summary.selected_lane == "claude_cli"
-    assert summary.selected_backend == "kodo"
+    assert summary.selected_backend == "team_executor"
 
 
 # ---------------------------------------------------------------------------
@@ -186,39 +186,39 @@ def test_plan_with_summary_lane_backend(stub_svc):
 
 def test_summarize_result_returns_summary(stub_svc):
     result = _success_result()
-    summary = stub_svc.summarize_result(result, lane="claude_cli", backend="kodo")
+    summary = stub_svc.summarize_result(result, lane="claude_cli", backend="team_executor")
     assert isinstance(summary, ShellStatusSummary)
 
 
 def test_summarize_result_success(stub_svc):
     result = _success_result()
-    summary = stub_svc.summarize_result(result, lane="claude_cli", backend="kodo")
+    summary = stub_svc.summarize_result(result, lane="claude_cli", backend="team_executor")
     assert summary.success is True
     assert summary.status == ExecutionStatus.SUCCEEDED.value
 
 
 def test_summarize_result_failure(stub_svc):
     result = _failed_result()
-    summary = stub_svc.summarize_result(result, lane="claude_cli", backend="kodo")
+    summary = stub_svc.summarize_result(result, lane="claude_cli", backend="team_executor")
     assert summary.success is False
 
 
 def test_summarize_result_lane_backend_preserved(stub_svc):
     result = _success_result()
-    summary = stub_svc.summarize_result(result, lane="aider_local", backend="kodo")
+    summary = stub_svc.summarize_result(result, lane="aider_local", backend="team_executor")
     assert summary.selected_lane == "aider_local"
-    assert summary.selected_backend == "kodo"
+    assert summary.selected_backend == "team_executor"
 
 
 def test_summarize_result_recorded_at_set(stub_svc):
     result = _success_result()
-    summary = stub_svc.summarize_result(result, lane="claude_cli", backend="kodo")
+    summary = stub_svc.summarize_result(result, lane="claude_cli", backend="team_executor")
     assert summary.recorded_at is not None
 
 
 def test_summarize_result_headline_nonempty(stub_svc):
     result = _success_result()
-    summary = stub_svc.summarize_result(result, lane="claude_cli", backend="kodo")
+    summary = stub_svc.summarize_result(result, lane="claude_cli", backend="team_executor")
     assert len(summary.headline) > 0
 
 
@@ -248,10 +248,10 @@ def test_summarize_lightweight_no_recorded_at(stub_svc):
 def test_summarize_lightweight_lane_backend(stub_svc):
     result = _success_result()
     summary = stub_svc.summarize_result_lightweight(
-        result, lane="claude_cli", backend="kodo"
+        result, lane="claude_cli", backend="team_executor"
     )
     assert summary.selected_lane == "claude_cli"
-    assert summary.selected_backend == "kodo"
+    assert summary.selected_backend == "team_executor"
 
 
 def test_summarize_lightweight_no_lane_backend(stub_svc):
@@ -270,7 +270,7 @@ def test_inspect_record_returns_inspection(stub_svc):
     recorder = ExecutionRecorder()
     builder = RunReportBuilder()
     result = _success_result()
-    record = recorder.record(result, backend="kodo", lane="claude_cli")
+    record = recorder.record(result, backend="team_executor", lane="claude_cli")
     trace = builder.build_report(record)
     r = stub_svc.inspect_record(record, trace)
     assert isinstance(r, ShellInspectionResult)
@@ -280,7 +280,7 @@ def test_inspect_record_status(stub_svc):
     recorder = ExecutionRecorder()
     builder = RunReportBuilder()
     result = _success_result()
-    record = recorder.record(result, backend="kodo", lane="claude_cli")
+    record = recorder.record(result, backend="team_executor", lane="claude_cli")
     trace = builder.build_report(record)
     r = stub_svc.inspect_record(record, trace)
     assert r.status == ExecutionStatus.SUCCEEDED.value
@@ -291,7 +291,7 @@ def test_inspect_record_trace_and_record_ids(stub_svc):
     recorder = ExecutionRecorder()
     builder = RunReportBuilder()
     result = _success_result()
-    record = recorder.record(result, backend="kodo", lane="claude_cli")
+    record = recorder.record(result, backend="team_executor", lane="claude_cli")
     trace = builder.build_report(record)
     r = stub_svc.inspect_record(record, trace)
     assert r.trace_id == trace.trace_id

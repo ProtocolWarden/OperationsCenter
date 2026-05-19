@@ -24,36 +24,35 @@ _REAL_DIR = Path("src/operations_center/executors")
 
 
 class TestRealCatalog:
-    def test_loads_kodo_and_archon(self):
+    def test_loads_team_executor_and_dag_executor(self):
         cat = load_catalog(_REAL_DIR)
-        assert "kodo" in cat.entries
-        assert "archon" in cat.entries
+        assert "team_executor" in cat.entries
+        assert "dag_executor" in cat.entries
 
-    def test_kodo_entry_well_formed(self):
+    def test_team_executor_entry_well_formed(self):
         cat = load_catalog(_REAL_DIR)
-        kodo = cat.get("kodo")
-        assert kodo is not None
-        assert kodo.audit_verdict.outcome == AuditOutcome.ADAPTER_PLUS_WRAPPER
-        assert kodo.capability_card.backend_id == "kodo"
+        team = cat.get("team_executor")
+        assert team is not None
+        assert team.audit_verdict.outcome == AuditOutcome.ADAPTER_PLUS_WRAPPER
+        assert team.capability_card.backend_id == "team_executor"
 
-    def test_archon_entry_well_formed(self):
+    def test_dag_executor_entry_well_formed(self):
         cat = load_catalog(_REAL_DIR)
-        archon = cat.get("archon")
-        assert archon is not None
-        # Post-spike (2026-05-05): G-001 mitigated, outcome moved to wrapper
-        assert archon.audit_verdict.outcome == AuditOutcome.ADAPTER_PLUS_WRAPPER
+        dag = cat.get("dag_executor")
+        assert dag is not None
+        assert dag.audit_verdict.outcome == AuditOutcome.ADAPTER_PLUS_WRAPPER
 
 
 # ── Query 1: runtime support ────────────────────────────────────────────
 
 
 class TestRuntimeQuery:
-    def test_finds_kodo_for_cli_subscription(self):
+    def test_finds_team_executor_for_cli_subscription(self):
         cat = load_catalog(_REAL_DIR)
         out = backends_supporting_runtime(cat, runtime_kind="cli_subscription")
-        assert "kodo" in out
-        # Post-spike: archon also supports cli_subscription via YAML wrapper
-        assert "archon" in out
+        assert "team_executor" in out
+        # dag_executor also supports cli_subscription
+        assert "dag_executor" in out
 
     def test_returns_empty_for_unsupported_kind(self):
         cat = load_catalog(_REAL_DIR)
@@ -67,12 +66,12 @@ class TestCapabilityQuery:
     def test_finds_both_for_repo_read(self):
         cat = load_catalog(_REAL_DIR)
         out = backends_supporting_capabilities(cat, required_capabilities={"repo_read"})
-        assert set(out) == {"kodo", "archon"}
+        assert set(out) == {"team_executor", "dag_executor"}
 
-    def test_finds_only_kodo_for_shell_write(self):
+    def test_finds_only_team_executor_for_shell_write(self):
         cat = load_catalog(_REAL_DIR)
         out = backends_supporting_capabilities(cat, required_capabilities={"shell_write"})
-        assert out == ["kodo"]
+        assert out == ["team_executor"]
 
     def test_returns_empty_for_impossible_combo(self):
         cat = load_catalog(_REAL_DIR)
@@ -88,8 +87,9 @@ class TestCapabilityQuery:
 class TestVerdictQuery:
     def test_adapter_plus_wrapper(self):
         cat = load_catalog(_REAL_DIR)
-        # Post-spike: both kodo and archon now wrappers
-        assert backends_by_outcome(cat, outcome="adapter_plus_wrapper") == ["archon", "kodo"]
+        # ADR 0005: both team_executor and dag_executor are wrappers
+        result = backends_by_outcome(cat, outcome="adapter_plus_wrapper")
+        assert set(result) == {"team_executor", "dag_executor"}
 
     def test_upstream_patch_pending(self):
         cat = load_catalog(_REAL_DIR)

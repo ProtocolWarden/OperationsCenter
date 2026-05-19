@@ -18,8 +18,6 @@ from rxp.contracts import RuntimeInvocation, RuntimeResult
 
 from operations_center.backends._capacity_classifier import classify_capacity_exhaustion
 from operations_center.backends.direct_local.adapter import DirectLocalBackendAdapter
-from operations_center.backends.kodo.models import KodoRunCapture
-from operations_center.backends.kodo.normalize import normalize as kodo_normalize
 from operations_center.config.settings import AiderSettings
 from operations_center.contracts.enums import ExecutionStatus, FailureReasonCategory
 from operations_center.contracts.execution import ExecutionRequest
@@ -139,38 +137,3 @@ def test_direct_local_clean_success_unchanged(tmp_path: Path) -> None:
     assert result.failure_category is None
 
 
-# ---------------------------------------------------------------------------
-# kodo normalize: capacity excerpt in combined_output flips success
-# ---------------------------------------------------------------------------
-
-
-def _kodo_capture(*, stdout: str = "", stderr: str = "", exit_code: int = 0) -> KodoRunCapture:
-    now = datetime.now(timezone.utc)
-    return KodoRunCapture(
-        run_id="run-1",
-        exit_code=exit_code,
-        stdout=stdout,
-        stderr=stderr,
-        command=["kodo"],
-        started_at=now,
-        finished_at=now,
-        duration_ms=0,
-    )
-
-
-def test_kodo_normalize_flips_capacity_exhaustion_to_failed() -> None:
-    capture = _kodo_capture(
-        stdout="Done: 1/1 stage completed\nYou're out of extra usage · resets 4:20am\n"
-    )
-    result = kodo_normalize(capture, proposal_id="p", decision_id="d")
-    assert result.success is False
-    assert result.status == ExecutionStatus.FAILED
-    assert result.failure_category == FailureReasonCategory.BACKEND_ERROR
-    assert "capacity exhaustion" in (result.failure_reason or "").lower()
-
-
-def test_kodo_normalize_clean_success_unchanged() -> None:
-    capture = _kodo_capture(stdout="Done: 1/1 stage completed\n")
-    result = kodo_normalize(capture, proposal_id="p", decision_id="d")
-    assert result.success is True
-    assert result.status == ExecutionStatus.SUCCEEDED

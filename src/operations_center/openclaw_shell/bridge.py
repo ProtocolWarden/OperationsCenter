@@ -203,7 +203,7 @@ class OpenClawBridge:
     def with_stub_routing(
         cls,
         lane: str = "claude_cli",
-        backend: str = "kodo",
+        backend: str = "team_executor",
         confidence: float = 0.9,
     ) -> "OpenClawBridge":
         """Create with a stub routing client — for tests and local dev."""

@@ -124,12 +124,12 @@ def test_record_execution_persists_backend_field(monkeypatch, tmp_path: Path) ->
     now = datetime(2026, 3, 31, 12, tzinfo=UTC)
     store.record_execution(
         role="goal", task_id="T1", signature="s", now=now,
-        repo_key="r1", backend="archon",
+        repo_key="r1", backend="dag_executor",
     )
     data = store.load()
     events = [e for e in data["events"] if e.get("kind") == "execution"]
     assert events
-    assert events[-1].get("backend") == "archon"
+    assert events[-1].get("backend") == "dag_executor"
     assert events[-1].get("repo_key") == "r1"
 
 
@@ -151,10 +151,10 @@ def test_budget_decision_for_backend_under_cap(monkeypatch, tmp_path: Path) -> N
     for i in range(2):
         store.record_execution(
             role="goal", task_id=f"T{i}", signature=f"s{i}",
-            now=now - timedelta(minutes=10 * i), backend="archon",
+            now=now - timedelta(minutes=10 * i), backend="dag_executor",
         )
     decision = store.budget_decision_for_backend(
-        "archon", max_per_hour=5, max_per_day=20, now=now,
+        "dag_executor", max_per_hour=5, max_per_day=20, now=now,
     )
     assert decision.allowed is True
 
@@ -166,10 +166,10 @@ def test_budget_decision_for_backend_hourly_blocks(monkeypatch, tmp_path: Path) 
     for i in range(3):
         store.record_execution(
             role="goal", task_id=f"T{i}", signature=f"s{i}",
-            now=now - timedelta(minutes=5 * i), backend="archon",
+            now=now - timedelta(minutes=5 * i), backend="dag_executor",
         )
     decision = store.budget_decision_for_backend(
-        "archon", max_per_hour=3, max_per_day=20, now=now,
+        "dag_executor", max_per_hour=3, max_per_day=20, now=now,
     )
     assert decision.allowed is False
     assert decision.reason == "backend_budget_exceeded"
@@ -186,10 +186,10 @@ def test_budget_decision_for_backend_daily_blocks(monkeypatch, tmp_path: Path) -
     for i in range(5):
         store.record_execution(
             role="goal", task_id=f"T{i}", signature=f"s{i}",
-            now=now - timedelta(hours=2 + i), backend="archon",
+            now=now - timedelta(hours=2 + i), backend="dag_executor",
         )
     decision = store.budget_decision_for_backend(
-        "archon", max_per_hour=10, max_per_day=5, now=now,
+        "dag_executor", max_per_hour=10, max_per_day=5, now=now,
     )
     assert decision.allowed is False
     assert decision.window == "daily"
@@ -201,20 +201,20 @@ def test_budget_decision_for_backend_filters_by_backend(monkeypatch, tmp_path: P
     monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
     store = UsageStore()
     now = datetime(2026, 3, 31, 12, tzinfo=UTC)
-    # 5 kodo events
+    # 5 team_executor events
     for i in range(5):
         store.record_execution(
             role="goal", task_id=f"K{i}", signature=f"sk{i}",
-            now=now - timedelta(minutes=10 * i), backend="kodo",
+            now=now - timedelta(minutes=10 * i), backend="team_executor",
         )
-    # 1 archon event
+    # 1 dag_executor event
     store.record_execution(
         role="goal", task_id="A1", signature="sa", now=now - timedelta(minutes=5),
-        backend="archon",
+        backend="dag_executor",
     )
-    # archon cap of 3 — should be allowed (only 1 archon event counts)
+    # dag_executor cap of 3 — should be allowed (only 1 dag_executor event counts)
     decision = store.budget_decision_for_backend(
-        "archon", max_per_hour=3, max_per_day=10, now=now,
+        "dag_executor", max_per_hour=3, max_per_day=10, now=now,
     )
     assert decision.allowed is True
 
@@ -227,11 +227,11 @@ def test_budget_decision_for_backend_no_caps_returns_allowed(monkeypatch, tmp_pa
     for i in range(50):
         store.record_execution(
             role="goal", task_id=f"T{i}", signature=f"s{i}",
-            now=now - timedelta(minutes=i), backend="archon",
+            now=now - timedelta(minutes=i), backend="dag_executor",
         )
-    assert store.budget_decision_for_backend("archon", now=now).allowed
+    assert store.budget_decision_for_backend("dag_executor", now=now).allowed
     assert store.budget_decision_for_backend(
-        "archon", max_per_hour=None, max_per_day=None, now=now,
+        "dag_executor", max_per_hour=None, max_per_day=None, now=now,
     ).allowed
 
 
@@ -252,7 +252,7 @@ def test_budget_decision_for_backend_ignores_legacy_unbacked_events(monkeypatch,
             now=now - timedelta(minutes=10 * i),
         )
     decision = store.budget_decision_for_backend(
-        "archon", max_per_hour=2, max_per_day=10, now=now,
+        "dag_executor", max_per_hour=2, max_per_day=10, now=now,
     )
     assert decision.allowed is True
 
@@ -268,7 +268,7 @@ def test_backend_cap_settings_pydantic_default():
 
 def test_settings_backend_caps_default_empty():
     from operations_center.config.settings import (
-        Settings, PlaneSettings, GitSettings, KodoSettings,
+        Settings, PlaneSettings, GitSettings, TeamExecutorSettings,
     )
     s = Settings(
         plane=PlaneSettings(
@@ -276,7 +276,7 @@ def test_settings_backend_caps_default_empty():
             workspace_slug="w", project_id="p",
         ),
         git=GitSettings(),
-        kodo=KodoSettings(),
+        team_executor=TeamExecutorSettings(),
         repos={},
     )
     assert s.backend_caps == {}
@@ -293,11 +293,11 @@ def test_record_execution_outcome_persists_backend_and_version(monkeypatch, tmp_
     now = datetime(2026, 5, 8, 12, tzinfo=UTC)
     store.record_execution_outcome(
         task_id="T1", role="goal", succeeded=True, now=now,
-        backend="kodo", backend_version="0.4.272",
+        backend="team_executor", backend_version="0.4.272",
     )
     data = store.load()
     ev = next(e for e in data["events"] if e.get("kind") == "execution_outcome")
-    assert ev.get("backend") == "kodo"
+    assert ev.get("backend") == "team_executor"
     assert ev.get("backend_version") == "0.4.272"
     # Old kodo-named field never written by the new code.
     assert "kodo_version" not in ev
@@ -320,10 +320,10 @@ def test_record_quota_event_writes_quota_event_kind(monkeypatch, tmp_path: Path)
     monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
     store = UsageStore()
     now = datetime(2026, 5, 8, 12, tzinfo=UTC)
-    store.record_quota_event(task_id="T1", role="goal", backend="archon", now=now)
+    store.record_quota_event(task_id="T1", role="goal", backend="dag_executor", now=now)
     data = store.load()
     ev = next(e for e in data["events"] if e.get("kind") == "quota_event")
-    assert ev.get("backend") == "archon"
+    assert ev.get("backend") == "dag_executor"
     # Old kind never written.
     assert not any(e.get("kind") == "kodo_quota_event" for e in data["events"])
 
@@ -351,11 +351,11 @@ def test_audit_export_uses_quota_event_kind(monkeypatch, tmp_path: Path) -> None
     monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
     store = UsageStore()
     now = datetime(2026, 5, 8, 12, tzinfo=UTC)
-    store.record_quota_event(task_id="T1", role="goal", backend="archon", now=now)
+    store.record_quota_event(task_id="T1", role="goal", backend="dag_executor", now=now)
     rows = store.audit_export(window_days=1, now=now + timedelta(seconds=1))
     quota_rows = [r for r in rows if r.get("outcome") == "quota_exhausted"]
     assert len(quota_rows) == 1
-    assert quota_rows[0].get("backend") == "archon"
+    assert quota_rows[0].get("backend") == "dag_executor"
 
 
 def test_circuit_breaker_uses_backend_version_only(monkeypatch, tmp_path: Path) -> None:
@@ -373,7 +373,7 @@ def test_circuit_breaker_uses_backend_version_only(monkeypatch, tmp_path: Path) 
         store.record_execution_outcome(
             task_id=f"T{i}", role="goal", succeeded=False,
             now=now - timedelta(minutes=10 * i),
-            backend="kodo", backend_version="0.4.272",
+            backend="team_executor", backend_version="0.4.272",
         )
     decision = store.budget_decision(now=now)
     assert decision.allowed is False
@@ -389,18 +389,18 @@ def test_concurrent_runs_starts_at_zero(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
     store = UsageStore()
     now = datetime(2026, 5, 8, 12, tzinfo=UTC)
-    assert store.concurrent_runs_for_backend("kodo", now=now) == 0
+    assert store.concurrent_runs_for_backend("team_executor", now=now) == 0
 
 
 def test_concurrent_runs_increments_on_started(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
     store = UsageStore()
     now = datetime(2026, 5, 8, 12, tzinfo=UTC)
-    store.record_execution_started(task_id="T1", backend="archon", now=now)
-    store.record_execution_started(task_id="T2", backend="archon", now=now)
-    store.record_execution_started(task_id="T3", backend="kodo", now=now)
-    assert store.concurrent_runs_for_backend("archon", now=now) == 2
-    assert store.concurrent_runs_for_backend("kodo", now=now) == 1
+    store.record_execution_started(task_id="T1", backend="dag_executor", now=now)
+    store.record_execution_started(task_id="T2", backend="dag_executor", now=now)
+    store.record_execution_started(task_id="T3", backend="team_executor", now=now)
+    assert store.concurrent_runs_for_backend("dag_executor", now=now) == 2
+    assert store.concurrent_runs_for_backend("team_executor", now=now) == 1
     assert store.concurrent_runs_for_backend("aider", now=now) == 0
 
 
@@ -408,10 +408,10 @@ def test_concurrent_runs_decrements_on_finished(monkeypatch, tmp_path: Path) -> 
     monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
     store = UsageStore()
     now = datetime(2026, 5, 8, 12, tzinfo=UTC)
-    store.record_execution_started(task_id="T1", backend="archon", now=now)
-    store.record_execution_started(task_id="T2", backend="archon", now=now)
-    store.record_execution_finished(task_id="T1", backend="archon", now=now + timedelta(seconds=30))
-    assert store.concurrent_runs_for_backend("archon", now=now + timedelta(seconds=31)) == 1
+    store.record_execution_started(task_id="T1", backend="dag_executor", now=now)
+    store.record_execution_started(task_id="T2", backend="dag_executor", now=now)
+    store.record_execution_finished(task_id="T1", backend="dag_executor", now=now + timedelta(seconds=30))
+    assert store.concurrent_runs_for_backend("dag_executor", now=now + timedelta(seconds=31)) == 1
 
 
 def test_concurrent_runs_excludes_stale_started_events(
@@ -422,9 +422,9 @@ def test_concurrent_runs_excludes_stale_started_events(
     store = UsageStore()
     now = datetime(2026, 5, 8, 12, tzinfo=UTC)
     store.record_execution_started(
-        task_id="T-stale", backend="kodo", now=now - timedelta(hours=30),
+        task_id="T-stale", backend="team_executor", now=now - timedelta(hours=30),
     )
-    assert store.concurrent_runs_for_backend("kodo", now=now) == 0
+    assert store.concurrent_runs_for_backend("team_executor", now=now) == 0
 
 
 def test_concurrency_decision_for_backend_blocks_at_cap(
@@ -433,10 +433,10 @@ def test_concurrency_decision_for_backend_blocks_at_cap(
     monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
     store = UsageStore()
     now = datetime(2026, 5, 8, 12, tzinfo=UTC)
-    store.record_execution_started(task_id="T1", backend="kodo", now=now)
-    store.record_execution_started(task_id="T2", backend="kodo", now=now)
+    store.record_execution_started(task_id="T1", backend="team_executor", now=now)
+    store.record_execution_started(task_id="T2", backend="team_executor", now=now)
     decision = store.concurrency_decision_for_backend(
-        "kodo", max_concurrent=2, now=now,
+        "team_executor", max_concurrent=2, now=now,
     )
     assert decision.allowed is False
     assert decision.reason == "backend_concurrency_exceeded"
@@ -450,9 +450,9 @@ def test_concurrency_decision_for_backend_under_cap(
     monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
     store = UsageStore()
     now = datetime(2026, 5, 8, 12, tzinfo=UTC)
-    store.record_execution_started(task_id="T1", backend="kodo", now=now)
+    store.record_execution_started(task_id="T1", backend="team_executor", now=now)
     decision = store.concurrency_decision_for_backend(
-        "kodo", max_concurrent=2, now=now,
+        "team_executor", max_concurrent=2, now=now,
     )
     assert decision.allowed is True
 
@@ -464,9 +464,9 @@ def test_concurrency_decision_no_cap_returns_allowed(
     store = UsageStore()
     now = datetime(2026, 5, 8, 12, tzinfo=UTC)
     for i in range(20):
-        store.record_execution_started(task_id=f"T{i}", backend="kodo", now=now)
+        store.record_execution_started(task_id=f"T{i}", backend="team_executor", now=now)
     assert store.concurrency_decision_for_backend(
-        "kodo", max_concurrent=None, now=now,
+        "team_executor", max_concurrent=None, now=now,
     ).allowed
 
 
@@ -477,7 +477,7 @@ def test_memory_decision_no_threshold_returns_allowed(
     store = UsageStore()
     now = datetime(2026, 5, 8, 12, tzinfo=UTC)
     assert store.memory_decision_for_backend(
-        "kodo", min_available_memory_mb=None, now=now,
+        "team_executor", min_available_memory_mb=None, now=now,
     ).allowed
 
 
@@ -490,7 +490,7 @@ def test_memory_decision_blocks_when_below_threshold(
     now = datetime(2026, 5, 8, 12, tzinfo=UTC)
     monkeypatch.setattr(UsageStore, "available_memory_mb", staticmethod(lambda: 1024))
     decision = store.memory_decision_for_backend(
-        "kodo", min_available_memory_mb=6144, now=now,
+        "team_executor", min_available_memory_mb=6144, now=now,
     )
     assert decision.allowed is False
     assert decision.reason == "backend_memory_insufficient"
@@ -506,7 +506,7 @@ def test_memory_decision_passes_when_above_threshold(
     now = datetime(2026, 5, 8, 12, tzinfo=UTC)
     monkeypatch.setattr(UsageStore, "available_memory_mb", staticmethod(lambda: 32000))
     assert store.memory_decision_for_backend(
-        "kodo", min_available_memory_mb=6144, now=now,
+        "team_executor", min_available_memory_mb=6144, now=now,
     ).allowed
 
 
@@ -519,7 +519,7 @@ def test_memory_decision_zero_meminfo_returns_allowed(
     now = datetime(2026, 5, 8, 12, tzinfo=UTC)
     monkeypatch.setattr(UsageStore, "available_memory_mb", staticmethod(lambda: 0))
     assert store.memory_decision_for_backend(
-        "kodo", min_available_memory_mb=6144, now=now,
+        "team_executor", min_available_memory_mb=6144, now=now,
     ).allowed
 
 

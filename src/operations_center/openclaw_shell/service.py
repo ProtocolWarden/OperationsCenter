@@ -59,7 +59,7 @@ class OpenClawShellService:
         handle = svc.plan(context)
 
         # Derive status from a canonical execution result
-        summary = svc.summarize_result(result, lane="claude_cli", backend="kodo")
+        summary = svc.summarize_result(result, lane="claude_cli", backend="team_executor")
 
         # Inspect a retained record
         inspection = svc.inspect_record(record, trace)
@@ -170,7 +170,7 @@ class OpenClawShellService:
     def with_stub_routing(
         cls,
         lane: str = "claude_cli",
-        backend: str = "kodo",
+        backend: str = "team_executor",
         confidence: float = 0.9,
     ) -> "OpenClawShellService":
         """Create with a stub routing client — for tests and local dev.

@@ -49,7 +49,7 @@ def _decision(lane: LaneName = LaneName.CLAUDE_CLI) -> LaneDecision:
     return LaneDecision(
         proposal_id="TASK-1",
         selected_lane=lane,
-        selected_backend=BackendName.KODO,
+        selected_backend=BackendName.TEAM_EXECUTOR,
         confidence=0.9,
         rationale="test",
     )

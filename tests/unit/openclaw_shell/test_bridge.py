@@ -72,7 +72,7 @@ def _failed_result(**kw):
 @pytest.fixture
 def bridge() -> OpenClawBridge:
     return OpenClawBridge.with_stub_routing(
-        lane="claude_cli", backend="kodo", confidence=0.9
+        lane="claude_cli", backend="team_executor", confidence=0.9
     )
 
 
@@ -141,7 +141,7 @@ def test_trigger_handle_lane_backend(bridge):
     ctx = _ctx()
     handle = bridge.trigger(ctx)
     assert handle.selected_lane == "claude_cli"
-    assert handle.selected_backend == "kodo"
+    assert handle.selected_backend == "team_executor"
 
 
 def test_trigger_handle_status_planned(bridge):
@@ -195,22 +195,22 @@ def test_trigger_with_summary_matching_ids(bridge):
 
 def test_status_from_result_success(bridge):
     result = _success_result()
-    summary = bridge.status_from_result(result, lane="claude_cli", backend="kodo")
+    summary = bridge.status_from_result(result, lane="claude_cli", backend="team_executor")
     assert isinstance(summary, ShellStatusSummary)
     assert summary.success is True
 
 
 def test_status_from_result_failure(bridge):
     result = _failed_result()
-    summary = bridge.status_from_result(result, lane="claude_cli", backend="kodo")
+    summary = bridge.status_from_result(result, lane="claude_cli", backend="team_executor")
     assert summary.success is False
 
 
 def test_status_from_result_lane_backend(bridge):
     result = _success_result()
-    summary = bridge.status_from_result(result, lane="aider_local", backend="kodo")
+    summary = bridge.status_from_result(result, lane="aider_local", backend="team_executor")
     assert summary.selected_lane == "aider_local"
-    assert summary.selected_backend == "kodo"
+    assert summary.selected_backend == "team_executor"
 
 
 # ---------------------------------------------------------------------------
@@ -239,7 +239,7 @@ def test_inspect_from_record_returns_inspection(bridge):
     recorder = ExecutionRecorder()
     builder = RunReportBuilder()
     result = _success_result()
-    record = recorder.record(result, backend="kodo", lane="claude_cli")
+    record = recorder.record(result, backend="team_executor", lane="claude_cli")
     trace = builder.build_report(record)
     r = bridge.inspect_from_record(record, trace)
     assert isinstance(r, ShellInspectionResult)
@@ -249,7 +249,7 @@ def test_inspect_from_record_status(bridge):
     recorder = ExecutionRecorder()
     builder = RunReportBuilder()
     result = _success_result()
-    record = recorder.record(result, backend="kodo", lane="claude_cli")
+    record = recorder.record(result, backend="team_executor", lane="claude_cli")
     trace = builder.build_report(record)
     r = bridge.inspect_from_record(record, trace)
     assert r.status == ExecutionStatus.SUCCEEDED.value

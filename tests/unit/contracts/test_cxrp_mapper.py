@@ -110,10 +110,10 @@ def _make_decision(proposal_id: str) -> LaneDecision:
     return LaneDecision(
         proposal_id=proposal_id,
         selected_lane=LaneName.CLAUDE_CLI,
-        selected_backend=BackendName.KODO,
+        selected_backend=BackendName.OPENCLAW,
         confidence=0.92,
         policy_rule_matched="bugfix-low-risk",
-        rationale="task_type=bug_fix + risk=low → claude_cli via kodo",
+        rationale="task_type=bug_fix + risk=low → claude_cli via openclaw",
         alternatives_considered=[LaneName.CODEX_CLI],
     )
 
@@ -210,7 +210,7 @@ def test_to_cxrp_lane_decision_separates_category_from_executor_backend():
     cxrp = to_cxrp_lane_decision(_make_decision("p-1"))
     assert cxrp.lane == LaneType.CODING_AGENT
     assert cxrp.executor == "claude_cli"
-    assert cxrp.backend == "kodo"
+    assert cxrp.backend == "openclaw"
 
 
 def test_ecp_lane_decision_validates_against_schema():

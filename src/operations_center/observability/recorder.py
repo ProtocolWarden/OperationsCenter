@@ -28,7 +28,7 @@ class ExecutionRecorder:
 
     Usage:
         recorder = ExecutionRecorder()
-        record = recorder.record(result, backend="kodo", lane="claude_cli")
+        record = recorder.record(result, backend="team_executor", lane="claude_cli")
     """
 
     def record(

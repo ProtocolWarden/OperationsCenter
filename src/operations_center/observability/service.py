@@ -12,7 +12,7 @@ Top-level facade for the observability pipeline:
 Typical usage:
 
     svc = ExecutionObservabilityService.default()
-    record, trace = svc.observe(result, backend="kodo", lane="claude_cli")
+    record, trace = svc.observe(result, backend="team_executor", lane="claude_cli")
 
 Both record and trace are returned so the caller can retain the record and
 display/log the trace independently.

@@ -71,7 +71,7 @@ def _bundle(task_type: str = "refactor", lane: LaneName = LaneName.CLAUDE_CLI) -
         decision=LaneDecision(
             proposal_id=proposal.proposal_id,
             selected_lane=lane,
-            selected_backend=BackendName.KODO,
+            selected_backend=BackendName.TEAM_EXECUTOR,
         ),
     )
 

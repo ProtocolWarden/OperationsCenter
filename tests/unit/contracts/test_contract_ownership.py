@@ -60,7 +60,7 @@ def _decision(proposal_id: str) -> OcRoutingDecision:
     return OcRoutingDecision(
         proposal_id=proposal_id,
         selected_lane=LaneName.CLAUDE_CLI,
-        selected_backend=BackendName.KODO,
+        selected_backend=BackendName.OPENCLAW,
         confidence=0.9,
         policy_rule_matched="default",
         rationale="default route",
@@ -126,7 +126,7 @@ def test_execution_boundary_serializes_to_canonical_cxrp_contracts() -> None:
     result = _result(request)
 
     cxrp_request = to_cxrp_execution_request(
-        request, executor=LaneName.CLAUDE_CLI.value, backend=BackendName.KODO.value
+        request, executor=LaneName.CLAUDE_CLI.value, backend=BackendName.OPENCLAW.value
     )
     cxrp_result = to_cxrp_execution_result(result)
 

@@ -1,34 +1,45 @@
 sources:
-  - name: kodo
-    upstream_url: https://github.com/ikamensh/kodo
-    fork_url: https://github.com/ProtocolWarden/kodo
-    local_path: /home/dev/Documents/GitHub/kodo
-    branch: dev
-    expected_sha: 9758a0a
-    install_kind: cli_tool
-    base_commit: 90bdf8a
-    install_modes:
-      prod: uv tool install --reinstall --force git+ssh://git@github.com/ProtocolWarden/kodo.git@{expected_sha}
-      ci: uv tool install --reinstall --force git+https://github.com/ProtocolWarden/kodo.git@{expected_sha}
-      dev: uv tool install --reinstall --force {local_path}
-    local_clone_hint: ~/Documents/GitHub/kodo
-    poll_cadence_hours: 24
-    auto_pr_push: true
-    auto_sync: true
-
-  - name: archon
-    upstream_url: https://github.com/coleam00/Archon
-    fork_url: https://github.com/ProtocolWarden/Archon
-    local_path: /home/dev/Documents/GitHub/Archon
+  - name: TeamExecutor
+    upstream_url: https://github.com/ProtocolWarden/TeamExecutor
+    fork_url: https://github.com/ProtocolWarden/TeamExecutor
+    local_path: /home/dev/Documents/GitHub/TeamExecutor
     branch: main
-    expected_sha: fd6d75e
-    install_kind: external
-    base_commit: 6be5c61
+    install_kind: python_package
     install_modes:
-      dev: 'true'
-      ci: 'true'
-      prod: 'true'
-    local_clone_hint: ~/Documents/GitHub/Archon
+      prod: pip install git+ssh://git@github.com/ProtocolWarden/TeamExecutor.git
+      ci: pip install git+https://github.com/ProtocolWarden/TeamExecutor.git
+      dev: pip install -e {local_path}
+    local_clone_hint: ~/Documents/GitHub/TeamExecutor
     poll_cadence_hours: 24
     auto_pr_push: false
-    auto_sync: true
+    auto_sync: false
+
+  - name: DagExecutor
+    upstream_url: https://github.com/ProtocolWarden/DagExecutor
+    fork_url: https://github.com/ProtocolWarden/DagExecutor
+    local_path: /home/dev/Documents/GitHub/DagExecutor
+    branch: main
+    install_kind: python_package
+    install_modes:
+      prod: pip install git+ssh://git@github.com/ProtocolWarden/DagExecutor.git
+      ci: pip install git+https://github.com/ProtocolWarden/DagExecutor.git
+      dev: pip install -e {local_path}
+    local_clone_hint: ~/Documents/GitHub/DagExecutor
+    poll_cadence_hours: 24
+    auto_pr_push: false
+    auto_sync: false
+
+  - name: CritiqueExecutor
+    upstream_url: https://github.com/ProtocolWarden/CritiqueExecutor
+    fork_url: https://github.com/ProtocolWarden/CritiqueExecutor
+    local_path: /home/dev/Documents/GitHub/CritiqueExecutor
+    branch: main
+    install_kind: python_package
+    install_modes:
+      prod: pip install git+ssh://git@github.com/ProtocolWarden/CritiqueExecutor.git
+      ci: pip install git+https://github.com/ProtocolWarden/CritiqueExecutor.git
+      dev: pip install -e {local_path}
+    local_clone_hint: ~/Documents/GitHub/CritiqueExecutor
+    poll_cadence_hours: 24
+    auto_pr_push: false
+    auto_sync: false

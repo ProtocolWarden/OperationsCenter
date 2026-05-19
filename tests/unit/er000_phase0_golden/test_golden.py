@@ -59,11 +59,11 @@ class TestOneShotPath:
         ld = LaneDecision(
             proposal_id="tp-er000",
             selected_lane=LaneName.CLAUDE_CLI,
-            selected_backend=BackendName.KODO,
+            selected_backend=BackendName.TEAM_EXECUTOR,
             rationale="er-000 freeze",
         )
         assert ld.selected_lane == LaneName.CLAUDE_CLI
-        assert ld.selected_backend == BackendName.KODO
+        assert ld.selected_backend == BackendName.TEAM_EXECUTOR
 
     def test_execution_request_constructs(self, tmp_path: Path) -> None:
         req = ExecutionRequest(
@@ -112,7 +112,7 @@ class TestContractValidation:
         ld = LaneDecision(
             proposal_id="tp-x",
             selected_lane=LaneName.CLAUDE_CLI,
-            selected_backend=BackendName.KODO,
+            selected_backend=BackendName.TEAM_EXECUTOR,
         )
         assert ld.confidence == 1.0  # default
 
@@ -121,7 +121,7 @@ class TestContractValidation:
             LaneDecision(
                 proposal_id="tp-x",
                 selected_lane="not_a_lane",  # type: ignore[arg-type]
-                selected_backend=BackendName.KODO,
+                selected_backend=BackendName.TEAM_EXECUTOR,
             )
 
     def test_lane_decision_confidence_out_of_range_rejected(self) -> None:
@@ -129,7 +129,7 @@ class TestContractValidation:
             LaneDecision(
                 proposal_id="tp-x",
                 selected_lane=LaneName.CLAUDE_CLI,
-                selected_backend=BackendName.KODO,
+                selected_backend=BackendName.TEAM_EXECUTOR,
                 confidence=2.0,
             )
 
