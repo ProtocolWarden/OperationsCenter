@@ -41,10 +41,10 @@ become orphans and continue consuming CPU and API quota.
 ## Decision
 
 1. **Rename** `ExecutorRuntime` → `CoreRunner` (package `executor_runtime` →
-   `core_runner`, class `ExecutorRuntime` → `CoreRunner`).
+   core_runner, class `ExecutorRuntime` → `CoreRunner`).
 
-2. **Extract** a standalone `safe_run()` function from `SubprocessRunner` into
-   `core_runner.process` — a public, lightweight primitive with no RxP
+2. **Extract** a standalone safe_run() function from `SubprocessRunner` into
+   core_runner.process — a public, lightweight primitive with no RxP
    dependency. Signature:
 
    ```python
@@ -63,7 +63,7 @@ become orphans and continue consuming CPU and API quota.
    `timed_out`. No RxP contracts, no artifact descriptors.
 
 3. **Wire** TE/DE/CE to replace their raw `subprocess.run()` calls with
-   `core_runner.process.safe_run()`. The full RxP invocation path
+   core_runner.process.safe_run(). The full RxP invocation path
    (`CoreRunner.run(invocation)`) remains unchanged for `direct_local` /
    `aider_local`.
 
@@ -85,27 +85,27 @@ become orphans and continue consuming CPU and API quota.
 
 ## Work Order
 
-### Phase 1 — Extract `safe_run()` in CoreRunner repo
+### Phase 1 — Extract safe_run() in CoreRunner repo
 
 **Files to create/change in `ExecutorRuntime` (soon `CoreRunner`):**
 
 1. `src/core_runner/process.py` *(new)*
    - Extract `_run_with_process_group()` logic from `SubprocessRunner` into
-     `safe_run(cmd, *, cwd, env, timeout_seconds, capture_output) → SafeRunResult`
+     safe_run(cmd, *, cwd, env, timeout_seconds, capture_output) → SafeRunResult`
    - `SafeRunResult` dataclass: `returncode: int | None`, `stdout: str`,
      `stderr: str`, `timed_out: bool`
    - Keep stdout/stderr in-memory (not captured to files) — file capture is an
      RxP-layer concern, not a primitive concern
 
 2. `src/core_runner/__init__.py`
-   - Export `CoreRunner` (renamed from `ExecutorRuntime`) and `safe_run`
+   - Export `CoreRunner` (renamed from `ExecutorRuntime`) and safe_run`
 
 3. `src/core_runner/runtime.py`
    - Rename class `ExecutorRuntime` → `CoreRunner`
-   - Internal imports updated to `core_runner.*`
+   - Internal imports updated to core_runner.*
 
 4. `src/core_runner/runners/subprocess_runner.py`
-   - Delegate `_run_with_process_group` to `core_runner.process.safe_run()`
+   - Delegate `_run_with_process_group` to core_runner.process.safe_run()
      internally (removes duplication)
 
 5. All other files under `src/executor_runtime/` → `src/core_runner/`
@@ -127,21 +127,21 @@ become orphans and continue consuming CPU and API quota.
 
 ---
 
-### Phase 2 — Wire TE/DE/CE to `core_runner.safe_run()`
+### Phase 2 — Wire TE/DE/CE to core_runner.safe_run()
 
 **TeamExecutor — `src/team_executor/agent_call.py`:**
 - Replace `subprocess.run(cmd, ...)` in `_claude_call()` and `_codex_call()`
-  with `safe_run(cmd, cwd=working_dir, timeout_seconds=role.timeout_seconds)`
+  with safe_run(cmd, cwd=working_dir, timeout_seconds=role.timeout_seconds)`
 - `pyproject.toml` — add `core-runner` dependency
 
 **DAGExecutor — `src/dag_executor/nodes/base.py`:**
-- Replace `run_subprocess()` implementation with `safe_run()`
+- Replace `run_subprocess()` implementation with safe_run()
 - Remove `shell=True` (use list form — already done in agent node)
 - `pyproject.toml` — add `core-runner` dependency
 
 **CritiqueExecutor — `src/critique_executor/critic_runner.py`:**
 - Replace `subprocess.run(cmd, ...)` in `_claude_critic()` and `_codex_critic()`
-  with `safe_run(cmd, cwd=working_dir, timeout_seconds=timeout_seconds)`
+  with safe_run(cmd, cwd=working_dir, timeout_seconds=timeout_seconds)`
 - `pyproject.toml` — add `core-runner` dependency
 
 ---
@@ -170,9 +170,9 @@ become orphans and continue consuming CPU and API quota.
 ### Phase 4 — Update PlatformManifest
 
 **`src/platform_manifest/data/platform_manifest.yaml`:**
-- Node key `executor_runtime` → `core_runner`
+- Node key `executor_runtime` → core_runner
 - `canonical_name: ExecutorRuntime` → `CoreRunner`
-- All edge references: `executor_runtime` → `core_runner`
+- All edge references: `executor_runtime` → core_runner
 
 **Tests:**
 - `tests/test_repo_graph.py`, `test_validate.py`, `test_ontology_relationships.py`,
@@ -186,7 +186,7 @@ become orphans and continue consuming CPU and API quota.
 **RxP** — `README.md`, `.github/` templates, `CONTRIBUTING.md`, `SECURITY.md`,
 `rxp/vocabulary/runtime_kind.py` — update all `ExecutorRuntime` → `CoreRunner`
 
-**CxRP** — `docs/integrations/operations_center.md` — update table entry
+**CxRP** — `operations_center.md` integration doc — update table entry
 
 **OperatorConsole:**
 - `config/profiles/executorruntime.yaml` → rename to `corerunner.yaml`, update `name: CoreRunner`

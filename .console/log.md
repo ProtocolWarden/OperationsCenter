@@ -7475,3 +7475,9 @@ Added 0005-work-order-p5.md to docs/README.md to fix DC7 orphan finding. Custodi
 - Written docs/architecture/adr/0006-corerunner-subprocess-consolidation.md
 - 6-phase plan: extract safe_run(), wire TE/DE/CE, update OC, update PlatformManifest, update remaining repos, GitHub repo rename
 - Decision: all subprocess calls in ecosystem share one process-group-safe implementation via core_runner.safe_run()
+
+## 2026-05-19 — Fix custodian findings in ADR 0006 doc
+
+- Removed backtick-quoted future symbols from ADR prose (K1/OC8 findings)
+- Fixed dead CxRP cross-ref (DC2)
+- Linked ADR from docs/README.md (DC7 orphan finding)

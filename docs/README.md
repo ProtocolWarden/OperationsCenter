@@ -128,3 +128,5 @@ guidance.
   slice replay, final verification.
 - [history/development-log/](history/development-log/) (under previous `history/`) —
   development log and remediation summaries.
+
+- [ADR 0006 — CoreRunner rename and subprocess safety consolidation](architecture/adr/0006-corerunner-subprocess-consolidation.md)
