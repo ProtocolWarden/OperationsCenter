@@ -238,8 +238,16 @@ def _apply_rules(
         # Also skipped when executor-signal:SIGKILL is present — SIGKILL'd tasks have a
         # systemic failure (timeout, OOM) and should not be automatically re-dispatched;
         # they require triage review before retrying (Rule 1 cancels at ≥3 retries).
+        # Also skipped when executor-exit-code:0 is present WITHOUT a corresponding
+        # executor-signal label — this indicates execute.main exited clean but the result
+        # was unreadable (empty result.json race); re-queuing would loop forever until the
+        # underlying execute.main bug is fixed.
         if state_lower == "blocked" and _has_label(labels, _SELF_MODIFY_APPROVED_LABEL):
             executor_signal_val = _label_value(labels, _SIGKILL_SIGNAL_PREFIX) or ""
+            executor_exit_code_val = _label_value(labels, "executor-exit-code:") or ""
+            exit_code_zero_no_signal = (
+                executor_exit_code_val.strip() == "0" and not executor_signal_val
+            )
             if "sigkill" in executor_signal_val.lower():
                 actions.append({
                     "task_id": task_id,
@@ -248,6 +256,16 @@ def _apply_rules(
                     "from_state": state,
                     "to_state": "Ready for AI",
                     "reason": "SKIPPED — executor-signal:SIGKILL present; triage review required before requeue",
+                    "skipped": True,
+                })
+            elif exit_code_zero_no_signal:
+                actions.append({
+                    "task_id": task_id,
+                    "title": title,
+                    "rule": "SELF_MODIFY_REQUEUE",
+                    "from_state": state,
+                    "to_state": "Ready for AI",
+                    "reason": "SKIPPED — executor-exit-code:0 with no signal label; empty result.json pattern requires execute.main fix before retry",
                     "skipped": True,
                 })
             elif mem_available_gb < _MEM_R4AI_THRESHOLD_GB:

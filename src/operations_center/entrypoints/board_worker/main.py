@@ -444,14 +444,33 @@ def _process_issue(issue: dict, role: str, config_path: Path, settings, client) 
             "--source",         f"board_worker_{role}",
         ]
 
-        subprocess.run(exec_cmd, cwd=oc_root, env=env, capture_output=True, text=True)
+        proc = subprocess.run(exec_cmd, cwd=oc_root, env=env, capture_output=True, text=True)
 
         if not result_file.exists():
             logger.error("board_worker[%s]: execute produced no result for task_id=%s", role, task_id)
             _fail_task(client, task_id, role, "execute produced no result file")
             return False
 
-        outcome = json.loads(result_file.read_text(encoding="utf-8"))
+        result_text = result_file.read_text(encoding="utf-8").strip()
+        if not result_text:
+            # write_text truncates the file before writing; a SIGKILL between
+            # those two operations leaves an empty file. Treat as executor kill
+            # so the SIGKILL guard in board_unblock fires correctly.
+            rc = proc.returncode
+            logger.error(
+                "board_worker[%s]: empty result.json for task_id=%s (returncode=%s) — treating as executor kill",
+                role, task_id, rc,
+            )
+            _add_label(client, issue, f"executor-exit-code: {rc}")
+            _add_label(client, issue, "executor-signal: SIGKILL")
+            _increment_retry_count(client, issue)
+            _fail_task(
+                client, task_id, role,
+                f"execute wrote empty result.json (returncode={rc}) — treated as executor kill",
+            )
+            return False
+
+        outcome = json.loads(result_text)
         result  = outcome.get("result", {})
         success = result.get("success", False)
         status  = result.get("status", "unknown")
