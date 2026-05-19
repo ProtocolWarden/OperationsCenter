@@ -7640,3 +7640,69 @@ Cross-cycle repeating patterns:
 
 ### Direct fixes: none (execution gate: no qualifying findings this cycle)
 ### Repos touched: OperationsCenter (.console/log.md commit only)
+
+## OC Platform Watchdog Cycle — 2026-05-19 08:42 UTC (Cycle 3)
+
+- Lock owner: pid=2266828 hostname=dev-latitudee7470 (reclaimed stale from cycle 2)
+- Health state: ACTIVE (direct fix applied)
+- Next cadence: 900s — direct fix to board_unblock SIGKILL guard; verify no cycling next cycle
+- Plane status: 4 R4AI / Blocked / Backlog (after board-unblock STEP 2.5)
+- PlatformDeployment / SwitchBoard status: healthy (200 OK; selector_ready=True; uptime=10272s)
+- Watchers: 8/8 running | all healthy, no new crashes
+- Audits run: custodian-sweep ghost-audit flow-audit graph-doctor reaudit-check regressions
+
+### Preflight notes
+- OperationsCenter: `git pull --ff-only` reported conflict (pre-existing merge in-flight); resolved — on main (clean) with merge commit 41a3056 "CoreRunner phase-3 PR + watchdog fixes"
+- Branch cleanup: deleted merged watchdog branches oc-watchdog/20260519-0413 and oc-watchdog/20260519-0754 (local + remote)
+- All other repos: already up to date
+
+### STEP 1 findings
+- graph-doctor: ✓ OK — 11 nodes / 12 edges / graph_built=True
+- ghost-audit: 1 G10 (b67bc0e0 "Fix lint regression" — NON-CONVERGENT, 3rd consecutive cycle)
+- flow-audit: 0 open gaps; F8 partial (persistent, non-critical)
+- reaudit-check: exit 1 — DAGExecutor + TeamExecutor (persistent, CxRP v0.3.1)
+- regression-check: 0 findings ✓
+- custodian-sweep: 7 repos swept, all delta=0 ✓
+
+### STEP 2 triage
+- b67bc0e0: escalation_commented, safe=false (SIGKILL retry budget exhausted) — 3rd cycle
+
+### STEP 2.5 board-unblock
+- 8871f757, 2824d46e, b67bc0e0, a969024e: 4 Blocked→R4AI transitions (before SIGKILL fix applied)
+- Post-fix dry-run: 0 actions (b67bc0e0 now correctly skipped by SIGKILL guard)
+
+### STEP 3 — Convergence analysis
+- b67bc0e0 G10: 3 consecutive cycles = NON-CONVERGENT → escalated to direct fix per STEP 4/5
+- All other audit findings: stable (no new findings, no regressions)
+- Convergence: WEAKLY-CONVERGENT → ACTIVE (fix in flight)
+
+### STEP 4 — Promotion action taken
+- Plane task 86c8c778 created: "Fix board-unblock: SELF_MODIFY_REQUEUE must respect triage safe=false label" (Backlog, OperationsCenter)
+
+### STEP 5/6 — Direct fix
+- Repo: OperationsCenter
+- File: src/operations_center/entrypoints/maintenance/board_unblock.py
+- Change: Rule 4 SELF_MODIFY_REQUEUE now skips tasks with executor-signal:SIGKILL label (systemic failure → triage review required before requeue)
+- Branch: oc-watchdog/20260519-0842-board-unblock-sigkill-guard
+- Commit: 2bc25f0
+- Verification: dry-run post-fix shows 0 actions (b67bc0e0 skipped) ✓
+
+### STEP 7 — Invariant tests
+- pytest tests/unit/er000_phase0_golden/ -q: 15 passed ✓
+
+### STEP 8 — Watcher health
+- 8/8 watchers running; no new non-143 crashes; review watcher healthy (polling GitHub APIs)
+- Old review log errors (03:52-03:53): pre-fix stale entries; current session log clean
+
+### Blocked work classification
+- b67bc0e0: structurally-blocked → FIXED (SIGKILL guard prevents cycling); Rule 1 will cancel at retry-count≥3
+- reaudit DAGExecutor+TeamExecutor: validation-blocked (CxRP v0.3.1, ongoing, non-critical)
+
+### Behavioral convergence: ACTIVE (fix dispatched)
+- NON-CONVERGENT b67bc0e0 pattern: RESOLVED by board_unblock SIGKILL guard
+- All cycle 1+2 fixes held
+- Custodian delta=0 across 7 repos
+- Next cycle should show CONVERGENT or WEAKLY-CONVERGENT (no more G10 from b67bc0e0)
+
+### Watcher handoff gaps closed this cycle
+- board_unblock SELF_MODIFY_REQUEUE: no longer conflicts with triage safe=false
