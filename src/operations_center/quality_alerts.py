@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-"""Helpers for surfacing kodo run quality issues + escalation events.
+"""Helpers for surfacing execution backend run quality issues + escalation events.
 
 Cited by `docs/design/autonomy/autonomy_gaps.md` Wave 5 (S5-10 Quality Erosion,
-S7-7 Escalation Wiring, S10-1 Rejection Patterns Injected into Kodo
+S7-7 Escalation Wiring, S10-1 Rejection Patterns Injected into Backend
 Prompts).
 
 Pure formatting / extraction utilities — no I/O. Callers wire them at
-the natural integration points (Plane comments, kodo prompt assembly).
+the natural integration points (Plane comments, backend prompt assembly).
 
 Invariants: read-only utilities, no contract mutation, no
 behavior_calibration imports.
@@ -56,7 +56,7 @@ def _extract_rejection_patterns(rejection_records: list[dict]) -> list[str]:
 
     Each record is a dict with at least a `reason` field. Returns the top
     N reasons by count, deduplicated and lowercased — these become hints
-    for the kodo prompt to avoid repeating the same mistake.
+    for the backend prompt to avoid repeating the same mistake.
     """
     if not rejection_records:
         return []
@@ -135,11 +135,11 @@ def _escalate_to_human(
 # ── _process_self_review (reviewer-side helper) ──────────────────────────────
 
 def _process_self_review(verdict: dict | None, *, max_summary: int = 400) -> tuple[str, str]:
-    """Normalise a kodo self-review verdict dict into (result, summary).
+    """Normalise a backend verdict dict into (result, summary).
 
-    The reviewer pipeline reads `verdict.json` from kodo's workspace; this
-    helper validates the shape and returns trimmed strings the caller can
-    safely use in PR comments / state files.
+    The reviewer pipeline reads `verdict.json` from the execution backend's
+    workspace; this helper validates the shape and returns trimmed strings the
+    caller can safely use in PR comments / state files.
 
     Returns ("LGTM" | "CONCERNS", summary). Defaults to CONCERNS when
     the verdict is missing / malformed (fail-closed).

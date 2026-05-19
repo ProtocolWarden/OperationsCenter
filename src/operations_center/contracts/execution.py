@@ -176,8 +176,8 @@ class OcExecutionResult(BaseModel):
     The canonical outcome of an execution run.
 
     Produced by the backend adapter and returned to the OperationsCenter execution
-    boundary / platform. This is backend-agnostic: a kodo adapter, Archon
-    adapter, and any future adapter all return this same shape.
+    boundary / platform. This is backend-agnostic: a team_executor, dag_executor,
+    or other backend adapter all return this same shape.
     """
 
     run_id: str
@@ -345,7 +345,7 @@ class RuntimeInvocationRef(BaseModel):
     """
 
     invocation_id: str = Field(description="RuntimeInvocation.invocation_id (matches RuntimeResult.invocation_id)")
-    runtime_name: str = Field(description="Logical runtime name passed to ExecutorRuntime, e.g. 'direct_local', 'kodo'")
+    runtime_name: str = Field(description="Logical runtime name passed to ExecutorRuntime, e.g. 'direct_local', 'team_executor'")
     runtime_kind: str = Field(description="RxP runtime kind, e.g. 'subprocess', 'http_async', 'manual'")
     stdout_path: Optional[str] = Field(default=None, description="RuntimeResult.stdout_path, if the runner captured it")
     stderr_path: Optional[str] = Field(default=None, description="RuntimeResult.stderr_path, if the runner captured it")

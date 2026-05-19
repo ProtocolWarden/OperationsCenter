@@ -41,7 +41,7 @@ Applies five rules on every run:
     move to Ready for AI.  Catches tasks whose executor died (OOM, SIGKILL, watcher
     restart) without updating Plane state.  The watcher startup reconciliation only
     handles tasks Running at cycle 1; tasks that become orphaned mid-session are
-    covered here.  2h threshold is chosen to be > the kodo timeout (1h) so legitimate
+    covered here.  2h threshold is chosen to be > the backend timeout (1h) so legitimate
     long-running tasks are not incorrectly recovered.
 
 Usage:
@@ -230,8 +230,8 @@ def _apply_rules(
                 continue
 
         # Rule 4 — self-modify:approved tasks blocked on a resolved (or absent) dependency
-        # Skipped when memory is below the kodo dispatch threshold — requeueing to R4AI
-        # when memory is low would cause kodo to get OOM-killed on the next dispatch.
+        # Skipped when memory is below the executor dispatch threshold — requeueing to R4AI
+        # when memory is low would cause the executor to get OOM-killed on the next dispatch.
         if state_lower == "blocked" and _has_label(labels, _SELF_MODIFY_APPROVED_LABEL):
             if mem_available_gb < _MEM_R4AI_THRESHOLD_GB:
                 actions.append({
@@ -274,7 +274,7 @@ def _apply_rules(
                 })
 
         # Rule 6 — stale Running tasks whose executor died without updating Plane
-        # Threshold must exceed the kodo timeout (default 3600s = 1h) so legitimate
+        # Threshold must exceed the backend timeout (default 3600s = 1h) so legitimate
         # long-running tasks are not prematurely recovered.
         if state_lower == "running":
             updated_at = _parse_updated_at(issue)
@@ -302,7 +302,7 @@ def main() -> int:
     parser.add_argument("--stale-blocked-hours", type=int, default=4,
                         help="hours after which an improve task in Blocked is considered stale")
     parser.add_argument("--stale-running-hours", type=int, default=2,
-                        help="hours after which a Running task is considered orphaned (must exceed kodo timeout)")
+                        help="hours after which a Running task is considered orphaned (must exceed backend timeout)")
     args = parser.parse_args()
 
     settings = load_settings(args.config)

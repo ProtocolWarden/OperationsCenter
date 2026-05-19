@@ -49,7 +49,7 @@ class BoundExecutionTarget(BaseModel):
         enumerate categories.
       - ``executor`` — OC ``LaneName`` enum (``claude_cli`` / ``codex_cli`` /
         ``aider_local``). Strict.
-      - ``backend`` — OC ``BackendName`` enum (``kodo`` / ``archon`` / ...).
+      - ``backend`` — OC ``BackendName`` enum (``team_executor`` / ``dag_executor`` / ...).
         Strict.
     """
 

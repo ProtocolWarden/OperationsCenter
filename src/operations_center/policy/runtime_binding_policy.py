@@ -87,7 +87,7 @@ class RuntimeBindingPolicy:
     ) -> RuntimeBinding | None:
         """Return the first-matching rule's binding, or the default's, or None.
 
-        ``None`` means "no binding selected" — kodo (and other adapters)
+        ``None`` means "no binding selected" — team_executor and other backends
         will fall back to their built-in defaults. This is the pre-policy
         behaviour and is preserved when no rule and no default match.
         """

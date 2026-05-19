@@ -21,7 +21,7 @@ class ExecutionHealthDeriver:
 
     Signals:
     - high_no_op_rate: most recent runs for this repo produced no code changes,
-      suggesting tasks are being generated but kodo cannot act on them.
+      suggesting tasks are being generated but the execution backend cannot act on them.
     - persistent_validation_failures: multiple executed runs failed validation,
       suggesting a systemic quality issue or overly complex task descriptions.
     - repeated_unknown_failures: multiple runs ended with unknown or error outcomes,

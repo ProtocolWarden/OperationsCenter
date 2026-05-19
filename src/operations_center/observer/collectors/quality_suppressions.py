@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-"""Count code-quality suppression markers added in a kodo diff.
+"""Count code-quality suppression markers added in a backend diff.
 
-Cited by `docs/design/autonomy/autonomy_gaps.md` S5-10 (Kodo Quality Erosion
-Detection). The intent: if kodo's output keeps reaching for `# noqa` /
+Cited by `docs/design/autonomy/autonomy_gaps.md` S5-10 (Quality Erosion
+Detection). The intent: if the backend output keeps reaching for `# noqa` /
 `# type: ignore` to silence linters and type checkers instead of fixing
 the underlying issue, that's a signal that the team config is degrading
 or the goal text is overconstrained.

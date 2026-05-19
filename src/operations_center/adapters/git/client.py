@@ -68,7 +68,7 @@ class GitClient:
 
         Returns (success, conflicting_files).  On conflict the merge is left
         in-progress so conflict markers are visible in the working tree — the
-        caller is responsible for resolving them (e.g. via kodo) and then
+        caller is responsible for resolving them (e.g. via the execution backend) and then
         committing.
         """
         proc = subprocess.run(

@@ -78,13 +78,13 @@ class SetupAnswers:
     git_author_email: str
     git_sign_commits: bool
     git_signing_key: str | None
-    kodo_binary: str
-    kodo_install_ref: str | None
-    kodo_team: str
-    kodo_cycles: int
-    kodo_exchanges: int
-    kodo_orchestrator: str
-    kodo_effort: str
+    executor_binary: str
+    executor_install_ref: str | None
+    executor_team: str
+    executor_cycles: int
+    executor_exchanges: int
+    executor_orchestrator: str
+    executor_effort: str
     preferred_smart_provider: str | None
     preferred_fast_provider: str | None
     allowed_providers: list[str]
@@ -119,7 +119,7 @@ def print_banner() -> None:
     width = max(60, min(shutil.get_terminal_size((80, 20)).columns, 100))
     rule = "=" * width
     title = "Operations Center Setup"
-    subtitle = "Plane + Kodo local operator bootstrap"
+    subtitle = "Plane + executor local operator bootstrap"
     console.print(f"[blue]{rule}[/blue]")
     console.print(f"[bold green]{title.center(width)}[/bold green]")
     console.print(f"[bright_black]{subtitle.center(width)}[/bright_black]")
@@ -175,7 +175,7 @@ def default_orchestrator_for_statuses(
 def ensure_uv_installed() -> None:
     if check_command_installed("uv"):
         return
-    typer.echo("[kodo] uv not found -> installing...")
+    typer.echo("[executor] uv not found -> installing...")
     proc = subprocess.run(
         "curl -LsSf https://astral.sh/uv/install.sh | sh",
         shell=True,
@@ -184,20 +184,20 @@ def ensure_uv_installed() -> None:
     )
     prepend_local_bin_to_path()
     if proc.returncode != 0 or not check_command_installed("uv"):
-        raise typer.BadParameter("[kodo] ERROR: uv installation failed")
+        raise typer.BadParameter("[executor] ERROR: uv installation failed")
 
 
-def ensure_kodo_installed(binary: str, install_ref: str | None = None) -> None:
-    typer.echo("[kodo] Checking installation...")
+def ensure_executor_installed(binary: str, install_ref: str | None = None) -> None:
+    typer.echo("[executor] Checking installation...")
     if check_command_installed(binary):
-        typer.echo("[kodo] already installed")
+        typer.echo("[executor] already installed")
         return
     if binary != "kodo":
         raise typer.BadParameter(
-            f"[kodo] ERROR: custom kodo binary '{binary}' is not on PATH and automatic install only supports 'kodo'"
+            f"[executor] ERROR: custom executor binary '{binary}' is not on PATH and automatic install only supports 'kodo'"
         )
     ensure_uv_installed()
-    typer.echo("[kodo] Installing via uv (ProtocolWarden fork, dev branch)...")
+    typer.echo("[executor] Installing via uv (ProtocolWarden fork, dev branch)...")
     # Use the ProtocolWarden fork which contains fixes not in upstream:
     # - --full-auto replaced with -a never for Codex orchestrator
     # install_ref overrides the default branch for pinned installs.
@@ -211,16 +211,16 @@ def ensure_kodo_installed(binary: str, install_ref: str | None = None) -> None:
     )
     prepend_local_bin_to_path()
     if proc.returncode != 0 or not check_command_installed(binary):
-        raise typer.BadParameter("[kodo] ERROR: installation failed")
-    typer.echo("[kodo] installed successfully")
+        raise typer.BadParameter("[executor] ERROR: installation failed")
+    typer.echo("[executor] installed successfully")
 
 
-def verify_kodo(binary: str) -> None:
-    typer.echo("[kodo] Verifying...")
+def verify_executor(binary: str) -> None:
+    typer.echo("[executor] Verifying...")
     proc = subprocess.run([binary, "--help"], check=False, capture_output=True, text=True, env=os.environ.copy())
     if proc.returncode != 0:
-        raise typer.BadParameter("[kodo] ERROR: kodo not functioning")
-    typer.echo("[kodo] OK")
+        raise typer.BadParameter("[executor] ERROR: executor not functioning")
+    typer.echo("[executor] OK")
 
 
 def verify_plane_configuration(
@@ -633,17 +633,12 @@ def render_settings_yaml(answers: SetupAnswers) -> str:
             "sign_commits": answers.git_sign_commits,
             "signing_key": answers.git_signing_key,
         },
-        "kodo": {
-            "binary": answers.kodo_binary,
-            "team": answers.kodo_team,
-            "cycles": answers.kodo_cycles,
-            "exchanges": answers.kodo_exchanges,
-            "orchestrator": answers.kodo_orchestrator,
-            "effort": answers.kodo_effort,
+        "team_executor": {
+            "team_name": answers.executor_team,
             "timeout_seconds": 3600,
         },
         "repos": repos,
-        "report_root": "tools/report/kodo_plane",
+        "report_root": "tools/report/oc_plane",
     }
     return yaml.safe_dump(config, sort_keys=False, default_flow_style=False)
 
@@ -667,8 +662,8 @@ def render_env_file(answers: SetupAnswers) -> str:
         lines.append(f"export OPERATIONS_CENTER_PLANE_VERSION={shell_quote(answers.plane_version)}")
     if answers.plane_setup_url:
         lines.append(f"export OPERATIONS_CENTER_PLANE_SETUP_URL={shell_quote(answers.plane_setup_url)}")
-    if answers.kodo_install_ref:
-        lines.append(f"export OPERATIONS_CENTER_KODO_INSTALL_REF={shell_quote(answers.kodo_install_ref)}")
+    if answers.executor_install_ref:
+        lines.append(f"export OPERATIONS_CENTER_EXECUTOR_INSTALL_REF={shell_quote(answers.executor_install_ref)}")
     provider_env_keys = {
         "claude": "OPERATIONS_CENTER_PROVIDER_CLAUDE_VERSION",
         "codex": "OPERATIONS_CENTER_PROVIDER_CODEX_VERSION",
@@ -704,7 +699,7 @@ def render_task_template(answers: SetupAnswers) -> str:
             allowed_paths,
             "",
             "## Goal",
-            "Describe the code change you want Kodo to make.",
+            "Describe the code change you want the executor to make.",
             "",
             "## Constraints",
             f"- Keep the selected base branch within: {allowed_branches}",
@@ -857,7 +852,7 @@ def main(
     plane_version = existing_env.get("OPERATIONS_CENTER_PLANE_VERSION") or None
     plane_setup_url = existing_env.get("OPERATIONS_CENTER_PLANE_SETUP_URL") or None
     if advanced_mode:
-        print_section("Version Pins", "Optional install refs or versions for Plane, Kodo, and provider CLIs.")
+        print_section("Version Pins", "Optional install refs or versions for Plane, executor, and provider CLIs.")
         plane_version = typer.prompt(
             "Plane release tag (optional; pins repo-managed setup download)",
             default=plane_version or "",
@@ -1010,21 +1005,21 @@ def main(
         ).strip() or None
     ensure_github_ssh_setup(git_author_email, Path.cwd())
 
-    existing_kodo_binary = existing_config_value(existing_config, "kodo", "binary") or "kodo"
-    kodo_install_ref = existing_env.get("OPERATIONS_CENTER_KODO_INSTALL_REF") or None
-    print_section("Kodo Install", "Ensure the Kodo CLI is available before writing config.")
-    kodo_binary = prompt_with_default(
-        "Kodo binary",
-        existing_kodo_binary,
-        note="Using saved value." if existing_kodo_binary != "kodo" or existing_config_value(existing_config, "kodo", "binary") else None,
+    existing_executor_binary = existing_config_value(existing_config, "team_executor", "binary") or "kodo"
+    executor_install_ref = existing_env.get("OPERATIONS_CENTER_EXECUTOR_INSTALL_REF") or None
+    print_section("Executor Install", "Ensure the executor CLI is available before writing config.")
+    executor_binary = prompt_with_default(
+        "Executor binary",
+        existing_executor_binary,
+        note="Using saved value." if existing_executor_binary != "kodo" or existing_config_value(existing_config, "team_executor", "binary") else None,
     )
     if advanced_mode:
-        kodo_install_ref = typer.prompt(
-            "Kodo git ref/tag/SHA for install (optional)",
-            default=kodo_install_ref or "",
+        executor_install_ref = typer.prompt(
+            "Executor git ref/tag/SHA for install (optional)",
+            default=executor_install_ref or "",
         ).strip() or None
 
-    print_section("Providers", "Supported Kodo backends detected on this machine.")
+    print_section("Providers", "Supported executor backends detected on this machine.")
     statuses = detect_all_provider_statuses()
     write_provider_summary(statuses)
     provider_version_defaults = {
@@ -1088,8 +1083,8 @@ def main(
     typer.echo("[provider] Final provider summary:")
     typer.echo(summarize_provider_statuses(statuses))
 
-    ensure_kodo_installed(kodo_binary, install_ref=kodo_install_ref)
-    verify_kodo(kodo_binary)
+    ensure_executor_installed(executor_binary, install_ref=executor_install_ref)
+    verify_executor(executor_binary)
 
     usable_providers = [status.key for status in statuses if status.interactive_ready]
     if not usable_providers:
@@ -1111,37 +1106,37 @@ def main(
         default=existing_env.get("OPERATIONS_CENTER_PROVIDER_PREFERRED_FAST") or "codex",
     )
 
-    print_section("Kodo", "Execution defaults for the local coding engine.")
-    kodo_team = prompt_with_default(
-        "Kodo team",
-        existing_config_value(existing_config, "kodo", "team") or "full",
-        note="Using saved value." if existing_config_value(existing_config, "kodo", "team") else None,
+    print_section("Executor", "Execution defaults for the local coding engine.")
+    executor_team = prompt_with_default(
+        "Executor team name",
+        existing_config_value(existing_config, "team_executor", "team_name") or "default",
+        note="Using saved value." if existing_config_value(existing_config, "team_executor", "team_name") else None,
     )
-    kodo_cycles = int(prompt_with_default(
-        "Kodo cycles",
-        existing_config_value(existing_config, "kodo", "cycles") or "3",
-        note="Using saved value." if existing_config_value(existing_config, "kodo", "cycles") else None,
-    ))
-    kodo_exchanges = int(
-        prompt_with_default(
-            "Kodo exchanges",
-            existing_config_value(existing_config, "kodo", "exchanges") or "20",
-            note="Using saved value." if existing_config_value(existing_config, "kodo", "exchanges") else None,
-        )
-    )
-    kodo_orchestrator = prompt_with_default(
-        "Kodo orchestrator",
+    executor_orchestrator = prompt_with_default(
+        "Executor orchestrator",
         default_orchestrator_for_statuses(
             statuses,
             preferred_smart_provider=preferred_smart_provider,
-            saved_value=existing_config_value(existing_config, "kodo", "orchestrator"),
+            saved_value=existing_config_value(existing_config, "team_executor", "orchestrator"),
         ),
-        note="Using saved value." if existing_config_value(existing_config, "kodo", "orchestrator") else None,
+        note="Using saved value." if existing_config_value(existing_config, "team_executor", "orchestrator") else None,
     )
-    kodo_effort = prompt_with_default(
-        "Kodo effort",
-        existing_config_value(existing_config, "kodo", "effort") or "standard",
-        note="Using saved value." if existing_config_value(existing_config, "kodo", "effort") else None,
+    executor_cycles = int(prompt_with_default(
+        "Executor cycles",
+        existing_config_value(existing_config, "team_executor", "cycles") or "3",
+        note="Using saved value." if existing_config_value(existing_config, "team_executor", "cycles") else None,
+    ))
+    executor_exchanges = int(
+        prompt_with_default(
+            "Executor exchanges",
+            existing_config_value(existing_config, "team_executor", "exchanges") or "20",
+            note="Using saved value." if existing_config_value(existing_config, "team_executor", "exchanges") else None,
+        )
+    )
+    executor_effort = prompt_with_default(
+        "Executor effort",
+        existing_config_value(existing_config, "team_executor", "effort") or "standard",
+        note="Using saved value." if existing_config_value(existing_config, "team_executor", "effort") else None,
     )
 
     print_section("Repos", "Target repositories, branch policy, validation, and repo-local bootstrap.")
@@ -1177,13 +1172,13 @@ def main(
         git_author_email=git_author_email,
         git_sign_commits=git_sign_commits,
         git_signing_key=git_signing_key,
-        kodo_binary=kodo_binary,
-        kodo_install_ref=kodo_install_ref,
-        kodo_team=kodo_team,
-        kodo_cycles=kodo_cycles,
-        kodo_exchanges=kodo_exchanges,
-        kodo_orchestrator=kodo_orchestrator,
-        kodo_effort=kodo_effort,
+        executor_binary=executor_binary,
+        executor_install_ref=executor_install_ref,
+        executor_team=executor_team,
+        executor_cycles=executor_cycles,
+        executor_exchanges=executor_exchanges,
+        executor_orchestrator=executor_orchestrator,
+        executor_effort=executor_effort,
         preferred_smart_provider=preferred_smart_provider,
         preferred_fast_provider=preferred_fast_provider,
         allowed_providers=usable_providers,

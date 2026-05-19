@@ -13,7 +13,7 @@ inter-repo communication uses CxRP shape.
 Mapping conventions:
 
 * OC ``selected_lane`` (e.g. ``claude_cli``) → CxRP ``executor``
-* OC ``selected_backend`` (e.g. ``kodo``)   → CxRP ``backend``
+* OC ``selected_backend`` (e.g. ``team_executor``)   → CxRP ``backend``
 * CxRP abstract ``lane`` is derived from the OC lane name.
 * OC's rich ``ExecutionArtifact`` (id, label, content, size) collapses
   to CxRP ``Artifact`` (kind, uri, description, metadata) — id/label/size

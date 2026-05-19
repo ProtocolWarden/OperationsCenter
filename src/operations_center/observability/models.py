@@ -85,7 +85,7 @@ class ExecutionRecord(BaseModel):
     recorded_at: datetime = Field(default_factory=_utcnow)
     backend: Optional[str] = Field(
         default=None,
-        description="Backend name (e.g. 'kodo', 'archon', 'openclaw').",
+        description="Backend name (e.g. 'team_executor', 'dag_executor', 'openclaw').",
     )
     lane: Optional[str] = Field(
         default=None,

@@ -91,7 +91,7 @@ class BackendComparisonSummary(BaseModel):
     This is evidence-derived, not a policy statement.
     """
 
-    backend: str = Field(description="Backend name, e.g. 'kodo', 'archon', 'openclaw'")
+    backend: str = Field(description="Backend name, e.g. 'team_executor', 'dag_executor', 'openclaw'")
     lane: str = Field(description="Lane name, e.g. 'claude_cli', 'aider_local'")
     task_type_scope: list[str] = Field(
         default_factory=list,

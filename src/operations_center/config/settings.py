@@ -31,7 +31,7 @@ class GitSettings(BaseModel):
 class BackendCapSettings(BaseModel):
     """Per-backend execution cap and resource thresholds.
 
-    Keyed on the backend that powers the dispatch (``kodo``, ``archon``,
+    Keyed on the backend that powers the dispatch (``team_executor``, ``dag_executor``,
     ``aider``, ``openclaw``, ``pi``, ...). All fields are optional;
     backends with no entry in ``Settings.backend_caps`` are
     unconstrained at this layer — the global cap still applies.
@@ -43,10 +43,10 @@ class BackendCapSettings(BaseModel):
 
     **Resource thresholds** (all backends share the host's RAM and
     process pool — calibrate to *aggregate footprint when dispatched
-    on this host*, not protocol overhead. An Archon HTTP dispatch is
-    cheap to send but the Archon container is on the same machine and
-    its child processes consume the same RAM that kodo subprocess
-    teams need):
+    on this host*, not protocol overhead. An executor backend HTTP dispatch is
+    cheap to send but the backend container is on the same machine and
+    its child processes consume the same RAM that executor backend subprocess
+    processes need):
       - ``min_available_memory_mb`` — pre-dispatch check that free RAM
         is at least this much (read from ``/proc/meminfo``). Refuses
         the dispatch when below.
@@ -57,11 +57,11 @@ class BackendCapSettings(BaseModel):
     Typical config::
 
         backend_caps:
-          kodo:
+          team_executor:
             max_per_day: 50
             min_available_memory_mb: 6144   # subprocess team config
             max_concurrent: 1               # teams hate sharing
-          archon:
+          dag_executor:
             max_per_day: 5                  # trust-building rate cap
             min_available_memory_mb: 8192   # container baseline + SDK call
             max_concurrent: 4
@@ -256,9 +256,9 @@ class ReviewerSettings(BaseModel):
     bot_logins: list[str] = Field(default_factory=list)
     # If non-empty, only comments from these logins trigger human revisions
     allowed_reviewer_logins: list[str] = Field(default_factory=list)
-    # Max kodo self-review+revision cycles before escalating to human
+    # Max self-review+revision cycles before escalating to human
     max_self_review_loops: int = 2
-    # Max kodo revision passes driven by human comments before auto-merging
+    # Max revision passes driven by human comments before auto-merging
     max_human_review_loops: int = 3
     # Seconds from phase-2 entry before auto-merging (default: 1 day)
     human_review_timeout_seconds: int = 86400
@@ -459,7 +459,7 @@ def _resolve_binary(binary: str, config_dir: Path) -> str:
     """Resolve a relative binary path to an absolute one.
 
     Tries config-file directory first, then falls back to cwd (the project
-    root when the process starts), so paths like ``scripts/kodo-shim`` work
+    root when the process starts), so paths like ``scripts/executor-shim`` work
     even when the config lives in a subdirectory (e.g. ``config/``).
     """
     if not binary or Path(binary).is_absolute():
@@ -476,7 +476,7 @@ def _resolve_manifest_path(value: Path | None, config_dir: Path) -> Path | None:
 
     Absolute paths pass through unchanged. ``~`` is expanded against the
     invoking user's home. Relative paths resolve against the config-file
-    directory (matches the kodo.binary resolution pattern).
+    directory (matches the executor binary resolution pattern).
     """
     if value is None:
         return None

@@ -19,7 +19,7 @@ def _slug(title: str) -> str:
 
 # Minimum execution runs before we trust the health signal.
 _MIN_RUNS = 10
-# Maximum acceptable no-op rate (kodo ran but made no changes).
+# Maximum acceptable no-op rate (backend ran but made no changes).
 _MAX_NO_OP_RATE = 0.30
 # Validation failures must be zero — arch work on a broken baseline is unsafe.
 _MAX_VALIDATION_FAILURES = 0
