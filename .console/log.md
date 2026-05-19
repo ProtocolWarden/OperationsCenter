@@ -3,6 +3,29 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-19 — Watchdog cycle 16: WEAKLY-CONVERGENT — custodian parser fixed; Haiku spec false positive resolved
+
+**Convergence:** WEAKLY-CONVERGENT. Board stable (applied=[]). Custodian parser fixed (key was 'repos', actual is 'results'). Guards holding. All watchers idle/healthy per heartbeats (20:58-20:59). Spec consecutive_non143=7 in Haiku JSON was stale-log artifact (014915 session, not current 021248 session). b67bc0e0/a969024e SIGKILL open.
+
+**Parser fix this cycle:** custodian — top-level key is 'results' not 'repos'. Updated haiku_collector_prompt.md with fallback: `d.get('results', d.get('repos', {}))`.
+
+**Watcher error review:**
+- spec: consecutive_non143=7 in Haiku was from 014915_spec.log (old session). 021248_spec.log (current) has zero exit_code entries. Heartbeat: idle at 20:56. False positive — no action.
+- goal: 4 tasks blocked in 021248 session (02:18-02:31) due to testing branch missing on dispatched repos. Heartbeat: idle at 20:58. Not currently active; Rule 3 should recover stale Blocked tasks >4h.
+- improve: "Expecting value" JSON parse error — per-task, not crash-looping (consecutive_non143=0, heartbeat idle 20:59).
+- propose: unmerged files git error — per-task, not crash-looping (heartbeat idle 20:58).
+
+**STEP 1:** custodian: all_zero=true ✓ (fix confirmed) | ghost: 1 event, active=[], fixed=[] | flow: 0 gaps | graph: ok | reaudit: dag_executor + team_executor | regressions: 0
+**STEP 2:** triage: b67bc0e0 escalation_commented (13th consecutive ✓)
+**STEP 2.5 board-unblock:**
+- APPLIED: (none)
+- SKIPPED: 8871f757, 2824d46e — exit-code:0 guard (4th cycle); b67bc0e0, a969024e — SIGKILL guard
+
+**STEP 7:** no repos touched this cycle.
+**STEP 8:** 8/8 watchers healthy (heartbeats confirmed). Spec false positive resolved.
+
+**Cadence:** PARKED_OPERATOR_BLOCKED (1800s) — board stable, guards working, SIGKILL root cause open
+
 ## 2026-05-19 — Watchdog cycle 15: WEAKLY-CONVERGENT — all parsers clean; first fully clean Haiku cycle
 
 **Convergence:** WEAKLY-CONVERGENT. Board stable (applied=[]). All Haiku parsers working for first time (custodian all_zero=true ✓, ghost ✓, flow ✓, graph ✓, reaudit ✓, regressions ✓). All watchers healthy (exit_code=null, consecutive_non143=0, last_error=null all roles). No cycling. b67bc0e0/a969024e SIGKILL'd, root cause unknown (OOM ruled out — 24GB free).

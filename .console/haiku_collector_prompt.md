@@ -56,11 +56,12 @@ Then extract each field with python3:
 
 ```bash
 # custodian: all_zero and findings with non-zero delta
+# Note: custodian-sweep --emit output uses top-level key 'results' (not 'repos')
 python3 -c "
 import json, sys
 try:
     d = json.load(open('/tmp/oc_custodian.json'))
-    repos = d.get('repos', {})
+    repos = d.get('results', d.get('repos', {}))
     findings = []
     for repo, data in repos.items():
         if isinstance(data, dict):
