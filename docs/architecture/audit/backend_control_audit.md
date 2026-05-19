@@ -807,7 +807,7 @@ Fork is required when backend cannot support:
 - normalized ExecutionResult
 - reliable failure classification
 - bounded internal multi-agent routing
-- SwitchBoard / OC lane-executor-runtime injection
+- SwitchBoard / OC lane-core-runner injection
 
 ---
 
