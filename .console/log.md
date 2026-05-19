@@ -3,6 +3,41 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-19 — Watchdog cycle 8: DEGRADED — 8871f757 NON-CONVERGENT (exit-code:0 + empty JSON)
+
+**Convergence:** NON-CONVERGENT for 8871f757. Root cause identified: task has `executor-exit-code:0`
+AND `self-modify:approved` labels; executor exits 0 but writes empty result.json; board_worker
+raises JSONDecodeError; board_unblock has no exit-code:0 guard so re-queues every cycle. 2+ cycles
+of identical outcome. Created Plane task 30cb28ce (#86) for investigation. Also: 3 stale-Blocked
+improve tasks (89fc5782, 0f1612ea, 3a3c202f) moved to Backlog by Rule 3 IMPROVE_UNBLOCK.
+
+**8871f757 analysis:**
+- Labels: task-kind:improve, repo:OperationsCenter, self-modify:approved, executor-exit-code:0, source-family:lint_fix, source:propose
+- Pattern: execute.main subprocess exits 0, result.json written empty → JSONDecodeError → Blocked
+- Guard gap: board_unblock Rule 4 has no exit-code:0 guard (unlike SIGKILL guard added cycle 3)
+- Fix needed: (a) execute.main — why does it write empty result.json on exit 0?
+  (b) board_worker — graceful empty-file handling at line 454
+  (c) board_unblock — exit-code:0 guard once (a) or (b) adds a distinct label
+- Plane task 30cb28ce (#86) tracking investigation
+
+**2824d46e:** rate-gated (budget_exhausted) — no backend_error this cycle, temporarily-blocked.
+
+**STEP 1:** custodian: all-zero ✓ | ghost: G10 status="fixed" (2nd consecutive) | flow: 0 | graph: ok | reaudit: persistent | regressions: 0 ✓
+
+**STEP 2:** triage: b67bc0e0 escalation_commented (5th consecutive ✓)
+
+**STEP 2.5 board-unblock:**
+- APPLIED: 8871f757 → R4AI (SIGKILL guard cannot help: no SIGKILL label)
+- APPLIED: 2824d46e → R4AI
+- APPLIED: 89fc5782, 0f1612ea, 3a3c202f → Backlog (Rule 3: stale >4h)
+- SKIPPED: b67bc0e0, a969024e — SIGKILL guard (5th consecutive ✓)
+
+**STEP 7:** 15/15 tests passed ✓
+**STEP 8:** 8/8 watchers; watch-review crash-looping (exit_code=1, Plane 35852f04)
+
+**Convergence classification:** NON-CONVERGENT (8871f757 same outcome 2+ cycles)
+**Health state:** DEGRADED (300s) — NON-CONVERGENT cycling + review watcher crash-loop
+
 ## 2026-05-19 — Watchdog cycle 7: DEGRADED — review watcher crash-loop + backend_error pattern
 
 **Convergence:** WEAKLY-CONVERGENT (improving). G10 ghost-audit now reports status="fixed" for
