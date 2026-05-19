@@ -49,13 +49,20 @@ Actively investigate: (a) R4AI stuck >2 cycles, (b) Blocked self-modify:approved
 
 Classify each blocked item: temporarily-blocked / infra-blocked / ownership-ambiguous / validation-blocked / structurally-blocked / crash-looping / starvation / dead-remediation / closed-loop stagnation / non-convergent / divergent / operator-blocked.
 
-**OPERATOR-BLOCKED:** classify when root cause known ≥3 cycles, Plane escalation exists, no queue evolution, no safe retry, no new evidence, AND no direct infrastructure fix is available.
+**OPERATOR-BLOCKED:** classify ONLY when the issue genuinely requires external credentials, physical infrastructure changes, or a policy decision that cannot be made programmatically. The loop IS the operator — "needs human triage" is never an acceptable classification for anything the loop can reason about. When in doubt, make the call.
+
 **PARK TRANSITION** — STALLED → PARKED_OPERATOR_BLOCKED when ALL park criteria met for 2+ cycles.
-**UNPARK CONDITIONS** — queue changed, watcher crashed, new telemetry, Plane task changed, operator acted, safe retry became true, runtime config changed, new repos in tool output, execution outcome changed.
+**UNPARK CONDITIONS** — queue changed, watcher crashed, new telemetry, Plane task changed, safe retry became true, runtime config changed, new repos in tool output, execution outcome changed.
 
-**INFRASTRUCTURE FIX ESCALATION** — before parking as OPERATOR_BLOCKED, always ask: "Is the root cause a bug in OC source code I can fix directly?" If yes → write the fix, run tests, commit. Do not park. PARKED_OPERATOR_BLOCKED is reserved for issues requiring credentials, external infra changes, or human policy decisions — not code bugs with known fixes.
+**INFRASTRUCTURE FIX ESCALATION** — before parking as OPERATOR_BLOCKED, always ask: "Is the root cause a bug in OC source code I can fix directly?" If yes → write the fix, run tests, commit. Do not park. PARKED_OPERATOR_BLOCKED is reserved for conditions requiring credentials, external infra changes, or human policy decisions — not code bugs with known fixes.
 
-**EXECUTOR FAILURE INVESTIGATION** — if haiku JSON shows executor_investigation.triggered=true OR any board_unblock skipped item shows SIGKILL, analyze the investigation fields before creating a Plane task. Include root cause in task if determinable.
+**SIGKILL TRIAGE — the loop decides:** When a task is SIGKILL'd and held by the SIGKILL guard, the loop must make one of these calls (do not defer):
+1. **Target already resolved** → verify directly (run linter, check tests, etc.). If resolved → cancel task as stale remediation.
+2. **Transient SIGKILL (OOM ruled out, retry-count < 3)** → re-queue to Ready for AI. Comment explaining the decision.
+3. **Systematic SIGKILL (same task SIGKILL'd 2+ times, cause unclear)** → investigate kodo-stderr.log, dmesg, memory; if cause still unclear → re-queue once more (Rule 1 auto-cancels at retry-count≥3).
+4. **Dead remediation** → add dead-remediation label; Rule 1 cancels on next cycle.
+
+**EXECUTOR FAILURE INVESTIGATION** — if haiku JSON shows executor_investigation.triggered=true, analyze before re-queuing. OOM ruled out when memory_free_gb > 8. SIGKILL without OOM = kodo timeout or task-specific failure.
 
 ### STEP 4 — CONVERGENCE PROMOTION CHECK
 
@@ -93,12 +100,6 @@ From Haiku JSON watchers array:
 - exit_code=1/2 AND consecutive_non143 ≥ 2: Plane task if none exists; do NOT blindly restart.
 - exit_code=1/2 AND consecutive_non143 = 1: monitor next cycle before escalating.
 - exit_code=0: unexpected, investigate.
-
-**REVIEW WATCHER RESTART** — approved for next safe window when running_tasks=[]:
-Root cause: GITHUB_TOKEN not in subprocess env. Plane task 35852f04 exists.
-Fix: `scripts/operations-center.sh watch-stop --role review` then `scripts/operations-center.sh watch --role review`
-Verify: latest review log shows GitHub API calls, not "no GitHub token".
-Mark 35852f04 Done if successful. (May already be done — check first.)
 
 **ANTI-FLAP:** same watcher crashes non-143 in TWO consecutive cycles → Plane task, do NOT blindly restart.
 
@@ -155,13 +156,11 @@ Call ScheduleWakeup with:
 
 ## KNOWN OPEN ISSUES
 
-- **9c7f4bb9**: kodo SIGKILL (-9) at "Analyzing project and creating plan". Root cause TBD. Investigate via executor_investigation before re-queuing.
 - **Campaign 10c50210**: STALLED. AgentTopology Done (v0.3.0). ShippingForm (2b5ff37e) Blocked (SIGKILL'd). Phase-gated tasks (3fd02e75, 60390297, 6e32031c, d126bc51) await ShippingForm Done.
-- **b67bc0e0, a969024e**: SIGKILL'd ×2+, correctly skip-listed by SIGKILL guard. Rule 1 cancels at retry-count≥3.
 - **86c8c778**: Plane task tracking board_unblock SIGKILL guard — Backlog, OperationsCenter.
-- **35852f04 (#85)**: review watcher crash-loop — FIXED cycle 11. Marked Done.
-- **30cb28ce (#86)**: 8871f757 empty result.json cycling — FIXED cycle 12 (board_worker empty-file guard + board_unblock exit-code:0 guard). Mark Done next cycle if 8871f757 no longer cycles.
-- **2824d46e**: temporarily-blocked (rate-gate budget_exhausted). Normal behavior; retries hourly.
+- **2824d46e**: Re-queued to R4AI (cycle 18 triage). Was exit-code:0 blocked; board_worker fix now in place. Monitor next execution.
+- **a969024e**: Re-queued to R4AI (cycle 18 triage). SIGKILL'd once (retry-count:1); OOM ruled out. If SIGKILL'd again → investigate further; at retry-count≥3 Rule 1 auto-cancels.
+- **8871f757, b67bc0e0**: CANCELLED (cycle 18 triage). Lint targets already resolved — ruff check passes cleanly.
 
 ## GOVERNING PRINCIPLE
 

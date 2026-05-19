@@ -3,6 +3,23 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-19 — Watchdog cycle 18b: ACTIVE — direct triage of all 4 blocked tasks; runbook updated
+
+**Triage actions taken:**
+- **8871f757** (Fix 7 ruff lint violations F401/E702) → CANCELLED. ruff check passes cleanly; violations already resolved. Stale remediation.
+- **b67bc0e0** (Fix lint regression +1 ruff violation) → CANCELLED. Same: ruff clean. Stale remediation.
+- **2824d46e** (Restore repeated missing test signal coverage) → RE-QUEUED to Ready for AI. board_worker empty-result guard now in place; safe to retry.
+- **a969024e** (Improve test signal visibility for OC) → RE-QUEUED to Ready for AI. SIGKILL'd once (retry-count:1); OOM ruled out (24GB free); transient SIGKILL assumption; 2 retries remain before Rule 1 auto-cancel.
+
+**Runbook changes:**
+- OPERATOR-BLOCKED definition narrowed: loop IS the operator, "needs human triage" removed as valid classification
+- SIGKILL TRIAGE section added with explicit decision tree (verify target → cancel if resolved; transient → re-queue; systematic → investigate then re-queue once; dead → label)
+- Review watcher restart note removed (done, #85 closed)
+- Known issues updated: 8871f757/b67bc0e0 cancelled, 2824d46e/a969024e re-queued
+- Haiku STEP 8 watcher health improved (heartbeat-first, exit_code/watcher_restart only)
+
+**Cadence:** ACTIVE (900s) — remediation re-queued to R4AI, execution in flight
+
 ## 2026-05-19 — Watchdog cycle 18: WEAKLY-CONVERGENT — board stable; Haiku prompt hardened for watcher health
 
 **Convergence:** WEAKLY-CONVERGENT. Board stable (applied=[], 4 guards). Haiku spec exit_code=1/consecutive_non143=7 false positive confirmed for 3rd time (021248_spec.log has 0 error entries; 3768 lines total). Custodian produced 0-byte file in Haiku parallel execution (intermittent; tool works fine when run directly). All watchers healthy per heartbeats (22:20-22:22). b67bc0e0/a969024e SIGKILL open (15th triage cycle).
