@@ -3,6 +3,25 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-19 — Watchdog cycle 20: ACTIVE — watcher restart; board_worker fix now live; re-queued
+
+**Convergence:** ACTIVE. Two root causes resolved this cycle:
+1. **Testing branch deleted from origin** (cycle 19 fix) — workspace prep failing on all OC tasks. Fixed.
+2. **board_worker empty-result fix not active** — improve watcher (PID 1770750) loaded old board_worker at session start (02:12 AM), before the fix was committed. Old code crashed on json.loads("") without setting SIGKILL labels. Fixed by restarting improve watcher (new PID 798077, log 20260519T194036_improve.log).
+
+**Actions:**
+- Restarted improve watcher: `watch-stop --role improve && watch --role improve`
+- Re-queued 2824d46e and a969024e to R4AI (3rd attempt; now both blockers resolved)
+
+**Watcher lifecycle insight:** watchers are long-running processes that import board_worker at startup. Code fixes to board_worker require a watcher restart to take effect. Future fix: add note to runbook about restarting affected watchers after board_worker commits.
+
+**STEP 1:** custodian: all_zero=true ✓ | ghost: 1 event, active=[], fixed=[G10] | flow: 0 | graph: ok | reaudit: dag_executor + team_executor | regressions: 0
+**STEP 2:** triage: no escalations (board quiet) ✓
+**STEP 2.5 board-unblock:** applied=[], skipped: 2824d46e (exit-code:0), a969024e (SIGKILL) — both re-queued after this
+**STEP 8:** 8/8 watchers healthy. All exit_code=null, consecutive_non143=0, last_error=null.
+
+**Cadence:** ACTIVE (900s) — tasks re-queued, both root causes fixed, monitoring first clean execution
+
 ## 2026-05-19 — Watchdog cycle 19: ACTIVE — root cause found; testing branch restored; tasks re-queued
 
 **Convergence:** ACTIVE. Root cause of all workspace-prep failures identified: operations-center-testing-branch was deleted from origin. All prior SIGKILL labels on 2824d46e/a969024e were from workspace prep failures setting exit-code:-9 or exit-code:0, not from kodo execution itself. Branch restored from stale remote-tracking ref (push to origin at 81a21f8).

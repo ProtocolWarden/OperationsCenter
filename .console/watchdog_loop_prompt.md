@@ -103,6 +103,8 @@ From Haiku JSON watchers array:
 
 **ANTI-FLAP:** same watcher crashes non-143 in TWO consecutive cycles → Plane task, do NOT blindly restart.
 
+**CODE DEPLOY:** watchers are long-running processes that import modules at startup. After committing fixes to board_worker or other in-process modules, affected watchers must be restarted to load the new code. Safe restart requires running_tasks=[] for the role being restarted. Do not restart all watchers simultaneously.
+
 ---
 
 ## PHASE 3 — OUTPUT
