@@ -3,6 +3,27 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-19 — Watchdog cycle 11: PARKED_OPERATOR_BLOCKED — review watcher fixed; two-tier loop restructured
+
+**Convergence:** PARKED_OPERATOR_BLOCKED. 8871f757 re-queued again (4th park cycle, pattern unchanged). All other signals clean or improving.
+
+**Key events this cycle:**
+- Review watcher FIXED: log `20260519T035408_review.log` shows healthy GitHub API polling. Plane task 35852f04 (#85) marked Done.
+- Two-tier loop restructured: Haiku sub-agent now handles data collection (STEP 0-2.5 + STEP 8); Sonnet handles analysis, judgment, execution. Files: `.console/haiku_collector_prompt.md`, `.console/watchdog_loop_prompt.md`. New ScheduleWakeup prompt references the file. Reduces per-cycle token cost significantly.
+- ProtocolWarden.github.io: 4 files changed, 91 insertions (+6) on pull — only repo not already-up-to-date.
+
+**STEP 1:** custodian: all-zero (6th consecutive ✓) | ghost: G10 fixed (4th consecutive ✓) | flow: 0 gaps | graph: ok | reaudit: dag_executor + team_executor (persistent) | regressions: 0 ✓
+
+**STEP 2:** triage: b67bc0e0 escalation_commented (8th consecutive ✓)
+
+**STEP 2.5 board-unblock:**
+- APPLIED: 5e2dca43 → Backlog (Rule 3 stale); 8871f757 → R4AI (PARKED, 4th cycle); 2824d46e → R4AI (rate-gate reset)
+- SKIPPED: b67bc0e0, a969024e — SIGKILL guard (7th consecutive ✓)
+
+**STEP 8:** 8/8 watchers running. watch-review healthy (new pid 2129031, GitHub API polling confirmed). Plane #85 closed.
+
+**Cadence:** PARKED_OPERATOR_BLOCKED (1800s) — 8871f757 only open issue; root cause known, Plane #86 exists, no new evidence expected
+
 ## 2026-05-19 — Watchdog cycle 10: DEGRADED — 8871f757 PARKED (3rd cycle confirmed); review watcher restart deferred
 
 **Convergence:** PARKED_OPERATOR_BLOCKED confirmed (3rd cycle). 8871f757 re-queued by board_unblock → claimed at 06:50 → failed again (exit-code:0/empty-JSON pattern). No code fix applied; execution gate condition (g) blocks: closed-loop stagnation. Plane 30cb28ce (#86) remains open.
