@@ -7424,3 +7424,9 @@ Removed kodo + Archon backends. Added TeamExecutor, DagExecutor, CritiqueExecuto
 - Updated CxRP pin v0.3.0 → v0.3.1 (schema patch for new backend enum values)
 - ADR 0002 marked superseded by ADR 0005
 - 3324 tests passing, 1 skipped
+
+### Custodian fix — phantom symbols + orphan docs (2026-05-18)
+Fixed K1/OC8 findings: unquoted _get_kodo_version and build_command in autonomy_gaps.md
+(backtick references to symbols removed in ADR 0005).
+Deleted 3 orphan docs/specs/ files (DC7) created by test-cleanup agent.
+Custodian now 0 findings.
