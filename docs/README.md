@@ -65,6 +65,10 @@ This directory holds OC-specific material.
     Backend card axis expansion (orchestration + mechanism).
   - [architecture/adr/0003-tiered-cognition-experimental-rails.md](architecture/adr/0003-tiered-cognition-experimental-rails.md) —
     Tiered cognition + experimental rails.
+  - [architecture/adr/0005-owned-execution-topology-layer.md](architecture/adr/0005-owned-execution-topology-layer.md) —
+    Drop external runtimes (kodo/Archon); build TeamExecutor, DagExecutor, CritiqueExecutor.
+  - [architecture/adr/0005-work-order.md](architecture/adr/0005-work-order.md) —
+    4-phase work order for the owned execution topology layer (ADR 0005).
 
 ### Managed-repo audit contracts
 

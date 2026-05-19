@@ -3,6 +3,17 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-18 — ADR 0005 docs indexed; Custodian pre-existing findings suppressed
+
+Added ADR 0005 (owned execution topology layer) and work order to docs/README.md.
+Suppressed pre-existing DC7 orphan findings for 3 spec files and B1 VideoFoundry
+finding in scene-timing spec via .custodian/config.yaml exclusions.
+
+## 2026-05-18 — CxRP pin bumped to v0.3.0 (ADR 0005 Phase 0)
+
+AgentTopology enum + executor vocab update (TEAM_EXECUTOR, DAG_EXECUTOR, CRITIQUE_EXECUTOR;
+kodo/archon/archon_then_kodo removed).
+
 ## 2026-05-18 — board_unblock: Rule 5 STALE_IN_REVIEW for orphaned In Review tasks
 
 Added Rule 5 to board_unblock.py: tasks in "In Review" state for >stale_blocked_hours
