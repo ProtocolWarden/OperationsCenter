@@ -234,6 +234,11 @@ STEP 0 — OWNERSHIP + PREFLIGHT:
 Acquire/verify logs/local/watchdog_loop.lock via:
   scripts/operations-center.sh watchdog-loop-acquire
 If another live owner exists, abort. If stale, reclaim.
+Sync all repos:
+  for repo in OperationsCenter SwitchBoard TeamExecutor DAGExecutor CritiqueExecutor ExecutorRuntime CxRP RxP PlatformDeployment PlatformManifest Custodian SourceRegistry OperatorConsole RepoGraph ProtocolWarden ProtocolWarden.github.io; do
+    dir="/home/dev/Documents/GitHub/$repo"
+    [ -d "$dir/.git" ] && echo "$repo: $(git -C "$dir" pull --ff-only 2>&1 | tail -1)"
+  done
 Then confirm: Plane at http://localhost:8080, PlatformDeployment/SwitchBoard at http://localhost:20401/health, all 8 OC watchers running, .venv CLIs present, runtime low-cost policy (sonnet/haiku), kodo max_concurrent=1 in config, working tree state via git status.
 
 STEP 1 — INVESTIGATE (run in parallel where safe):
