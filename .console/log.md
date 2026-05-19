@@ -3,6 +3,29 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-19 — Watchdog cycle 19: ACTIVE — root cause found; testing branch restored; tasks re-queued
+
+**Convergence:** ACTIVE. Root cause of all workspace-prep failures identified: operations-center-testing-branch was deleted from origin. All prior SIGKILL labels on 2824d46e/a969024e were from workspace prep failures setting exit-code:-9 or exit-code:0, not from kodo execution itself. Branch restored from stale remote-tracking ref (push to origin at 81a21f8).
+
+**Root cause chain:**
+- Testing branch deleted from origin (unknown when — no local branch either, only stale remote-tracking ref)
+- Every task targeting OperationsCenter fails workspace prep with "base_branch does not exist on origin"
+- board_worker sets executor-exit-code:0 (backend_error category) → board_unblock guards block re-queue
+- Loop was re-queuing tasks that immediately failed again with same error
+- Fix: `git push origin refs/remotes/origin/operations-center-testing-branch:refs/heads/operations-center-testing-branch`
+
+**Actions this cycle:**
+- Restored operations-center-testing-branch to origin (81a21f8 — last known good state)
+- Re-queued 2824d46e and a969024e to R4AI
+- Updated runbook with testing-branch note
+
+**STEP 1:** custodian: all_zero=true ✓ | ghost: 0 events | flow: 0 | graph: ok | reaudit: [] (both cleared!) | regressions: 0
+**STEP 2:** triage: no escalations (b67bc0e0 cancelled; board quiet)
+**STEP 2.5 board-unblock:** applied=[], skipped: 2824d46e/a969024e (guards, now re-queued after branch fix)
+**STEP 8:** 8/8 watchers healthy. All exit_code=null, consecutive_non143=0, last_error=null (heartbeat-first reporting working).
+
+**Cadence:** ACTIVE (900s) — tasks re-queued after root cause fix; monitoring first clean execution
+
 ## 2026-05-19 — Watchdog cycle 18b: ACTIVE — direct triage of all 4 blocked tasks; runbook updated
 
 **Triage actions taken:**

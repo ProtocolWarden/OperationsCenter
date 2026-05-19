@@ -158,9 +158,9 @@ Call ScheduleWakeup with:
 
 - **Campaign 10c50210**: STALLED. AgentTopology Done (v0.3.0). ShippingForm (2b5ff37e) Blocked (SIGKILL'd). Phase-gated tasks (3fd02e75, 60390297, 6e32031c, d126bc51) await ShippingForm Done.
 - **86c8c778**: Plane task tracking board_unblock SIGKILL guard — Backlog, OperationsCenter.
-- **2824d46e**: Re-queued to R4AI (cycle 18 triage). Was exit-code:0 blocked; board_worker fix now in place. Monitor next execution.
-- **a969024e**: Re-queued to R4AI (cycle 18 triage). SIGKILL'd once (retry-count:1); OOM ruled out. If SIGKILL'd again → investigate further; at retry-count≥3 Rule 1 auto-cancels.
+- **2824d46e, a969024e**: Re-queued to R4AI (cycle 19 triage). Root cause was operations-center-testing-branch deleted from origin — all workspace prep failures traced here. Branch restored (push from stale remote-tracking ref). Watch next execution for clean run.
 - **8871f757, b67bc0e0**: CANCELLED (cycle 18 triage). Lint targets already resolved — ruff check passes cleanly.
+- **NOTE — testing branch**: if workspace prep failures reappear across repos, check `git ls-remote origin operations-center-testing-branch` on each affected repo. Branch may need to be pushed per-repo.
 
 ## GOVERNING PRINCIPLE
 
