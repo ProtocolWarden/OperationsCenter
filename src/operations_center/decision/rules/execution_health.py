@@ -137,7 +137,7 @@ class ExecutionHealthRule:
                                 f"runs for {repo} ended with unknown or error outcomes "
                                 f"({unknown_count} unknown, {error_count} errors). "
                                 "This suggests the execution engine is encountering repeated unexplained "
-                                "failures. Investigate recent kodo_plane artifacts and execution logs "
+                                "failures. Investigate recent executor_plane artifacts and execution logs "
                                 "to identify whether the cause is environmental (e.g. tooling misconfiguration, "
                                 "missing dependencies) or task-related (e.g. impossible scope, malformed input). "
                                 "While this fix-task remains unresolved, the circuit-breaker will skip "

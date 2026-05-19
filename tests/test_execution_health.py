@@ -110,7 +110,7 @@ class _FakeContext:
 
 
 def test_collector_counts_outcomes_for_matching_repo(tmp_path: Path) -> None:
-    root = tmp_path / "kodo_plane"
+    root = tmp_path / "executor_plane"
     root.mkdir()
     # 3 no_ops for the target repo
     for i in range(3):
@@ -132,7 +132,7 @@ def test_collector_counts_outcomes_for_matching_repo(tmp_path: Path) -> None:
 
 
 def test_collector_counts_validation_failures(tmp_path: Path) -> None:
-    root = tmp_path / "kodo_plane"
+    root = tmp_path / "executor_plane"
     root.mkdir()
     _write_run(root, repo_key="OperationsCenter", run_id="r0", task_id="t0", worker_role="goal", outcome_status="executed", validation_passed=False)
     _write_run(root, repo_key="OperationsCenter", run_id="r1", task_id="t1", worker_role="goal", outcome_status="executed", validation_passed=False)
@@ -146,7 +146,7 @@ def test_collector_counts_validation_failures(tmp_path: Path) -> None:
 
 
 def test_collector_returns_empty_signal_when_no_artifacts(tmp_path: Path) -> None:
-    root = tmp_path / "kodo_plane"
+    root = tmp_path / "executor_plane"
     root.mkdir()
     ctx = _FakeContext("OperationsCenter", root)
     sig = ExecutionArtifactCollector().collect(ctx)  # type: ignore[arg-type]
@@ -156,7 +156,7 @@ def test_collector_returns_empty_signal_when_no_artifacts(tmp_path: Path) -> Non
 
 
 def test_collector_counts_unknown_outcomes(tmp_path: Path) -> None:
-    root = tmp_path / "kodo_plane"
+    root = tmp_path / "executor_plane"
     root.mkdir()
     _write_run(root, repo_key="OperationsCenter", run_id="r0", task_id="t0", worker_role="goal", outcome_status="unknown")
     _write_run(root, repo_key="OperationsCenter", run_id="r1", task_id="t1", worker_role="goal", outcome_status="unknown")
@@ -172,7 +172,7 @@ def test_collector_counts_unknown_outcomes(tmp_path: Path) -> None:
 
 
 def test_collector_counts_error_outcomes(tmp_path: Path) -> None:
-    root = tmp_path / "kodo_plane"
+    root = tmp_path / "executor_plane"
     root.mkdir()
     _write_run(root, repo_key="OperationsCenter", run_id="r0", task_id="t0", worker_role="goal", outcome_status="error")
     _write_run(root, repo_key="OperationsCenter", run_id="r1", task_id="t1", worker_role="goal", outcome_status="error")
@@ -189,7 +189,7 @@ def test_collector_counts_error_outcomes(tmp_path: Path) -> None:
 
 
 def test_collector_counts_mixed_unknown_and_error_outcomes(tmp_path: Path) -> None:
-    root = tmp_path / "kodo_plane"
+    root = tmp_path / "executor_plane"
     root.mkdir()
     _write_run(root, repo_key="OperationsCenter", run_id="r0", task_id="t0", worker_role="goal", outcome_status="unknown")
     _write_run(root, repo_key="OperationsCenter", run_id="r1", task_id="t1", worker_role="goal", outcome_status="error")
@@ -208,7 +208,7 @@ def test_collector_counts_mixed_unknown_and_error_outcomes(tmp_path: Path) -> No
 
 
 def test_collector_ignores_dirs_without_required_files(tmp_path: Path) -> None:
-    root = tmp_path / "kodo_plane"
+    root = tmp_path / "executor_plane"
     root.mkdir()
     (root / "incomplete_run").mkdir()
     (root / "incomplete_run" / "control_outcome.json").write_text('{"status":"no_op"}')
@@ -456,7 +456,7 @@ def test_rule_repeated_unknown_failures_proposal_outline() -> None:
     assert "unknown" in spec.proposal_outline.title_hint.lower()
     assert "5 recent failures" in spec.proposal_outline.title_hint
     assert "OperationsCenter" in spec.proposal_outline.title_hint
-    assert "kodo_plane" in spec.proposal_outline.summary_hint
+    assert "executor_plane" in spec.proposal_outline.summary_hint
     assert "circuit-breaker" in spec.proposal_outline.summary_hint
     assert spec.proposal_outline.labels_hint == ["task-kind: improve", "source: proposer"]
     assert spec.proposal_outline.source_family == "execution_health_followup"

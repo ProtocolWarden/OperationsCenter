@@ -11,7 +11,7 @@ Two scans run together:
 
   2. handle_awaiting_input_scan — flags tasks in Awaiting Input state
      that have new operator comments. With --apply, transitions them
-     to Ready for AI so kodo retries with the new context.
+     to Ready for AI so the executor retries with the new context.
 
     python -m operations_center.entrypoints.maintenance.triage_scan \\
         --config config/operations_center.local.yaml \\
@@ -99,7 +99,7 @@ def main() -> int:
                 client.comment_issue(
                     a.task_id,
                     f"Triage scan: {a.new_comment_count} new operator comment(s) — "
-                    "re-promoted to Ready for AI for another kodo pass.",
+                    "re-promoted to Ready for AI for another executor pass.",
                 )
                 entry["action"] = "transitioned"
             except Exception as exc:

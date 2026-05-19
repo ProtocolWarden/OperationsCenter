@@ -5,7 +5,7 @@ backends/openclaw/errors.py — error category mapping for the OpenClaw backend 
 
 Maps OpenClaw-specific failure signals into canonical FailureReasonCategory values
 and structured failure messages. OpenClaw may surface agent-specific outcomes
-(partial completion, context limit, tool failure) that differ from kodo.
+(partial completion, context limit, tool failure) that differ from the executor.
 """
 
 from __future__ import annotations

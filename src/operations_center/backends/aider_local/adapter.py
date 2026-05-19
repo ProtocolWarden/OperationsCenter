@@ -38,7 +38,7 @@ class AiderLocalBackendAdapter:
 
     Phase 2 + 3 of the OC runtime extraction: subprocess invocation
     is delegated to ``ExecutorRuntime`` (subprocess kind). Same pattern
-    as kodo and direct_local.
+    as team_executor and direct_local.
     """
 
     def __init__(

@@ -37,7 +37,7 @@ After the front matter, write a markdown spec document with:
 - ## Success Criteria (how to know it is done)
 
 Be specific and bounded. Prefer 2-4 goals over vague large ones. \
-Each goal should be completable by one kodo run in under 1 hour. \
+Each goal should be completable by one executor run in under 1 hour. \
 Set repos: to exactly one repo from the available repos list."""
 
 

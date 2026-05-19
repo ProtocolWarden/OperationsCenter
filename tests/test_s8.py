@@ -55,7 +55,7 @@ def test_execution_outcome_deriver_empty_when_no_artifacts(tmp_path: Path) -> No
 def test_execution_outcome_deriver_detects_timeout_pattern(tmp_path: Path) -> None:
     """Two timeout failures → execution_outcome/timeout_pattern insight."""
     normalizer = InsightNormalizer()
-    artifact_root = tmp_path / "kodo_plane"
+    artifact_root = tmp_path / "executor_plane"
     artifact_root.mkdir()
 
     for i in range(2):
@@ -76,7 +76,7 @@ def test_execution_outcome_deriver_detects_timeout_pattern(tmp_path: Path) -> No
 def test_execution_outcome_deriver_detects_validation_loop(tmp_path: Path) -> None:
     """Same task failing validation 3+ times → execution_outcome/validation_loop insight."""
     normalizer = InsightNormalizer()
-    artifact_root = tmp_path / "kodo_plane"
+    artifact_root = tmp_path / "executor_plane"
     artifact_root.mkdir()
     task_id = "looptask"
 
