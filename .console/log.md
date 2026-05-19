@@ -3,6 +3,27 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-19 — Watchdog cycle 10: DEGRADED — 8871f757 PARKED (3rd cycle confirmed); review watcher restart deferred
+
+**Convergence:** PARKED_OPERATOR_BLOCKED confirmed (3rd cycle). 8871f757 re-queued by board_unblock → claimed at 06:50 → failed again (exit-code:0/empty-JSON pattern). No code fix applied; execution gate condition (g) blocks: closed-loop stagnation. Plane 30cb28ce (#86) remains open.
+
+**STEP 1:** custodian: all-zero (5th consecutive ✓) | ghost: G10 status=fixed (3rd consecutive ✓) | flow: 0 gaps | graph: ok | reaudit: dag_executor + team_executor (persistent) | regressions: 0 ✓
+
+**STEP 2:** triage: b67bc0e0 escalation_commented (7th consecutive ✓)
+
+**STEP 2.5 board-unblock:**
+- APPLIED: dea3a194, 41bcd057, 74af58c5 → Backlog (Rule 3 stale >4h)
+- APPLIED: 8871f757 → R4AI (PARKED — will fail again; no exit-code:0 guard)
+- APPLIED: 2824d46e → R4AI (temporarily-blocked, rate-gate reset)
+- SKIPPED: b67bc0e0, a969024e — SIGKILL guard (6th consecutive ✓)
+
+**STEP 7:** 15/15 tests ✓
+**STEP 8:** 8/8 watchers; watch-review crash-looping (exit_code=1, Plane 35852f04)
+
+**Review watcher restart — deferred again:** 8871f757 and 2824d46e were claimed/processing at cycle 10 start. Not safe to stop watch-all. Will retry next cycle.
+
+**Cadence:** DEGRADED (300s) — review watcher non-143 crash persistent; 8871f757 PARKED cycling
+
 ## 2026-05-19 — Watchdog cycle 9: DEGRADED — 8871f757 PARKED; review watcher restart pending
 
 **Convergence:** NON-CONVERGENT → PARKED_OPERATOR_BLOCKED for 8871f757.
