@@ -36,9 +36,9 @@ class BackendName(str, Enum):
     """Backend implementations that execute tasks inside a lane."""
     DIRECT_LOCAL = "direct_local"
     AIDER_LOCAL = "aider_local"
-    KODO = "kodo"
-    ARCHON = "archon"
-    ARCHON_THEN_KODO = "archon_then_kodo"
+    TEAM_EXECUTOR = "team_executor"
+    DAG_EXECUTOR = "dag_executor"
+    CRITIQUE_EXECUTOR = "critique_executor"
     OPENCLAW = "openclaw"
     DEMO_STUB = "demo_stub"
 

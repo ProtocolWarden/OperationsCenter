@@ -46,7 +46,7 @@ class TestLaneDecisionConstruction:
         d = LaneDecision(
             proposal_id="prop-456",
             selected_lane=LaneName.CLAUDE_CLI,
-            selected_backend=BackendName.KODO,
+            selected_backend=BackendName.TEAM_EXECUTOR,
             confidence=0.92,
             policy_rule_matched="high-risk-to-premium",
             rationale="Task risk_level=HIGH; policy mandates premium lane",
@@ -97,7 +97,7 @@ class TestLaneDecisionSerialization:
         d = LaneDecision(
             proposal_id="p",
             selected_lane=LaneName.CLAUDE_CLI,
-            selected_backend=BackendName.KODO,
+            selected_backend=BackendName.TEAM_EXECUTOR,
             alternatives_considered=[LaneName.AIDER_LOCAL, LaneName.CODEX_CLI],
         )
         parsed = json.loads(d.model_dump_json())

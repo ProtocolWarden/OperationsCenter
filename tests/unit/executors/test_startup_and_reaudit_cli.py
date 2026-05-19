@@ -20,8 +20,8 @@ class TestStartupHook:
     def test_initialize_loads_real_catalog(self):
         cat = initialize_catalog(_REAL_DIR)
         assert cat is not None
-        assert "kodo" in cat.entries
-        assert "archon" in cat.entries
+        assert "team_executor" in cat.entries
+        assert "dag_executor" in cat.entries
 
     def test_fail_fast_raises_on_invalid_dir(self, tmp_path):
         backend = tmp_path / "x"

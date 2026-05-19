@@ -79,8 +79,8 @@ class TestAnalyzeOutputShape:
 
     def test_multiple_backends_multiple_comparisons(self):
         records = (
-            make_n_successes(10, backend="kodo", lane="claude_cli")
-            + make_n_successes(10, backend="archon", lane="claude_cli")
+            make_n_successes(10, backend="team_executor", lane="claude_cli")
+            + make_n_successes(10, backend="dag_executor", lane="claude_cli")
         )
         service = StrategyTuningService.default()
         report = service.analyze(records)

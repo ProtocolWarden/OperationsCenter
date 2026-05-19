@@ -807,7 +807,7 @@ kodo_profiles:
     effort: high
 ```
 
-**Files:** `settings.py` (`Settings.kodo_profiles`), `adapters/kodo/adapter.py` (`build_command`, `run`, `_run_with_claude_fallback`), `application/service.py` (profile resolution)
+**Files:** `settings.py` (kodo_profiles, removed in ADR 0005), kodo/adapter.py (build_command, run, removed in ADR 0005), `application/service.py` (profile resolution)
 
 ---
 
@@ -933,7 +933,7 @@ reviewer:
 
 **Fix:** `_get_kodo_version(binary)` is cached per watcher startup (module-level dict). The result is passed as `backend_version=` to `UsageStore.record_execution_outcome()`. When the backend version transitions mid-window (old version → new version or vice versa), the circuit-breaker check skips outcomes from the old version in its sliding window to prevent a version upgrade from triggering a false positive.
 
-**Files:** `entrypoints/worker/main.py` (`_get_kodo_version`, `_kodo_version_cache`, called from `handle_goal_task`/`handle_test_task`), `execution/usage_store.py` (`record_execution_outcome`, version-transition check in `budget_decision`)
+**Files:** `entrypoints/worker/main.py` (get_kodo_version, kodo_version_cache, removed in ADR 0005), `execution/usage_store.py` (`record_execution_outcome`, version-transition check in `budget_decision`)
 
 ---
 

@@ -158,8 +158,3 @@ def test_maintenance_window_defensive_against_missing_fields():
     assert not _in_maintenance_window(s, datetime(2026, 1, 1, 12, 0, tzinfo=UTC))
 
 
-# ── _get_kodo_version is a thin shim ─────────────────────────────────────────
-
-def test_get_kodo_version_returns_none_for_missing_binary():
-    from operations_center.backends.kodo.runner import _get_kodo_version
-    assert _get_kodo_version("no-such-binary-anywhere") is None

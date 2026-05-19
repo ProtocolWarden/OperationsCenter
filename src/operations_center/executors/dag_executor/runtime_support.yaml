@@ -1,0 +1,8 @@
+backend_id: dag_executor
+backend_version: "0.1.0"
+supported_runtime_kinds:
+  - cli_subscription
+supported_selection_modes:
+  - backend_default
+  - policy_selected
+  - explicit_request

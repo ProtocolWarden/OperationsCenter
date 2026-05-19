@@ -34,9 +34,9 @@ def test_routing_client_no_longer_supports_in_process_bypass() -> None:
 
 def test_no_execution_proxy_env_injection_in_canonical_backends() -> None:
     paths = [
-        REPO_ROOT / "src" / "operations_center" / "backends" / "kodo" / "invoke.py",
-        REPO_ROOT / "src" / "operations_center" / "backends" / "archon" / "invoke.py",
+        REPO_ROOT / "src" / "operations_center" / "backends" / "openclaw" / "invoke.py",
         REPO_ROOT / "src" / "operations_center" / "backends" / "direct_local" / "adapter.py",
+        REPO_ROOT / "src" / "operations_center" / "backends" / "aider_local" / "adapter.py",
     ]
     for path in paths:
         source = path.read_text(encoding="utf-8")

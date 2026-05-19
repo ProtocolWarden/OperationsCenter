@@ -19,55 +19,46 @@ from operations_center.executors._artifacts import (
 )
 
 
-_KODO_DIR   = Path("src/operations_center/executors/kodo")
-_ARCHON_DIR = Path("src/operations_center/executors/archon")
+_TEAM_EXECUTOR_DIR = Path("src/operations_center/executors/team_executor")
+_DAG_EXECUTOR_DIR  = Path("src/operations_center/executors/dag_executor")
 
 
 # ── shipped artifacts load and validate ─────────────────────────────────
 
 
 class TestShippedArtifacts:
-    def test_kodo_contract_gaps(self):
-        gaps = load_contract_gaps(_KODO_DIR / "contract_gaps.yaml")
-        assert any(g.id == "G-001" for g in gaps)
+    def test_team_executor_contract_gaps(self):
+        gaps = load_contract_gaps(_TEAM_EXECUTOR_DIR / "contract_gaps.yaml")
         assert all(isinstance(g.status, GapStatus) for g in gaps)
 
-    def test_kodo_capability_card(self):
-        card = load_capability_card(_KODO_DIR / "capability_card.yaml")
-        assert card.backend_id == "kodo"
+    def test_team_executor_capability_card(self):
+        card = load_capability_card(_TEAM_EXECUTOR_DIR / "capability_card.yaml")
+        assert card.backend_id == "team_executor"
         assert "repo_patch" in card.advertised_capabilities
 
-    def test_kodo_runtime_support(self):
-        rs = load_runtime_support(_KODO_DIR / "runtime_support.yaml")
+    def test_team_executor_runtime_support(self):
+        rs = load_runtime_support(_TEAM_EXECUTOR_DIR / "runtime_support.yaml")
         assert "cli_subscription" in rs.supported_runtime_kinds
 
-    def test_kodo_verdict(self):
-        v = load_audit_verdict(_KODO_DIR / "audit_verdict.yaml")
+    def test_team_executor_verdict(self):
+        v = load_audit_verdict(_TEAM_EXECUTOR_DIR / "audit_verdict.yaml")
         assert v.outcome == AuditOutcome.ADAPTER_PLUS_WRAPPER
         assert v.per_phase["internal_routing"] == PhaseClassification.NA
-        assert "G-001" in v.gap_refs
 
-    def test_archon_contract_gaps(self):
-        # Post-spike: G-001 mitigated (worktree-isolated YAML wrapper),
-        # G-002 still open without deadline (internal-routing observability)
-        gaps = load_contract_gaps(_ARCHON_DIR / "contract_gaps.yaml")
-        g001 = next(g for g in gaps if g.id == "G-001")
-        assert g001.status == GapStatus.MITIGATED
-        assert g001.patch_deadline is None
+    def test_dag_executor_contract_gaps(self):
+        gaps = load_contract_gaps(_DAG_EXECUTOR_DIR / "contract_gaps.yaml")
+        assert all(isinstance(g.status, GapStatus) for g in gaps)
 
-    def test_archon_capability_card(self):
-        card = load_capability_card(_ARCHON_DIR / "capability_card.yaml")
-        assert card.backend_id == "archon"
+    def test_dag_executor_capability_card(self):
+        card = load_capability_card(_DAG_EXECUTOR_DIR / "capability_card.yaml")
+        assert card.backend_id == "dag_executor"
 
-    def test_archon_runtime_support(self):
-        # Post-spike: Archon supports cli_subscription + hosted_api
-        # via per-workflow YAML override.
-        rs = load_runtime_support(_ARCHON_DIR / "runtime_support.yaml")
+    def test_dag_executor_runtime_support(self):
+        rs = load_runtime_support(_DAG_EXECUTOR_DIR / "runtime_support.yaml")
         assert "cli_subscription" in rs.supported_runtime_kinds
-        assert "hosted_api" in rs.supported_runtime_kinds
 
-    def test_archon_verdict(self):
-        v = load_audit_verdict(_ARCHON_DIR / "audit_verdict.yaml")
+    def test_dag_executor_verdict(self):
+        v = load_audit_verdict(_DAG_EXECUTOR_DIR / "audit_verdict.yaml")
         assert v.outcome == AuditOutcome.ADAPTER_PLUS_WRAPPER
 
 

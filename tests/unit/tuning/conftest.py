@@ -55,7 +55,7 @@ def make_result(
 def make_record(
     *,
     run_id: str = "run-0001",
-    backend: str = "kodo",
+    backend: str = "team_executor",
     lane: str = "claude_cli",
     status: ExecutionStatus = ExecutionStatus.SUCCEEDED,
     success: bool = True,
@@ -97,7 +97,7 @@ def make_record(
     )
 
 
-def make_success(backend: str = "kodo", lane: str = "claude_cli", **kw) -> ExecutionRecord:
+def make_success(backend: str = "team_executor", lane: str = "claude_cli", **kw) -> ExecutionRecord:
     return make_record(
         backend=backend,
         lane=lane,
@@ -107,7 +107,7 @@ def make_success(backend: str = "kodo", lane: str = "claude_cli", **kw) -> Execu
     )
 
 
-def make_failure(backend: str = "kodo", lane: str = "claude_cli", **kw) -> ExecutionRecord:
+def make_failure(backend: str = "team_executor", lane: str = "claude_cli", **kw) -> ExecutionRecord:
     return make_record(
         backend=backend,
         lane=lane,
@@ -119,7 +119,7 @@ def make_failure(backend: str = "kodo", lane: str = "claude_cli", **kw) -> Execu
     )
 
 
-def make_timeout(backend: str = "kodo", lane: str = "claude_cli", **kw) -> ExecutionRecord:
+def make_timeout(backend: str = "team_executor", lane: str = "claude_cli", **kw) -> ExecutionRecord:
     return make_record(
         backend=backend,
         lane=lane,
@@ -131,7 +131,7 @@ def make_timeout(backend: str = "kodo", lane: str = "claude_cli", **kw) -> Execu
     )
 
 
-def make_no_changes(backend: str = "kodo", lane: str = "claude_cli", **kw) -> ExecutionRecord:
+def make_no_changes(backend: str = "team_executor", lane: str = "claude_cli", **kw) -> ExecutionRecord:
     return make_record(
         backend=backend,
         lane=lane,
@@ -144,7 +144,7 @@ def make_no_changes(backend: str = "kodo", lane: str = "claude_cli", **kw) -> Ex
 
 
 def make_unknown_changed_files(
-    backend: str = "kodo", lane: str = "claude_cli", **kw
+    backend: str = "team_executor", lane: str = "claude_cli", **kw
 ) -> ExecutionRecord:
     """Successful run but no changed-file info (backend didn't report)."""
     result = make_result(
@@ -161,7 +161,7 @@ def make_unknown_changed_files(
 
 def make_n_successes(
     n: int,
-    backend: str = "kodo",
+    backend: str = "team_executor",
     lane: str = "claude_cli",
     **kw,
 ) -> list[ExecutionRecord]:
@@ -170,7 +170,7 @@ def make_n_successes(
 
 def make_n_failures(
     n: int,
-    backend: str = "kodo",
+    backend: str = "team_executor",
     lane: str = "claude_cli",
     **kw,
 ) -> list[ExecutionRecord]:

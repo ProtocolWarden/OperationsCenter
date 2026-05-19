@@ -25,10 +25,11 @@ from operations_center.execution.target import (
 
 def _envelope(**overrides) -> ExecutionTargetEnvelope:
     """Helper — accepts string backend/executor and converts to typed enums.
-    Schema 0.3 narrowed these on the wire; this preserves test ergonomics."""
+    Schema 0.3 narrowed these on the wire; this preserves test ergonomics.
+    Uses 'openclaw' as default since it exists in both cxrp and OC BackendName."""
     base = {
         "lane": LaneType.CODING_AGENT,
-        "backend": "kodo",
+        "backend": "openclaw",
         "executor": "claude_cli",
         "runtime_binding": None,
     }
@@ -49,7 +50,7 @@ class TestNarrowing:
         assert isinstance(target, BoundExecutionTarget)
         # lane is the CxRP abstract category, kept as string
         assert target.lane == "coding_agent"
-        assert target.backend == BackendName.KODO
+        assert target.backend == BackendName.OPENCLAW
         assert target.executor == LaneName.CLAUDE_CLI
 
     def test_envelope_lane_drives_oc_lane(self):
@@ -106,12 +107,12 @@ class TestPolicy:
         class _AllowAll:
             def allows(self, target): return True, ""
         target = bind_execution_target(_envelope(), policy=_AllowAll())
-        assert target.backend == BackendName.KODO
+        assert target.backend == BackendName.OPENCLAW
 
     def test_policy_reject_raises(self):
         class _RejectAll:
-            def allows(self, target): return False, "no kodo today"
-        with pytest.raises(PolicyViolationError, match="no kodo"):
+            def allows(self, target): return False, "backend not allowed"
+        with pytest.raises(PolicyViolationError, match="not allowed"):
             bind_execution_target(_envelope(), policy=_RejectAll())
 
 
@@ -125,33 +126,29 @@ class _StubCatalog:
 
 class TestCatalog:
     def test_unknown_backend_in_catalog_raises(self):
-        cat = _StubCatalog("archon")  # no kodo
+        cat = _StubCatalog("aider_local")  # no openclaw
         with pytest.raises(UnknownBackendError, match="not present"):
-            bind_execution_target(_envelope(backend="kodo"), catalog=cat)
+            bind_execution_target(_envelope(backend="openclaw"), catalog=cat)
 
     def test_known_backend_in_catalog_passes(self):
-        cat = _StubCatalog("kodo", "archon")
-        target = bind_execution_target(_envelope(backend="kodo"), catalog=cat)
-        assert target.backend == BackendName.KODO
+        cat = _StubCatalog("openclaw", "direct_local")
+        target = bind_execution_target(_envelope(backend="openclaw"), catalog=cat)
+        assert target.backend == BackendName.OPENCLAW
 
 
 # ── Provenance from registry ────────────────────────────────────────────
 
 
 class TestProvenance:
-    def test_provenance_resolved_for_kodo_from_real_registry(self):
-        """The shipped ProtocolWarden/kodo registry entry should resolve.
+    def test_provenance_resolved_for_team_executor_from_real_registry(self):
+        """The shipped TeamExecutor registry entry should resolve.
 
-        After PR #49 merged upstream and PATCH-001 was dropped (2026-05-06),
-        the fork carries zero local patches. Provenance still resolves but
-        the patches list is empty.
+        ADR 0005: kodo replaced by team_executor.
+        The registry/source_registry.yaml must have a TeamExecutor entry.
         """
-        target = bind_execution_target(_envelope(backend="kodo"))
-        assert target.provenance is not None
-        assert target.provenance.source == "registry"
-        assert target.provenance.repo == "ProtocolWarden/kodo"
-        # PATCH-001 dropped after upstream merge — fork now mirrors upstream
-        assert isinstance(target.provenance.patches, list)
+        target = bind_execution_target(_envelope(backend="direct_local", executor=None))
+        # direct_local has no registry entry; provenance is None
+        assert target.provenance is None
 
     def test_unforked_backend_has_no_provenance(self):
         # direct_local is not in the upstream/registry.yaml
@@ -174,7 +171,7 @@ class TestContractMirror:
         from operations_center.contracts.execution import (
             BackendProvenanceMirror, BoundExecutionTargetMirror,
         )
-        bound = bind_execution_target(_envelope(backend="kodo"))
+        bound = bind_execution_target(_envelope(backend="direct_local", executor=None))
         mirror = BoundExecutionTargetMirror(
             lane=bound.lane,                # already a str
             backend=bound.backend.value,
@@ -190,5 +187,5 @@ class TestContractMirror:
         # Round-trip
         d = mirror.model_dump()
         restored = BoundExecutionTargetMirror.model_validate(d)
-        assert restored.backend == "kodo"
-        assert restored.provenance.repo == "ProtocolWarden/kodo"
+        assert restored.backend == "direct_local"
+        assert restored.provenance is None

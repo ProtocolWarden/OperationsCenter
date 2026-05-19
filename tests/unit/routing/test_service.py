@@ -28,7 +28,7 @@ def _ctx(**kw) -> PlanningContext:
 
 def _stub_service(
     lane=LaneName.CLAUDE_CLI,
-    backend=BackendName.KODO,
+    backend=BackendName.TEAM_EXECUTOR,
 ) -> PlanningService:
     decision = LaneDecision(
         proposal_id="",  # will be overwritten in real routing; stub ignores it
@@ -128,15 +128,15 @@ def test_trace_notes_default_empty():
 
 
 def test_run_summary_contains_lane():
-    service = _stub_service(lane=LaneName.CLAUDE_CLI, backend=BackendName.KODO)
+    service = _stub_service(lane=LaneName.CLAUDE_CLI, backend=BackendName.TEAM_EXECUTOR)
     bundle = service.plan(_ctx())
     assert "claude_cli" in bundle.run_summary
 
 
 def test_run_summary_contains_backend():
-    service = _stub_service(lane=LaneName.AIDER_LOCAL, backend=BackendName.KODO)
+    service = _stub_service(lane=LaneName.AIDER_LOCAL, backend=BackendName.TEAM_EXECUTOR)
     bundle = service.plan(_ctx())
-    assert "kodo" in bundle.run_summary
+    assert "team_executor" in bundle.run_summary
 
 
 def test_run_summary_contains_proposal_id_prefix():

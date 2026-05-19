@@ -130,36 +130,22 @@ class ResourceGateSettings(BaseModel):
     min_available_memory_mb: int | None = None
 
 
-class ArchonSettings(BaseModel):
-    """Settings for the Archon HTTP workflow backend.
-
-    Archon is deployed by PlatformDeployment (``compose/profiles/archon.yml``)
-    at ``http://localhost:3000`` by default. ``workflow_names`` maps OC
-    workflow_type values to actual Archon workflow names operators have
-    shipped under ``.archon/workflows/``.
-    """
-
-    enabled: bool = False
-    base_url: str = "http://localhost:3000"
-    poll_interval_seconds: float = 2.0
-    workflow_names: dict[str, str] = Field(
-        default_factory=lambda: {
-            "goal":    "archon-assist",
-            "fix_pr":  "archon-fix-github-issue",
-            "test":    "archon-test-loop-dag",
-            "improve": "archon-refactor-safely",
-        },
-    )
-
-
-class KodoSettings(BaseModel):
-    binary: str = "kodo"
-    team: str = "full"
-    cycles: int = 3
-    exchanges: int = 20
-    orchestrator: str = "codex:gpt-5.4"
-    effort: str = "standard"
+class TeamExecutorSettings(BaseModel):
+    team_name: str = "default"
     timeout_seconds: int = 3600
+    api_key: str = ""
+
+
+class DagExecutorSettings(BaseModel):
+    timeout_seconds: int = 3600
+    artifacts_dir: str = ""
+
+
+class CritiqueExecutorSettings(BaseModel):
+    topology: str = "reflexion"
+    max_rounds: int = 5
+    timeout_seconds: int = 3600
+    api_key: str = ""
 
 
 class AiderSettings(BaseModel):
@@ -405,8 +391,9 @@ class ContractChangePropagationSettings(BaseModel):
 class Settings(BaseModel):
     plane: PlaneSettings
     git: GitSettings
-    kodo: KodoSettings
-    archon: ArchonSettings = Field(default_factory=ArchonSettings)
+    team_executor: TeamExecutorSettings = Field(default_factory=TeamExecutorSettings)
+    dag_executor: DagExecutorSettings = Field(default_factory=DagExecutorSettings)
+    critique_executor: CritiqueExecutorSettings = Field(default_factory=CritiqueExecutorSettings)
     platform_manifest: PlatformManifestSettings = Field(default_factory=PlatformManifestSettings)
     contract_change_propagation: ContractChangePropagationSettings = Field(
         default_factory=ContractChangePropagationSettings
@@ -422,7 +409,7 @@ class Settings(BaseModel):
     resource_gate: ResourceGateSettings = Field(default_factory=ResourceGateSettings)
     repos: dict[str, RepoSettings]
     reviewer: ReviewerSettings = Field(default_factory=ReviewerSettings)
-    report_root: Path = Path("tools/report/kodo_plane")
+    report_root: Path = Path("tools/report/runs")
     # The repo key that identifies this OperationsCenter installation itself.
     # Tasks targeting this repo require a "self-modify: approved" label before
     # the goal/test watcher will auto-execute them, and proposals for it are
@@ -433,23 +420,7 @@ class Settings(BaseModel):
     # Number of days a PR can remain open without activity before stale-PR scan
     # closes it and requeues the task.
     stale_pr_days: int = 7
-    # Estimated USD cost per Kodo execution for spend telemetry.  Set to 0.0
-    # (the default) to disable cost recording.  The value is operator-supplied;
-    # OperationsCenter does not parse Kodo billing output.
     cost_per_execution_usd: float = 0.0
-    # Per-task-kind Kodo execution profile overrides.  Keys are task_kind values
-    # (e.g. "goal", "improve", "test") or a special "default" fallback.  Any
-    # field omitted in a profile inherits from the top-level ``kodo`` block.
-    # Example:
-    #   kodo_profiles:
-    #     lint_fix:           # task created with task-kind: goal + source_family: lint_fix
-    #       cycles: 2
-    #       effort: low
-    #     context_limit:
-    #       cycles: 6
-    #       exchanges: 40
-    #       effort: high
-    kodo_profiles: dict[str, KodoSettings] = Field(default_factory=dict)
     # Recurring time windows during which proposal creation and task execution
     # are suppressed.  Use this to prevent autonomous activity during planned
     # deploy windows, maintenance periods, or overnight freezes.
@@ -523,9 +494,6 @@ def load_settings(path: str | Path) -> Settings:
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     settings = Settings.model_validate(raw)
     config_dir = config_path.parent
-    settings.kodo.binary = _resolve_binary(settings.kodo.binary, config_dir)
-    for profile in settings.kodo_profiles.values():
-        profile.binary = _resolve_binary(profile.binary, config_dir)
     # Resolve platform_manifest paths relative to the config file dir so
     # operators can write `project_manifest_path: ../ExampleManagedRepo/topology/...`
     # without hardcoding absolute paths.

@@ -49,7 +49,7 @@ class TestLocalSuccessDominant:
     def _records(self):
         successes = [
             make_success(
-                backend="kodo",
+                backend="team_executor",
                 lane="aider_local",
                 task_type="bug_fix",
                 risk_level="low",
@@ -59,7 +59,7 @@ class TestLocalSuccessDominant:
             for i, d in enumerate([18000, 22000, 15000, 19000, 12000, 21000, 16000, 14000, 17000])
         ]
         failure = make_failure(
-            backend="kodo",
+            backend="team_executor",
             lane="aider_local",
             task_type="bug_fix",
             risk_level="low",
@@ -105,50 +105,46 @@ class TestLocalSuccessDominant:
 
 
 class TestPremiumBackendWins:
-    """Archon outperforms kodo@aider_local on refactor tasks."""
+    """dag_executor outperforms team_executor@aider_local on refactor tasks."""
 
     def _records(self):
-        archon = [
-            make_success(backend="archon", lane="claude_cli", task_type="refactor", run_id=f"arch-{i}")
+        dag = [
+            make_success(backend="dag_executor", lane="claude_cli", task_type="refactor", run_id=f"arch-{i}")
             for i in range(7)
         ] + [
-            make_failure(backend="archon", lane="claude_cli", task_type="refactor", run_id="arch-7")
+            make_failure(backend="dag_executor", lane="claude_cli", task_type="refactor", run_id="arch-7")
         ]
-        kodo = [
-            make_success(backend="kodo", lane="aider_local", task_type="refactor", run_id="kodo-0")
+        team = [
+            make_success(backend="team_executor", lane="aider_local", task_type="refactor", run_id="kodo-0")
         ] + [
-            make_failure(backend="kodo", lane="aider_local", task_type="refactor", run_id=f"kodo-{i}")
+            make_failure(backend="team_executor", lane="aider_local", task_type="refactor", run_id=f"kodo-{i}")
             for i in range(1, 8)
         ]
-        return archon + kodo
+        return dag + team
 
-    def test_archon_has_higher_success_rate(self):
+    def test_dag_executor_has_higher_success_rate(self):
         report = StrategyTuningService.default().analyze(self._records())
         by_backend = {s.backend: s for s in report.comparison_summaries}
-        assert by_backend["archon"].success_rate > by_backend["kodo"].success_rate
+        assert by_backend["dag_executor"].success_rate > by_backend["team_executor"].success_rate
 
-    def test_archon_is_high_reliability(self):
+    def test_dag_executor_is_high_reliability(self):
         report = StrategyTuningService.default().analyze(self._records())
         by_backend = {s.backend: s for s in report.comparison_summaries}
-        assert by_backend["archon"].reliability_class == ReliabilityClass.HIGH
+        assert by_backend["dag_executor"].reliability_class == ReliabilityClass.HIGH
 
-    def test_kodo_is_low_reliability_for_this_task_type(self):
+    def test_team_executor_is_low_reliability_for_this_task_type(self):
         report = StrategyTuningService.default().analyze(self._records())
         by_backend = {s.backend: s for s in report.comparison_summaries}
-        assert by_backend["kodo"].reliability_class == ReliabilityClass.LOW
+        assert by_backend["team_executor"].reliability_class == ReliabilityClass.LOW
 
     def test_both_backends_appear_in_comparison(self):
         report = StrategyTuningService.default().analyze(self._records())
         backends = {s.backend for s in report.comparison_summaries}
-        assert "archon" in backends
-        assert "kodo" in backends
+        assert "dag_executor" in backends
+        assert "team_executor" in backends
 
-    def test_kodo_low_reliability_produces_proposal(self):
+    def test_team_executor_low_reliability_produces_proposal(self):
         report = StrategyTuningService.default().analyze(self._records())
-        _kodo_proposals = [
-            p for p in report.recommendations
-            if any("kodo" in fid or True for fid in p.source_finding_ids)
-        ]
         # At least one proposal about low reliability exists
         assert any("backend_preference" == p.affected_policy_area for p in report.recommendations)
 

@@ -101,7 +101,7 @@ def make_decision(
 def local_decision(proposal_id: str = "proposal-test") -> LaneDecision:
     return make_decision(
         lane=LaneName.AIDER_LOCAL,
-        backend=BackendName.KODO,
+        backend=BackendName.TEAM_EXECUTOR,
         proposal_id=proposal_id,
     )
 

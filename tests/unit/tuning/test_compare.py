@@ -41,26 +41,26 @@ class TestEmptyInput:
 
 class TestGrouping:
     def test_single_backend_single_group(self):
-        records = make_n_successes(5, backend="kodo", lane="claude_cli")
+        records = make_n_successes(5, backend="team_executor", lane="claude_cli")
         summaries = compare_backends(records)
         assert len(summaries) == 1
-        assert summaries[0].backend == "kodo"
+        assert summaries[0].backend == "team_executor"
         assert summaries[0].lane == "claude_cli"
 
     def test_two_backends_two_groups(self):
         records = (
-            make_n_successes(5, backend="kodo", lane="claude_cli")
-            + make_n_successes(5, backend="archon", lane="claude_cli")
+            make_n_successes(5, backend="team_executor", lane="claude_cli")
+            + make_n_successes(5, backend="dag_executor", lane="claude_cli")
         )
         summaries = compare_backends(records)
         assert len(summaries) == 2
         backends = {s.backend for s in summaries}
-        assert backends == {"kodo", "archon"}
+        assert backends == {"team_executor", "dag_executor"}
 
     def test_two_lanes_two_groups(self):
         records = (
-            make_n_successes(5, backend="kodo", lane="claude_cli")
-            + make_n_successes(5, backend="kodo", lane="aider_local")
+            make_n_successes(5, backend="team_executor", lane="claude_cli")
+            + make_n_successes(5, backend="team_executor", lane="aider_local")
         )
         summaries = compare_backends(records)
         assert len(summaries) == 2
@@ -74,7 +74,7 @@ class TestGrouping:
         assert summaries[0].backend == "unknown"
 
     def test_sample_size_matches_group_count(self):
-        records = make_n_successes(12, backend="kodo", lane="claude_cli")
+        records = make_n_successes(12, backend="team_executor", lane="claude_cli")
         summaries = compare_backends(records)
         assert summaries[0].sample_size == 12
 

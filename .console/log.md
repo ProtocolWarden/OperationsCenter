@@ -7412,3 +7412,21 @@ Commit: 7e5eee5. Backfilled: #18→retry-count:2, #17→retry-count:1.
 ### Board state at cycle end
 Running: 3 (#17, #18, #26), R4AI: 2 (#27, #42), Backlog: 21, Done: 8, Cancelled: 23
 All audits clean. Timeout fix should allow tasks to complete on this attempt.
+
+### ADR 0005 — Phase 4 cutover (2026-05-18)
+Removed kodo + Archon backends. Added TeamExecutor, DagExecutor, CritiqueExecutor to BackendName enum.
+- Deleted: backends/archon/, backends/kodo/, executors/archon/, executors/kodo/, entrypoints/archon_probe/,
+  patches/archon/, tests/unit/backends/archon/, tests/unit/backends/kodo/, tests/fixtures/backends/archon/
+- Deleted test files: test_archon_*, test_kodo_*, test_e2e_architect_via_kodo.py, test_goal_file_idempotency.py
+- Updated: contracts/enums.py, config/settings.py, backends/factory.py, registry/source_registry.yaml
+- Created: executors/team_executor/, executors/dag_executor/ capability cards
+- Cleaned all test files: replaced BackendName.KODO/ARCHON → TEAM_EXECUTOR/DAG_EXECUTOR
+- Updated CxRP pin v0.3.0 → v0.3.1 (schema patch for new backend enum values)
+- ADR 0002 marked superseded by ADR 0005
+- 3324 tests passing, 1 skipped
+
+### Custodian fix — phantom symbols + orphan docs (2026-05-18)
+Fixed K1/OC8 findings: unquoted _get_kodo_version and build_command in autonomy_gaps.md
+(backtick references to symbols removed in ADR 0005).
+Deleted 3 orphan docs/specs/ files (DC7) created by test-cleanup agent.
+Custodian now 0 findings.

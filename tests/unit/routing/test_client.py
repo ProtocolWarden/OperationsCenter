@@ -33,7 +33,7 @@ def _ctx(**kw) -> PlanningContext:
     return PlanningContext(**defaults)
 
 
-def _stub_decision(lane=LaneName.CLAUDE_CLI, backend=BackendName.KODO) -> LaneDecision:
+def _stub_decision(lane=LaneName.CLAUDE_CLI, backend=BackendName.TEAM_EXECUTOR) -> LaneDecision:
     return LaneDecision(
         proposal_id="prop-test-1",
         selected_lane=lane,
@@ -43,7 +43,7 @@ def _stub_decision(lane=LaneName.CLAUDE_CLI, backend=BackendName.KODO) -> LaneDe
     )
 
 
-def _stub_cxrp_response(executor: str = "claude_cli", backend: str = "kodo") -> dict:
+def _stub_cxrp_response(executor: str = "claude_cli", backend: str = "team_executor") -> dict:
     """Minimal CxRP v0.2 LaneDecision payload for /route mock responses."""
     return {
         "schema_version": "0.3",
@@ -154,7 +154,7 @@ def test_http_client_decodes_cxrp_shape_response() -> None:
         "metadata": {"policy_rule_matched": "test_rule"},
         "lane": "coding_agent",
         "executor": "claude_cli",
-        "backend": "kodo",
+        "backend": "team_executor",
         "rationale": "cxrp-shape decision",
         "confidence": 0.88,
         "alternatives": [
@@ -173,7 +173,7 @@ def test_http_client_decodes_cxrp_shape_response() -> None:
         client.close()
 
     assert decision.selected_lane == LaneName.CLAUDE_CLI
-    assert decision.selected_backend == BackendName.KODO
+    assert decision.selected_backend == BackendName.TEAM_EXECUTOR
     assert decision.confidence == 0.88
     assert decision.policy_rule_matched == "test_rule"
     assert decision.alternatives_considered == [LaneName.CODEX_CLI]

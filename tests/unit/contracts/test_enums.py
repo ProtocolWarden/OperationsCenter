@@ -45,9 +45,12 @@ class TestLaneName:
 
 class TestBackendName:
     def test_round_trip(self):
-        assert BackendName("kodo") is BackendName.KODO
+        assert BackendName("team_executor") is BackendName.TEAM_EXECUTOR
+        assert BackendName("dag_executor") is BackendName.DAG_EXECUTOR
+        assert BackendName("critique_executor") is BackendName.CRITIQUE_EXECUTOR
         assert BackendName("direct_local") is BackendName.DIRECT_LOCAL
-        assert BackendName("archon_then_kodo") is BackendName.ARCHON_THEN_KODO
+        assert BackendName("openclaw") is BackendName.OPENCLAW
+
 
 
 class TestExecutionStatus:
