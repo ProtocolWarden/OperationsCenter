@@ -3,6 +3,15 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-19 — Watchdog cycle: fix testing-branch gap + audit E702/F401
+
+Pushed `operations-center-testing-branch` to GitHub origin (was missing — stale
+local tracking ref). Blocked every improve/goal dispatch with "base_branch does
+not exist on remote". Fixed 5 E702 (semicolons) in test_trace_path_staleness.py
+and 2 F401 (unused pytest imports) in test_run_show.py + test_sourceregistry_wiring.py.
+Audit now clean. 8/8 watchers alive; spec watcher stable (restarts count is
+historical from earlier config-file-missing crashes, not current).
+
 ## 2026-05-19 — Removed remaining live kodo/archon references from src (final sweep)
 
 Renamed `kodo_exit_code` → `executor_exit_code` in validation.py dataclass + builder.

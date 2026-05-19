@@ -38,8 +38,10 @@ def _result_with_paths(*, stdout: str, stderr: str, artifact_dir: str) -> Execut
 
 
 def test_warning_emitted_when_stdout_path_missing(tmp_path: Path) -> None:
-    artifact_dir = tmp_path / "ad"; artifact_dir.mkdir()
-    stdout = artifact_dir / "stdout.txt"; stdout.write_text("ok", encoding="utf-8")
+    artifact_dir = tmp_path / "ad"
+    artifact_dir.mkdir()
+    stdout = artifact_dir / "stdout.txt"
+    stdout.write_text("ok", encoding="utf-8")
     stderr = artifact_dir / "stderr.txt"  # never created
     result = _result_with_paths(
         stdout=str(stdout), stderr=str(stderr), artifact_dir=str(artifact_dir),
@@ -70,9 +72,12 @@ def test_warning_emitted_when_artifact_dir_reaped(tmp_path: Path) -> None:
 
 
 def test_no_staleness_warning_when_paths_resolve(tmp_path: Path) -> None:
-    artifact_dir = tmp_path / "ad"; artifact_dir.mkdir()
-    stdout = artifact_dir / "stdout.txt"; stdout.write_text("ok", encoding="utf-8")
-    stderr = artifact_dir / "stderr.txt"; stderr.write_text("", encoding="utf-8")
+    artifact_dir = tmp_path / "ad"
+    artifact_dir.mkdir()
+    stdout = artifact_dir / "stdout.txt"
+    stdout.write_text("ok", encoding="utf-8")
+    stderr = artifact_dir / "stderr.txt"
+    stderr.write_text("", encoding="utf-8")
     result = _result_with_paths(
         stdout=str(stdout), stderr=str(stderr), artifact_dir=str(artifact_dir),
     )
