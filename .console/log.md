@@ -3,6 +3,34 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-19 — Watchdog cycle 6: WEAKLY-CONVERGENT → stepping toward HEALTHY
+
+**Convergence:** WEAKLY-CONVERGENT. G10 ghost still in 1h window (aging-out pre-fix event from
+~08:42 UTC; b67bc0e0 SIGKILL guard was applied cycle 3; no new G10 events). Expected to clear
+naturally by cycle 7 once window moves past 08:42.
+
+**STEP 1:**
+- custodian: repos=7, all deltas=zero ✓ (RUFF regression fully cleared, 2nd clean cycle)
+- ghost: total=1, active=['G10'] — lagging pre-fix artifact, not a new runaway
+- flow: gaps=0 (F8 partial persistent — non-critical)
+- graph-doctor: ok
+- reaudit: ['dag_executor', 'team_executor'] — persistent since CxRP v0.3.1 (non-blocking)
+- regressions: 0 ✓
+
+**STEP 2:** triage heal=1 (b67bc0e0 escalation_commented — correct, retry budget exhausted)
+
+**STEP 2.5 board-unblock:**
+- APPLIED: 8871f757 "Fix 7 ruff lint violations" → R4AI
+- APPLIED: 2824d46e "Restore repeated missing test signal coverage" → R4AI
+- SKIPPED: b67bc0e0 — SIGKILL guard (3rd consecutive ✓)
+- SKIPPED: a969024e — SIGKILL guard (3rd consecutive ✓)
+
+**STEP 7:** 15/15 tests passed ✓
+**STEP 8:** 8/8 watchers healthy, SB ok
+
+**Cadence:** ACTIVE (900s) — two tasks moved to R4AI this cycle, remediation in flight.
+**Branch:** oc-watchdog/20260519-0842-board-unblock-sigkill-guard
+
 ## 2026-05-19 — Watchdog cycle: fix testing-branch gap + audit E702/F401
 
 Pushed `operations-center-testing-branch` to GitHub origin (was missing — stale
