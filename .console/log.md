@@ -3,6 +3,27 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-20 — Watchdog cycle 24: ACTIVE — signal threading + git clone timeout fixed
+
+**Convergence:** ACTIVE. Two new infrastructure bugs surfaced after cycle 23's TeamExecutor `--message` fix unblocked actual execution.
+
+**STEP 1:** custodian: all_zero=true ✓ | ghost: 1 event, active=[], fixed=[] | flow: 0 | graph: ok | reaudit: dag_executor + team_executor | regressions: 0
+
+**STEP 2.5 board-unblock:**
+- APPLIED: a969024e SELF_MODIFY_REQUEUE (Blocked→R4AI) — during Haiku run. 2824d46e was Running when Haiku ran; applied manually at cycle end.
+- Haiku reported improve=false (wrong) — heartbeat confirmed improve running; Haiku reliability issue.
+
+**Root causes identified and fixed:**
+1. **"signal only works in main thread"** — `safe_run` in CoreRunner called `signal.signal(signal.SIGTERM, ...)` unconditionally. TeamExecutor's `coordinator.py:173` uses `ThreadPoolExecutor` for parallel stages; `_run_stage` → `agent_call._claude_call` → `safe_run` from worker threads. Fix: guard with `threading.current_thread() is threading.main_thread()`. Committed to CoreRunner (fa5ab8c), venv copy patched in-place.
+
+2. **git clone timeout** — `workspace.py` used full `git clone` with 120s timeout. Measured: shallow clone ~38s, full clone >120s for large repos like OC. Fix: use `--depth 1 --no-single-branch` + 300s timeout. Committed to OC (813882b on oc-watchdog/20260520-0202-cycle24-signal-clone-fix).
+
+**STEP 8:** 8/8 watchers running (Haiku reported 6/8, false negative confirmed by heartbeats and watch-all-status).
+
+**Actions:** board_unblock --apply re-queued both 2824d46e and a969024e to R4AI after fixes applied.
+
+**Cadence:** ACTIVE (900s) — both infrastructure fixes live, monitoring first clean end-to-end TeamExecutor run
+
 ## 2026-05-20 — Watchdog cycle 23: ACTIVE — TeamExecutor --message bug root-caused and fixed
 
 **Convergence:** NON-CONVERGENT → ACTIVE. Root cause of all backend_error failures on 2824d46e and a969024e identified and resolved. TeamExecutor agent_call.py/worker.py invoked `claude --message <prompt>` (deprecated in claude CLI v2.x). claude 2.1.145 exits immediately with empty stdout → `stage_planner.json.loads("")` raises JSONDecodeError → `TeamExecutorRunner` returns `error_summary="Expecting value: line 1 column 1 (char 0)"` → board_worker logs `category=backend_error`. All 8-9 min improve runs were failing in 345ms at the coordinator layer. Fix: replaced `--message` with `-p` + positional prompt arg. Committed to TeamExecutor main (ee5c281), 108 tests pass, editable install active immediately.
