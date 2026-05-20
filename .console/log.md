@@ -3,6 +3,35 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-20 — Watchdog cycle 30: ACTIVE — a969024e first clean dispatch attempt; rate gate clear
+
+**Convergence:** WEAKLY-CONVERGENT. Rate gate finally clear (all hourly events expired). a969024e claimed at 01:50:27 local (05:50 UTC) — first attempt where rate gate current=0 at dispatch time. 2824d46e in R4AI queue behind it.
+
+**STEP 1:** custodian: all_zero=null (sweep parse failure, 4th consecutive — recurring platform issue) | ghost: 1 event, active=[], fixed=[] | flow: 0 | graph: ok | reaudit: dag_executor + team_executor | regressions: 0
+
+**Custodian sweep failure: convergence promotion candidate.** `all_zero=null` has appeared in 4+ consecutive cycles (cycles 27-30). The sweep itself is failing to collect or parse results. This is a repeated loop-only judgment — should promote to a Plane task for the reaudit watcher. Will track.
+
+**reaudit (dag_executor + team_executor): 6+ cycles, promotion candidate.** Consistent finding across all training cycles.
+
+**STEP 2 — execution outcomes since cycle 29:**
+- 2824d46e (01:24–01:30 local): `budget_exhausted/rate_gate` — 6 min workspace prep then gate hit (current=2 from 00:25 and 01:15 usage events)
+- Rate gate expired: last usage event at ~01:24 local → expired at ~02:24. Gate now clear (current=0).
+- a969024e (01:50:27 local = 05:50 UTC): **In-flight** — first clean dispatch attempt.
+
+**STEP 2.5 board-unblock:**
+- APPLIED: 2824d46e → R4AI, a969024e → R4AI (cycle 30 Haiku at 05:49 UTC)
+- a969024e immediately claimed by improve watcher at 01:50:27 local
+
+**Classification:**
+- a969024e: temporarily-blocked → dispatching (rate gate cleared; in-flight now)
+- 2824d46e: temporarily-blocked (in R4AI, awaiting a969024e completion)
+- reaudit dag_executor + team_executor: promotion candidate (6+ cycles, non-critical)
+- custodian sweep null: promotion candidate (4+ cycles)
+
+**STEP 8:** 8/8 watchers healthy, all clean.
+
+**Cadence:** ACTIVE (900s) — a969024e in-flight, expect dispatch at ~02:00 local (rate gate clear)
+
 ## 2026-05-20 — Watchdog cycle 29: ACTIVE — 2824d46e in-flight; a969024e stage-planning resolved
 
 **Convergence:** WEAKLY-CONVERGENT. Key positive signal: a969024e's JSONDecodeError is resolved — both attempts in this cycle hit the OC rate gate (budget_exhausted), which means stage planning SUCCEEDED. The systematic empty-stdout issue (cycles 27–28) is no longer occurring. 2824d46e improving: "4 of 6 stages failed" (cycle 27) → "2 of 5 stages failed" (cycle 28) → currently in-flight (cycle 29).
