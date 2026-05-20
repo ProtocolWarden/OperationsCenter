@@ -3,6 +3,26 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-20 — Watchdog cycle 38: ACTIVE — 2824d46e in fresh session; both branches pushed
+
+**Convergence:** WEAKLY-CONVERGENT. 2824d46e keeps hitting session limits mid-run; just started at 23:28 UTC in a fresh session (7pm EDT reset). Both branches now on GitHub.
+
+**Pushes:**
+- OC watchdog branch: a402010..ca9a9b6 → GitHub ✓
+- TeamExecutor main: 4e1a1c8..c681149 → GitHub ✓ (stage_planner fix live)
+
+**STEP 1:** custodian: all_zero=true ✓ | ghost: 2 events, active=[], fixed=[G1..G12] | flow: 0 | graph: ok | reaudit: dag_executor + team_executor | regressions: 0
+
+**STEP 2 — 2824d46e session-limit pattern:**
+- 17:43-17:52 local (21:43-21:52 UTC): session limit hit — "resets 7pm EDT" (23:00 UTC). Only 9 min in; session depleted from loop overhead.
+- 19:28:36 local (23:28:36 UTC): **claimed in fresh session** (23:00 UTC reset, 28 min old). Full 5-hour window. In-flight now.
+
+**STEP 2.5 board-unblock:** 2824d46e → R4AI (applied).
+
+**STEP 8 — watcher health:** 7/8 running ✓ (Haiku heartbeat fix working — correctly reports 7). watchdog: 17+ hours stale, genuinely dead. No other degradation.
+
+**Cadence:** ACTIVE (1800s) — board_unblock applied; 2824d46e just started in clean window
+
 ## 2026-05-20 — Watchdog cycle 37: ACTIVE — 2824d46e 4th attempt in-flight; 7/8 watchers healthy
 
 **Convergence:** WEAKLY-CONVERGENT. Board is moving (a969024e done + 5 follow-up tasks). 2824d46e cycled through concurrency block; just claimed again at 21:43 UTC.
