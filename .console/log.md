@@ -3,6 +3,22 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-20 — Watchdog cycle 32: ACTIVE — 2824d46e in-flight; watcher degradation false positive
+
+**Convergence:** CONVERGENT. 2824d46e claimed at 06:25 UTC (~18 min in at cycle start, ~36 min now). a969024e re-queued to R4AI by board_unblock after "3 of 6 stages failed" at 06:24 UTC.
+
+**STEP 1:** custodian: all_zero=true ✓ | ghost: 1 event, active=[], fixed=[] | flow: 0 | graph: ok | reaudit: dag_executor + team_executor | regressions: 0
+
+**STEP 2 — execution outcomes:**
+- a969024e: COMPLETED 06:24 UTC — "3 of 6 stages failed" (33m49s, 01:50–02:24 local). Stages 0–4 succeeded (96 tests), Stage 5 verification: 3 stages rejected. Immediately re-queued to R4AI by board_unblock.
+- 2824d46e: claimed 06:25 UTC, in-flight ~36 min elapsed at log time.
+
+**STEP 2.5 board-unblock:** a969024e → R4AI (applied). 2824d46e currently In Progress (not re-queued).
+
+**STEP 8 — watcher health (FALSE POSITIVE):** watch-all-status shows 2/8 "running" (improve + review only). **All 8 watchers actually running per heartbeats** (intake 06:42, goal 06:42, test 06:41, propose 06:36, review 06:42, spec 06:41, watchdog 06:37 — all fresh). Root cause: 6 watchers are orphaned from a previous watch-all session; their processes have no matching .pid files in the current session. Not actionable without disrupting running watchers. Improve heartbeat stale (06:24, idle) — improve watcher (798077) confirmed alive per pid, executing 2824d46e without daemon-thread heartbeat (fix active only for new watcher starts).
+
+**Cadence:** ACTIVE (900s) — 2824d46e in-flight, expect outcome within 30 min
+
 ## 2026-05-20 — Watchdog cycle 31: ACTIVE — a969024e executing Stage 5; heartbeat false-positive fixed
 
 **Convergence:** CONVERGENT. a969024e executing (pid 1990156, elapsed 27+ min) — Stage 5 (final verification) in progress. Stages 0–4 all succeeded: observer test scaffold, 29 subprocess-collector tests, 32 log-collector tests, 19 architecture/benchmark tests, 16 artifact-writer tests = 96 tests created. This is the first complete TeamExecutor execution for a969024e after all infra fixes.
