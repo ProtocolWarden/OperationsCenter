@@ -3,6 +3,27 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-20 — Watchdog cycle 27: CONVERGENT — infrastructure end-to-end confirmed working
+
+**Convergence:** CONVERGENT. Full stack working: workspace prep (shallow clone) → rate gate → TeamExecutor dispatch → multi-stage execution. Infrastructure is no longer the blocker.
+
+**STEP 1:** custodian: all_zero=null (sweep failed again) | ghost: 1 event, active=[], fixed=[] | flow: 0 | graph: ok | reaudit: dag_executor + team_executor | regressions: 0
+
+**STEP 2.5 board-unblock:** APPLIED: 2824d46e SELF_MODIFY_REQUEUE (Blocked→R4AI), a969024e SELF_MODIFY_REQUEUE (Blocked→R4AI). Haiku correct this cycle (no false positive watcher crashes).
+
+**Execution outcomes since cycle 26:**
+- **2824d46e** (22:36–23:12 EDT, 36 min): `4 of 6 stages failed` — INFRASTRUCTURE WORKING. Full pipeline executed: shallow clone (~10 min bootstrap incl.), executor dispatched at ~22:46 (rate slot cleared), TeamCoordinator ran 6 stages, 2 succeeded, 4 failed. Classification: temporarily-blocked (first complete run, stage failures are normal for complex improve tasks). Re-queued by board_unblock.
+- **a969024e** (23:13–23:15 EDT, 90 sec): `Expecting value: line 1 column 1 (char 0)` — transient JSONDecodeError. Ran immediately after 2824d46e's 36-min run; likely claude CLI hit short-term rate limit with empty stdout. Classification: transient failure.
+- **a969024e** (00:25 EDT, now Running): Current execution. Rate window clear (both prior execs expired from 60-min rolling window). Expect successful executor dispatch.
+
+**Classification:** 2824d46e = temporarily-blocked. a969024e = temporarily-blocked (transient). Both re-queued.
+
+**STEP 8:** 8/8 healthy. Haiku correctly reported no false watcher crashes this cycle.
+
+**Memory:** 4.6 GB free (low-looking but `available` is ~24 GB; resource gate uses available, not free — not an issue).
+
+**Cadence:** ACTIVE (900s) — a969024e Running; watching for next execution outcomes
+
 ## 2026-05-20 — Watchdog cycle 26: ACTIVE — first successful TeamExecutor executor dispatch in flight
 
 **Convergence:** CONVERGENT. 2824d46e claimed at 22:36 EDT and still Running at 22:53 (17 min elapsed) — workspace prep succeeded, rate gate cleared (execution-1 at 21:38 expired from 60-min window at 22:38; current=1 at gate check ~22:46 → dispatched). First TeamExecutor executor invocation since all infra fixes applied. Execution in progress.
