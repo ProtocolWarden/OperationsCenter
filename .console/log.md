@@ -3,6 +3,27 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-20 — Watchdog cycle 37: ACTIVE — 2824d46e 4th attempt in-flight; 7/8 watchers healthy
+
+**Convergence:** WEAKLY-CONVERGENT. Board is moving (a969024e done + 5 follow-up tasks). 2824d46e cycled through concurrency block; just claimed again at 21:43 UTC.
+
+**STEP 1:** custodian: all_zero=null (9th intermittent — 8da50821 open) | ghost: 2 events, active=[], fixed=[G7,G10] | flow: 0 | graph: ok | reaudit: dag_executor + team_executor | regressions: 0
+
+**STEP 2 — 2824d46e history (since cycle 36):**
+- 16:29-16:39 local: `budget_exhausted` — `global_concurrency_exceeded; in_flight=1 limit=1`. One of the 5 a969024e follow-up tasks (bfb289b3/89191ff5/360cff3a/c7df5422/ff19d39b) was dispatched and occupied the concurrency slot.
+- 17:43:07 local (21:43 UTC): **claimed again — in-flight now**. Concurrency slot should be free.
+
+**STEP 2.5 board-unblock:** 2824d46e → R4AI (applied; was in Blocked from concurrency_exceeded).
+
+**STEP 8 — watcher health (heartbeats authoritative; Haiku running=false is false negative):**
+- intake: 21:43:36 UTC ✓ | goal: 21:43:37 ✓ | test: 21:43:41 ✓ | spec: 21:43:38 ✓ | review: 21:42:56 (active) ✓ | improve: running 2824d46e ✓ | propose: running ✓
+- watchdog: 06:37:51 UTC — **15+ hours stale. Genuinely dead.**
+- Haiku watcher running=false for 6 roles: false negative from .pid file mismatch (watch-all-status dominates over heartbeat check). Heartbeats are authoritative.
+
+**Persistent issue — Haiku watcher classification:** Haiku consistently misclassifies orphaned watchers as not running because watch-all-status shows 2/8. Heartbeat check must be done manually each cycle when Haiku shows most as stopped. Consider fixing Haiku prompt to weight heartbeat recency higher than watch-all-status count.
+
+**Cadence:** ACTIVE (1800s) — board_unblock applied; 2824d46e just started
+
 ## 2026-05-20 — Watchdog cycle 36: IDLE — a969024e SUCCEEDED; 2824d46e in-flight; memory false alarm
 
 **Convergence:** CONVERGENT. a969024e completed status=succeeded at 16:28 local (20:28 UTC) — first clean completion in training mode. 5 follow-up tasks spawned. 2824d46e claimed immediately at 16:29.
