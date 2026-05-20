@@ -1129,17 +1129,24 @@ def _create_follow_up(client, parent: dict, _settings, follow_kind: str, reason:
 
 # ── Heartbeat ─────────────────────────────────────────────────────────────────
 
-def _write_heartbeat(status_dir: Path, role: str) -> None:
+def _write_heartbeat(status_dir: Path, role: str, status: str = "idle") -> None:
     try:
         status_dir.mkdir(parents=True, exist_ok=True)
         hb = status_dir / f"heartbeat_{role}.json"
         hb.write_text(json.dumps({
             "role": role,
             "at":   datetime.now(UTC).isoformat(),
-            "status": "idle",
+            "status": status,
         }, ensure_ascii=False), encoding="utf-8")
     except Exception:
         pass
+
+
+def _heartbeat_loop(status_dir: Path, role: str, stop_event) -> None:
+    """Write 'executing' heartbeat every 60 s while a task runs."""
+    while not stop_event.is_set():
+        _write_heartbeat(status_dir, role, status="executing")
+        stop_event.wait(60)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1197,7 +1204,19 @@ def main() -> int:
             try:
                 issue = _claim_next(client, role, settings)
                 if issue:
-                    _process_issue(issue, role, args.config, settings, client)
+                    import threading
+                    _stop = threading.Event()
+                    _hb_thread = threading.Thread(
+                        target=_heartbeat_loop,
+                        args=(status_dir, role, _stop),
+                        daemon=True,
+                    )
+                    _hb_thread.start()
+                    try:
+                        _process_issue(issue, role, args.config, settings, client)
+                    finally:
+                        _stop.set()
+                        _hb_thread.join(timeout=5)
                 else:
                     logger.debug("board_worker[%s]: nothing ready", role)
                 _write_heartbeat(status_dir, role)

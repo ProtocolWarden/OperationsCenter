@@ -183,9 +183,10 @@ done
 ```
 
 IMPORTANT for watcher health classification:
-- Use heartbeat timestamp to confirm a watcher is alive (updated within last 5 minutes = running)
+- Use heartbeat timestamp to confirm a watcher is alive (updated within last 5 minutes = running). EXCEPTION: status="executing" means a task is actively running; use a 90-minute window for this status since long executions update the heartbeat every 60s but blocking subprocess calls between updates can leave it momentarily stale.
 - Use log grep ONLY for exit_code (non-143) and watcher_restart events — do NOT include ERROR/Traceback lines in last_error (those are per-task errors, not watcher crashes)
 - If heartbeat exists and is recent but log shows no exit_code entries → running=true, exit_code=null, consecutive_non143=0, last_error=null
+- If heartbeat status="executing" and timestamp is within 90 minutes → running=true (watcher is blocked waiting for a long-running task subprocess)
 - consecutive_non143: count only watcher_restart events with exit_code != 143 in the SELECTED log file
 
 For each watcher role: running true/false (from heartbeat recency + watch-all-status), exit_code (most recent non-143 watcher_restart in CURRENT log only, null if none), consecutive_non143 (count in current log), last_error (null unless a watcher_restart exit_code is present).

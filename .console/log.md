@@ -3,6 +3,32 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-20 — Watchdog cycle 31: ACTIVE — a969024e executing Stage 5; heartbeat false-positive fixed
+
+**Convergence:** CONVERGENT. a969024e executing (pid 1990156, elapsed 27+ min) — Stage 5 (final verification) in progress. Stages 0–4 all succeeded: observer test scaffold, 29 subprocess-collector tests, 32 log-collector tests, 19 architecture/benchmark tests, 16 artifact-writer tests = 96 tests created. This is the first complete TeamExecutor execution for a969024e after all infra fixes.
+
+**STEP 1:** custodian: all_zero=true ✓ | ghost: 1 event, active=[], fixed=[G1,G4,G5,G7,G8,G10,G12] (7 ghosts fixed!) | flow: 0 | graph: ok | reaudit: dag_executor + team_executor | regressions: 0
+
+**Ghost mass-fix**: G1,G4,G5,G7,G8,G10,G12 all fixed this cycle — significant cleanup, down to 0 active ghosts. Likely from earlier board-unblock re-queuing clearing stale Running states.
+
+**STEP 2 — execution outcomes:**
+- a969024e claimed 01:50 local (05:50 UTC) — workspace prep + rate gate cleared (current=0)
+- Stage 5 (run full test suite, verify acceptance criteria): in-progress (claude pid 2070440, 47s elapsed at cycle start)
+- Stages 0–4 confirmed successful per Stage 5 completion notes
+
+**STEP 2.5 board-unblock:** Nothing applied or skipped (a969024e Running, 2824d46e in R4AI).
+
+**INFRASTRUCTURE FIX applied — board_worker heartbeat thread:**
+- Bug: `_write_heartbeat` only called after `_process_issue` completes; blocking `subprocess.run()` for 30+ min leaves heartbeat 30+ min stale → Haiku false-positive "improve watcher not running"
+- Fix: spawned daemon thread (`_heartbeat_loop`) that writes "executing" heartbeat every 60s while task runs; heartbeat returns to "idle" after task completes
+- Also updated `haiku_collector_prompt.md`: status="executing" + 90-min window → running=true
+- Tests: 15/15 invariant tests pass ✓
+- Deployment: takes effect on next improve watcher restart (after a969024e completes)
+
+**STEP 8:** 8/8 watchers healthy. Improve watcher heartbeat stale (24 min old) is FALSE POSITIVE — watcher (pid 798113) and execute subprocess (pid 1990156) both alive. Fix above resolves this for future cycles.
+
+**Cadence:** ACTIVE (900s) — a969024e Stage 5 in progress; expect completion within 15 min
+
 ## 2026-05-20 — Watchdog cycle 30: ACTIVE — a969024e first clean dispatch attempt; rate gate clear
 
 **Convergence:** WEAKLY-CONVERGENT. Rate gate finally clear (all hourly events expired). a969024e claimed at 01:50:27 local (05:50 UTC) — first attempt where rate gate current=0 at dispatch time. 2824d46e in R4AI queue behind it.
