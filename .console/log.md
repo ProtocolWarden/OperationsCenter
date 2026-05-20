@@ -3,6 +3,25 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-20 — Watchdog cycle 26: ACTIVE — first successful TeamExecutor executor dispatch in flight
+
+**Convergence:** CONVERGENT. 2824d46e claimed at 22:36 EDT and still Running at 22:53 (17 min elapsed) — workspace prep succeeded, rate gate cleared (execution-1 at 21:38 expired from 60-min window at 22:38; current=1 at gate check ~22:46 → dispatched). First TeamExecutor executor invocation since all infra fixes applied. Execution in progress.
+
+**STEP 1:** custodian: all_zero=null (sweep collection issue) | ghost: 1 event, active=[], fixed=[] | flow: 0 | graph: ok | reaudit: dag_executor + team_executor | regressions: 0
+
+**STEP 2.5 board-unblock:**
+- APPLIED: a969024e SELF_MODIFY_REQUEUE (Blocked→R4AI) — 2824d46e was Running, correctly skipped
+- Haiku reported spec consecutive_non143=6 and goal consecutive_non143=5 — CONFIRMED FALSE POSITIVES. No watcher_restart entries exist in either log. Haiku is misreading budget_exhausted/ERROR lines as watcher restart events. Heartbeats confirm both alive.
+
+**STEP 8:** 8/8 watchers healthy (confirmed via heartbeats). Haiku false-positive watcher crash detection is a recurring reliability issue.
+
+**Execution history (22:02–22:53 EDT):**
+- 22:02–22:35: multiple budget_exhausted blocks (rate window current=2)
+- 22:36: 2824d46e claimed — workspace prep with shallow clone (~10 min), executor dispatched at ~22:46 (current=1, passes gate)
+- 22:53: still Running → executor active
+
+**Cadence:** ACTIVE (900s) — monitoring 2824d46e completion; a969024e in R4AI queue
+
 ## 2026-05-20 — Watchdog cycle 25: ACTIVE — infrastructure fixes confirmed; rate gate now sole blocker
 
 **Convergence:** WEAKLY-CONVERGENT. Signal-threading fix (CoreRunner fa5ab8c) and shallow-clone fix (OC 813882b) are confirmed working — no more "signal only works in main thread" or git clone timeout errors in this cycle. The only remaining blocker is `budget_exhausted/global_rate_exceeded (current=2 limit=2)`. The two counted executions (21:38 + 21:49 EDT) expire from the rolling window at 22:38 and 22:49 EDT. First clean end-to-end execution expected at ~22:45–23:00.
