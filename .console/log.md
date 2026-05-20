@@ -3,6 +3,26 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-20 — Watchdog cycle 28: WEAKLY-CONVERGENT — a969024e systematic stage-planner failure; diagnostics improved
+
+**Convergence:** WEAKLY-CONVERGENT. Infrastructure confirmed working (2824d46e executing again). a969024e has now failed 3× with `Expecting value: line 1 column 1 (char 0)` — systematic, not transient. Root cause: `call_agent` returns `""` (empty stdout from claude) for a969024e's stage_planner call; the silent empty-string return masked the actual error.
+
+**STEP 1:** custodian: all_zero=null (sweep failed again — recurring) | ghost: 1 event, active=[], fixed=[G10] | flow: 0 | graph: ok | reaudit: dag_executor + team_executor | regressions: 0
+
+**Ghost G10 fixed** — small positive signal.
+
+**STEP 2.5 board-unblock:** APPLIED: a969024e SELF_MODIFY_REQUEUE (Blocked→R4AI). 2824d46e Running (claimed 00:34 EDT), correctly skipped.
+
+**Fix applied:** TeamExecutor `agent_call._claude_call` (4e1a1c8) now raises RuntimeError with claude's actual stderr when stdout is empty, and handles `is_error=true` in the JSON envelope. Next a969024e failure will show the real claude error instead of JSONDecodeError. Editable install active immediately.
+
+**Current state:**
+- 2824d46e: Running since 00:34 EDT (2nd real TeamExecutor execution)
+- a969024e: Ready for AI (queued, better diagnostics on next attempt)
+
+**STEP 8:** 8/8 watchers healthy.
+
+**Cadence:** ACTIVE (900s) — watching 2824d46e outcome and a969024e next attempt with improved error surfacing
+
 ## 2026-05-20 — Watchdog cycle 27: CONVERGENT — infrastructure end-to-end confirmed working
 
 **Convergence:** CONVERGENT. Full stack working: workspace prep (shallow clone) → rate gate → TeamExecutor dispatch → multi-stage execution. Infrastructure is no longer the blocker.
