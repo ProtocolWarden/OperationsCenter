@@ -142,9 +142,11 @@ Run `git diff --staged` before committing.
 | CRITICAL | 180s | crash loops / graph broken / autonomy failing |
 | DEGRADED | 300s | non-143 crashes / blocked queue unchanged / flow gaps |
 | STALLED | 600s | starvation / closed-loop stagnation / no forward progress |
-| ACTIVE | 900s | direct fixes dispatched / remediation in flight |
-| PARKED_OPERATOR_BLOCKED | 1800s | root cause known, Plane escalation exists, no new evidence |
-| HEALTHY | 3600s | all clean, no starvation signals, all watchers up |
+| ACTIVE | 1800s | direct fix dispatched THIS cycle (autonomy-cycle ran, board_unblock applied, infra fix committed) |
+| PARKED_OPERATOR_BLOCKED | 3600s | root cause known, Plane escalation exists, no new evidence |
+| IDLE | 3600s | ALL: custodian all_zero, ghost active=[], flow gaps=0, regressions=0, running_tasks=[], all watchers healthy, no board_unblock applied, no fixes dispatched this cycle |
+
+**IDLE vs ACTIVE distinction:** Task in-flight but no action taken this cycle → IDLE (not ACTIVE). ACTIVE requires the loop itself to have done something (dispatched autonomy-cycle, applied board_unblock, committed a fix). Watching a task run is IDLE.
 
 Use WORST state observed across all signals. Log chosen cadence and driving signal.
 
