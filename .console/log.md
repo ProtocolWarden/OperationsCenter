@@ -3,6 +3,38 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-20 — Watchdog cycle 36: IDLE — a969024e SUCCEEDED; 2824d46e in-flight; memory false alarm
+
+**Convergence:** CONVERGENT. a969024e completed status=succeeded at 16:28 local (20:28 UTC) — first clean completion in training mode. 5 follow-up tasks spawned. 2824d46e claimed immediately at 16:29.
+
+**STEP 1:** custodian: all_zero=null (8th intermittent cycle — 8da50821 open) | ghost: parse error | flow: parse error | graph: ok | reaudit: empty (resolved!) | regressions: parse error (likely concurrent tool load)
+
+**STEP 2 — a969024e SUCCESS (major milestone):**
+- 15:56–16:28 local (19:56–20:28 UTC), 32 min: **status=succeeded**
+- Follow-up tasks spawned (all in Backlog/R4AI):
+  - bfb289b3: "Add pytest-cov with coverage reporting to CI"
+  - 89191ff5: "Emit JUnit XML from the CI pytest step"
+  - 360cff3a: "Add `slow` and `smoke` pytest markers in CI"
+  - c7df5422: "Enable parallel unit-test execution with pytest-xdist"
+  - ff19d39b: "Add per-test duration reporting and slow-test threshold"
+- 2824d46e: claimed 16:29 local (20:29 UTC), currently in-flight
+
+**STEP 2.5 board-unblock:** Nothing applied — both tasks progressing normally (a969024e Done, 2824d46e In Progress).
+
+**Memory false alarm — Haiku prompt fixed:**
+- Haiku reported memory_free_gb=2.7 — this was the "free" column (raw unused RAM)
+- Actual available memory: 23 GB (free + reclaimable buff/cache = normal Linux)
+- Fixed haiku_collector_prompt.md to extract the "available" column via python3 one-liner
+
+**STEP 8 — watcher health:**
+- improve (798113): ALIVE per ps, running 2824d46e — heartbeat stale (no daemon thread in old watcher, fix a402010 not yet loaded)
+- goal (1770817): ALIVE per ps — Haiku false negative
+- proposer: spawning new campaign specs (pid 3296196, claude-opus generating spec)
+- Executor verifying OC coverage configuration stage (pid 3297702)
+- watchdog: DEAD (persistent, no cascading impact yet)
+
+**Cadence:** IDLE (3600s) — loop took no action; board moving on its own; 2824d46e in-flight
+
 ## 2026-05-20 — Watchdog cycle 35: ACTIVE — a969024e executing in fresh session; 2824d46e "4/6 failed"
 
 **Convergence:** WEAKLY-CONVERGENT. a969024e now in-flight at 19:56 UTC (fresh session, stage_planner fix active). 2824d46e produced real execution result but failure count non-deterministic.
