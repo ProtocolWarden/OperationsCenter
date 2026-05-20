@@ -3,6 +3,34 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-20 — Watchdog cycle 29: ACTIVE — 2824d46e in-flight; a969024e stage-planning resolved
+
+**Convergence:** WEAKLY-CONVERGENT. Key positive signal: a969024e's JSONDecodeError is resolved — both attempts in this cycle hit the OC rate gate (budget_exhausted), which means stage planning SUCCEEDED. The systematic empty-stdout issue (cycles 27–28) is no longer occurring. 2824d46e improving: "4 of 6 stages failed" (cycle 27) → "2 of 5 stages failed" (cycle 28) → currently in-flight (cycle 29).
+
+**STEP 1:** custodian: all_zero=true ✓ (sweep working this cycle) | ghost: 1 event, active=[], fixed=[] | flow: 0 gaps | graph: ok | reaudit: dag_executor + team_executor | regressions: 0
+
+**STEP 2 — execution outcomes since cycle 28:**
+- a969024e (00:33 UTC): JSONDecodeError — final occurrence (last before 4e1a1c8 took effect in new subprocess)
+- 2824d46e (01:00 UTC): `2 of 5 stages failed` — improving (was `4 of 6`)
+- a969024e (01:07 UTC): `budget_exhausted/rate_gate` — stage planning SUCCEEDED ✓ JSONDecodeError resolved
+- a969024e (01:23 UTC): `budget_exhausted/rate_gate` — stage planning SUCCEEDED again ✓
+- 2824d46e (01:24 UTC local = 05:24 UTC): In-flight (execute.main pid 1909998, workspace /tmp/oc-improve-nqgcjpft)
+
+**Rate gate analysis:** Both hourly slots consumed at ~00:25 UTC (a969024e) and ~00:34 UTC (2824d46e). Window clears at ~01:25/01:34 UTC — within 2824d46e's workspace-prep window, so it will dispatch cleanly.
+
+**STEP 2.5 board-unblock:**
+- APPLIED: 2824d46e → R4AI, a969024e → R4AI (Haiku at 05:15 UTC; both immediately claimed)
+- SKIPPED: none
+
+**Classification:**
+- a969024e: temporarily-blocked (rate gate only; stage planning working; re-queues naturally)
+- 2824d46e: infra-blocked (partial stage failures; improving across retries; in-flight now)
+- reaudit dag_executor + team_executor: validation-blocked (persistent, non-critical)
+
+**STEP 8:** 8/8 watchers healthy, all heartbeats fresh.
+
+**Cadence:** ACTIVE (900s) — 2824d46e in-flight; watching for completion outcome
+
 ## 2026-05-20 — Watchdog cycle 28: WEAKLY-CONVERGENT — a969024e systematic stage-planner failure; diagnostics improved
 
 **Convergence:** WEAKLY-CONVERGENT. Infrastructure confirmed working (2824d46e executing again). a969024e has now failed 3× with `Expecting value: line 1 column 1 (char 0)` — systematic, not transient. Root cause: `call_agent` returns `""` (empty stdout from claude) for a969024e's stage_planner call; the silent empty-string return masked the actual error.
