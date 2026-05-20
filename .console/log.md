@@ -3,6 +3,32 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-20 — Watchdog cycle 33: ACTIVE — session-limit failures; propose restarted; custodian task created
+
+**Convergence:** WEAKLY-CONVERGENT. Both tasks failed due to session exhaustion (not task bugs), re-queued by board_unblock. a969024e now executing again (18:34 UTC); next session reset 19:20 UTC (~46 min window — likely tight).
+
+**STEP 1:** custodian: all_zero=null (6th consecutive cycle — parse failure; Plane task 8da50821 created) | ghost: 1 event, active=[], fixed=[] | flow: 0 | graph: ok | reaudit: dag_executor + team_executor | regressions: 0
+
+**STEP 2 — execution outcomes (since cycle 32):**
+- 2824d46e (02:25–02:48 local): `backend_error` — **"You've hit your session limit · resets 5:20am EDT"** — NOT a task failure; session exhausted. Re-queued to R4AI.
+- a969024e (02:49–02:50 local): rate gate hit (current=2, limit=2) after 2824d46e used last slot. Re-queued.
+- a969024e: re-picked at 14:34 local (18:34 UTC) after session reset at 09:20 UTC. Currently in-flight.
+
+**STEP 2.5 board-unblock:** a969024e → R4AI, 2824d46e → R4AI (both applied, SELF_MODIFY_REQUEUE).
+
+**Convergence promotions:**
+- Custodian sweep null (6 cycles) → Plane task **8da50821** created in Backlog: "Fix custodian-sweep --emit parse failure"
+
+**STEP 8 — watcher health:**
+- propose: DEAD (heartbeat stale 12h, 06:36 UTC). **Restarted** — fresh heartbeat 18:37 UTC ✓
+- watchdog: DEAD (heartbeat stale 12h, 06:37 UTC). NOT restarted — would create duplicate watchers for 6 orphaned roles (intake/goal/test/spec/review/improve have no .pid files). Needs coordinated cleanup.
+- spec: running=true, exit_code=1, consecutive_non143=1. **Monitor next cycle** before escalating.
+- 6 orphaned watchers (intake/goal/test/spec/review/improve): functionally running per heartbeats; untracked by .pid files.
+
+**Session limit context:** 2824d46e's "session limit hit" at 02:48 UTC is a scheduling problem, not a task bug. Both tasks eligible once session is fresh. Consider: when failure reason contains "session limit", park (don't re-queue) until reset.
+
+**Cadence:** ACTIVE (1800s) — board_unblock applied this cycle; a969024e executing
+
 ## 2026-05-20 — Watchdog cycle 32: ACTIVE — 2824d46e in-flight; watcher degradation false positive
 
 **Convergence:** CONVERGENT. 2824d46e claimed at 06:25 UTC (~18 min in at cycle start, ~36 min now). a969024e re-queued to R4AI by board_unblock after "3 of 6 stages failed" at 06:24 UTC.
