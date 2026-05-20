@@ -3,6 +3,29 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-20 — Watchdog cycle 35: ACTIVE — a969024e executing in fresh session; 2824d46e "4/6 failed"
+
+**Convergence:** WEAKLY-CONVERGENT. a969024e now in-flight at 19:56 UTC (fresh session, stage_planner fix active). 2824d46e produced real execution result but failure count non-deterministic.
+
+**STEP 1:** custodian: all_zero=null (7th cycle intermittent — 8da50821 exists) | ghost: 0 active | flow: 0 | graph: ok | reaudit: dag_executor + team_executor | regressions: 0
+
+**STEP 2 — execution outcomes (since cycle 34):**
+- a969024e (14:34–14:42 local, 8 min): JSONDecodeError during stage planning — stage_planner fix c681149 addresses this; new subprocess will use fixed code
+- 2824d46e (14:43–15:21 local, 38 min): **"4 of 6 stages failed"** — 3rd real execution, failure count non-deterministic (prior: 4/6, 2/5, now 4/6 again). Workspace and infra working; stage execution quality variable.
+- a969024e (15:22–15:26 local): rate gate hit (current=2); expired after 15:42
+- a969024e (15:56 local = 19:56 UTC): **CLAIMED — executing now**. Fresh session (19:20 UTC reset, 36 min old). Stage_planner fix active. Rate gate clear.
+
+**STEP 2.5 board-unblock:** 2824d46e → R4AI, a969024e → R4AI (both applied).
+
+**STEP 8 — watcher health:**
+- 7/8 watchers running per heartbeats (intake/goal/test/improve/propose/review/spec) ✓
+- watchdog: DEAD (persistent). No other watcher has crashed yet.
+- watch-all-status shows 2/8 running (pid tracking mismatch — false positive, heartbeats authoritative)
+
+**2824d46e convergence note:** Execution outcomes: "4/6 stages failed" → "2/5 stages failed" → "4/6 stages failed". Not improving. The partial successes vary in which stages pass. This suggests non-deterministic AI execution rather than a systematic bug. Consider: after a969024e completes, investigate which stages consistently fail.
+
+**Cadence:** ACTIVE (1800s) — board_unblock applied; a969024e executing in clean window
+
 ## 2026-05-20 — Watchdog cycle 34: ACTIVE — stage_planner JSONDecodeError root cause fixed; 2824d46e in-flight
 
 **Convergence:** WEAKLY-CONVERGENT. Root cause of recurring JSONDecodeError found and fixed. 2824d46e in-flight (18:43 UTC start, ~32 min at cycle time — session limit at 19:20 UTC, will likely hit). a969024e re-queued to R4AI.
