@@ -95,9 +95,11 @@ class WorkspaceManager:
 
         # `git clone <url> .` populates the current directory directly, so the
         # repo root IS the workspace — no extra `repo/` subdir to confuse kodo.
+        # --depth 1 --no-single-branch fetches all branch tips without full history
+        # (measured: shallow clone ~38s vs full clone >120s for large repos).
         proc = subprocess.run(
-            ["git", "clone", request.clone_url, "."],
-            cwd=ws, capture_output=True, text=True, timeout=120,
+            ["git", "clone", "--depth", "1", "--no-single-branch", request.clone_url, "."],
+            cwd=ws, capture_output=True, text=True, timeout=300,
         )
         if proc.returncode != 0:
             raise RuntimeError(
