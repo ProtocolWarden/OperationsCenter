@@ -3,6 +3,25 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-20 — Watchdog cycle 25: ACTIVE — infrastructure fixes confirmed; rate gate now sole blocker
+
+**Convergence:** WEAKLY-CONVERGENT. Signal-threading fix (CoreRunner fa5ab8c) and shallow-clone fix (OC 813882b) are confirmed working — no more "signal only works in main thread" or git clone timeout errors in this cycle. The only remaining blocker is `budget_exhausted/global_rate_exceeded (current=2 limit=2)`. The two counted executions (21:38 + 21:49 EDT) expire from the rolling window at 22:38 and 22:49 EDT. First clean end-to-end execution expected at ~22:45–23:00.
+
+**STEP 1:** custodian: all_zero=true ✓ | ghost: 1 event, active=[], fixed=[] | flow: 0 | graph: ok | reaudit: dag_executor + team_executor | regressions: 0
+
+**STEP 2.5 board-unblock:**
+- APPLIED: 2824d46e SELF_MODIFY_REQUEUE (Blocked→R4AI), a969024e SELF_MODIFY_REQUEUE (Blocked→R4AI)
+- Haiku correctly reported 8/8 watchers running this cycle.
+
+**Execution timeline since cycle 24 fixes:**
+- 22:02: a969024e claimed → workspace prep ran 10 min (clone worked!) → budget_exhausted at 22:12
+- 22:13: 2824d46e claimed → budget_exhausted at 22:18
+- 22:26: a969024e claimed → outcome pending (likely budget_exhausted again; gate clears 22:38)
+
+**STEP 8:** 8/8 watchers healthy. All exit_code=null, consecutive_non143=0.
+
+**Cadence:** ACTIVE (900s) — rate gate clears at 22:38 EDT; monitoring for first clean TeamExecutor completion
+
 ## 2026-05-20 — Watchdog cycle 24: ACTIVE — signal threading + git clone timeout fixed
 
 **Convergence:** ACTIVE. Two new infrastructure bugs surfaced after cycle 23's TeamExecutor `--message` fix unblocked actual execution.
