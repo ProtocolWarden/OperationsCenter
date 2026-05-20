@@ -3,6 +3,34 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-20 — Watchdog cycle 34: ACTIVE — stage_planner JSONDecodeError root cause fixed; 2824d46e in-flight
+
+**Convergence:** WEAKLY-CONVERGENT. Root cause of recurring JSONDecodeError found and fixed. 2824d46e in-flight (18:43 UTC start, ~32 min at cycle time — session limit at 19:20 UTC, will likely hit). a969024e re-queued to R4AI.
+
+**STEP 1:** custodian: all_zero=true ✓ (recovered after 6-cycle null streak) | ghost: 1 event, active=[], fixed=[] | flow: 0 | graph: ok | reaudit: dag_executor + team_executor | regressions: 0
+
+**STEP 2 — execution outcomes (since cycle 33):**
+- a969024e (18:34–18:42 UTC, 8 min): `backend_error reason=Expecting value: line 1 column 1 (char 0)` — JSONDecodeError during stage planning. Claude returned plain-text session limit message (not JSON envelope), _claude_call silently returned it raw, stage_planner failed.
+- 2824d46e: claimed 18:43 UTC, currently in-flight (~32 min elapsed). Session limit at 19:20 UTC — outcome uncertain.
+
+**INFRASTRUCTURE FIX — TeamExecutor stage_planner.py (commit c681149):**
+- Bug: `plan_stages()` line 49 `json.loads(raw_text)` uncaught; when claude outputs plain text (session limit message, bare errors), `_claude_call` returns it raw → JSONDecodeError with no context
+- Fix: wrapped in `try/except json.JSONDecodeError` → raises `RuntimeError("Stage planner received non-JSON from agent (session limit or error): <first 300 chars>")` — failure reason now visible in board_worker blocked comments
+- Tests: 7/7 stage_planner tests pass ✓
+- Takes effect on next execute.main subprocess spawn (editable install)
+
+**STEP 2.5 board-unblock:** a969024e → R4AI (applied).
+
+**STEP 8 — watcher health:**
+- improve: bash wrapper (798077) ALIVE; Python board_worker running 2824d46e; heartbeat stale (no daemon thread in old watcher)
+- watchdog: DEAD (12+ hours stale). Still deferred — restart risks duplicate orphaned watchers.
+- propose: running ✓ (restarted cycle 33, healthy)
+- spec: exit_code=1 from cycle 33 CLEARED — consecutive_non143=0, no escalation needed.
+
+**Session limit pattern:** a969024e fails with session limit / non-JSON when the session is heavily depleted. After stage_planner fix, future failures will show `"Stage planner received non-JSON from agent (session limit or error): You've hit your session limit..."` — clear signal to classify as scheduling issue, not bug.
+
+**Cadence:** ACTIVE (1800s) — infra fix committed; board_unblock applied; 2824d46e in-flight
+
 ## 2026-05-20 — Watchdog cycle 33: ACTIVE — session-limit failures; propose restarted; custodian task created
 
 **Convergence:** WEAKLY-CONVERGENT. Both tasks failed due to session exhaustion (not task bugs), re-queued by board_unblock. a969024e now executing again (18:34 UTC); next session reset 19:20 UTC (~46 min window — likely tight).
