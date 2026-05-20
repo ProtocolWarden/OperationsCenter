@@ -3,6 +3,30 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-20 — Watchdog cycle 23: ACTIVE — TeamExecutor --message bug root-caused and fixed
+
+**Convergence:** NON-CONVERGENT → ACTIVE. Root cause of all backend_error failures on 2824d46e and a969024e identified and resolved. TeamExecutor agent_call.py/worker.py invoked `claude --message <prompt>` (deprecated in claude CLI v2.x). claude 2.1.145 exits immediately with empty stdout → `stage_planner.json.loads("")` raises JSONDecodeError → `TeamExecutorRunner` returns `error_summary="Expecting value: line 1 column 1 (char 0)"` → board_worker logs `category=backend_error`. All 8-9 min improve runs were failing in 345ms at the coordinator layer. Fix: replaced `--message` with `-p` + positional prompt arg. Committed to TeamExecutor main (ee5c281), 108 tests pass, editable install active immediately.
+
+**STEP 1:** custodian: all_zero=null (timeout) | ghost: 1 event, active=[], fixed=[G10] | flow: 0 | graph: ok | reaudit: dag_executor + team_executor | regressions: 0
+**STEP 2.5 board-unblock:** APPLIED: 2824d46e + a969024e SELF_MODIFY_REQUEUE (3rd consecutive cycle — closed-loop stagnation confirmed).
+**Actions:** Fixed TeamExecutor (ee5c281). Re-queued 2824d46e and a969024e to R4AI with comment.
+**Cadence:** ACTIVE (900s) — TeamExecutor fix live, monitoring first clean improve run
+
+## 2026-05-20 — Watchdog cycle 22: ACTIVE — board_unblock re-queued both tasks; rate window reset
+
+**Convergence:** WEAKLY-CONVERGENT. board_unblock correctly fired SELF_MODIFY_REQUEUE on both tasks (Blocked→R4AI) — cycle 21 label cleanup working. Tasks got blocked again by budget_exhausted (watcher picked up before hourly window reset). At 00:32 UTC hourly window reset; improve watcher picked them up and they executed — but hit backend_error (TeamExecutor --message bug, not yet found). board_unblock re-queued again this cycle.
+**STEP 1:** custodian: all_zero=true ✓ | ghost: 1 event, active=[], fixed=[] | flow: 0 | graph: ok | reaudit: dag_executor + team_executor | regressions: 0
+**STEP 8:** 8/8 healthy, spec false positive resolved.
+**Cadence:** ACTIVE (900s)
+
+## 2026-05-20 — Watchdog cycle 21: ACTIVE — budget_exhausted rate-limit block; executor labels stripped; re-queued
+
+**Convergence:** WEAKLY-CONVERGENT. Infrastructure fixes from cycles 19-20 working (workspace prep succeeds). Tasks executed in new improve watcher session but hit `budget_exhausted/global_rate_exceeded` (hourly limit=2). Old executor labels (SIGKILL, exit-code:0) blocked board_unblock Rule 4. Stripped labels and re-queued both via PlaneClient direct API.
+**STEP 1:** custodian: all_zero=true ✓ | ghost: 1 event, active=[], fixed=[] | flow: 0 | graph: ok | reaudit: dag_executor + team_executor | regressions: 0
+**STEP 8:** 8/8 healthy. Spec consecutive_non143=7 confirmed false positive (Haiku reading old session log).
+**Actions:** Stripped old executor labels from 2824d46e and a969024e. Re-queued both to R4AI.
+**Cadence:** ACTIVE (900s)
+
 ## 2026-05-19 — Watchdog cycle 20: ACTIVE — watcher restart; board_worker fix now live; re-queued
 
 **Convergence:** ACTIVE. Two root causes resolved this cycle:
