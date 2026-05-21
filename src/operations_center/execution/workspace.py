@@ -495,7 +495,5 @@ class WorkspaceManager:
                 (proc.stderr or proc.stdout).strip()[:200],
             )
             return
-        logger.info(
-            "WorkspaceManager: bootstrapped venv at %s/%s for %s",
-            ws, venv_dir, request.repo_key,
-        )
+        logger.info("WorkspaceManager: bootstrapped venv at %s/%s for %s",
+                    ws, venv_dir, request.repo_key)

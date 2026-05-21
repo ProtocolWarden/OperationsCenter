@@ -1,0 +1,39 @@
+# OperationsCenter — ContextLifecycleProtocol config
+clp_version: "0.1"
+repo: "OperationsCenter"
+
+guard:
+  require_capsule: false    # set true to enforce capsule presence for all tool calls
+  enforce_lease: true
+  capsule_path: ".context/active/"
+  checkpoint_path: ".context/checkpoints/"
+  handoff_path: ".context/handoffs/"
+
+loop:
+  relaunch_command: "python scripts/watchdog_loop.py"
+  relaunch_args: ["--config", ".context/config.yaml"]
+  max_cycle_minutes: 60
+  checkpoint_on_stop: true
+
+workers:
+  - id: "investigation-worker"
+    task: "bounded investigation of a failing invariant or blocker"
+    max_minutes: 30
+    max_tool_calls: 75
+    allowed_paths:
+      - ".context/"
+      - ".console/"
+      - "src/"
+      - "tests/"
+    forbidden_paths:
+      - ".console/tmp/"
+      - ".context/tmp/"
+    allowed_subagents: 1
+    mutation_policy: "write_allowed"
+
+watchers:
+  - id: "invariant-watcher"
+    description: "watches for failing invariants or execution boundary violations"
+    watch_path: ".console/"
+    trigger_on: "failure"
+    dispatch_worker: "investigation-worker"

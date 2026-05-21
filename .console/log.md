@@ -3,6 +3,22 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-21 — Custodian violation fixes (pre-existing)
+
+**C29:** workspace.py was 501 lines. Condensed logger.info call to bring under limit.
+**DC7:** Three orphan spec docs in docs/specs/ were not linked from docs/README.md. Linked them.
+Neither violation was introduced by the context-lifecycle branch — both were pre-existing on main.
+
+## 2026-05-21 — ContextLifecycleProtocol Phase 3 integration
+
+**Decision:** Added `.context/` cognition surface and ContextGuard Claude Code hooks.
+
+OC now has bounded, resumable cognition infrastructure: checkpoint-driven watchdog lifecycle, investigation capsule templates, worker handoff templates, and ContextGuard enforcement (lease expiry, forbidden paths, subagent budget, context_risk flags). Orchestrator lifecycle instructions added to CLAUDE.md.
+
+**Why:** Watchdog loops were functioning as immortal cognition sinks — runaway context growth, instruction fade-out, increasing token inefficiency. This formalizes checkpoint-driven operation so OC state lives in artifacts, not conversation history.
+
+**Branch:** feat/context-lifecycle
+
 ## 2026-05-21 — Watchdog cycle 41: ACTIVE — 2824d46e DONE; goal watcher died; restarted
 
 **Convergence:** WEAKLY-CONVERGENT → IMPROVING. 2824d46e is **DONE** (completed after 10+ cycles). All 5 a969024e follow-up tasks (bfb289b3, 89191ff5, 360cff3a, c7df5422, ff19d39b) moved to Backlog via board_unblock cycles 40-41. Goal watcher died same pattern as improve (old-session orphan, died within ~60s of claim after rate gate blocks). Restarted, healthy at 01:31 UTC.

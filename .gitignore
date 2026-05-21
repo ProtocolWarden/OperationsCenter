@@ -44,3 +44,9 @@ scripts/tmp_*.py
 # tracked example template; real bindings (which name specific private
 # managed repos) live untracked under config/managed_repos/local/.
 config/managed_repos/local/
+
+# ContextLifecycleProtocol scratch state
+.context/tmp/
+.context/active/*.lock
+.context/leases/*.live
+.context/leases/*.pid
