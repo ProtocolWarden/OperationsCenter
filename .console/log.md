@@ -1,5 +1,95 @@
 # Log
 
+## OC Platform Watchdog Cycle — 2026-05-21 11:41 UTC (Cycle 7)
+
+- Lock owner: pid=51145 hostname=dev-latitudee7470 (acquired fresh; prior DEGRADED cycle expired)
+- Branch / commit: main @ 6d9e942
+- Health state: ACTIVE
+- Next cadence: 900s — infrastructure restart + board cleanup performed this cycle
+- Plane status: DOWN at cycle start (stopped ~00:22 UTC); restarted via plane-up at 07:44 UTC ✓
+- PlatformDeployment / SwitchBoard status: DOWN at cycle start; SwitchBoard restarted via compose ✓
+- Watchers: 0/8 at cycle start → 8/8 running post-restart ✓
+
+### STEP 0 — Preflight
+- All 16 repos: already up to date (ff-only pull)
+- Plane: unreachable at cycle start; restarted → reachable (http://localhost:8080)
+- SwitchBoard: unreachable at cycle start; restarted → ok (selector_ready=True, uptime=2.8s)
+- Invalid crash-looping `watch --role all` process (pid 58995) terminated (my mistaken command; not a watcher crash)
+
+### STEP 1 findings
+- graph-doctor: ✓ OK — 11 nodes / 12 edges / graph_built=True
+- ghost-audit: 1 G10 (b67bc0e0 "Fix lint regression" state=Cancelled, **status=fixed**) — previously cycling, now in terminal state
+- flow-audit: 0 open gaps; F8 partial (persistent, non-critical)
+- reaudit-check: exit 1 — DAGExecutor + TeamExecutor (persistent, CxRP v0.3.1, non-critical)
+- regression-check: 0 findings ✓
+- custodian-sweep: 7 repos swept; all delta=0 ✓ (OperationsCenter total_findings=2 but delta=0)
+
+### STEP 1 executor failure investigation
+- dmesg: no OOM events found
+- journalctl: no killed/OOM events found
+- free: 31Gi total / 5.7Gi used / 25Gi available — memory not the cause
+- kodo-stderr logs: none found
+- SIGKILL root cause: still unknown (no new evidence)
+
+### STEP 2 triage
+- 0 actions (board already in clean state at scan time)
+
+### STEP 2.5 board-unblock
+- Rule 3 IMPROVE_UNBLOCK applied: multiple Blocked→Backlog transitions (stale >4h, platform was down 7h)
+- Full task list: all remaining Blocked tasks moved to Backlog (verified 0 actions on second dry-run)
+
+### STEP 3 — Convergence analysis
+- Campaign 10c50210 status change: ALL tasks now in terminal state
+  - ShippingForm (2b5ff37e): Cancelled (was Blocked/SIGKILL'd; cancelled by Rule 1 per SIGKILL retry count)
+  - Phase-gated test/improve tasks: 3fd02e75, 60390297, 6e32031c, d126bc51 → all Cancelled
+  - 8871f757 (Fix ruff violations): Cancelled; 2824d46e (Restore test signal coverage): Done
+  - a969024e (Improve test signal visibility): Done; b67bc0e0 (Fix lint regression): Cancelled
+- Backend Card Axis Expansion arc: ALL implementation tasks cancelled → arc needs operator restart with new strategy
+- No starvation detected (0 Blocked, 0 R4AI; watchers just restarted)
+- No closed-loop stagnation (major state change this cycle: full infrastructure restart)
+- No automation self-deception (platform was genuinely down)
+- Behavioral convergence: ACTIVE → CONVERGENT (platform restored to clean state)
+
+### STEP 4 — Convergence promotion
+- No new loop-only judgment patterns to promote (all transitions were clean tool-driven actions)
+
+### STEP 5/6 — Execution gate
+- No direct fixes dispatched (no audit findings requiring code changes)
+- Campaign restart not dispatched (operator decision required for new strategy on Backend Card Axis Expansion arc)
+
+### STEP 7 — Invariant tests
+- pytest tests/unit/er000_phase0_golden/ -q: 15 passed ✓
+
+### STEP 8 — Watcher health
+- 8/8 watchers running; all healthy; no non-143 exits in current session logs
+- Previous watcher logs (ending 00:21 UTC): all showed clean polling; stopped when Plane went down at 00:22
+- exit_code=2 in watch-all/20260521T074525_all.log: my mistaken `watch --role all` command (invalid role); process terminated ✓
+
+### Blocked work classification
+- Campaign 10c50210: structurally-stalled (all tasks Cancelled; arc needs operator restart)
+- reaudit DAGExecutor+TeamExecutor: validation-blocked (CxRP v0.3.1, persistent, non-critical)
+- kodo SIGKILL root cause: operator-investigation (no new evidence; no affected tasks remaining)
+
+### Behavioral convergence: ACTIVE (infrastructure restored)
+- Platform operational: Plane + SwitchBoard + 8 watchers all up ✓
+- Board clean: 0 Blocked, 0 R4AI, 59 Backlog, 13 Done, 25 Cancelled ✓
+- All prior cycle fixes holding (SIGKILL guard, F541 fix) ✓
+- G10 pattern (b67bc0e0): resolved — task Cancelled ✓
+- Campaign cleanup: Backend Card Axis Expansion arc fully cancelled; awaiting operator restart
+
+### Operator-blocked state: no
+### Parked state: no
+### Known open issues status:
+- 9c7f4bb9 (kodo SIGKILL root cause): Still unknown. All affected tasks now Cancelled. No new evidence this cycle.
+- Campaign 10c50210: ShippingForm Cancelled. All phase-gated tasks Cancelled. Arc needs operator restart.
+
+### Convergence maturity metrics
+- loop_only_judgments_per_cycle: 0
+- manual_inference_events: 0
+- watcher_owned_recovery_rate: N/A (no crashes)
+- automatic_queue_heal_rate: 1.0 (all stale Blocked tasks moved to Backlog)
+- operator_escalation_rate: 0.0
+
 ## 2026-05-21 — Add --dangerously-skip-permissions to controller session spawn
 
 claude -p without this flag blocks tool calls that need interactive approval.
