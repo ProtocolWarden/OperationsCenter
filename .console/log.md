@@ -1,5 +1,11 @@
 # Log
 
+## 2026-05-21 — Sync ContextGuard hook fixes from CLP
+
+Synced updated pre_tool_use.sh and stop.sh from ContextLifecycleProtocol adapter.
+Fixes: allowed_paths whitelist enforcement, malformed capsule detection, subagent_heavy
+warn, checkpoint_stale block, reload_scope_too_large warn, session-aware stop detection.
+
 ## 2026-05-21 — Add closing fence to console-context block
 
 Added <!-- /console-context --> end marker so OperatorConsole only replaces its

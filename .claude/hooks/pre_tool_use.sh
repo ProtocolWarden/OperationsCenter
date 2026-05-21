@@ -11,6 +11,11 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 CONFIG_FILE="${REPO_ROOT}/.context/config.yaml"
 
+# --- Session marker (created on first tool call; stop.sh uses it to detect fresh checkpoints) ---
+_SESSION_HASH="$(echo "$REPO_ROOT" | cksum | cut -d' ' -f1)"
+SESSION_MARKER="/tmp/clp_session_${_SESSION_HASH}"
+[[ -f "$SESSION_MARKER" ]] || touch "$SESSION_MARKER" 2>/dev/null || true
+
 # --- Read hook input ---
 INPUT="$(cat)"
 TOOL_NAME="$(echo "$INPUT" | jq -r '.tool_name // ""')"
@@ -103,11 +108,27 @@ warn() {
   echo "ContextGuard warning: $1" >&2
 }
 
-# --- Check: require_capsule ---
+# --- Check: require_capsule (+ malformed YAML detection) ---
 if [[ "$REQUIRE_CAPSULE" == "true" ]]; then
   ACTIVE_CAPSULE="$(find_active_capsule)"
   if [[ -z "$ACTIVE_CAPSULE" ]]; then
     block "No active capsule found in ${CAPSULE_PATH}. Create or load an InvestigationCapsule before proceeding."
+  else
+    # Validate capsule is parseable YAML with required identity fields
+    CAPSULE_VALID=$(python3 -c "
+try:
+    import yaml
+    with open('${ACTIVE_CAPSULE}') as f:
+        d = yaml.safe_load(f)
+    required = ['capsule_id', 'schema_version', 'status']
+    missing = [k for k in required if not d.get(k)]
+    print('ok' if not missing else 'missing:' + ','.join(missing))
+except Exception as e:
+    print('malformed:' + str(e)[:80])
+" 2>/dev/null || echo "unreadable")
+    if [[ "$CAPSULE_VALID" != "ok" ]]; then
+      block "Active capsule is invalid (${CAPSULE_VALID}). Fix or remove ${ACTIVE_CAPSULE} before proceeding."
+    fi
   fi
 fi
 
@@ -155,6 +176,32 @@ except Exception:
             block "Path '${TARGET_PATH}' is forbidden by active worker scope (matches '${forbidden_path}')."
           fi
         done <<< "$FORBIDDEN"
+
+        # Enforce allowed_paths whitelist — if non-empty, path must match at least one entry
+        ALLOWED=$(python3 -c "
+try:
+    import yaml
+    with open('${ACTIVE_HANDOFF}') as f:
+        d = yaml.safe_load(f)
+    allowed = d.get('worker_scope', {}).get('allowed_paths', []) or []
+    for p in allowed:
+        print(p)
+except Exception:
+    pass
+" 2>/dev/null || true)
+
+        if [[ -n "$ALLOWED" ]]; then
+          PATH_ALLOWED=false
+          while IFS= read -r allowed_path; do
+            if [[ -n "$allowed_path" && "$TARGET_PATH" == "$allowed_path"* ]]; then
+              PATH_ALLOWED=true
+              break
+            fi
+          done <<< "$ALLOWED"
+          if [[ "$PATH_ALLOWED" == "false" ]]; then
+            block "Path '${TARGET_PATH}' is outside worker scope allowed_paths. Permitted prefixes: $(echo "$ALLOWED" | tr '\n' ' ')"
+          fi
+        fi
 
         MUTATION_POLICY=$(python3 -c "
 try:
@@ -215,28 +262,56 @@ except Exception:
       if [[ "$HIGH_PARALLELISM" == "true" ]]; then
         block "context_risk.high_parallelism is true. Deny additional worker spawning until resolved."
       fi
-    fi
-  fi
-fi
 
-# --- context_risk: long_lived_session warning ---
-CHECKPOINT_DIR="${REPO_ROOT}/${CHECKPOINT_PATH}"
-if [[ -d "$CHECKPOINT_DIR" ]]; then
-  LATEST_CHECKPOINT="$(find "$CHECKPOINT_DIR" -name "*.yaml" -not -name ".gitkeep" | sort | tail -1)"
-  if [[ -n "$LATEST_CHECKPOINT" ]]; then
-    LONG_LIVED=$(python3 -c "
+      SUBAGENT_HEAVY=$(python3 -c "
 try:
     import yaml
     with open('${LATEST_CHECKPOINT}') as f:
         d = yaml.safe_load(f)
     risk = d.get('orchestrator', {}).get('context_risk', {})
-    print(str(risk.get('long_lived_session', False)).lower())
+    print(str(risk.get('subagent_heavy', False)).lower())
 except Exception:
     print('false')
 " 2>/dev/null || echo "false")
 
-    if [[ "$LONG_LIVED" == "true" ]]; then
-      warn "context_risk.long_lived_session is true. Consider compacting before continuing."
+      if [[ "$SUBAGENT_HEAVY" == "true" ]]; then
+        warn "context_risk.subagent_heavy is true. Reduce subagent budget and avoid Explore escalation."
+      fi
+    fi
+  fi
+fi
+
+# --- context_risk flags from latest checkpoint ---
+CHECKPOINT_DIR="${REPO_ROOT}/${CHECKPOINT_PATH}"
+if [[ -d "$CHECKPOINT_DIR" ]]; then
+  LATEST_CHECKPOINT="$(find "$CHECKPOINT_DIR" -name "*.yaml" -not -name ".gitkeep" | sort | tail -1)"
+  if [[ -n "$LATEST_CHECKPOINT" ]]; then
+    _RISK=$(python3 -c "
+try:
+    import yaml
+    with open('${LATEST_CHECKPOINT}') as f:
+        d = yaml.safe_load(f)
+    risk = d.get('orchestrator', {}).get('context_risk', {})
+    import json; print(json.dumps(risk))
+except Exception:
+    print('{}')
+" 2>/dev/null || echo "{}")
+
+    # long_lived_session — warn: compact before continuing
+    if echo "$_RISK" | python3 -c "import sys,json; r=json.load(sys.stdin); exit(0 if r.get('long_lived_session') else 1)" 2>/dev/null; then
+      warn "context_risk.long_lived_session is true. Compact context before continuing."
+    fi
+
+    # checkpoint_stale — block: require refresh before dispatch
+    if echo "$_RISK" | python3 -c "import sys,json; r=json.load(sys.stdin); exit(0 if r.get('checkpoint_stale') else 1)" 2>/dev/null; then
+      block "context_risk.checkpoint_stale is true. Write a fresh LoopCheckpoint before dispatching."
+    fi
+
+    # reload_scope_too_large — warn on expensive read operations
+    if [[ "$TOOL_NAME" == "Read" || "$TOOL_NAME" == "Bash" || "$TOOL_NAME" == "Glob" ]]; then
+      if echo "$_RISK" | python3 -c "import sys,json; r=json.load(sys.stdin); exit(0 if r.get('reload_scope_too_large') else 1)" 2>/dev/null; then
+        warn "context_risk.reload_scope_too_large is true. Prune warm/cold context before broad reads."
+      fi
     fi
   fi
 fi
