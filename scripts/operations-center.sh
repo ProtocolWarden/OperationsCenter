@@ -160,6 +160,9 @@ Usage:
   scripts/operations-center.sh watchdog-loop-acquire
   scripts/operations-center.sh watchdog-loop-release
   scripts/operations-center.sh watchdog-loop-status
+  scripts/operations-center.sh loop-start
+  scripts/operations-center.sh loop-stop
+  scripts/operations-center.sh loop-status
 
 Environment:
   OPERATIONS_CENTER_CONFIG   Override config path (default: ${CONFIG_PATH})
@@ -230,6 +233,26 @@ check_watchdog_loop_lock() {
     cat "${WATCHDOG_LOOP_LOCK}"
     return 2
   fi
+}
+
+LOOP_CONTROLLER_LOCK="${LOG_DIR}/loop_controller.lock"
+LOOP_STOP_FLAG="${LOG_DIR}/loop_stop.flag"
+LOOP_LOG="${LOG_DIR}/loop_controller.log"
+
+loop_start() {
+  rm -f "${LOOP_STOP_FLAG}"
+  nohup python3 "${ROOT_DIR}/tools/loop/controller.py" > /dev/null 2>&1 &
+  sleep 1
+  python3 "${ROOT_DIR}/tools/loop/controller.py" --status
+  echo "Log: ${LOOP_LOG}"
+}
+
+loop_stop() {
+  python3 "${ROOT_DIR}/tools/loop/controller.py" --stop
+}
+
+loop_status() {
+  python3 "${ROOT_DIR}/tools/loop/controller.py" --status
 }
 
 watch_pid_file() {
@@ -561,7 +584,7 @@ shift || true
 cd "${ROOT_DIR}"
 # Skip janitor for read-only / stop commands — they're fast and don't need it.
 case "${cmd}" in
-  watch-all-status|dev-status|watch-all-stop|watch-stop|watchdog-stop|plane-status|providers-status|doctor|status) ;;
+  watch-all-status|dev-status|watch-all-stop|watch-stop|watchdog-stop|plane-status|providers-status|doctor|status|loop-start|loop-stop|loop-status) ;;
   *) run_janitor ;;
 esac
 
@@ -876,6 +899,15 @@ PYEOF
     ;;
   watchdog-loop-status)
     check_watchdog_loop_lock
+    ;;
+  loop-start)
+    loop_start
+    ;;
+  loop-stop)
+    loop_stop
+    ;;
+  loop-status)
+    loop_status
     ;;
   *)
     usage
