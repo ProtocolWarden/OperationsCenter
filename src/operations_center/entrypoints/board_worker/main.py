@@ -430,6 +430,28 @@ def _process_issue(issue: dict, role: str, config_path: Path, settings, client) 
         config_file = tmp / "ops.yaml"
         shutil.copy(config_path, config_file)
 
+        # CI branch: when the proposal carries ContinuousImprovementSpec and
+        # the task is an improve_campaign, delegate to the refinement loop.
+        ci_spec_raw = bundle.get("proposal", {}).get("continuous_improvement")
+        if ci_spec_raw and execution_mode == "improve_campaign":
+            return _run_ci_loop(
+                ci_spec_raw=ci_spec_raw,
+                client=client,
+                issue=issue,
+                role=role,
+                task_kind=task_kind,
+                task_id=task_id,
+                repo_key=repo_key,
+                settings=settings,
+                python=python,
+                oc_root=oc_root,
+                env=env,
+                bundle_file=bundle_file,
+                config_file=config_file,
+                tmp=tmp,
+                short_id=short_id,
+            )
+
         workspace = tmp / "workspace"
         workspace.mkdir()
         result_file = tmp / "result.json"
@@ -554,6 +576,156 @@ def _process_issue(issue: dict, role: str, config_path: Path, settings, client) 
 
 
 # ── Outcome handlers ──────────────────────────────────────────────────────────
+
+def _run_ci_loop(
+    *,
+    ci_spec_raw: dict,
+    client,
+    issue: dict,
+    role: str,
+    task_kind: str,
+    task_id: str,
+    repo_key: str,
+    settings,
+    python: str,
+    oc_root: Path,
+    env: dict,
+    bundle_file: Path,
+    config_file: Path,
+    tmp: Path,
+    short_id: str,
+) -> bool:
+    """
+    Drive a ContinuousImprovementSpec refinement loop for an improve_campaign task.
+
+    Builds a CiRunContext, dispatches the CiCoordinator, and maps the
+    final RefinementStatus to _handle_success / _handle_failure.
+    Returns True on ACCEPTED, False otherwise.
+    """
+    from operations_center.contracts.ci import ContinuousImprovementSpec
+    from operations_center.contracts.enums import RefinementStatus
+    from operations_center.execution.ci_coordinator import CiCoordinator, CiRunContext
+    from operations_center.execution.ci_store import CiStore
+    from pydantic import ValidationError
+
+    try:
+        ci_spec = ContinuousImprovementSpec.model_validate(ci_spec_raw)
+    except (ValidationError, Exception) as exc:
+        logger.error(
+            "board_worker[%s]: task_id=%s invalid ContinuousImprovementSpec — %s",
+            role, task_id, exc,
+        )
+        _fail_task(client, task_id, role, f"invalid continuous_improvement spec: {exc}")
+        return False
+
+    repo_path = Path(_repo_local_path(settings, repo_key))
+    lineage_id = f"lin-{task_id[:12]}"
+    validation_commands = list(
+        ci_spec.evaluation.evaluation_command
+        and [] or []
+    )
+    # Prefer validation_commands from the repo config if available
+    repo_cfg = settings.repos.get(repo_key)
+    if repo_cfg and hasattr(repo_cfg, "validation_commands"):
+        validation_commands = list(getattr(repo_cfg, "validation_commands", []))
+
+    store_path = oc_root / "state" / "ci_lineage.json"
+    ctx = CiRunContext(
+        proposal_id=bundle_file.parent.name,  # tmp dir name as ephemeral ID
+        repo_path=repo_path,
+        lineage_id=lineage_id,
+        spec=ci_spec,
+        validation_commands=validation_commands,
+        store_path=store_path,
+        eval_output_dir=tmp / "eval_output",
+        timeout_seconds=120,
+    )
+
+    last_attempt_result: dict = {}
+
+    def execute(*, attempt_number: int, strategy, proposal_id: str):
+        attempt_workspace = tmp / f"workspace-ci-{attempt_number}"
+        attempt_workspace.mkdir(exist_ok=True)
+        attempt_result_file = tmp / f"result-ci-{attempt_number}.json"
+
+        exec_cmd = [
+            python, "-m", "operations_center.entrypoints.execute.main",
+            "--config",         str(config_file),
+            "--bundle",         str(bundle_file),
+            "--workspace-path", str(attempt_workspace),
+            "--task-branch",    f"{role}/{short_id}-ci{attempt_number}",
+            "--output",         str(attempt_result_file),
+            "--source",         f"board_worker_{role}_ci_{attempt_number}",
+        ]
+
+        logger.info(
+            "board_worker[%s]: CI attempt %d for task_id=%s",
+            role, attempt_number, task_id,
+        )
+        subprocess.run(exec_cmd, cwd=oc_root, env=env, capture_output=True, text=True)
+
+        run_id = f"ci-{task_id[:8]}-attempt-{attempt_number}"
+        changed_files: list[str] = []
+        success = False
+
+        if attempt_result_file.exists():
+            try:
+                attempt_outcome = json.loads(attempt_result_file.read_text(encoding="utf-8"))
+                r = attempt_outcome.get("result", {})
+                success = r.get("success", False)
+                run_id = r.get("run_id", run_id)
+                changed_files = [f["path"] for f in r.get("changed_files", []) if "path" in f]
+                last_attempt_result.update(r)
+            except Exception as exc:
+                logger.warning(
+                    "board_worker[%s]: CI attempt %d result parse failed — %s",
+                    role, attempt_number, exc,
+                )
+
+        return run_id, changed_files, success
+
+    try:
+        coordinator = CiCoordinator(store=CiStore(path=store_path))
+        ci_result = coordinator.run(ctx, execute)
+    except Exception as exc:
+        logger.error(
+            "board_worker[%s]: CI coordinator failed task_id=%s — %s",
+            role, task_id, exc,
+        )
+        _fail_task(client, task_id, role, f"CI coordinator error: {exc}")
+        return False
+
+    logger.info(
+        "board_worker[%s]: CI loop done task_id=%s status=%s attempts=%d",
+        role, task_id, ci_result.final_status.value, ci_result.total_attempts,
+    )
+
+    _add_label(client, issue, f"ci-status: {ci_result.final_status.value}")
+    _add_label(client, issue, f"ci-attempts: {ci_result.total_attempts}")
+
+    if ci_result.final_status == RefinementStatus.ACCEPTED:
+        _handle_success(client, issue, role, task_kind, False, settings)
+        return True
+
+    if ci_result.final_status == RefinementStatus.ESCALATED:
+        _fail_task(
+            client, task_id, role,
+            f"CI loop escalated after {ci_result.total_attempts} attempt(s) — "
+            "inconclusive outcome requires operator decision",
+        )
+        return False
+
+    # BUDGET_EXHAUSTED or ABANDONED
+    failure_result = dict(last_attempt_result)
+    failure_result.setdefault("status", ci_result.final_status.value)
+    failure_result.setdefault(
+        "failure_reason",
+        f"CI refinement loop ended with status={ci_result.final_status.value} "
+        f"after {ci_result.total_attempts} attempt(s)",
+    )
+    _handle_failure(client, issue, role, task_kind, failure_result, settings)
+    return False
+
 
 def _fail_task(client, task_id: str, role: str, reason: str) -> None:
     try:
