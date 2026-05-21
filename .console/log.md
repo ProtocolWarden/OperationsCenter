@@ -1,5 +1,14 @@
 # Log
 
+## 2026-05-21 — Record operator decisions in CI schema design (§12)
+
+All 5 open questions resolved: OC owns evaluation command derivation; guardrails
+are closed enum (EnforcedGuardrail) + advisory custom_checks; lineage is CLP-native
+in .context/capsules/ indexed by OC via OcLineageIndexEntry, archived by Warehouse;
+CI spec stays OC-internal (not in CxRP wire); no new ExecutionMode unless routing
+diverges. Updated design.md §12 and draft_schema.py with EvaluationCommandSource
+enum, OcLineageIndexEntry type, and closed EnforcedGuardrail enum.
+
 ## 2026-05-21 — Fix Custodian DC7/K1/OC8 in CI design doc
 
 Linked design.md from docs/README.md; unquoted worker_scope field name.

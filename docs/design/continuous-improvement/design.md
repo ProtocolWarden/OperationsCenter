@@ -1,6 +1,6 @@
 # Continuous Improvement Schema Extension — Design
 
-**Status:** DRAFT  
+**Status:** DRAFT — decisions recorded (2026-05-21); pending implementation  
 **Date:** 2026-05-21  
 **Scope:** Platform work-item schema extension  
 **Primary contract:** `OcPlanningProposal` + new `ContinuousImprovementSpec` block  
@@ -623,19 +623,61 @@ continuous_improvement:
 
 ---
 
-## 12. Open Questions (for operator decision)
+## 12. Decisions
 
-These require explicit decisions before production implementation:
+**Status:** All five questions resolved (2026-05-21). Schema updated in `draft_schema.py`.
 
-1. **Evaluation command ownership:** Who writes and validates the `evaluation_command`? Is it provided by the Proposer, by OC, or derived from validation_profile?
+---
 
-2. **Guardrail extensibility:** Should guardrails be a closed enum or open strings? Open strings are flexible but reduce automated enforcement. Closed enum allows ContextGuard integration per guardrail.
+**Q1 — Evaluation command ownership**
 
-3. **Lineage storage:** Should lineage live in the repo's `.context/capsules/` (CLP-native) or in OC's run store? The design assumes `.context/` for now; Warehouse archival happens post-resolution.
+> *OC owns command derivation.*
 
-4. **CxRP wire extension:** Does `ContinuousImprovementSpec` need to appear in the CxRP wire contract, or is it OC-internal? The current design keeps it OC-internal (not in CxRP `TaskProposal`), consistent with how `LifecycleMetadata` is handled.
+`evaluation_command` is OC-derived, resolved from `validation_profile`. The Proposer may supply an `evaluation_command_hint` (advisory only). OC validates and canonicalizes before execution. Source is tracked via `EvaluationCommandSource` enum: `OC_DERIVED`, `PROPOSER_SUGGESTED`, `VALIDATION_PROFILE`.
 
-5. **ExecutionMode entry:** Should a new `ExecutionMode.IMPROVE_CAMPAIGN_CI` distinguish CI-backed improve_campaign from the existing `improve_campaign`? Or is the presence of `continuous_improvement` block sufficient?
+---
+
+**Q2 — Guardrail extensibility**
+
+> *Guardrails are a closed enum + optional advisory custom notes.*
+
+`guardrails: list[EnforcedGuardrail]` is a closed enum with automated enforcement:
+- `NO_LOST_ESCALATIONS`
+- `CUSTODIAN_CLEAN`
+- `NO_ARCHITECTURE_VIOLATIONS`
+- `REGRESSION_FIXTURES_PASS`
+- `NO_RUNTIME_POLICY_WIDENING`
+
+Advisory, non-blocking notes go in `custom_checks: list[str]`. ContextGuard can integrate per-guardrail enforcement without open-ended string parsing.
+
+---
+
+**Q3 — Lineage storage**
+
+> *Lineage is CLP-native in `.context`, indexed by OC, archived by Warehouse.*
+
+Three-tier model:
+1. **Primary/canonical:** `.context/capsules/<lineage_id>/lineage.json` — CLP-native, written during execution
+2. **OC index:** `OcLineageIndexEntry` in the run store — lightweight pointer for routing and status queries
+3. **Archive:** Warehouse archives post-resolution via `warehouse_archive_id`
+
+OC never duplicates the full lineage object; it holds only the index entry pointing to the CLP artifact.
+
+---
+
+**Q4 — CxRP wire extension**
+
+> *CI spec stays OC-internal initially.*
+
+`ContinuousImprovementSpec` is not added to the CxRP `TaskProposal` wire contract. Consistent with how `LifecycleMetadata` is handled: OC enriches internally, CxRP sees only the core task shape. Revisit if cross-system CI coordination is needed.
+
+---
+
+**Q5 — ExecutionMode entry**
+
+> *No new ExecutionMode unless routing semantics actually diverge.*
+
+Presence of the `continuous_improvement` block is sufficient to opt into the CI lifecycle. `execution_mode: improve_campaign` is reused. A new `IMPROVE_CAMPAIGN_CI` mode would be added only if the routing path or capability requirements diverge from the existing improve_campaign lane.
 
 ---
 
