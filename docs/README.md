@@ -107,6 +107,9 @@ shape, not any particular bound repo.
 - [specs/proposer-consumes-custodian-sweep.md](specs/proposer-consumes-custodian-sweep.md)
 - [specs/reviewer-pr-state-machine.md](specs/reviewer-pr-state-machine.md)
 - [specs/watcher-entrypoint-test-coverage.md](specs/watcher-entrypoint-test-coverage.md)
+- [specs/executor-adapter-unit-tests.md](specs/executor-adapter-unit-tests.md)
+- [specs/p5-adapter-and-board-unblock-tests.md](specs/p5-adapter-and-board-unblock-tests.md)
+- [specs/platform-cli-test-coverage.md](specs/platform-cli-test-coverage.md)
 
 ## Demo & Backlog
 

@@ -3,6 +3,12 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-21 — Custodian violation fixes (pre-existing)
+
+**C29:** workspace.py was 501 lines. Condensed logger.info call to bring under limit.
+**DC7:** Three orphan spec docs in docs/specs/ were not linked from docs/README.md. Linked them.
+Neither violation was introduced by the context-lifecycle branch — both were pre-existing on main.
+
 ## 2026-05-21 — ContextLifecycleProtocol Phase 3 integration
 
 **Decision:** Added `.context/` cognition surface and ContextGuard Claude Code hooks.
