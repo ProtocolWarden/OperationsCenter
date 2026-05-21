@@ -6,7 +6,7 @@ The loop is the operator for all conditions handled here.  Do not add "operator 
 required" notes for patterns this tool covers.  When a new stuck pattern emerges, add a
 rule here rather than logging it and waiting.
 
-Applies five rules on every run:
+Applies seven rules on every run:
 
   Rule 1 — DEAD_REMEDIATION_CANCEL
     Tasks with label "dead-remediation" OR (executor-signal: sigkill + retry-count ≥ 3)
@@ -47,6 +47,16 @@ Applies five rules on every run:
     covered here.  2h threshold is chosen to be > the backend timeout (1h) so legitimate
     long-running tasks are not incorrectly recovered.
 
+  Rule 7 — GOAL_BACKLOG_PROMOTE
+    Tasks with "task-kind: goal" + "source: autonomy" + "source: improve-suggestion"
+    in Backlog state whose parent improve task (original-task-id: label) has reached a
+    terminal state (Done/Cancelled) → move to Ready for AI.
+    These tasks are created by the improve board_worker as follow-on sub-tasks, but no
+    watcher moves them from Backlog to R4AI.  Once the parent is terminal the sub-tasks
+    are ready for the goal board_worker to claim.
+    Skipped when memory is below the executor dispatch threshold or when
+    executor-signal: SIGKILL is present.
+
 Usage:
     python -m operations_center.entrypoints.maintenance.board_unblock \\
         --config config/operations_center.local.yaml [--apply] [--stale-blocked-hours 4]
@@ -84,6 +94,9 @@ _SELF_MODIFY_APPROVED_LABEL = "self-modify: approved"
 _SIGKILL_SIGNAL_PREFIX = "executor-signal:"  # value checked separately
 _RETRY_COUNT_PREFIX = "retry-count:"
 _BLOCKED_BY_PREFIX = "blocked-by:"
+_ORIGINAL_TASK_PREFIX = "original-task-id:"
+_SOURCE_AUTONOMY_LABEL = "source: autonomy"
+_SOURCE_IMPROVE_SUGGESTION_LABEL = "source: improve-suggestion"
 
 
 def _labels(issue: dict[str, Any]) -> list[str]:
@@ -325,6 +338,34 @@ def _apply_rules(
                         f"(OOM/SIGKILL/watcher restart) without updating Plane state"
                     ),
                 })
+
+        # Rule 7 — improve-suggestion goal tasks whose parent task is terminal
+        # The improve board_worker creates task-kind:goal sub-tasks in Backlog as follow-on
+        # work, but no watcher promotes them to Ready for AI for the goal worker to claim.
+        # Once the parent improve task reaches a terminal state, these sub-tasks are ready.
+        if (
+            state_lower == "backlog"
+            and _has_label(labels, _GOAL_LABEL)
+            and _has_label(labels, _SOURCE_AUTONOMY_LABEL)
+            and _has_label(labels, _SOURCE_IMPROVE_SUGGESTION_LABEL)
+            and not _has_label_prefix(labels, _SIGKILL_SIGNAL_PREFIX)
+            and mem_available_gb >= _MEM_R4AI_THRESHOLD_GB
+        ):
+            parent_id = _label_value(labels, _ORIGINAL_TASK_PREFIX)
+            if parent_id:
+                parent_state = id_state.get(parent_id, "")
+                if _is_terminal(parent_state):
+                    actions.append({
+                        "task_id": task_id,
+                        "title": title,
+                        "rule": "GOAL_BACKLOG_PROMOTE",
+                        "from_state": state,
+                        "to_state": "Ready for AI",
+                        "reason": (
+                            f"parent improve task {parent_id} is {parent_state}; "
+                            "promote for goal board_worker dispatch"
+                        ),
+                    })
 
     return actions
 
