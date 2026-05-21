@@ -1,5 +1,13 @@
 # Log
 
+## 2026-05-21 — Add loop controller (replace /loop + ScheduleWakeup)
+
+tools/loop/controller.py spawns a fresh claude -p session per watchdog cycle.
+Context never accumulates across cycles. Session writes .context/loop_schedule.json
+at STEP 10 with {delay_s, state, reason}; controller reads it for adaptive timing.
+Updated watchdog_loop_prompt.md STEP 10, watchdog_loop.md, and LOOP_START.md.
+Enables overnight unattended runs without session context exhaustion.
+
 ## 2026-05-21 — Update ADR-0003 to reference CI design
 
 Added "Related" section to ADR-0003 documenting the relationship between

@@ -12,9 +12,10 @@ The loop is **not merely an hourly audit runner**. When the platform is
 unhealthy it shortens its cadence and actively works to restore forward
 progress. When healthy it backs off to maintenance frequency.
 
-The loop is session-bound: it runs as long as the Claude Code session is open.
-It uses `ScheduleWakeup`, not cron/systemd/daemon behavior. Do not replace it
-with a system scheduler.
+The loop is controller-driven: `tools/loop/controller.py` spawns a fresh
+`claude -p` session for each iteration so context never accumulates. Each session
+exits cleanly after writing `.context/loop_schedule.json`; the controller reads
+that file for adaptive timing before launching the next session.
 
 **Related docs:**
 - [`self_healing_model.md`](self_healing_model.md) — convergence phases 1–7, architecture, ownership model
@@ -225,10 +226,17 @@ must only run when this loop owns the lock.
 
 ## Starting the Loop
 
-Invoke in the Claude Code session:
+```bash
+cd /home/dev/Documents/GitHub/OperationsCenter
+nohup python tools/loop/controller.py > /dev/null 2>&1 &
+python tools/loop/controller.py --status
+# Log: logs/local/loop_controller.log
+```
+
+Each session receives this prompt:
 
 ```
-/loop Run the OC/Platform stabilization and audit cycle from /home/dev/Documents/GitHub/OperationsCenter. Source .env.operations-center.local first. Use .venv/bin/ for all CLIs. This loop is session-bound and uses ScheduleWakeup, not cron/systemd.
+Run the OC/Platform stabilization and audit cycle from /home/dev/Documents/GitHub/OperationsCenter. Source .env.operations-center.local first. Use .venv/bin/ for all CLIs. This loop is session-bound and uses ScheduleWakeup, not cron/systemd.
 
 STEP 0 — OWNERSHIP + PREFLIGHT:
 Acquire/verify logs/local/watchdog_loop.lock via:
@@ -580,8 +588,8 @@ explicitly allowed it for the current task/session. If not allowed, create a bra
 One logical commit per repo per cycle. Commit message must name: root cause, affected repo,
 gate/check fixed. Never force-push, amend old loop commits, or commit generated noise.
 
-STEP 10 — ADAPTIVE SCHEDULEWAKEUP:
-Assess platform health state and choose ScheduleWakeup delay accordingly:
+STEP 10 — WRITE SCHEDULE AND EXIT:
+Assess platform health state and choose the appropriate delay:
 
   CRITICAL                — crash loops / graph broken / autonomy failing repeatedly:              180s
   DEGRADED                — watcher crashes (non-143) / blocked queue unchanged / flow gaps:       300s
@@ -638,7 +646,8 @@ Automation self-deception: DEGRADED minimum cadence + create Plane escalation ta
 Use the WORST health state observed across all steps. Starvation/stagnation/convergence signals
 force STALLED minimum immediately — single cycle evidence is sufficient.
 Log the chosen cadence and the driving signal in the cycle summary.
-Pass this full /loop prompt verbatim as the ScheduleWakeup prompt.
+Write .context/loop_schedule.json with {"delay_s": <int>, "state": "<STATE>", "reason": "<signal>"}
+then exit cleanly. Do NOT call ScheduleWakeup — the controller reads this file.
 ```
 
 ---
@@ -953,13 +962,16 @@ incidental remediation.
 
 ## Stopping the Loop
 
-The loop stops when you close the Claude Code session, or tell Claude to stop.
-To stop explicitly, tell Claude: "stop the loop" — it will omit the next
-`ScheduleWakeup` call and the loop ends naturally.
-
-Before stopping, release the lock:
 ```bash
-scripts/operations-center.sh watchdog-loop-release
+python tools/loop/controller.py --stop
+```
+
+This writes a stop flag; the current session finishes its iteration normally,
+then the controller exits. The controller lock is released on exit.
+
+To stop immediately (kills the running session):
+```bash
+kill $(python -c "import json; print(json.load(open('logs/local/loop_controller.lock'))['pid'])")
 ```
 
 ---

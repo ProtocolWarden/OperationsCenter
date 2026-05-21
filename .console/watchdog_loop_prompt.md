@@ -135,7 +135,7 @@ Update .console/backlog.md if any tasks were completed or newly blocked.
 Commit to branch oc-watchdog/<YYYYMMDD-HHMM>-<topic>. One commit per repo per cycle.
 Run `git diff --staged` before committing.
 
-### STEP 10 — ADAPTIVE SCHEDULEWAKEUP
+### STEP 10 — WRITE SCHEDULE AND EXIT
 
 | State | Delay | Trigger |
 |-------|-------|---------|
@@ -150,11 +150,20 @@ Run `git diff --staged` before committing.
 
 Use WORST state observed across all signals. Log chosen cadence and driving signal.
 
-Call ScheduleWakeup with:
-- prompt: contents of this file path prefixed with `/loop `:
-  `/loop Run the OC watchdog loop. Read /home/dev/Documents/GitHub/OperationsCenter/.console/watchdog_loop_prompt.md and follow it exactly.`
-- delaySeconds: per table above
-- reason: one sentence naming the driving signal
+Write the schedule file — the controller reads this to determine how long to sleep before spawning the next session:
+
+```python
+import json
+from pathlib import Path
+schedule = {
+    "delay_s": <chosen delay as int>,
+    "state": "<STATE>",
+    "reason": "<one sentence naming the driving signal>",
+}
+Path(".context/loop_schedule.json").write_text(json.dumps(schedule))
+```
+
+Do NOT call ScheduleWakeup. Exit cleanly after writing the schedule file.
 
 ---
 

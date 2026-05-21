@@ -42,10 +42,24 @@ scripts/reset-training-branches.sh
 
 ---
 
-## Step 3 — Paste this into Claude Code
+## Step 3 — Start the controller
+
+```bash
+cd /home/dev/Documents/GitHub/OperationsCenter
+nohup python tools/loop/controller.py > /dev/null 2>&1 &
+python tools/loop/controller.py --status   # confirm running
+# To stop:  python tools/loop/controller.py --stop
+# Log:      logs/local/loop_controller.log
+```
+
+Each iteration is a fresh `claude -p` session — context never accumulates across cycles.
+The session writes `.context/loop_schedule.json` at STEP 10; the controller reads it for
+adaptive delay before spawning the next session.
+
+### What the controller passes to each session
 
 ```
-/loop Run the OC/Platform stabilization and audit cycle from /home/dev/Documents/GitHub/OperationsCenter. Source .env.operations-center.local first. Use .venv/bin/ for all CLIs. This loop is session-bound and uses ScheduleWakeup, not cron/systemd.
+Run the OC/Platform stabilization and audit cycle from /home/dev/Documents/GitHub/OperationsCenter. Source .env.operations-center.local first. Use .venv/bin/ for all CLIs. This loop is controller-driven — do NOT call ScheduleWakeup.
 
 STEP 0 — OWNERSHIP + PREFLIGHT:
 Acquire/verify logs/local/watchdog_loop.lock via:
