@@ -1,0 +1,72 @@
+# Example: Retry churn reduction
+# Reduces false-positive retry escalations from flaky validation commands
+# by tracking command failure rates and applying a flakiness classifier.
+
+proposal_id: "prop-20260521-retry-churn"
+task_id: "task-4498"
+project_id: "operations"
+task_type: "bug_fix"
+execution_mode: "improve_campaign"
+goal_text: >
+  Reduce unnecessary task retry churn caused by flaky validation commands
+  misclassified as real failures. The improve watcher classifies flaky
+  commands (>=30% failure rate over 10 runs) — but the threshold may be
+  too sensitive or too lenient for certain command categories.
+  Tune the flakiness threshold to reduce false retries while preserving
+  real failure detection.
+target:
+  repo_key: "OperationsCenter"
+  clone_url: "git@github.com:ProtocolWarden/OperationsCenter.git"
+  base_branch: "main"
+  allowed_paths:
+    - "src/operations_center/watcher/improve/"
+    - "tests/watcher/improve/"
+
+continuous_improvement:
+
+  strategy:
+    principle: "Tune per-command flakiness threshold using observed failure rate distribution"
+    constraints:
+      - fail_closed
+      - preserve_real_failure_detection
+      - no_threshold_below_ten_percent
+      - no_runtime_policy_widening
+
+  evaluation:
+    baseline_description: >
+      current_flakiness_classifier — false_retry_rate 18% across last 500 runs,
+      real_failure_miss_rate 2%
+    primary_scoring:
+      metric: "false_retry_rate"
+      direction: "lower_is_better"
+      baseline_value: 0.18
+      target_delta: -0.05
+      unit: "fraction"
+    secondary_scoring:
+      - metric: "real_failure_miss_rate"
+        direction: "lower_is_better"
+        baseline_value: 0.02
+        unit: "fraction"
+    guardrails:
+      - custodian_clean
+      - regression_fixtures_pass
+      - real_failure_miss_rate_not_increased
+      - no_threshold_below_ten_percent
+    evaluation_command: >
+      python scripts/evaluate_flakiness_classifier.py
+      --history-dir state/validation_history/
+      --output .context/capsules/lin-retry-churn/attempt-{n}/eval.json
+
+  refinement:
+    enabled: true
+    max_attempts: 3
+    requires_checkpoint_between_attempts: true
+    vary_strategy_on_retry: false
+    failure_penalty: 0
+    accept_on_neutral: false
+
+  clp:
+    investigation_capsule_path: ".context/active/inv-retry-churn.yaml"
+    loop_checkpoint_path: null
+    worker_handoff_path: null
+    lease_expires_at: null

@@ -1,5 +1,13 @@
 # Log
 
+## 2026-05-21 — Continuous improvement schema extension design
+
+Added design doc, draft schema, and examples for extending OcPlanningProposal
+with a ContinuousImprovementSpec block. Covers: strategy, evaluation, refinement
+policy, CLP binding, lineage/provenance, governance boundaries, replay semantics,
+failure modes. DRAFT — not yet wired into production contracts. Awaiting operator
+review of open questions (Section 12) before implementation.
+
 ## 2026-05-21 — Sync python3/jq fallback to pre_tool_use.sh
 
 Added python3 fallback for jq in pre_tool_use.sh. Hook now works in
