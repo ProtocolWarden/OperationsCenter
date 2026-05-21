@@ -15,6 +15,64 @@ OPERATOR_BLOCKED narrowed to credentials/hardware/policy only. All code bugs,
 queue deadlocks, watcher crashes, and infra config errors are session's responsibility.
 Controller reads prompt from file at launch; updates take effect on next iteration.
 
+## OC Platform Watchdog Cycle — 2026-05-21 11:24
+
+- Lock owner: controller-managed (unlocked between sessions)
+- Branch / commit: main @ f26c1fe
+- Health state: DEGRADED
+- Next cadence: 300s — Plane unreachable; SwitchBoard unreachable; all 8 watchers stopped
+- Plane status: unreachable (connection refused) — board state unknown
+- PlatformDeployment / SwitchBoard status: unreachable
+- Watchers: 0/8 running | restarts this cycle: none observed (clean shutdown signatures)
+- Audits run: ghost-audit flow-audit graph-doctor reaudit-check regressions (custodian-sweep/triage-scan failed — Plane unreachable)
+- Findings reproduced this cycle: ghost=0, flow=0, regressions=0, graph=ok, reaudit=dag_executor+team_executor
+- Blocked work: unknown (Plane unreachable)
+- Repeated findings (vs prior cycles): reaudit: dag_executor+team_executor (cxrp_minor_version_advanced) — persistent from cycle 41
+- Forward progress observed: no — platform infrastructure not running
+- Queue movement: unknown (Plane unreachable)
+- Closed-loop stagnation detected: no
+- Duplicate remediation churn: no
+- Blocked queue deadlock suspected: unknown
+- Stagnation detected: no
+- Plane tasks opened/updated: none (Plane unreachable)
+- Direct fixes dispatched: none
+- Repos touched: none
+- Repos skipped (gate failed): all (Plane unreachable)
+- Validation run: skipped (platform down)
+- Graph status: 11 nodes / 12 edges, graph_built=True
+- Regressions checked: 0 findings
+- Watcher restarts / crash classifications: none — all watchers cleanly stopped prior to this session
+- Anti-flap escalations: none
+- Autonomy-cycle outcomes: none
+- Convergence phase estimate: N/A (infrastructure down)
+- Loop-owned recovery decisions this cycle: 0
+- Watcher-owned recoveries this cycle: 0
+- Automatic recovery actions executed: none
+- Manual inference required: no
+- Recovery ownership migration candidates: none
+- Behavioral convergence: N/A (platform offline)
+- Executor adaptation observed: no — platform not running
+- Semantic duplicate remediation suspected: no
+- Remediation lineage investigated: no
+- Automation self-deception detected: no
+- Retry quality: N/A
+- Queue evolution quality: N/A
+- Convergence promotion candidates: none
+- Loop-only judgments repeated: none
+- Watcher handoff gaps: none observable
+- Missing watcher evidence: none
+- Behavior to move out of /loop: none
+- Convergence maturity metrics: loop_only_judgments_per_cycle=0, manual_inference_events=0, watcher_owned_recovery_rate=N/A, automatic_queue_heal_rate=N/A, parked_transition_accuracy=N/A, recovery_adaptation_rate=N/A, operator_escalation_rate=N/A
+- Operator-blocked state: no
+- Parked state active: no
+- Park reason: none
+- New evidence detected: yes — Plane and SwitchBoard unreachable (new since cycle 41 where Plane was accessible)
+- Safe retry condition: Plane and SwitchBoard must be running; watchers must be started
+- Last evidence-changing cycle: 2026-05-21 11:24 (this cycle)
+- Repeated unchanged cycles: 0
+- Active remediation suspended: yes — platform infrastructure not running
+- Follow-ups: none (Plane unreachable)
+
 ## 2026-05-21 — Mark tools/loop/controller.py executable
 
 Mode change 100644 → 100755. Matches vf.sh controller.
