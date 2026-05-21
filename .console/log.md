@@ -1,5 +1,9 @@
 # Log
 
+## 2026-05-21 — Mark tools/loop/controller.py executable
+
+Mode change 100644 → 100755. Matches vf.sh controller.
+
 ## 2026-05-21 — Add loop-log to operations-center.sh
 
 Added loop-log subcommand (tail -f loop_controller.log). Mirrors vf.sh loop-log.
