@@ -3,6 +3,12 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-21 — Remove Cognition Lifecycle section from CLAUDE.md
+
+OperatorConsole's context injector rewrites CLAUDE.md on session start, stripping anything
+after its managed block. Moved CLP lifecycle content to .context/README.md (already there).
+CLAUDE.md is now OC-managed-only to avoid dirty diffs.
+
 ## 2026-05-21 — Custodian violation fixes (pre-existing)
 
 **C29:** workspace.py was 501 lines. Condensed logger.info call to bring under limit.
