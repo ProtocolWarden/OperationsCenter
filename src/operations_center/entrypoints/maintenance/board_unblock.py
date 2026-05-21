@@ -6,7 +6,7 @@ The loop is the operator for all conditions handled here.  Do not add "operator 
 required" notes for patterns this tool covers.  When a new stuck pattern emerges, add a
 rule here rather than logging it and waiting.
 
-Applies seven rules on every run:
+Applies eight rules on every run:
 
   Rule 1 — DEAD_REMEDIATION_CANCEL
     Tasks with label "dead-remediation" OR (executor-signal: sigkill + retry-count ≥ 3)
@@ -56,6 +56,19 @@ Applies seven rules on every run:
     are ready for the goal board_worker to claim.
     Skipped when memory is below the executor dispatch threshold or when
     executor-signal: SIGKILL is present.
+
+  Rule 8 — CLEAN_BLOCKED_RETRY
+    Tasks with "task-kind: goal" or "task-kind: improve" in Blocked state where:
+      - No "blocked-by:" label (not held by an explicit dependency gate)
+      - No "executor-signal:" label (executor was never killed by a signal)
+      - No "executor-exit-code:" label (executor never ran — pre-execution failure)
+      - Not "self-modify: approved" (those are handled by Rule 4)
+      - Blocked for at least --clean-blocked-min-minutes (default 5) minutes
+    → move to Backlog for retry.
+    These represent pre-execution failures (workspace preparation errors, missing
+    sandbox branch, transient infra config issues) where no executor ran and the
+    failure is safe to retry once the underlying infrastructure is fixed.
+    The minimum age avoids re-queuing before the board_worker finishes writing labels.
 
 Usage:
     python -m operations_center.entrypoints.maintenance.board_unblock \\
@@ -171,6 +184,7 @@ def _apply_rules(
     now: datetime,
     stale_blocked_hours: int,
     stale_running_hours: int,
+    clean_blocked_min_minutes: int,
     mem_available_gb: float,
 ) -> list[dict[str, Any]]:
     id_state = _build_id_state_map(issues)
@@ -367,6 +381,35 @@ def _apply_rules(
                         ),
                     })
 
+        # Rule 8 — clean-blocked tasks where no executor ran (pre-execution failure)
+        # Workspace preparation failures, missing sandbox branch, transient infra errors.
+        # These tasks have no executor-signal, no executor-exit-code, and no blocked-by
+        # label because the executor never launched.  They are safe to retry once the
+        # underlying infrastructure is fixed.  Min age avoids racing with label writes.
+        is_clean_blocked = (
+            state_lower == "blocked"
+            and (_has_label(labels, _IMPROVE_LABEL) or _has_label(labels, _GOAL_LABEL))
+            and not _has_label(labels, _SELF_MODIFY_APPROVED_LABEL)
+            and not _has_label_prefix(labels, _SIGKILL_SIGNAL_PREFIX)
+            and not _has_label_prefix(labels, "executor-exit-code:")
+            and not _has_label_prefix(labels, _BLOCKED_BY_PREFIX)
+        )
+        if is_clean_blocked:
+            updated_at = _parse_updated_at(issue)
+            if updated_at and (now - updated_at) >= timedelta(minutes=clean_blocked_min_minutes):
+                actions.append({
+                    "task_id": task_id,
+                    "title": title,
+                    "rule": "CLEAN_BLOCKED_RETRY",
+                    "from_state": state,
+                    "to_state": "Backlog",
+                    "reason": (
+                        f"no executor-signal/exit-code/blocked-by labels — pre-execution failure "
+                        f"(workspace prep or infra config); safe to retry after "
+                        f"{clean_blocked_min_minutes}m min age"
+                    ),
+                })
+
     return actions
 
 
@@ -379,6 +422,8 @@ def main() -> int:
                         help="hours after which an improve task in Blocked is considered stale")
     parser.add_argument("--stale-running-hours", type=int, default=2,
                         help="hours after which a Running task is considered orphaned (must exceed backend timeout)")
+    parser.add_argument("--clean-blocked-min-minutes", type=int, default=5,
+                        help="minimum minutes a task must be Blocked before Rule 8 re-queues it (avoids label-write race)")
     args = parser.parse_args()
 
     settings = load_settings(args.config)
@@ -408,7 +453,9 @@ def main() -> int:
     now = datetime.now(UTC)
     actions = _apply_rules(
         issues, now=now, stale_blocked_hours=args.stale_blocked_hours,
-        stale_running_hours=args.stale_running_hours, mem_available_gb=mem_gb,
+        stale_running_hours=args.stale_running_hours,
+        clean_blocked_min_minutes=args.clean_blocked_min_minutes,
+        mem_available_gb=mem_gb,
     )
 
     results = []
