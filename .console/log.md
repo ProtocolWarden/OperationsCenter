@@ -3,6 +3,18 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-20 — Watchdog cycle 39: ACTIVE — 2824d46e real stage failures; board_unblock re-queued
+
+**Convergence:** NON-CONVERGENT. 2824d46e blocked again at 19:59 local: "1 of 5 stages failed" — real execution failure in fresh session (19:28–19:59, 31 min in). Not a session limit. Mix of session limits (cycles 33, 36, 37, 38) and genuine stage failures (1/5, 2/5, 4/6 across cycles). board_unblock applied → R4AI; claimed again at 20:06 local, in-flight at cycle end.
+
+**STEP 1:** custodian: all_zero=true ✓ | ghost: parse error (null) | flow: parse error (null) | graph: ok | reaudit: [] | regressions: null (parse error)
+
+**STEP 2.5 board-unblock:** APPLIED — 2824d46e Blocked → R4AI (SELF_MODIFY_REQUEUE)
+
+**STEP 8 — watcher health:** 7/8 running (watchdog still dead, 19+ hours). No change from cycle 38.
+
+**Cadence:** ACTIVE (1800s) — board_unblock applied; 2824d46e in-flight at 20:06 local
+
 ## 2026-05-20 — Watchdog cycle 38: ACTIVE — 2824d46e in fresh session; both branches pushed
 
 **Convergence:** WEAKLY-CONVERGENT. 2824d46e keeps hitting session limits mid-run; just started at 23:28 UTC in a fresh session (7pm EDT reset). Both branches now on GitHub.
