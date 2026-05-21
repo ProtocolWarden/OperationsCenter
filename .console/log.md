@@ -3,6 +3,21 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-21 — Watchdog cycle 40: ACTIVE — improve watcher died; 2824d46e orphaned; watcher restarted
+
+**Convergence:** WEAKLY-CONVERGENT. Improve watcher died at ~00:06 UTC while processing 2824d46e. Task left stuck in Running state (orphaned). Manually transitioned Running→Blocked→R4AI. Improve watcher restarted (PID 3667811, healthy at 00:49 UTC). Follow-up tasks from a969024e continue to be processed.
+
+**STEP 1:** custodian: all_zero=true ✓ | ghost: 2 events, active=[], fixed=[G7,G10] | flow: 0 ✓ | graph: ok ✓ | reaudit: dag_executor + team_executor | regressions: 0 ✓
+
+**STEP 2.5 board-unblock (Haiku):** 89191ff5 Blocked→Backlog (IMPROVE_UNBLOCK) | bfb289b3 In Review→Backlog (STALE_IN_REVIEW)
+**STEP 2.5 board-unblock (manual):** 360cff3a Blocked→Backlog (IMPROVE_UNBLOCK) | 2824d46e Running→Blocked→R4AI (SELF_MODIFY_REQUEUE + orphan recovery)
+
+**Improve watcher death analysis:** Log ends at 20:06:26 local (00:06:26 UTC). Last heartbeat 00:05:25 idle (just before claim). No watcher_restart event in log. No exit_code recorded. Process died within ~60s of claiming task — possibly natural process exit or untracked signal. No OOM signals in dmesg.
+
+**STEP 8 — watcher health:** improve: **restarted** (was dead, now alive 00:49 UTC). watchdog: still dead (20+ hours). 7/8 healthy after restart.
+
+**Cadence:** ACTIVE (1800s) — board_unblock applied (4 tasks), improve watcher restarted
+
 ## 2026-05-20 — Watchdog cycle 39: ACTIVE — 2824d46e real stage failures; board_unblock re-queued
 
 **Convergence:** NON-CONVERGENT. 2824d46e blocked again at 19:59 local: "1 of 5 stages failed" — real execution failure in fresh session (19:28–19:59, 31 min in). Not a session limit. Mix of session limits (cycles 33, 36, 37, 38) and genuine stage failures (1/5, 2/5, 4/6 across cycles). board_unblock applied → R4AI; claimed again at 20:06 local, in-flight at cycle end.
