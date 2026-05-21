@@ -12,6 +12,10 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 CONFIG_FILE="${REPO_ROOT}/.context/config.yaml"
 
+# --- Session marker (written by pre_tool_use.sh on first tool call this session) ---
+_SESSION_HASH="$(echo "$REPO_ROOT" | cksum | cut -d' ' -f1)"
+SESSION_MARKER="/tmp/clp_session_${_SESSION_HASH}"
+
 # --- Load config ---
 CHECKPOINT_ON_STOP=true
 CAPSULE_PATH=".context/active/"
@@ -55,17 +59,24 @@ warn() {
 }
 
 # --- Check: was a checkpoint written this session? ---
-# We detect this by checking if any checkpoint file is newer than the session start.
-# Session start is approximated by the age of /tmp/clp_session_start if it exists,
-# otherwise we fall back to checking if any checkpoint exists at all.
+# Uses SESSION_MARKER (created by pre_tool_use.sh on first tool call) as the
+# timestamp reference. find -newer detects only checkpoints written after session start.
+# Falls back to existence check if the marker is absent (session without tool calls).
 
 CHECKPOINT_DIR="${REPO_ROOT}/${CHECKPOINT_PATH}"
 CHECKPOINT_FOUND=false
 
 if [[ -d "$CHECKPOINT_DIR" ]]; then
-  CHECKPOINT_COUNT=$(find "$CHECKPOINT_DIR" -name "*.yaml" -not -name ".gitkeep" | wc -l)
-  if [[ "$CHECKPOINT_COUNT" -gt 0 ]]; then
-    CHECKPOINT_FOUND=true
+  if [[ -f "$SESSION_MARKER" ]]; then
+    SESSION_CHECKPOINT="$(find "$CHECKPOINT_DIR" -name "*.yaml" -not -name ".gitkeep" -newer "$SESSION_MARKER" | head -1)"
+    if [[ -n "$SESSION_CHECKPOINT" ]]; then
+      CHECKPOINT_FOUND=true
+    fi
+  else
+    CHECKPOINT_COUNT=$(find "$CHECKPOINT_DIR" -name "*.yaml" -not -name ".gitkeep" | wc -l)
+    if [[ "$CHECKPOINT_COUNT" -gt 0 ]]; then
+      CHECKPOINT_FOUND=true
+    fi
   fi
 fi
 
