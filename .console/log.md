@@ -1,5 +1,13 @@
 # Log
 
+## 2026-05-21 — Update ADR-0003 to reference CI design
+
+Added "Related" section to ADR-0003 documenting the relationship between
+tiered cognition and the continuous improvement schema: trace data compatibility
+(LineageAttempt.replay_metadata feeds cognition_summary), refinement as a
+bounded-cognition amortization strategy, and the explicit non-introduction of
+a CognitionTier enum (consistent with ADR-0003 D1 / ADR-0002 G1).
+
 ## 2026-05-21 — Wire CI coordinator into board_worker call-site
 
 board_worker/main.py: after planning, check bundle.proposal.continuous_improvement.

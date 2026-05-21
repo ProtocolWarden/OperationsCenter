@@ -260,6 +260,41 @@ Out of scope:
   cross-file reasoning, novel architecture decisions — frontier
   cognition continues to matter for those.
 
+## Related
+
+### Continuous improvement schema (2026-05-21)
+
+The continuous improvement extension (see
+[docs/design/continuous-improvement/design.md](../../design/continuous-improvement/design.md))
+introduces evaluation-driven refinement as a complementary axis to tiered
+cognition. Where tiered cognition asks *which model should run this node?*,
+the CI schema asks *did this execution improve the target metric, and should
+we retry with a variation?*
+
+The two interact in two concrete ways:
+
+**Trace data.** Each CI attempt produces a `LineageAttempt` with a
+`replay_metadata` dict that includes `runtime_binding_model`. This is exactly
+the per-invocation provenance that ADR-0003 D2 targets — it feeds directly into
+`cognition_summary.nodes_by_model` once that telemetry is landed. A CI run with
+`max_attempts=3` across two model tiers gives three comparable data points with
+consistent goal text and evaluation criteria, which is the paired-run evidence
+G4 requires before a routing rule is safe to write.
+
+**Refinement as a bounded-cognition strategy.** CI's `RefinementPolicy` is
+structurally similar to the "plan once, execute many" amortization pattern
+described in the Context section. A single OC evaluation run (strong model)
+sets the `EvaluationSpec` baseline and strategy; each attempt can use a cheaper
+or local model (`ImprovementStrategy.constraints` propagated into the
+WorkerHandoff). The scoring loop provides the feedback signal that lets
+bounded-cognition attempts improve without re-engaging frontier planning for
+every retry.
+
+The CI schema does not introduce a `CognitionTier` enum — consistent with
+ADR-0003 D1 and ADR-0002 G1. Tier selection remains a workflow-level concern;
+the CI spec carries `strategy.constraints` (policy) and the runtime binding
+carries the actual model used (observability).
+
 ## Why this ADR exists at all
 
 The architecture is unusually close to enabling tiered-cognition
