@@ -1,0 +1,44 @@
+# OC Watchdog LoopCheckpoint template
+# Write one of these at the end of each watchdog cycle.
+# schema: https://github.com/ProtocolWarden/ContextLifecycleProtocol/blob/main/.context/schemas/loop_checkpoint.yaml
+
+checkpoint_id: ""           # e.g. "chk-$(date +%Y%m%d-%H%M)-oc-watchdog"
+schema_version: "0.1"
+created_at: ""
+updated_at: ""
+parent_checkpoint_id: ""
+active_capsule_ids: []
+orchestrator_cycle_id: ""   # increment per cycle
+
+last_completed_cycle: ""
+current_phase: "monitoring"
+current_operational_state: ""
+
+latest_worker_outputs: []
+unresolved_blockers: []
+
+next_scheduled_action: ""
+next_wakeup_reason: ""
+
+relaunch_metadata:
+  relaunch_command: "python scripts/watchdog_loop.py"
+  relaunch_args: ["--config", ".context/config.yaml"]
+  environment:
+    LOG_LEVEL: "INFO"
+
+compaction_status: "not_required"
+
+orchestrator:
+  last_compacted_at: ""
+  current_cycle_id: ""
+  active_worker_ids: []
+  active_capsule_ids: []
+  next_allowed_action: ""
+  context_risk:
+    long_lived_session: false
+    high_parallelism: false
+    subagent_heavy: false
+    checkpoint_stale: false
+    reload_scope_too_large: false
+
+operator_summary: ""
