@@ -129,7 +129,7 @@ def get_delay() -> int:
 def run_session() -> int:
     """Spawn one bounded claude -p session. Returns exit code."""
     prompt = load_session_prompt()
-    cmd = ["claude", "-p", prompt, "--output-format", "text"]
+    cmd = ["claude", "-p", prompt, "--dangerously-skip-permissions", "--output-format", "text"]
     _log(f"Spawning session (prompt: {SESSION_PROMPT_FILE.name}, {len(prompt)} chars) ...")
     # Source env before spawning so the session inherits OC credentials
     env = os.environ.copy()

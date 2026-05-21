@@ -1,5 +1,11 @@
 # Log
 
+## 2026-05-21 — Add --dangerously-skip-permissions to controller session spawn
+
+claude -p without this flag blocks tool calls that need interactive approval.
+The controller is a deliberate operator action; ContextGuard hooks still run.
+This gives the spawned session the same tool access as an interactive session.
+
 ## 2026-05-21 — Full session prompt with explicit authorization (loop controller)
 
 Replaced thin SESSION_PROMPT pointer with tools/loop/oc_session_prompt.txt —
