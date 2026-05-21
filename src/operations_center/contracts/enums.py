@@ -108,3 +108,67 @@ class FailureReasonCategory(str, Enum):
     BUDGET_EXHAUSTED = "budget_exhausted"
     ROUTING_ERROR = "routing_error"
     UNKNOWN = "unknown"
+
+
+# ---------------------------------------------------------------------------
+# Continuous improvement enums
+# ---------------------------------------------------------------------------
+
+class RefinementStatus(str, Enum):
+    """Overall status of the refinement lifecycle for a work item."""
+    NOT_STARTED = "not_started"
+    IN_PROGRESS = "in_progress"
+    ACCEPTED = "accepted"
+    BUDGET_EXHAUSTED = "budget_exhausted"
+    ABANDONED = "abandoned"
+    ESCALATED = "escalated"
+
+
+class RefinementDecision(str, Enum):
+    """Decision emitted after evaluating a single attempt."""
+    ACCEPT = "accept"
+    RETRY = "retry"
+    ABANDON = "abandon"
+    ESCALATE = "escalate"
+
+
+class EvaluationOutcome(str, Enum):
+    """Coarse evaluation result for a single attempt."""
+    IMPROVED = "improved"
+    NEUTRAL = "neutral"
+    REGRESSED = "regressed"
+    GUARDRAIL_VIOLATED = "guardrail_violated"
+    INCONCLUSIVE = "inconclusive"
+
+
+class LineageBranchReason(str, Enum):
+    """Why a new lineage branch was created."""
+    INITIAL = "initial"
+    RETRY_AFTER_FAILURE = "retry_after_failure"
+    STRATEGY_VARIATION = "strategy_variation"
+    OPERATOR_RESTART = "operator_restart"
+
+
+class EnforcedGuardrail(str, Enum):
+    """
+    Closed enum of guardrails OC and ContextGuard/Custodian enforce automatically.
+
+    Enforcement mapping:
+      NO_LOST_ESCALATIONS       → compare escalation count before/after attempt
+      CUSTODIAN_CLEAN           → run Custodian; require 0 findings on result diff
+      NO_ARCHITECTURE_VIOLATIONS → run Custodian X2/B1 boundary checks
+      REGRESSION_FIXTURES_PASS  → re-run validation_profile.commands on result branch
+      NO_RUNTIME_POLICY_WIDENING → static check: forbidden_paths unchanged, no policy file edits
+    """
+    NO_LOST_ESCALATIONS = "no_lost_escalations"
+    CUSTODIAN_CLEAN = "custodian_clean"
+    NO_ARCHITECTURE_VIOLATIONS = "no_architecture_violations"
+    REGRESSION_FIXTURES_PASS = "regression_fixtures_pass"
+    NO_RUNTIME_POLICY_WIDENING = "no_runtime_policy_widening"
+
+
+class EvaluationCommandSource(str, Enum):
+    """How evaluation_command was determined."""
+    OC_DERIVED = "oc_derived"
+    PROPOSER_SUGGESTED = "proposer_suggested"
+    VALIDATION_PROFILE = "validation_profile"

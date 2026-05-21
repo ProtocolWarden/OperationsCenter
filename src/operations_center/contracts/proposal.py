@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 
 from .enums import ExecutionMode, Priority, RiskLevel, TaskType
 from .common import BranchPolicy, ExecutionConstraints, TaskTarget, ValidationProfile
+from .ci import ContinuousImprovementSpec
 
 
 def _utcnow() -> datetime:
@@ -70,6 +71,15 @@ class OcPlanningProposal(BaseModel):
         description="Validation commands to run after execution",
     )
     branch_policy: BranchPolicy = Field(default_factory=BranchPolicy)
+
+    # Continuous improvement (optional — presence opts into CI lifecycle)
+    continuous_improvement: Optional[ContinuousImprovementSpec] = Field(
+        default=None,
+        description=(
+            "If set, opts this work item into evaluation-driven refinement. "
+            "Absence preserves one-shot behaviour. OC-internal only."
+        ),
+    )
 
     # Metadata
     proposed_at: datetime = Field(default_factory=_utcnow)
