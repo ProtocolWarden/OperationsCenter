@@ -42,7 +42,13 @@ Sync all repos:
     dir="/home/dev/Documents/GitHub/$repo"
     [ -d "$dir/.git" ] && echo "$repo: $(git -C "$dir" pull --ff-only 2>&1 | tail -1)"
   done
-Then confirm: Plane at http://localhost:8080, PlatformDeployment/SwitchBoard at http://localhost:20401/health, all 8 OC watchers running, .venv CLIs present, runtime low-cost policy (sonnet/haiku), kodo max_concurrent=1 in config, working tree state via git status.
+Then confirm each of the following with a single, non-blocking check — do NOT poll or retry in a loop:
+  curl -fsS --max-time 5 http://localhost:8080/ -o /dev/null && echo "Plane OK" || echo "Plane DOWN"
+  curl -fsS --max-time 5 http://localhost:20401/health -o /dev/null && echo "SwitchBoard OK" || echo "SwitchBoard DOWN"
+  scripts/operations-center.sh watch-all-status
+  ls .venv/bin/operations-center-* > /dev/null && echo "CLIs OK" || echo "CLIs MISSING"
+  git status --short
+If a service is DOWN, note it and continue — do not block on it. Bring it up in STEP 2 if needed.
 
 STEP 1 — INVESTIGATE (run in parallel where safe):
   .venv/bin/operations-center-custodian-sweep --config config/operations_center.local.yaml --emit
