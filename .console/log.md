@@ -1,5 +1,10 @@
 # Log
 
+## 2026-05-21 — Add closing fence to console-context block
+
+Added <!-- /console-context --> end marker so OperatorConsole only replaces its
+managed block and leaves repo-owned content below it untouched.
+
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
