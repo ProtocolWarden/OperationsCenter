@@ -1,5 +1,9 @@
 # Log
 
+## 2026-05-21 — Add loop-log to operations-center.sh
+
+Added loop-log subcommand (tail -f loop_controller.log). Mirrors vf.sh loop-log.
+
 ## 2026-05-21 — Add loop-start/stop/status to operations-center.sh
 
 Added loop_start, loop_stop, loop_status functions and case entries to

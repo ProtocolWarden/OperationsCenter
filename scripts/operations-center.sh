@@ -163,6 +163,7 @@ Usage:
   scripts/operations-center.sh loop-start
   scripts/operations-center.sh loop-stop
   scripts/operations-center.sh loop-status
+  scripts/operations-center.sh loop-log
 
 Environment:
   OPERATIONS_CENTER_CONFIG   Override config path (default: ${CONFIG_PATH})
@@ -253,6 +254,10 @@ loop_stop() {
 
 loop_status() {
   python3 "${ROOT_DIR}/tools/loop/controller.py" --status
+}
+
+loop_log() {
+  tail -f "${LOOP_LOG}"
 }
 
 watch_pid_file() {
@@ -584,7 +589,7 @@ shift || true
 cd "${ROOT_DIR}"
 # Skip janitor for read-only / stop commands — they're fast and don't need it.
 case "${cmd}" in
-  watch-all-status|dev-status|watch-all-stop|watch-stop|watchdog-stop|plane-status|providers-status|doctor|status|loop-start|loop-stop|loop-status) ;;
+  watch-all-status|dev-status|watch-all-stop|watch-stop|watchdog-stop|plane-status|providers-status|doctor|status|loop-start|loop-stop|loop-status|loop-log) ;;
   *) run_janitor ;;
 esac
 
@@ -908,6 +913,9 @@ PYEOF
     ;;
   loop-status)
     loop_status
+    ;;
+  loop-log)
+    loop_log
     ;;
   *)
     usage
