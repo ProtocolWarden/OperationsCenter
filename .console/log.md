@@ -1,5 +1,10 @@
 # Log
 
+## 2026-05-21 — Fix ruff unused imports in ci_coordinator.py / ci_store.py
+
+Removed unused uuid, Callable imports from ci_coordinator.py; removed unused
+UTC, datetime imports from ci_store.py. Custodian now clean (0 non-B2 findings).
+
 ## 2026-05-21 — Implement continuous improvement schema (§13)
 
 Production contracts in src/operations_center/contracts/ci.py (all CI types

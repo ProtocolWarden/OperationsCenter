@@ -26,11 +26,10 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Callable, Optional, Protocol, runtime_checkable
+from typing import Optional, Protocol, runtime_checkable
 
 from operations_center.contracts.ci import (
     ClpBinding,
