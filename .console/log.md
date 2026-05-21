@@ -1,5 +1,10 @@
 # Log
 
+## 2026-05-21 — Sync python3/jq fallback to pre_tool_use.sh
+
+Added python3 fallback for jq in pre_tool_use.sh. Hook now works in
+environments without jq installed.
+
 ## 2026-05-21 — Sync ContextGuard hook fixes from CLP
 
 Synced updated pre_tool_use.sh and stop.sh from ContextLifecycleProtocol adapter.

@@ -18,8 +18,14 @@ SESSION_MARKER="/tmp/clp_session_${_SESSION_HASH}"
 
 # --- Read hook input ---
 INPUT="$(cat)"
-TOOL_NAME="$(echo "$INPUT" | jq -r '.tool_name // ""')"
-TOOL_INPUT="$(echo "$INPUT" | jq -r '.tool_input // {}')"
+# Prefer jq if available; fall back to python3 (already required for YAML parsing)
+if command -v jq &>/dev/null; then
+  TOOL_NAME="$(echo "$INPUT" | jq -r '.tool_name // ""')"
+  TOOL_INPUT="$(echo "$INPUT" | jq -r '.tool_input // {}')"
+else
+  TOOL_NAME="$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('tool_name',''))" 2>/dev/null || echo "")"
+  TOOL_INPUT="$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps(d.get('tool_input',{})))" 2>/dev/null || echo "{}")"
+fi
 
 # --- Load config (with defaults) ---
 REQUIRE_CAPSULE=false
@@ -152,7 +158,11 @@ fi
 
 # --- Check: pre_write — forbidden paths ---
 if [[ "$TOOL_NAME" == "Write" || "$TOOL_NAME" == "Edit" ]]; then
-  TARGET_PATH="$(echo "$TOOL_INPUT" | jq -r '.file_path // .path // ""')"
+  if command -v jq &>/dev/null; then
+    TARGET_PATH="$(echo "$TOOL_INPUT" | jq -r '.file_path // .path // ""')"
+  else
+    TARGET_PATH="$(echo "$TOOL_INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('file_path') or d.get('path') or '')" 2>/dev/null || echo "")"
+  fi
 
   if [[ -n "$TARGET_PATH" ]]; then
     HANDOFF_DIR="${REPO_ROOT}/${HANDOFF_PATH}"
