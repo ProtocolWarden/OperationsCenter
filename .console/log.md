@@ -1,5 +1,21 @@
 # Log
 
+## 2026-05-21 — Fix ruff unused imports in ci_coordinator.py / ci_store.py
+
+Removed unused uuid, Callable imports from ci_coordinator.py; removed unused
+UTC, datetime imports from ci_store.py. Custodian now clean (0 non-B2 findings).
+
+## 2026-05-21 — Implement continuous improvement schema (§13)
+
+Production contracts in src/operations_center/contracts/ci.py (all CI types
+extracted from draft_schema.py). CI enums added to enums.py. OcPlanningProposal
+extended with Optional[ContinuousImprovementSpec]. ci_store.py (JSON-backed
+lineage index + CI state store), ci_evaluator.py (evaluation command runner +
+5 guardrail implementations), ci_coordinator.py (multi-attempt refinement loop
+state machine). fail_closed invariant enforced at Pydantic construction time.
+38 new tests (unit/contracts/test_ci_contracts.py, unit/execution/test_ci_coordinator.py)
+— all pass. 135/135 existing contract tests unaffected.
+
 ## 2026-05-21 — Record operator decisions in CI schema design (§12)
 
 All 5 open questions resolved: OC owns evaluation command derivation; guardrails
