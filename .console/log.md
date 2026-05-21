@@ -1,5 +1,14 @@
 # Log
 
+## 2026-05-21 — Full session prompt with explicit authorization (loop controller)
+
+Replaced thin SESSION_PROMPT pointer with tools/loop/oc_session_prompt.txt —
+full STEP 0-10 watchdog content plus an explicit AUTHORIZATION block granting
+bash/.venv CLI/autonomy-cycle/watcher-restart/Plane/commit permissions.
+OPERATOR_BLOCKED narrowed to credentials/hardware/policy only. All code bugs,
+queue deadlocks, watcher crashes, and infra config errors are session's responsibility.
+Controller reads prompt from file at launch; updates take effect on next iteration.
+
 ## 2026-05-21 — Mark tools/loop/controller.py executable
 
 Mode change 100644 → 100755. Matches vf.sh controller.
