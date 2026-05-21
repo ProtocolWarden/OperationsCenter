@@ -1,5 +1,11 @@
 # Log
 
+## 2026-05-21 — Add loop-start/stop/status to operations-center.sh
+
+Added loop_start, loop_stop, loop_status functions and case entries to
+scripts/operations-center.sh. loop-start/stop/status skip the janitor.
+Mirrors existing watchdog-loop-* pattern.
+
 ## 2026-05-21 — Add loop controller (replace /loop + ScheduleWakeup)
 
 tools/loop/controller.py spawns a fresh claude -p session per watchdog cycle.
