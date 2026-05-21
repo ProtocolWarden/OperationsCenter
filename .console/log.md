@@ -1,5 +1,14 @@
 # Log
 
+## 2026-05-21 — Wire CI coordinator into board_worker call-site
+
+board_worker/main.py: after planning, check bundle.proposal.continuous_improvement.
+If present and execution_mode==improve_campaign, delegate to _run_ci_loop() which
+drives CiCoordinator.run() with a per-attempt subprocess execute callable. Maps
+RefinementStatus to _handle_success/_handle_failure/_fail_task. CI status and
+attempt count added as Plane labels. Single-shot path unchanged when spec absent.
+6 new tests in tests/unit/entrypoints/test_board_worker_ci_wiring.py — all pass.
+
 ## 2026-05-21 — Fix ruff unused imports in ci_coordinator.py / ci_store.py
 
 Removed unused uuid, Callable imports from ci_coordinator.py; removed unused
