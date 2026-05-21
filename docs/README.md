@@ -92,6 +92,7 @@ shape, not any particular bound repo.
 - [design/roadmap.md](design/roadmap.md)
 - [design/lifecycle.md](design/lifecycle.md)
 - [design/improve_worker.md](design/improve_worker.md)
+- [design/continuous-improvement/design.md](design/continuous-improvement/design.md) — DRAFT: schema extension for evaluation-driven refinement within existing lanes
 - [design/plane_kodo_wrapper.md](design/plane_kodo_wrapper.md)
 - [design/autonomy/repo_aware_autonomy.md](design/autonomy/repo_aware_autonomy.md)
 - [design/execution_budget_and_safety_controls.md](design/execution_budget_and_safety_controls.md)

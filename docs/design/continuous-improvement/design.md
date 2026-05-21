@@ -202,7 +202,7 @@ These are path references only. The worker resolves them at runtime via the CLP 
 |---|---|
 | `InvestigationCapsule` | Carries the improvement hypothesis, evidence gathered, and active hypotheses across retry attempts. Created on first dispatch; updated by the worker after each attempt. |
 | `LoopCheckpoint` | Written by OC between attempts (required when `requires_checkpoint_between_attempts=true`). Carries `context_risk` flags; ContextGuard enforces these on the next dispatch. |
-| `WorkerHandoff` | Scoped per dispatch. Contains `worker_scope` (allowed_paths, forbidden_paths, mutation_policy derived from `strategy.constraints`) and `lease` (expires_at from `RefinementPolicy` budget). |
+| `WorkerHandoff` | Scoped per dispatch. Contains the worker_scope section (allowed_paths, forbidden_paths, mutation_policy derived from `strategy.constraints`) and lease (expires_at from `RefinementPolicy` budget). |
 | `worker_scope` | Derived from `ImprovementStrategy.constraints`. `fail_closed` maps to `mutation_policy: write_allowed` on allowed paths only; `no_runtime_policy_widening` maps to forbidden_paths excluding runtime config. |
 | `lease` | `expires_at` set per-attempt based on `timeout_seconds` + buffer. `max_subagents` set from `RefinementPolicy`. |
 

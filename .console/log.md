@@ -1,5 +1,9 @@
 # Log
 
+## 2026-05-21 — Fix Custodian DC7/K1/OC8 in CI design doc
+
+Linked design.md from docs/README.md; unquoted worker_scope field name.
+
 ## 2026-05-21 — Continuous improvement schema extension design
 
 Added design doc, draft schema, and examples for extending OcPlanningProposal
