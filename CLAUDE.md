@@ -18,30 +18,3 @@ The context file contains your current task, guidelines, backlog, log, and runti
 
 After meaningful progress, update `.console/backlog.md` and `.console/log.md`.
 Do not edit `.console/.context` directly — it is regenerated at each launch.
-
-## Cognition Lifecycle
-
-OC uses [ContextLifecycleProtocol](https://github.com/ProtocolWarden/ContextLifecycleProtocol) for bounded, resumable agent sessions.
-
-| Surface       | Purpose                                                      |
-|---------------|--------------------------------------------------------------|
-| `.console/`   | Operational truth — task, guidelines, backlog, log           |
-| `.context/`   | Durable cognition — capsules, checkpoints, handoffs, leases  |
-| `.claude/`    | Claude Code adapter — ContextGuard hooks                     |
-
-**Orchestrator lifecycle:**
-
-```
-wake → read .context/checkpoints/<latest>.yaml
-     → read active capsule refs
-     → classify state
-     → dispatch bounded worker if needed
-     → write updated checkpoint
-     → update .console/log.md
-     → terminate or compact
-```
-
-**On session start:** Check `.context/active/` for any active capsules. Check `.context/checkpoints/` for the latest checkpoint.  
-**On session end:** Write a LoopCheckpoint. Update any active capsule's `handoff_notes` and `next_actions`.  
-**Templates:** `.context/templates/`  
-**Config:** `.context/config.yaml`
