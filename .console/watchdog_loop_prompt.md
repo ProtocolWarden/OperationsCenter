@@ -162,8 +162,9 @@ Call ScheduleWakeup with:
 
 - **Campaign 10c50210**: STALLED. AgentTopology Done (v0.3.0). ShippingForm (2b5ff37e) Blocked (SIGKILL'd). Phase-gated tasks (3fd02e75, 60390297, 6e32031c, d126bc51) await ShippingForm Done.
 - **86c8c778**: Plane task tracking board_unblock SIGKILL guard — Backlog, OperationsCenter.
-- **2824d46e**: NON-CONVERGENT (cycle 39). "Restore repeated missing test signal coverage" — OperationsCenter improve task. Mix of session-limit hits and real stage failures (1/5, 2/5, 4/6 across 10+ cycles). Latest: 19:28–19:59 local ran in fresh 7pm EDT session window, got "1 of 5 stages failed" (real failure). board_unblock re-queued → R4AI cycle 39. In-flight at 20:06 local cycle 39 end. If blocks again: investigate stage failure detail in kodo-stderr.log before re-queuing.
-- **a969024e**: SUCCEEDED (cycle 36). 5 follow-up tasks spawned: bfb289b3, 89191ff5, 360cff3a, c7df5422, ff19d39b (test infra improvements for OC).
+- **2824d46e**: DONE (cycle 41). "Restore repeated missing test signal coverage" — completed after 10+ cycles of session limits and stage failures.
+- **a969024e follow-ups**: All 5 tasks (bfb289b3, 89191ff5, 360cff3a, c7df5422, ff19d39b) moved to Backlog via board_unblock (cycles 40–41). Now in queue for execution.
+- **Orphaned watcher pattern** (cycle 40–41): Old-session watchers (no .pid file, pre-a402010 code) dying within ~60s of claiming tasks after back-to-back rate gate blocks. Improve died cycle 40 (restarted), goal died cycle 41 (restarted). Intake/test/review/spec orphans still alive — monitor. Fresh restarts have .pid files and are stable.
 - **8871f757, b67bc0e0**: CANCELLED (cycle 18 triage). Lint targets already resolved.
 - **NOTE — testing branch**: if workspace prep failures reappear across repos, check `git ls-remote origin operations-center-testing-branch` on each affected repo. Branch may need to be pushed per-repo.
 

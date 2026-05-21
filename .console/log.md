@@ -3,6 +3,20 @@
 _Chronological continuity log. Decisions, stop points, what changed and why._
 _Not a task tracker — that's backlog.md. Keep entries concise and dated._
 
+## 2026-05-21 — Watchdog cycle 41: ACTIVE — 2824d46e DONE; goal watcher died; restarted
+
+**Convergence:** WEAKLY-CONVERGENT → IMPROVING. 2824d46e is **DONE** (completed after 10+ cycles). All 5 a969024e follow-up tasks (bfb289b3, 89191ff5, 360cff3a, c7df5422, ff19d39b) moved to Backlog via board_unblock cycles 40-41. Goal watcher died same pattern as improve (old-session orphan, died within ~60s of claim after rate gate blocks). Restarted, healthy at 01:31 UTC.
+
+**STEP 1:** custodian: all_zero=true ✓ | ghost: 2 events, active=[], fixed=[] | flow: 0 ✓ | graph: ok ✓ | reaudit: dag_executor + team_executor | regressions: 0 ✓
+
+**STEP 2.5 board-unblock:** ff19d39b Blocked→Backlog (IMPROVE_UNBLOCK) | c7df5422 Blocked→Backlog (IMPROVE_UNBLOCK)
+
+**Orphaned watcher pattern:** Goal watcher (old session, no .pid) died at ~01:20 UTC after claiming 1ad727e3 which was immediately blocked by rate gate. Same pattern as improve (cycle 40). 1ad727e3 properly transitioned to Blocked (rate gate). Remaining orphans (intake, test, review, spec) alive with fresh heartbeats at 01:30 UTC — monitoring.
+
+**STEP 8 — watcher health:** goal: restarted (PID 3747800, executing at 01:31 UTC). watchdog: still dead (21+ hours). 7/8 healthy after restart.
+
+**Cadence:** ACTIVE (1800s) — board_unblock applied (2 tasks), goal watcher restarted, 2824d46e closed
+
 ## 2026-05-21 — Watchdog cycle 40: ACTIVE — improve watcher died; 2824d46e orphaned; watcher restarted
 
 **Convergence:** WEAKLY-CONVERGENT. Improve watcher died at ~00:06 UTC while processing 2824d46e. Task left stuck in Running state (orphaned). Manually transitioned Running→Blocked→R4AI. Improve watcher restarted (PID 3667811, healthy at 00:49 UTC). Follow-up tasks from a969024e continue to be processed.
