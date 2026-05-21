@@ -28,9 +28,9 @@ LOCK_PATH = REPO_ROOT / "logs/local/loop_controller.lock"
 STOP_FLAG = REPO_ROOT / "logs/local/loop_stop.flag"
 SCHEDULE_FILE = REPO_ROOT / ".context/loop_schedule.json"
 LOG_FILE = REPO_ROOT / "logs/local/loop_controller.log"
+SESSION_PROMPT_FILE = REPO_ROOT / "tools/loop/oc_session_prompt.txt"
 
 # Fallback delays (seconds) when session doesn't write loop_schedule.json.
-# Maps health state name → delay; also used as documentation of the full table.
 STATE_DELAYS: dict[str, int] = {
     "CRITICAL": 180,
     "DEGRADED": 300,
@@ -41,17 +41,12 @@ STATE_DELAYS: dict[str, int] = {
 }
 DEFAULT_DELAY = 600  # conservative fallback (STALLED equivalent)
 
-SESSION_PROMPT = (
-    "You are running one iteration of the OC platform watchdog cycle, "
-    "managed by an external controller. "
-    "Full instructions are in docs/operator/watchdog_loop.md. "
-    "Read .console/.context first. "
-    "Do NOT call ScheduleWakeup — the controller manages timing. "
-    "At STEP 10, assess platform health state, choose the appropriate delay "
-    "from the cadence table, then write .context/loop_schedule.json with: "
-    '{"delay_s": <int>, "state": "<STATE>", "reason": "<driving signal>"} '
-    "and exit cleanly."
-)
+
+def load_session_prompt() -> str:
+    try:
+        return SESSION_PROMPT_FILE.read_text()
+    except OSError as e:
+        raise SystemExit(f"Cannot read session prompt file {SESSION_PROMPT_FILE}: {e}")
 
 _stop = False
 
@@ -133,8 +128,9 @@ def get_delay() -> int:
 
 def run_session() -> int:
     """Spawn one bounded claude -p session. Returns exit code."""
-    cmd = ["claude", "-p", SESSION_PROMPT, "--output-format", "text"]
-    _log(f"Spawning session: {' '.join(cmd[:2])} ...")
+    prompt = load_session_prompt()
+    cmd = ["claude", "-p", prompt, "--output-format", "text"]
+    _log(f"Spawning session (prompt: {SESSION_PROMPT_FILE.name}, {len(prompt)} chars) ...")
     # Source env before spawning so the session inherits OC credentials
     env = os.environ.copy()
     env_file = REPO_ROOT / ".env.operations-center.local"
