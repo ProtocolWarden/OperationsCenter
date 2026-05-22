@@ -1,6 +1,6 @@
 # OC Watchdog LoopCheckpoint template
 # Write one of these at the end of each watchdog cycle.
-# schema: https://github.com/ProtocolWarden/ContextLifecycleProtocol/blob/main/.context/schemas/loop_checkpoint.yaml
+# schema: https://github.com/ProtocolWarden/ContextLifecycle/blob/main/.context/schemas/loop_checkpoint.yaml
 
 checkpoint_id: ""           # e.g. "chk-$(date +%Y%m%d-%H%M)-oc-watchdog"
 schema_version: "0.1"

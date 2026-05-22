@@ -2,7 +2,7 @@
 
 Runtime-neutral durable cognition surface for OperationsCenter.
 
-Implements the [ContextLifecycleProtocol](https://github.com/ProtocolWarden/ContextLifecycleProtocol).
+Implements the [ContextLifecycle](https://github.com/ProtocolWarden/ContextLifecycle).
 
 OC is the orchestration and execution boundary. Its watchdog loops and worker dispatches must not accumulate unbounded conversational history. This surface enables checkpoint-driven resumable operation.
 
@@ -48,4 +48,4 @@ See `config.yaml` in this directory.
 
 ## CLP Reference
 
-Schemas: https://github.com/ProtocolWarden/ContextLifecycleProtocol/tree/main/.context/schemas/
+Schemas: https://github.com/ProtocolWarden/ContextLifecycle/tree/main/.context/schemas/

@@ -396,7 +396,7 @@ environments without jq installed.
 
 ## 2026-05-21 — Sync ContextGuard hook fixes from CLP
 
-Synced updated pre_tool_use.sh and stop.sh from ContextLifecycleProtocol adapter.
+Synced updated pre_tool_use.sh and stop.sh from ContextLifecycle adapter.
 Fixes: allowed_paths whitelist enforcement, malformed capsule detection, subagent_heavy
 warn, checkpoint_stale block, reload_scope_too_large warn, session-aware stop detection.
 
@@ -420,7 +420,7 @@ CLAUDE.md is now OC-managed-only to avoid dirty diffs.
 **DC7:** Three orphan spec docs in docs/specs/ were not linked from docs/README.md. Linked them.
 Neither violation was introduced by the context-lifecycle branch — both were pre-existing on main.
 
-## 2026-05-21 — ContextLifecycleProtocol Phase 3 integration
+## 2026-05-21 — ContextLifecycle Phase 3 integration
 
 **Decision:** Added `.context/` cognition surface and ContextGuard Claude Code hooks.
 

@@ -12,7 +12,7 @@ Intended integration point:
   OcPlanningProposal.continuous_improvement: Optional[ContinuousImprovementSpec]
 
 CLP artifact paths are carried as string references only — no live imports
-from ContextLifecycleProtocol. Paths are relative to the target repo root.
+from ContextLifecycle. Paths are relative to the target repo root.
 
 Design doc: docs/design/continuous-improvement/design.md
 

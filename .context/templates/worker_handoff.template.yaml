@@ -1,6 +1,6 @@
 # OC WorkerHandoff template
 # Created by the orchestrator before dispatching an investigation worker.
-# schema: https://github.com/ProtocolWarden/ContextLifecycleProtocol/blob/main/.context/schemas/worker_handoff.yaml
+# schema: https://github.com/ProtocolWarden/ContextLifecycle/blob/main/.context/schemas/worker_handoff.yaml
 
 handoff_id: ""              # e.g. "handoff-$(date +%Y%m%d-%H%M)-oc-<slug>"
 schema_version: "0.1"

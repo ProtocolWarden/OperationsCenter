@@ -1,6 +1,6 @@
 # OC InvestigationCapsule template
 # Use when a worker is dispatched to investigate a failing invariant or blocker.
-# schema: https://github.com/ProtocolWarden/ContextLifecycleProtocol/blob/main/.context/schemas/investigation_capsule.yaml
+# schema: https://github.com/ProtocolWarden/ContextLifecycle/blob/main/.context/schemas/investigation_capsule.yaml
 
 capsule_id: ""              # e.g. "inv-$(date +%Y%m%d)-oc-<short-slug>"
 schema_version: "0.1"
