@@ -123,7 +123,7 @@ def write_watchdog_loop_lock() -> None:
     """
     lock = {
         "pid": os.getpid(),
-        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(timespec="seconds"),
         "hostname": socket.gethostname(),
         "repo_root": str(REPO_ROOT),
         "purpose": "OC Platform Watchdog Loop",
@@ -233,8 +233,8 @@ def main() -> None:
     write_watchdog_loop_lock()
     STOP_FLAG.unlink(missing_ok=True)
     _log(f"OC watchdog loop controller started. pid={os.getpid()}")
-    _log(f"Stop with: python tools/loop/controller.py --stop")
-    _log(f"Status:    python tools/loop/controller.py --status")
+    _log("Stop with: python tools/loop/controller.py --stop")
+    _log("Status:    python tools/loop/controller.py --status")
     _log(f"Log:       {LOG_FILE}")
 
     iteration = 0

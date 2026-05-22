@@ -12,9 +12,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
-import pytest
 
 from operations_center.contracts.ci import (
     ContinuousImprovementSpec,

@@ -149,7 +149,6 @@ audit:
       - "src/operations_center/audit_toolset/**"
       - "src/operations_center/autonomy_tiers/**"
       - "src/operations_center/behavior_calibration/**"
-      - "src/operations_center/repo_graph/**"
       - "src/operations_center/routing/**"
       - "src/operations_center/decision/**"
       - "src/operations_center/drift/**"
@@ -196,7 +195,6 @@ audit:
       - "src/operations_center/audit_toolset/**"
       - "src/operations_center/autonomy_tiers/**"
       - "src/operations_center/behavior_calibration/**"
-      - "src/operations_center/repo_graph/**"
       - "src/operations_center/routing/**"
       - "src/operations_center/decision/**"
       - "src/operations_center/drift/**"
@@ -237,7 +235,6 @@ audit:
       # Startup-wiring tests verify env_var_unset / env_var_set side effects via
       # mocks; the test is the side-effect check.
       - tests/unit/er000_phase0_golden/test_golden.py
-      - tests/unit/executors/test_normalizers.py
       - tests/unit/executors/test_startup_wiring.py
     D11:
       # The local backends (aider_local, direct_local, team_executor) share a
@@ -273,7 +270,6 @@ audit:
       - "src/operations_center/policy/**"
       - "src/operations_center/managed_repos/**"
       - "src/operations_center/run_memory/**"
-      - "src/operations_center/repo_graph/**"
       # CLI entrypoints (artifacts/fixtures/flow_audit/ghost_audit) share
       # _load_index / _parse_since / _detect_* helpers — typology by class.
       - "src/operations_center/entrypoints/**"

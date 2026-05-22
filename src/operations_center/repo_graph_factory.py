@@ -61,7 +61,7 @@ def _load_effective_graph_compatible(
     if "private" in params:
         return load_effective_graph(
             base,
-            private=private,
+            private=private,  # ty: ignore[unknown-argument]
             project=project,
             work_scope=work_scope,
             local=local,

@@ -99,7 +99,22 @@ class TestProjectExplicit:
         assert g.resolve("MyProjAPI") is not None
 
 
+_SIBLING_PM_AVAILABLE = (
+    Path(__file__).resolve().parents[3]
+    / "PlatformManifest"
+    / "src"
+    / "platform_manifest"
+    / "__init__.py"
+).is_file()
+
+_requires_sibling_pm = pytest.mark.skipif(
+    not _SIBLING_PM_AVAILABLE,
+    reason="sibling PlatformManifest source not available in this environment",
+)
+
+
 class TestPrivateExplicit:
+    @_requires_sibling_pm
     def test_explicit_private_manifest_path_loads(self, tmp_path: Path) -> None:
         private = tmp_path / "private.yaml"
         private.write_text(_PRIVATE_YAML, encoding="utf-8")
@@ -203,6 +218,7 @@ class TestProjectByRepoRootConvention:
 
 
 class TestPrivateBySlugConvention:
+    @_requires_sibling_pm
     def test_private_manifest_discovered_from_private_topology_sibling(
         self, tmp_path: Path
     ) -> None:

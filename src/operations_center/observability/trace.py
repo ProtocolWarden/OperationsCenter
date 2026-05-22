@@ -106,8 +106,8 @@ class RunReportBuilder:
             warnings=self._warnings(record),
             backend_detail_refs=list(record.backend_detail_refs),
             runtime_invocation_ref=record.result.runtime_invocation_ref,
-            routing=dict(routing) if isinstance(routing, dict) else {},
-            provenance=dict(provenance) if isinstance(provenance, dict) else {},
+            routing=dict(routing) if isinstance(routing, dict) else {},  # ty: ignore[no-matching-overload]
+            provenance=dict(provenance) if isinstance(provenance, dict) else {},  # ty: ignore[no-matching-overload]
         )
 
     # ------------------------------------------------------------------

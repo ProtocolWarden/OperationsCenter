@@ -126,8 +126,8 @@ def _runtime_binding_to_summary(rb) -> Optional[RuntimeBindingSummary]:
         return None
     try:
         return RuntimeBindingSummary(
-            kind=rb.kind.value if isinstance(rb.kind, RuntimeKind) else str(rb.kind),
-            selection_mode=(
+            kind=rb.kind.value if isinstance(rb.kind, RuntimeKind) else str(rb.kind),  # ty: ignore[invalid-argument-type]
+            selection_mode=(  # ty: ignore[invalid-argument-type]
                 rb.selection_mode.value
                 if isinstance(rb.selection_mode, SelectionMode)
                 else str(rb.selection_mode)
