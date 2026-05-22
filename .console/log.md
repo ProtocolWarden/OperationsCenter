@@ -1,5 +1,73 @@
 # Log
 
+## OC Platform Watchdog Cycle — 2026-05-22 22:09 UTC (Cycle 14)
+
+- Branch: oc-watchdog/20260522-1710-fix-ci-regressions
+- Health state: ACTIVE (direct fix applied — context-lifecycle pin v0.3.0→v0.3.1 resolves CI gate)
+- Next cadence: 900s — fix committed; push PR; CI should go green; family_deferred_initial_gating will clear
+
+### STEP 0 — Preflight
+- All 16 repos: Already up to date (ff-only pull) ✓ (OC on watchdog branch, no remote tracking — expected)
+- Plane: OK ✓ | SwitchBoard: OK ✓ | Watchers: 8/8 running ✓ | CLIs: OK ✓
+- git status: loop_schedule.json deleted (controller reset)
+
+### STEP 1 — Investigation findings
+- graph-doctor: ✓ OK — 11 nodes / 12 edges / graph_built=True
+- ghost-audit: G10 (1 event: Fix lint regression Cancelled, lagging — expected to clear)
+- flow-audit: 0 open gaps ✓; F8 partial (persistent/non-critical)
+- reaudit-check: both dag_executor + team_executor `needed=false` (CxRP 0.3.1) ✓
+- regression-check: 0 findings ✓
+- custodian-sweep: 7 repos swept, all RUFF=0, no actionable deltas ✓
+
+### STEP 1 — CI root cause investigation
+- **Primary blocker**: `context-lifecycle@v0.3.0` baked `repograph @ file:///home/dev/Documents/GitHub/RepoGraph` into its pyproject.toml at that tag — a local developer path. CI fails with `[Errno 2] No such file or directory: '/home/dev/Documents/GitHub/RepoGraph'` on every install.
+- Introduced by commit `f4991b7 chore(deps): pin context-lifecycle to git tag v0.3.0` on remote main.
+- Fix: bump to `v0.3.1` which uses `repograph @ git+https://github.com/ProtocolWarden/RepoGraph.git@v0.2.0`.
+- **Secondary issues** (already fixed by e9d0913): license headers, ruff, ty, test failures from maintenance+prompt-diff commits.
+- PR #169 (`oc-watchdog/20260522-0644-fix-ci-failures`): addresses an earlier set of regressions; does NOT include the context-lifecycle fix (was cut before f4991b7). Superseded by current branch.
+- operations-center-testing-branch: present on origin ✓ (was missing at 03:01 UTC, now confirmed present).
+
+### STEP 1 — Executor failure investigation
+- 03:16–03:18 UTC: SwitchBoard outage (5 tasks got "planning failed") — resolved, stale log entries
+- 02:54 UTC: task 74af58c5 "Add Rule evidence type" — "2 of 5 stages failed" (persistent; investigate next cycle post-CI-fix)
+- session limits: `resets 1:40am ET` (05:40 UTC); rate gate 2/hr throttling board dispatch
+- No OOM; no SIGKILL; memory 25Gi available — healthy
+
+### STEP 2 — Triage: 0 actions
+
+### STEP 2.5 — Board-unblock: 2 actions
+- CLEAN_BLOCKED_RETRY: c7df5422 "Enable parallel unit-test execution" → Backlog (pre-execution failure, no signal labels)
+- GOAL_BACKLOG_PROMOTE: 360cff3a "Add slow/smoke pytest markers" → R4AI (parent improve a969024e Done)
+
+### STEP 3 — Blocked/stalled analysis
+- Autonomy-cycle: 0 candidates emitted; 12 suppressed (8 `family_deferred_initial_gating` from CI failure on main, 4 `cooldown_active`)
+- CI gate is the primary blocker: once PR merged and CI green, all 8 gated families unlock
+- Session limits and rate gate (2/hr): self-resolving at 05:40 UTC; by-design throttling — NOT starvation
+- task 74af58c5: temporarily-blocked (CI green may unblock; 2 of 5 stages failure pattern)
+- Behavioral convergence: ACTIVE (direct CI fix applied this cycle)
+
+### STEP 5/6 — Direct fix (OperationsCenter)
+- pyproject.toml: context-lifecycle `v0.3.0` → `v0.3.1`
+- Local verification: 2408 tests pass, 1 skipped; ruff clean; SPDX clean ✓
+- v0.3.1 installs with `repograph @ git+https://github.com/ProtocolWarden/RepoGraph.git@v0.2.0` (no local path dep)
+
+### STEP 7 — Invariant tests: 15 passed ✓
+
+### STEP 8 — Watcher health: 8/8 running ✓
+- SwitchBoard outage errors (03:16–03:18): stale log entries from prior outage
+- No non-143 crashes; no OOM; no SIGKILL events
+
+### Blocked work classification
+- 74af58c5: temporarily-blocked (post-CI-fix retry; 2/5 stages failing)
+- 3a3c202f: temporarily-blocked (testing-branch transient — now present; next attempt should clear)
+- operations-center-testing-branch: present on origin ✓
+
+### Behavioral convergence: ACTIVE
+- Context-lifecycle pin fix addresses root cause of CI failure → all 8 gated families unlock after merge
+- Rate gate and session limits: by-design; self-resolving
+
+---
+
 ## OC Platform Watchdog Cycle — 2026-05-22 21:50 UTC (Cycle 13)
 
 - Branch: oc-watchdog/20260522-1710-fix-ci-regressions
