@@ -236,6 +236,30 @@ def _cb_row() -> str:
     return f"  {status}  ({failures}/{len(outcomes)} fresh failed, threshold {int(_CB_THRESHOLD * 100)}%)"
 
 
+def _rate_gate_row() -> str:
+    data = _read_json(USAGE_JSON)
+    hourly = data.get("hourly_exec_count", "?") if data else "?"
+    daily = data.get("daily_exec_count", "?") if data else "?"
+    max_hour: int | str = "?"
+    max_day: int | str = "?"
+    try:
+        import yaml
+        cfg_path = ROOT_DIR / "config" / "operations_center.local.yaml"
+        cfg = yaml.safe_load(cfg_path.read_text()) or {}
+        gate = cfg.get("resource_gate", {}) or {}
+        max_hour = gate.get("max_per_hour", "?")
+        max_day = gate.get("max_per_day", "?")
+    except Exception:
+        pass
+    hour_color = _RED if isinstance(hourly, int) and isinstance(max_hour, int) and hourly >= max_hour else ""
+    day_color = _RED if isinstance(daily, int) and isinstance(max_day, int) and daily >= max_day else ""
+    r = _RESET if hour_color or day_color else ""
+    return (
+        f"  {hour_color}hour: {hourly}/{max_hour}{_RESET if hour_color else ''}   "
+        f"{day_color}day: {daily}/{max_day}{_RESET if day_color else ''}"
+    )
+
+
 def _memory_row() -> str:
     try:
         avail_kb = 0
@@ -247,7 +271,7 @@ def _memory_row() -> str:
                 swap_kb = int(line.split()[1])
         total_mb = (avail_kb + swap_kb) // 1024
         total_gb = total_mb / 1024
-        threshold_mb = int(os.environ.get("OPERATIONS_CENTER_MIN_KODO_AVAILABLE_MB", "6144"))
+        threshold_mb = int(os.environ.get("OPERATIONS_CENTER_MIN_AVAILABLE_MB", "6144"))
         threshold_gb = threshold_mb / 1024
         color = _RED if total_mb < threshold_mb else ""
         reset = _RESET if color else ""
@@ -278,6 +302,7 @@ def _render(repo_filter: list[str] | None, width: int = 78) -> str:
     sections.append("")
     sections.append("CIRCUIT BREAKER  " + _cb_row().lstrip())
     sections.append("MEMORY           " + _memory_row().lstrip())
+    sections.append("RATE GATE        " + _rate_gate_row().lstrip())
 
     sections.append("")
     sections.append(divider)
@@ -375,10 +400,19 @@ def _render_rich(repo_filter: list[str] | None, console) -> None:
         expand=True,
     )
 
+    rate_text = Text.from_ansi(_rate_gate_row().strip())
+    rate_panel = Panel(
+        rate_text,
+        title="[bold]Rate Gate[/bold]",
+        border_style="cyan",
+        box=box.ROUNDED,
+        expand=True,
+    )
+
     content = Group(
         Columns(watcher_panels, equal=True, expand=True),
         Columns([executor_panel, board_panel], equal=True, expand=True),
-        Columns([cb_panel, mem_panel], equal=True, expand=True),
+        Columns([cb_panel, mem_panel, rate_panel], equal=True, expand=True),
         wd_text,
     )
 
