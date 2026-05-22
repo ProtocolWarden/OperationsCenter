@@ -1,5 +1,70 @@
 # Log
 
+## OC Platform Watchdog Cycle — 2026-05-22 21:50 UTC (Cycle 13)
+
+- Branch: oc-watchdog/20260522-1710-fix-ci-regressions
+- Health state: DEGRADED (session limits exhausted; R4AI saturated at 15; CI fix not yet merged to main)
+- Next cadence: 300s — R4AI blocked; session limits reset at ~00:40 UTC; CI fix on watchdog branch pending operator merge
+
+### STEP 0 — Preflight
+- All 16 repos: Already up to date (ff-only pull) ✓ (OC on watchdog branch, no remote tracking — expected)
+- Plane: OK ✓ | SwitchBoard: OK ✓ | Watchers: 8/8 running ✓ | CLIs: OK ✓
+- git status: loop_schedule.json deleted (controller reset for this cycle)
+
+### STEP 1 — Investigation findings
+- graph-doctor: ✓ OK — 11 nodes / 12 edges / graph_built=True
+- ghost-audit: G10 (1 event: Fix lint regression Cancelled, lagging — expected to clear)
+- flow-audit: 0 open gaps ✓; F8 partial (persistent/non-critical)
+- reaudit-check: both dag_executor + team_executor `needed=false` (CxRP 0.3.1) ✓
+- regression-check: 0 findings ✓
+- custodian-sweep: 7 repos, all RUFF=0, no actionable deltas ✓
+
+### STEP 1 — Executor failure investigation
+- **SwitchBoard outage at 03:16–03:18 UTC**: 5 tasks (3a3c202f, 0f1612ea, 89fc5782, 41bcd097, bfb289b3) got "planning failed — SwitchBoard unreachable" during the Plane outage window. Resolved; SwitchBoard is OK now.
+- Session limits: 2 slots exhausted (reset 8:40pm ET = 00:40 UTC; 1:40am ET = 05:40 UTC)
+- Hourly rate gate: 2/2 repeatedly; resets each hour
+- `operations-center-testing-branch`: was missing at 03:01:36 UTC (caused 3a3c202f workspace failure); present on origin now — transient
+- `74af58c5` "Add Rule evidence type": 2 of 5 stages failed (most recent) — stage failures not session-limit; needs investigation next execution attempt
+- No OOM; no SIGKILL; no executor signals; memory healthy (26Gi free)
+- **CI still failing on origin/main** (SHA 1cb614a): all 6 checks failing — Custodian doctor, License headers, Lint, Test, Type check, audit. Fix commit e9d0913 is on local watchdog branch (not pushed). Causing `family_deferred_initial_gating` suppressions in autonomy-cycle (8 candidates gated, 4 on cooldown).
+
+### STEP 2 — Triage: 0 actions
+
+### STEP 2.5 — Board-unblock: 1 task moved
+- CLEAN_BLOCKED_RETRY: `360cff3a` "Add slow/smoke pytest markers" → Backlog (pre-execution workspace failure; no executor-signal labels; safe to retry)
+
+### STEP 3 — Blocked/stalled analysis
+- R4AI queue: 15 tasks (cap=8, saturation limit=15). Tasks claiming, failing (session limits + SwitchBoard outage), recycling Blocked → R4AI. Queue full, not empty.
+- propose: created=0, skipped=2 — REASON: `ready_queue_saturated` (ready_count=15, cap=8). NOT starvation (queue is FULL).
+- autonomy-cycle: 0 emitted candidates this cycle; 12 suppressed (8 `family_deferred_initial_gating` from CI failure, 4 `cooldown_active`)
+- New spec campaign `ci-coordinator-decision-tests` (a94c7e1f): created 7 tasks at 21:22 UTC — legitimate new campaign
+- Behavioral convergence: WEAKLY-CONVERGENT (board-unblock active; spec campaign created; session limits are external/self-resolving)
+- **Structural blocker**: CI fix on watchdog branch not pushed. Operator must push branch and merge PR to clear `family_deferred_initial_gating` gate.
+
+### STEP 4 — Convergence promotion candidates
+- CI failure gate (`family_deferred_initial_gating`) correctly suppressing — this is working as designed. Gate will clear when e9d0913 merges to main and CI passes.
+- No new convergence promotion items.
+
+### STEP 5/6 — Direct fixes
+- None. CI fix already committed (e9d0913) but not pushed — operator action required to create PR and merge.
+- No code regressions detected. All local audits clean.
+
+### STEP 7 — Invariant tests: 15 passed ✓
+
+### STEP 8 — Watcher health: 8/8 running ✓; SwitchBoard outage 03:16–03:18 UTC (resolved before this cycle)
+
+### Blocked work classification
+- 74af58c5, 3a3c202f, 0f1612ea, 89fc5782, 41bcd097, bfb289b3: temporarily-blocked (session limits + transient SwitchBoard outage; self-resolving at 00:40 UTC)
+- 360cff3a: moved Backlog ✓ this cycle
+- CI/main: structurally-blocked (watchdog branch not pushed — operator must merge oc-watchdog/20260522-1710-fix-ci-regressions → main)
+
+### Operator action required
+- Push watchdog branch `oc-watchdog/20260522-1710-fix-ci-regressions` and open PR → main to restore CI green (fixes `family_deferred_initial_gating` suppression in autonomy-cycle)
+
+### Behavioral convergence: WEAKLY-CONVERGENT
+
+---
+
 ## OC Platform Watchdog Cycle — 2026-05-22 21:24 UTC (Cycle 12)
 
 - Branch: oc-watchdog/20260522-1710-fix-ci-regressions
