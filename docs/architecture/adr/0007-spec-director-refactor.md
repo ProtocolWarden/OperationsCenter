@@ -147,14 +147,14 @@ Planning subprocess composes the prompt from this payload. Execute subprocess ru
 
 For Phase D (phase orchestration / spec rewrite), the naive approach is full-regen: hand the LLM the existing spec + phase state, ask for the updated version, accept whatever comes back. This loses intentional decisions, drifts on structure, and is wasteful for small advances.
 
-A better primitive is **prompt-diff** — the LLM emits a structured patch ("update section X, leave everything else alone") that's applied to the existing spec rather than replacing it. `temm1e-labs/promptlabs` (https://github.com/temm1e-labs/promptlabs) is one implementation; we plan to **clone its repo and copy the primitives** into OC (or a new internal package) rather than add it as a third-party dependency. The package has uncertain maintenance trajectory and a small surface area worth owning.
+A better primitive is **prompt-diff** — the LLM emits a structured patch ("update section X, leave everything else alone") that's applied to the existing spec rather than replacing it. `temm1e-labs/promptlabs` (https://github.com/temm1e-labs/promptlabs) is one implementation; we cloned its repo and copied the primitives into OC rather than adding it as a third-party dependency. The package has uncertain maintenance trajectory and a small surface area worth owning.
 
-This ADR's Phase D handler should be built so the swap is straightforward:
+This ADR's Phase D handler was built so the swap is straightforward:
 - The handler reads the existing spec content from the workspace (it has to anyway, for context).
 - The backend prompt is what differs between "full regen" and "diff-apply" — handler logic stays the same.
 - ExecutionResult shape is identical (file modified, committed, pushed).
 
-When the copied-in prompt-diff primitive lands, only the prompt-construction step changes. The audit/lifecycle/Plane integration built in this ADR carries forward.
+**As of follow-up C (2026-05-22) this is DONE.** The primitives live in `src/operations_center/prompt_diff/` (`Edit`, `EditOp`, `EditApplicationError`, `apply_one`, `apply_edits`, `ApplyResult`) — schema + application logic copied from promptlabs' `api/app/agents/optimizer.py` (MIT) with the closed-loop optimizer agent intentionally left behind. `_build_phase_advance_goal_text` in `board_worker/main.py` now emits a structured-edit prompt (fenced under `<!-- prompt_diff_edits -->`) instead of regenerating the whole spec; `_handle_spec_author_success` soft-validates the committed fence as `list[Edit]` for observability without failing the task. The audit/lifecycle/Plane integration built in this ADR carries forward unchanged.
 
 ## Risks
 

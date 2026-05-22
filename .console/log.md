@@ -1,5 +1,21 @@
 # Log
-## 2026-05-22 — ADR 0007 follow-up B: substitute run_id at execute-time
+## 2026-05-22 — ADR 0007 follow-up C: prompt-diff primitive + surgical phase-advance
+
+Branch: `feat/adr-0007-followups`. Replaced the naive full-regen phase-advance prompt with a structured-edit (prompt-diff) primitive copied in from `temm1e-labs/promptlabs` (MIT — per upstream README; no LICENSE file in the repo, README declares "MIT.").
+
+**New module:** `src/operations_center/prompt_diff/` — `Edit` (Pydantic v2), `EditOp` (Literal), `EditApplicationError`, `apply_one`, `apply_edits`, `ApplyResult` (dataclass). Schema + application logic carried over from promptlabs' `api/app/agents/optimizer.py`; the closed-loop optimizer agent (LLM-calling, budgets, variable validation) deliberately not. Header attributes derivation per MIT custom.
+
+**Prompt rewrite:** `_build_phase_advance_goal_text` in `entrypoints/board_worker/main.py` now instructs the agent to (1) read the existing spec, (2) emit a YAML `list[Edit]` between `<!-- prompt_diff_edits -->` / `<!-- /prompt_diff_edits -->` markers, (3) apply the edits and write the result back. Schema documented inline; worked example included; uniqueness + minimality rules made hard. Front-matter, provenance comment, prior-phase decisions preserved by construction (anchors leave them alone).
+
+**Post-process verification:** new `_summarize_prompt_diff_block` helper parses the committed fence as `list[Edit]` and logs the edit count. Soft signal only — parse failure logs at INFO and does NOT block task transition. The hard contract is "spec committed"; edit-block hygiene is feedback for prompt tuning.
+
+**ADR 0007 follow-up section** updated from future tense ("when ... lands") to past tense ("as of follow-up C ... DONE"), pointing at the new module.
+
+**Tests:** `tests/prompt_diff/test_apply.py` — 13 passing. Covers all 5 ops (replace / insert_before / insert_after / delete / append), ambiguous-anchor rejection, missing-anchor rejection, required-field validation, `apply_edits` mixed-validity skip semantics, sequential edits running against partial state. Adjacent suites (`tests/spec_author/` + grep `board_worker|phase_advance|spec_author`) all green: 38 + 13 passing.
+
+**Constraints honored:** no commit, no push; follow-ups A/B/D untouched; full Optimizer agent (LLM closed loop) not pulled in; license attribution in module header.
+
+
 
 Branch: `feat/adr-0007-followups`. Replaced the fragile post-success `__RUN_ID__` token rewrite with an at-prompt-time substitution.
 

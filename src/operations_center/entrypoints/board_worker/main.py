@@ -803,9 +803,18 @@ def _handle_spec_author_success(
     task_id = str(issue["id"])
 
     if task_phase:
-        # ADR 0007 Phase D (not-yet-wired) path: phase-advance rewrites an
-        # existing spec; no new campaign sub-tasks needed because the
-        # campaign was created on first authoring.
+        # ADR 0007 Phase D + follow-up C path: phase-advance applied a
+        # prompt-diff edit block; no new campaign sub-tasks needed because
+        # the campaign was created on first authoring.
+        #
+        # Soft sanity-check: parse the prompt_diff_edits fence out of the
+        # committed spec and confirm it deserializes as list[Edit]. This
+        # is observational only — a failed parse logs at WARNING but does
+        # NOT fail the task. The hard contract is "spec committed"; edit-
+        # block hygiene is feedback for prompt tuning.
+        edit_count, edit_parse_note = _summarize_prompt_diff_block(
+            workspace=workspace, target_path=target_path
+        )
         try:
             client.transition_issue(task_id, _STATE_DONE)
             client.comment_issue(
@@ -818,6 +827,11 @@ def _handle_spec_author_success(
                 "board_worker[spec-author]: phase-advance Done transition failed task_id=%s — %s",
                 task_id, exc,
             )
+        logger.info(
+            "board_worker[spec-author]: phase-advance task_id=%s edit_block=%s",
+            task_id,
+            edit_parse_note if edit_count is None else f"{edit_count} edits ({edit_parse_note})",
+        )
         return
 
     spec_path = workspace / target_path
@@ -1743,6 +1757,52 @@ def _parse_spec_author_payload(description: str) -> dict | None:
     return data
 
 
+_PROMPT_DIFF_OPEN  = "<!-- prompt_diff_edits -->"
+_PROMPT_DIFF_CLOSE = "<!-- /prompt_diff_edits -->"
+
+
+def _summarize_prompt_diff_block(
+    *, workspace: Path, target_path: str
+) -> tuple[int | None, str]:
+    """Soft-validate the prompt_diff_edits fence in a committed spec.
+
+    Returns ``(edit_count, note)``:
+
+    * ``(N, "parsed")``  — fence present and YAML deserialized to N ``Edit`` objects.
+    * ``(None, "absent")`` — no fence in the file.
+    * ``(None, "<reason>")`` — fence present but failed to parse (logged, not fatal).
+
+    Pure observation: the hard contract is "spec committed". This function
+    never raises and never affects task transition. Per ADR 0007 follow-up C.
+    """
+    try:
+        spec_text = (workspace / target_path).read_text(encoding="utf-8")
+    except OSError as exc:
+        return None, f"read failed: {exc}"
+
+    if _PROMPT_DIFF_OPEN not in spec_text or _PROMPT_DIFF_CLOSE not in spec_text:
+        return None, "absent"
+
+    try:
+        body = spec_text.split(_PROMPT_DIFF_OPEN, 1)[1].split(_PROMPT_DIFF_CLOSE, 1)[0]
+    except IndexError:
+        return None, "fence malformed"
+
+    try:
+        import yaml  # local — keeps board_worker import path lean for non-spec kinds.
+
+        from operations_center.prompt_diff import Edit
+
+        doc = yaml.safe_load(body) or {}
+        raw_edits = doc.get("edits") if isinstance(doc, dict) else None
+        if not isinstance(raw_edits, list):
+            return None, "edits key missing or not a list"
+        parsed = [Edit.model_validate(e) for e in raw_edits]
+        return len(parsed), "parsed"
+    except Exception as exc:  # noqa: BLE001 — soft signal, log everything.
+        return None, f"parse failed: {type(exc).__name__}: {exc}"
+
+
 def _build_phase_advance_goal_text(
     *,
     spec_slug: str,
@@ -1752,22 +1812,23 @@ def _build_phase_advance_goal_text(
     ctx: dict,
     run_id_placeholder: str,
 ) -> str:
-    """Phase-advance spec rewrite prompt (ADR 0007 Phase D).
+    """Phase-advance spec rewrite prompt (ADR 0007 Phase D + follow-up C).
 
-    Naive full-regen template: the agent reads the existing spec at
-    ``target_path``, rewrites it for ``task_phase``, and writes it back.
-    When the prompt-diff primitive (ADR 0007 follow-up note) is integrated,
-    only the contents of this function change — the surrounding pipeline,
-    payload shape, and ``_handle_spec_author_success`` (phase-advance branch)
-    do not.
+    Surgical-edit template: the agent reads the existing spec, emits a
+    structured ``list[Edit]`` patch under a fenced block, applies it via
+    the in-tree ``operations_center.prompt_diff`` primitive, and writes the
+    result back. Replaces the previous full-regen prompt — preserves prior
+    decisions and structure across phase advances rather than rolling them
+    forward by hope.
     """
     parts: list[str] = []
     parts.append(
         f"# Spec phase advance — {spec_slug} -> {task_phase}\n\n"
         f"The campaign spec at `{target_path}` is currently between phases. "
-        f"Its predecessor phase has finished; the spec now needs to describe "
-        f"the **{task_phase}** phase concretely so the next batch of campaign "
-        f"tasks has clear ground truth."
+        f"Its predecessor phase has finished; the spec needs **minimal, "
+        f"targeted edits** so it describes the **{task_phase}** phase "
+        f"concretely. Do NOT rewrite the spec from scratch — emit a "
+        f"structured diff and apply it."
     )
 
     parts.append(
@@ -1775,27 +1836,63 @@ def _build_phase_advance_goal_text(
         f"1. Read the existing spec at `{target_path}` (it is already in the "
         f"workspace — this repository is `OperationsCenter` and the file is "
         f"committed on the current branch).\n"
-        f"2. Rewrite the spec for the `{task_phase}` phase. **Preserve**:\n"
-        "   - The YAML front-matter (campaign_id, slug, repos, area_keywords, "
-        "created_at). Update only the `status:` field if appropriate.\n"
-        "   - The provenance comment on line 1 (`<!-- generated_by_run: ... -->`). "
-        "If absent, add one using the run id below.\n"
-        "   - All prior decisions, constraints, and references to completed work. "
-        "Phase-advance is additive — earlier phases are history, not waste.\n"
-        f"3. Replace the `## Goals` section with goals specific to the "
-        f"`{task_phase}` phase. Each goal must be one bounded executor run "
-        "(under 1 hour); 2–4 goals total.\n"
-        "4. Update `## Success Criteria` to reflect what \"done\" means for "
-        f"this phase specifically.\n"
-        f"5. Write the updated spec back to `{target_path}`. Touch no other file.\n"
+        f"2. Decide the smallest set of edits that updates `## Goals` and "
+        f"`## Success Criteria` for the `{task_phase}` phase. Leave everything "
+        f"else alone — front-matter, prior decisions, completed-phase notes, "
+        f"the `<!-- generated_by_run: ... -->` provenance line on line 1.\n"
+        f"3. Emit those edits as a YAML list inside the fenced block "
+        f"described below.\n"
+        f"4. Apply the edits to produce the new spec contents, then write "
+        f"the result to `{target_path}`. Touch no other file.\n"
+        f"5. The fenced ``prompt_diff_edits`` block MUST remain in the "
+        f"committed spec — it is the audit trail of what changed and why.\n"
     )
 
     parts.append(
-        "## Provenance\n"
-        f"If the spec is missing its `<!-- generated_by_run: ... -->` header, "
-        f"add `<!-- generated_by_run: {run_id_placeholder} -->` as the first "
-        f"line. Otherwise leave the existing header untouched — phase advances "
-        f"do not overwrite original authorship provenance.\n"
+        "## Edit schema\n"
+        "Each entry in the YAML list is one ``Edit`` object. Shape:\n"
+        "\n"
+        "```\n"
+        "- op: replace | insert_before | insert_after | delete | append\n"
+        "  anchor: <exact substring from the current spec — REQUIRED except for append>\n"
+        "  new_text: <text to insert / replace with — REQUIRED except for delete>\n"
+        "  reason: <one short sentence; operator reads this in audit>\n"
+        "  targets_criterion: <optional rubric name; null is fine>\n"
+        "```\n"
+        "\n"
+        "Hard rules:\n"
+        "- Each ``anchor`` MUST appear EXACTLY ONCE in the current spec. If a string "
+        "occurs multiple times, anchor on a longer surrounding substring that is unique.\n"
+        "- Anchors match by exact substring (whitespace- and case-sensitive).\n"
+        "- Keep edits MINIMAL — touch only what must change for the new phase. "
+        "No stylistic cleanup, no \"while I'm here\" rewrites.\n"
+        "- Preserve the `<!-- generated_by_run: {{RUN_ID}} -->` provenance line "
+        "on line 1 unchanged. Phase advances do not overwrite authorship provenance.\n"
+        "- Preserve front-matter keys (campaign_id, slug, repos, area_keywords, "
+        "created_at). Only ``status:`` may change if relevant.\n"
+    )
+
+    parts.append(
+        "## Output fence\n"
+        f"Emit your edits between these two markers (literal, including the "
+        f"angle brackets and dashes), placed at the END of the rewritten spec:\n"
+        "\n"
+        f"```\n{_PROMPT_DIFF_OPEN}\n"
+        "edits:\n"
+        "  - op: replace\n"
+        "    anchor: \"## Goals\\n1. Implement the parser.\\n\"\n"
+        "    new_text: \"## Goals\\n1. Add unit coverage for the parser.\\n\"\n"
+        "    reason: \"advance from implement to test phase\"\n"
+        "    targets_criterion: null\n"
+        "  - op: insert_after\n"
+        "    anchor: \"## Success Criteria\\n\"\n"
+        f"    new_text: \"- {task_phase} phase: coverage report attached to the campaign run.\\n\"\n"
+        "    reason: \"add phase-specific done criterion\"\n"
+        "    targets_criterion: null\n"
+        f"{_PROMPT_DIFF_CLOSE}\n```\n"
+        "\n"
+        "The example above is illustrative — substitute anchors and text that "
+        "actually exist in THIS spec.\n"
     )
 
     if seed_text:
@@ -1819,8 +1916,11 @@ def _build_phase_advance_goal_text(
         f"- Touch exactly one file: `{target_path}`.\n"
         "- Do not create new files.\n"
         "- Do not modify the campaign_id, slug, repos, or area_keywords.\n"
-        f"- Output is the rewritten spec written back to `{target_path}`, "
-        "committed and pushed by the backend.\n"
+        "- Do not regenerate the spec from scratch — the edit block is the contract.\n"
+        f"- The committed spec must include the ``{_PROMPT_DIFF_OPEN}`` ... "
+        f"``{_PROMPT_DIFF_CLOSE}`` block as its audit trail.\n"
+        f"- Output is the edited spec written back to `{target_path}`, "
+        f"committed and pushed by the backend (run id `{run_id_placeholder}`).\n"
     )
 
     return "\n\n".join(parts)
