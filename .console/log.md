@@ -1,4 +1,65 @@
 # Log
+
+## OC Platform Watchdog Cycle — 2026-05-22 21:24 UTC (Cycle 12)
+
+- Branch: oc-watchdog/20260522-1710-fix-ci-regressions
+- Health state: DEGRADED (session limits exhausted; R4AI queue saturated at 15; self-resolves at 05:40 UTC)
+- Next cadence: 300s — session limits blocking execution; R4AI draining slowly; no structural issues
+
+### STEP 0 — Preflight
+- All 16 repos: Already up to date (ff-only pull) ✓ (OC on watchdog branch, no remote tracking — expected)
+- Plane: OK ✓ | SwitchBoard: OK ✓ | Watchers: 8/8 running ✓ | CLIs: OK ✓
+- git status: loop_schedule.json deleted, 2 spec docs modified to status:cancelled (spec watcher output, committed this cycle)
+
+### STEP 1 — Investigation findings
+- graph-doctor: ✓ OK — 11 nodes / 12 edges / graph_built=True
+- ghost-audit: G10 (1 event: b67bc0e0 "Fix lint regression" Cancelled, lagging — expected to clear) 
+- flow-audit: 0 open gaps ✓; F8 partial (persistent/non-critical)
+- reaudit-check: both dag_executor + team_executor `needed=false` (CxRP 0.3.1) ✓
+- regression-check: 0 findings ✓
+- custodian-sweep: 7 repos, all RUFF=0, no actionable deltas ✓
+- full unit suite: 2408 passed, 1 skipped ✓
+
+### STEP 1 — Executor failure investigation
+- board_worker logs show tasks failing due to session limits ("resets 1:40am ET" = 05:40 UTC) and hourly rate gate (2/2)
+- 360cff3a "Add slow/smoke pytest markers": "1 of 5 stages failed" — runtime_invocation_ref=null, session limit at planning stage
+- 74af58c5 "Add Rule evidence type": "4 of 6 stages" then "1 of 5 stages" — mixed failures across cycles; post-kodo-fix still failing
+- 3a3c202f "Harden Collector": session limit at 21:57 UTC; testing-branch transient missing at 20:25 UTC (now present, confirmed via ls-remote)
+- No OOM; no SIGKILL; no executor signals; memory healthy
+
+### STEP 2 — Triage: 0 actions
+
+### STEP 2.5 — Board-unblock: 3 tasks promoted
+- GOAL_BACKLOG_PROMOTE: 0f1612ea, 3a3c202f, 74af58c5 → Ready for AI (parent improve fa470a1f Done)
+
+### STEP 3 — Blocked/stalled analysis
+- propose: tasks_created=0, skipped=2 — REASON: ready_queue_saturated (15 R4AI, cap=8). NOT starvation — queue is full due to execution failures recycling tasks.
+- R4AI queue: 15 tasks, cap 8. Tasks claiming, failing (session limits), board-unblock recycling → queue stays saturated
+- Session limits: 2 slots exhausted; both reset at 05:40 UTC. Expected ~8h recovery window.
+- Rate gate: 2/2 hourly (normal API throttling; resets each hour)
+- Spec campaigns: 2 cancelled (b7e3f1a4, dd2bdbb2); spec docs status updated to cancelled ✓
+- Behavioral convergence: WEAKLY-CONVERGENT (board-unblock working; tasks moving; session limits are external/self-resolving)
+
+### STEP 4 — Convergence promotion candidates
+- None new this cycle. G10 still lagging (benign, will self-clear). Session limit handling is known external constraint.
+
+### STEP 5/6 — Direct fixes
+- None. All CI audits clean. Testing branch current. No code regressions detected.
+
+### STEP 7 — Invariant tests: 15 passed ✓ (and 2408 unit tests ✓)
+
+### STEP 8 — Watcher health: 8/8 running ✓; no errors or non-143 exits in current session logs
+
+### Blocked work classification
+- 74af58c5, 360cff3a, 3a3c202f: temporarily-blocked (session limits; self-resolving at 05:40 UTC)
+- Session limit: operator-blocked (external API constraint — no programmatic remedy)
+
+### Operator-blocked: session limits (external, self-resolving)
+### Parked state: no
+### Behavioral convergence: WEAKLY-CONVERGENT
+
+---
+
 ## 2026-05-22 — Watchdog cycle: CI regression fixes + Plane recovery
 
 **Root cause:** Commits `1cb614a` (maintenance registry) and `bc41be5` (prompt-diff) introduced 6 CI regressions: 1 test failure, 5 ruff violations, 1 missing license header, stale custodian exclusion paths, and 14 ty type-check errors.

@@ -12,7 +12,7 @@ area_keywords:
   - test/integration
   - api/routes_admin
   - lane/engine
-status: active
+status: cancelled
 created_at: 2026-05-18T00:00:00Z
 ---
 

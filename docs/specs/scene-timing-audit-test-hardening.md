@@ -11,7 +11,7 @@ area_keywords:
   - workflow/long_form/stages
   - tools/audit
   - domain/video/logging
-status: active
+status: cancelled
 created_at: 2026-05-18T16:11:30+00:00
 ---
 
