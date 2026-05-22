@@ -1,4 +1,22 @@
 # Log
+## 2026-05-22 — ADR 0007 follow-up D: generic maintenance-task registration
+
+Branch: `feat/adr-0007-followups`. Landed the registration mechanism ADR 0007 flagged as out-of-scope ("Generic watcher-registration mechanism for the watchdog — would be useful but is its own work"). Migrated `spec_hygiene` as the proof of concept.
+
+**New module:** `src/operations_center/maintenance/` — `MaintenanceTask` (Protocol, `@runtime_checkable`), `MaintenanceContext` (cycle_id + now + resources dict), `MaintenanceResult` (`name`/`status`/`duration_seconds`/`details`/`error`), `MaintenanceRegistry`. Registry honors per-task `interval_seconds` (advisory), isolates failures (one failing task doesn't block others — it logs status='failed' with the error string and the cycle continues), and persists last-run timestamps to `.console/maintenance_state.json` so intervals survive restarts. State file is gitignored under the existing `.console/*` rule.
+
+**Watchdog wiring:** OC's actual in-process maintenance host is the `spec_hygiene` watcher (the loop controller in `tools/loop/controller.py` is a Claude-session subprocess spawner, not a Python in-process cycle). `spec_hygiene/main.py:main()` now constructs a `MaintenanceRegistry`, registers `SpecHygieneTask`, and each cycle calls `registry.run_due(ctx)` instead of bare `run_once()` — slotting in at the same `while True:` loop. Adds `--maintenance-state` flag for overriding the sidecar path.
+
+**SpecHygieneTask:** wraps the existing `run_once(settings, client)` cycle (still works standalone). `run_once` now returns a summary dict (`campaigns_projected`, `phases_advanced`, `campaigns_completed`, `phase_advance_tasks_emitted`, `campaigns_abandoned`, `status_hint`); the task adapts it into a `MaintenanceResult`. Backward-compat preserved: `operations-center-spec-hygiene` CLI still launches with the same args (`--config`, `--once`, `--status-dir`) and the standalone watcher loop continues to drive the cycle.
+
+**Tests:** `tests/maintenance/test_registry.py` + `tests/maintenance/test_spec_hygiene_task.py` — 11 passing. Covers register + list, duplicate-name rejection, interval gating, disabled tasks, failure-isolation across multiple tasks, state-file persistence across registry instances, Protocol structural conformance, happy-path SpecHygieneTask result, disabled/skipped path, exception → failed path.
+
+**Docs:** `docs/architecture/maintenance_pattern.md` (new); ADR 0007 _Considered alternatives_ note updated to point at the landed pattern.
+
+**Constraints honored:** no commit, no push; A/B/C untouched; only `spec_hygiene` migrated (custodian/ghost/flow audits left for later); standalone CLI behavior preserved.
+
+
+
 ## 2026-05-22 — ADR 0007 follow-up C: prompt-diff primitive + surgical phase-advance
 
 Branch: `feat/adr-0007-followups`. Replaced the naive full-regen phase-advance prompt with a structured-edit (prompt-diff) primitive copied in from `temm1e-labs/promptlabs` (MIT — per upstream README; no LICENSE file in the repo, README declares "MIT.").

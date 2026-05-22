@@ -133,7 +133,7 @@ Planning subprocess composes the prompt from this payload. Execute subprocess ru
 
 ## Considered alternatives
 
-- **Fold Half 1 into the watchdog's `run_once()`.** Rejected: watchdog has no registration mechanism; adding hardcoded steps conflates spec concerns with general health. Separate `spec_hygiene` entrypoint is clearer and easier to disable.
+- **Fold Half 1 into the watchdog's `run_once()`.** Rejected: watchdog has no registration mechanism; adding hardcoded steps conflates spec concerns with general health. Separate `spec_hygiene` entrypoint is clearer and easier to disable. **Follow-up D (2026-05-22) landed the generic registration pattern** in `src/operations_center/maintenance/` (`MaintenanceTask` protocol + `MaintenanceRegistry`); `SpecHygieneTask` is the migrated proof of concept. The standalone `operations-center-spec-hygiene` CLI still works — it now drives the same registry/task wiring internally, so the watcher and any hosting maintenance loop share one source of truth. See `docs/architecture/maintenance_pattern.md`.
 - **New `spec-generate` and `phase-advance` as separate task-kinds.** Rejected: they're structurally the same operation (write structured doc to OC repo). One `spec-author` kind with a `task_phase` label is minimum new surface.
 - **Eliminate `state/campaigns/active.json` entirely.** Rejected: OperatorConsole `watcher_status_pane.py:403` reads it directly. Keeping the file as a Plane-derived projection (single writer = `spec_hygiene`) is safer.
 

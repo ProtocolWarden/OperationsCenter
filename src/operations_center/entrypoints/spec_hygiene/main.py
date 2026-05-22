@@ -24,11 +24,17 @@ import argparse
 import json
 import logging
 import time
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
 from operations_center.adapters.plane import PlaneClient
 from operations_center.config import load_settings
+from operations_center.maintenance import (
+    MaintenanceContext,
+    MaintenanceRegistry,
+    MaintenanceResult,
+)
 from operations_center.spec_author.campaign_builder import CampaignBuilder
 from operations_center.spec_author.models import (
     ActiveCampaigns,
@@ -354,10 +360,25 @@ def _emit_phase_advance_tasks(
     return created
 
 
-def run_once(settings: Any, client: PlaneClient) -> None:
+def run_once(settings: Any, client: PlaneClient) -> dict[str, Any]:
+    """Execute one spec-hygiene cycle. Returns a free-form summary dict
+    consumed by SpecHygieneTask to populate MaintenanceResult.details.
+    An empty dict means the cycle short-circuited (e.g. disabled or fetch
+    failed); the caller can treat that as either ``skipped`` or ``failed``
+    based on the value of ``summary.get('status_hint')``.
+    """
+    summary: dict[str, Any] = {
+        "campaigns_projected": 0,
+        "phases_advanced": 0,
+        "campaigns_completed": 0,
+        "phase_advance_tasks_emitted": 0,
+        "campaigns_abandoned": 0,
+    }
     sd = settings.spec_author
     if not sd.enabled:
-        return
+        summary["status_hint"] = "skipped"
+        summary["reason"] = "spec_author_disabled"
+        return summary
 
     logger.info(json.dumps({"event": "spec_hygiene_cycle_start"}, ensure_ascii=False))
 
@@ -376,11 +397,21 @@ def run_once(settings: Any, client: PlaneClient) -> None:
             {"event": "spec_hygiene_board_fetch_failed", "error": str(exc)},
             ensure_ascii=False,
         ))
-        return
+        summary["status_hint"] = "failed"
+        summary["error"] = f"board_fetch_failed: {exc}"
+        return summary
 
     # Step 1a: Rebuild active.json projection from Plane.
     # Single-writer invariant per ADR 0007. OperatorConsole reads this projection.
     _rebuild_active_projection(state_mgr, all_issues)
+    summary["campaigns_projected"] = sum(
+        1 for i in all_issues
+        if any(
+            (lab.get("name", "") if isinstance(lab, dict) else str(lab))
+            .lower() == "source: spec-campaign"
+            for lab in (i.get("labels") or [])
+        )
+    )
 
     # Step 2: Orphan-campaign bootstrap — campaigns registered in state but with
     # zero backing Plane tasks (e.g. autonomously-spawned campaigns whose builder
@@ -406,6 +437,9 @@ def run_once(settings: Any, client: PlaneClient) -> None:
         all_issues=all_issues,
         pending=orch_result.pending_advances,
     )
+    summary["phases_advanced"] = int(orch_result.phases_advanced or 0)
+    summary["campaigns_completed"] = int(orch_result.campaigns_completed or 0)
+    summary["phase_advance_tasks_emitted"] = int(tasks_emitted)
     if any([
         orch_result.phases_advanced,
         orch_result.campaigns_completed,
@@ -425,13 +459,74 @@ def run_once(settings: Any, client: PlaneClient) -> None:
         state_manager=state_mgr,
         abandon_hours=sd.campaign_abandon_hours,
     )
+    abandoned = 0
     for campaign in active.active_campaigns():
         if recovery.should_abandon(campaign):
             recovery.self_cancel(campaign, "abandon_hours_exceeded", _SPECS_DIR)
+            abandoned += 1
             logger.info(json.dumps(
                 {"event": "spec_campaign_abandoned", "campaign_id": campaign.campaign_id},
                 ensure_ascii=False,
             ))
+    summary["campaigns_abandoned"] = abandoned
+    summary["status_hint"] = "ok"
+    return summary
+
+
+class SpecHygieneTask:
+    """``MaintenanceTask`` wrapper around ``run_once`` (ADR 0007 follow-up D).
+
+    Implements the ``operations_center.maintenance.MaintenanceTask`` protocol
+    so the spec-hygiene cycle can be driven uniformly by the maintenance
+    registry alongside any future maintenance operations. The standalone
+    ``main()`` entrypoint also drives this class so there is one source of
+    truth for the cycle logic.
+    """
+
+    name: str = "spec_hygiene"
+
+    def __init__(
+        self,
+        settings: Any,
+        client: PlaneClient,
+        *,
+        interval_seconds: int | None = None,
+        enabled: bool | None = None,
+    ) -> None:
+        self._settings = settings
+        self._client = client
+        sd = settings.spec_author
+        self.interval_seconds = int(
+            interval_seconds if interval_seconds is not None else sd.poll_interval_seconds
+        )
+        self.enabled = bool(enabled if enabled is not None else sd.enabled)
+
+    def run_once(self, ctx: MaintenanceContext) -> MaintenanceResult:
+        started = time.monotonic()
+        try:
+            summary = run_once(self._settings, self._client)
+        except Exception as exc:  # noqa: BLE001 — uniform failure surface
+            duration = time.monotonic() - started
+            return MaintenanceResult(
+                name=self.name,
+                status="failed",
+                duration_seconds=duration,
+                details={"cycle_id": ctx.cycle_id},
+                error=str(exc),
+            )
+        duration = time.monotonic() - started
+        hint = summary.pop("status_hint", "ok")
+        error = summary.pop("error", None)
+        status = hint if hint in {"ok", "skipped", "failed"} else "ok"
+        details = dict(summary)
+        details["cycle_id"] = ctx.cycle_id
+        return MaintenanceResult(
+            name=self.name,
+            status=status,  # type: ignore[arg-type]
+            duration_seconds=duration,
+            details=details,
+            error=error,
+        )
 
 
 def _write_heartbeat(status_dir: Path | None) -> None:
@@ -454,6 +549,17 @@ def _write_heartbeat(status_dir: Path | None) -> None:
         pass
 
 
+def _log_maintenance_result(result: MaintenanceResult) -> None:
+    logger.info(json.dumps({
+        "event": "maintenance_task_run",
+        "name": result.name,
+        "status": result.status,
+        "duration_seconds": round(result.duration_seconds, 3),
+        "details": result.details,
+        "error": result.error,
+    }, ensure_ascii=False))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="spec_hygiene — non-LLM spec/campaign hygiene watcher (ADR 0007)",
@@ -463,6 +569,13 @@ def main() -> None:
     parser.add_argument(
         "--status-dir", type=Path, default=None,
         help="Directory for heartbeat_spec_hygiene.json",
+    )
+    parser.add_argument(
+        "--maintenance-state",
+        type=Path,
+        default=None,
+        help="Override path for the maintenance registry's last-run sidecar "
+             "(default: .console/maintenance_state.json)",
     )
     args = parser.parse_args()
 
@@ -475,15 +588,35 @@ def main() -> None:
     )
     sd = settings.spec_author
 
+    # Build a maintenance registry hosting the spec-hygiene task. The
+    # standalone CLI and the watchdog-side loop share the same wiring
+    # (ADR 0007 follow-up D).
+    registry = MaintenanceRegistry(state_path=args.maintenance_state)
+    task = SpecHygieneTask(settings, client)
+    registry.register(task)
+
+    def _build_ctx() -> MaintenanceContext:
+        return MaintenanceContext(
+            cycle_id=str(uuid.uuid4()),
+            now=datetime.now(UTC),
+            resources={"plane_client": client, "settings": settings},
+        )
+
     try:
         if args.once:
-            run_once(settings, client)
+            # --once bypasses the interval gate so operators can force a
+            # single cycle on demand.
+            ctx = _build_ctx()
+            result = task.run_once(ctx)
+            _log_maintenance_result(result)
             return
         cycle = 0
         while True:
             _write_heartbeat(args.status_dir)
             try:
-                run_once(settings, client)
+                results = registry.run_due(_build_ctx())
+                for r in results:
+                    _log_maintenance_result(r)
             except Exception as exc:
                 logger.error(json.dumps(
                     {"event": "spec_hygiene_cycle_error", "cycle": cycle, "error": str(exc)},
