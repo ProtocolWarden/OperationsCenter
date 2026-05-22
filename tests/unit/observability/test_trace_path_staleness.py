@@ -103,13 +103,10 @@ def test_path_check_tolerates_oserror(monkeypatch, tmp_path: Path) -> None:
     """A permission-error / broken-symlink during exists() must not crash trace build."""
     from operations_center.observability import trace as trace_mod
 
-    real_path_cls = trace_mod.Path
+    def _exploding_exists(self: Path) -> bool:
+        raise OSError("simulated permission denied")
 
-    class _ExplodingPath(real_path_cls):  # type: ignore[misc, valid-type]
-        def exists(self) -> bool:  # type: ignore[override]
-            raise OSError("simulated permission denied")
-
-    monkeypatch.setattr(trace_mod, "Path", _ExplodingPath)
+    monkeypatch.setattr(trace_mod.Path, "exists", _exploding_exists)
 
     result = _result_with_paths(
         stdout=str(tmp_path / "x.txt"),

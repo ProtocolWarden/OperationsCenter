@@ -1,5 +1,57 @@
 # Log
 
+## OC Platform Watchdog Cycle — 2026-05-22 05:48 UTC (Cycle 10)
+
+- Lock owner: watchdog pid (reclaimed)
+- Branch: oc-watchdog/20260522-0137-fix-kodo-removal-regressions
+- Health state: ACTIVE (additional CI fixes dispatched)
+- Next cadence: 900s — CI fixes pushed; verify CI green next cycle; board-unblock moved 74af58c5 Blocked→Backlog
+
+### STEP 0 — Preflight
+- All 16 repos: Already up to date (ff-only pull) ✓
+- Plane: OK ✓ | SwitchBoard: OK ✓ | Watchers: 8/8 running ✓ | CLIs: OK ✓
+- git status: large pre-existing 46-file diff in working tree (operator in-progress work — NOT committed this cycle)
+
+### STEP 1 — Investigation findings
+- graph-doctor: ✓ OK — 11 nodes / 12 edges / graph_built=True
+- ghost-audit: G7 (1 thin goal refused: 89191ff5 "Emit JUnit XML"); G10 (1 b67bc0e0 lagging, Cancelled — resolving naturally)
+- flow-audit: 0 open gaps ✓
+- reaudit-check: exit 0 — both audit verdicts now CxRP 0.3.1 (fixed cycle 9) ✓
+- regression-check: 0 findings ✓
+- custodian-sweep: all delta=0 ✓
+
+### CI investigation (primary focus this cycle)
+- Branch oc-watchdog/20260522-0137-fix-kodo-removal-regressions: CI still failing (4 issues)
+  1. test_cxrp_mapper.py (3 failures): kodo→team_executor fixes were in working tree but NOT committed in cycle 9 → FIXED this cycle
+  2. license-headers: src/operations_center/entrypoints/run_show/__init__.py empty, tools/loop/controller.py missing SPDX → FIXED this cycle
+  3. test_trace_path_staleness.py: _ExplodingPath(Path) subclassing fails on Python 3.11 (CI), passes Python 3.14 (local) → FIXED this cycle (patched exists method directly)
+  4. test_repo_graph_factory_from_settings.py (2 failures): pre-existing on main; platform_manifest installed without `private` param → _load_local_platform_manifest_impl() can't find PlatformManifest on CI → caught silently, returns None → Plane task created
+- Confirmed: failures 1-3 are new regressions our branch introduced or inherited; failure 4 is pre-existing
+
+### STEP 2 — Triage: 0 actions
+### STEP 2.5 — Board-unblock:
+- Rule IMPROVE_UNBLOCK: task 74af58c5 ("Add Rule evidence type and boundary validation tests") Blocked→Backlog (stale >4h, no executor progress)
+
+### STEP 3 — Blocked work
+- 74af58c5: moved Backlog (stale); once CI green, propose may re-emit
+- Behavioral convergence: ACTIVE (direct fixes applied, CI unblocking in progress)
+
+### STEP 5/6 — Direct fixes (OperationsCenter)
+- tests/unit/contracts/test_cxrp_mapper.py: commit uncommitted kodo→team_executor (3 instances)
+- src/operations_center/entrypoints/run_show/__init__.py: add SPDX header (was empty)
+- tools/loop/controller.py: add SPDX header after shebang
+- tests/unit/observability/test_trace_path_staleness.py: replace _ExplodingPath(Path) subclassing with monkeypatch.setattr(Path, "exists") — Python 3.11 compatible
+
+### STEP 7 — Invariant tests: 15 passed ✓
+### STEP 8 — Watcher health: 8/8 running ✓
+
+### Blocked work classification
+- 74af58c5: Backlog (board-unblocked this cycle)
+- test_repo_graph_factory_from_settings.py: validation-blocked (CI env missing PlatformManifest sibling) — Plane task created
+
+### Behavioral convergence: ACTIVE
+- CI regression fixes continuing; 4 issues addressed this cycle
+
 ## OC Platform Watchdog Cycle — 2026-05-22 01:09 UTC (Cycle 8)
 
 - Lock owner: controller-managed (unlocked between sessions)
