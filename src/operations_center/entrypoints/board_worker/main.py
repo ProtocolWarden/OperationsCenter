@@ -59,10 +59,15 @@ _STATE_REVIEW     = "In Review"
 _LIFECYCLE_EXPANDED = "lifecycle: expanded"
 
 # task-kind labels claimed per role
+# ADR 0007 Phase C: `spec-author` is its own role — distinct from goal/test/improve
+# because the planning prompt + _handle_success branch are spec-specific
+# (parse spec front-matter, spawn campaign sub-tasks). Folding it into `goal`
+# would force the goal planner to special-case spec_slug parsing.
 _ROLE_KINDS: dict[str, list[str]] = {
-    "goal":    ["goal"],
-    "test":    ["test", "test_campaign"],
-    "improve": ["improve", "improve_campaign"],
+    "goal":        ["goal"],
+    "test":        ["test", "test_campaign"],
+    "improve":     ["improve", "improve_campaign"],
+    "spec-author": ["spec-author"],
 }
 
 
@@ -156,6 +161,11 @@ def _claim_next(client, role: str, settings) -> dict | None:
         if task_kind not in kinds:
             continue
         repo_key = _label_value(labels, "repo")
+        # ADR 0007 Phase C: spec-author tasks target the OC host repo and
+        # carry no `repo:` label (spec_trigger leaves it off — see ADR
+        # spec-author payload). Repo is fixed in _process_spec_author.
+        if task_kind == "spec-author":
+            repo_key = _SPEC_AUTHOR_REPO_KEY
         if repo_key not in managed_repos:
             continue
         # Per-repo quota gate. RepoSettings.max_daily_executions is None /
@@ -201,9 +211,14 @@ def _claim_next(client, role: str, settings) -> dict | None:
     # (or spec_director) can fill in details and re-promote.
     desc = issue.get("description") or issue.get("description_stripped") or ""
     title = issue.get("name", "")
+    # ADR 0007 Phase C: spec-author tasks carry their intent in a YAML payload,
+    # not a `## Goal` block. The thin-goal-text guard would reject them on
+    # title length; skip the guard since the payload body is always present
+    # (spec_trigger fails the create if it isn't).
+    candidate_kind = _label_value(issue.get("labels", []), "task-kind")
     candidate_goal = _extract_goal(desc, title).strip()
     _MIN_GOAL_TEXT_CHARS = 40
-    if len(candidate_goal) < _MIN_GOAL_TEXT_CHARS:
+    if candidate_kind != "spec-author" and len(candidate_goal) < _MIN_GOAL_TEXT_CHARS:
         try:
             client.transition_issue(str(issue["id"]), _STATE_BLOCKED)
             client.comment_issue(
@@ -282,8 +297,63 @@ def _process_issue(issue: dict, role: str, config_path: Path, settings, client) 
 
     description = issue.get("description") or issue.get("description_stripped") or ""
 
+    # ADR 0007 Phase C: spec-author tasks carry a YAML payload (parsed below)
+    # rather than a `## Goal` block. The whole path is distinct: planning text
+    # is composed from the payload, repo is fixed to OC, scope is one file.
+    spec_payload: dict | None = None
+    if task_kind == "spec-author":
+        spec_payload = _parse_spec_author_payload(description)
+        if spec_payload is None:
+            logger.error(
+                "board_worker[%s]: spec-author task_id=%s has no parseable YAML payload",
+                role, task_id,
+            )
+            _fail_task(client, task_id, role, "spec-author payload missing or malformed YAML block")
+            return False
+
     # Extract goal text from description
     goal_text = _extract_goal(description, title)
+
+    # ADR 0007 Phase C: short-circuit the standard goal/test/improve prompt
+    # pipeline for spec-author. We have a YAML payload, not a `## Goal` block
+    # to enrich; the spec-author prompt is fully composed below.
+    if task_kind == "spec-author" and spec_payload is not None:
+        repo_key  = _SPEC_AUTHOR_REPO_KEY
+        # run_id is allocated inside the backend, so we can't substitute it
+        # at prompt time. Use a sentinel the executor wrapper / a future
+        # post-process step can rewrite. _handle_spec_author_success notes
+        # the sentinel so operators can grep for unrewritten files.
+        run_id_sentinel = "__RUN_ID__"
+        goal_text = _build_spec_author_goal_text(spec_payload, run_id_sentinel)
+        target_path = str(spec_payload.get("target_path", "")).strip()
+        spec_slug   = str(spec_payload.get("spec_slug", "")).strip()
+        trigger_source = str(spec_payload.get("trigger_source", "")).strip()
+        execution_mode = "goal"
+        repo_cfg = settings.repos.get(repo_key)
+        clone_url = repo_cfg.clone_url if repo_cfg else f"file://{_repo_local_path(settings, repo_key)}"
+        base_branch = (
+            _label_value(labels, "base-branch")
+            or (repo_cfg.sandbox_base_branch if repo_cfg and repo_cfg.sandbox_base_branch else None)
+            or (repo_cfg.default_branch if repo_cfg else "main")
+        )
+        oc_root  = Path(__file__).resolve().parents[4]
+        python   = _venv_python(oc_root)
+        env      = _build_env(oc_root)
+        short_id = task_id[:8]
+
+        logger.info(
+            "board_worker[%s]: processing spec-author task_id=%s spec_slug=%s target=%s trigger=%s",
+            role, task_id, spec_slug, target_path, trigger_source,
+        )
+
+        return _process_spec_author(
+            issue=issue, role=role, settings=settings, client=client,
+            config_path=config_path, goal_text=goal_text, repo_key=repo_key,
+            clone_url=clone_url, base_branch=base_branch, spec_slug=spec_slug,
+            target_path=target_path, trigger_source=trigger_source,
+            task_phase=str(spec_payload.get("task_phase", "")).strip(),
+            python=python, oc_root=oc_root, env=env, short_id=short_id,
+        )
 
     # Rejection-pattern hint: if recent proposals in this repo were rejected
     # for a recurring reason, prepend a "common rejection patterns to avoid"
@@ -573,6 +643,302 @@ def _process_issue(issue: dict, role: str, config_path: Path, settings, client) 
             )
 
         return success and not scope_too_wide
+
+
+# ── Spec-author pipeline (ADR 0007 Phase C) ───────────────────────────────────
+
+def _process_spec_author(
+    *,
+    issue: dict,
+    role: str,
+    settings,
+    client,
+    config_path: Path,
+    goal_text: str,
+    repo_key: str,
+    clone_url: str,
+    base_branch: str,
+    spec_slug: str,
+    target_path: str,
+    trigger_source: str,
+    task_phase: str,
+    python: str,
+    oc_root: Path,
+    env: dict,
+    short_id: str,
+) -> bool:
+    """Drive a spec-author task through planning -> ExecutionCoordinator.
+
+    Mirrors ``_process_issue``'s plan-then-execute shape but with spec-specific
+    constraints (allowed_paths=docs/specs/, max_changed_files=1, longer
+    timeout) and a spec-author success handler that parses the committed spec
+    file and spawns campaign sub-tasks via CampaignBuilder.
+
+    Does NOT call _claude_cli, BrainstormService, or any direct-Claude path.
+    All LLM work flows through the planning subprocess -> ExecutionCoordinator
+    -> backend adapter chain — the whole point of the ADR 0007 refactor.
+    """
+    task_id  = str(issue["id"])
+
+    with tempfile.TemporaryDirectory(prefix=f"oc-{role}-") as tmpdir:
+        tmp = Path(tmpdir)
+
+        # Forward source labels so the policy engine sees spec-director as a
+        # trusted lane (no review_required default for autonomy-class work).
+        forwarded_labels: list[str] = []
+        for label in issue.get("labels", []):
+            name = (label.get("name", "") if isinstance(label, dict) else str(label)).strip()
+            if name.lower().startswith("source:"):
+                forwarded_labels.append(name)
+
+        plan_cmd = [
+            python, "-m", "operations_center.entrypoints.worker.main",
+            "--goal",               goal_text,
+            "--task-type",          _task_type_from_kind("spec-author"),
+            "--execution-mode",     "goal",
+            "--repo-key",           repo_key,
+            "--clone-url",          clone_url,
+            "--base-branch",        base_branch,
+            "--project-id",         settings.plane.project_id,
+            "--task-id",            task_id,
+            "--timeout-seconds",    str(_SPEC_AUTHOR_TIMEOUT_SECONDS),
+            "--max-changed-files",  "1",
+            "--allowed-path",       "docs/specs/",
+        ]
+        for lbl in forwarded_labels:
+            plan_cmd.extend(["--label", lbl])
+
+        plan_proc = subprocess.run(
+            plan_cmd, cwd=oc_root, env=env, capture_output=True, text=True,
+        )
+        try:
+            bundle = json.loads(plan_proc.stdout)
+        except Exception:
+            logger.error(
+                "board_worker[%s]: spec-author planning produced no JSON for task_id=%s\n%s",
+                role, task_id, plan_proc.stderr.strip() or plan_proc.stdout.strip(),
+            )
+            _fail_task(client, task_id, role, "spec-author planning produced no JSON output")
+            return False
+        if plan_proc.returncode != 0:
+            msg = bundle.get("message", "unknown planning error")
+            logger.error("board_worker[%s]: spec-author planning failed task_id=%s — %s", role, task_id, msg)
+            _fail_task(client, task_id, role, f"spec-author planning failed: {msg}")
+            return False
+
+        bundle_file = tmp / "bundle.json"
+        bundle_file.write_text(json.dumps(bundle, ensure_ascii=False), encoding="utf-8")
+
+        config_file = tmp / "ops.yaml"
+        shutil.copy(config_path, config_file)
+
+        workspace = tmp / "workspace"
+        workspace.mkdir()
+        result_file = tmp / "result.json"
+
+        # `--source` carries spec_slug + trigger_source into run_metadata.json
+        # via RunArtifactWriter's extra_metadata path. This is the ADR 0007
+        # audit-trail wiring point: every spec-author run on disk can be
+        # traced back to the trigger that fired it.
+        source_tag = f"board_worker_spec_author|spec_slug={spec_slug}|trigger={trigger_source}"
+
+        exec_cmd = [
+            python, "-m", "operations_center.entrypoints.execute.main",
+            "--config",         str(config_file),
+            "--bundle",         str(bundle_file),
+            "--workspace-path", str(workspace),
+            "--task-branch",    f"spec-author/{short_id}",
+            "--output",         str(result_file),
+            "--source",         source_tag,
+        ]
+        subprocess.run(exec_cmd, cwd=oc_root, env=env, capture_output=True, text=True)
+
+        if not result_file.exists():
+            logger.error("board_worker[%s]: spec-author execute produced no result task_id=%s", role, task_id)
+            _fail_task(client, task_id, role, "spec-author execute produced no result file")
+            return False
+
+        try:
+            outcome = json.loads(result_file.read_text(encoding="utf-8") or "{}")
+        except Exception as exc:
+            _fail_task(client, task_id, role, f"spec-author result.json parse failed: {exc}")
+            return False
+        result  = outcome.get("result", {})
+        success = result.get("success", False)
+        run_id  = result.get("run_id", "")
+
+        if success:
+            logger.info(
+                "board_worker[spec-author]: task_id=%s succeeded run_id=%s spec_slug=%s",
+                task_id, run_id, spec_slug,
+            )
+            _handle_spec_author_success(
+                client=client, issue=issue, settings=settings,
+                workspace=workspace, target_path=target_path,
+                spec_slug=spec_slug, run_id=run_id, task_phase=task_phase,
+            )
+            return True
+        else:
+            _handle_failure(client, issue, role, "spec-author", result, settings)
+            return False
+
+
+def _handle_spec_author_success(
+    *,
+    client,
+    issue: dict,
+    settings,
+    workspace: Path,
+    target_path: str,
+    spec_slug: str,
+    run_id: str,
+    task_phase: str,
+) -> None:
+    """Post-success: parse committed spec, spawn campaign sub-tasks, Done.
+
+    Phase-advance case (task_phase set): spec already exists, campaign tasks
+    already exist; just transition Done with a comment.
+    """
+    task_id = str(issue["id"])
+
+    if task_phase:
+        # ADR 0007 Phase D (not-yet-wired) path: phase-advance rewrites an
+        # existing spec; no new campaign sub-tasks needed because the
+        # campaign was created on first authoring.
+        try:
+            client.transition_issue(task_id, _STATE_DONE)
+            client.comment_issue(
+                task_id,
+                f"spec-author (phase-advance, task_phase={task_phase}) complete — "
+                f"spec rewritten at {target_path} (run_id={run_id}).",
+            )
+        except Exception as exc:
+            logger.warning(
+                "board_worker[spec-author]: phase-advance Done transition failed task_id=%s — %s",
+                task_id, exc,
+            )
+        return
+
+    spec_path = workspace / target_path
+    if not spec_path.exists():
+        # The backend reported success but the spec file isn't on disk where
+        # we expected. Mark Done with a warning rather than Blocked — the run
+        # itself succeeded, the campaign sub-tasks just can't be spawned.
+        logger.warning(
+            "board_worker[spec-author]: spec file missing at %s after success run_id=%s",
+            spec_path, run_id,
+        )
+        try:
+            client.transition_issue(task_id, _STATE_DONE)
+            client.comment_issue(
+                task_id,
+                f"spec-author run succeeded (run_id={run_id}) but expected file "
+                f"{target_path} not found in workspace — no campaign sub-tasks created.",
+            )
+        except Exception as exc:
+            logger.warning(
+                "board_worker[spec-author]: Done transition failed task_id=%s — %s",
+                task_id, exc,
+            )
+        return
+
+    try:
+        spec_text = spec_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        logger.warning("board_worker[spec-author]: read failed task_id=%s — %s", task_id, exc)
+        spec_text = ""
+
+    # Post-process the run-id sentinel inserted at prompt-build time. If the
+    # backend wrote the literal sentinel, rewrite it in-place so the spec
+    # file's provenance comment carries the real run_id. Best-effort —
+    # failure leaves the sentinel in place and is grep-discoverable later.
+    if spec_text and "__RUN_ID__" in spec_text and run_id:
+        try:
+            updated = spec_text.replace("__RUN_ID__", run_id)
+            spec_path.write_text(updated, encoding="utf-8")
+            spec_text = updated
+            logger.info(
+                "board_worker[spec-author]: substituted run_id sentinel in %s",
+                target_path,
+            )
+        except OSError as exc:
+            logger.warning(
+                "board_worker[spec-author]: run_id sentinel rewrite failed for %s — %s",
+                target_path, exc,
+            )
+
+    # Parse + create campaign sub-tasks via the existing CampaignBuilder.
+    # Importing here (not at module top) keeps the spec_director dependency
+    # cleanly scoped to the spec-author code path — board_worker stays
+    # importable even if spec_director is later retired (Phase F: the import
+    # will need to move, but no other code path will break).
+    created_ids: list[str] = []
+    try:
+        from operations_center.spec_director.campaign_builder import CampaignBuilder
+        # Spec front-matter declares repos:[...]; CampaignBuilder takes
+        # repo_key/base_branch as arguments. Pull the chosen repo from
+        # the spec; fall back to OperationsCenter if missing.
+        from operations_center.spec_director.models import SpecFrontMatter
+        try:
+            fm = SpecFrontMatter.from_spec_text(spec_text)
+            repo_key = fm.repos[0] if fm.repos else _SPEC_AUTHOR_REPO_KEY
+        except Exception:
+            repo_key = _SPEC_AUTHOR_REPO_KEY
+        repo_cfg = settings.repos.get(repo_key)
+        base_branch = (
+            (repo_cfg.sandbox_base_branch if repo_cfg and repo_cfg.sandbox_base_branch else None)
+            or (repo_cfg.default_branch if repo_cfg else "main")
+        )
+        builder = CampaignBuilder(
+            client=client,
+            project_id=settings.plane.project_id,
+        )
+        created_ids = builder.build(spec_text=spec_text, repo_key=repo_key, base_branch=base_branch)
+    except Exception as exc:
+        logger.warning(
+            "board_worker[spec-author]: campaign build failed task_id=%s — %s",
+            task_id, exc,
+        )
+
+    # Tag each newly-created campaign task with `parent_run: <run_id>` per
+    # ADR 0007's audit-trail invariant. CampaignBuilder already attaches
+    # `source: spec-campaign` and `campaign-id: <id>`. We need a label-merge
+    # (not a replace) so we re-list issues once, then merge labels per id.
+    if run_id and created_ids:
+        try:
+            all_issues = client.list_issues()
+            by_id = {str(i.get("id", "")): i for i in all_issues}
+            for new_id in created_ids:
+                iss = by_id.get(new_id)
+                if iss is None:
+                    continue
+                _add_label(client, iss, f"parent_run: {run_id}")
+        except Exception as exc:
+            logger.debug(
+                "board_worker[spec-author]: parent_run label tagging failed — %s",
+                exc,
+            )
+
+    try:
+        client.transition_issue(task_id, _STATE_DONE)
+        if created_ids:
+            client.comment_issue(
+                task_id,
+                f"spec-author complete (run_id={run_id}) — wrote {target_path} and "
+                f"created {len(created_ids)} campaign task(s): "
+                + ", ".join(f"#{i}" for i in created_ids),
+            )
+        else:
+            client.comment_issue(
+                task_id,
+                f"spec-author complete (run_id={run_id}) — wrote {target_path} but "
+                "campaign-task creation produced no children (parse failed or empty goals).",
+            )
+    except Exception as exc:
+        logger.warning(
+            "board_worker[spec-author]: post-success transition failed task_id=%s — %s",
+            task_id, exc,
+        )
 
 
 # ── Outcome handlers ──────────────────────────────────────────────────────────
@@ -1341,7 +1707,157 @@ def _task_type_from_kind(task_kind: str) -> str:
         "test_campaign":     "test",
         "improve":           "refactor",
         "improve_campaign":  "refactor",
+        # ADR 0007 Phase C: spec-author writes a markdown spec under docs/.
+        # Closest canonical TaskType bucket is "chore" — it's a docs-shaped
+        # edit, not a feature/refactor/test.
+        "spec-author":       "chore",
     }.get(task_kind, "chore")
+
+
+# ── Spec-author payload parsing (ADR 0007 Phase C) ───────────────────────────
+
+# Host repo for spec files. spec_trigger writes target_path = docs/specs/<slug>.md
+# and the backend operates on this repo's workspace clone.
+_SPEC_AUTHOR_REPO_KEY = "OperationsCenter"
+
+# Timeout for an LLM-driven spec draft. Spec authoring is a single-file write
+# with a tightly-scoped prompt — 8 minutes is generous for the model + the
+# clone/commit/push overhead, while still bounded enough that a runaway run
+# gets killed before it can burn the rest of the cycle.
+_SPEC_AUTHOR_TIMEOUT_SECONDS = 480
+
+
+def _parse_spec_author_payload(description: str) -> dict | None:
+    """Extract the YAML payload spec_trigger embeds in the task description.
+
+    Returns the parsed dict (with spec_slug, target_path, trigger_source,
+    task_phase, seed_text, context_bundle) or None if the body doesn't carry
+    a parseable spec-author block.
+
+    The body shape is fixed by ``spec_trigger._render_task_body``:
+        ## Spec Authoring
+
+        ```yaml
+        task-kind: spec-author
+        ...
+        ```
+    """
+    import re as _re
+    import yaml as _yaml
+    m = _re.search(r"```yaml\s*\n(.*?)\n```", description, _re.DOTALL)
+    if not m:
+        return None
+    try:
+        data = _yaml.safe_load(m.group(1))
+    except Exception:
+        return None
+    if not isinstance(data, dict):
+        return None
+    return data
+
+
+def _build_spec_author_goal_text(payload: dict, run_id_placeholder: str) -> str:
+    """Compose the spec-authoring prompt the backend will execute.
+
+    Mirrors the structure of ``spec_director.brainstorm.BrainstormService``'s
+    user prompt (available repos, operator seed, recent git activity, existing
+    specs, board summary) but is delivered as a single goal_text the backend
+    can act on directly — no separate Claude subprocess, no _claude_cli, no
+    BrainstormService.
+
+    The ``task_phase`` branch is reserved for Phase D (phase orchestration via
+    spec-author with task_phase set). For now we emit a TODO so the prompt
+    structure is in place and the Phase D handler only has to swap the body.
+    """
+    spec_slug    = str(payload.get("spec_slug", "")).strip()
+    target_path  = str(payload.get("target_path", "")).strip()
+    trigger      = str(payload.get("trigger_source", "")).strip()
+    task_phase   = str(payload.get("task_phase", "")).strip()
+    seed_text    = str(payload.get("seed_text") or "").strip()
+    ctx          = payload.get("context_bundle") or {}
+
+    if task_phase:
+        # TODO(ADR 0007 Phase D): when phase_orchestrator emits spec-author
+        # with task_phase set, branch into the "rewrite existing spec for
+        # this phase" prompt (load current spec, apply phase-state diff).
+        # For now, fall through to the draft prompt so the structural wire-up
+        # is exercisable end-to-end.
+        pass
+
+    parts: list[str] = []
+    parts.append(
+        f"# Spec authoring task\n\n"
+        f"Write a focused improvement-campaign spec at `{target_path}` in this "
+        f"repository (`OperationsCenter`). The spec drives a multi-task Plane "
+        f"campaign; keep its goals concrete and bounded."
+    )
+
+    parts.append(
+        "## Required output\n"
+        f"Create exactly one file: `{target_path}`. Do not modify any other file.\n\n"
+        f"The first line of the file MUST be an HTML comment recording provenance:\n"
+        f"`<!-- generated_by_run: {run_id_placeholder} -->`\n\n"
+        "Then a YAML front-matter block in this exact format:\n"
+        "```\n"
+        "---\n"
+        "campaign_id: <UUID v4 you generate>\n"
+        f"slug: {spec_slug}\n"
+        "phases:\n"
+        "  - implement\n"
+        "  - test\n"
+        "  - improve\n"
+        "repos:\n"
+        "  - <one repo from the Available Repos list below>\n"
+        "area_keywords:\n"
+        "  - <directory prefix or topic keyword>\n"
+        "status: active\n"
+        "created_at: <ISO 8601 UTC timestamp>\n"
+        "---\n"
+        "```\n\n"
+        "Then markdown sections:\n"
+        "- `## Overview` (2-3 sentences)\n"
+        "- `## Goals` (numbered list of 2-4 concrete, bounded tasks; each completable "
+        "in one executor run under 1 hour)\n"
+        "- `## Constraints` (approach decisions, allowed paths, things to avoid)\n"
+        "- `## Success Criteria` (how to know it is done)\n"
+    )
+
+    repos = ctx.get("recent_git_log_repos") or {}
+    if isinstance(repos, dict) and repos:
+        parts.append("## Available Repos\n" + "\n".join(f"- {r}" for r in sorted(repos)))
+
+    if seed_text:
+        parts.append(f"## Operator Direction\n{seed_text}")
+
+    if isinstance(repos, dict):
+        for repo_key, log_text in repos.items():
+            if log_text:
+                parts.append(f"## Recent Git Activity ({repo_key})\n```\n{log_text}\n```")
+
+    existing = ctx.get("existing_specs") or []
+    if existing:
+        parts.append("## Existing Specs (do not duplicate)\n"
+                     + "\n".join(f"- {s}" for s in existing))
+
+    snap = ctx.get("board_snapshot") or {}
+    if isinstance(snap, dict) and snap:
+        parts.append(
+            "## Board Summary\n"
+            f"- ready: {snap.get('ready', '?')}\n"
+            f"- running: {snap.get('running', '?')}\n"
+            f"- drained: {snap.get('drained', '?')}\n"
+            f"- trigger_source: {trigger}\n"
+        )
+
+    parts.append(
+        "## Boundaries\n"
+        f"- Touch exactly one file: `{target_path}`.\n"
+        "- Do not modify any other repo content.\n"
+        "- Pick exactly one repo for the `repos:` field from Available Repos.\n"
+        "- Prefer 2-4 small goals over one large one.\n"
+    )
+
+    return "\n\n".join(parts)
 
 
 # ── Main loop ─────────────────────────────────────────────────────────────────

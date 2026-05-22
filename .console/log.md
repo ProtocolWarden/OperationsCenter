@@ -1,4 +1,28 @@
 # Log
+## 2026-05-22 — ADR 0007 Phase C: board_worker spec-author handler
+
+Branch: `feat/spec-director-refactor`. Phase C of ADR 0007 — teaches board_worker how to claim and process the `task-kind: spec-author` tasks that spec_trigger (Phase B) emits, with all LLM work flowing through the normal `worker.main` → `execute.main` → `ExecutionCoordinator` pipeline. No `_claude_cli` import anywhere.
+
+- `src/operations_center/entrypoints/board_worker/main.py`:
+  - `_ROLE_KINDS` gains `"spec-author": ["spec-author"]`. Distinct role, not folded into goal/test/improve — it has its own prompt assembly and its own success handler.
+  - `_claim_next`: spec-author tasks bypass the thin-goal-text guard (their intent is YAML, not `## Goal`) and synthesise repo_key=`OperationsCenter` since spec_trigger leaves the `repo:` label off per ADR's payload spec.
+  - `_process_issue`: short-circuits early for spec-author, parses the YAML payload via `_parse_spec_author_payload`, composes the spec-authoring prompt via `_build_spec_author_goal_text` (mirrors `spec_director.brainstorm._SYSTEM_PROMPT` + `_build_user_prompt` but emitted as goal_text the backend can run directly), then dispatches to `_process_spec_author`.
+  - `_process_spec_author`: plan → execute subprocess pair, same shape as the existing flow. Constraints: `--max-changed-files 1`, `--allowed-path docs/specs/`, 8-min timeout. `--source` tag carries `spec_slug` and `trigger_source` into `run_metadata.json` via the existing `extra_metadata` path on `RunArtifactWriter.write_run`.
+  - `_handle_spec_author_success`: reads the committed spec from the workspace, post-substitutes the `__RUN_ID__` sentinel with the real run_id (so the spec carries `<!-- generated_by_run: <run_id> -->`), invokes the existing `CampaignBuilder` to spawn sub-tasks, then tags each new task with `parent_run: <run_id>`. Phase-advance branch (`task_phase` set) skips campaign creation and transitions Done — the campaign already exists from the original authoring run.
+- `src/operations_center/entrypoints/worker/main.py`: added `--max-changed-files` flag so the spec-author planning invocation can cap scope. PlanningContext already supported the field; this is purely a CLI surface extension.
+- `src/operations_center/entrypoints/execute/main.py`: unchanged — the proposal/decision bundle flows through ExecutionCoordinator with no spec-author-specific branching needed. `--source` already supports an arbitrary tag string; we pack `spec_slug` and `trigger_source` into it.
+
+**Audit-trail wiring (ADR 0007 invariants):**
+- `runs/<run_id>/run_metadata.json` carries `source: board_worker_spec_author|spec_slug=...|trigger=...` via the existing `extra_metadata` path.
+- Spec file carries `<!-- generated_by_run: <run_id> -->` on line 1 (sentinel substituted post-success).
+- Each child campaign task carries `parent_run: <run_id>` label (added after `CampaignBuilder.build` returns).
+
+**Deviation:** the prompt asks the model to write the literal `__RUN_ID__` sentinel and we substitute post-success because the planning subprocess can't know the eventual run_id (the backend allocates it). Post-process is best-effort — if the model deviates from the sentinel string, the comment line still gets written, just without provenance linkage; greppable.
+
+**Not touched (per ADR phase scoping):** `_claude_cli.py` (Phase E), `phase_orchestrator.py` LLM path (Phase D), `spec_director` entrypoint (Phase F).
+
+**Stop point:** staged but not committed. Parent handles git ops.
+
 ## 2026-05-22 — ADR 0007 Phase B: extract spec_trigger watcher
 
 Branch: `feat/spec-director-refactor`. Phase B of ADR 0007 — splits the trigger-detection half of `spec_director` into its own LLM-free watcher that emits Plane tasks instead of calling Claude.

@@ -53,6 +53,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--timeout-seconds", type=int, default=None,
         help="Wall-clock timeout for the execution run (overrides PlanningContext default of 300).",
     )
+    parser.add_argument(
+        "--max-changed-files", type=int, default=None,
+        help="Maximum number of files this proposal may change (caps WorkspaceManager scope). "
+             "ADR 0007 Phase C uses this to constrain spec-author runs to one file.",
+    )
     return parser
 
 
@@ -79,6 +84,8 @@ def _context_from_args(args: argparse.Namespace) -> PlanningContext:
     )
     if args.timeout_seconds is not None:
         kwargs["timeout_seconds"] = args.timeout_seconds
+    if args.max_changed_files is not None:
+        kwargs["max_changed_files"] = args.max_changed_files
     return PlanningContext(**kwargs)
 
 
