@@ -61,7 +61,7 @@ def _load_effective_graph_compatible(
     if "private" in params:
         return load_effective_graph(
             base,
-            private=private,
+            private=private,  # type: ignore  # noqa: PGH003
             project=project,
             work_scope=work_scope,
             local=local,

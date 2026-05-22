@@ -42,7 +42,7 @@ class TeamExecutorBackendAdapter:
         runner = TeamExecutorRunner(
             team_name=self._settings.team_name,
             working_dir=working_dir,
-            worker_backend=self._settings.worker_backend,  # type: ignore[arg-type]
+            worker_backend=self._settings.worker_backend,  # type: ignore  # noqa: PGH003
         )
 
         try:

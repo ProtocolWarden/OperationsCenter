@@ -4,19 +4,14 @@
 
 from __future__ import annotations
 
-import json
-
 import pytest
 from pydantic import ValidationError
 
 from operations_center.contracts.ci import (
-    ClpBinding,
     ContinuousImprovementSpec,
-    EvaluationScore,
     EvaluationSpec,
     ImprovementLineage,
     ImprovementStrategy,
-    LineageAttempt,
     OcLineageIndexEntry,
     RefinementPolicy,
     ScoringMetric,
@@ -24,9 +19,6 @@ from operations_center.contracts.ci import (
 from operations_center.contracts.enums import (
     EnforcedGuardrail,
     EvaluationCommandSource,
-    EvaluationOutcome,
-    LineageBranchReason,
-    RefinementDecision,
     RefinementStatus,
 )
 from operations_center.contracts.proposal import OcPlanningProposal

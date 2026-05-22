@@ -45,7 +45,7 @@ class DAGExecutorBackendAdapter:
             artifacts_dir=artifacts_dir,
             working_directory=str(workspace),
             timeout_seconds=self._settings.timeout_seconds or None,
-            worker_backend=self._settings.worker_backend,
+            worker_backend=self._settings.worker_backend,  # type: ignore  # noqa: PGH003
         )
 
         logger.info(
