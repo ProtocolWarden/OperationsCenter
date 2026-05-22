@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from operations_center.spec_director.phase_orchestrator import PhaseOrchestrator
 from operations_center.spec_director.models import CampaignRecord
@@ -94,23 +94,19 @@ def test_advances_to_test_when_all_implement_done(tmp_path):
 
 
 def test_does_not_advance_if_implement_blocked(tmp_path):
+    # Post-ADR-0007 Phase D: phase_orchestrator is detection-only; no LLM
+    # rewrite is performed for blocked tasks. We only verify that a blocked
+    # task in the current phase prevents the next phase from being promoted.
     orch, client = _make_orchestrator(tmp_path)
     blocked_issue = _make_issue(
         task_id="impl-1", name="[Impl] Goal 1", state="Blocked", kind="goal"
     )
-    client.fetch_issue.return_value = dict(blocked_issue)
     issues = [
         _make_parent(),
         blocked_issue,
         _make_issue(task_id="test-1", name="[Test] Goal 1", state="Backlog", kind="test_campaign"),
     ]
-    with patch("operations_center.spec_director.phase_orchestrator.call_claude") as mock_claude:
-        mock_claude.return_value = (
-            "## Execution\nrepo: repo_a\nbase_branch: main\nmode: goal\n"
-            "spec_campaign_id: test-campaign-uuid\nspec_file: docs/specs/my-slug.md\n"
-            "task_phase: implement\nblock_rewrite_count: 1\n\n## Goal\nRewritten.\n"
-        )
-        orch.run(issues)
+    orch.run(issues)
 
     # test-1 must NOT be transitioned to Ready for AI (implement is blocked, not terminal)
     transition_calls = [str(c) for c in client.transition_issue.call_args_list]
@@ -146,56 +142,6 @@ def test_completes_campaign_when_all_phases_terminal(tmp_path):
     client.transition_issue.assert_any_call("parent-1", "Done")
     active = state_mgr.load()
     assert not active.has_active()
-
-
-def test_blocked_task_rewritten_and_requeued(tmp_path):
-    orch, client = _make_orchestrator(tmp_path)
-    blocked_issue = _make_issue(
-        task_id="impl-1", name="[Impl] Goal 1", state="Blocked", kind="goal"
-    )
-    client.fetch_issue.return_value = dict(blocked_issue)
-    client.list_issue_comments.return_value = [{"body": "Tests failed: assertion error on line 42."}]
-
-    with patch("operations_center.spec_director.phase_orchestrator.call_claude") as mock_claude:
-        mock_claude.return_value = (
-            "## Execution\nrepo: repo_a\nbase_branch: main\nmode: goal\n"
-            "spec_campaign_id: test-campaign-uuid\nspec_file: docs/specs/my-slug.md\n"
-            "task_phase: implement\nblock_rewrite_count: 1\n\n## Goal\nRewritten goal text.\n"
-        )
-        result = orch.run([_make_parent(), blocked_issue])
-
-    assert result.tasks_unblocked == 1
-    client.update_issue_description.assert_called_once()
-    client.transition_issue.assert_any_call("impl-1", "Ready for AI")
-    # The failure comment must have been fetched to include in the rewrite prompt
-    client.list_issue_comments.assert_called_once_with("impl-1")
-    # The failure comment text must appear in the Claude prompt
-    call_args = mock_claude.call_args[0][0]
-    assert "## Failure comment" in call_args
-    assert "Tests failed: assertion error on line 42." in call_args
-
-
-def test_blocked_task_cancelled_after_two_rewrites(tmp_path):
-    orch, client = _make_orchestrator(tmp_path)
-    blocked_issue = _make_issue(
-        task_id="impl-1", name="[Impl] Goal 1", state="Blocked", kind="goal"
-    )
-    full_desc = blocked_issue["description"] + "block_rewrite_count: 2\n"
-    client.fetch_issue.return_value = dict(blocked_issue, description=full_desc)
-    client.list_issue_comments.return_value = [{"body": "Build failed: missing module."}]
-
-    result = orch.run([_make_parent(), blocked_issue])
-
-    assert result.tasks_cancelled == 1
-    client.transition_issue.assert_any_call("impl-1", "Cancelled")
-    # Cancel comment must include the reason from the last failure comment
-    comment_calls = client.comment_issue.call_args_list
-    cancel_comment = next(
-        (str(c) for c in comment_calls if "cancelled" in str(c).lower()),
-        None,
-    )
-    assert cancel_comment is not None
-    assert "Build failed: missing module." in cancel_comment
 
 
 def test_no_action_when_no_active_campaigns(tmp_path):

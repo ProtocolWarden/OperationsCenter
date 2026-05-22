@@ -15,7 +15,11 @@ from pathlib import Path
 from operations_center.adapters.plane import PlaneClient
 from operations_center.config import load_settings
 from operations_center.execution.usage_store import _check_disk_space
-from operations_center.spec_director.brainstorm import BrainstormService
+# TODO(ADR 0007 Phase F): BrainstormService was deleted in Phase E along with
+# _claude_cli.py — this legacy entrypoint is being retired in Phase F. Any code
+# path below that references ``BrainstormService`` is dead and will raise
+# NameError if exercised; that is intentional. See
+# PlatformDeployment/docs/architecture/adr/0007-spec-director-refactor.md.
 from operations_center.spec_director.campaign_builder import CampaignBuilder
 from operations_center.spec_director.context_bundle import ContextBundleBuilder
 from operations_center.spec_director.models import CampaignRecord
@@ -278,7 +282,12 @@ def run_once(settings: Any, client: PlaneClient) -> None:
     )
 
     # Step 5b: Brainstorm
-    brainstorm_svc = BrainstormService(model=sd.brainstorm_model)
+    # TODO(ADR 0007 Phase F): BrainstormService was deleted in Phase E. This
+    # block is dead code on the retirement path; spec authoring now flows
+    # through spec_trigger → board_worker spec-author handler. Will raise
+    # NameError if reached, which is the intended failure mode until this
+    # entrypoint is removed in Phase F.
+    brainstorm_svc = BrainstormService(model=sd.brainstorm_model)  # noqa: F821
     try:
         result = brainstorm_svc.brainstorm(bundle)
     except Exception as exc:
