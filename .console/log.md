@@ -1,4 +1,8 @@
 # Log
+## 2026-05-22 — Pin context-lifecycle to git tag v0.3.0 (was file:// local pin)
+
+Follow-up to ADR 0002 P4 release. Switched `context-lifecycle` dependency from a local file:// pin to `git+https://github.com/ProtocolWarden/ContextLifecycle.git@v0.3.0`. Matches the pattern OC already uses for `core-runner` and `platform-manifest`. Local editable installs still override the pin for active development.
+
 
 ## 2026-05-22 — P6: annotate continuous-improvement design with anchor-host paths
 

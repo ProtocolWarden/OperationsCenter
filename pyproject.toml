@@ -18,10 +18,8 @@ dependencies = [
   "rxp @ git+https://github.com/ProtocolWarden/RxP.git",
   "core-runner @ git+https://github.com/ProtocolWarden/CoreRunner.git",
   "platform-manifest @ git+https://github.com/ProtocolWarden/PlatformManifest.git@v1.0.0",
-  # ADR 0002 P4 — dispatcher CL wrap. Local-path pin for dev parity with
-  # how CL itself pins RepoGraph; flip to a tagged release once CL 0.3.0
-  # is published.
-  "context-lifecycle @ file:///home/dev/Documents/GitHub/ContextLifecycle",
+  # ADR 0002 P4 — dispatcher CL wrap.
+  "context-lifecycle @ git+https://github.com/ProtocolWarden/ContextLifecycle.git@v0.3.0",
 ]
 
 [project.scripts]
