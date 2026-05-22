@@ -77,8 +77,8 @@ def test_headline_contains_status(recorder, builder, successful_rich_result):
 
 
 def test_headline_contains_backend(recorder, builder, successful_rich_result):
-    trace = _trace(successful_rich_result, recorder, builder, backend="kodo")
-    assert "kodo" in trace.headline
+    trace = _trace(successful_rich_result, recorder, builder, backend="team_executor")
+    assert "team_executor" in trace.headline
 
 
 def test_headline_contains_lane(recorder, builder, successful_rich_result):

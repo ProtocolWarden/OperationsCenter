@@ -32,7 +32,7 @@ from operations_center.tuning.routing_recommend import derive_findings, generate
 
 
 def _summary(
-    backend: str = "kodo",
+    backend: str = "team_executor",
     lane: str = "claude_cli",
     sample_size: int = 10,
     evidence_strength: EvidenceStrength = EvidenceStrength.MODERATE,
@@ -156,9 +156,9 @@ class TestDeriveFindings:
         assert "contradictory" not in cats
 
     def test_multiple_summaries_multiple_finding_sets(self):
-        s1 = _summary(backend="kodo", lane="claude_cli")
+        s1 = _summary(backend="team_executor", lane="claude_cli")
         s2 = _summary(
-            backend="archon",
+            backend="direct_local",
             lane="claude_cli",
             reliability_class=ReliabilityClass.LOW,
             success_rate=0.5,
@@ -166,8 +166,8 @@ class TestDeriveFindings:
         )
         findings = derive_findings([s1, s2])
         backends = {b for f in findings for b in f.affected_backends}
-        assert "kodo" in backends
-        assert "archon" in backends
+        assert "team_executor" in backends
+        assert "direct_local" in backends
 
     def test_empty_summaries_returns_empty(self):
         assert derive_findings([]) == []
@@ -230,14 +230,14 @@ class TestGenerateRecommendations:
             category=category,
             summary=summary,
             evidence_strength=strength,
-            affected_backends=kw.get("affected_backends", ["kodo"]),
+            affected_backends=kw.get("affected_backends", ["team_executor"]),
             affected_lanes=kw.get("affected_lanes", ["claude_cli"]),
         )
 
     def test_low_reliability_finding_produces_proposal(self):
         f = self._finding(
             "reliability",
-            "kodo @ claude_cli shows low reliability: 50% success rate across 10 runs.",
+            "team_executor @ claude_cli shows low reliability: 50% success rate across 10 runs.",
             EvidenceStrength.MODERATE,
         )
         proposals = generate_recommendations([f])
@@ -248,7 +248,7 @@ class TestGenerateRecommendations:
     def test_high_reliability_finding_produces_proposal(self):
         f = self._finding(
             "reliability",
-            "kodo @ claude_cli shows high reliability: 90% success rate across 10 runs.",
+            "team_executor @ claude_cli shows high reliability: 90% success rate across 10 runs.",
             EvidenceStrength.MODERATE,
         )
         proposals = generate_recommendations([f])
@@ -267,7 +267,7 @@ class TestGenerateRecommendations:
     def test_policy_guardrails_are_attached_to_generated_proposals(self):
         f = self._finding(
             "reliability",
-            "kodo @ claude_cli shows high reliability: 90% success rate across 10 runs.",
+            "team_executor @ claude_cli shows high reliability: 90% success rate across 10 runs.",
             EvidenceStrength.MODERATE,
         )
         proposals = generate_recommendations(
@@ -279,7 +279,7 @@ class TestGenerateRecommendations:
     def test_validation_gap_produces_proposal(self):
         f = self._finding(
             "validation",
-            "kodo @ aider_local skips validation in 85% of runs.",
+            "team_executor @ aider_local skips validation in 85% of runs.",
             EvidenceStrength.MODERATE,
         )
         proposals = generate_recommendations([f])
@@ -289,7 +289,7 @@ class TestGenerateRecommendations:
     def test_latency_slow_produces_proposal(self):
         f = self._finding(
             "latency",
-            "archon @ claude_cli is slow (median 300000 ms) across 20 runs.",
+            "direct_local @ claude_cli is slow (median 300000 ms) across 20 runs.",
             EvidenceStrength.STRONG,
         )
         proposals = generate_recommendations([f])
@@ -299,7 +299,7 @@ class TestGenerateRecommendations:
     def test_contradictory_produces_proposal(self):
         f = self._finding(
             "contradictory",
-            "kodo @ claude_cli is reliable by success rate but produces poor changed-file evidence.",
+            "team_executor @ claude_cli is reliable by success rate but produces poor changed-file evidence.",
             EvidenceStrength.STRONG,
         )
         proposals = generate_recommendations([f])
@@ -308,8 +308,8 @@ class TestGenerateRecommendations:
 
     def test_all_proposals_require_review(self):
         findings = [
-            self._finding("reliability", "kodo @ x shows low reliability: 50% success rate across 10 runs.", EvidenceStrength.MODERATE),
-            self._finding("change_evidence", "kodo @ x produces poor changed-file evidence.", EvidenceStrength.STRONG),
+            self._finding("reliability", "team_executor @ x shows low reliability: 50% success rate across 10 runs.", EvidenceStrength.MODERATE),
+            self._finding("change_evidence", "team_executor @ x produces poor changed-file evidence.", EvidenceStrength.STRONG),
         ]
         proposals = generate_recommendations(findings)
         assert all(p.requires_review is True for p in proposals)
@@ -317,14 +317,14 @@ class TestGenerateRecommendations:
     def test_proposals_carry_source_finding_ids(self):
         f = self._finding(
             "reliability",
-            "kodo @ claude_cli shows low reliability: 50% success rate across 10 runs.",
+            "team_executor @ claude_cli shows low reliability: 50% success rate across 10 runs.",
             EvidenceStrength.MODERATE,
         )
         proposals = generate_recommendations([f])
         assert f.finding_id in proposals[0].source_finding_ids
 
     def test_recommendations_are_distinct_from_active_policy(self):
-        f = self._finding("reliability", "kodo @ x shows high reliability: 90% success rate across 10 runs.", EvidenceStrength.STRONG)
+        f = self._finding("reliability", "team_executor @ x shows high reliability: 90% success rate across 10 runs.", EvidenceStrength.STRONG)
         proposals = generate_recommendations([f])
         # Proposals are frozen Pydantic objects — they cannot mutate active policy
         from pydantic import ValidationError

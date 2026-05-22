@@ -102,7 +102,7 @@ Tracked: [#21](https://github.com/ProtocolWarden/OperationsCenter/issues/21)
 ### autonomy — Fully autonomous spec-driven campaign chain (`watch --role spec`)
 **Status**: done
 
-New sixth watcher role `spec` that closes the direction gap in the reactive propose loop. `TriggerDetector` detects when to start a campaign (drop-file > Plane label > queue drain). `BrainstormService` calls the Anthropic API directly to produce a spec doc written to `docs/specs/`. `CampaignBuilder` converts the spec into a bounded set of Plane tasks across implement/test/improve phases. `SpecComplianceService` reviews each PR diff against the spec (structured JSON verdict) upstream of kodo self-review. `RecoveryService` handles stall detection, spec revision, and orderly self-cancel. `Suppressor` blocks conflicting heuristic proposals during an active campaign. New task kinds `test_campaign` and `improve_campaign` route to `kodo --test` / `kodo --improve` via `ROLE_TASK_KINDS` in `worker/main.py`.
+New sixth watcher role `spec` that closes the direction gap in the reactive propose loop. `TriggerDetector` detects when to start a campaign (drop-file > Plane label > queue drain). `BrainstormService` calls the Anthropic API directly to produce a spec doc written to `docs/specs/`. `CampaignBuilder` converts the spec into a bounded set of Plane tasks across implement/test/improve phases. `SpecComplianceService` reviews each PR diff against the spec (structured JSON verdict) upstream of executor self-review. `RecoveryService` handles stall detection, spec revision, and orderly self-cancel. `Suppressor` blocks conflicting heuristic proposals during an active campaign. New task kinds `test_campaign` and `improve_campaign` route to executor test/improve modes via `ROLE_TASK_KINDS` in `worker/main.py`.
 
 ---
 
@@ -111,7 +111,7 @@ New sixth watcher role `spec` that closes the direction gap in the reactive prop
 ### autonomy — Execution health self-tuning loop
 **Status**: done
 
-`ExecutionArtifactCollector` reads retained kodo_plane artifacts on every observer run and computes per-repo execution quality metrics (`total_runs`, `no_op_count`, `executed_count`, `validation_failed_count`). `ExecutionHealthDeriver` derives `high_no_op_rate` and `persistent_validation_failures` insights. `ExecutionHealthRule` converts them into `execution_health_followup` candidates. The family is in `_DEFAULT_ALLOWED_FAMILIES` so it fires automatically. No manual trigger needed.
+`ExecutionArtifactCollector` reads retained execution_plane artifacts on every observer run and computes per-repo execution quality metrics (`total_runs`, `no_op_count`, `executed_count`, `validation_failed_count`). `ExecutionHealthDeriver` derives `high_no_op_rate` and `persistent_validation_failures` insights. `ExecutionHealthRule` converts them into `execution_health_followup` candidates. The family is in `_DEFAULT_ALLOWED_FAMILIES` so it fires automatically. No manual trigger needed.
 
 ---
 

@@ -388,9 +388,7 @@ class TestImportBoundary:
     _FORBIDDEN_PREFIXES = (
         "example_managed_repo",
         "managed_repo",
-        "kodo",
         "codex",
-        "archon",
     )
 
     def _collect_imports(self, source: str) -> list[str]:

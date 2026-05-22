@@ -54,8 +54,6 @@ plane:
   project_id: proj
 git:
   provider: github
-kodo:
-  binary: kodo
 repos:
   docs:
     clone_url: https://example.invalid/docs.git
@@ -184,8 +182,6 @@ plane:
   project_id: proj
 git:
   provider: github
-kodo:
-  binary: kodo
 repos:
   docs:
     clone_url: https://example.invalid/docs.git

@@ -27,12 +27,12 @@ def _seed_sample(backend_dir: Path, name: str, raw: dict) -> None:
 
 class TestBatchSynthesizer:
     def test_empty_dir_returns_zero_facts(self, tmp_path):
-        facts = synthesize_from_samples(tmp_path / "kodo")
+        facts = synthesize_from_samples(tmp_path / "team_executor")
         assert facts.sample_count == 0
         assert facts.observed_capabilities == set()
 
     def test_aggregates_across_samples(self, tmp_path):
-        bd = tmp_path / "kodo"
+        bd = tmp_path / "team_executor"
         _seed_sample(bd, "s1", {"exit_code": 0, "files_changed": ["a", "b"], "tests_run": ["t1"]})
         _seed_sample(bd, "s2", {"exit_code": 0, "files_changed": ["a"], "commands_run": ["x", "y", "z"]})
         _seed_sample(bd, "s3", {"exit_code": 1, "stderr": "boom"})
@@ -49,7 +49,7 @@ class TestBatchSynthesizer:
         assert "shell_write" in facts.observed_capabilities
 
     def test_capability_diff_only_adds(self, tmp_path):
-        bd = tmp_path / "kodo"
+        bd = tmp_path / "team_executor"
         _seed_sample(bd, "s1", {"exit_code": 0, "files_changed": ["a"]})
         facts = synthesize_from_samples(bd)
         diff = facts.to_capability_card_diff(baseline={
@@ -63,7 +63,7 @@ class TestBatchSynthesizer:
 
 class TestWriteDiffs:
     def test_writes_synthesized_yaml_files(self, tmp_path):
-        bd = tmp_path / "kodo"
+        bd = tmp_path / "team_executor"
         _seed_sample(bd, "s1", {"exit_code": 0, "files_changed": ["a", "b"]})
         facts = synthesize_from_samples(bd)
         cap_path, rs_path = write_synthesized_diffs(bd, facts)
@@ -77,7 +77,7 @@ class TestWriteDiffs:
 
 class TestOngoingSynthesizer:
     def test_observe_increments_facts(self, tmp_path):
-        bd = tmp_path / "kodo"
+        bd = tmp_path / "team_executor"
         bd.mkdir()
         syn = OngoingSynthesizer(backend_dir=bd, flush_every_observations=100)
         syn.observe({"raw_output": {"exit_code": 0, "files_changed": ["a"]}})
@@ -87,7 +87,7 @@ class TestOngoingSynthesizer:
         assert syn.facts.failure_count == 1
 
     def test_flush_on_observation_count(self, tmp_path):
-        bd = tmp_path / "kodo"
+        bd = tmp_path / "team_executor"
         bd.mkdir()
         syn = OngoingSynthesizer(backend_dir=bd, flush_every_observations=2, flush_every_seconds=999)
         assert syn.observe({"raw_output": {"exit_code": 0}}) is False
@@ -96,7 +96,7 @@ class TestOngoingSynthesizer:
         assert (bd / "capability_card.synthesized.yaml").exists()
 
     def test_explicit_flush(self, tmp_path):
-        bd = tmp_path / "kodo"
+        bd = tmp_path / "team_executor"
         bd.mkdir()
         syn = OngoingSynthesizer(backend_dir=bd)
         syn.observe({"raw_output": {"exit_code": 0, "files_changed": ["a"]}})
@@ -104,7 +104,7 @@ class TestOngoingSynthesizer:
         assert cap_path.exists()
 
     def test_carries_existing_samples_at_init(self, tmp_path):
-        bd = tmp_path / "kodo"
+        bd = tmp_path / "team_executor"
         _seed_sample(bd, "preexisting", {"exit_code": 0, "files_changed": ["a"]})
         syn = OngoingSynthesizer(backend_dir=bd)
         # Pre-existing sample is loaded into facts at construction

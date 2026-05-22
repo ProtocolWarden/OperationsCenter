@@ -332,7 +332,7 @@ When you change a threshold, add a comment inline or update this file with the b
 ```
 # 2026-04-04: raised TestVisibilityRule min_consecutive_runs from 3 to 4
 # Reason: test signal flickered on ExternalRepo 3 times in 2 days,
-# creating tasks that resolved themselves before kodo could run them.
+# creating tasks that resolved themselves before the executor could run them.
 ```
 
 This audit trail is how you distinguish "threshold correctly tuned" from "threshold silently drifted."

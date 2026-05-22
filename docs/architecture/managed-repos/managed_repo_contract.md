@@ -47,7 +47,7 @@ config/managed_repos/<repo_id>.yaml
 
 This is a standalone YAML file, separate from `config/operations_center.yaml`.
 
-Reason: the managed repo is not a kodo execution target (no PRs, no validation pipeline).
+Reason: the managed repo is not an executor target (no PRs, no validation pipeline).
 It is an external service that OpsCenter invokes and reads from. The managed repo
 contract is a different concept from the existing `repos:` block.
 

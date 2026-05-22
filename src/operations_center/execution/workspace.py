@@ -35,8 +35,8 @@ logger = logging.getLogger(__name__)
 
 # Branch prefixes whose runs should NOT be pushed or PR'd. Improve mode is
 # analysis-only (output is the follow-up goal task, not code). Reviewer self-
-# review writes verdict.json and exits — never code changes. If kodo wrote
-# anything to the workspace it's incidental; we drop it.
+# review writes verdict.json and exits — never code changes. Anything written
+# to the workspace incidentally is dropped.
 _NO_PUSH_BRANCH_PREFIXES = ("improve/", "review/")
 
 # Paths inside the workspace that must never be committed even if .gitignore
@@ -48,8 +48,8 @@ _LOCAL_EXCLUDE_PATTERNS = (
 )
 
 # Soft limits on the size of a single autonomy commit. A diff that exceeds
-# either threshold is almost always kodo going wide unintentionally — the
-# 25K-LOC PR #56 was the spark for adding this guard. Operators can bump
+# either threshold is almost always the executor going wide unintentionally —
+# the 25K-LOC PR #56 was the spark for adding this guard. Operators can bump
 # the env vars when intentionally large refactors are expected.
 _DEFAULT_MAX_FILES = 50
 _DEFAULT_MAX_LINES = 2000
@@ -94,7 +94,7 @@ class WorkspaceManager:
             )
 
         # `git clone <url> .` populates the current directory directly, so the
-        # repo root IS the workspace — no extra `repo/` subdir to confuse kodo.
+        # repo root IS the workspace — no extra `repo/` subdir.
         # --depth 1 --no-single-branch fetches all branch tips without full history
         # (measured: shallow clone ~38s vs full clone >120s for large repos).
         proc = subprocess.run(
@@ -109,7 +109,7 @@ class WorkspaceManager:
         self._git.set_identity(ws, self._bot_name, self._bot_email)
         # Belt-and-suspenders: even if the target repo's .gitignore doesn't
         # exclude backend artifacts, this local exclude keeps them out of the
-        # commit. Earlier runs without this committed kodo's own stdout.log
+        # commit. Earlier runs without this committed executor stdout.log
         # back into the repo, producing 25K-LOC garbage PRs.
         for pattern in _LOCAL_EXCLUDE_PATTERNS:
             self._git.add_local_exclude(ws, pattern)
@@ -161,7 +161,7 @@ class WorkspaceManager:
             return result
 
         # Don't push runs whose branch prefix indicates analysis-only work.
-        # Improve mode: kodo analyses and the orchestrator creates a follow-up
+        # Improve mode: executor analyses and the orchestrator creates a follow-up
         # goal task — that goal task is what gets shipped, not the improve
         # workspace. Reviewer self-review: writes verdict.json, never code.
         if request.task_branch.startswith(_NO_PUSH_BRANCH_PREFIXES):
@@ -177,7 +177,7 @@ class WorkspaceManager:
             return result
 
         # Pre-flight diff cap: refuse to commit a diff that's almost certainly
-        # kodo going wide. Operators set OPS_CENTER_MAX_FILES /
+        # the executor going wide. Operators set OPS_CENTER_MAX_FILES /
         # OPS_CENTER_MAX_LINES higher when intentionally shipping a large
         # refactor; default is conservative.
         oversized = self._diff_oversized(ws)
@@ -200,8 +200,8 @@ class WorkspaceManager:
                 logger.warning("WorkspaceManager.finalize: could not persist scope-too-wide.json — %s", exc)
             # Detailed reason — surfaces in the Plane comment via _handle_failure
             # plumbing. Lists the top files so an operator (or a future
-            # auto-split recovery service) can see exactly where kodo went wide
-            # and break the work into focused chunks.
+            # auto-split recovery service) can see exactly where the executor
+            # went wide and break the work into focused chunks.
             top_files = "\n".join(f"  - {f}" for f in file_list[:15])
             extra = f" (+{len(file_list) - 15} more)" if len(file_list) > 15 else ""
             return result.model_copy(update={
@@ -217,7 +217,7 @@ class WorkspaceManager:
                 ),
             })
 
-        # Commit anything kodo left in the working tree
+        # Commit anything the executor left in the working tree
         if self._git.changed_files(ws):
             commit_message = self._commit_message(request)
             self._git.commit_all(ws, commit_message)

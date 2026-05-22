@@ -239,12 +239,8 @@ audit:
       - tests/unit/er000_phase0_golden/test_golden.py
       - tests/unit/executors/test_normalizers.py
       - tests/unit/executors/test_startup_wiring.py
-    C41:
-      # http_workflow.py emits Archon API payloads; ASCII-safe is correct
-      # for HTTP wire format here (operator names + IDs are ASCII).
-      - src/operations_center/backends/archon/http_workflow.py
     D11:
-      # The three local backends (aider_local, direct_local, kodo) share a
+      # The local backends (aider_local, direct_local, team_executor) share a
       # common lifecycle by design — _read_capture, _discover_changed_files,
       # _diff_stat. Refactoring to a shared helper is a follow-up; today
       # the duplication is intentional to keep each backend self-contained.
@@ -323,10 +319,8 @@ audit:
       # adapters: subprocess/git cleanup, process kill, PR metadata parsing
       - src/operations_center/adapters/git/client.py
       - src/operations_center/adapters/github_pr.py
-      - src/operations_center/adapters/kodo/adapter.py
       # backends: finally-block cleanup (temp file delete, process teardown)
       - src/operations_center/backends/aider_local/adapter.py
-      - src/operations_center/backends/kodo/invoke.py
       # governance/audit: state load failure → None is documented fallback
       - src/operations_center/audit_governance/runner.py
       # store: corrupted state file → empty dict (already logs warning)
@@ -375,10 +369,9 @@ audit:
       - src/operations_center/tuning/**
       # Backend normalisers: parse best-effort; return None/[] on any decode failure
       - src/operations_center/backends/**
-      # Adapter layer: GitHub/kodo API calls return [] / None on any transport error;
+      # Adapter layer: GitHub API calls return [] / None on any transport error;
       # callers decide whether to retry or skip.
       - src/operations_center/adapters/github_pr.py
-      - src/operations_center/adapters/kodo/adapter.py
       # Structured error capture — exception message stored in a result/error list,
       # not silently discarded:
       - src/operations_center/audit_dispatch/executor.py
@@ -422,8 +415,8 @@ audit:
       - src/operations_center/execution/coordinator.py
     C11:
       # Agent-spawning entrypoints: board_worker, intake, pr_review_watcher invoke
-      # the coding backend (kodo, aider, etc.) which runs for an unbounded duration.
-      # A timeout would kill legitimate long-running tasks.
+      # the coding backend (team_executor, aider, etc.) which runs for an unbounded
+      # duration. A timeout would kill legitimate long-running tasks.
       - src/operations_center/entrypoints/board_worker/**
       - src/operations_center/entrypoints/intake/**
       - src/operations_center/entrypoints/pr_review_watcher/**
@@ -504,8 +497,8 @@ audit:
     - lint_fix
     - type_fix
     - github_rate_limit_low
-    - kodo_quota_event
-    - kodo_quality_warning
+    - executor_quota_event
+    - executor_quality_warning
     - failure_rate_degradation
     - warn_threshold
     - block_threshold
@@ -514,7 +507,7 @@ audit:
     - disk_space_low
     - insufficient_quota
     - execution_stderr_excerpt
-    - _kodo_version_cache
+    - _backend_version_cache
     - _rejection_store
     - candidate_dedup_key
     - _path_locks
@@ -628,14 +621,13 @@ audit:
     - improve_campaign
     - execute_representative_workflow
     - audit_report
-    - kodo_version
+    - backend_version
     - requires_human_approval
 
   # OC1 backends that have raise NotImplementedError intentionally —
-  # openclaw and archon are partially scaffolded; full implementation is deferred.
+  # openclaw is partially scaffolded; full implementation is deferred.
   oc1_exempt:
     - src/operations_center/backends/openclaw/invoke.py
-    - src/operations_center/backends/archon/invoke.py
 
   # Settings fields that are intentionally kept even though OC7 can't find
   # dot-notation usage. These are generated into config file templates by

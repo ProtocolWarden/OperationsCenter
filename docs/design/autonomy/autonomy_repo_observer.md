@@ -28,7 +28,7 @@ observe -> analyze -> decide -> propose
 | test signal | `TestSignalCollector` | last known local test status from retained artifacts |
 | dependency drift | `DependencyDriftCollector` | drift signal from retained dependency-check artifacts |
 | TODO/FIXME summary | `TodoSignalCollector` | count and sample of TODO/FIXME markers |
-| execution health | `ExecutionArtifactCollector` | outcome rates and validation failure counts from retained kodo_plane artifacts |
+| execution health | `ExecutionArtifactCollector` | outcome rates and validation failure counts from retained execution_plane artifacts |
 | lint signal | `LintSignalCollector` | lint violation count and status from `ruff check` |
 | type signal | `TypeSignalCollector` | type error count and status from `ty` or `mypy` |
 | CI history | `CIHistoryCollector` | failing and flaky checks from GitHub check-run history |
@@ -38,7 +38,7 @@ observe -> analyze -> decide -> propose
 
 ### ExecutionArtifactCollector
 
-Reads retained run artifacts from `tools/report/kodo_plane/` and computes for the target repo:
+Reads retained run artifacts from `tools/report/execution_plane/` and computes for the target repo:
 
 - `total_runs` — number of retained artifact directories matched to this repo
 - `executed_count` / `no_op_count` — breakdown of outcome status

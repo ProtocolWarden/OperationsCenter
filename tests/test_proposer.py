@@ -71,7 +71,6 @@ def _write_config(tmp_path: Path) -> Path:
                 "  workspace_slug: ws",
                 "  project_id: proj",
                 "git: {}",
-                "kodo: {}",
                 "repos:",
                 "  operations-center:",
                 "    clone_url: git@github.com:ProtocolWarden/OperationsCenter.git",

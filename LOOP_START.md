@@ -70,7 +70,7 @@ Sync all repos:
     dir="/home/dev/Documents/GitHub/$repo"
     [ -d "$dir/.git" ] && echo "$repo: $(git -C "$dir" pull --ff-only 2>&1 | tail -1)"
   done
-Then confirm: Plane at http://localhost:8080, PlatformDeployment/SwitchBoard at http://localhost:20401/health, all 8 OC watchers running, .venv CLIs present, runtime low-cost policy (sonnet/haiku), kodo max_concurrent=1 in config, working tree state via git status.
+Then confirm: Plane at http://localhost:8080, PlatformDeployment/SwitchBoard at http://localhost:20401/health, all 8 OC watchers running, .venv CLIs present, runtime low-cost policy (sonnet/haiku), team_executor max_concurrent=1 in config, working tree state via git status.
 
 STEP 1 — INVESTIGATE (run in parallel where safe):
   .venv/bin/operations-center-custodian-sweep --config config/operations_center.local.yaml --emit
@@ -91,10 +91,10 @@ If root cause is determinable from these logs, include it directly in the task o
   journalctl -k --since "2h ago" 2>/dev/null | grep -iE "killed|oom" | tail -20
   # System memory at time of investigation
   free -h
-  # Most recent kodo stderr artifacts (written when kodo fails)
-  find logs/ -name "kodo-stderr.log" 2>/dev/null | sort -t/ -k1 | tail -3 | \
+  # Most recent executor stderr artifacts
+  find logs/ -name "executor-stderr.log" 2>/dev/null | sort -t/ -k1 | tail -3 | \
     xargs -I{} sh -c 'echo "=== {} ==="; tail -40 "{}"'
-This investigation applies to ALL backends (kodo, archon, aider) — not just kodo. Any executor
+This investigation applies to ALL backends (team_executor, aider, etc.). Any executor
 that exits with a signal or unexpected code should be investigated the same way.
 
 STEP 2 — TRIAGE:
@@ -297,13 +297,13 @@ FORWARD PROGRESS CHECK — before classifying as temporarily-blocked, confirm at
 If none apply and remediation is actively running, classify as stagnation, not temporary delay.
 
 KNOWN OPEN ISSUES (carry forward until resolved, remove when closed):
-- 9c7f4bb9: kodo SIGKILL (-9) confirmed. kodo exited -9 at "Analyzing project and creating plan".
+- 9c7f4bb9: executor SIGKILL (-9) confirmed. Executor exited -9 at "Analyzing project and creating plan".
   Hypothesis: time-of-day resource exhaustion, not task complexity. Root cause not yet determined.
-  Investigate via STEP 1 EXECUTOR FAILURE INVESTIGATION (dmesg, journalctl, free -h, kodo-stderr).
+  Investigate via STEP 1 EXECUTOR FAILURE INVESTIGATION (dmesg, journalctl, free -h).
   In training mode, OC tasks and ShippingForm (2b5ff37e) MAY be re-queued once investigation
   identifies root cause and confirms safe retry conditions. Do not re-queue blindly before that.
 - Campaign 10c50210: STALLED. AgentTopology Done (v0.3.0). ShippingForm (2b5ff37e) Blocked (SIGKILL'd).
-  ShippingForm may be re-queued after kodo SIGKILL root cause is determined.
+  ShippingForm may be re-queued after SIGKILL root cause is determined.
   Test/Improve Backlog tasks (3fd02e75, 60390297, 6e32031c, d126bc51) remain phase-gated until
   ShippingForm reaches Done.
 
@@ -344,7 +344,7 @@ If any condition fails → create/update Plane task, skip direct fix.
 STEP 6 — DIRECT FIXES (only if loop owns the lock):
 For each affected repo that passes the execution gate, run one at a time:
   scripts/operations-center.sh autonomy-cycle --config config/operations_center.local.yaml --execute --repo <path>
-Respect kodo max_concurrent=1 — do not dispatch two repos simultaneously.
+Respect team_executor max_concurrent=1 — do not dispatch two repos simultaneously.
 
 TRAINING MODE — OC SELF-MODIFICATION:
 In training mode (sandbox_base_branch = operations-center-testing-branch), the self_repo_key repo

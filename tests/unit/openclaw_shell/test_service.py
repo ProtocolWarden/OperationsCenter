@@ -62,7 +62,7 @@ def _failed_result(**kw):
         status=ExecutionStatus.FAILED,
         success=False,
         failure_category=FailureReasonCategory.BACKEND_ERROR,
-        failure_reason="kodo exited 1",
+        failure_reason="executor exited 1",
         **kw,
     )
 

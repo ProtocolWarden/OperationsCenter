@@ -192,7 +192,7 @@ class TestRunTelemetry:
             llm_output_tokens=1500,
             tool_calls=30,
             lane_name="aider_local",
-            backend_name="kodo",
+            backend_name="team_executor",
             backend_version="0.3.1",
         )
         assert t.llm_calls == 12

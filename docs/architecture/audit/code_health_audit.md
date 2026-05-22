@@ -45,9 +45,8 @@ treatment per pattern:
 
 - **C1** scaffolded backends: either finish the implementation, delete the
   module, or move it to a `experimental/` subtree with a clear note. We
-  shipped two backend skeletons (openclaw, archon) that haven't been used
-  in production; they're candidates for the chopping block once we're
-  certain nobody plans to revisit them.
+  shipped two backend skeletons (openclaw, dag_executor) that are the candidates
+  for deeper integration once downstream infrastructure is ready.
 - **C2** untagged TODOs: either fix, delete, or convert to
   `[deferred, reviewed YYYY-MM-DD]` to acknowledge the debt.
 - **C3** orphaned entrypoints: wire into `operations-center.sh`,

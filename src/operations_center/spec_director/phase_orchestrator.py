@@ -253,10 +253,10 @@ class PhaseOrchestrator:
 
         # Lifecycle guard: a task carrying `lifecycle: expanded` has been
         # decomposed into children whose own runs do the real work. Don't
-        # call kodo to rewrite its description — the parent is intentionally
-        # quiescent and waiting for its children to finish (then the
-        # board_worker auto-closes it). Without this guard the orchestrator
-        # generates ghost rewrites against meta-tasks. See
+        # rewrite the description — the parent is intentionally quiescent
+        # and waiting for its children to finish (then the board_worker
+        # auto-closes it). Without this guard the orchestrator generates
+        # ghost rewrites against meta-tasks. See
         # docs/architecture/ghost_work_audit.md G12.
         if _has_lifecycle_label(issue, "expanded"):
             logger.info(
@@ -288,7 +288,7 @@ class PhaseOrchestrator:
             )
             return
 
-        # Fetch the most recent comment (failure comment left by kodo)
+        # Fetch the most recent comment (failure comment left by the executor)
         last_comment_body: str | None = None
         try:
             comments = self._client.list_issue_comments(task_id)

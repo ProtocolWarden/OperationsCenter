@@ -38,7 +38,7 @@ def test_render_settings_yaml_contains_local_repo_bootstrap_defaults() -> None:
         git_author_email="bot@example.com",
         git_sign_commits=True,
         git_signing_key="ABC12345",
-        executor_binary="kodo",
+        executor_binary="team-executor",
         executor_install_ref=None,
         executor_team="default",
         executor_cycles=3,
@@ -130,7 +130,7 @@ def test_render_env_file_for_subscription_mode_skips_provider_secret_export() ->
         git_author_email="bot@example.com",
         git_sign_commits=False,
         git_signing_key=None,
-        executor_binary="kodo",
+        executor_binary="team-executor",
         executor_install_ref="v0.4.272",
         executor_team="full",
         executor_cycles=3,
@@ -194,7 +194,7 @@ def test_render_settings_yaml_supports_multiple_repos() -> None:
         git_author_email="bot@example.com",
         git_sign_commits=False,
         git_signing_key=None,
-        executor_binary="kodo",
+        executor_binary="team-executor",
         executor_install_ref=None,
         executor_team="default",
         executor_cycles=3,
@@ -259,7 +259,7 @@ def test_render_task_template_uses_default_repo() -> None:
         git_author_email="bot@example.com",
         git_sign_commits=False,
         git_signing_key=None,
-        executor_binary="kodo",
+        executor_binary="team-executor",
         executor_install_ref=None,
         executor_team="default",
         executor_cycles=3,
@@ -325,8 +325,8 @@ def test_prepend_local_bin_to_path_adds_home_local_bin(monkeypatch) -> None:
 
 def test_check_command_installed_uses_local_bin_path(monkeypatch) -> None:
     monkeypatch.setenv("PATH", "/usr/bin")
-    monkeypatch.setattr("shutil.which", lambda command: "/home/dev/.local/bin/kodo" if command == "kodo" else None)
-    assert check_command_installed("kodo") is True
+    monkeypatch.setattr("shutil.which", lambda command: "/home/dev/.local/bin/team-executor" if command == "team-executor" else None)
+    assert check_command_installed("team-executor") is True
 
 
 def test_summarize_provider_statuses_distinguishes_states() -> None:

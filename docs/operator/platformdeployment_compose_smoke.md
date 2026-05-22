@@ -52,9 +52,12 @@ curl -fsS http://localhost:20401/health | jq .status
 See `docs/operator/switchboard_live_verification.md` for the full
 SwitchBoard runbook (rebuild path if you see a CxRP envelope mismatch).
 
-### `archon` — adds Archon workflow harness
+### `archon` — Archon workflow harness (removed)
 
-Layers on top of `core`. Archon joins as a long-running HTTP service.
+> **Note:** Archon has been removed. This section is kept for historical reference only.
+> The `archon.yml` compose profile and `platformdeployment-archon` container are no longer used.
+
+Layers on top of `core`. Archon joined as a long-running HTTP service.
 
 ```bash
 docker compose \
@@ -78,9 +81,8 @@ curl -fsS http://localhost:3000/api/health | jq '{status, version}'
 
 **Smoke status (2026-05-08): ✅ healthy**
 
-See `docs/operator/archon_workflow_registration.md` for the codebase
-registration runbook needed before `/api/workflows` returns
-non-empty.
+See `docs/operator/archon_workflow_registration.md` for the historical
+codebase registration runbook (Archon has been removed).
 
 ### `dev` — adds developer tooling on top of core
 

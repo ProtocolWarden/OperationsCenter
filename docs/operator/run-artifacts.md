@@ -53,7 +53,7 @@ grep -rl '"success": false' ~/.console/operations_center/runs/
   "proposal_id": "...",
   "decision_id": "...",
   "selected_lane": "claude_cli",
-  "selected_backend": "kodo",
+  "selected_backend": "team_executor",
   "status": "success",
   "success": true,
   "executed": true,

@@ -108,7 +108,7 @@ def successful_rich_result() -> ExecutionResult:
         artifacts=[
             make_artifact(ArtifactType.DIFF, "pre-merge diff", "--- a/src/main.py\n+++ b/src/main.py"),
             make_artifact(ArtifactType.VALIDATION_REPORT, "ruff output", "All checks passed."),
-            make_artifact(ArtifactType.LOG_EXCERPT, "kodo run log", "kodo: 2 files fixed\nkodo: done"),
+            make_artifact(ArtifactType.LOG_EXCERPT, "executor run log", "executor: 2 files fixed\nexecutor: done"),
         ],
     )
 
@@ -122,9 +122,9 @@ def failed_result_with_logs() -> ExecutionResult:
         success=False,
         changed_files=[],
         failure_category=FailureReasonCategory.BACKEND_ERROR,
-        failure_reason="kodo exited 1: tool call failed",
+        failure_reason="executor exited 1: tool call failed",
         artifacts=[
-            make_artifact(ArtifactType.LOG_EXCERPT, "kodo run log", "kodo: exit 1"),
+            make_artifact(ArtifactType.LOG_EXCERPT, "executor run log", "executor: exit 1"),
         ],
     )
 
@@ -137,7 +137,7 @@ def timeout_result() -> ExecutionResult:
         status=ExecutionStatus.TIMED_OUT,
         success=False,
         failure_category=FailureReasonCategory.TIMEOUT,
-        failure_reason="kodo exited -1: [timeout: process group killed after 300s]",
+        failure_reason="executor exited -1: [timeout: process group killed after 300s]",
         artifacts=[],
     )
 
@@ -151,9 +151,9 @@ def no_changes_result() -> ExecutionResult:
         success=False,
         changed_files=[],
         failure_category=FailureReasonCategory.NO_CHANGES,
-        failure_reason="kodo: no changes detected",
+        failure_reason="executor: no changes detected",
         artifacts=[
-            make_artifact(ArtifactType.LOG_EXCERPT, "kodo run log", "kodo: no changes"),
+            make_artifact(ArtifactType.LOG_EXCERPT, "executor run log", "executor: no changes"),
         ],
     )
 

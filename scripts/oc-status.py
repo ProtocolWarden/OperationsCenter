@@ -124,7 +124,7 @@ def _watcher_rows(repo_filter: list[str] | None) -> list[str]:
     return lines
 
 
-def _kodo_rows(repo_filter: list[str] | None) -> list[str]:
+def _executor_rows(repo_filter: list[str] | None) -> list[str]:
     lines = []
     try:
         workspaces = list(Path("/tmp").glob("oc-task-*"))
@@ -268,8 +268,8 @@ def _render(repo_filter: list[str] | None, width: int = 78) -> str:
     sections.extend(_watcher_rows(repo_filter))
 
     sections.append("")
-    sections.append("ACTIVE KODO")
-    sections.extend(_kodo_rows(repo_filter))
+    sections.append("ACTIVE EXECUTOR")
+    sections.extend(_executor_rows(repo_filter))
 
     sections.append("")
     sections.append("BOARD")
@@ -336,11 +336,11 @@ def _render_rich(repo_filter: list[str] | None, console) -> None:
     wd_text.append("running" if wd_alive else "stopped",
                    style="green" if wd_alive else "bold red")
 
-    # ── active kodo panel ────────────────────────────────────────────────────
-    kodo_lines = _kodo_rows(repo_filter)
-    kodo_panel = Panel(
-        Text.from_ansi("\n".join(kodo_lines)),
-        title="[bold]Active Kodo[/bold]",
+    # ── active executor panel ────────────────────────────────────────────────
+    executor_lines = _executor_rows(repo_filter)
+    executor_panel = Panel(
+        Text.from_ansi("\n".join(executor_lines)),
+        title="[bold]Active Executor[/bold]",
         border_style="blue",
         box=box.ROUNDED,
         expand=True,
@@ -377,7 +377,7 @@ def _render_rich(repo_filter: list[str] | None, console) -> None:
 
     content = Group(
         Columns(watcher_panels, equal=True, expand=True),
-        Columns([kodo_panel, board_panel], equal=True, expand=True),
+        Columns([executor_panel, board_panel], equal=True, expand=True),
         Columns([cb_panel, mem_panel], equal=True, expand=True),
         wd_text,
     )

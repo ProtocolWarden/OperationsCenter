@@ -57,15 +57,15 @@ def test_openclaw_strong_changed_file_friction_generates_proposal() -> None:
     assert len(report.recommendations) == 1
 
 
-def test_archon_weak_limitation_stays_adapter_first() -> None:
-    payload = _load_fixture("archon_weak_support_limitation.json")
+def test_weak_backend_limitation_stays_adapter_first() -> None:
+    payload = _load_fixture("generic_backend_weak_support_limitation.json")
     report = UpstreamPatchEvaluator.default().analyze(_build_evidence(payload))
     assert report.friction_findings[0].evidence_strength == EvidenceStrength.WEAK
     assert report.recommendations == []
 
 
-def test_kodo_moderate_ergonomic_issue_stays_in_adapter_layer() -> None:
-    payload = _load_fixture("kodo_moderate_ergonomic_issue.json")
+def test_team_executor_moderate_ergonomic_issue_stays_in_adapter_layer() -> None:
+    payload = _load_fixture("team_executor_moderate_ergonomic_issue.json")
     report = UpstreamPatchEvaluator.default().analyze(_build_evidence(payload))
     assert report.friction_findings[0].frequency == FrequencyClass.RECURRING
     assert report.recommendations == []

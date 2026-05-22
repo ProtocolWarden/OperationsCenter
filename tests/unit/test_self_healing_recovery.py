@@ -61,7 +61,7 @@ def test_backend_sigkill_transitions_to_unstable_with_cooldown():
     )
     result = _make_result(request=request, failure_reason="executor failed signal=SIGKILL")
 
-    record, transition = registry.record_failure("kodo", result)
+    record, transition = registry.record_failure("team_executor", result)
 
     assert record.state == BackendHealthState.UNSTABLE
     assert record.last_failure is not None
@@ -172,7 +172,7 @@ def test_evidence_fingerprint_ignores_timestamp_noise_and_ordering():
 
 def test_parked_state_unparks_on_semantic_evidence_change():
     parked = ParkedState(
-        root_cause_signature="kodo_sigkill_plan_phase",
+        root_cause_signature="executor_sigkill_plan_phase",
         parked_reason="backend cooldown exhausted without safe retry",
         last_evidence_hash="old",
     )
@@ -186,7 +186,7 @@ def test_parked_state_unparks_on_semantic_evidence_change():
 def test_parked_state_store_round_trips_metadata(tmp_path):
     store = ParkedStateStore(tmp_path / "parked.json")
     state = ParkedState(
-        root_cause_signature="kodo_sigkill_plan_phase",
+        root_cause_signature="executor_sigkill_plan_phase",
         parked_reason="operator action required",
         unchanged_cycles=4,
         last_evidence_hash="abc123",

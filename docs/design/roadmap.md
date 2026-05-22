@@ -38,7 +38,7 @@ This milestone has two halves. The first is complete; the second is TODO'd.
 
 **`ExecutionOutcomeDeriver`** (`src/operations_center/insights/derivers/execution_outcome.py`)
 
-Reads retained `control_outcome.json` and `stderr.txt` artifacts from `tools/report/kodo_plane/` to classify failure modes: `timeout_pattern` (≥2 timeout failures), `test_regression` (test-output pattern in validation failures), `validation_loop` (same task failed validation ≥3 times). Wired into `build_insight_service()` in `autonomy_cycle/main.py`.
+Reads retained `control_outcome.json` and `stderr.txt` artifacts from `tools/report/execution_plane/` to classify failure modes: `timeout_pattern` (≥2 timeout failures), `test_regression` (test-output pattern in validation failures), `validation_loop` (same task failed validation ≥3 times). Wired into `build_insight_service()` in `autonomy_cycle/main.py`.
 
 Per-task validation profile tracking and cycle report profile fields remain as optional future improvements once lint_fix has ≥10 executions in the feedback store.
 
@@ -97,9 +97,9 @@ A fully autonomous spec-driven development chain giving OperationsCenter a sixth
 
 **Recovery service** (`spec_director/recovery.py`): Stall detection (24 h), spec revision via Anthropic API (budget 3), abandon + self-cancel (72 h).
 
-**Spec compliance reviewer** (`spec_director/compliance.py`): Direct Anthropic API call (claude-sonnet-4-6) that compares PR diff against the spec and returns a structured JSON verdict (`LGTM`/`CONCERNS`/`FAIL`). Wired into the reviewer watcher as an upstream step before kodo self-review.
+**Spec compliance reviewer** (`spec_director/compliance.py`): Direct Anthropic API call (claude-sonnet-4-6) that compares PR diff against the spec and returns a structured JSON verdict (`LGTM`/`CONCERNS`/`FAIL`). Wired into the reviewer watcher as an upstream step before executor self-review.
 
-**New task kinds**: `test_campaign` (→ `kodo --test`), `improve_campaign` (→ `kodo --improve`). Both are claimed by their corresponding role workers via `ROLE_TASK_KINDS` in `worker/main.py`.
+**New task kinds**: `test_campaign` (executor test mode), `improve_campaign` (executor improve mode). Both are claimed by their corresponding role workers via `ROLE_TASK_KINDS` in `worker/main.py`.
 
 **Entrypoint** (`entrypoints/spec_director/main.py`): Polling loop, `--once` flag for supervised runs. `watch --role spec` registered in `scripts/operations-center.sh`.
 

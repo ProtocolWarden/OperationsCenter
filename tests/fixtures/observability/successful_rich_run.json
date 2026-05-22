@@ -37,8 +37,8 @@
       },
       {
         "artifact_type": "log_excerpt",
-        "label": "kodo run log",
-        "content": "kodo: 2 files fixed\nkodo: done"
+        "label": "executor run log",
+        "content": "executor: 2 files fixed\nexecutor: done"
       }
     ]
   },

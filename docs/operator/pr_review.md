@@ -22,10 +22,10 @@ When a task completes with a branch push and `await_review: true` is set for the
 
 The `review` watcher polls tracked PRs every 60 seconds (configurable via `OPERATIONS_CENTER_WATCH_INTERVAL_REVIEW_SECONDS`).
 
-1. Kodo reads the diff against the base branch.
-2. Kodo writes a verdict: `LGTM` or `CONCERNS`.
+1. The executor reads the diff against the base branch.
+2. The executor writes a verdict: `LGTM` or `CONCERNS`.
 3. **`LGTM`** → squash-merge, delete branch, task marked Done.
-4. **`CONCERNS`** → kodo runs a revision pass on the branch, then re-reviews.
+4. **`CONCERNS`** → the executor runs a revision pass on the branch, then re-reviews.
 5. This loop repeats up to `max_self_review_loops` times (default: 2).
 6. If still unresolved after all loops → escalates to Stage 2.
 
@@ -36,7 +36,7 @@ The self-review verdict is posted as a PR comment with the `<!-- operations-cent
 1. Watcher posts a comment on the PR explaining what it couldn't resolve automatically.
 2. A human can then:
    - **👍 the PR** or **👍 the latest bot comment** → squash-merge + Done.
-   - **Post a comment** → kodo runs a revision pass; bot replies when done; repeat up to 3 times.
+   - **Post a comment** → the executor runs a revision pass; bot replies when done; repeat up to 3 times.
 3. If no action after 1 day → auto-merge (timeout fallback).
 
 ## Enabling the Review Loop
@@ -97,7 +97,7 @@ Before enabling `await_review: true` for a new repo, verify:
 Every PR action is logged in two places:
 
 1. **Plane comment** on the task — transition reason, run_id, outcome.
-2. **Retained artifact** under `tools/report/kodo_plane/<task-id>/<run-id>/` — full diff, kodo stdout, summary.json.
+2. **Retained artifact** under `tools/report/execution_plane/<task-id>/<run-id>/` — full diff, executor stdout, summary.json.
 
 PR state files live in `state/pr_reviews/<owner>/<repo>/<pr-number>.json`. These track:
 
@@ -183,7 +183,7 @@ The fresh goal task allows a human to review the scope and promote it when ready
 Run these scenarios against a controlled test repo to validate the loop before enabling it in production:
 
 1. **Happy path (LGTM)**: Create a task with a simple goal, let it complete, verify Stage 1 merges the PR automatically.
-2. **Revision loop (CONCERNS)**: Make the diff produce a CONCERNS verdict (e.g. remove a test), verify kodo revises and re-reviews.
+2. **Revision loop (CONCERNS)**: Make the diff produce a CONCERNS verdict (e.g. remove a test), verify the executor revises and re-reviews.
 3. **Human escalation**: Let max_self_review_loops run out, verify Stage 2 escalation comment appears, verify 👍 triggers a merge.
 4. **Bot loop prevention**: Post a comment from a bot login listed in `bot_logins`, verify no revision is triggered.
 5. **Dry-run**: Set `PR_DRY_RUN=1`, run a full cycle, verify no GitHub writes but full log output.

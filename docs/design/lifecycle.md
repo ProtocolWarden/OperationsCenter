@@ -76,8 +76,8 @@ Blocked-task handling lives inside `improve`, not in a separate `unblocker` lane
 
 - Manages open PRs created by the `goal` lane when `await_review: true` is set for the repo.
 - Operates as a two-phase state machine per PR, tracked in `state/pr_reviews/<task_id>.json`:
-  - **Stage 1 — self-review**: kodo reads the diff against the base branch and writes a verdict file (`LGTM` or `CONCERNS`). LGTM triggers merge. CONCERNS triggers a kodo revision pass followed by another self-review cycle (up to `reviewer.max_self_review_loops` times).
-  - **Stage 2 — human review**: if self-review cannot resolve its concerns, the watcher posts an escalation comment and waits for human input. Human 👍 on the PR or bot reply triggers merge. Human comment triggers a kodo revision pass; bot replies when done (max 3 loops). Timeout of 1 day triggers auto-merge.
+  - **Stage 1 — self-review**: the executor reads the diff against the base branch and writes a verdict file (`LGTM` or `CONCERNS`). LGTM triggers merge. CONCERNS triggers an executor revision pass followed by another self-review cycle (up to `reviewer.max_self_review_loops` times).
+  - **Stage 2 — human review**: if self-review cannot resolve its concerns, the watcher posts an escalation comment and waits for human input. Human 👍 on the PR or bot reply triggers merge. Human comment triggers an executor revision pass; bot replies when done (max 3 loops). Timeout of 1 day triggers auto-merge.
 - All bot-posted comments carry a `<!-- operations-center:bot -->` marker. The watcher never re-processes its own comments.
 - `reviewer.bot_logins` in config lists accounts whose comments are always ignored.
 - `reviewer.allowed_reviewer_logins` optionally restricts human-phase revision triggers to a whitelist.
@@ -123,8 +123,8 @@ These are board-facing workflow states, not a queue implementation.
 
 The `spec` lane introduces two new task kinds for the test and improve phases of a campaign:
 
-- `test_campaign` — picked up by the `test` role worker (alongside plain `test`); runs `kodo --test` for adversarial testing of campaign implementation.
-- `improve_campaign` — picked up by the `improve` role worker (alongside plain `improve`); runs `kodo --improve` for simplification/architecture/usability passes.
+- `test_campaign` — picked up by the `test` role worker (alongside plain `test`); runs the executor in test mode for adversarial testing of campaign implementation.
+- `improve_campaign` — picked up by the `improve` role worker (alongside plain `improve`); runs the executor in improve mode for simplification/architecture/usability passes.
 
 Campaign `implement` phase tasks use the standard `goal` task kind and are executed by the existing `goal` lane workers unchanged.
 

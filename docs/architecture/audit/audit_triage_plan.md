@@ -16,7 +16,7 @@ code_health_audit  8 patterns   total: 190  (mostly C7 settings + C8 phantoms)
 | ID | Action | Cost | Status |
 |----|--------|------|--------|
 | A1 | Delete `backends/openclaw/` (1,100 LOC stub) | S | **Held — keep for future use** |
-| A2 | Delete `backends/archon/` (957 LOC stub) | S | **Held — keep for future use** |
+| A2 | Delete `backends/archon/` (957 LOC stub) | S | **Done — removed in ADR 0005** |
 | A3 | Delete `openclaw_shell/` (801 LOC) | S | **Held — falls with A1** |
 | A4 | Triage 35 dead settings fields | M | **In progress** — see C7 catalog below |
 
@@ -66,7 +66,7 @@ where the implementation cost is small AND the value is concrete.
 | ID | Field(s) | Depends on |
 |----|----------|-----------|
 | C-D1 | `auto_merge_success_rate_threshold` | E5 reviewer trust ramp-up |
-| C-D2 | `parallel_slots`, `max_concurrent_kodo`, `min_kodo_available_mb` | concurrency-control feature |
+| C-D2 | `parallel_slots`, `backend_caps.team_executor.max_concurrent`, `backend_caps.team_executor.min_available_memory_mb` | concurrency-control feature |
 | C-D3 | `focus_areas` | propose tuning |
 | C-D4 | All `SpecDirectorSettings` fields | spec_director enhancements |
 | C-D5 | `EscalationSettings.block_threshold`, `credential_expiry_warn_days` | F12 alerting |
@@ -81,7 +81,7 @@ where the implementation cost is small AND the value is concrete.
 
 | ID | Action | Cost | Status |
 |----|--------|------|--------|
-| D1 | **F2** transient kodo retry | M | Pending |
+| D1 | **F2** transient executor retry | M | Pending |
 | D2 | **F4** quota-aware throttling consumer | S | Pending — wires `max_daily_executions` |
 | D3 | **F8** Ready-queue back-pressure | S | Pending — wires `propose_skip_when_ready_count` |
 | D4 | **F12** stall alerting | M | Pending |

@@ -20,12 +20,12 @@
     "branch_name": "auto/lint-fix-abc123",
     "pull_request_url": null,
     "failure_category": "backend_error",
-    "failure_reason": "kodo exited 1: tool call failed",
+    "failure_reason": "executor exited 1: tool call failed",
     "artifacts": [
       {
         "artifact_type": "log_excerpt",
-        "label": "kodo run log",
-        "content": "kodo: exit 1"
+        "label": "executor run log",
+        "content": "executor: exit 1"
       }
     ]
   },

@@ -27,13 +27,13 @@ You will receive an acknowledgment within 72 hours. We aim to release a fix with
 OperationsCenter is the planning and execution orchestration layer. The primary security surface is:
 
 - **Plane API token exposure** via config files or logs (`PLANE_API_TOKEN`)
-- **Arbitrary command execution** via kodo/Archon/OpenClaw adapter dispatch
+- **Arbitrary command execution** via backend adapter dispatch (team_executor, OpenClaw, etc.)
 - **Path traversal** via workspace directory creation in `/tmp/oc-task-*`
 - **Policy bypass** — anything that routes execution past the policy gate
 - **Log injection** via untrusted task content written to structured logs
 
 ## Out of Scope
 
-- Vulnerabilities in kodo, Archon, OpenClaw, or other upstream execution tools
+- Vulnerabilities in TeamExecutor, OpenClaw, or other upstream execution tools
 - Issues requiring physical access to the host machine
 - Denial-of-service via normal task load (rate limiting is a configuration concern)

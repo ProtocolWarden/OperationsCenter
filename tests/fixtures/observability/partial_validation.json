@@ -31,8 +31,8 @@
       },
       {
         "artifact_type": "log_excerpt",
-        "label": "kodo run log",
-        "content": "kodo: validation failed"
+        "label": "executor run log",
+        "content": "executor: validation failed"
       }
     ]
   },

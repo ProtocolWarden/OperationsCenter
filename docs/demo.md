@@ -218,7 +218,7 @@ Full end-to-end walkthrough from local startup to a completed task with retained
 - Python 3.11+
 - A GitHub account with a repo and a personal access token (repo scope)
 - `gh` CLI authenticated (`gh auth login`) or a `GITHUB_TOKEN` PAT
-- Kodo installed and accessible via `scripts/kodo-shim`
+- TeamExecutor (`team-executor`) installed and accessible via PATH
 
 ### Step 1 — First-time setup
 
@@ -313,17 +313,16 @@ In Plane, the task transitions:
 
 ### Step 5 — Inspect retained artifacts
 
-Every run writes structured artifacts under `tools/report/kodo_plane/`:
+Every run writes structured artifacts under `tools/report/execution_plane/`:
 
 ```
-tools/report/kodo_plane/
+tools/report/execution_plane/
 └── TASK-<id>/
     └── <run-id>/
         ├── request_context.json   # task + repo metadata at time of run
         ├── request.json           # full execution request
-        ├── kodo_command.json      # exact kodo CLI command used
-        ├── kodo_stdout.txt        # kodo stdout
-        ├── kodo_stderr.txt        # kodo stderr
+        ├── executor_stdout.txt    # executor stdout
+        ├── executor_stderr.txt    # executor stderr
         ├── validation.json        # validation command results
         ├── diff_stat.txt          # git diff --stat
         ├── diff_patch.txt         # full patch
@@ -334,7 +333,7 @@ tools/report/kodo_plane/
 Inspect the outcome:
 
 ```bash
-cat tools/report/kodo_plane/TASK-*/*/summary.json | python3 -m json.tool
+cat tools/report/execution_plane/TASK-*/*/summary.json | python3 -m json.tool
 ```
 
 ### Step 6 — Recognise success and failure signals
@@ -362,7 +361,7 @@ cat tools/report/kodo_plane/TASK-*/*/summary.json | python3 -m json.tool
 
 - [ ] `dev-status` shows all watchers as `idle` or `polling`
 - [ ] Task transitions from `Ready for AI` → `Running` within one poll interval
-- [ ] Artifacts appear in `tools/report/kodo_plane/`
+- [ ] Artifacts appear in `tools/report/execution_plane/`
 - [ ] `summary.json` exists and has a recognisable outcome
 - [ ] Plane task comment shows execution result details
 - [ ] GitHub branch or PR exists if push succeeded

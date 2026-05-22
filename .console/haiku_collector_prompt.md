@@ -205,7 +205,7 @@ journalctl -k --since "2h ago" 2>/dev/null | grep -iE "killed|oom" | tail -20
 free -h
 # Extract available memory (not "free" column — includes reclaimable cache):
 python3 -c "import subprocess,re; out=subprocess.check_output(['free','-g'],text=True); m=re.search(r'Mem:\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+(\d+)',out); print('available_gb='+m.group(1) if m else 'available_gb=unknown')"
-find logs/ -name "kodo-stderr.log" 2>/dev/null | sort -t/ -k1 | tail -3 | xargs -I{} sh -c 'echo "=== {} ==="; tail -40 "{}"'
+find logs/ -name "executor-stderr.log" 2>/dev/null | sort -t/ -k1 | tail -3 | xargs -I{} sh -c 'echo "=== {} ==="; tail -40 "{}"'
 ```
 Capture: OOM signals present, recent SIGKILL task IDs and context, free memory in GB.
 

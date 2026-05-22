@@ -70,10 +70,10 @@ RuntimeBinding
 Examples:
 
 ```text
-architecture_design → kodo   → claude_cli / opus
-repo_patch          → aider  → ollama / qwen-coder
-workflow_agent      → archon → runtime binding TBD
-human_review        → human  → no model runtime
+architecture_design → team_executor → claude_cli / opus
+repo_patch          → aider         → ollama / qwen-coder
+workflow_agent      → dag_executor  → runtime binding TBD
+human_review        → human         → no model runtime
 ```
 
 Do not collapse lane, executor, and runtime into one field.
@@ -605,7 +605,7 @@ operations_center/executors/<backend>/recommendations.md
 ## Example capability_card.yaml
 
 ```yaml
-backend_id: kodo
+backend_id: team_executor
 backend_version: unknown
 advertised_capabilities:
   - repo_read
@@ -621,7 +621,7 @@ known_capability_gaps:
 ## Example runtime_support.yaml
 
 ```yaml
-backend_id: kodo
+backend_id: team_executor
 backend_version: unknown
 supported_runtime_kinds:
   - cli_subscription
@@ -650,7 +650,7 @@ operations_center/executors/<backend>/audit_verdict.yaml
 ## Required Schema
 
 ```yaml
-backend_id: kodo
+backend_id: team_executor
 audited_at: 2026-05-05
 audited_against_cxrp_version: 1.2
 backend_version: unknown
@@ -888,29 +888,8 @@ Notes:
 Likely first proof target:
 
 ```text
-architecture_design → kodo → claude_cli / opus
+architecture_design → team_executor → claude_cli / opus
 ```
-
-## Archon
-
-Expected near-term outcome: `upstream_patch_pending OR fork_required`.
-
-Notes:
-
-- Current adapter is transport-shaped, not binder-shaped.
-- No confirmed per-request runtime/model/provider parameter.
-- Must spike whether Archon exposes per-workflow LLM override.
-- If only env / global config exists → wrapper / fork risk is high.
-- If internal agents choose runtime independently → fork is required.
-
-Likely first proof target:
-
-```text
-architecture_design → archon → claude_cli / opus
-```
-
-This likely fails today unless Archon exposes per-workflow runtime
-binding.
 
 ---
 
@@ -918,7 +897,7 @@ binding.
 
 ```text
 SwitchBoard selects architecture_design
-OperationsCenter binds executor = kodo OR archon
+OperationsCenter binds executor = team_executor OR dag_executor
 OperationsCenter binds RuntimeBinding = claude_cli / opus
 Backend executes without overriding runtime / capabilities
 ExecutionResult returns normalized evidence

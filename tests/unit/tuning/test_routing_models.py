@@ -56,7 +56,7 @@ class TestChangeEvidenceClass:
 class TestBackendComparisonSummary:
     def _make(self, **kw) -> BackendComparisonSummary:
         defaults = dict(
-            backend="kodo",
+            backend="team_executor",
             lane="claude_cli",
             sample_size=10,
             evidence_strength=EvidenceStrength.MODERATE,
@@ -71,7 +71,7 @@ class TestBackendComparisonSummary:
 
     def test_minimal_construction(self):
         s = self._make()
-        assert s.backend == "kodo"
+        assert s.backend == "team_executor"
         assert s.lane == "claude_cli"
         assert s.sample_size == 10
 
@@ -101,7 +101,7 @@ class TestStrategyFinding:
     def test_construction(self):
         f = StrategyFinding(
             category="reliability",
-            summary="kodo is reliable.",
+            summary="team_executor is reliable.",
             evidence_strength=EvidenceStrength.STRONG,
         )
         assert f.category == "reliability"

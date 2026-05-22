@@ -275,7 +275,7 @@ the automation strategy **changed** after a prior failure before classifying as 
 When starvation or closed-loop stagnation is detected, investigate:
 
 1. **Why are Blocked tasks blocked?**
-   - Did a prior kodo run fail and move them to Blocked?
+   - Did a prior executor run fail and move them to Blocked?
    - Were they manually blocked by the operator?
    - Is a phase gate holding them (spec campaign phase not yet active)?
 
@@ -399,8 +399,8 @@ Do not infer affected repos from unrelated logs, memory, or prior sessions.
 
 The following invariant is enforced by Custodian on every sweep:
 
-- **OC10** (`kodo max_concurrent must be 1`) — reads
-  `config/operations_center.local.yaml` and fails if `backend_caps.kodo.max_concurrent != 1`.
+- **OC10** (`team_executor max_concurrent must be 1`) — reads
+  `config/operations_center.local.yaml` and fails if `backend_caps.team_executor.max_concurrent != 1`.
   Silently passes on fresh clones (local config absent).
 
 Additional invariants maintained by runbook convention (not currently code-enforced):
@@ -418,7 +418,7 @@ Additional invariants maintained by runbook convention (not currently code-enfor
 - No ADR modification from watchdog/autonomy loop paths
 - No destructive git operations in loop helpers
 - No runtime model policy widening from loop actions
-- Adaptive cadence must not widen kodo concurrency regardless of urgency
+- Adaptive cadence must not widen executor concurrency regardless of urgency
 
 **Stagnation and convergence:**
 - HEALTHY cadence forbidden while starvation, closed-loop stagnation, non-convergent, or divergent automation is active

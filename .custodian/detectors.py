@@ -14,8 +14,8 @@ Remaining OC-specific detectors (cannot be expressed by native Custodian config)
                                reducing false positives for DTO field references in docs.
                                Migrates fully once K1 gains field-def awareness.
 
-  OC10 kodo max_concurrent must be 1 — reads config/operations_center.local.yaml (if
-                               present) and confirms backend_caps.kodo.max_concurrent == 1.
+  OC10 team_executor max_concurrent must be 1 — reads config/operations_center.local.yaml
+                               (if present) and confirms backend_caps.team_executor.max_concurrent == 1.
                                Prevents inadvertent concurrency widening from the watchdog
                                loop or autonomy-cycle. Silently passes when the local config
                                is absent (CI / fresh clone).
@@ -179,10 +179,10 @@ def _detect_oc8_phantom_symbols(ctx: AuditContext) -> DetectorResult:
     return DetectorResult(count=len(seen), samples=samples[:8])
 
 
-# ── OC10: kodo max_concurrent must be 1 ───────────────────────────────────────
+# ── OC10: team_executor max_concurrent must be 1 ──────────────────────────────
 
-def _detect_oc10_kodo_max_concurrent(ctx: AuditContext) -> DetectorResult:
-    """Confirm backend_caps.kodo.max_concurrent == 1 in the local config.
+def _detect_oc10_team_executor_max_concurrent(ctx: AuditContext) -> DetectorResult:
+    """Confirm backend_caps.team_executor.max_concurrent == 1 in the local config.
 
     Silently passes when the local config is absent (CI / fresh clone) so this
     never blocks the test suite on machines that haven't run setup.
@@ -200,7 +200,7 @@ def _detect_oc10_kodo_max_concurrent(ctx: AuditContext) -> DetectorResult:
     actual = (
         (data or {})
         .get("backend_caps", {})
-        .get("kodo", {})
+        .get("team_executor", {})
         .get("max_concurrent")
     )
     if actual is None:
@@ -211,8 +211,8 @@ def _detect_oc10_kodo_max_concurrent(ctx: AuditContext) -> DetectorResult:
             count=1,
             samples=[
                 f"config/operations_center.local.yaml: "
-                f"backend_caps.kodo.max_concurrent={actual!r} — must be 1 "
-                f"(watchdog loop invariant; concurrent kodo teams fight for host RAM)"
+                f"backend_caps.team_executor.max_concurrent={actual!r} — must be 1 "
+                f"(watchdog loop invariant; concurrent executor teams fight for host RAM)"
             ],
         )
     return DetectorResult(count=0, samples=[])
@@ -295,6 +295,6 @@ def build_oc_detectors() -> list[Detector]:
     return [
         Detector("OC3",  "orphaned entrypoints",                             "open", _detect_oc3_orphaned_entrypoints,  MEDIUM),
         Detector("OC8",  "docs reference a symbol that doesn't exist",       "open", _detect_oc8_phantom_symbols,       LOW),
-        Detector("OC10", "kodo max_concurrent must be 1",                    "open", _detect_oc10_kodo_max_concurrent,  MEDIUM),
+        Detector("OC10", "team_executor max_concurrent must be 1",            "open", _detect_oc10_team_executor_max_concurrent,  MEDIUM),
         Detector("OC11", "managed-repo config schema sync",                  "open", _detect_oc11_schema_sync,          MEDIUM),
     ]

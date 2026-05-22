@@ -23,7 +23,7 @@ This directory holds OC-specific material.
 - [operator/manifest_authoring.md](operator/manifest_authoring.md) — How to author a `topology/project_manifest.yaml` for a project repo.
 - [operator/manifest_wiring.md](operator/manifest_wiring.md) — How OC picks up project + local manifests at runtime; the `platform_manifest:` settings block.
 - [operator/propagation/post-merge-hook.md](operator/propagation/post-merge-hook.md) — Post-merge propagation hook setup.
-- [operator/archon_workflow_registration.md](operator/archon_workflow_registration.md) — Archon workflow registration handshake.
+- [operator/archon_workflow_registration.md](operator/archon_workflow_registration.md) — Historical: Archon workflow registration handshake (Archon removed; kept for historical reference).
 
 ## Backends
 
@@ -66,7 +66,7 @@ This directory holds OC-specific material.
   - [architecture/adr/0003-tiered-cognition-experimental-rails.md](architecture/adr/0003-tiered-cognition-experimental-rails.md) —
     Tiered cognition + experimental rails.
   - [architecture/adr/0005-owned-execution-topology-layer.md](architecture/adr/0005-owned-execution-topology-layer.md) —
-    Drop external runtimes (kodo/Archon); build TeamExecutor, DAGExecutor, CritiqueExecutor.
+    Drop external runtimes (kodo/Archon — historical); build TeamExecutor, DAGExecutor, CritiqueExecutor.
   - [architecture/adr/0005-work-order.md](architecture/adr/0005-work-order.md) —
     4-phase work order for the owned execution topology layer (ADR 0005).
   - [architecture/adr/0005-work-order-p5.md](architecture/adr/0005-work-order-p5.md) —
@@ -93,7 +93,7 @@ shape, not any particular bound repo.
 - [design/lifecycle.md](design/lifecycle.md)
 - [design/improve_worker.md](design/improve_worker.md)
 - [design/continuous-improvement/design.md](design/continuous-improvement/design.md) — DRAFT: schema extension for evaluation-driven refinement within existing lanes
-- [design/plane_kodo_wrapper.md](design/plane_kodo_wrapper.md)
+- [design/plane_kodo_wrapper.md](design/plane_kodo_wrapper.md) — Historical: Plane/kodo integration design (kodo replaced by TeamExecutor)
 - [design/autonomy/repo_aware_autonomy.md](design/autonomy/repo_aware_autonomy.md)
 - [design/execution_budget_and_safety_controls.md](design/execution_budget_and_safety_controls.md)
 - [design/autonomy/autonomy_decision_engine.md](design/autonomy/autonomy_decision_engine.md)
