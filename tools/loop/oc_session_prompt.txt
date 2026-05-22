@@ -33,10 +33,7 @@ Then exit cleanly.
 
 Run the OC/Platform stabilization and audit cycle from /home/dev/Documents/GitHub/OperationsCenter. Source .env.operations-center.local first. Use .venv/bin/ for all CLIs.
 
-STEP 0 — OWNERSHIP + PREFLIGHT:
-Acquire/verify logs/local/watchdog_loop.lock via:
-  scripts/operations-center.sh watchdog-loop-acquire
-If another live owner exists, abort. If stale, reclaim.
+STEP 0 — PREFLIGHT:
 Sync all repos:
   for repo in OperationsCenter SwitchBoard TeamExecutor DAGExecutor CritiqueExecutor CoreRunner CxRP RxP PlatformDeployment PlatformManifest Custodian SourceRegistry OperatorConsole RepoGraph ProtocolWarden ProtocolWarden.github.io; do
     dir="/home/dev/Documents/GitHub/$repo"

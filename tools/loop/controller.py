@@ -25,6 +25,7 @@ from pathlib import Path
 
 REPO_ROOT = Path("/home/dev/Documents/GitHub/OperationsCenter")
 LOCK_PATH = REPO_ROOT / "logs/local/loop_controller.lock"
+WATCHDOG_LOOP_LOCK = REPO_ROOT / "logs/local/watchdog_loop.lock"
 STOP_FLAG = REPO_ROOT / "logs/local/loop_stop.flag"
 SCHEDULE_FILE = REPO_ROOT / ".context/loop_schedule.json"
 LOG_FILE = REPO_ROOT / "logs/local/loop_controller.log"
@@ -106,6 +107,26 @@ def check_and_acquire_lock() -> bool:
 
 def release_lock() -> None:
     LOCK_PATH.unlink(missing_ok=True)
+    WATCHDOG_LOOP_LOCK.unlink(missing_ok=True)
+
+
+def write_watchdog_loop_lock() -> None:
+    """Write watchdog_loop.lock owned by this controller process.
+
+    Sessions previously acquired this lock themselves via watchdog-loop-acquire,
+    but stored PPID (the spawning claude process) rather than a stable pid —
+    causing stale-lock failures after session exit. The controller is the correct
+    owner: it is live for the full loop lifetime and has correct reclaim logic.
+    """
+    lock = {
+        "pid": os.getpid(),
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "hostname": socket.gethostname(),
+        "repo_root": str(REPO_ROOT),
+        "purpose": "OC Platform Watchdog Loop",
+    }
+    WATCHDOG_LOOP_LOCK.parent.mkdir(parents=True, exist_ok=True)
+    WATCHDOG_LOOP_LOCK.write_text(json.dumps(lock, indent=2))
 
 
 def get_delay() -> int:
@@ -198,6 +219,7 @@ def main() -> None:
     if not check_and_acquire_lock():
         sys.exit(1)
 
+    write_watchdog_loop_lock()
     STOP_FLAG.unlink(missing_ok=True)
     _log(f"OC watchdog loop controller started. pid={os.getpid()}")
     _log(f"Stop with: python tools/loop/controller.py --stop")
