@@ -1,5 +1,71 @@
 # Log
 
+## OC Platform Watchdog Cycle — 2026-05-22 23:06 UTC (Cycle 16)
+
+- Branch: oc-watchdog/20260522-1710-fix-ci-regressions
+- Health state: ACTIVE (ruff PGH003 fix committed; CI should fully green after push)
+- Next cadence: 900s — ruff fix in flight; session limits cleared; goal watcher executing 3a3c202f
+
+### STEP 0 — Preflight
+- All 16 repos: Already up to date ✓
+- Plane: OK ✓ | SwitchBoard: OK ✓ | Watchers: 8/8 running ✓ | CLIs: OK ✓
+- Working tree: contracts/__init__.py, enums.py (modified), evidence.py (untracked) — stale artifacts from 74af58c5 attempt; NOT staged
+
+### STEP 1 — Investigation findings
+- graph-doctor: ✓ OK — 11 nodes / 12 edges / graph_built=True
+- ghost-audit: G10 ×1 (Fix lint regression Cancelled, lagging — non-critical)
+- flow-audit: 0 open gaps ✓; F8 partial (persistent/non-critical)
+- reaudit-check: dag_executor + team_executor `needed=false` (CxRP 0.3.1) ✓
+- regression-check: 0 findings ✓
+- custodian-sweep: 7 repos, all deltas=0 ✓
+- CI signal (PR #170): Type check (ty) PASSING ✓; Lint (ruff) FAILING (PGH003 on blanket `# type: ignore` lines)
+- **Root cause**: prior cycle changed `# type: ignore[import]` → `# type: ignore` (for ty) but `# noqa: PGH003` was NOT added → ruff PGH003 triggers
+- **Fix**: add `# noqa: PGH003` to 3 import lines in dag_executor/adapter.py and team_executor/adapter.py
+
+### STEP 2 — Triage: 0 actions
+
+### STEP 2.5 — Board-unblock
+- CLEAN_BLOCKED_RETRY: 74af58c5 "Add Rule evidence type" → Backlog (3 of 5 stages failed, no signal labels, safe retry)
+- No other qualifying tasks
+
+### STEP 3 — Blocked/stalled analysis
+- **Propose**: 0 emitted, 13 suppressed (9 family_deferred_initial_gating, 4 cooldown_active) — hotspot_concentration not in allowed_families; normal behavior
+- **R4AI**: prior cycle showed ready_count=16 cap=8 (saturated); current cycle 0 emitted but no `ready_queue_saturated` → queue may have partially drained
+- **360cff3a "Add slow/smoke pytest markers"**: Blocked "1 of 5 stages failed" at 17:26 UTC — diagnosed as session limit hit BEFORE 8:40pm ET reset + pre-CI-fix. Temporarily-blocked.
+- **c7df5422 "Enable parallel unit-test execution"**: Blocked "1 of 5 stages failed" at 18:03 UTC — same root cause. Temporarily-blocked.
+- **74af58c5 "Add Rule evidence type"**: Blocked "3 of 5 stages failed" at 19:00 UTC → moved to Backlog by board-unblock. Stale contract artifacts left in working tree (not staged).
+- **3a3c202f "Harden Collector"**: In-flight since 19:01 UTC (4+ hours). Heartbeat: executing. Previous cycle: workspace prep failed (testing-branch missing) was at 03:01 UTC — resolved. No OOM, no SIGKILL.
+- **Rate gate**: global_rate_exceeded hourly limit=2 observed during 17:33–22:23 UTC earlier session — by-design throttling, self-resolving
+- **Session limits**: resets at 8:40pm ET (00:40 UTC) and 1:40am ET (05:40 UTC). Current time 23:06 UTC — sessions available
+- Behavioral convergence: ACTIVE (direct CI fix applied)
+
+### STEP 5/6 — Direct fix (OperationsCenter)
+- `src/operations_center/backends/dag_executor/adapter.py`: add `# noqa: PGH003` to 2 blanket `# type: ignore` import lines
+- `src/operations_center/backends/team_executor/adapter.py`: add `# noqa: PGH003` to 1 blanket `# type: ignore` import line
+- Verified: ruff clean ✓; ty warnings (unused ignore — because packages installed locally, required in CI) ✓; golden tests 15/15 ✓
+
+### STEP 7 — Invariant tests
+- pytest tests/unit/er000_phase0_golden/ -q: 15 passed ✓
+
+### STEP 8 — Watcher health
+- 8/8 watchers running; heartbeat_goal: executing (3a3c202f in flight 4+ hours)
+- No non-143 crashes; no OOM; no SIGKILL events
+- Memory: 26Gi available ✓
+
+### Blocked work classification
+- 360cff3a, c7df5422: temporarily-blocked (session limit + CI failure during prior execution; CI fix now applied; expect retry after CI greens)
+- 3a3c202f: in-flight (unusual 4+ hour duration; heartbeat alive; monitoring)
+- 74af58c5: moved to Backlog by board-unblock (safe retry)
+- custodian-audit: operator-blocked (REPOGRAPH_BOUNDARY_ARTIFACT_FILE secret missing in GitHub settings)
+
+### Behavioral convergence: ACTIVE
+- Ruff PGH003 fix resolves final CI blocking check on PR #170
+- ty check already passing; pytest already passing; audit operator-blocked (external secret)
+- After merge: main CI should be clean; all 9 gated families should unlock; propose should emit candidates
+
+### Operator-blocked: custodian-audit REPOGRAPH_BOUNDARY_ARTIFACT_FILE secret missing
+### Parked state: no
+
 ## OC Platform Watchdog Cycle — 2026-05-22 22:34 UTC (Cycle 15)
 
 - Branch: oc-watchdog/20260522-1710-fix-ci-regressions

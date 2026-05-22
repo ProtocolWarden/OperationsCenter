@@ -26,7 +26,7 @@ class TeamExecutorBackendAdapter:
 
     def execute(self, request: ExecutionRequest) -> ExecutionResult:
         try:
-            from team_executor.executor import TeamExecutorRunner  # type: ignore
+            from team_executor.executor import TeamExecutorRunner  # type: ignore  # noqa: PGH003
         except ImportError as exc:
             return _error_result(request, f"team_executor not installed: {exc}")
 

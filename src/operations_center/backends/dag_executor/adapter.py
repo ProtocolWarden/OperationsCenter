@@ -32,8 +32,8 @@ class DAGExecutorBackendAdapter:
 
     def execute(self, request: ExecutionRequest) -> ExecutionResult:
         try:
-            from dag_executor.executor import DAGExecutorRunner  # type: ignore
-            from dag_executor.models import GraphSpec, NodeSpec, NodeType  # type: ignore
+            from dag_executor.executor import DAGExecutorRunner  # type: ignore  # noqa: PGH003
+            from dag_executor.models import GraphSpec, NodeSpec, NodeType  # type: ignore  # noqa: PGH003
         except ImportError as exc:
             return _error_result(request, f"dag_executor not installed: {exc}")
 
