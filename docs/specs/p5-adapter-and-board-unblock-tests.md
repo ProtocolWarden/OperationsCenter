@@ -12,7 +12,7 @@ area_keywords:
   - backends/dag_executor
   - backends/critique_executor
   - entrypoints/maintenance
-status: active
+status: cancelled
 created_at: 2026-05-19T00:00:00Z
 ---
 
