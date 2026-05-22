@@ -1,5 +1,24 @@
 # Log
 
+## 2026-05-22 — P4: dispatcher CL hydrate/capture wrap
+
+Branch: `feat/p4-dispatcher-cl-wrap`. Companion to CL `feat/p4-public-api`
+(CL 0.3.0 ships the `hydrate` / `capture` / `peek` public API).
+
+- `pyproject.toml`: added `context-lifecycle @ file:///home/dev/Documents/GitHub/ContextLifecycle` to deps. Local-path pin for dev parity with how CL pins RepoGraph; flip to a tagged release once CL 0.3.0 is published.
+- `src/operations_center/execution/cl_wrap.py` (NEW, ~180 LOC): `cl_dispatch_wrap(work_item)` context manager. Derives a lineage id from the request (preferring `lineage_id` → `run_id` → `proposal_id`, falling back to `l-unknown`), calls `cl.hydrate()` on enter, runs the inner block, and calls `cl.capture()` on exit. Exceptions inside the block re-raise but capture still fires with an `error` payload so failed lineages leave a trace. The wrap is a strict no-op when `CL_ANCHOR` is unset OR `context_lifecycle` is not importable — preserves pre-P4 behavior for any test/session that doesn't anchor. Capture-write failures are logged-and-swallowed so a buggy CL never breaks dispatch.
+- `src/operations_center/execution/coordinator.py`: one new import + the wrap is placed around `_run_with_recovery_loop` inside `execute()` (lines ~236-245). The recovery loop, observability, usage_store, run_memory, workspace finalize, and lifecycle plan/verify all remain outside the wrap — only the actual adapter-driving recovery loop is lineage-scoped. Did NOT modify the adapter signature; the wrap reads work_item, calls hydrate/capture around the call, and never touches what the adapter receives.
+- `tests/unit/execution/test_coordinator_cl_wrap.py` (NEW, 11 tests): cl_wrap unit tests (noop gate, hydrate-then-capture ordering, lineage derivation precedence, error-path capture, no-result capture, capture-failure swallowed) + one end-to-end coordinator integration test. Unit tests: 10 pass. The integration test SKIPs in this env because the coordinator's transitive backend imports require `core_runner` (broken/missing editable install — pre-existing, not from P4).
+- `CLAUDE.md`: added a "Dispatcher wrap (ADR 0002 P4)" note pointing at `cl_wrap.py` and explaining the no-op gate.
+
+Verified no regressions outside the pre-existing `core_runner` ImportError zone: tests/unit/policy + tests/unit/contracts + tests/unit/observability → 463 pass, 3 unrelated cxrp_mapper failures that fail on `main` too.
+
+**Deviations / blockers:**
+- The OC dispatch chain transitively imports `core_runner` (via `operations_center.backends.factory` → `aider_local.adapter`), which is broken in this `.venv`. Pre-existing — flagged for follow-up but out of P4 scope. Once fixed, the integration test in `test_coordinator_cl_wrap.py::test_coordinator_dispatch_drives_hydrate_and_capture` will run end-to-end through ExecutionCoordinator.
+- The work order mentioned wrapping TeamExecutor / DAGExecutor / CritiqueExecutor individually. The actual dispatcher in OC is the single `ExecutionCoordinator.execute()` boundary — all three executors are reached via the backend registry from there. Wrapping coordinator gives the same lineage-scoped pre/around/post per dispatch with one site instead of three.
+
+**Stop point:** staged, not committed. Parent handles git ops.
+
 ## 2026-05-22 — P3: remove local `.context/`; cognition now hosted by anchor manifest
 
 Branch: `feat/p3-remove-local-context`.

@@ -44,6 +44,8 @@ wake → read <anchor>/.context/sessions/<sid>/checkpoints/<latest>.yaml
      → terminate or compact
 ```
 
+**Dispatcher wrap (ADR 0002 P4):** `ExecutionCoordinator.execute()` wraps every adapter dispatch in `cl_dispatch_wrap()` (`src/operations_center/execution/cl_wrap.py`). The wrap calls `context_lifecycle.hydrate(lineage_id, request)` before the adapter runs and `context_lifecycle.capture(lineage_id, result)` after — including on adapter exception, so failed lineages still leave a trace under the anchor manifest. The wrap is a no-op when `CL_ANCHOR` is unset, preserving pre-P4 behavior for unanchored sessions.
+
 **On session start:** verify `CL_ANCHOR` is set. Check `<anchor>/.context/sessions/<CL_SESSION_ID>/active/` for any active capsules; check `checkpoints/` for the latest checkpoint.
 **On session end:** write a LoopCheckpoint to `checkpoints/`. Update any active capsule's `handoff_notes` and `next_actions`. `cl session end` archives the session subdir.
 **Templates:** `<anchor>/.context/templates/`.

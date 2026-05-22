@@ -38,6 +38,7 @@ from operations_center.policy.models import PolicyDecision, PolicyStatus
 
 from datetime import UTC, datetime
 
+from .cl_wrap import cl_dispatch_wrap
 from .handoff import ExecutionRequestBuilder, ExecutionRuntimeContext
 from .recovery_loop import (
     RecoveryAction,
@@ -233,15 +234,21 @@ class ExecutionCoordinator:
                 now=datetime.now(UTC),
             )
         try:
-            result, raw_detail_refs, runtime_metadata, recovery_actions, policy_decision = (
-                self._run_with_recovery_loop(
-                    adapter=adapter,
-                    bundle=bundle,
-                    runtime=runtime,
-                    request=request,
-                    policy_decision=policy_decision,
+            # ADR 0002 P4 — CL hydrate/capture wrap. Lineage-scoped per
+            # dispatch; no-op when CL_ANCHOR is unset. Exceptions inside
+            # the with-block still drive a `capture` so failed lineages
+            # leave a trace under the anchor manifest.
+            with cl_dispatch_wrap(request) as _cl_ctx:
+                result, raw_detail_refs, runtime_metadata, recovery_actions, policy_decision = (
+                    self._run_with_recovery_loop(
+                        adapter=adapter,
+                        bundle=bundle,
+                        runtime=runtime,
+                        request=request,
+                        policy_decision=policy_decision,
+                    )
                 )
-            )
+                _cl_ctx["set_result"](result)
         finally:
             if self._usage_store is not None:
                 self._usage_store.record_execution_finished(
