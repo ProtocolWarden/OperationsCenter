@@ -30,9 +30,9 @@ it second.
 - [ ] **CxRP — `ShippingForm` enum**: `local_subprocess / long_running_service / managed_cli / hosted_api`. Same guardrail tests. Tagged release in same release window as `AgentTopology`.
 - [ ] **OC — bump CxRP pin** to the release that ships both new enums.
 - [ ] **OC — `OrchestrationProfileCard` + `MechanismProfileCard`** in `executors/_artifacts.py`: dataclass + loader + same `_DISALLOWED` enforcement as `load_capability_card`. Reject unknown enum values, reject subjective fields.
-- [ ] **OC — author cards for kodo + archon** under `src/operations_center/executors/{kodo,archon}/`: `orchestration_profile.yaml` (kodo=`sequential_multi_agent`, archon=`dag_workflow`); `mechanism_profile.yaml` (kodo=`managed_cli`, archon=`long_running_service`).
+- [x] **OC — kodo + archon executor cards** — superseded by team_executor (ADR 0005). kodo and archon removed; team_executor is the active backend.
 - [ ] **OC — `executors/catalog/query.py` extensions**: `backends_with_topology(...)`, `backends_with_shipping_form(...)`, mirroring the existing `backends_supporting_capabilities(...)` shape.
-- [ ] **OC — sweep `recommendations.md` for kodo + archon**: anything now expressible as an enum value gets removed from prose to prevent claim drift between card and prose.
+- [x] **OC — sweep `recommendations.md` for kodo + archon** — superseded; kodo and archon removed (ADR 0005).
 - [ ] **(Follow-up arc, not this one) — author cards for the remaining backends** (`direct_local`, `aider_local`, `openclaw`, `demo_stub`) so every backend has a card folder under `executors/` and the G2 two-backend test holds for `agent_topology` in steady state.
 - [ ] **(Follow-up arc, not this one) — synthesized siblings**: `orchestration_profile.synthesized.yaml` derived from observed `runtime_invocation_ref` counts per OC run; declared-vs-observed diff becomes the runtime-truth-reconciliation signal.
 - [ ] **(Follow-up arc, not this one) — SwitchBoard rules consuming the new axes**: incoherent-tuple rejection (e.g. `swarm_parallel + managed_cli`); topology-aware lane preferences. Out of scope for the bring-up arc per ADR 0002.
@@ -63,7 +63,7 @@ None of these items reopen boundaries.
 - [x] **the bound managed repo project manifest authored (2026-05-08, VF PR #892)**: `topology/project_manifest.yaml` declares VF as private managed-repo with `OperationsCenter dispatches_to the bound managed repo`. `topology/local_manifest.example.yaml` template; live `topology/local_manifest.yaml` gitignored. Validates clean through PM `load_effective_graph` (10 nodes / 13 edges; VF surfaces with source=project, visibility=private, local annotations applied).
 
 - [x] **Warehouse project manifest authored (2026-05-08, Warehouse PR #1)**: Same shape as VF — private managed-repo node + `OperationsCenter dispatches_to Warehouse` edge.
-- [ ] **File upstream PR for Archon PATCH-001 (no branch — operational gate, 2026-05-08)**: Tracked at `patches/archon/PATCH-001.yaml` (`pushed: false`). Wait until OC has dispatched **≥100 real Archon workflows with override applied** AND captured at least one trace where the override produced a different SDK call than the workflow YAML default (e.g. workflow says `model: sonnet`, override says `model: opus`, claude SDK gets `opus`). Pitch needs to be reframed for upstream Archon users (external orchestrators, multi-tenant deployments, A/B model testing per request) — OC's per-request RuntimeBinding isn't a coleam00/Archon concern on its own. When the gate trips: file against coleam00/Archon, set `patches/archon/PATCH-001.yaml::pushed: true` and `pushed_pr_url`. Until then, gated on `archon.enabled: true` somewhere non-test + a registered codebase + an LLM key in the container.
+- [x] **File upstream PR for Archon PATCH-001** — superseded; archon backend removed (ADR 0005). Patch is no longer applicable.
 
 
 - [x] **3-layer manifest primitive — operationally complete (2026-05-08, R1–R4 across PM/VF/Warehouse/OC)**: All 14 DoD items met. R1 schema CI + validate CLI, R2 operator runbooks + example.yaml block, R3 path resolution + slug auto-resolve + `effective` CLI, R4 graph-doctor + integration smoke. PM tagged through v0.5.0. Operator now sees blast-radius warnings on every contract-touching dispatch; failures degrade gracefully; pattern is discoverable from main.
@@ -124,3 +124,9 @@ None of these items reopen boundaries.
 - [x] Phase 11: Mini regression suite
 - [x] Phase 12: Full audit governance
 - [x] Rev 1–10 verification passes: all 23 lifetime gaps closed; 14/14 invariants; 2733 tests passing
+
+## Cycle 9 updates (2026-05-22)
+- [x] Fix kodo→openclaw regression in tests (cb56d53) — unblocked CI
+- [x] Update dag_executor/team_executor audit verdicts to CxRP 0.3.1
+- [ ] Custodian/regression-check: add detector for invalid backend enum references in tests (promotion candidate from cycle 9)
+- [ ] PR cb56d53 merge: oc-watchdog/20260522-0137-fix-kodo-removal-regressions → main
