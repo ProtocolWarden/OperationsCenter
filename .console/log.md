@@ -1,4 +1,18 @@
 # Log
+## 2026-05-22 — ADR 0007 follow-up B: substitute run_id at execute-time
+
+Branch: `feat/adr-0007-followups`. Replaced the fragile post-success `__RUN_ID__` token rewrite with an at-prompt-time substitution.
+
+**Convention switch:** `__RUN_ID__` sentinel → `{{RUN_ID}}` placeholder. The spec-author prompts (`_build_spec_author_goal_text` + `_build_phase_advance_goal_text` in `board_worker/main.py`) now emit `{{RUN_ID}}` in the provenance-comment instructions.
+
+**Substitution site:** `ExecutionRequestBuilder.build()` in `src/operations_center/execution/handoff.py`. We allocate `run_id` explicitly (via `_new_id()` from `contracts.execution`), do a literal `(proposal.goal_text or "").replace("{{RUN_ID}}", run_id)`, then construct the frozen `ExecutionRequest` with both the substituted `goal_text` and the matching `run_id`. Unconditional and task-kind-agnostic — `replace` is a no-op when the placeholder isn't present. `ExecutionRequest` is a frozen Pydantic model, so we can't mutate in place; explicit allocation + single construction is cleaner than `model_copy(update=)`.
+
+**Post-success rewrite removed:** `_handle_spec_author_success` no longer reads + replaces + rewrites the spec file. The agent now sees the real run_id at prompt time and writes `<!-- generated_by_run: <real-id> -->` directly. Comment left in place noting the contract.
+
+**Grep confirmation:** `grep -rn "__RUN_ID__" src/ tests/` → 0 hits.
+
+**Test impact:** No tests referenced the old sentinel. Pre-existing failures (`test_phase_orchestrator.test_advances_to_test_when_all_implement_done`, three `test_cxrp_mapper` BackendName failures) reproduce on `git stash` — unrelated to this change.
+
 ## 2026-05-22 — ADR 0007 follow-up A: config key rename
 
 Renamed `SpecDirectorSettings` → `SpecAuthorSettings` and the parent field `settings.spec_director` → `settings.spec_author`. Updated the 5 attribute reads across `spec_hygiene` and `spec_trigger`. Renamed test from `test_spec_director_settings_defaults` → `test_spec_author_settings_defaults`. No YAML config files referenced the key, so no migration needed.

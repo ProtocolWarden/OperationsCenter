@@ -64,10 +64,21 @@ class ExecutionRequestBuilder:
             bundle, runtime.runtime_binding,
         )
 
+        # ADR 0007 follow-up B: substitute {{RUN_ID}} in goal_text now that
+        # run_id is allocated. Agents see the real id, no post-hoc rewrite
+        # needed. ExecutionRequest.run_id is allocated via Field(default_factory=
+        # _new_id) at construction; to keep the substitution and the run_id
+        # consistent on a single frozen instance, generate the id first and
+        # pass both explicitly.
+        from operations_center.contracts.execution import _new_id  # local import: avoid top-level coupling
+        run_id = _new_id()
+        goal_text = (proposal.goal_text or "").replace("{{RUN_ID}}", run_id)
+
         return ExecutionRequest(
+            run_id=run_id,
             proposal_id=proposal.proposal_id,
             decision_id=bundle.decision.decision_id,
-            goal_text=proposal.goal_text,
+            goal_text=goal_text,
             constraints_text=proposal.constraints_text,
             repo_key=proposal.target.repo_key,
             clone_url=proposal.target.clone_url,

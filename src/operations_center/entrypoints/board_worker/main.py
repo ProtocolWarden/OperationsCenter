@@ -319,12 +319,13 @@ def _process_issue(issue: dict, role: str, config_path: Path, settings, client) 
     # to enrich; the spec-author prompt is fully composed below.
     if task_kind == "spec-author" and spec_payload is not None:
         repo_key  = _SPEC_AUTHOR_REPO_KEY
-        # run_id is allocated inside the backend, so we can't substitute it
-        # at prompt time. Use a sentinel the executor wrapper / a future
-        # post-process step can rewrite. _handle_spec_author_success notes
-        # the sentinel so operators can grep for unrewritten files.
-        run_id_sentinel = "__RUN_ID__"
-        goal_text = _build_spec_author_goal_text(spec_payload, run_id_sentinel)
+        # ADR 0007 follow-up B: emit the {{RUN_ID}} placeholder in the prompt;
+        # the execute subprocess substitutes the real run_id into goal_text
+        # before backend dispatch (see ExecutionRequestBuilder.build), so the
+        # agent sees the actual id at prompt time and writes the correct
+        # provenance comment directly — no post-success rewrite needed.
+        run_id_placeholder = "{{RUN_ID}}"
+        goal_text = _build_spec_author_goal_text(spec_payload, run_id_placeholder)
         target_path = str(spec_payload.get("target_path", "")).strip()
         spec_slug   = str(spec_payload.get("spec_slug", "")).strip()
         trigger_source = str(spec_payload.get("trigger_source", "")).strip()
@@ -848,24 +849,10 @@ def _handle_spec_author_success(
         logger.warning("board_worker[spec-author]: read failed task_id=%s — %s", task_id, exc)
         spec_text = ""
 
-    # Post-process the run-id sentinel inserted at prompt-build time. If the
-    # backend wrote the literal sentinel, rewrite it in-place so the spec
-    # file's provenance comment carries the real run_id. Best-effort —
-    # failure leaves the sentinel in place and is grep-discoverable later.
-    if spec_text and "__RUN_ID__" in spec_text and run_id:
-        try:
-            updated = spec_text.replace("__RUN_ID__", run_id)
-            spec_path.write_text(updated, encoding="utf-8")
-            spec_text = updated
-            logger.info(
-                "board_worker[spec-author]: substituted run_id sentinel in %s",
-                target_path,
-            )
-        except OSError as exc:
-            logger.warning(
-                "board_worker[spec-author]: run_id sentinel rewrite failed for %s — %s",
-                target_path, exc,
-            )
+    # ADR 0007 follow-up B: run_id is substituted at execute-time via
+    # ExecutionRequestBuilder.build; the spec already contains the real id
+    # in its `<!-- generated_by_run: ... -->` provenance comment when this
+    # handler runs. No post-hoc rewrite needed.
 
     # Parse + create campaign sub-tasks via the existing CampaignBuilder.
     # Importing here (not at module top) keeps the spec_author dependency
