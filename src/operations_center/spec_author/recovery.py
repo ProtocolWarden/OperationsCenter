@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-# src/operations_center/spec_director/recovery.py
+# src/operations_center/spec_author/recovery.py
 from __future__ import annotations
 
 import logging
@@ -8,8 +8,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from operations_center.spec_director.models import CampaignRecord
-from operations_center.spec_director.state import CampaignStateManager
+from operations_center.spec_author.models import CampaignRecord
+from operations_center.spec_author.state import CampaignStateManager
 
 logger = logging.getLogger(__name__)
 

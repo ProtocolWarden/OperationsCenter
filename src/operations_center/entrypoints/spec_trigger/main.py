@@ -26,14 +26,14 @@ from typing import Any
 
 from operations_center.adapters.plane import PlaneClient
 from operations_center.config import load_settings
-from operations_center.spec_director.models import TriggerSource
-from operations_center.spec_director.spec_author_task import (
+from operations_center.spec_author.models import TriggerSource
+from operations_center.spec_author.spec_author_task import (
     LABEL_SOURCE as _LABEL_SOURCE,
     LABEL_TASK_KIND as _LABEL_TASK_KIND,
     SpecAuthorPayload,
     create_spec_author_task,
 )
-from operations_center.spec_director.trigger import TriggerDetector, TriggerResult
+from operations_center.spec_author.trigger import TriggerDetector, TriggerResult
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)

@@ -40,7 +40,7 @@ created_at: 2026-04-15T00:00:00+00:00
 
 
 def test_creates_parent_and_child_tasks():
-    from operations_center.spec_director.campaign_builder import CampaignBuilder
+    from operations_center.spec_author.campaign_builder import CampaignBuilder
     mock_client = MagicMock()
     mock_client.create_issue.return_value = {"id": "task-001"}
     builder = CampaignBuilder(client=mock_client, project_id="proj-1", max_tasks=6)
@@ -50,7 +50,7 @@ def test_creates_parent_and_child_tasks():
 
 
 def test_task_limit_enforced():
-    from operations_center.spec_director.campaign_builder import CampaignBuilder
+    from operations_center.spec_author.campaign_builder import CampaignBuilder
     mock_client = MagicMock()
     mock_client.create_issue.return_value = {"id": "task-001"}
     builder = CampaignBuilder(client=mock_client, project_id="proj-1", max_tasks=2)
@@ -60,7 +60,7 @@ def test_task_limit_enforced():
 
 
 def test_child_task_body_contains_campaign_id():
-    from operations_center.spec_director.campaign_builder import CampaignBuilder
+    from operations_center.spec_author.campaign_builder import CampaignBuilder
     created_bodies = []
 
     def capture_create(**kwargs):

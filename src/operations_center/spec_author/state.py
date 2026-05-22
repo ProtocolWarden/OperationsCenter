@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-# src/operations_center/spec_director/state.py
+# src/operations_center/spec_author/state.py
 from __future__ import annotations
 
 import json
@@ -9,7 +9,7 @@ from datetime import UTC, datetime  # UTC kept for corrupt-file timestamp
 from pathlib import Path
 from typing import Literal
 
-from operations_center.spec_director.models import ActiveCampaigns, CampaignRecord
+from operations_center.spec_author.models import ActiveCampaigns, CampaignRecord
 
 _DEFAULT_STATE_PATH = Path("state/campaigns/active.json")
 logger = logging.getLogger(__name__)
@@ -72,7 +72,7 @@ class CampaignStateManager:
 
     def rebuild_from_specs(self, specs_dir: Path) -> ActiveCampaigns:
         """Rebuild active campaigns list by scanning spec front matter."""
-        from operations_center.spec_director.models import SpecFrontMatter
+        from operations_center.spec_author.models import SpecFrontMatter
         campaigns = []
         for spec_file in sorted(specs_dir.glob("*.md")):
             try:

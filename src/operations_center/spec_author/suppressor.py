@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-# src/operations_center/spec_director/suppressor.py
+# src/operations_center/spec_author/suppressor.py
 from __future__ import annotations
 
 import logging
@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from operations_center.spec_director.models import CampaignRecord
+    from operations_center.spec_author.models import CampaignRecord
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ def _load_area_keywords(campaign: "CampaignRecord", specs_dir: Path | None) -> l
             # Try the stored path relative to specs_dir parent
             spec_path = candidate  # best guess; will fail gracefully below
     try:
-        from operations_center.spec_director.models import SpecFrontMatter
+        from operations_center.spec_author.models import SpecFrontMatter
         text = spec_path.read_text(encoding="utf-8")
         fm = SpecFrontMatter.from_spec_text(text)
         return fm.area_keywords

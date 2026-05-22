@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-# src/operations_center/spec_director/spec_author_task.py
+# src/operations_center/spec_author/spec_author_task.py
 """Shared helpers for building ``spec-author`` Plane tasks (ADR 0007).
 
 Originally lived inside ``entrypoints/spec_trigger/main.py``. Hoisted here in

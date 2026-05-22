@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-# src/operations_center/spec_director/phase_orchestrator.py
+# src/operations_center/spec_author/phase_orchestrator.py
 """Phase orchestrator — detection-only (ADR 0007 Phase D).
 
 After Phase D, this module performs only LLM-free Plane state transitions and
@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from operations_center.spec_director.state import CampaignStateManager
+from operations_center.spec_author.state import CampaignStateManager
 
 logger = logging.getLogger(__name__)
 
@@ -100,8 +100,10 @@ class PhaseOrchestrationResult:
     pending_advances: list[PendingPhaseAdvance] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
-    # Back-compat shims for callers that read these fields (the spec_director
-    # legacy entrypoint reads them). Both are always zero post-Phase D.
+    # Back-compat shims for legacy callers; both are always zero post-Phase D.
+    # (The spec_director legacy entrypoint that read these was deleted in
+    # Phase F; fields kept so spec_hygiene / spec-author can be reverted
+    # without a payload schema change.)
     tasks_unblocked: int = 0
     tasks_cancelled: int = 0
 
@@ -132,7 +134,8 @@ class PhaseOrchestrator:
         state_manager: CampaignStateManager,
         specs_dir: Path,
         # Kept for back-compat with existing call sites; unused now that the
-        # rewrite path is gone. Will be removed when spec_director is retired.
+        # rewrite path is gone. (spec_director entrypoint retired in Phase F;
+        # arg retained to avoid churning every existing caller.)
         max_rewrite_attempts: int = 2,  # noqa: ARG002 — kept for signature compat
     ) -> None:
         self._client = client

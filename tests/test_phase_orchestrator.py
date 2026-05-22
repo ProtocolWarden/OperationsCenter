@@ -6,9 +6,9 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from operations_center.spec_director.phase_orchestrator import PhaseOrchestrator
-from operations_center.spec_director.models import CampaignRecord
-from operations_center.spec_director.state import CampaignStateManager
+from operations_center.spec_author.phase_orchestrator import PhaseOrchestrator
+from operations_center.spec_author.models import CampaignRecord
+from operations_center.spec_author.state import CampaignStateManager
 
 
 _CAMPAIGN_ID = "test-campaign-uuid"

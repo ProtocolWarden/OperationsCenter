@@ -5,8 +5,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from operations_center.spec_director.trigger import TriggerDetector
-from operations_center.spec_director.models import TriggerSource
+from operations_center.spec_author.trigger import TriggerDetector
+from operations_center.spec_author.models import TriggerSource
 
 
 def _make_detector(tmp_path: Path) -> TriggerDetector:

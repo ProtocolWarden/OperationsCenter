@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-# src/operations_center/spec_director/context_bundle.py
+# src/operations_center/spec_author/context_bundle.py
 from __future__ import annotations
 
 import subprocess
@@ -83,7 +83,7 @@ class ContextBundleBuilder:
     @staticmethod
     def collect_specs_index(specs_dir: Path) -> list[dict]:
         """Return [{slug, status}] for each spec in specs_dir."""
-        from operations_center.spec_director.models import SpecFrontMatter
+        from operations_center.spec_author.models import SpecFrontMatter
         index = []
         for p in sorted(specs_dir.glob("*.md")):
             if p.parent.name == "archive":

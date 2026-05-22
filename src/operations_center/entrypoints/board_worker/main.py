@@ -868,17 +868,17 @@ def _handle_spec_author_success(
             )
 
     # Parse + create campaign sub-tasks via the existing CampaignBuilder.
-    # Importing here (not at module top) keeps the spec_director dependency
+    # Importing here (not at module top) keeps the spec_author dependency
     # cleanly scoped to the spec-author code path — board_worker stays
-    # importable even if spec_director is later retired (Phase F: the import
-    # will need to move, but no other code path will break).
+    # importable even if the spec_author package is restructured. (Package
+    # was renamed from spec_director to spec_author in ADR 0007 Phase F.)
     created_ids: list[str] = []
     try:
-        from operations_center.spec_director.campaign_builder import CampaignBuilder
+        from operations_center.spec_author.campaign_builder import CampaignBuilder
         # Spec front-matter declares repos:[...]; CampaignBuilder takes
         # repo_key/base_branch as arguments. Pull the chosen repo from
         # the spec; fall back to OperationsCenter if missing.
-        from operations_center.spec_director.models import SpecFrontMatter
+        from operations_center.spec_author.models import SpecFrontMatter
         try:
             fm = SpecFrontMatter.from_spec_text(spec_text)
             repo_key = fm.repos[0] if fm.repos else _SPEC_AUTHOR_REPO_KEY

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-# src/operations_center/spec_director/campaign_builder.py
+# src/operations_center/spec_author/campaign_builder.py
 from __future__ import annotations
 
 import logging
@@ -8,7 +8,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from operations_center.spec_director.models import SpecFrontMatter
+from operations_center.spec_author.models import SpecFrontMatter
 
 logger = logging.getLogger(__name__)
 

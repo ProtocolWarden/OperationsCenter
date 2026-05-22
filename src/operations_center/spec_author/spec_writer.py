@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-# src/operations_center/spec_director/spec_writer.py
+# src/operations_center/spec_author/spec_writer.py
 from __future__ import annotations
 
 import logging
@@ -8,7 +8,7 @@ import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 
-from operations_center.spec_director.models import SpecFrontMatter
+from operations_center.spec_author.models import SpecFrontMatter
 
 _DEFAULT_SPECS_DIR = Path("docs/specs")
 logger = logging.getLogger(__name__)

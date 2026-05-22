@@ -350,23 +350,38 @@ start_watch_role() {
       done
     " >>"${log_file}" 2>&1 < /dev/null &
   elif [[ "${role}" == "spec" ]]; then
+    # ADR 0007 Phase F: spec_director retired. The `spec` role now supervises
+    # two sibling watchers — spec_hygiene (board hygiene + active.json
+    # projection) and spec_trigger (drop-file / queue-drain detection that
+    # emits spec-author Plane tasks). Phase orchestration moved to the
+    # spec-author task-kind handler inside board_worker. See
+    # docs/architecture/adr/0007-spec-director-refactor.md.
     setsid /bin/bash -lc "
       cd '${ROOT_DIR}'
       set -a
       source '${ENV_PATH}'
       set +a
-      _child_pid=''
-      trap 'kill \$_child_pid 2>/dev/null; exit 0' TERM INT
+      _hyg_pid=''
+      _trig_pid=''
+      trap 'kill \$_hyg_pid \$_trig_pid 2>/dev/null; exit 0' TERM INT
       while true; do
         set -a
         source '${ENV_PATH}' 2>/dev/null || true
         set +a
-        '${VENV_DIR}/bin/python' -u -m operations_center.entrypoints.spec_director.main \
+        '${VENV_DIR}/bin/python' -u -m operations_center.entrypoints.spec_hygiene.main \
           --config '${CONFIG_PATH}' \
           --status-dir '${WATCH_DIR}' &
-        _child_pid=\$!
-        wait \$_child_pid
+        _hyg_pid=\$!
+        '${VENV_DIR}/bin/python' -u -m operations_center.entrypoints.spec_trigger.main \
+          --config '${CONFIG_PATH}' \
+          --status-dir '${WATCH_DIR}' &
+        _trig_pid=\$!
+        # If either sibling exits, kill the other and restart the pair.
+        wait -n \$_hyg_pid \$_trig_pid
         _exit=\$?
+        kill \$_hyg_pid \$_trig_pid 2>/dev/null || true
+        wait \$_hyg_pid 2>/dev/null || true
+        wait \$_trig_pid 2>/dev/null || true
         [[ ! -f '${pid_file}' ]] && exit 0
         echo \"{\\\"event\\\":\\\"watcher_restart\\\",\\\"role\\\":\\\"${role}\\\",\\\"exit_code\\\":\$_exit}\"
         sleep 30

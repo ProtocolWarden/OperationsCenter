@@ -29,24 +29,24 @@ from pathlib import Path
 
 from operations_center.adapters.plane import PlaneClient
 from operations_center.config import load_settings
-from operations_center.spec_director.campaign_builder import CampaignBuilder
-from operations_center.spec_director.models import (
+from operations_center.spec_author.campaign_builder import CampaignBuilder
+from operations_center.spec_author.models import (
     ActiveCampaigns,
     CampaignRecord,
     SpecFrontMatter,
 )
-from operations_center.spec_director.phase_orchestrator import (
+from operations_center.spec_author.phase_orchestrator import (
     PendingPhaseAdvance,
     PhaseOrchestrator,
 )
-from operations_center.spec_director.recovery import RecoveryService
-from operations_center.spec_director.spec_author_task import (
+from operations_center.spec_author.recovery import RecoveryService
+from operations_center.spec_author.spec_author_task import (
     SpecAuthorPayload,
     create_spec_author_task,
     find_in_flight_phase_advance,
 )
-from operations_center.spec_director.spec_writer import SpecWriter
-from operations_center.spec_director.state import CampaignStateManager
+from operations_center.spec_author.spec_writer import SpecWriter
+from operations_center.spec_author.state import CampaignStateManager
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)

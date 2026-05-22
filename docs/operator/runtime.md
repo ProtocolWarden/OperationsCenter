@@ -69,11 +69,24 @@ This repo runs as a local polling workflow.
 
 ### `watch --role spec`
 
-- polls for spec campaign trigger conditions (drop-file, Plane label, queue drain)
-- when triggered: brainstorms a spec via Claude, creates a Plane campaign with child tasks
-- runs stall detection and self-recovery on every cycle
-- suppresses heuristic proposals for campaign area while campaign is active
-- controlled by `spec_director:` config block
+ADR 0007 Phase F (2026-05-22) retired the monolithic `spec_director` watcher
+and split it into two sibling processes that the `spec` role now supervises
+together. Phase orchestration moved to the `spec-author` task-kind handler
+inside `board_worker`; both watchers below are non-LLM.
+
+- **`operations-center-spec-hygiene`** (long-running)
+  - rebuilds `state/campaigns/active.json` from Plane (single writer)
+  - runs stall detection, self-recovery, and proposal suppression
+  - heartbeat: `heartbeat_spec_hygiene.json`
+- **`operations-center-spec-trigger`** (long-running)
+  - polls for spec campaign trigger conditions (drop-file, Plane label, queue drain)
+  - emits at most one `spec-author` Plane task per cycle — no LLM calls
+  - heartbeat: `heartbeat_spec_trigger.json`
+- **`spec-author` task-kind handler in `board_worker`**
+  - claims `spec-author` tasks, runs phase orchestration (brainstorm → campaign creation)
+  - this is the only spec-authoring code path that calls the backend executor
+- still controlled by the `spec_director:` config block (block name preserved for
+  back-compat; renaming the config key is a separate change)
 
 ### `watch-stop`
 

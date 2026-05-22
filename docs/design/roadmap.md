@@ -81,6 +81,8 @@ All three signals default to `status="unavailable"` when the tool output files a
 
 A fully autonomous spec-driven development chain giving OperationsCenter a sixth watcher role (`spec`).
 
+> **Update (ADR 0007 Phase F, 2026-05-22):** the monolithic `spec_director` watcher was retired and split. Trigger detection moved to `operations-center-spec-trigger`; hygiene + `active.json` projection to `operations-center-spec-hygiene`; brainstorm/recovery/phase orchestration into the `spec-author` task-kind handler in `board_worker` (which routes LLM work through the backend executor, eliminating the historical Claude CLI bypass). The shared library was renamed `src/operations_center/spec_director/` → `src/operations_center/spec_author/`. Module-path references below describe the legacy layout; consult ADR 0007 for the current topology.
+
 ### What was built
 
 **Trigger detection** (`spec_director/trigger.py`): Priority-ordered: drop-file (`state/spec_director_trigger.md`) > Plane label (`spec-director: trigger`) > queue drain (board goes quiet). Each trigger passes optional operator seed text to the brainstorm step.

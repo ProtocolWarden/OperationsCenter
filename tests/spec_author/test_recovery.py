@@ -4,7 +4,7 @@
 from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
-from operations_center.spec_director.models import CampaignRecord
+from operations_center.spec_author.models import CampaignRecord
 
 
 def _campaign(hours_ago: int = 30) -> CampaignRecord:
@@ -17,7 +17,7 @@ def _campaign(hours_ago: int = 30) -> CampaignRecord:
 
 
 def test_abandon_threshold_exceeded():
-    from operations_center.spec_director.recovery import RecoveryService
+    from operations_center.spec_author.recovery import RecoveryService
     campaign = _campaign(hours_ago=80)
     service = RecoveryService(
         client=MagicMock(), state_manager=MagicMock(),
@@ -27,7 +27,7 @@ def test_abandon_threshold_exceeded():
 
 
 def test_no_abandon_when_recent():
-    from operations_center.spec_director.recovery import RecoveryService
+    from operations_center.spec_author.recovery import RecoveryService
     campaign = _campaign(hours_ago=1)
     service = RecoveryService(
         client=MagicMock(), state_manager=MagicMock(),
@@ -37,7 +37,7 @@ def test_no_abandon_when_recent():
 
 
 def test_self_cancel_marks_cancelled(tmp_path):
-    from operations_center.spec_director.recovery import RecoveryService
+    from operations_center.spec_author.recovery import RecoveryService
 
     spec_file = tmp_path / "add-auth.md"
     spec_file.write_text("---\nstatus: active\n---\n# Spec\n")

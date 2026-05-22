@@ -1,4 +1,42 @@
 # Log
+## 2026-05-22 — ADR 0007 Phase F: retire spec_director entrypoint + rename package to spec_author
+
+Branch: `feat/spec-director-refactor`. Phase F closes ADR 0007 — the legacy `spec_director` watcher is fully retired; its three former responsibilities now live in three focused surfaces:
+
+- `operations-center-spec-trigger` (Phase B) — drop-file / queue-drain detection, emits one `spec-author` Plane task per cycle (no LLM).
+- `operations-center-spec-hygiene` (Phase A) — board hygiene, `active.json` projection, stall detection, phase-advance task emission (no LLM).
+- `spec-author` task-kind handler in `board_worker` (Phases C/D) — brainstorm, campaign creation, phase-advance rewrite via the backend executor (the only LLM path).
+
+**Deleted:**
+- `src/operations_center/entrypoints/spec_director/` (entire package — `__init__.py` and `main.py`).
+- `tests/test_spec_director_main.py` — exercised only the now-deleted entrypoint.
+
+**Renamed:**
+- `src/operations_center/spec_director/` → `src/operations_center/spec_author/` (shared library). Name now matches the task-kind it fronts; the package is shared infrastructure, no longer a watcher.
+- `tests/spec_director/` → `tests/spec_author/`.
+- All `from operations_center.spec_director...` imports in `src/` and `tests/` rewritten to `from operations_center.spec_author...` (mechanical sed).
+
+**Modified:**
+- `src/operations_center/spec_author/__init__.py`: added docstring explaining the rename and ADR 0007 Phase F lineage.
+- `scripts/operations-center.sh`: the `spec` watch role no longer launches `operations_center.entrypoints.spec_director.main`. It now supervises two sibling Python children — `spec_hygiene.main` and `spec_trigger.main` — under a single restart-loop wrapper (`wait -n` on either child triggers a paired restart). PID-file semantics preserved.
+- `docs/operator/runtime.md` `watch --role spec` section rewritten to document the two siblings + the `spec-author` task-kind handler, with the ADR 0007 Phase F provenance note.
+- `docs/design/roadmap.md` "Autonomous Spec-Driven Campaign Chain" section: added a Phase F update note at the top of the section so the historical "what was built" content stays auditable while pointing readers at the current topology.
+- `.env.operations-center.example`: SwitchBoard comment retargeted from `spec_director LLM calls` to `spec-author LLM calls`.
+- `.custodian/config.yaml`: every `src/operations_center/spec_director/...` writer glob / required-file path rewritten to `src/operations_center/spec_author/...`; touchpoint comment updated.
+- `tests/test_architecture_cleanup_guards.py` `test_adr_0007_no_claude_cli_module_in_source_tree`: now asserts both legacy and current paths (`spec_director/_claude_cli.py` and `spec_author/_claude_cli.py`) are absent, so the Phase-E guard survives the rename.
+- `src/operations_center/spec_author/phase_orchestrator.py` and `src/operations_center/entrypoints/board_worker/main.py`: Phase-F TODO breadcrumbs updated to reflect that retirement has happened; fields/args kept for back-compat but comments now point to the completed retirement.
+- Stale `# src/operations_center/spec_director/<file>` path comments at the top of every renamed module rewritten to the new path.
+
+**Intentionally NOT renamed:** `settings.spec_director` config block — leaves the operator-facing YAML key stable; renaming it is a separate orchestrated change.
+
+**Phase E guard suite:** `pytest tests/test_architecture_cleanup_guards.py -v` → 7 passed.
+
+**Post-Phase-F grep `spec_director` over `src/`:** 17 hits, all in comments / docstrings / the `settings.spec_director` back-compat config attribute / the `__init__.py` historical-context note. Zero executable references. AST guard (`test_adr_0007_no_claude_cli_imports_in_source_tree`) green.
+
+**OperatorConsole:** `grep -rn "spec_director" OperatorConsole/` returned zero hits. No per-watcher label to update; OperatorConsole reads `state/campaigns/active.json` directly and is agnostic to which OC process writes it. No OperatorConsole branch needed.
+
+**Stop point:** changes staged but not committed; parent handles git ops. OC remains broken from earlier phases (the Phase F task explicitly scoped runtime tests out).
+
 ## 2026-05-22 — ADR 0007 Phase E: delete `_claude_cli` + every importer, add CI guard
 
 Branch: `feat/spec-director-refactor`. Phase E of ADR 0007 — physically removes the direct-Claude bypass module and its remaining importers, and adds an architectural guard so it cannot be reintroduced. After Phases B/C/D the only live LLM-needing path is `spec-author` Plane tasks executed by `board_worker` via the normal backend pipeline; this phase scrubs the dead surface.

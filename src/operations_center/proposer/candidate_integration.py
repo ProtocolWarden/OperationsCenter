@@ -22,7 +22,7 @@ from operations_center.proposer.result_models import (
     ProposerRepoRef,
     SkippedProposalResult,
 )
-from operations_center.spec_director.suppressor import is_suppressed as _spec_suppressed
+from operations_center.spec_author.suppressor import is_suppressed as _spec_suppressed
 
 
 class CandidateLoaderProtocol(Protocol):
@@ -70,7 +70,7 @@ class CandidateProposerIntegrationService:
 
         _active_campaign_list: list = []
         try:
-            from operations_center.spec_director.state import CampaignStateManager
+            from operations_center.spec_author.state import CampaignStateManager
             _active_campaign_list = CampaignStateManager().load().active_campaigns()
         except Exception:
             _active_campaign_list = []

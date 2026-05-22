@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-# src/operations_center/spec_director/trigger.py
+# src/operations_center/spec_author/trigger.py
 from __future__ import annotations
 
 import logging
@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from operations_center.spec_director.models import TriggerSource
+from operations_center.spec_author.models import TriggerSource
 
 logger = logging.getLogger(__name__)
 

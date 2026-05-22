@@ -108,9 +108,10 @@ audit:
         - swap_pct
         - swap_total_gb
         - swap_used_gb
-    # P1/P2/P3: OC spec_director campaigns state → OperatorConsole campaign pane.
+    # P1/P2/P3: OC spec-author campaigns state → OperatorConsole campaign pane.
+    # (Package renamed from spec_director to spec_author per ADR 0007 Phase F.)
     - id: campaigns
-      writer_glob: "src/operations_center/spec_director/state.py"
+      writer_glob: "src/operations_center/spec_author/state.py"
       reader_path: "../OperatorConsole/src/operator_console/watcher_status_pane.py"
       written_keys: [campaigns]
       path_fragment: "active.json"
@@ -160,7 +161,7 @@ audit:
       - "src/operations_center/proposer/**"
       - "src/operations_center/slice_replay/**"
       - "src/operations_center/tuning/**"
-      - "src/operations_center/spec_director/**"
+      - "src/operations_center/spec_author/**"
       - "src/operations_center/contracts/**"
       - "src/operations_center/application/**"
       - "src/operations_center/execution/**"
@@ -190,7 +191,7 @@ audit:
       - "src/operations_center/insights/**"
       - "src/operations_center/upstream_eval/**"
       - "src/operations_center/propagation/**"
-      - "src/operations_center/spec_director/**"
+      - "src/operations_center/spec_author/**"
       - "src/operations_center/audit_dispatch/**"
       - "src/operations_center/audit_governance/**"
       - "src/operations_center/audit_toolset/**"
@@ -256,7 +257,7 @@ audit:
       - "src/operations_center/adapters/reporting/**"
       - "src/operations_center/adapters/plane/**"
       # Spec-director phase orchestrators are a CRUD family by design.
-      - "src/operations_center/spec_director/**"
+      - "src/operations_center/spec_author/**"
       # Routing rules / decision rules / proposer / planning / lifecycle —
       # all evaluator typology that share shape.
       - "src/operations_center/routing/**"
@@ -338,8 +339,8 @@ audit:
       # scheduled tasks: datetime parse failure → treat as never run (correct)
       - src/operations_center/scheduled_tasks/runner.py
       # spec director: date parse on archival, state file load
-      - src/operations_center/spec_director/spec_writer.py
-      - src/operations_center/spec_director/state.py
+      - src/operations_center/spec_author/spec_writer.py
+      - src/operations_center/spec_author/state.py
       # tuning: calibration/metrics/compare calculations — one bad record skipped
       - src/operations_center/tuning/calibration.py
       - src/operations_center/tuning/compare.py
@@ -355,7 +356,7 @@ audit:
       # behavior calibration: unresolvable artifact path — skip rule
       - src/operations_center/behavior_calibration/rules.py
       # spec director phase orchestrator: one best-effort traceability append
-      - src/operations_center/spec_director/phase_orchestrator.py
+      - src/operations_center/spec_author/phase_orchestrator.py
     C9:
       # Entrypoints are polling workers (same rationale as C4); broad catches
       # prevent one bad work item from aborting the whole cycle. The cycle logs
@@ -390,10 +391,10 @@ audit:
       - src/operations_center/priority_scans.py
       - src/operations_center/reconcile_running.py
       - src/operations_center/scheduled_tasks/runner.py
-      - src/operations_center/spec_director/context_bundle.py
-      - src/operations_center/spec_director/phase_orchestrator.py
-      - src/operations_center/spec_director/recovery.py
-      - src/operations_center/spec_director/spec_writer.py
+      - src/operations_center/spec_author/context_bundle.py
+      - src/operations_center/spec_author/phase_orchestrator.py
+      - src/operations_center/spec_author/recovery.py
+      - src/operations_center/spec_author/spec_writer.py
     C29:
       # Entrypoint main files are necessarily large — they wire together the full
       # worker lifecycle (arg parsing, signal handling, retry loops, artifact

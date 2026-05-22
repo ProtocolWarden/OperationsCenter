@@ -280,7 +280,7 @@ def _load_campaign_spec(oc_root: Path, settings, plane_task_id: str | None) -> s
         campaign_id = _label_value(labels, "campaign-id")
         if not campaign_id:
             return ""
-        from operations_center.spec_director.state import CampaignStateManager
+        from operations_center.spec_author.state import CampaignStateManager
         campaigns_state = CampaignStateManager().load()
         for campaign in campaigns_state.active_campaigns():
             if campaign.campaign_id == campaign_id:

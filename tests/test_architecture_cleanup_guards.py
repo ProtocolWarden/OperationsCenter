@@ -50,9 +50,12 @@ def _iter_source_files(root: Path):
 def test_adr_0007_no_claude_cli_module_in_source_tree() -> None:
     """ADR 0007 Phase E: ``spec_director/_claude_cli.py`` was deleted and may
     not be reintroduced. All LLM work must flow through the backend executor
-    via a spec-author Plane task."""
-    forbidden = REPO_ROOT / "src" / "operations_center" / "spec_director" / "_claude_cli.py"
-    assert not forbidden.exists(), _ADR_0007_FORBIDDEN_MSG
+    via a spec-author Plane task. Phase F renamed the package to ``spec_author``;
+    this guard checks both the historical and current paths."""
+    legacy_forbidden = REPO_ROOT / "src" / "operations_center" / "spec_director" / "_claude_cli.py"
+    current_forbidden = REPO_ROOT / "src" / "operations_center" / "spec_author" / "_claude_cli.py"
+    assert not legacy_forbidden.exists(), _ADR_0007_FORBIDDEN_MSG
+    assert not current_forbidden.exists(), _ADR_0007_FORBIDDEN_MSG
 
 
 def test_adr_0007_no_claude_cli_imports_in_source_tree() -> None:
@@ -72,12 +75,12 @@ def test_adr_0007_no_claude_cli_imports_in_source_tree() -> None:
         except SyntaxError:
             continue
         for node in ast.walk(tree):
-            # `from operations_center.spec_director._claude_cli import ...`
+            # `from operations_center.spec_author._claude_cli import ...`
             if isinstance(node, ast.ImportFrom):
                 mod = node.module or ""
                 if "_claude_cli" in mod:
                     offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}: import from {mod}")
-            # `import operations_center.spec_director._claude_cli`
+            # `import operations_center.spec_author._claude_cli`
             elif isinstance(node, ast.Import):
                 for alias in node.names:
                     if "_claude_cli" in alias.name:
