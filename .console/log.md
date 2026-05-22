@@ -1,5 +1,63 @@
 # Log
 
+## OC Platform Watchdog Cycle — 2026-05-22 06:17 UTC (Cycle 11)
+
+- Lock owner: watchdog pid (reclaimed)
+- Branch: oc-watchdog/20260522-0137-fix-kodo-removal-regressions (merged to main @ c8b45b0)
+- HEAD: 8b261fd (= main — branch was merged, no divergence)
+- Health state: ACTIVE (15 board-unblock actions applied; 74af58c5 promoted R4AI; session reset pending ~06:40 UTC)
+- Next cadence: 900s — 74af58c5 in R4AI awaiting session reset; rate gate normal; board draining
+
+### STEP 0 — Preflight
+- All 16 repos: Already up to date (ff-only pull) ✓
+- Plane: OK ✓ | SwitchBoard: OK ✓ | Watchers: 8/8 running (same PIDs) ✓ | CLIs: OK ✓
+- git status: HEAD = main (prior watchdog branch merged via c8b45b0) ✓
+
+### STEP 1 — Investigation findings
+- graph-doctor: ✓ OK — 11 nodes / 12 edges / graph_built=True
+- ghost-audit: G7 (1 thin goal: 89191ff5 "Emit JUnit XML" — persistent multi-cycle); G10 (b67bc0e0 Cancelled, lagging)
+- flow-audit: 0 open gaps ✓; F8 partial (persistent/non-critical)
+- reaudit-check: exit 0 (both backends CxRP 0.3.1) ✓
+- regression-check: 0 findings ✓
+- custodian-sweep: 7 repos swept; VideoFoundry RUFF delta=+1 (custodian commented on board); all others delta=0
+
+### STEP 2 — Triage: 0 actions
+
+### STEP 2.5 — Board-unblock: 15 actions applied
+- CLEAN_BLOCKED_RETRY: cd783c69, b4b40a95 → Backlog (pre-execution failures, no signal labels)
+- IMPROVE_UNBLOCK: b7719888, 1ad727e3, bd7817c6, ff19d39b, c7df5422, 360cff3a, 89191ff5, bfb289b3, 41bcd097, 89fc5782, 0f1612ea, 3a3c202f → Backlog (stale >4h, no executor progress)
+- GOAL_BACKLOG_PROMOTE: 74af58c5 → Ready for AI (parent improve task fa470a1f Done)
+
+### STEP 3 — Blocked/stalled analysis
+- Budget exhaustion pattern: overnight goal watcher blocked by session limit (22:27 UTC expiry, ~18:40 ET reset; 1:40am ET reset ≈ 06:40 UTC pending)
+  and hourly rate gate (2/hr limit). Normal API throttling — not structural stagnation.
+- propose: 0 candidates created in recent cycles; test_signal candidates suppressed as recently_completed_equivalent_task (7-day window) — expected dedup behavior, not closed-loop stagnation
+- 74af58c5: R4AI; kodo fix now in main (c8b45b0 merge). Next execution attempt should succeed (only prior failures were pre-fix).
+- G7/89191ff5 "Emit JUnit XML": thin-goal loop detected (refused multi-cycle → Blocked → board-unblock → Backlog → R4AI → repeat). STEP 4 below.
+- VideoFoundry RUFF delta=+1: custodian commented; autonomy dry-run 0 candidates (no actionable proposal). Note only.
+- Behavioral convergence: WEAKLY-CONVERGENT (board unblocked, tasks moving; session limit self-resolving; no structural stagnation)
+
+### STEP 4 — Convergence promotion
+- 89191ff5 thin-goal loop: persists ≥3 cycles. Watcher gap: IMPROVE_UNBLOCK (Rule 3) moves stale Blocked→Backlog without checking if task was repeatedly thin-refused by goal watcher. Rule 3 should add thin-refusal count exclusion. Plane task needed.
+
+### STEP 5/6 — Direct fixes
+- None this cycle. Board-unblock handled all queue actions. Goal watcher will handle 74af58c5 execution.
+
+### STEP 7 — Invariant tests: 15 passed ✓
+
+### STEP 8 — Watcher health
+- 8/8 watchers running ✓
+- role=all exit_code=2 events: all in 20260521T074525_all.log (session startup at 07:45 May 21 — confirmed benign, known pattern)
+
+### Blocked work classification
+- 74af58c5: temporarily-blocked (kodo fix in main; R4AI for retry; session reset pending 06:40 UTC)
+- 89191ff5: thin-goal loop (see STEP 4 — promotion candidate)
+
+### Operator-blocked: none
+### Parked state: no
+
+---
+
 ## OC Platform Watchdog Cycle — 2026-05-22 05:48 UTC (Cycle 10)
 
 - Lock owner: watchdog pid (reclaimed)
