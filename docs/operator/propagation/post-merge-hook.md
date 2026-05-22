@@ -68,7 +68,7 @@ Set these on the contract repo (Settings → Secrets and variables → Actions):
 |---|---|
 | `OC_REPO_TOKEN` | GitHub PAT with `repo` scope; lets the workflow check out OperationsCenter |
 | `PLANE_API_TOKEN` | The Plane API token OC uses to create issues |
-| `OC_PROPAGATE_CONFIG` | Full YAML config for OC. **At minimum** must include `plane:`, `git:`, `kodo:`, `repos:`, and a `contract_change_propagation:` block with `enabled: true` |
+| `OC_PROPAGATE_CONFIG` | Full YAML config for OC. **At minimum** must include `plane:`, `git:`, `repos:`, and a `contract_change_propagation:` block with `enabled: true` |
 
 ## Minimum OC_PROPAGATE_CONFIG
 
@@ -81,9 +81,6 @@ plane:
 
 git:
   token_env: GITHUB_TOKEN
-
-kodo:
-  binary: kodo
 
 repos: {}    # propagator doesn't need any repos defined
 

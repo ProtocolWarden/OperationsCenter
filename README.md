@@ -6,7 +6,7 @@ Local planning, execution, policy, and evidence service for the coding platform.
 
 - Canonical task-proposal authoring and validation
 - Routing-aware planning (SwitchBoard lane decisions consumed as input)
-- Bounded execution boundary (`ExecutionCoordinator` + per-backend adapters: kodo, archon, openclaw, direct_local, aider_local)
+- Bounded execution boundary (`ExecutionCoordinator` + per-backend adapters: team_executor, openclaw, direct_local, aider_local)
 - Mandatory policy gate before execution
 - Run-artifact persistence and observability (proposal, decision, request, result, trace)
 - Worker lanes for the autonomous loop: goal, test, improve, propose, review
@@ -189,39 +189,8 @@ outcome = coordinator.execute(
 # outcome.record/trace    -> retained observability view
 ```
 
-`KodoBackendAdapter` wraps the kodo subprocess behind the canonical interface:
-
-```python
-from operations_center.backends.kodo import KodoBackendAdapter
-result = KodoBackendAdapter.from_settings().execute(request)  # ExecutionRequest → ExecutionResult
-```
-
 These adapters are OperationsCenter-owned integration modules reached through the
 canonical execution boundary rather than legacy worker runtime code.
-
-### Archon Backend Adapter (Phase 8, optional)
-
-`ArchonBackendAdapter` is an optional, bounded second backend for workflow-oriented execution. Archon runs multi-step agentic workflows (plan → execute → validate) internally. It follows the same canonical interface as kodo but stays completely separate from it:
-
-```python
-from operations_center.backends.archon.adapter import ArchonBackendAdapter
-
-# Use the stub factory in tests
-adapter = ArchonBackendAdapter.with_stub(outcome="success", output_text="done")
-result = adapter.execute(request)  # ExecutionRequest → ExecutionResult
-
-# Or capture raw workflow events for observability
-result, capture = adapter.execute_and_capture(request)
-# capture.workflow_events — Archon-internal step trace, NOT in ExecutionResult
-```
-
-Key design constraints:
-- Archon is **not** a universal backend — `aider_local` runs use the dedicated `AiderLocalBackendAdapter`, not Archon
-- Archon-native types (`ArchonWorkflowConfig`, `ArchonRunCapture`, `workflow_events`) are confined to `backends/archon/`
-- `execute_and_capture()` exposes raw workflow events for `BackendDetailRef` retention without inlining them into canonical contracts
-- Unsupported requests return `UNSUPPORTED_REQUEST` before invocation; the capture is `None`
-
-See `PlatformDeployment/docs/architecture/adapters/archon-adapter.md` for architecture and usage.
 
 ### OpenClaw Backend Adapter (Phase 11, optional)
 
@@ -267,7 +236,7 @@ if OpenClawBridge.is_enabled():
     )
     handle = bridge.trigger(ctx)
     # handle.selected_lane, handle.selected_backend, handle.status == "planned"
-    summary = bridge.status_from_result(result, lane="claude_cli", backend="kodo")
+    summary = bridge.status_from_result(result, lane="claude_cli", backend="team_executor")
     inspection = bridge.inspect_from_record(record, trace)
 ```
 
@@ -286,7 +255,7 @@ See `PlatformDeployment/docs/architecture/adapters/openclaw-outer-shell.md` for 
 from operations_center.observability.service import ExecutionObservabilityService
 
 svc = ExecutionObservabilityService.default()
-record, trace = svc.observe(result, backend="kodo", lane="claude_cli")
+record, trace = svc.observe(result, backend="team_executor", lane="claude_cli")
 # record → ExecutionRecord (retained; classified artifacts, changed-file evidence, backend detail refs)
 # trace  → ExecutionTrace (inspectable; headline, summary, warnings, key artifacts)
 ```
@@ -380,7 +349,7 @@ See [PlatformDeployment/docs/architecture/routing/routing-tuning.md](https://git
 
 ### Upstream Patch Evaluation (Phase 14)
 
-`UpstreamPatchEvaluator` evaluates whether recurring friction around external systems like `openclaw`, `archon`, or `kodo` actually justifies upstream patching or deeper native integration work.
+`UpstreamPatchEvaluator` evaluates whether recurring friction around external systems like `openclaw` or `team_executor` actually justifies upstream patching or deeper native integration work.
 
 ```python
 from operations_center.upstream_eval import UpstreamPatchEvaluator
@@ -485,7 +454,7 @@ The naming is intentionally close because the second is the board adapter for th
 - Improve-worker blocked-task triage, repeated-failure pattern detection, and bounded follow-up task creation.
 - Proposer idle-board task generation with cooldowns, quotas, deduplication, velocity cap, and staleness guard.
 - Dependency drift reporting with optional Plane improve-task creation.
-- **Execution health self-tuning loop**: on every `autonomy-cycle` the observer reads retained kodo_plane execution artifacts, derives `high_no_op_rate` and `persistent_validation_failures` insights, and automatically proposes bounded improve tasks when execution quality degrades. No manual trigger or consecutive-run threshold required.
+- **Execution health self-tuning loop**: on every `autonomy-cycle` the observer reads retained execution artifacts, derives `high_no_op_rate` and `persistent_validation_failures` insights, and automatically proposes bounded improve tasks when execution quality degrades. No manual trigger or consecutive-run threshold required.
 - **Bounded self-tuning regulator** (`tune-autonomy`): aggregates per-family metrics from retained artifacts and emits conservative threshold recommendations. Optional auto-apply mode (double-gated) writes bounded changes to `config/autonomy_tuning.json` with full audit trail.
 - **Autonomy tier management** (`autonomy-tiers`): operator CLI to promote or demote families between tier 0 (decision artifact only), tier 1 (Backlog), and tier 2 (Ready for AI).
 
@@ -496,15 +465,15 @@ The naming is intentionally close because the second is the board adapter for th
 - A dedicated `review` watcher polls GitHub every 60 seconds and drives the loop:
 
 **Phase 1 — Self-review (automatic):**
-  - Kodo reads the diff against the base branch and writes a verdict (`LGTM` or `CONCERNS`).
+  - Executor reads the diff against the base branch and writes a verdict (`LGTM` or `CONCERNS`).
   - `LGTM` → squash-merge, delete branch, task marked Done.
-  - `CONCERNS` → kodo runs a revision pass on the branch, then re-reviews (up to `max_self_review_loops`, default 2).
+  - `CONCERNS` → executor runs a revision pass on the branch, then re-reviews (up to `max_self_review_loops`, default 2).
   - If still unresolved after all loops → escalate to Phase 2.
 
 **Phase 2 — Human review (escalated):**
   - Watcher posts a comment on the PR explaining what it couldn't resolve.
   - 👍 on the PR or the latest bot reply → squash-merge + done.
-  - Human comment → kodo runs a revision pass; bot replies when done; repeat up to 3 times.
+  - Human comment → executor runs a revision pass; bot replies when done; repeat up to 3 times.
   - 👍 on bot reply → merge.
   - No action after 1 day → merge automatically (timeout fallback).
 
@@ -577,7 +546,7 @@ The following capabilities were added to close gaps toward full autonomous opera
 - **Execution duration baseline** — records wall-clock time per task; logs `duration_anomaly` when a run takes >2× the median.
 - **Pre-execution rejection feedback** — when `validate_task_pre_execution` rejects a task, records a failure in the proposal success-rate store so the category learns.
 - **Safe revert detection** — post-merge regression tasks now carry `recommended_action: revert` when the merge commit is still at HEAD, `investigate` when subsequent commits exist.
-- **Kodo version attribution** — `kodo_version` is recorded in every execution outcome; the circuit breaker skips outcomes from the previous version during a kodo upgrade.
+- **Backend version attribution** — `backend_version` is recorded in every execution outcome; the circuit breaker skips outcomes from the previous version during a backend upgrade.
 - **Structured audit log export** — `audit-export` CLI prints the full execution event log as JSON; filterable by `--window-days`.
 - **Board health snapshot** — `board-health` CLI and automatic 40-cycle scan detect stuck_running tasks, clustered blocked reasons, and quiet repo lanes.
 
@@ -593,7 +562,7 @@ The following capabilities were added to close gaps toward full autonomous opera
 
 **Session 8 — 10 execution depth and calibration improvements:**
 
-- **ExecutionOutcomeDeriver (Phase 4)** — reads retained `control_outcome.json` and `stderr.txt` from kodo artifacts; classifies `timeout_pattern` (≥2 timeout failures), `test_regression` (test output in stderr of validation failure), `validation_loop` (same task fails validation ≥3 times).
+- **ExecutionOutcomeDeriver (Phase 4)** — reads retained `control_outcome.json` and `stderr.txt` from execution artifacts; classifies `timeout_pattern` (≥2 timeout failures), `test_regression` (test output in stderr of validation failure), `validation_loop` (same task fails validation ≥3 times).
 - **Quality trend tracking** — `QualityTrendDeriver` computes lint/type error deltas across ≥3 observer snapshots; emits `lint_improving`, `lint_degrading`, `type_improving`, `type_degrading`, `stagnant` insights with a 10% change threshold.
 - **Confidence calibration store** — `ConfidenceCalibrationStore` in `tuning/calibration.py` tracks whether `high/medium/low` confidence labels are accurate; `tune-autonomy` output now includes a calibration table with ⚠ flags for over-confident families.
 - **Semantic deduplication** — near-duplicate proposals with different wording are suppressed via Jaccard similarity on title word tokens (threshold 0.5); `[...]` prefix markers are stripped before comparison.
@@ -817,7 +786,7 @@ Runs `scripts/oc-status.py` — a live terminal dashboard that refreshes every 2
 - Command logs: `logs/local/`
 - Plane runtime logs: `logs/local/plane-runtime/`
 - Watcher logs, PIDs, and heartbeat files: `logs/local/watch-all/`
-- Retained execution artifacts: `tools/report/kodo_plane/`
+- Retained execution artifacts: `tools/report/execution_plane/`
 - Retained execution usage ledger: `tools/report/operations_center/execution/`
 - Repo observer snapshots: `tools/report/operations_center/observer/`
 - Insight artifacts: `tools/report/operations_center/insights/`
@@ -883,7 +852,7 @@ The repo-aware autonomy loop is behaving well when:
 - [Repo-Aware Autonomy Layer](docs/design/autonomy/repo_aware_autonomy.md)
 - [Self-Tuning Regulator](docs/design/autonomy/autonomy_self_tuning_regulator.md)
 - [Execution Budget And Safety Controls](docs/design/execution_budget_and_safety_controls.md)
-- [Plane + Kodo Wrapper Design](docs/design/plane_kodo_wrapper.md)
+- [Execution Plane Design](docs/design/plane_kodo_wrapper.md) — Historical: original Plane/kodo integration design
 - [Roadmap](docs/design/roadmap.md)
 
 ### Operator Guides

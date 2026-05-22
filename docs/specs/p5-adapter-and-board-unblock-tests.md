@@ -35,7 +35,7 @@ The P5 executor backend adapters (TeamExecutor, DAGExecutor, CritiqueExecutor) a
 - All new tests must be pure unit tests — no network, no Docker, no Plane API calls. Use `unittest.mock` or `pytest` monkeypatch exclusively.
 - Do not modify production source code; only add or extend test files.
 - Follow the existing test layout: `tests/unit/<mirror-of-src-path>/test_<module>.py`.
-- Keep each test file under 250 lines to stay within a single kodo run budget.
+- Keep each test file under 250 lines to stay within a single executor run budget.
 - Do not re-propose recovery-subsystem or QueueHealingEngine tests (cancelled).
 
 ## Success Criteria

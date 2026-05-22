@@ -59,10 +59,10 @@ Classify each blocked item: temporarily-blocked / infra-blocked / ownership-ambi
 **SIGKILL TRIAGE — the loop decides:** When a task is SIGKILL'd and held by the SIGKILL guard, the loop must make one of these calls (do not defer):
 1. **Target already resolved** → verify directly (run linter, check tests, etc.). If resolved → cancel task as stale remediation.
 2. **Transient SIGKILL (OOM ruled out, retry-count < 3)** → re-queue to Ready for AI. Comment explaining the decision.
-3. **Systematic SIGKILL (same task SIGKILL'd 2+ times, cause unclear)** → investigate kodo-stderr.log, dmesg, memory; if cause still unclear → re-queue once more (Rule 1 auto-cancels at retry-count≥3).
+3. **Systematic SIGKILL (same task SIGKILL'd 2+ times, cause unclear)** → investigate executor stderr, dmesg, memory; if cause still unclear → re-queue once more (Rule 1 auto-cancels at retry-count≥3).
 4. **Dead remediation** → add dead-remediation label; Rule 1 cancels on next cycle.
 
-**EXECUTOR FAILURE INVESTIGATION** — if haiku JSON shows executor_investigation.triggered=true, analyze before re-queuing. OOM ruled out when memory_free_gb > 8. SIGKILL without OOM = kodo timeout or task-specific failure.
+**EXECUTOR FAILURE INVESTIGATION** — if haiku JSON shows executor_investigation.triggered=true, analyze before re-queuing. OOM ruled out when memory_free_gb > 8. SIGKILL without OOM = executor timeout or task-specific failure.
 
 ### STEP 4 — CONVERGENCE PROMOTION CHECK
 
@@ -81,7 +81,7 @@ Direct fix allowed ONLY when ALL hold:
 source .env.operations-center.local
 scripts/operations-center.sh autonomy-cycle --config config/operations_center.local.yaml --execute --repo <path>
 ```
-kodo max_concurrent=1 — never dispatch two repos simultaneously.
+team_executor max_concurrent=1 — never dispatch two repos simultaneously.
 
 TRAINING MODE: sandbox_base_branch=operations-center-testing-branch. OC (self_repo_key) MAY be dispatched via autonomy-cycle. proposer auto-adds self-modify:approved. No extra gate needed.
 

@@ -7,7 +7,7 @@ It prepares:
 - local Plane API config
 - local repo config
 - provider readiness
-- Kodo install/verification
+- executor (TeamExecutor) install/verification
 - repo target defaults
 
 ## Files Written
@@ -68,24 +68,12 @@ source .env.operations-center.local
 - bot author identity
 - GitHub SSH bootstrap/verification
 
-### Kodo
+### Executor (TeamExecutor)
 
-Kodo is the multi-agent coding engine OperationsCenter uses for task execution.
-This installation uses the **ProtocolWarden fork** (`github.com/ProtocolWarden/kodo`,
-`dev` branch) rather than the upstream (`github.com/ikamensh/kodo`).
+TeamExecutor is the multi-agent coding engine OperationsCenter uses for task execution.
+See `src/operations_center/backends/team_executor/` for the adapter implementation.
 
-The fork contains fixes that are not yet in upstream releases:
-- `--full-auto → -a never` for the Codex orchestrator (codex dropped `--full-auto`)
-
-Install command (must use fork, not upstream):
-```bash
-uv tool install git+https://github.com/ProtocolWarden/kodo.git@dev --force
-```
-
-Do **not** run `uv tool install kodo` (installs upstream from PyPI).  The setup script
-must be updated to use the fork URL when kodo is missing or needs to be reinstalled.
-
-- install/verify `kodo` (from ProtocolWarden fork, `dev` branch)
+- install/verify `team-executor` CLI
 - configure orchestrator defaults
 - persist local execution settings
 
@@ -105,7 +93,7 @@ must be updated to use the fork URL when kodo is missing or needs to be reinstal
 
 ## Repo Bootstrap Convention
 
-Before kodo runs on a task, OperationsCenter bootstraps the repo's Python environment.
+Before the executor runs on a task, OperationsCenter bootstraps the repo's Python environment.
 
 **Default (Python repos):** set `bootstrap_enabled: true` in the repo config.
 OperationsCenter creates a venv at `venv_dir` and runs `install_dev_command`.
@@ -118,31 +106,26 @@ with the repo root as the working directory.
 `bootstrap_commands` in the repo config can still override this for one-off cases,
 but the preferred pattern for repos with their own setup process is `tools/bootstrap.sh`.
 
-Validation commands run after kodo using full paths (e.g. `.codebase-venv/bin/python -m pytest -q`)
+Validation commands run after the executor using full paths (e.g. `.codebase-venv/bin/python -m pytest -q`)
 so they work regardless of which venv was activated during bootstrap.
 
-## Kodo Install Behavior
+## Executor Install Behavior
 
 Setup:
 
-- checks whether `kodo` is on `PATH`
+- checks whether `team-executor` is on `PATH`
 - installs `uv` if needed
-- installs Kodo from the **ProtocolWarden fork** (`dev` branch) if missing:
-  `uv tool install git+https://github.com/ProtocolWarden/kodo.git@dev --force`
-- verifies the install with `kodo --help`
+- installs TeamExecutor if missing
+- verifies the install with `team-executor --help`
 
-Setup is intended to be idempotent: it does not reinstall Kodo when the current install already works.
-
-> **Important:** The setup script's kodo install logic must use the fork URL.
-> If the script currently installs from PyPI or upstream GitHub, update it.
-> See `scripts/kodo-shim` for the runtime shim that wraps the installed kodo binary.
+Setup is intended to be idempotent: it does not reinstall the executor when the current install already works.
 
 ## Advanced Mode
 
 Advanced mode also exposes optional version pins for:
 
 - Plane
-- Kodo
+- TeamExecutor
 - supported provider CLIs
 
 Pins are for reproducible local installs. They do not automatically trigger update checks during normal runs.

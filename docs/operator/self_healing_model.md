@@ -280,7 +280,7 @@ surface structured health records equivalent to:
 
 ```yaml
 backend_health:
-  kodo:
+  team_executor:
     state: unstable
     failure_count: 2
     last_success_at: null
@@ -358,7 +358,7 @@ budgets, and telemetry are machine-enforced.
 
 Guardrails:
 - Do not widen runtime policy automatically
-- Do not increase `kodo` concurrency automatically
+- Do not increase executor concurrency automatically
 - Do not bypass execution gates silently
 - Do not replay unsafe retries
 - Do not mutate queue state without structured evidence
@@ -406,7 +406,7 @@ Parked metadata must include:
 
 ```yaml
 parked_state:
-  root_cause_signature: kodo_sigkill_plan_phase
+  root_cause_signature: executor_sigkill_plan_phase
   parked_reason: backend cooldown exhausted without safe retry
   unchanged_cycles: 14
   last_evidence_hash: abc123

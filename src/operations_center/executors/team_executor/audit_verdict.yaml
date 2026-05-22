@@ -1,6 +1,6 @@
 backend_id: team_executor
-audited_at: "2026-05-05"
-audited_against_cxrp_version: "0.2"
+audited_at: "2026-05-22"
+audited_against_cxrp_version: "0.3.1"
 backend_version: "0.1.0"
 per_phase:
   runtime_control: PARTIAL

@@ -143,7 +143,7 @@ class TestProvenance:
     def test_provenance_resolved_for_team_executor_from_real_registry(self):
         """The shipped TeamExecutor registry entry should resolve.
 
-        ADR 0005: kodo replaced by team_executor.
+        ADR 0005: team_executor is the active backend.
         The registry/source_registry.yaml must have a TeamExecutor entry.
         """
         target = bind_execution_target(_envelope(backend="direct_local", executor=None))

@@ -560,7 +560,7 @@ def test_write_heartbeat_idempotent(tmp_path: Path) -> None:
 
 def test_cli_accepts_all_flags(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     config = tmp_path / "cfg.yaml"
-    config.write_text("plane:\n  base_url: http://x\n  api_token_env: X\n  workspace_slug: ws\n  project_id: p\ngit:\n  provider: github\nkodo: {}\nrepos: {}\n")
+    config.write_text("plane:\n  base_url: http://x\n  api_token_env: X\n  workspace_slug: ws\n  project_id: p\ngit:\n  provider: github\nrepos: {}\n")
 
     monkeypatch.setenv("X", "token")
 

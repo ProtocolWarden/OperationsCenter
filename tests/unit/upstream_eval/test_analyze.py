@@ -51,7 +51,7 @@ def test_recurring_low_impact_friction_does_not_auto_recommend_patch() -> None:
     evaluator = UpstreamPatchEvaluator.default()
     evidence = [
         _evidence(
-            upstream_target="kodo",
+            upstream_target="team_executor",
             issue_key="wrapper_flag_verbosity",
             category=PatchCandidateCategory.ERGONOMIC_SIMPLIFICATION,
             summary="Wrapper setup is mildly verbose.",
@@ -85,7 +85,7 @@ def test_recurring_high_impact_strong_evidence_can_produce_patch_proposal() -> N
 def test_weak_evidence_leads_to_conservative_output() -> None:
     evaluator = UpstreamPatchEvaluator.default()
     report = evaluator.analyze([
-        _evidence(upstream_target="archon", issue_key="provider_surface_gap", sample_size=1, occurrence_count=1)
+        _evidence(upstream_target="generic_backend", issue_key="provider_surface_gap", sample_size=1, occurrence_count=1)
     ])
     assert report.friction_findings[0].evidence_strength == EvidenceStrength.WEAK
     assert report.recommendations == []

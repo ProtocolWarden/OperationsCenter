@@ -1,8 +1,8 @@
 {
-  "description": "Moderate kodo ergonomic issue that should stay in the adapter layer",
+  "description": "Moderate team_executor ergonomic issue that should stay in the adapter layer",
   "evidence": [
     {
-      "upstream_target": "kodo",
+      "upstream_target": "team_executor",
       "issue_key": "wrapper_complexity",
       "category": "ergonomic_simplification",
       "source_type": "wrapper_complexity",

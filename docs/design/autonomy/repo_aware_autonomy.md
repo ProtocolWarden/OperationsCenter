@@ -40,10 +40,10 @@ The observer collects eleven categories of factual signal:
 | git branch context | local git |
 | recent commits | local git |
 | file hotspots | local git history |
-| test status | retained kodo artifacts |
+| test status | retained execution artifacts |
 | dependency drift | retained dependency-check artifacts |
 | TODO/FIXME summary | local file scan |
-| execution health | retained kodo_plane artifacts |
+| execution health | retained execution artifacts |
 | lint violations | `ruff check` |
 | type errors | `ty` or `mypy` |
 | CI check history | GitHub API |
@@ -81,7 +81,7 @@ Tiers are configured via `config/autonomy_tiers.json` and managed with:
 The autonomy layer closes a feedback loop through the reviewer watcher and the self-tuning regulator:
 
 ```text
-[Plane tasks execute] -> [kodo_plane artifacts written]
+[Plane tasks execute] -> [execution artifacts written]
                                     ↓
                     [ExecutionArtifactCollector + ValidationHistoryCollector]
                                     ↓

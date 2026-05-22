@@ -23,7 +23,6 @@ def test_smoke_entrypoint_writes_retained_plane_payload(
                 "  project_id: proj",
                 "git:",
                 "  provider: github",
-                "kodo: {}",
                 "repos: {}",
                 f"report_root: {tmp_path / 'reports'}",
             ]

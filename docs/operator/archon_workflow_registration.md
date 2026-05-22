@@ -1,5 +1,9 @@
 # Archon workflow registration playbook
 
+> **Historical.** Archon has been removed from the platform. This runbook is
+> retained for reference only. The current execution backend is TeamExecutor.
+> See `src/operations_center/backends/team_executor/` for the live implementation.
+
 > Operator runbook. No OC code changes are required to follow this playbook.
 > Closes the "what the live container could not validate" line in
 > `.console/validation/post_extraction_runtime_2026-05-08-rev3.md`.

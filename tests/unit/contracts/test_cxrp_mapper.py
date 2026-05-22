@@ -233,7 +233,7 @@ def test_ecp_lane_decision_alternatives_become_structured():
 
 def test_to_cxrp_execution_request_validates_against_schema():
     req = _make_request("p-1", "d-1")
-    cxrp = to_cxrp_execution_request(req, executor="claude_cli", backend="kodo")
+    cxrp = to_cxrp_execution_request(req, executor="claude_cli", backend="team_executor")
     payload = cxrp.to_dict()
     payload["lane"] = payload["lane"].value if hasattr(payload["lane"], "value") else payload["lane"]
     validate_contract("execution_request", payload)
@@ -242,13 +242,13 @@ def test_to_cxrp_execution_request_validates_against_schema():
 
 def test_execution_request_input_payload_validates_against_lane_schema():
     req = _make_request("p-1", "d-1")
-    cxrp = to_cxrp_execution_request(req, executor="claude_cli", backend="kodo")
+    cxrp = to_cxrp_execution_request(req, executor="claude_cli", backend="team_executor")
     assert cxrp.input_payload_schema == CODING_AGENT_INPUT_SCHEMA_ID
     validate_payload(cxrp.input_payload_schema, cxrp.input_payload)
 
 
 def test_execution_request_limits_are_universal():
-    cxrp = to_cxrp_execution_request(_make_request("p", "d"), executor="claude_cli", backend="kodo")
+    cxrp = to_cxrp_execution_request(_make_request("p", "d"), executor="claude_cli", backend="team_executor")
     assert cxrp.limits is not None
     assert cxrp.limits.max_changed_files == 25
     assert cxrp.limits.timeout_seconds == 600

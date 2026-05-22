@@ -56,9 +56,9 @@ def test_record_result_matches_input(svc, successful_rich_result):
 
 
 def test_backend_propagated(svc, successful_rich_result):
-    record, trace = svc.observe(successful_rich_result, backend="kodo")
-    assert record.backend == "kodo"
-    assert "kodo" in trace.headline
+    record, trace = svc.observe(successful_rich_result, backend="team_executor")
+    assert record.backend == "team_executor"
+    assert "team_executor" in trace.headline
 
 
 def test_lane_propagated(svc, successful_rich_result):

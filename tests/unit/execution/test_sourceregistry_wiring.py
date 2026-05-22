@@ -48,7 +48,7 @@ def test_provenance_from_registry_resolves_real_team_executor_entry(monkeypatch,
     """The shipped registry/source_registry.yaml must resolve `team_executor` to
     its ProtocolWarden fork.
 
-    ADR 0005: kodo replaced by team_executor.
+    ADR 0005: team_executor is the active backend.
     NOTE: This test currently expects None because registry/source_registry.yaml
     is formatted for the new source_registry library version that requires
     expected_sha and uses different install_kind values. Until the registry YAML
@@ -161,7 +161,7 @@ def test_request_builder_bound_target_provenance_none_for_unregistered_backend(
 def test_provenance_appears_on_execution_record_metadata_and_trace(monkeypatch) -> None:
     """Validates that provenance (when present) surfaces on record.metadata and trace.
 
-    ADR 0005: Uses openclaw backend as kodo/archon no longer exist in OC BackendName.
+    ADR 0005: Uses openclaw backend for testing registry provenance.
     Registry provenance may be None due to registry format incompatibility —
     but the coordinator path still executes cleanly.
     """

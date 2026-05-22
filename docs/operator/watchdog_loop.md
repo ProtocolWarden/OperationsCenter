@@ -142,9 +142,9 @@ Before starting the loop, confirm:
    scripts/operations-center.sh watch-all-status   # all 8 must show running
    ```
 4. **Runtime model is low-cost** (sonnet/haiku, not opus):
-   - `config/operations_center.local.yaml` → `kodo.orchestrator: claude-code:sonnet`
+   - `config/operations_center.local.yaml` → `team_executor.orchestrator: claude-code:sonnet`
    - `config/runtime_binding_policy.yaml` → refactor + feature rules → `model: sonnet`
-5. **kodo max_concurrent = 1** — verify in `config/operations_center.local.yaml`
+5. **team_executor max_concurrent = 1** — verify in `config/operations_center.local.yaml`
 
 ---
 
@@ -187,10 +187,10 @@ git status --short | head -10
 grep "orchestrator:" config/operations_center.local.yaml
 grep "model:" config/runtime_binding_policy.yaml | head -5
 
-# 10. kodo concurrency
+# 10. executor concurrency
 python3 -c "import yaml; d=yaml.safe_load(open('config/operations_center.local.yaml')); \
-  mc=d.get('backend_caps',{}).get('kodo',{}).get('max_concurrent'); \
-  print('✓ kodo max_concurrent=1' if mc==1 else f'✗ kodo max_concurrent={mc}')"
+  mc=d.get('backend_caps',{}).get('team_executor',{}).get('max_concurrent'); \
+  print('✓ team_executor max_concurrent=1' if mc==1 else f'✗ team_executor max_concurrent={mc}')"
 ```
 
 ---
@@ -247,7 +247,7 @@ Sync all repos:
     dir="/home/dev/Documents/GitHub/$repo"
     [ -d "$dir/.git" ] && echo "$repo: $(git -C "$dir" pull --ff-only 2>&1 | tail -1)"
   done
-Then confirm: Plane at http://localhost:8080, PlatformDeployment/SwitchBoard at http://localhost:20401/health, all 8 OC watchers running, .venv CLIs present, runtime low-cost policy (sonnet/haiku), kodo max_concurrent=1 in config, working tree state via git status.
+Then confirm: Plane at http://localhost:8080, PlatformDeployment/SwitchBoard at http://localhost:20401/health, all 8 OC watchers running, .venv CLIs present, runtime low-cost policy (sonnet/haiku), team_executor max_concurrent=1 in config, working tree state via git status.
 
 STEP 1 — INVESTIGATE (run in parallel where safe):
   .venv/bin/operations-center-custodian-sweep --config config/operations_center.local.yaml --emit
@@ -268,10 +268,10 @@ If root cause is determinable from these logs, include it directly in the task o
   journalctl -k --since "2h ago" 2>/dev/null | grep -iE "killed|oom" | tail -20
   # System memory at time of investigation
   free -h
-  # Most recent kodo stderr artifacts (written when kodo fails)
-  find logs/ -name "kodo-stderr.log" 2>/dev/null | sort -t/ -k1 | tail -3 | \
+  # Most recent executor stderr artifacts (written when executor fails)
+  find logs/ -name "executor-stderr.log" 2>/dev/null | sort -t/ -k1 | tail -3 | \
     xargs -I{} sh -c 'echo "=== {} ==="; tail -40 "{}"'
-This investigation applies to ALL backends (kodo, archon, aider) — not just kodo. Any executor
+This investigation applies to ALL backends (team_executor, openclaw, aider) — not just one. Any executor
 that exits with a signal or unexpected code should be investigated the same way.
 
 STEP 2 — TRIAGE:
@@ -474,13 +474,13 @@ FORWARD PROGRESS CHECK — before classifying as temporarily-blocked, confirm at
 If none apply and remediation is actively running, classify as stagnation, not temporary delay.
 
 KNOWN OPEN ISSUES (carry forward until resolved, remove when closed):
-- 9c7f4bb9: kodo SIGKILL (-9) confirmed. kodo exited -9 at "Analyzing project and creating plan".
+- 9c7f4bb9: executor SIGKILL (-9) confirmed. Executor exited -9 at "Analyzing project and creating plan".
   Hypothesis: time-of-day resource exhaustion, not task complexity. Root cause not yet determined.
-  Investigate via STEP 1 EXECUTOR FAILURE INVESTIGATION (dmesg, journalctl, free -h, kodo-stderr).
+  Investigate via STEP 1 EXECUTOR FAILURE INVESTIGATION (dmesg, journalctl, free -h, executor-stderr).
   In training mode, OC tasks and ShippingForm (2b5ff37e) MAY be re-queued once investigation
   identifies root cause and confirms safe retry conditions. Do not re-queue blindly before that.
 - Campaign 10c50210: STALLED. AgentTopology Done (v0.3.0). ShippingForm (2b5ff37e) Blocked (SIGKILL'd).
-  ShippingForm may be re-queued after kodo SIGKILL root cause is determined.
+  ShippingForm may be re-queued after executor SIGKILL root cause is determined.
   Test/Improve Backlog tasks (3fd02e75, 60390297, 6e32031c, d126bc51) remain phase-gated until
   ShippingForm reaches Done.
 
@@ -521,7 +521,7 @@ If any condition fails → create/update Plane task, skip direct fix.
 STEP 6 — DIRECT FIXES (only if loop owns the lock):
 For each affected repo that passes the execution gate, run one at a time:
   scripts/operations-center.sh autonomy-cycle --config config/operations_center.local.yaml --execute --repo <path>
-Respect kodo max_concurrent=1 — do not dispatch two repos simultaneously.
+Respect team_executor max_concurrent=1 — do not dispatch two repos simultaneously.
 
 TRAINING MODE — OC SELF-MODIFICATION:
 In training mode (sandbox_base_branch = operations-center-testing-branch), the self_repo_key repo
@@ -770,7 +770,7 @@ Append one block per completed cycle to `.console/log.md`:
 | **Park evaluation** | STALLED classification + evidence check | Evaluate STALLED→PARKED transition; check unpark conditions if already parked |
 | **Convergence promotion** | Loop history + watcher mapping | Identify repeated loop-only judgments; create Plane tasks for watcher ownership |
 | Execution gate | Criteria check + stagnation/convergence check | Gate direct fixes; route rest to Plane |
-| Direct fixes | `autonomy-cycle --execute` per repo | One repo at a time; kodo max_concurrent=1 |
+| Direct fixes | `autonomy-cycle --execute` per repo | One repo at a time; team_executor max_concurrent=1 |
 | Invariants | `pytest er000_phase0_golden` + targeted | Plane task on failure |
 | Watcher health | `watch-all-status` + log grep | Anti-flap classification; restart if safe |
 | Log | `.console/log.md` structured block | One summary per cycle with all stagnation + promotion fields |
@@ -792,7 +792,7 @@ The loop must **never** do the following without explicit operator approval:
 - Changing secrets or credentials
 - Modifying ADRs (`docs/architecture/adr/`)
 - Changing runtime model policy (`config/runtime_binding_policy.yaml`)
-- Widening `kodo max_concurrent` beyond 1
+- Widening `team_executor max_concurrent` beyond 1
 - Replacing `ScheduleWakeup` with cron/systemd/daemon behavior
 
 **Regression revert procedure** (when `check-regressions` confirms a regression):
@@ -902,14 +902,15 @@ Any of these triggers a return to full investigation:
 
 ---
 
-## Canonical Example: kodo SIGKILL (9c7f4bb9)
+## Canonical Example: executor SIGKILL (9c7f4bb9)
 
 This section documents the SIGKILL block that ran for ~179 cycles (2026-05 session) as a
-reference for future operator-blocked situations.
+reference for future operator-blocked situations. (Note: "kodo" in the original incident
+logs refers to the old executor binary, now replaced by TeamExecutor.)
 
 ### What Happened
 
-- kodo exited -9 (SIGKILL) at "Analyzing project and creating plan" regardless of task scope
+- The executor exited -9 (SIGKILL) at "Analyzing project and creating plan" regardless of task scope
 - Both OC improve tasks and bounded CxRP tasks (ShippingForm) reproduced the pattern
 - Root cause hypothesis: time-of-day resource exhaustion (confirmed by AgentTopology succeeding
   at 20:22Z, ShippingForm SIGKILL'd at 23:46Z)
@@ -935,7 +936,7 @@ evolution, NEW_EVIDENCE_DETECTED=no for 2 consecutive cycles):
 
 ### Safe Retry Condition for This Case
 
-`kodo SIGKILL resolved` — operator must diagnose and fix kodo resource exhaustion before
+`executor SIGKILL resolved` — operator must diagnose and fix executor resource exhaustion before
 any blocked improve tasks or ShippingForm can be re-queued.
 
 ---

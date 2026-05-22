@@ -35,7 +35,7 @@ What actually happened. Include the execution stage where it failed:
 - OS: 
 - Python version: 
 - OperationsCenter version / commit: 
-- Adapter in use (kodo / archon / openclaw / direct_local): 
+- Adapter in use (team_executor / openclaw / direct_local / aider_local): 
 
 ## Relevant Output
 

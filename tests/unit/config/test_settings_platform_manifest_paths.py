@@ -20,9 +20,6 @@ plane:
 git:
   token_env: GH_TOKEN
 
-kodo:
-  binary: kodo
-
 repos:
   Demo:
     clone_url: git@example.com:demo.git

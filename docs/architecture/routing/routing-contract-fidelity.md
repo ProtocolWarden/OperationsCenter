@@ -5,11 +5,11 @@
 SwitchBoard policy already routed to values such as:
 
 - `direct_local`
-- `kodo`
-- `archon_then_kodo`
+- `team_executor`
+- `dag_executor`
 - `openclaw`
 
-The old contract narrowed `LaneDecision.selected_backend` and silently rewrote unknown values to `kodo`, which made the canonical routing output untrustworthy.
+The old contract narrowed `LaneDecision.selected_backend` and silently rewrote unknown values to a single backend name, which made the canonical routing output untrustworthy.
 
 ## Current Rule
 
@@ -23,7 +23,7 @@ Selector behavior is now:
 
 Selector behavior is no longer:
 
-- emit `kodo` as a lossy fallback for unsupported backend values
+- emit a single backend name as a lossy fallback for unsupported backend values
 
 ## Routing Outputs
 

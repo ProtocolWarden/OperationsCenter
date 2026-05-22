@@ -23,11 +23,11 @@ This is the fastest check when polling is not finding work.
 ./scripts/operations-center.sh smoke --task-id TASK-123 --comment-only
 ```
 
-Use this to verify Plane fetch/comment behavior without running a full Kodo task.
+Use this to verify Plane fetch/comment behavior without running a full execution task.
 
 Retained smoke artifacts are written under:
 
-- `tools/report/kodo_plane/<timestamp>_<task_id>_<run_id>/`
+- `tools/report/execution_plane/<timestamp>_<task_id>_<run_id>/`
 
 ## Providers Status
 
@@ -143,7 +143,7 @@ Requires `cost_per_execution_usd` to be set in config (default 0.0 = disabled).
 
 ## Circuit Breaker Diagnosis
 
-When a systemic failure (bad kodo version, auth regression) causes every execution to fail, the circuit breaker opens to prevent burning the full daily budget. Look for:
+When a systemic failure (bad executor version, auth regression) causes every execution to fail, the circuit breaker opens to prevent burning the full daily budget. Look for:
 
 ```
 {"event": "budget_decision", "allowed": false, "reason": "circuit_breaker_open", ...}
@@ -205,29 +205,29 @@ Each entry has `reason`, `task_id`, `task_title`, and `recorded_at`. These are c
 
 ## Quality Erosion Warnings
 
-After each Kodo run, the execution service scans the diff for quality-suppressing additions:
+After each executor run, the execution service scans the diff for quality-suppressing additions:
 
 - `# noqa` annotations
 - `# type: ignore` annotations
 - bare `pass` statements
 
-When the combined total reaches or exceeds 3, a `kodo_quality_warning` event is written to the usage store and a note is appended to the PR comment:
+When the combined total reaches or exceeds 3, an `executor_quality_warning` event is written to the usage store and a note is appended to the PR comment:
 
 ```
 > [quality] This run added N quality suppressions: {"noqa": N, "type_ignore": N}. Review before merging.
 ```
 
-To audit suppression trends, filter the usage store for `"kind": "kodo_quality_warning"` entries. These are tracked for observability only — they do not affect task status.
+To audit suppression trends, filter the usage store for `"kind": "executor_quality_warning"` entries. These are tracked for observability only — they do not affect task status.
 
 ## Scope Violation Observability
 
-When `allowed_paths` is configured and a Kodo run modifies files outside the allowed set, the policy is enforced (changes are not pushed) and a `scope_violation` event is written to the usage store. Fields include `violated_files` and `repo_key`.
+When `allowed_paths` is configured and an executor run modifies files outside the allowed set, the policy is enforced (changes are not pushed) and a `scope_violation` event is written to the usage store. Fields include `violated_files` and `repo_key`.
 
 Filter for `"kind": "scope_violation"` in `tools/report/operations_center/execution/usage.json` to see which tasks have exceeded their path budget. Recurring violations may indicate the `allowed_paths` config is too narrow for the goal.
 
 ## Quota Exhaustion Detection
 
-Hard quota exhaustion from the Kodo orchestrator (e.g. Anthropic API quota exceeded) is detected separately from rate limiting. When detected:
+Hard quota exhaustion from the executor orchestrator (e.g. Anthropic API quota exceeded) is detected separately from rate limiting. When detected:
 
 - a `quota_event` is written to the usage store (does **not** feed the circuit breaker)
 - the task is moved to `Blocked` with `blocked_classification: quota_exhausted`
@@ -246,13 +246,13 @@ See the [Disk Space Guardrail](../operator/runtime.md#disk-space-guardrail) sect
 |---------------|---------|-----------------|
 | `scope_policy` | `allowed_paths` violation | policy-retry fired |
 | `oom` | Out of memory / killed | investigate memory pressure |
-| `timeout` | Process timed out | increase `kodo.timeout_seconds` or split task |
+| `timeout` | Process timed out | increase `executor.timeout_seconds` or split task |
 | `model_error` | API 5xx / overloaded | transient; retry usually succeeds |
 | `context_limit` | Token limit exceeded | split task with `prior_progress` handoff |
 | `dependency_missing` | ModuleNotFoundError / command not found | fix bootstrap |
 | `flaky_test` | Known-flaky command | stabilise the test |
 | `validation_failure` | Tests / lint fail | investigate test output |
-| `awaiting_input` | Kodo embedded `<!-- cp:question: ... -->` | human must reply; improve watcher re-queues automatically |
+| `awaiting_input` | Executor embedded `<!-- cp:question: ... -->` | human must reply; improve watcher re-queues automatically |
 | `tool_failure` | Bash/git tool error | investigate tool configuration |
 | `infra_tooling` | Auth / missing file | fix credentials or environment |
 | `unknown` | None of the above | investigate stderr |
@@ -318,7 +318,7 @@ Campaign records are stored in `state/campaigns.json`. Each record contains `cam
 
 ## Awaiting-Input Tasks
 
-When Kodo embeds `<!-- cp:question: ... -->` in its output, the task is classified as `awaiting_input` and blocked. The improve watcher:
+When the executor embeds `<!-- cp:question: ... -->` in its output, the task is classified as `awaiting_input` and blocked. The improve watcher:
 
 1. Extracts the question text from the HTML comment.
 2. Posts it as a Plane comment asking for human input.
@@ -359,14 +359,14 @@ If you find `.review/` directories or `*_verdict.txt` files in unexpected locati
 find $HOME -maxdepth 2 -name '*verdict*' -o -name '.review' -type d 2>/dev/null
 ```
 
-The root cause of stray verdicts is either an old kodo run that predates the absolute-path fix, or a supervisor that was not starting the worker process from `ROOT_DIR`. Both are fixed; this should not recur.
+The root cause of stray verdicts is either an old executor run that predates the absolute-path fix, or a supervisor that was not starting the worker process from `ROOT_DIR`. Both are fixed; this should not recur.
 
 ## Suggested Debugging Order
 
 1. `watch-all-status`
 2. watcher log in `logs/local/watch-all/`
 3. Plane comments on the task
-4. retained artifact directory in `tools/report/kodo_plane/`
+4. retained artifact directory in `tools/report/execution_plane/`
 5. `plane-doctor` if the board/API contract looks wrong
 6. heartbeat check: `python -m operations_center.entrypoints.worker.main heartbeat-check`
 7. supervisor status: `cat logs/local/supervisor.status.json` (if using supervisor)
@@ -375,12 +375,12 @@ The root cause of stray verdicts is either an old kodo run that predates the abs
 10. circuit breaker: look for `reason: circuit_breaker_open` in watcher log; check for `circuit_breaker_escalation_sent`
 11. connection backoff: look for `watch_error` with `consecutive_errors > 1` in watcher log
 12. quota exhaustion: look for `"kind": "quota_event"` in usage store
-13. quality erosion: look for `"kind": "kodo_quality_warning"` in usage store
+13. quality erosion: look for `"kind": "executor_quality_warning"` in usage store
 14. scope violations: look for `"kind": "scope_violation"` in usage store
 15. board saturation: look for `"event": "propose_skipped_board_saturated"` in propose watcher log
 16. propose backlog gate: look for `"event": "watch_propose_skipped_backlog"` in propose watcher log — board has ≥ `propose_skip_when_ready_count` ready tasks
-17. kodo concurrency gate: look for `"event": "watch_skip_kodo_gate"` with `"reason": "kodo_concurrency_cap"` — another kodo run is active
-18. memory gate: look for `"event": "watch_skip_kodo_gate"` with `"reason": "low_memory"` — less than `min_kodo_available_mb` free
+17. executor concurrency gate: look for `"dispatch skipped"` with `"reason": "concurrency_cap"` — another executor run is active
+18. memory gate: look for `"dispatch skipped"` with `"reason": "low_memory"` — less than `backend_caps.team_executor.min_available_memory_mb` free
 19. self-healing: look for `self_healing_repeated_block` events in improve watcher log
 20. credential expiry: look for `credential_expiry_soon` in watcher log at cycle 1
 21. cross-repo impact: look for `cross_repo_impact_detected` in goal watcher log

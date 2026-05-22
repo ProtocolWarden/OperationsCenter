@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-"""Regression tests for scope policy edge cases (kodo test)."""
+"""Regression tests for scope policy edge cases."""
 from operations_center.application.scope_policy import ChangedFilePolicyChecker
 
 

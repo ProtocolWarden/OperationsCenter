@@ -41,7 +41,6 @@ def _write_config(tmp_path: Path) -> Path:
                 "  workspace_slug: ws",
                 "  project_id: proj",
                 "git: {}",
-                "kodo: {}",
                 "repos:",
                 "  operations-center:",
                 "    clone_url: git@github.com:ProtocolWarden/OperationsCenter.git",
@@ -173,7 +172,7 @@ def test_test_signal_and_dependency_drift_collectors(tmp_path: Path) -> None:
         json.dumps(
             {
                 "statuses": [
-                    {"key": "kodo", "notes": ["Pinned version differs"]},
+                    {"key": "team_executor", "notes": ["Pinned version differs"]},
                     {"key": "plane", "notes": []},
                 ],
                 "created_task_ids": ["TASK-1"],

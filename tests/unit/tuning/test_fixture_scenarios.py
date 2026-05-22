@@ -115,9 +115,9 @@ class TestPremiumBackendWins:
             make_failure(backend="dag_executor", lane="claude_cli", task_type="refactor", run_id="arch-7")
         ]
         team = [
-            make_success(backend="team_executor", lane="aider_local", task_type="refactor", run_id="kodo-0")
+            make_success(backend="team_executor", lane="aider_local", task_type="refactor", run_id="team_executor-0")
         ] + [
-            make_failure(backend="team_executor", lane="aider_local", task_type="refactor", run_id=f"kodo-{i}")
+            make_failure(backend="team_executor", lane="aider_local", task_type="refactor", run_id=f"team_executor-{i}")
             for i in range(1, 8)
         ]
         return dag + team

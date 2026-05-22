@@ -13,9 +13,9 @@ it to ``CoreRunner`` (which routes ``runtime_kind="manual"`` to a
 receives an RxP ``RuntimeResult`` back, and assembles the
 ``OpenClawRunCapture`` for the normalizer.
 
-Phase 2 + 3 of the OC runtime extraction applied to openclaw. Same
-shape as archon's manual-kind path: openclaw is dispatched to an
-external runner subclass, not run as a subprocess by OC.
+Phase 2 + 3 of the OC runtime extraction applied to openclaw.
+Openclaw is dispatched to an external runner subclass, not run as a
+subprocess by OC.
 
 Single-threaded by design: concurrent invokes would race on the
 registered "manual" runner.

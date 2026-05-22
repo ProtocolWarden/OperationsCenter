@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-"""Regression tests for insight derivers and evidence bundle (kodo test)."""
+"""Regression tests for insight derivers and evidence bundle."""
 
 
 def test_insight_engine_empty_snapshots():

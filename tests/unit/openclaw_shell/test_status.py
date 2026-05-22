@@ -38,7 +38,7 @@ _recorder = ExecutionRecorder()
 _builder = RunReportBuilder()
 
 
-def _make_record_and_trace(result, backend="kodo", lane="claude_cli"):
+def _make_record_and_trace(result, backend="team_executor", lane="claude_cli"):
     record = _recorder.record(result, backend=backend, lane=lane)
     trace = _builder.build_report(record)
     return record, trace
@@ -68,7 +68,7 @@ def _failed_result(**kw):
         status=ExecutionStatus.FAILED,
         success=False,
         failure_category=FailureReasonCategory.BACKEND_ERROR,
-        failure_reason="kodo exited 1: tool call failed",
+        failure_reason="executor exited 1: tool call failed",
         **kw,
     )
 
@@ -120,10 +120,10 @@ def test_status_from_record_summary_from_trace():
 
 
 def test_status_from_record_lane_backend():
-    record, trace = _make_record_and_trace(_success_result(), backend="kodo", lane="claude_cli")
+    record, trace = _make_record_and_trace(_success_result(), backend="team_executor", lane="claude_cli")
     summary = status_from_record(record, trace)
     assert summary.selected_lane == "claude_cli"
-    assert summary.selected_backend == "kodo"
+    assert summary.selected_backend == "team_executor"
 
 
 def test_status_from_record_recorded_at_set():
@@ -174,7 +174,7 @@ def test_status_from_record_is_frozen():
 
 def test_status_from_result_only_returns_summary():
     result = _success_result()
-    summary = status_from_result_only(result, lane="claude_cli", backend="kodo")
+    summary = status_from_result_only(result, lane="claude_cli", backend="team_executor")
     assert isinstance(summary, ShellStatusSummary)
 
 
@@ -202,13 +202,13 @@ def test_status_from_result_only_failure():
 
 def test_status_from_result_only_headline_contains_status():
     result = _success_result()
-    summary = status_from_result_only(result, lane="claude_cli", backend="kodo")
+    summary = status_from_result_only(result, lane="claude_cli", backend="team_executor")
     assert "SUCCEEDED" in summary.headline.upper()
 
 
 def test_status_from_result_only_headline_contains_run_id():
     result = _success_result()
-    summary = status_from_result_only(result, lane="claude_cli", backend="kodo")
+    summary = status_from_result_only(result, lane="claude_cli", backend="team_executor")
     assert "run-s01"[:8] in summary.headline
 
 
@@ -221,9 +221,9 @@ def test_status_from_result_only_no_lane_backend():
 
 def test_status_from_result_only_with_lane_backend():
     result = _success_result()
-    summary = status_from_result_only(result, lane="aider_local", backend="kodo")
+    summary = status_from_result_only(result, lane="aider_local", backend="team_executor")
     assert summary.selected_lane == "aider_local"
-    assert summary.selected_backend == "kodo"
+    assert summary.selected_backend == "team_executor"
 
 
 def test_status_from_result_only_recorded_at_none():
@@ -281,7 +281,7 @@ def test_status_from_result_only_artifact_count():
 def test_status_from_result_only_failure_reason_in_summary():
     result = _failed_result()
     summary = status_from_result_only(result)
-    assert "kodo exited 1" in summary.summary
+    assert "executor exited 1" in summary.summary
 
 
 def test_status_from_result_only_is_frozen():
@@ -342,10 +342,10 @@ def test_inspection_from_record_record_id_set():
 
 
 def test_inspection_from_record_lane_backend():
-    record, trace = _make_record_and_trace(_success_result(), backend="kodo", lane="claude_cli")
+    record, trace = _make_record_and_trace(_success_result(), backend="team_executor", lane="claude_cli")
     r = inspection_from_record(record, trace)
     assert r.selected_lane == "claude_cli"
-    assert r.selected_backend == "kodo"
+    assert r.selected_backend == "team_executor"
 
 
 def test_inspection_from_record_artifact_count():

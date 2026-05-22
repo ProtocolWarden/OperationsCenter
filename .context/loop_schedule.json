@@ -1,1 +1,1 @@
-{"delay_s": 900, "state": "ACTIVE", "reason": "1 Running task + 14 R4AI queue draining at rate-gate 2/hr; no blocked/stalled work"}
+{"delay_s": 900, "state": "ACTIVE", "reason": "CI fixes pushed (license headers, kodo refs, Python 3.11 compat); 14 Blocked tasks approaching 4h stale threshold; propose temporarily suppressed by duplicate deadlock; all watchers healthy"}

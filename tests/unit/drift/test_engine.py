@@ -34,7 +34,7 @@ def test_finding_has_required_payload_fields():
 class TestRuntimeDrift:
     def test_no_drift_when_observed_matches(self):
         out = detect_runtime_drift(
-            backend_id="kodo", request_id="r",
+            backend_id="team_executor", request_id="r",
             bound_runtime={"kind": "cli_subscription", "model": "opus"},
             observed_runtime={"kind": "cli_subscription", "model": "opus"},
         )
@@ -42,7 +42,7 @@ class TestRuntimeDrift:
 
     def test_drift_when_model_differs(self):
         out = detect_runtime_drift(
-            backend_id="kodo", request_id="r",
+            backend_id="team_executor", request_id="r",
             bound_runtime={"kind": "cli_subscription", "model": "opus"},
             observed_runtime={"kind": "cli_subscription", "model": "sonnet"},
         )
@@ -119,7 +119,7 @@ class TestOutputShapeDrift:
 class TestInternalRoutingDrift:
     def test_no_drift_when_agents_use_pinned_models(self):
         out = detect_internal_routing_drift(
-            backend_id="archon", request_id="r",
+            backend_id="direct_local", request_id="r",
             bound_agent_models={"planner": "opus", "executor": "sonnet"},
             observed_agent_models={"planner": "opus", "executor": "sonnet"},
         )
@@ -127,7 +127,7 @@ class TestInternalRoutingDrift:
 
     def test_drift_when_agent_uses_different_model(self):
         out = detect_internal_routing_drift(
-            backend_id="archon", request_id="r",
+            backend_id="direct_local", request_id="r",
             bound_agent_models={"planner": "opus"},
             observed_agent_models={"planner": "sonnet"},
         )

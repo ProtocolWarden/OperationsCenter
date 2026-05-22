@@ -8,7 +8,7 @@ ENV_PATH="${OPERATIONS_CENTER_ENV_FILE:-${ROOT_DIR}/.env.operations-center.local
 BOOTSTRAP_STAMP="${VENV_DIR}/.operations-center-bootstrap"
 LOG_DIR="${ROOT_DIR}/logs/local"
 WATCH_DIR="${LOG_DIR}/watch-all"
-REPORT_DIR="${ROOT_DIR}/tools/report/kodo_plane"
+REPORT_DIR="${ROOT_DIR}/tools/report/execution_plane"
 PLANE_MANAGER="${ROOT_DIR}/deployment/plane/manage.sh"
 JANITOR_MAX_AGE_DAYS="${OPERATIONS_CENTER_RETENTION_DAYS:-1}"
 WATCHDOG_LOOP_LOCK="${LOG_DIR}/watchdog_loop.lock"
@@ -26,8 +26,8 @@ ensure_venv() {
 }
 
 # Ensure the user-level pip config requires a virtualenv for all pip installs.
-# This prevents kodo's internal bootstrapping (which uses the global Python)
-# from accidentally depositing editable installs in the global site-packages.
+# This prevents any bootstrapping process from accidentally depositing editable
+# installs in the global site-packages.
 # Safe to run repeatedly; skips if require-virtualenv is already set.
 ensure_pip_conf() {
   local pip_conf="${XDG_CONFIG_HOME:-${HOME}/.config}/pip/pip.conf"
@@ -92,7 +92,7 @@ run_janitor() {
 
   find "${LOG_DIR}" -depth -type d -empty -delete >/dev/null 2>&1 || true
 
-  # Clean up stale task branches left in local repo clones by kodo.
+  # Clean up stale task branches left in local repo clones by the executor.
   # Branches matching "task/*" or "cp/*" whose worktrees no longer exist are removed.
   _cleanup_stale_task_branches
 }
@@ -108,10 +108,10 @@ _cleanup_stale_task_branches() {
       [[ "${branch}" == "* "* ]] && continue
       [[ "${branch}" == remotes/* ]] && continue
       # Only prune branches that look like task branches.
-      if [[ "${branch}" =~ ^(task/|cp/|kodo/|plane/) ]]; then
+      if [[ "${branch}" =~ ^(task/|cp/|plane/) ]]; then
         git -C "${repo_dir}" branch -D "${branch}" >/dev/null 2>&1 && ((deleted++)) || true
       fi
-    done < <(git -C "${repo_dir}" branch 2>/dev/null | grep -E '^\s*(task/|cp/|kodo/|plane/)' || true)
+    done < <(git -C "${repo_dir}" branch 2>/dev/null | grep -E '^\s*(task/|cp/|plane/)' || true)
   done
   [[ "${deleted}" -gt 0 ]] && echo "Janitor: removed ${deleted} stale task branch(es)" || true
 }

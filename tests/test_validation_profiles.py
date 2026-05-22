@@ -161,7 +161,6 @@ def _make_settings(tmp_path: Path) -> object:
             "  workspace_slug: ws",
             "  project_id: proj",
             "git: {}",
-            "kodo: {}",
             "repos:",
             "  OperationsCenter:",
             "    clone_url: git@github.com:test/repo.git",

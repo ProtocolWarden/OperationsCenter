@@ -31,7 +31,7 @@ def test_evidence_model_construction() -> None:
 def test_proposal_requires_review_is_enforced() -> None:
     with pytest.raises(ValidationError):
         UpstreamPatchProposal(
-            upstream_target="kodo",
+            upstream_target="team_executor",
             title="x",
             summary="y",
             candidate_class=PatchCandidateCategory.ERGONOMIC_SIMPLIFICATION,

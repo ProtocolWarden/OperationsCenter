@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-"""Wave 5 (kodo quality + escalation) + Wave 6 (priority/scheduling) helpers."""
+"""Wave 5 (execution quality + escalation) + Wave 6 (priority/scheduling) helpers."""
 from __future__ import annotations
 
 import json

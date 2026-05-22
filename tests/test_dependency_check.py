@@ -17,7 +17,7 @@ def test_normalize_version_extracts_semver() -> None:
 
 def test_actionable_statuses_filters_to_items_with_notes() -> None:
     statuses = [
-        DependencyStatus("kodo", "Kodo", "cli", "0.4.1", "0.4.1", "0.4.2", True, []),
+        DependencyStatus("team-executor", "TeamExecutor", "cli", "1.0.0", "1.0.0", "1.1.0", True, []),
         DependencyStatus("codex", "Codex", "provider", "0.117.0", "0.117.0", "0.118.0", True, ["Pinned version differs"]),
     ]
     assert [status.key for status in actionable_statuses(statuses)] == ["codex"]

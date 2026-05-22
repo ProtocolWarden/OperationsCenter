@@ -1,10 +1,8 @@
 # SwitchBoard live verification runbook
 
 > Operator runbook. Closes the "SwitchBoard live verification rev"
-> Verification Gaps backlog item. Companion to
-> `docs/operator/archon_workflow_registration.md` — same verify-only
-> shape: bring service up, prove the integration path, document the
-> failure modes that surfaced.
+> Verification Gaps backlog item. See also
+> `docs/operator/archon_workflow_registration.md` (historical, Archon removed).
 
 OC's in-process SwitchBoard tests (`tests/unit/routing/`) prove the
 schema, the cxrp_mapper round-trip, and the in-memory client. What was
@@ -92,7 +90,7 @@ Expected:
   "schema_version": "0.3",
   "lane": "coding_agent",
   "executor": "codex_cli",
-  "backend": "kodo"
+  "backend": "team_executor"
 }
 ```
 
@@ -158,10 +156,10 @@ unchanged.
 
 - **A live happy-path dispatch under SwitchBoard's decision.** The
   routing tests prove `/route` round-trips correctly. Whether the
-  *backend* SwitchBoard selected (kodo / archon / direct_local) then
+  *backend* SwitchBoard selected (team_executor / direct_local / openclaw) then
   runs successfully is a separate concern — it depends on that
   backend's own infrastructure (LLM credentials, container health,
-  etc.) and is covered by Archon Rev 3 + ADR 0003 follow-ups.
+  etc.) and is covered by ADR 0003 and ADR 0005 follow-ups.
 - **Multi-tenant routing.** SwitchBoard's selector is single-policy
   in this image; multi-policy / per-project policy routing is a
   future concern, not in this image's contract.

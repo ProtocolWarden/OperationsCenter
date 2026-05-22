@@ -27,7 +27,7 @@ small high-value first.
 | 2 — pre-execution validation          | ✅ shipped | 4 | 13 | C8 53→50 |
 | 3 — post-merge regression detection   | ✅ shipped | 3 | 9  | — |
 | 4 — multi-step task planning          | ✅ shipped | 4 | 8  | — |
-| 5 — kodo run quality + escalation     | ✅ shipped | 5 | 9  | — |
+| 5 — executor run quality + escalation | ✅ shipped | 5 | 9  | — |
 | 6 — priority + scheduling scans       | ✅ shipped | 4 | 8  | C8 →43 |
 | Per-section walk (final pass)         | ✅ shipped | 2 | 11 | C8 →33 |
 
@@ -42,8 +42,8 @@ All 2954 pass, ruff clean.
 
 | Helper | Location | Purpose |
 |--------|----------|---------|
-| `_get_kodo_version` | `adapters/kodo/adapter.py` | Module-level shim around `KodoAdapter.get_version` for capture writers / observability |
-| `_is_quota_exhausted_result` | `adapters/kodo/adapter.py` | Module-level shim around `is_quota_exhausted` for non-adapter callers |
+| `_get_kodo_version` | `adapters/team_executor/adapter.py` | Module-level shim around `TeamExecutorAdapter.get_version` for capture writers / observability |
+| `_is_quota_exhausted_result` | `adapters/team_executor/adapter.py` | Module-level shim around `is_quota_exhausted` for non-adapter callers |
 | `_count_quality_suppressions` | `observer/collectors/quality_suppressions.py` | Counts `# noqa` / `# type: ignore` / `pytest.mark.skip` etc. added in a diff |
 | `_check_pr_description_quality` | `adapters/pr_quality.py` | Heuristic score for PR body quality (length, sections, prose vs diff-only) |
 | `_in_maintenance_window` | `maintenance_windows.py` | Extracted from `autonomy_cycle/main.py` so escalation / status pane can reuse it |
@@ -56,13 +56,13 @@ All 2954 pass, ruff clean.
 ## Wave 2 — pre-execution validation infrastructure (needs new feature)
 
 These are all pieces of the same feature: a "pre-flight check" stage that
-runs before kodo. Once the feature lands, ~8 phantoms resolve.
+runs before execution. Once the feature lands, ~8 phantoms resolve.
 
 | Helper | What it does |
 |--------|--------------|
 | `validate_task_pre_execution` | (already in stale_handlers — but the underlying *feature* is missing) |
-| `_check_execution_environment` | verify clone exists, deps satisfied, etc. before kodo |
-| `_collect_open_pr_files` | enumerate files touched by other open PRs, pass to kodo as conflict context |
+| `_check_execution_environment` | verify clone exists, deps satisfied, etc. before execution |
+| `_collect_open_pr_files` | enumerate files touched by other open PRs, pass to executor as conflict context |
 | `_has_conflict_with_active_task` | three-tier conflict detection (running, in-review, recently-merged) |
 | `build_improve_triage_result` | structure improve-mode output for downstream consumers |
 
@@ -101,12 +101,12 @@ Cost: L — depends on dependency tracking (F5 in flow_audit), so probably bundl
 
 ---
 
-## Wave 5 — kodo run quality + escalation
+## Wave 5 — executor run quality + escalation
 
 | Helper | What it does |
 |--------|--------------|
-| `_comment_markdown` | format kodo quality alerts as Plane comments |
-| `_extract_rejection_patterns` | mine recent rejections to seed kodo prompts |
+| `_comment_markdown` | format executor quality alerts as Plane comments |
+| `_extract_rejection_patterns` | mine recent rejections to seed executor prompts |
 | `_load_rejection_patterns_for_proposal` | inject rejection patterns into proposal text |
 | `_escalate_to_human` | emit a structured escalation event |
 | `_process_self_review` | reviewer-side self-review (Phase 1) helpers |

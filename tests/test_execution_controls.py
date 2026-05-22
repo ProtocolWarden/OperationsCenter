@@ -299,12 +299,12 @@ def test_record_execution_outcome_persists_backend_and_version(monkeypatch, tmp_
     ev = next(e for e in data["events"] if e.get("kind") == "execution_outcome")
     assert ev.get("backend") == "team_executor"
     assert ev.get("backend_version") == "0.4.272"
-    # Old kodo-named field never written by the new code.
+    # Old kodo-named field must not be written by the new code.
     assert "kodo_version" not in ev
 
 
 def test_record_execution_outcome_kodo_version_kwarg_is_gone(monkeypatch, tmp_path: Path) -> None:
-    """Full rename: kodo_version kwarg no longer accepted."""
+    """Regression: kodo_version kwarg was removed; must not be accepted."""
     import pytest
     monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
     store = UsageStore()

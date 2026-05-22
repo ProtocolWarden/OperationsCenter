@@ -123,21 +123,21 @@ may emit either shape:
 ```yaml
 # Legacy producer:
 executor: claude_cli
-backend: kodo
+backend: team_executor
 
 # Phase 2 producer:
 execution_target:
   lane: coding_agent
   executor: claude_cli
-  backend: kodo
+  backend: team_executor
 
 # Both at once (SwitchBoard does this for transition):
 executor: claude_cli
-backend: kodo
+backend: team_executor
 execution_target:
   lane: coding_agent
   executor: claude_cli
-  backend: kodo
+  backend: team_executor
 ```
 
 Consumer rule: **prefer `execution_target` when present**, fall back to

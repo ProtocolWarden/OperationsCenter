@@ -60,7 +60,7 @@ aider_local:
 
 ## Factory registration
 
-The adapter is always registered in `CanonicalBackendRegistry.from_settings()`. No optional argument is required (unlike `archon` or `openclaw`).
+The adapter is always registered in `CanonicalBackendRegistry.from_settings()`. No optional argument is required (unlike `openclaw`).
 
 ## Prerequisites
 

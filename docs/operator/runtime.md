@@ -60,8 +60,8 @@ This repo runs as a local polling workflow.
 - polls open PRs tracked in `state/pr_reviews/` every 60 seconds (configurable via `OPERATIONS_CENTER_WATCH_INTERVAL_REVIEW_SECONDS`)
 - only active for repos with `await_review: true` in config
 - drives the two-phase review loop:
-  - **self-review phase**: kodo evaluates its own diff and either merges (LGTM) or revises and retries
-  - **human review phase**: responds to human comments with kodo revision passes; merges on 👍 or 1-day timeout
+  - **self-review phase**: the executor evaluates its own diff and either merges (LGTM) or revises and retries
+  - **human review phase**: responds to human comments with executor revision passes; merges on 👍 or 1-day timeout
 - ignores comments from accounts listed in `reviewer.bot_logins` and comments carrying the `<!-- operations-center:bot -->` marker
 - on startup, backfills state files for any open PRs that pre-date the watcher
 - auto-merges autonomy PRs when every failing CI check matches a `ci_ignored_checks` pattern (pre-existing failures, not caused by the PR)
@@ -105,7 +105,7 @@ On the first cycle of each run, watchers perform two cleanup passes before polli
 
 1. **Stale running task reconciliation** — tasks that have been in `Running` state for more than 15 minutes are re-queued to `Ready for AI`. This is a shorter TTL than the normal 120-minute running timeout and is intentional: if the system just restarted, tasks that were running against now-dead workers should be re-claimed quickly. The short TTL only applies on cycle 1.
 
-2. **Orphaned workspace cleanup** — `/tmp/oc-task-*` directories not referenced by any live process are deleted. These accumulate when kodo workers are killed mid-run (OOM, SIGKILL, power cycle). Deleted paths are logged as `watch_cleanup_orphaned_workspaces`.
+2. **Orphaned workspace cleanup** — `/tmp/oc-task-*` directories not referenced by any live process are deleted. These accumulate when executor workers are killed mid-run (OOM, SIGKILL, power cycle). Deleted paths are logged as `watch_cleanup_orphaned_workspaces`.
 
 Periodic orphan cleanup also runs automatically every 20 cycles for goal, test, and improve watchers — no operator action required.
 
@@ -151,31 +151,35 @@ Slot 0 is the primary slot and runs all periodic scans (heartbeat, improve sub-s
 
 ## Resource Throttling
 
-The goal and test watchers self-throttle before launching Kodo to avoid overloading the machine.
+The goal and test watchers self-throttle before launching the executor to avoid overloading the machine.
 
-### Kodo Concurrency Gate
+### Executor Concurrency Gate
 
-Before each execution the watcher counts live `kodo` processes in `/proc/*/cmdline`. If the count equals or exceeds `max_concurrent_kodo`, the cycle is skipped (housekeeping still runs). The default is 1 — only one Kodo instance at a time on the machine.
+Before each execution the watcher counts live executor processes in `/proc/*/cmdline`. If the count equals or exceeds `backend_caps.team_executor.max_concurrent`, the cycle is skipped (housekeeping still runs). The default is 1 — only one executor instance at a time on the machine.
 
 ```yaml
-max_concurrent_kodo: 2   # allow two parallel kodo runs (e.g. 2 repos)
+backend_caps:
+  team_executor:
+    max_concurrent: 2   # allow two parallel executor runs (e.g. 2 repos)
 ```
 
 Set to 0 to disable the check.
 
-Look for `watch_skip_kodo_gate` with `"reason": "kodo_concurrency_cap"` in the watcher log when the gate fires.
+Look for `"dispatch skipped"` with `"reason": "concurrency_cap"` in the watcher log when the gate fires.
 
 ### Memory Gate
 
-Before each execution the watcher reads `MemAvailable` from `/proc/meminfo`. If available memory is below `min_kodo_available_mb`, the cycle is skipped. The default is 400 MB.
+Before each execution the watcher reads `MemAvailable` from `/proc/meminfo`. If available memory is below `backend_caps.team_executor.min_available_memory_mb`, the cycle is skipped. The default is 400 MB.
 
 ```yaml
-min_kodo_available_mb: 600   # require at least 600 MB free before launching kodo
+backend_caps:
+  team_executor:
+    min_available_memory_mb: 600   # require at least 600 MB free before launching the executor
 ```
 
 Set to 0 to disable the check.
 
-Look for `watch_skip_kodo_gate` with `"reason": "low_memory"` when the gate fires.
+Look for `"dispatch skipped"` with `"reason": "low_memory"` in the watcher log when the gate fires.
 
 ### Propose Backlog Gate
 
@@ -199,7 +203,7 @@ python -m operations_center.entrypoints.worker.main spend-report
 python -m operations_center.entrypoints.worker.main spend-report --window-days 7
 ```
 
-Cost tracking requires `cost_per_execution_usd` to be set in config (default 0.0 = disabled). The value is operator-supplied; OperationsCenter does not parse Kodo billing output.
+Cost tracking requires `cost_per_execution_usd` to be set in config (default 0.0 = disabled). The value is operator-supplied; OperationsCenter does not parse executor billing output.
 
 ```yaml
 cost_per_execution_usd: 0.15   # rough estimate per task run
@@ -210,24 +214,15 @@ cost_per_execution_usd: 0.15   # rough estimate per task run
 - command logs: `logs/local/`
 - Plane runtime logs: `logs/local/plane-runtime/`
 - watcher logs, PIDs, heartbeat files: `logs/local/watch-all/`
-- retained run artifacts: `tools/report/kodo_plane/`
+- retained run artifacts: `tools/report/execution_plane/`
 - observer snapshots: `tools/report/operations_center/observer/`
 - insight artifacts: `tools/report/operations_center/insights/`
 - decision artifacts: `tools/report/operations_center/decision/`
 - proposer result artifacts: `tools/report/operations_center/proposer/`
 
-### Machine-Level Kodo Artifacts (`~/.kodo/`)
+### Executor Run History
 
-Kodo maintains its own run history at `~/.kodo/runs/` — one JSON file per execution. This is a machine-level bookkeeping directory written by Kodo itself, not by OperationsCenter. It accumulates over time (hundreds of entries, tens of MB) and is safe to leave in place.
-
-The `~/.kodo/` directory is entirely separate from any per-repo `.kodo/` runtime directory that Kodo may create inside an ephemeral workspace during a run (e.g. `.kodo/team.json` for the Claude fallback override). The per-repo `.kodo/` directory is cleaned up automatically after each task run.
-
-If disk space is a concern, prune old Kodo run history manually:
-
-```bash
-ls -lt ~/.kodo/runs/ | wc -l            # count entries
-ls -lt ~/.kodo/runs/ | tail -n +100 | awk '{print $NF}' | xargs -I{} rm ~/.kodo/runs/{}  # keep newest 100
-```
+TeamExecutor may maintain its own run history directory. Consult the TeamExecutor documentation for details on pruning accumulated run records if disk space is a concern.
 
 ## Board Saturation Backpressure
 
@@ -526,7 +521,7 @@ python -m operations_center.entrypoints.pipeline_trigger.main \
 The trigger watches three sources:
 - `.git/FETCH_HEAD` in each repo's `local_path` — fires when a new fetch/push arrives
 - `state/error_ingest_dedup.json` — fires when a runtime error is ingested
-- `tools/report/kodo_plane/` child count — fires when new execution artifacts appear
+- `tools/report/execution_plane/` child count — fires when new execution artifacts appear
 
 Trigger state is persisted in `state/pipeline_trigger_state.json`. The debounce (`--min-interval`) prevents re-running on every small change; 5 minutes is a reasonable default for most repos.
 
@@ -598,7 +593,7 @@ python -m operations_center.entrypoints.worker.main audit-export
 python -m operations_center.entrypoints.worker.main audit-export --window-days 30 > audit.json
 ```
 
-Each entry has `kind: "execution"`, `task_id`, `outcome`, `succeeded`, `role`, `kodo_version`, and `timestamp`. Use for compliance review or debugging failure patterns.
+Each entry has `kind: "execution"`, `task_id`, `outcome`, `succeeded`, `role`, `backend_version`, and `timestamp`. Use for compliance review or debugging failure patterns.
 
 ## Board Health Snapshot
 

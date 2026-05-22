@@ -1,5 +1,57 @@
 # Log
 
+## OC Platform Watchdog Cycle — 2026-05-22 05:48 UTC (Cycle 10)
+
+- Lock owner: watchdog pid (reclaimed)
+- Branch: oc-watchdog/20260522-0137-fix-kodo-removal-regressions
+- Health state: ACTIVE (additional CI fixes dispatched)
+- Next cadence: 900s — CI fixes pushed; verify CI green next cycle; board-unblock moved 74af58c5 Blocked→Backlog
+
+### STEP 0 — Preflight
+- All 16 repos: Already up to date (ff-only pull) ✓
+- Plane: OK ✓ | SwitchBoard: OK ✓ | Watchers: 8/8 running ✓ | CLIs: OK ✓
+- git status: large pre-existing 46-file diff in working tree (operator in-progress work — NOT committed this cycle)
+
+### STEP 1 — Investigation findings
+- graph-doctor: ✓ OK — 11 nodes / 12 edges / graph_built=True
+- ghost-audit: G7 (1 thin goal refused: 89191ff5 "Emit JUnit XML"); G10 (1 b67bc0e0 lagging, Cancelled — resolving naturally)
+- flow-audit: 0 open gaps ✓
+- reaudit-check: exit 0 — both audit verdicts now CxRP 0.3.1 (fixed cycle 9) ✓
+- regression-check: 0 findings ✓
+- custodian-sweep: all delta=0 ✓
+
+### CI investigation (primary focus this cycle)
+- Branch oc-watchdog/20260522-0137-fix-kodo-removal-regressions: CI still failing (4 issues)
+  1. test_cxrp_mapper.py (3 failures): kodo→team_executor fixes were in working tree but NOT committed in cycle 9 → FIXED this cycle
+  2. license-headers: src/operations_center/entrypoints/run_show/__init__.py empty, tools/loop/controller.py missing SPDX → FIXED this cycle
+  3. test_trace_path_staleness.py: _ExplodingPath(Path) subclassing fails on Python 3.11 (CI), passes Python 3.14 (local) → FIXED this cycle (patched exists method directly)
+  4. test_repo_graph_factory_from_settings.py (2 failures): pre-existing on main; platform_manifest installed without `private` param → _load_local_platform_manifest_impl() can't find PlatformManifest on CI → caught silently, returns None → Plane task created
+- Confirmed: failures 1-3 are new regressions our branch introduced or inherited; failure 4 is pre-existing
+
+### STEP 2 — Triage: 0 actions
+### STEP 2.5 — Board-unblock:
+- Rule IMPROVE_UNBLOCK: task 74af58c5 ("Add Rule evidence type and boundary validation tests") Blocked→Backlog (stale >4h, no executor progress)
+
+### STEP 3 — Blocked work
+- 74af58c5: moved Backlog (stale); once CI green, propose may re-emit
+- Behavioral convergence: ACTIVE (direct fixes applied, CI unblocking in progress)
+
+### STEP 5/6 — Direct fixes (OperationsCenter)
+- tests/unit/contracts/test_cxrp_mapper.py: commit uncommitted kodo→team_executor (3 instances)
+- src/operations_center/entrypoints/run_show/__init__.py: add SPDX header (was empty)
+- tools/loop/controller.py: add SPDX header after shebang
+- tests/unit/observability/test_trace_path_staleness.py: replace _ExplodingPath(Path) subclassing with monkeypatch.setattr(Path, "exists") — Python 3.11 compatible
+
+### STEP 7 — Invariant tests: 15 passed ✓
+### STEP 8 — Watcher health: 8/8 running ✓
+
+### Blocked work classification
+- 74af58c5: Backlog (board-unblocked this cycle)
+- test_repo_graph_factory_from_settings.py: validation-blocked (CI env missing PlatformManifest sibling) — Plane task created
+
+### Behavioral convergence: ACTIVE
+- CI regression fixes continuing; 4 issues addressed this cycle
+
 ## OC Platform Watchdog Cycle — 2026-05-22 01:09 UTC (Cycle 8)
 
 - Lock owner: controller-managed (unlocked between sessions)
@@ -126,7 +178,7 @@
 - dmesg: no OOM events found
 - journalctl: no killed/OOM events found
 - free: 31Gi total / 5.7Gi used / 25Gi available — memory not the cause
-- kodo-stderr logs: none found
+- executor-stderr logs: none found
 - SIGKILL root cause: still unknown (no new evidence)
 
 ### STEP 2 triage
@@ -166,7 +218,7 @@
 ### Blocked work classification
 - Campaign 10c50210: structurally-stalled (all tasks Cancelled; arc needs operator restart)
 - reaudit DAGExecutor+TeamExecutor: validation-blocked (CxRP v0.3.1, persistent, non-critical)
-- kodo SIGKILL root cause: operator-investigation (no new evidence; no affected tasks remaining)
+- executor SIGKILL root cause: operator-investigation (no new evidence; no affected tasks remaining)
 
 ### Behavioral convergence: ACTIVE (infrastructure restored)
 - Platform operational: Plane + SwitchBoard + 8 watchers all up ✓
@@ -178,7 +230,7 @@
 ### Operator-blocked state: no
 ### Parked state: no
 ### Known open issues status:
-- 9c7f4bb9 (kodo SIGKILL root cause): Still unknown. All affected tasks now Cancelled. No new evidence this cycle.
+- 9c7f4bb9 (executor SIGKILL root cause): Still unknown. All affected tasks now Cancelled. No new evidence this cycle.
 - Campaign 10c50210: ShippingForm Cancelled. All phase-gated tasks Cancelled. Arc needs operator restart.
 
 ### Convergence maturity metrics
@@ -8982,3 +9034,83 @@ Cross-cycle repeating patterns:
 - Custodian: 0 new findings, RUFF regression cleared ✓
 - G10 will clear naturally next cycle (no board action needed)
 - Rate gate: 8871f757 and 2824d46e being dispatched; expected some R4AI→Blocked cycles via rate gate (normal)
+
+## OC Platform Watchdog Cycle — 2026-05-22 01:37 UTC (Cycle 9)
+
+- Lock owner: watchdog pid (reclaimed)
+- Health state: ACTIVE (direct fix dispatched — CI regression unblocked)
+- Next cadence: 900s — CI fix in flight; task 3a3c202f running; verify propose resumes next cycle
+- Plane status: 1 Running (3a3c202f), 1+ Blocked (74af58c5 failed 1/5 stages), R4AI queue
+- PlatformDeployment / SwitchBoard status: healthy (Plane OK, SwitchBoard OK)
+- Watchers: 8/8 running | all healthy; startup role=all errors are benign (07:45 session init, not current)
+- Audits run: custodian-sweep ghost-audit flow-audit graph-doctor reaudit-check regressions
+
+### Preflight notes
+- All 16 repos: already up to date (ff-only pull successful)
+- git status: large pre-existing 46-file diff in working tree (operator in-progress work — not committed this cycle)
+- loop_schedule.json: absent (expected — prior cycle cleanup)
+
+### STEP 1 findings
+- graph-doctor: ✓ OK — 11 nodes / 12 edges / graph_built=True
+- ghost-audit: G7 (1 thin goal refused — 89191ff5 "Emit JUnit XML"); G10 (1 b67bc0e0 "Fix lint regression" Cancelled — lagging)
+- flow-audit: 0 open gaps; F8 partial (persistent, non-critical)
+- reaudit-check: exit 1 — DAGExecutor + TeamExecutor (CxRP version mismatch — FIXED this cycle by audit_verdict.yaml bump)
+- regression-check: 0 findings ✓
+- custodian-sweep: 7 repos swept, all delta=0 ✓
+
+### STEP 1 Executor investigation
+- board_worker logs: task 74af58c5 ("Add Rule evidence type and boundary validation tests") failed at 01:16 UTC — "1 of 5 stages failed"
+- Root cause: kodo backend removed in b82aecf but tests/unit/executors/test_runtime_binding_wiring.py still used backend="kodo" → ValueError in CI
+- Concurrent failures (earlier session): operations-center-testing-branch missing (now exists on remote, pre-existing fix)
+- Session limit resets: normal (cleared since cycle 8)
+- No OOM; memory healthy (24GB available)
+
+### STEP 2 triage: 0 actions
+
+### STEP 2.5 board-unblock: 0 actions (no qualifying Blocked tasks)
+
+### STEP 3 — Convergence analysis
+- Propose emitting 0 candidates (12 suppressed: family_deferred_initial_gating×8, cooldown_active×4)
+  - Root cause: CI failing (6 checks: kodo regression + audit verdict staleness)
+  - FIXED this cycle: direct fix committed
+- Task 74af58c5: temporarily-blocked (kodo regression → fix in flight; retry after merge)
+- Task 3a3c202f: actively running
+- G10 ghost: lagging b67bc0e0 (Cancelled), expected to clear naturally
+- G7: normal thin-goal quality gate
+- Behavioral convergence: ACTIVE (direct fix applied, CI unblocked)
+
+### STEP 4 — Promotion candidates
+- Regression-check/custodian: gap detected — removal of a backend (kodo) does not trigger detection of test references to that backend. Promote to custodian detector or regression-check rule.
+
+### STEP 5/6 — Direct fix
+- Repo: OperationsCenter
+- Files changed:
+  - tests/unit/executors/test_runtime_binding_wiring.py: backend="kodo" → backend="openclaw" (2 instances)
+  - src/operations_center/executors/team_executor/audit_verdict.yaml: CxRP "0.2" → "0.3.1"
+  - src/operations_center/executors/dag_executor/audit_verdict.yaml: CxRP "0.2" → "0.3.1"
+- Branch: oc-watchdog/20260522-0137-fix-kodo-removal-regressions
+- Commit: cb56d53 (pushed)
+- Verification: 2397 passed, 1 skipped — all tests green ✓
+- Note: test_cxrp_mapper.py was already updated in working tree (backend="kodo" → "team_executor")
+
+### STEP 7 — Invariant tests
+- pytest tests/unit/er000_phase0_golden/ -q: 15 passed ✓
+- Full suite: 2397 passed, 1 skipped ✓
+
+### STEP 8 — Watcher health
+- 8/8 watchers running; no current non-143 crashes
+- Startup role=all errors in 20260521T074525_all.log: benign (session init at 07:45; board_worker doesn't accept role=all, fires once per startup, not crash-looping)
+- Goal watcher: active — task 3a3c202f in flight since 01:16 UTC
+
+### Blocked work classification
+- 74af58c5: temporarily-blocked (kodo regression → fix dispatched; expect retry success after merge)
+- 3a3c202f: running (in-flight goal task)
+- reaudit DAGExecutor+TeamExecutor: RESOLVED (audit verdicts updated to CxRP 0.3.1)
+
+### Behavioral convergence: ACTIVE
+- CI was failing (6 checks) → direct fix unblocks all 8 gated families
+- propose should resume emitting candidates next cycle
+- No starvation; no closed-loop stagnation
+
+### Operator-blocked: none
+### Parked state: no

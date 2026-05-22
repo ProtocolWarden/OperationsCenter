@@ -78,10 +78,10 @@ def _handle(**kw) -> ShellRunHandle:
         proposal_id="prop-1",
         decision_id="dec-1",
         selected_lane="claude_cli",
-        selected_backend="kodo",
+        selected_backend="team_executor",
         routing_confidence=0.9,
         status="planned",
-        summary="proposal=prop-1 lane=claude_cli backend=kodo rule=medium_implementation",
+        summary="proposal=prop-1 lane=claude_cli backend=team_executor rule=medium_implementation",
     )
     defaults.update(kw)
     return ShellRunHandle(**defaults)
@@ -92,7 +92,7 @@ def test_shell_run_handle_construction():
     assert h.proposal_id == "prop-1"
     assert h.decision_id == "dec-1"
     assert h.selected_lane == "claude_cli"
-    assert h.selected_backend == "kodo"
+    assert h.selected_backend == "team_executor"
 
 
 def test_shell_run_handle_defaults():
@@ -138,7 +138,7 @@ def _status_summary(**kw) -> ShellStatusSummary:
         decision_id="dec-1",
         status="succeeded",
         success=True,
-        headline="SUCCESS | kodo @ claude_cli | run=run-1abc",
+        headline="SUCCESS | team_executor @ claude_cli | run=run-1abc",
         summary="Run run-1abc; changed 3 files",
     )
     defaults.update(kw)
@@ -169,16 +169,16 @@ def test_status_summary_is_frozen():
 
 
 def test_status_summary_with_lane_backend():
-    s = _status_summary(selected_lane="claude_cli", selected_backend="kodo")
+    s = _status_summary(selected_lane="claude_cli", selected_backend="team_executor")
     assert s.selected_lane == "claude_cli"
-    assert s.selected_backend == "kodo"
+    assert s.selected_backend == "team_executor"
 
 
 def test_status_summary_failure():
     s = _status_summary(
         status="failed",
         success=False,
-        headline="FAILED | kodo @ claude_cli | run=run-1",
+        headline="FAILED | team_executor @ claude_cli | run=run-1",
         summary="Run run-1; failed: workflow step aborted",
     )
     assert s.success is False
@@ -196,7 +196,7 @@ def _inspection(**kw) -> ShellInspectionResult:
         proposal_id="prop-1",
         decision_id="dec-1",
         status="succeeded",
-        headline="SUCCESS | kodo @ claude_cli | run=run-1",
+        headline="SUCCESS | team_executor @ claude_cli | run=run-1",
         summary="Run run-1; changed 3 files; validation=passed",
     )
     defaults.update(kw)

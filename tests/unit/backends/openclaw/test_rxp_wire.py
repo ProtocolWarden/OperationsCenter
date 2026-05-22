@@ -3,9 +3,8 @@
 """Phase 2 + 3 — RxP wire + CoreRunner delegation for openclaw.
 
 OpenClaw is dispatched to an external runner (the abstract
-``OpenClawRunner`` subclass) — same shape as archon's manual-kind
-path. These tests pin the RuntimeInvocation/RuntimeResult contract
-and verify the invoker routes through CoreRunner.
+``OpenClawRunner`` subclass). These tests pin the RuntimeInvocation/RuntimeResult
+contract and verify the invoker routes through CoreRunner.
 """
 from __future__ import annotations
 

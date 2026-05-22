@@ -1,8 +1,8 @@
 {
-  "description": "Archon support limitation that is still too weak to justify patching",
+  "description": "Backend support limitation that is still too weak to justify patching",
   "evidence": [
     {
-      "upstream_target": "archon",
+      "upstream_target": "generic_backend",
       "issue_key": "provider_surface_gap",
       "category": "capability_enabling",
       "source_type": "support_check_failure",

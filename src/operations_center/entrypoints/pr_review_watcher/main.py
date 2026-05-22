@@ -2,14 +2,14 @@
 # Copyright (C) 2026 ProtocolWarden
 """PR Review Watcher — two-phase state machine for PRs created by the goal lane.
 
-Phase 1 (self-review): kodo reviews the diff and emits LGTM or CONCERNS.
+Phase 1 (self-review): executor reviews the diff and emits LGTM or CONCERNS.
   - LGTM → merge PR, mark Plane task Done.
   - CONCERNS → post comment, run revision pass, retry up to max_self_review_loops.
   - Unresolved → escalate to Phase 2.
 
 Phase 2 (human review): poll PR comments for human approval or feedback.
   - /lgtm comment or 👍 reaction → merge, Done.
-  - Human comment → kodo revision pass, post reply; up to max_human_review_loops.
+  - Human comment → executor revision pass, post reply; up to max_human_review_loops.
   - Timeout (human_review_timeout_seconds from phase-2 entry) → auto-merge.
 
 State per PR persisted in state/pr_reviews/<repo_key>-<pr_number>.json.
@@ -130,7 +130,7 @@ def _label_value(labels: list, prefix: str) -> str:
     return ""
 
 
-# ── kodo pipeline ─────────────────────────────────────────────────────────────
+# ── pr review pipeline ────────────────────────────────────────────────────────
 
 def _run_pipeline(
     oc_root: Path,
@@ -382,7 +382,7 @@ def _phase1(
         f"   requires — correct filenames, member names, member count, exports, tests, version bumps.\n"
         f"2. If Custodian findings are listed above, each finding is a CONCERN unless already fixed.\n"
         f"3. Standard code quality: correctness, style, potential bugs.\n"
-        f"4. No tooling artifacts (.kodo/, .baseline-validation.json, run-status.md) in the diff.\n\n"
+        f"4. No tooling artifacts (.baseline-validation.json, run-status.md) in the diff.\n\n"
         f"Write your verdict as JSON to a file named `verdict.json` in the current working directory:\n"
         f'{{"result": "LGTM", "summary": "..."}}\n'
         f"or\n"

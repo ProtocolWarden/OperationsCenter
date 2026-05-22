@@ -40,9 +40,9 @@ described in `docs/design/lifecycle.md`.
 ### Phase 1 — Self-review
 
 1. Poll GitHub for open PRs in each managed repo that have no verdict file yet
-2. For each unclaimed PR: call kodo with the diff against base branch
+2. For each unclaimed PR: call the executor with the diff against base branch
    (`worker.main` + `execute.main` pipeline, source=`reviewer_self`)
-3. kodo writes a verdict to a well-known path in the workspace:
+3. The executor writes a verdict to a well-known path in the workspace:
    `verdict.json` → `{"result": "LGTM" | "CONCERNS", "summary": "..."}`
 4. `LGTM` → merge PR, transition Plane task to Done
 5. `CONCERNS` → post comment with concerns summary, run one revision pass
@@ -54,7 +54,7 @@ described in `docs/design/lifecycle.md`.
 1. Post escalation comment: `<!-- operations-center:bot -->` + concerns summary
 2. Poll PR comments (ignoring `bot_logins` and own `<!-- operations-center:bot -->` markers)
 3. Human 👍 reaction or `/lgtm` comment → merge, Done
-4. Human comment (not a bot) → run kodo revision pass, post reply when done
+4. Human comment (not a bot) → run executor revision pass, post reply when done
    (up to `reviewer.max_human_review_loops`, default 3)
 5. Timeout of 86400s (1 day) from phase 2 entry → auto-merge with notice comment
 

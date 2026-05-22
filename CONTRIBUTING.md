@@ -42,7 +42,7 @@ src/operations_center/
   planning/         # proposer, insights, decision engine
   routing/          # SwitchBoard client
   execution/        # ExecutionCoordinator, artifact writer
-  backends/         # kodo, archon, openclaw, direct_local adapters
+  backends/         # team_executor, openclaw, direct_local, aider_local adapters
   policy/           # pre-execution policy gate
   observability/    # run artifact persistence, usage store
   tuning/           # recommendation-only tuning layer
