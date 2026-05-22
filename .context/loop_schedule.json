@@ -1,1 +1,1 @@
-{"delay_s": 300, "state": "DEGRADED", "reason": "Plane and SwitchBoard unreachable; all 8 watchers stopped; board state cannot be audited"}
+{"delay_s": 900, "state": "ACTIVE", "reason": "1 Running task + 14 R4AI queue draining at rate-gate 2/hr; no blocked/stalled work"}

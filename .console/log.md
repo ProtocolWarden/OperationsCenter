@@ -1,5 +1,103 @@
 # Log
 
+## OC Platform Watchdog Cycle — 2026-05-22 01:09 UTC (Cycle 8)
+
+- Lock owner: controller-managed (unlocked between sessions)
+- Branch / commit: main @ 310c0ae
+- Health state: ACTIVE
+- Next cadence: 900s — 1 Running task, 14 R4AI queue actively draining via rate gate
+- Plane status: OK ✓
+- SwitchBoard status: OK ✓
+- Watchers: 8/8 running (all stable, same PIDs as cycle 7 restart)
+
+### STEP 0 — Preflight
+- All 16 repos: Already up to date (ff-only pull) ✓
+- Plane: OK (http://localhost:8080) ✓
+- SwitchBoard: OK (http://localhost:20401/health) ✓
+- Watchers: 8/8 running ✓
+- CLIs: OK ✓
+- Git status: .context/loop_schedule.json deleted (will be recreated in STEP 10)
+
+### STEP 1 — Findings
+- custodian-sweep: 7 repos swept; all delta=0 except VideoFoundry T2 delta=+1 (new finding); plane=commented ✓
+- ghost-audit: G7=1 (89191ff5 refused thin — status=fixed), G10=1 (b67bc0e0 Cancelled — status=fixed). EXIT:0
+- flow-audit: 0 open gaps; F8 partial (persistent, back-pressure on Ready queue). EXIT:0
+- graph-doctor: 11 nodes / 12 edges / graph_built=True ✓
+- reaudit-check: dag_executor+team_executor (cxrp_minor_version_advanced, v0.3.1). EXIT:1 (persistent, non-critical)
+- regression-check: 0 findings ✓
+
+### STEP 1 — Executor failure investigation
+- watcher_restart role=all exit_code=2: from prior mistaken `watch --role all` command (already known) — benign
+- Session limit hits in logs: `resets 8:40pm ET` (~00:40 UTC) — reset confirmed; goal watcher claimed task at 00:47 UTC
+- Rate gate: `global_rate_exceeded; window=hourly; current=2 limit=2` — by-design throttle limiting dispatch to 2/hr
+- `operations-center-testing-branch` missing (in logs 16:19–16:36): branch now exists on remote (dc35fbe) — resolved
+- OOM: no events in dmesg/journalctl
+- Memory: 31Gi total / 7.5Gi used / 23Gi available — healthy
+- Task 74af58c5: failed `4 of 6 stages failed` multiple times, then session limit reset → goal watcher claimed at 00:47 UTC → now Running ✓
+- Tasks 2824d46e, a969024e (improve): multiple stage failures + session limit hits. Not visible in current board (both marked Done per cycle 7 log). The improve watcher continued polling but found no tasks to claim.
+
+### STEP 2 — Triage
+- 0 actions (no rescore/awaiting/queue_healing needed)
+
+### STEP 2.5 — Board unblock
+- 0 actions (no stuck patterns)
+
+### STEP 3 — Blocked/Stalled Work Investigation
+**Board state:** 0 Blocked, 14 Ready for AI, 1 Running (74af58c5), 44 Backlog, 25 Cancelled, 13 Done
+- No starvation: tasks ARE flowing — goal watcher claimed 74af58c5 at 00:47 UTC, currently running
+- No closed-loop stagnation: net state change this cycle (new task claimed, running)
+- No automation self-deception: real execution occurring
+- Propose saturation (00:53 UTC): `ready_queue_saturated` with ready_count=14, cap=8 — CORRECT back-pressure behavior, not starvation. 2 candidates skipped because R4AI queue exceeds cap.
+- Propose 01:00, 01:06 UTC: 0 emitted, 12 suppressed by `family_deferred_initial_gating` (hotspot_concentration and others) — correct filtering
+- Session limit (8:40pm ET) reset confirmed by goal watcher claiming 74af58c5 at 00:47 UTC
+- VideoFoundry T2 delta=+1: new finding, custodian-sweep already commented on Plane task — no additional action needed
+- Behavioral convergence: CONVERGENT (tasks flowing, no stuck patterns)
+- G7 pattern (89191ff5 "Emit JUnit XML"): logged as refused-thin historically, task is now in R4AI — propose created it
+- F8 (back-pressure): still partial — queue at 14 > cap 8, but this is correct throttling not a gap
+
+### STEP 4 — Convergence Promotion
+- No new loop-only judgment patterns. All transitions driven by watchers.
+- `ready_queue_saturated` back-pressure is watcher-owned and working correctly.
+- No promotion candidates this cycle.
+
+### STEP 5/6 — Execution Gate
+- No direct fixes dispatched (no audit findings requiring code changes)
+- No autonomy-cycle runs needed: propose watcher running automatically, board draining at 2/hr rate
+- VideoFoundry T2: custodian-sweep handled (commented on Plane task); board saturation means new tasks would queue to Backlog anyway
+
+### STEP 7 — Invariant tests
+- pytest tests/unit/er000_phase0_golden/ -q: 15 passed ✓
+
+### STEP 8 — Watcher health
+- 8/8 watchers running; all healthy; same PIDs since cycle 7 restart
+- No non-143 exits in current session logs
+- Goal watcher: claimed task at 00:47 UTC, actively executing — healthy
+- Improve watcher: polling normally, no tasks in R4AI for improve kind — healthy
+- Review watcher: polling GitHub PRs normally — healthy
+- Anti-flap: no new watcher crashes, no escalations needed
+
+### Blocked work classification
+- reaudit DAGExecutor+TeamExecutor: validation-blocked (CxRP v0.3.1, persistent, non-critical) — no action
+- VideoFoundry T2 delta=+1: custodian handled — no action
+
+### Behavioral convergence: CONVERGENT
+- Board: 0 Blocked, 14 R4AI, 1 Running — all healthy ✓
+- Rate gate (2/hr): working as designed; 7h estimated to drain R4AI queue ✓
+- Testing branch (operations-center-testing-branch): present on remote ✓
+- Session limits: reset; goal watcher dispatching again ✓
+
+### Operator-blocked state: no
+### Parked state: no
+### Known open issues:
+- Campaign 10c50210: CANCELLED (all tasks in terminal state) — carry forward
+
+### Convergence maturity metrics
+- loop_only_judgments_per_cycle: 0
+- manual_inference_events: 0
+- watcher_owned_recovery_rate: 1.0 (rate-gate + session-limit recovery were watcher-owned)
+- automatic_queue_heal_rate: N/A (no stale tasks)
+- operator_escalation_rate: 0.0
+
 ## OC Platform Watchdog Cycle — 2026-05-21 11:41 UTC (Cycle 7)
 
 - Lock owner: pid=51145 hostname=dev-latitudee7470 (acquired fresh; prior DEGRADED cycle expired)
