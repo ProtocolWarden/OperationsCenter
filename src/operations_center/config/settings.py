@@ -198,7 +198,13 @@ class ErrorIngestSettings(BaseModel):
     default_repo_key: str = ""
 
 
-class SpecDirectorSettings(BaseModel):
+class SpecAuthorSettings(BaseModel):
+    """Settings for the spec-authoring subsystem (ADR 0007).
+
+    Hosts knobs for the spec_hygiene watcher, spec_trigger watcher, and the
+    board_worker spec-author task-kind handler. Renamed from SpecDirectorSettings
+    in ADR 0007 follow-up to match the post-refactor naming.
+    """
     enabled: bool = True
     poll_interval_seconds: int = 120
     brainstorm_model: str = "claude-opus-4-6"
@@ -207,7 +213,6 @@ class SpecDirectorSettings(BaseModel):
     spec_retention_days: int = 90
     campaign_abandon_hours: int = 72
     # Historical compatibility field retained only so old configs still load.
-    # Spec director no longer injects routing environment variables at runtime.
     switchboard_url: str | None = None
 
 
@@ -434,7 +439,7 @@ class Settings(BaseModel):
     stale_autonomy_backlog_days: int = 30
     # S8-8: Runtime error ingestion configuration.  None = disabled.
     error_ingest: ErrorIngestSettings | None = None
-    spec_director: SpecDirectorSettings = Field(default_factory=SpecDirectorSettings)
+    spec_author: SpecAuthorSettings = Field(default_factory=SpecAuthorSettings)
     # Propose worker skips its generation cycle when the "Ready for AI" queue
     # already has this many or more tasks.  0 = disabled (default 8).
     propose_skip_when_ready_count: int = 8

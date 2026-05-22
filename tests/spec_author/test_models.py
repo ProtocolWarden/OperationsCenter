@@ -73,9 +73,9 @@ def test_trigger_source_values():
     assert not hasattr(TriggerSource, "PLANE_LABEL")
 
 
-def test_spec_director_settings_defaults():
-    from operations_center.config.settings import SpecDirectorSettings
-    s = SpecDirectorSettings()
+def test_spec_author_settings_defaults():
+    from operations_center.config.settings import SpecAuthorSettings
+    s = SpecAuthorSettings()
     assert s.enabled is True
     assert s.poll_interval_seconds == 120
     assert s.max_tasks_per_campaign == 6

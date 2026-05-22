@@ -194,7 +194,7 @@ def _bootstrap_orphan_campaigns(
     builder = CampaignBuilder(
         client=client,
         project_id=settings.plane.project_id,
-        max_tasks=settings.spec_director.max_tasks_per_campaign,
+        max_tasks=settings.spec_author.max_tasks_per_campaign,
     )
     for campaign in active.active_campaigns():
         if by_campaign.get(campaign.campaign_id, 0) > 0:
@@ -355,7 +355,7 @@ def _emit_phase_advance_tasks(
 
 
 def run_once(settings: Any, client: PlaneClient) -> None:
-    sd = settings.spec_director
+    sd = settings.spec_author
     if not sd.enabled:
         return
 
@@ -473,7 +473,7 @@ def main() -> None:
         workspace_slug=settings.plane.workspace_slug,
         project_id=settings.plane.project_id,
     )
-    sd = settings.spec_director
+    sd = settings.spec_author
 
     try:
         if args.once:

@@ -1,4 +1,8 @@
 # Log
+## 2026-05-22 — ADR 0007 follow-up A: config key rename
+
+Renamed `SpecDirectorSettings` → `SpecAuthorSettings` and the parent field `settings.spec_director` → `settings.spec_author`. Updated the 5 attribute reads across `spec_hygiene` and `spec_trigger`. Renamed test from `test_spec_director_settings_defaults` → `test_spec_author_settings_defaults`. No YAML config files referenced the key, so no migration needed.
+
 ## 2026-05-22 — ADR 0007 Phase F: retire spec_director entrypoint + rename package to spec_author
 
 Branch: `feat/spec-director-refactor`. Phase F closes ADR 0007 — the legacy `spec_director` watcher is fully retired; its three former responsibilities now live in three focused surfaces:
