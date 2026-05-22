@@ -1,6 +1,21 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-# src/operations_center/entrypoints/spec_director/main.py
+# src/operations_center/entrypoints/spec_hygiene/main.py
+"""spec_hygiene watcher — ADR 0007 Phase A.
+
+Hosts the non-LLM hygiene operations extracted from spec_director:
+    * spec archival
+    * orphan-campaign bootstrap
+    * auto-promote backlog → R4AI
+    * phase orchestration **detection** (LLM-free portion)
+    * campaign recovery (abandonment scan)
+
+Also rebuilds the state/campaigns/active.json projection from Plane at the
+top of every cycle so OperatorConsole reads a Plane-derived view.
+
+Phase advance detection only; LLM rewrite still happens via phase_orchestrator
+until ADR 0007 Phase D.
+"""
 from __future__ import annotations
 
 from typing import Any
@@ -14,30 +29,138 @@ from pathlib import Path
 
 from operations_center.adapters.plane import PlaneClient
 from operations_center.config import load_settings
-from operations_center.execution.usage_store import _check_disk_space
-from operations_center.spec_director.brainstorm import BrainstormService
 from operations_center.spec_director.campaign_builder import CampaignBuilder
-from operations_center.spec_director.context_bundle import ContextBundleBuilder
-from operations_center.spec_director.models import CampaignRecord
+from operations_center.spec_director.models import (
+    ActiveCampaigns,
+    CampaignRecord,
+    SpecFrontMatter,
+)
 from operations_center.spec_director.phase_orchestrator import PhaseOrchestrator
 from operations_center.spec_director.recovery import RecoveryService
 from operations_center.spec_director.spec_writer import SpecWriter
 from operations_center.spec_director.state import CampaignStateManager
-from operations_center.spec_director.trigger import TriggerDetector
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 _SPECS_DIR = Path("docs/specs")
 
+_LIFECYCLE_SKIP_PROMOTE = {
+    "lifecycle: expanded",
+    "lifecycle: archived",
+    "lifecycle: escalated",
+}
 
-def _count_state(issues: list[dict], state_name: str) -> int:
-    """Count issues matching a board state name (case-insensitive)."""
-    target = state_name.lower()
-    return sum(
-        1 for i in issues
-        if str((i.get("state") or {}).get("name", "")).lower() == target
-    )
+
+def _label_names(issue: dict) -> list[str]:
+    """Normalize Plane label payloads to a flat list of names."""
+    out: list[str] = []
+    for label in issue.get("labels", []) or []:
+        name = label.get("name", "") if isinstance(label, dict) else str(label)
+        if name:
+            out.append(name)
+    return out
+
+
+def _has_label(issue: dict, target: str) -> bool:
+    target_l = target.strip().lower()
+    return any(n.strip().lower() == target_l for n in _label_names(issue))
+
+
+def _campaign_id_of(issue: dict) -> str | None:
+    for n in _label_names(issue):
+        if n.lower().startswith("campaign-id:"):
+            return n.split(":", 1)[1].strip()
+    return None
+
+
+def _slug_of(issue: dict) -> str:
+    """Best-effort slug extraction from a [Campaign] parent issue name."""
+    name = str(issue.get("name", "")).strip()
+    if name.startswith("[Campaign]"):
+        return name[len("[Campaign]"):].strip()
+    return ""
+
+
+def _status_of(issue: dict) -> str:
+    state = issue.get("state")
+    if isinstance(state, dict):
+        return str(state.get("name", "")).lower()
+    return str(state or "").lower()
+
+
+def _rebuild_active_projection(
+    state_mgr: CampaignStateManager,
+    all_issues: list[dict],
+) -> None:
+    """Rebuild state/campaigns/active.json from Plane.
+
+    Single-writer invariant per ADR 0007. OperatorConsole reads this projection.
+
+    Aggregation rules:
+      * Only issues labeled `source: spec-campaign` participate.
+      * Group by `campaign-id: <id>` label.
+      * Status derivation:
+          - 'complete'  → every child issue is in a terminal state (done/cancelled)
+                          AND at least one is done
+          - 'cancelled' → every child is cancelled
+          - 'active'    → at least one child is not terminal
+      * slug derived from the parent `[Campaign] <slug>` issue when present;
+        otherwise fall back to the existing state record's slug.
+    """
+    existing = state_mgr.load()
+    existing_by_id = {c.campaign_id: c for c in existing.campaigns}
+
+    grouped: dict[str, list[dict]] = {}
+    for issue in all_issues:
+        if not _has_label(issue, "source: spec-campaign"):
+            continue
+        cid = _campaign_id_of(issue)
+        if not cid:
+            continue
+        grouped.setdefault(cid, []).append(issue)
+
+    rebuilt: list[CampaignRecord] = []
+    for cid, issues in grouped.items():
+        statuses = [_status_of(i) for i in issues]
+        all_terminal = all(s in {"done", "cancelled"} for s in statuses)
+        any_done = any(s == "done" for s in statuses)
+        all_cancelled = all(s == "cancelled" for s in statuses)
+        if all_terminal and all_cancelled:
+            status = "cancelled"
+        elif all_terminal and any_done:
+            status = "complete"
+        else:
+            status = "active"
+
+        # Pull slug + spec_file + created_at from the parent issue when we can.
+        parent = next(
+            (i for i in issues if str(i.get("name", "")).startswith("[Campaign]")),
+            None,
+        )
+        prev = existing_by_id.get(cid)
+        slug = (parent and _slug_of(parent)) or (prev.slug if prev else cid)
+        spec_file = prev.spec_file if prev else str(_SPECS_DIR / f"{slug}.md")
+        created_at = (
+            (prev.created_at if prev else None)
+            or (parent and str(parent.get("created_at") or "") or "")
+            or datetime.now(UTC).isoformat()
+        )
+        rebuilt.append(
+            CampaignRecord(
+                campaign_id=cid,
+                slug=slug,
+                spec_file=spec_file,
+                status=status,  # type: ignore[arg-type]
+                created_at=created_at,
+            )
+        )
+
+    state_mgr.save(ActiveCampaigns(campaigns=rebuilt))
+    logger.info(json.dumps({
+        "event": "spec_active_projection_rebuilt",
+        "campaign_count": len(rebuilt),
+    }, ensure_ascii=False))
 
 
 def _bootstrap_orphan_campaigns(
@@ -49,12 +172,8 @@ def _bootstrap_orphan_campaigns(
     """Create initial Plane tasks for active campaigns that have none.
 
     A campaign is "orphaned" if it appears in state/campaigns/active.json but no
-    Plane work-item carries its `campaign-id: <id>` label. This happens when a
-    campaign record is written outside the normal BrainstormService flow (e.g.
-    pasted into active.json, recovered from spec front-matter, etc.).
+    Plane work-item carries its `campaign-id: <id>` label.
     """
-    from operations_center.spec_director.models import SpecFrontMatter
-
     by_campaign: dict[str, int] = {}
     for issue in all_issues:
         for label in issue.get("labels", []) or []:
@@ -114,16 +233,13 @@ def _bootstrap_orphan_campaigns(
             }, ensure_ascii=False))
 
 
-_LIFECYCLE_SKIP_PROMOTE = {"lifecycle: expanded", "lifecycle: archived", "lifecycle: escalated"}
-
-
 def _auto_promote_backlog(client: PlaneClient, issues: list[dict]) -> None:
     """Promote tier-≥2 autonomy tasks from Backlog → Ready for AI each cycle.
 
-    Filters out tasks carrying any lifecycle label that means "don't touch":
-      • expanded   — work already delegated to children
-      • archived   — terminal-and-frozen
-      • escalated  — out of normal automated flow
+    Filters out tasks carrying any lifecycle label meaning "don't touch":
+      * expanded   — work already delegated to children
+      * archived   — terminal-and-frozen
+      * escalated  — out of normal automated flow
     """
     from operations_center.autonomy_tiers.config import (
         get_family_tier, load_tiers_config,
@@ -163,33 +279,40 @@ def run_once(settings: Any, client: PlaneClient) -> None:
     if not sd.enabled:
         return
 
-    logger.info(json.dumps({"event": "spec_cycle_start"}, ensure_ascii=False))
+    logger.info(json.dumps({"event": "spec_hygiene_cycle_start"}, ensure_ascii=False))
 
     state_mgr = CampaignStateManager()
     spec_writer = SpecWriter(specs_dir=_SPECS_DIR)
-    # TODO(ADR 0007 Phase F): superseded by spec_hygiene entrypoint, delete with retirement.
+
+    # Step 0: Spec archival — drop expired specs out of the working tree.
     spec_writer.archive_expired(retention_days=sd.spec_retention_days)
 
-    # Step 1: Fetch all issues once — shared across orchestration, recovery, and trigger detection
+    # Step 1: Fetch all issues once — shared across projection, bootstrap,
+    # promotion, orchestration, and recovery.
     try:
         all_issues = client.list_issues()
     except Exception as exc:
-        logger.error(json.dumps({"event": "spec_board_fetch_failed", "error": str(exc)}, ensure_ascii=False))
+        logger.error(json.dumps(
+            {"event": "spec_hygiene_board_fetch_failed", "error": str(exc)},
+            ensure_ascii=False,
+        ))
         return
 
-    # TODO(ADR 0007 Phase F): superseded by spec_hygiene entrypoint, delete with retirement.
-    # Step 1.5: Bootstrap orphan campaigns — campaigns registered in state but with
+    # Step 1a: Rebuild active.json projection from Plane.
+    # Single-writer invariant per ADR 0007. OperatorConsole reads this projection.
+    _rebuild_active_projection(state_mgr, all_issues)
+
+    # Step 2: Orphan-campaign bootstrap — campaigns registered in state but with
     # zero backing Plane tasks (e.g. autonomously-spawned campaigns whose builder
-    # step never ran).  Without this, PhaseOrchestrator has nothing to advance.
+    # step never ran).
     _bootstrap_orphan_campaigns(settings, client, all_issues, state_mgr)
 
-    # TODO(ADR 0007 Phase F): superseded by spec_hygiene entrypoint, delete with retirement.
-    # Step 1.7: Auto-promote Backlog → Ready for AI for tasks whose family tier ≥ 2.
-    # Tier bumps in autonomy_tiers.json apply to existing Backlog tasks via this hook.
+    # Step 3: Auto-promote Backlog → Ready for AI for tier-≥2 families.
     _auto_promote_backlog(client, all_issues)
 
-    # TODO(ADR 0007 Phase F): superseded by spec_hygiene entrypoint, delete with retirement.
-    # Step 2: Phase orchestration — advance phases, unblock tasks, detect completions
+    # Step 4: Phase orchestration — detection of phase advances + blocked-task
+    # handling. Phase advance detection only; LLM rewrite still happens via
+    # phase_orchestrator until ADR 0007 Phase D.
     orch = PhaseOrchestrator(
         client=client,
         state_manager=state_mgr,
@@ -210,8 +333,7 @@ def run_once(settings: Any, client: PlaneClient) -> None:
             "campaigns_completed": orch_result.campaigns_completed,
         }, ensure_ascii=False))
 
-    # TODO(ADR 0007 Phase F): superseded by spec_hygiene entrypoint, delete with retirement.
-    # Step 3: Recovery scan (runs after orchestration so completions are already processed)
+    # Step 5: Recovery scan — abandon stale campaigns past the threshold.
     active = state_mgr.load()
     recovery = RecoveryService(
         client=client,
@@ -221,131 +343,26 @@ def run_once(settings: Any, client: PlaneClient) -> None:
     for campaign in active.active_campaigns():
         if recovery.should_abandon(campaign):
             recovery.self_cancel(campaign, "abandon_hours_exceeded", _SPECS_DIR)
-            logger.info(json.dumps({"event": "spec_campaign_abandoned", "campaign_id": campaign.campaign_id}, ensure_ascii=False))
-
-    # Reload after potential cancellations
-    active = state_mgr.load()
-
-    # Step 4: Trigger detection — derive counts from already-fetched issues
-    # TODO(ADR 0007 Phase F): superseded by spec_trigger entrypoint +
-    # board_worker spec-author handler, delete with retirement.
-    ready_count = _count_state(all_issues, "ready for ai")
-    running_count = _count_state(all_issues, "in progress")
-    trigger_detector = TriggerDetector(drop_file_path=Path(sd.drop_file_path))
-    trigger = trigger_detector.detect(
-        ready_count=ready_count,
-        running_count=running_count,
-        has_active_campaign=active.has_active(),
-    )
-
-    if trigger is None:
-        logger.info(json.dumps({
-            "event": "spec_no_trigger",
-            "ready_count": ready_count,
-            "running_count": running_count,
-            "has_active": active.has_active(),
-        }, ensure_ascii=False))
-        return
-
-    logger.info(json.dumps({
-        "event": "spec_campaign_starting",
-        "trigger_source": str(trigger.source),
-        "seed_preview": trigger.seed_text[:80],
-    }, ensure_ascii=False))
-
-    # Disk space check before writing
-    try:
-        _check_disk_space(_SPECS_DIR)
-    except OSError as exc:
-        logger.error(json.dumps({"event": "spec_disk_space_critical", "error": str(exc)}, ensure_ascii=False))
-        return
-
-    # Step 5a: Build context bundle — reuse already-fetched issues
-    available_repos = list(settings.repos.keys()) if settings.repos else []
-    git_logs: dict[str, str] = {}
-    for rk, rcfg in (settings.repos or {}).items():
-        rpath = Path(rcfg.local_path) if getattr(rcfg, "local_path", None) else None
-        git_logs[rk] = ContextBundleBuilder.collect_git_log(rpath) if rpath else ""
-
-    bundle_builder = ContextBundleBuilder()
-    specs_index = ContextBundleBuilder.collect_specs_index(_SPECS_DIR)
-    bundle = bundle_builder.build(
-        seed_text=trigger.seed_text,
-        board_issues=all_issues,
-        specs_index=specs_index,
-        git_logs=git_logs,
-        available_repos=available_repos,
-    )
-
-    # Step 5b: Brainstorm
-    brainstorm_svc = BrainstormService(model=sd.brainstorm_model)
-    try:
-        result = brainstorm_svc.brainstorm(bundle)
-    except Exception as exc:
-        logger.error(json.dumps({"event": "spec_brainstorm_failed", "error": str(exc)}, ensure_ascii=False))
-        return
-
-    # Step 5c: Write spec
-    spec_path = spec_writer.write(slug=result.slug, spec_text=result.spec_text)
-
-    # Determine repo from spec front matter
-    from operations_center.spec_director.models import SpecFrontMatter
-    available_repos = list(settings.repos.keys()) if settings.repos else []
-    try:
-        fm = SpecFrontMatter.from_spec_text(result.spec_text)
-        spec_repo_key = fm.repos[0] if fm.repos else (available_repos[0] if available_repos else "")
-    except Exception:
-        spec_repo_key = available_repos[0] if available_repos else ""
-
-    repo_cfg = settings.repos.get(spec_repo_key) if settings.repos else None
-    base_branch = getattr(repo_cfg, "default_branch", "main") if repo_cfg else "main"
-
-    # Step 5d: Create Plane campaign tasks
-    builder = CampaignBuilder(
-        client=client,
-        project_id=settings.plane.project_id,
-        max_tasks=sd.max_tasks_per_campaign,
-    )
-    try:
-        task_ids = builder.build(
-            spec_text=result.spec_text,
-            repo_key=spec_repo_key,
-            base_branch=base_branch,
-        )
-    except Exception as exc:
-        logger.error(json.dumps({"event": "spec_campaign_build_failed", "error": str(exc)}, ensure_ascii=False))
-        spec_path.unlink(missing_ok=True)
-        return
-
-    # Step 5e: Record in state
-    campaign_record = CampaignRecord(
-        campaign_id=result.campaign_id,
-        slug=result.slug,
-        spec_file=str(spec_path),
-        status="active",
-        created_at=datetime.now(UTC).isoformat(),
-    )
-    state_mgr.add_campaign(campaign_record)
-
-    # Archive drop-file only after successful campaign creation
-    if hasattr(trigger.source, "value") and trigger.source.value == "drop_file":
-        trigger_detector.archive_drop_file()
-
-    logger.info(json.dumps({
-        "event": "spec_campaign_created",
-        "campaign_id": result.campaign_id,
-        "slug": result.slug,
-        "tasks_created": len(task_ids),
-    }, ensure_ascii=False))
+            logger.info(json.dumps(
+                {"event": "spec_campaign_abandoned", "campaign_id": campaign.campaign_id},
+                ensure_ascii=False,
+            ))
 
 
 def _write_heartbeat(status_dir: Path | None) -> None:
     if status_dir is None:
         return
     try:
-        hb = status_dir / "heartbeat_spec.json"
+        hb = status_dir / "heartbeat_spec_hygiene.json"
         hb.write_text(
-            json.dumps({"role": "spec", "at": datetime.now(UTC).isoformat(), "status": "idle"}, ensure_ascii=False),
+            json.dumps(
+                {
+                    "role": "spec_hygiene",
+                    "at": datetime.now(UTC).isoformat(),
+                    "status": "idle",
+                },
+                ensure_ascii=False,
+            ),
             encoding="utf-8",
         )
     except OSError:
@@ -353,10 +370,15 @@ def _write_heartbeat(status_dir: Path | None) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Spec director — autonomous spec-driven campaign manager")
+    parser = argparse.ArgumentParser(
+        description="spec_hygiene — non-LLM spec/campaign hygiene watcher (ADR 0007)",
+    )
     parser.add_argument("--config", required=True)
     parser.add_argument("--once", action="store_true", help="Run one cycle and exit")
-    parser.add_argument("--status-dir", type=Path, default=None, help="Directory for heartbeat_spec.json")
+    parser.add_argument(
+        "--status-dir", type=Path, default=None,
+        help="Directory for heartbeat_spec_hygiene.json",
+    )
     args = parser.parse_args()
 
     settings = load_settings(args.config)
@@ -378,7 +400,10 @@ def main() -> None:
             try:
                 run_once(settings, client)
             except Exception as exc:
-                logger.error(json.dumps({"event": "spec_director_cycle_error", "cycle": cycle, "error": str(exc)}, ensure_ascii=False))
+                logger.error(json.dumps(
+                    {"event": "spec_hygiene_cycle_error", "cycle": cycle, "error": str(exc)},
+                    ensure_ascii=False,
+                ))
             cycle += 1
             time.sleep(sd.poll_interval_seconds)
     finally:

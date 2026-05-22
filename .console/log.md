@@ -1,4 +1,43 @@
 # Log
+## 2026-05-22 — ADR 0007 Phase B: extract spec_trigger watcher
+
+Branch: `feat/spec-director-refactor`. Phase B of ADR 0007 — splits the trigger-detection half of `spec_director` into its own LLM-free watcher that emits Plane tasks instead of calling Claude.
+
+- `src/operations_center/entrypoints/spec_trigger/__init__.py` (NEW, license header).
+- `src/operations_center/entrypoints/spec_trigger/main.py` (NEW, ~330 LOC):
+  - `run_once()` fetches Plane issues once per cycle, dedupes against any non-Done issue carrying both `source: spec-director` + `task-kind: spec-author`, then runs `TriggerDetector.detect(ready, running, has_active)` re-using the existing detector (drop-file > queue-drain priority preserved).
+  - `has_active_campaign` is read from the spec_hygiene-owned projection at `state/campaigns/active.json` — single-writer invariant respected; we only read.
+  - On fire: builds the ADR 0007 payload (spec_slug derived from drop-file first line slug or `queue-drain-<ts>`, target_path `docs/specs/<slug>.md`, recent git log per managed repo, existing-spec index, board snapshot), creates one Plane task in state `Ready for AI` with labels `task-kind: spec-author`, `source: spec-director`, `trigger: <source>`, `spec-slug: <slug>`. The payload lands in the description as a single fenced YAML block under a `## Spec Authoring` heading.
+  - Drop-file is archived via the existing `TriggerDetector.archive_drop_file()` only after task creation succeeds.
+  - Zero LLM imports — no `BrainstormService`, no `_claude_cli`, no subprocess to claude. Grep `_claude_cli|call_claude|subprocess.*claude` in the new module returns empty.
+- `pyproject.toml`: registered `operations-center-spec-trigger` script.
+- `src/operations_center/entrypoints/spec_director/main.py`: marked legacy trigger block with `# TODO(ADR 0007 Phase F): superseded by spec_trigger entrypoint + board_worker spec-author handler, delete with retirement.` Brainstorm + CampaignBuilder code paths left intact for now (retired in Phase F per ADR).
+
+**Stop point:** files staged, not committed. Parent handles git ops. Phase A (`spec_hygiene`) still has only an empty `__init__.py`; Phase B does not depend on it at runtime (the projection file is optional — absent means "no active campaign"), but full end-to-end won't work until A also lands so the projection is being rebuilt.
+
+
+
+Branch: `feat/spec-director-refactor`. Phase A of `docs/architecture/adr/0007-spec-director-refactor.md`.
+
+New entrypoint `operations_center.entrypoints.spec_hygiene` hosts the non-LLM hygiene operations previously embedded in `spec_director.run_once()`:
+- Spec archival (`SpecWriter.archive_expired`)
+- Orphan-campaign bootstrap
+- Auto-promote Backlog → Ready for AI
+- Phase orchestration **detection** (the existing `PhaseOrchestrator.run` is invoked unchanged — LLM rewrite still happens via `phase_orchestrator`; full LLM eviction lands in Phase D)
+- Campaign recovery (abandonment scan)
+
+Also adds an `active.json` projection rebuild at the top of every cycle. spec_hygiene is now the single writer of `state/campaigns/active.json` per ADR 0007. Projection is derived from Plane issues labeled `source: spec-campaign`, grouped by `campaign-id: <id>`, with status (active/complete/cancelled) computed from child issue states.
+
+Files:
+- `src/operations_center/entrypoints/spec_hygiene/__init__.py` (new)
+- `src/operations_center/entrypoints/spec_hygiene/main.py` (new, ~340 LOC)
+- `pyproject.toml`: registered `operations-center-spec-hygiene` script.
+- `src/operations_center/entrypoints/spec_director/main.py`: hygiene call sites marked with `TODO(ADR 0007 Phase F): superseded by spec_hygiene entrypoint, delete with retirement.` Code paths left in place — both entrypoints can coexist until Phase F retires spec_director.
+
+Out of scope: board_worker, phase_orchestrator LLM call path, `_claude_cli.py`, other phases. Not touched.
+
+**Stop point:** staged, not committed. Parent handles git ops.
+
 ## 2026-05-22 — Pin context-lifecycle to git tag v0.3.0 (was file:// local pin)
 
 Follow-up to ADR 0002 P4 release. Switched `context-lifecycle` dependency from a local file:// pin to `git+https://github.com/ProtocolWarden/ContextLifecycle.git@v0.3.0`. Matches the pattern OC already uses for `core-runner` and `platform-manifest`. Local editable installs still override the pin for active development.

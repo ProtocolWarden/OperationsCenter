@@ -49,6 +49,10 @@ operations-center-cleanup-stale-backlog = "operations_center.entrypoints.mainten
 operations-center-check-regressions = "operations_center.entrypoints.maintenance.check_regressions:main"
 operations-center-triage-scan       = "operations_center.entrypoints.maintenance.triage_scan:main"
 operations-center-board-unblock     = "operations_center.entrypoints.maintenance.board_unblock:main"
+# ADR 0007 Phase B — spec trigger watcher. Emits one `spec-author` Plane task
+# per cycle on drop-file or queue-drain; no LLM calls. Supersedes the trigger
+# half of spec_director (retired in Phase F).
+operations-center-spec-trigger      = "operations_center.entrypoints.spec_trigger.main:main"
 # Operator one-shots — added 2026-04-28 from audit triage Group B.
 operations-center-autonomy-tiers    = "operations_center.entrypoints.autonomy_tiers.main:main"
 operations-center-ci-monitor        = "operations_center.entrypoints.ci_monitor.main:main"
@@ -71,6 +75,10 @@ operations-center-run-memory        = "operations_center.run_memory.cli:app"
 # Single-command provenance reader — prints OC↔RxP↔SwitchBoard chain
 # from execution_trace.json alone. Hardening arc item 3.
 operations-center-run-show          = "operations_center.entrypoints.run_show.main:main"
+# ADR 0007 Phase A — spec_hygiene watcher. Non-LLM hygiene + active.json
+# projection rebuild extracted from spec_director. Single writer of
+# state/campaigns/active.json.
+operations-center-spec-hygiene      = "operations_center.entrypoints.spec_hygiene.main:main"
 
 [project.optional-dependencies]
 dev = [
