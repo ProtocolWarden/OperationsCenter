@@ -127,7 +127,7 @@ Usage:
   scripts/operations-center.sh watch-all-stop
   scripts/operations-center.sh watch-all-status
   scripts/operations-center.sh intake [--once]
-  scripts/operations-center.sh status [--repo REPO,REPO]
+  scripts/operations-center.sh status
   scripts/operations-center.sh watchdog
   scripts/operations-center.sh dev-status
   scripts/operations-center.sh watch --role goal
@@ -811,9 +811,7 @@ PYEOF
     status_watchdog
     ;;
   status)
-    ensure_venv
-    load_env_file
-    "${VENV_DIR}/bin/python" "${ROOT_DIR}/scripts/oc-status.py" "${@}"
+    status_watchdog
     ;;
   worker)
     ensure_venv

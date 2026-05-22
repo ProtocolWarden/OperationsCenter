@@ -773,13 +773,6 @@ Useful companions:
 - `./scripts/operations-center.sh dev-down`
 - `./scripts/operations-center.sh dev-restart`
 
-### Live Status Dashboard
-
-```bash
-./scripts/operations-center.sh status [--repo REPO,REPO]
-```
-
-Runs `scripts/oc-status.py` — a live terminal dashboard that refreshes every 2 seconds, showing watcher state (role, cycle, last action, task ID, age, alive), active Kodo workspaces, board counts per repo, circuit breaker status, and available memory. Uses direct row addressing so it never grows the terminal scrollback. Pass `--repo OperationsCenter,OperatorConsole` to filter board and workspace rows by repo key.
 
 ## Runtime Files
 
