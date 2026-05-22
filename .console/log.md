@@ -1,5 +1,37 @@
 # Log
 
+## 2026-05-22 — P3: remove local `.context/`; cognition now hosted by anchor manifest
+
+Branch: `feat/p3-remove-local-context`.
+
+Phase 3 of work order `PlatformDeployment/docs/architecture/adr/0002-work-order-manifest-cognition.md`. OC no longer hosts its own cognition state; durable CL artifacts live under the active anchor manifest's `.context/sessions/<sid>/`. Sessions targeting OC must run `eval $(cl session start <PlatformManifest|PrivateManifest>)` first.
+
+Removed:
+- `.context/` (entire tree — templates, config.yaml, README.md, loop_schedule.json, all `.gitkeep`s for active/checkpoints/handoffs/capsules/leases/archive).
+
+Migrated runtime/operational state (NOT cognition) to OC-local surfaces:
+- `.context/loop_schedule.json` → `.console/loop_schedule.json`. OC-local runtime state written by the watchdog session at STEP 10 and read by `tools/loop/controller.py` for adaptive delay. Updated `controller.py` (SCHEDULE_FILE path + module docstring), `tools/loop/oc_session_prompt.txt`, `.console/watchdog_loop_prompt.md`, `docs/operator/watchdog_loop.md`, `LOOP_START.md` to point to the new path.
+- `.context/config.yaml` worker/loop/watchers sections → `.console/workers.yaml`. CL guard flags from that file are NOT migrated (they now live in the anchor manifest's `.context/config.yaml` — they're manifest-wide, not OC-specific).
+- Templates were already promoted to PlatformManifest in the companion `feat/p3-context-host` branch.
+
+Code updates for the rehome:
+- `src/operations_center/execution/ci_evaluator.py` — `_POLICY_FILE_PATTERNS` swapped `.context/config.yaml` → `.console/workers.yaml` (this list flags policy-widening diffs; new path is the equivalent under the OC-local convention).
+- `src/operations_center/execution/ci_store.py` — module + helper docstrings updated to describe artifacts as anchor-manifest-hosted.
+- `src/operations_center/contracts/ci.py` — `ClpBinding`, `LineageAttempt`, `ImprovementLineage` docstrings and Field descriptions updated; paths are now anchor-relative (e.g. `active/<lineage_id>/lineage.json`) rather than `.context/capsules/...`.
+- `tests/unit/contracts/test_ci_contracts.py` — fixture strings updated to match (pure cosmetic; field accepts any string).
+- `CLAUDE.md` — Cognition Lifecycle section rewritten to point at the anchor manifest pattern; surfaces table now includes `.console/workers.yaml` and `.console/loop_schedule.json`; lifecycle diagram uses `<anchor>/.context/sessions/<sid>/...` paths.
+
+Untouched (intentional):
+- `.claude/hooks/pre_tool_use.sh` and `stop.sh` — bash hook implementations. With `.context/config.yaml` gone they fall back to defaults; `require_capsule=false` keeps them passing as no-ops. ADR 0002 P5 replaces them with `cl hook` shims; not in P3 scope.
+- `.console/log.md` historical entries — left as-is (history references old paths intentionally).
+- `.console/.context` compiled context — auto-generated; regenerated at next session launch.
+
+Preflight notes:
+- Verified no systemd unit, cron job, or external scheduler references `loop_schedule.json` or `.context/`. OC controller (`tools/loop/controller.py`) is currently NOT running on this machine (only VideoFoundry's controller is active).
+- No live cognition data found in OC's `.context/` prior to removal — only empty `.gitkeep`s under active/, checkpoints/, handoffs/, capsules/, leases/, archive/ plus the loop schedule and config. Operator-approved removal scope matched reality.
+
+Not committed yet — staged for parent review.
+
 ## OC Platform Watchdog Cycle — 2026-05-22 06:17 UTC (Cycle 11)
 
 - Lock owner: watchdog pid (reclaimed)

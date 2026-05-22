@@ -182,22 +182,24 @@ class ClpBinding(BaseModel):
     """
     References to CLP artifacts providing continuity across refinement attempts.
 
-    Primary lineage lives in .context/capsules/<lineage_id>/lineage.json
-    (CLP-native). OC indexes via OcLineageIndexEntry. Warehouse archives
-    after resolution. All paths relative to the target repo root.
+    Primary lineage lives at
+    ``<anchor_manifest>/.context/sessions/<sid>/active/<lineage_id>/lineage.json``
+    (CLP-native; per P3 of ADR 0002). OC indexes via OcLineageIndexEntry.
+    Warehouse archives after resolution. All paths are resolved against the
+    active session anchor; OC does not host these artifacts itself.
     """
 
     investigation_capsule_path: Optional[str] = Field(
         default=None,
-        description="Active InvestigationCapsule, e.g. '.context/active/inv-<id>.yaml'",
+        description="Active InvestigationCapsule, anchor-relative e.g. 'active/inv-<id>.yaml'",
     )
     loop_checkpoint_path: Optional[str] = Field(
         default=None,
-        description="Latest LoopCheckpoint, e.g. '.context/checkpoints/chk-<id>.yaml'",
+        description="Latest LoopCheckpoint, anchor-relative e.g. 'checkpoints/chk-<id>.yaml'",
     )
     worker_handoff_path: Optional[str] = Field(
         default=None,
-        description="Active WorkerHandoff, e.g. '.context/handoffs/handoff-<id>.yaml'",
+        description="Active WorkerHandoff, anchor-relative e.g. 'handoffs/handoff-<id>.yaml'",
     )
     lease_expires_at: Optional[datetime] = Field(
         default=None,
@@ -206,8 +208,8 @@ class ClpBinding(BaseModel):
     lineage_artifact_path: Optional[str] = Field(
         default=None,
         description=(
-            "Path to ImprovementLineage JSON, e.g. "
-            "'.context/capsules/<lineage_id>/lineage.json'. "
+            "Path to ImprovementLineage JSON, anchor-relative e.g. "
+            "'active/<lineage_id>/lineage.json'. "
             "CLP-native canonical location; OC indexes this path in run store."
         ),
     )
@@ -244,7 +246,8 @@ class LineageAttempt(BaseModel):
     Complete record of a single refinement attempt.
 
     One LineageAttempt is appended per execution, stored in
-    .context/capsules/<lineage_id>/attempt-<n>/ alongside artifacts.
+    ``<anchor>/.context/sessions/<sid>/active/<lineage_id>/attempt-<n>/``
+    alongside artifacts.
     """
 
     attempt_number: int = Field(ge=1)
@@ -318,7 +321,8 @@ class ImprovementLineage(BaseModel):
     """
     Full history of refinement attempts for this work item.
 
-    Stored at: .context/capsules/<lineage_id>/lineage.json (CLP-native).
+    Stored at ``<anchor>/.context/sessions/<sid>/active/<lineage_id>/lineage.json``
+    (CLP-native).
     OC indexes via OcLineageIndexEntry. Warehouse archives post-resolution.
     Append-only in normal operation.
     """

@@ -22,27 +22,29 @@ Do not edit `.console/.context` directly — it is regenerated at each launch.
 
 ## Cognition Lifecycle
 
-OC uses [ContextLifecycle](https://github.com/ProtocolWarden/ContextLifecycle) for bounded, resumable agent sessions.
+OC uses [ContextLifecycle](https://github.com/ProtocolWarden/ContextLifecycle) for bounded, resumable agent sessions. **Cognition is hosted by the anchoring manifest** — OC carries no `.context/` of its own. Per P3 of `PlatformDeployment/docs/architecture/adr/0002-work-order-manifest-cognition.md`, every Claude Code session targeting OC must first run `eval $(cl session start PlatformManifest)` (or `PrivateManifest` for private work). All capsules, checkpoints, and handoffs land under the anchor's `.context/sessions/<CL_SESSION_ID>/` subtree.
 
-| Surface       | Purpose                                                      |
-|---------------|--------------------------------------------------------------|
-| `.console/`   | Operational truth — task, guidelines, backlog, log           |
-| `.context/`   | Durable cognition — capsules, checkpoints, handoffs, leases  |
-| `.claude/`    | Claude Code adapter — ContextGuard hooks                     |
+| Surface                                | Purpose                                                              |
+|----------------------------------------|----------------------------------------------------------------------|
+| `.console/`                            | Operational truth — task, guidelines, backlog, log                   |
+| `.console/workers.yaml`                | OC worker/watcher definitions (replaces old `.context/config.yaml`)  |
+| `.console/loop_schedule.json`          | Runtime watchdog state (cycle delay) — local runtime, not cognition  |
+| `<anchor>/.context/sessions/<sid>/`    | Durable cognition (capsules, checkpoints, handoffs) on the manifest  |
+| `.claude/`                             | Claude Code adapter — ContextGuard hooks (CL shim per ADR 0002 P5)   |
 
 **Orchestrator lifecycle:**
 
 ```
-wake → read .context/checkpoints/<latest>.yaml
-     → read active capsule refs
+wake → read <anchor>/.context/sessions/<sid>/checkpoints/<latest>.yaml
+     → read <anchor>/.context/sessions/<sid>/active/ capsule refs
      → classify state
      → dispatch bounded worker if needed
-     → write updated checkpoint
+     → write updated checkpoint to <anchor>/.context/sessions/<sid>/checkpoints/
      → update .console/log.md
      → terminate or compact
 ```
 
-**On session start:** Check `.context/active/` for any active capsules. Check `.context/checkpoints/` for the latest checkpoint.
-**On session end:** Write a LoopCheckpoint. Update any active capsule's `handoff_notes` and `next_actions`.
-**Templates:** `.context/templates/`
-**Config:** `.context/config.yaml`
+**On session start:** verify `CL_ANCHOR` is set. Check `<anchor>/.context/sessions/<CL_SESSION_ID>/active/` for any active capsules; check `checkpoints/` for the latest checkpoint.
+**On session end:** write a LoopCheckpoint to `checkpoints/`. Update any active capsule's `handoff_notes` and `next_actions`. `cl session end` archives the session subdir.
+**Templates:** `<anchor>/.context/templates/`.
+**Config:** `<anchor>/.context/config.yaml` (CL guard flags) and `.console/workers.yaml` (OC operational config).

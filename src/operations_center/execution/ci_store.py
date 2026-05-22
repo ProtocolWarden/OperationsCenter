@@ -8,8 +8,10 @@ records keyed by lineage_id, and ``OcContinuousImprovementState`` records keyed
 by proposal_id.
 
 The full ImprovementLineage artifact lives at the CLP-native path
-``<lineage_artifact_path>`` (e.g. .context/capsules/<id>/lineage.json in the
-target repo). This store holds only the index pointer and mutable state.
+``<lineage_artifact_path>``, resolved against the anchor manifest's
+``.context/sessions/<sid>/active/<id>/lineage.json`` (per P3 of work order
+PlatformDeployment/docs/architecture/adr/0002-work-order-manifest-cognition.md).
+This store holds only the index pointer and mutable state.
 """
 
 from __future__ import annotations
@@ -89,8 +91,8 @@ class CiStore:
     # ------------------------------------------------------------------
     # Lineage artifact (CLP-native JSON at lineage_artifact_path)
     # These helpers read/write the ImprovementLineage from the target
-    # repo's .context/capsules/ directory. The store itself only holds
-    # the index pointer.
+    # anchor manifest's .context/sessions/<sid>/active/ subtree. The
+    # store itself only holds the index pointer.
 
     @staticmethod
     def load_lineage(lineage_artifact_path: Path) -> ImprovementLineage | None:

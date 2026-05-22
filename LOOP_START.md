@@ -53,7 +53,7 @@ python tools/loop/controller.py --status   # confirm running
 ```
 
 Each iteration is a fresh `claude -p` session — context never accumulates across cycles.
-The session writes `.context/loop_schedule.json` at STEP 10; the controller reads it for
+The session writes `.console/loop_schedule.json` at STEP 10; the controller reads it for
 adaptive delay before spawning the next session.
 
 ### What the controller passes to each session

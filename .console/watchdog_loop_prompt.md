@@ -160,7 +160,7 @@ schedule = {
     "state": "<STATE>",
     "reason": "<one sentence naming the driving signal>",
 }
-Path(".context/loop_schedule.json").write_text(json.dumps(schedule))
+Path(".console/loop_schedule.json").write_text(json.dumps(schedule))
 ```
 
 Do NOT call ScheduleWakeup. Exit cleanly after writing the schedule file.

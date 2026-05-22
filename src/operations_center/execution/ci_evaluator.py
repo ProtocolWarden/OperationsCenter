@@ -42,7 +42,7 @@ _POLICY_FILE_PATTERNS = (
     "forbidden_paths",
     "policy",
     "allowed_paths",
-    ".context/config.yaml",
+    ".console/workers.yaml",
 )
 
 

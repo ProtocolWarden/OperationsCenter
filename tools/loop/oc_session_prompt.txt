@@ -22,9 +22,9 @@ infrastructure requiring human access, or policy decisions that genuinely cannot
 made programmatically. Everything else — code bugs, queue deadlocks, watcher crashes,
 stale locks, infra config errors — is YOUR responsibility to diagnose and fix.
 
-Do NOT call ScheduleWakeup. Instead, at STEP 10 write .context/loop_schedule.json:
+Do NOT call ScheduleWakeup. Instead, at STEP 10 write .console/loop_schedule.json:
   import json; from pathlib import Path
-  Path(".context/loop_schedule.json").write_text(json.dumps({
+  Path(".console/loop_schedule.json").write_text(json.dumps({
       "delay_s": <int>, "state": "<STATE>", "reason": "<driving signal>"
   }))
 Then exit cleanly.
@@ -363,10 +363,10 @@ FORBIDDEN: Do not choose STALLED cadence when PARKED_OPERATOR_BLOCKED criteria a
 Use the WORST health state observed across all steps.
 Log the chosen cadence and the driving signal in the cycle summary.
 
-Write .context/loop_schedule.json with the chosen state and delay:
+Write .console/loop_schedule.json with the chosen state and delay:
   import json
   from pathlib import Path
   schedule = {"delay_s": <chosen delay as int>, "state": "<STATE>", "reason": "<driving signal>"}
-  Path(".context/loop_schedule.json").write_text(json.dumps(schedule))
+  Path(".console/loop_schedule.json").write_text(json.dumps(schedule))
 
 Exit cleanly. Do NOT call ScheduleWakeup.

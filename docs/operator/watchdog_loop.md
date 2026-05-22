@@ -14,7 +14,7 @@ progress. When healthy it backs off to maintenance frequency.
 
 The loop is controller-driven: `tools/loop/controller.py` spawns a fresh
 `claude -p` session for each iteration so context never accumulates. Each session
-exits cleanly after writing `.context/loop_schedule.json`; the controller reads
+exits cleanly after writing `.console/loop_schedule.json`; the controller reads
 that file for adaptive timing before launching the next session.
 
 **Related docs:**
@@ -646,7 +646,7 @@ Automation self-deception: DEGRADED minimum cadence + create Plane escalation ta
 Use the WORST health state observed across all steps. Starvation/stagnation/convergence signals
 force STALLED minimum immediately — single cycle evidence is sufficient.
 Log the chosen cadence and the driving signal in the cycle summary.
-Write .context/loop_schedule.json with {"delay_s": <int>, "state": "<STATE>", "reason": "<signal>"}
+Write .console/loop_schedule.json with {"delay_s": <int>, "state": "<STATE>", "reason": "<signal>"}
 then exit cleanly. Do NOT call ScheduleWakeup — the controller reads this file.
 ```
 

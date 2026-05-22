@@ -5,6 +5,9 @@
 !.console/log.md
 !.console/validation/
 !.console/validation/**
+# P3: OC-local operational config and runtime state (migrated from .context/)
+!.console/workers.yaml
+!.console/loop_schedule.json
 CLAUDE.md
 .custodian/tmp*.yaml
 __pycache__/
@@ -45,8 +48,5 @@ scripts/tmp_*.py
 # managed repos) live untracked under config/managed_repos/local/.
 config/managed_repos/local/
 
-# ContextLifecycleProtocol scratch state
-.context/tmp/
-.context/active/*.lock
-.context/leases/*.live
-.context/leases/*.pid
+# (Per ADR 0002 P3, OC's .context/ is removed — cognition is hosted by
+# the anchoring manifest. Former scratch-state ignores deleted.)

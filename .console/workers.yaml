@@ -1,17 +1,17 @@
-# OperationsCenter — ContextLifecycle config
-clp_version: "0.1"
+# OperationsCenter — worker and watcher definitions
+#
+# Migrated from .context/config.yaml (P3 of work order
+# PlatformDeployment/docs/architecture/adr/0002-work-order-manifest-cognition.md).
+# CL guard flags moved to the anchoring manifest's .context/config.yaml;
+# OC-specific operational config (worker scopes, watchdog cycle, dispatch
+# wiring) lives here in .console/ — OC's operational truth surface.
+
+clp_version: "0.2"
 repo: "OperationsCenter"
 
-guard:
-  require_capsule: false    # set true to enforce capsule presence for all tool calls
-  enforce_lease: true
-  capsule_path: ".context/active/"
-  checkpoint_path: ".context/checkpoints/"
-  handoff_path: ".context/handoffs/"
-
 loop:
-  relaunch_command: "python scripts/watchdog_loop.py"
-  relaunch_args: ["--config", ".context/config.yaml"]
+  relaunch_command: "python tools/loop/controller.py"
+  relaunch_args: []
   max_cycle_minutes: 60
   checkpoint_on_stop: true
 
@@ -21,13 +21,11 @@ workers:
     max_minutes: 30
     max_tool_calls: 75
     allowed_paths:
-      - ".context/"
       - ".console/"
       - "src/"
       - "tests/"
     forbidden_paths:
       - ".console/tmp/"
-      - ".context/tmp/"
     allowed_subagents: 1
     mutation_policy: "write_allowed"
 

@@ -199,7 +199,7 @@ class TestOcLineageIndexEntry:
         entry = OcLineageIndexEntry(
             lineage_id="lin-001",
             proposal_id="prop-001",
-            lineage_artifact_path=".context/capsules/lin-001/lineage.json",
+            lineage_artifact_path="active/lin-001/lineage.json",
             status=RefinementStatus.IN_PROGRESS,
             current_attempt_number=1,
             last_updated_at=_utcnow(),
@@ -211,7 +211,7 @@ class TestOcLineageIndexEntry:
         entry = OcLineageIndexEntry(
             lineage_id="lin-001",
             proposal_id="prop-001",
-            lineage_artifact_path=".context/capsules/lin-001/lineage.json",
+            lineage_artifact_path="active/lin-001/lineage.json",
             status=RefinementStatus.ACCEPTED,
             current_attempt_number=2,
             accepted_attempt_number=2,
