@@ -1,16 +1,36 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 # src/operations_center/spec_director/phase_orchestrator.py
-"""Phase orchestrator — advances spec campaign phases and unblocks stuck tasks."""
+"""Phase orchestrator — detection-only (ADR 0007 Phase D).
+
+After Phase D, this module performs only LLM-free Plane state transitions and
+emits structured ``PendingPhaseAdvance`` records describing campaigns whose
+current phase has reached terminal state and whose next phase should begin.
+
+The caller (``spec_hygiene``) is responsible for creating ``spec-author`` Plane
+tasks with ``task_phase`` set for each pending advance; ``board_worker`` then
+executes the actual spec rewrite through the normal backend executor pipeline
+(no direct Claude subprocess, no ``_claude_cli`` import).
+
+What this module DOES still do synchronously:
+    * Promote backlog test/improve tasks to "Ready for AI" when their
+      predecessor phase is fully terminal.
+    * Close out a campaign (parent → Done, lifecycle: archived label) when
+      all child tasks are terminal.
+
+What this module no longer does (removed in Phase D):
+    * Call ``_claude_cli.call_claude`` to rewrite spec text between phases.
+    * Rewrite blocked-task descriptions via Claude. Blocked-task auto-recovery
+      via LLM rewrite is retired with this refactor; if it returns it will be
+      built on the same Plane → board_worker → backend pipeline.
+"""
 from __future__ import annotations
 
 import logging
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from operations_center.spec_director._claude_cli import call_claude
 from operations_center.spec_director.state import CampaignStateManager
 
 logger = logging.getLogger(__name__)
@@ -46,12 +66,6 @@ def _campaign_id_from_issue(issue: dict) -> str | None:
     return None
 
 
-def _has_lifecycle_label(issue: dict, value: str) -> bool:
-    """Check for `lifecycle: <value>` label (e.g. lifecycle: expanded)."""
-    target = f"lifecycle: {value}".lower()
-    return any(lbl.strip().lower() == target for lbl in _labels(issue))
-
-
 def _task_kind(issue: dict) -> str:
     for lbl in _labels(issue):
         if lbl.strip().lower().startswith("task-kind:"):
@@ -59,80 +73,85 @@ def _task_kind(issue: dict) -> str:
     return "goal"
 
 
-def _parse_rewrite_count(description: str) -> int:
-    m = re.search(r"block_rewrite_count:\s*(\d+)", description)
-    return int(m.group(1)) if m else 0
+@dataclass
+class PendingPhaseAdvance:
+    """A campaign whose current phase has completed and whose next phase
+    should be authored. Emitted by ``PhaseOrchestrator.detect_pending_advances``;
+    consumed by ``spec_hygiene`` to create a Plane ``spec-author`` task with
+    ``task_phase`` set.
 
-
-def _set_rewrite_count(description: str, count: int) -> str:
-    if re.search(r"block_rewrite_count:\s*\d+", description):
-        return re.sub(r"block_rewrite_count:\s*\d+", f"block_rewrite_count: {count}", description)
-    # Inject after task_phase line if present
-    updated = re.sub(
-        r"(task_phase:\s*\S+)",
-        rf"\1\nblock_rewrite_count: {count}",
-        description,
-        count=1,
-    )
-    if updated == description:
-        # Fallback: inject at end of ## Execution section (before next ## or end of string)
-        new_updated = re.sub(
-            r"(## Execution\n(?:(?!##).)*?)(\n## |\Z)",
-            lambda m: m.group(1) + f"\nblock_rewrite_count: {count}" + m.group(2),
-            description,
-            count=1,
-            flags=re.DOTALL,
-        )
-        if new_updated != description:
-            updated = new_updated
-        else:
-            # No ## Execution section at all — append at end
-            updated = description.rstrip("\n") + f"\nblock_rewrite_count: {count}\n"
-    return updated
-
-
-def _read_spec_text(description: str, specs_dir: Path) -> str:
-    m = re.search(r"spec_file:\s*(\S+)", description)
-    if not m:
-        return ""
-    rel = m.group(1)
-    candidates = [specs_dir / Path(rel).name, Path(rel)]
-    for p in candidates:
-        try:
-            return p.read_text(encoding="utf-8")
-        except Exception:
-            continue
-    return ""
+    Carries everything the spec rewrite prompt needs without forcing the caller
+    to re-derive it from the issues list.
+    """
+    campaign_id: str
+    spec_slug: str
+    spec_file_path: str
+    current_phase: str
+    next_phase: str
+    # Compact snapshot of each child task: (kind, status, title).
+    # Goes into the seed_text so the rewrite prompt sees the phase state.
+    task_summaries: list[tuple[str, str, str]] = field(default_factory=list)
 
 
 @dataclass
 class PhaseOrchestrationResult:
     phases_advanced: int = 0
+    campaigns_completed: int = 0
+    pending_advances: list[PendingPhaseAdvance] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+
+    # Back-compat shims for callers that read these fields (the spec_director
+    # legacy entrypoint reads them). Both are always zero post-Phase D.
     tasks_unblocked: int = 0
     tasks_cancelled: int = 0
-    campaigns_completed: int = 0
-    errors: list[str] = field(default_factory=list)
+
+
+# Ordered phase progression. Keys are the task-kind labels present on Plane
+# issues; values are the next-phase identifier emitted in the
+# ``task_phase`` field of the spec-author payload.
+_PHASE_ADVANCE_CHAIN: list[tuple[str, str]] = [
+    ("goal",            "test"),
+    ("test_campaign",   "improve"),
+]
 
 
 class PhaseOrchestrator:
+    """Detection-only orchestrator (ADR 0007 Phase D).
+
+    Per-cycle responsibilities:
+      1. Promote backlog tasks in the next phase to "Ready for AI" when the
+         current phase is fully terminal. (No LLM.)
+      2. Close out campaigns when every child task is terminal. (No LLM.)
+      3. Emit ``PendingPhaseAdvance`` records for the spec-rewrite step;
+         caller creates Plane tasks for the backend to execute.
+    """
+
     def __init__(
         self,
         client: Any,
         state_manager: CampaignStateManager,
         specs_dir: Path,
-        max_rewrite_attempts: int = 2,
+        # Kept for back-compat with existing call sites; unused now that the
+        # rewrite path is gone. Will be removed when spec_director is retired.
+        max_rewrite_attempts: int = 2,  # noqa: ARG002 — kept for signature compat
     ) -> None:
         self._client = client
         self._state = state_manager
         self._specs_dir = specs_dir
-        self._max_rewrites = max_rewrite_attempts
+
+    def detect_pending_advances(self, issues: list[dict]) -> list[PendingPhaseAdvance]:
+        """Return campaigns where the current phase is complete and the next
+        should begin. Caller is responsible for creating Plane tasks via the
+        spec-author handler (ADR 0007 Phase D)."""
+        result = self.run(issues)
+        return result.pending_advances
 
     def run(self, issues: list[dict]) -> PhaseOrchestrationResult:
         result = PhaseOrchestrationResult()
         active = self._state.load()
         for campaign in active.active_campaigns():
             try:
-                self._orchestrate(campaign.campaign_id, issues, result)
+                self._orchestrate(campaign, issues, result)
             except Exception as exc:
                 logger.error(
                     '{"event": "phase_orchestrator_error", "campaign_id": "%s", "error": "%s"}',
@@ -143,10 +162,11 @@ class PhaseOrchestrator:
 
     def _orchestrate(
         self,
-        campaign_id: str,
+        campaign: Any,
         issues: list[dict],
         result: PhaseOrchestrationResult,
     ) -> None:
+        campaign_id = campaign.campaign_id
         by_phase: dict[str, list[dict]] = {
             "goal": [],
             "test_campaign": [],
@@ -163,54 +183,48 @@ class PhaseOrchestrator:
                 bucket = kind if kind in by_phase else "goal"
                 by_phase[bucket].append(issue)
 
-        # Handle blocked tasks before phase-advancement check
-        for phase_key in ("goal", "test_campaign", "improve_campaign"):
-            for issue in by_phase[phase_key]:
-                if _status(issue) == "blocked":
-                    self._handle_blocked(issue, result)
-
-        # Phase advancement is evaluated independently for each phase transition.
-        # Both checks run every cycle: if goal and test_campaign tasks happen to be
-        # terminal simultaneously, both transitions fire in the same cycle (fast-path).
-        # The board is the ground truth; next cycle's state reflects actual outcomes.
-
-        # NOTE: _handle_blocked transitions issues on the board, but the in-memory
-        # `issues` list still reflects the old state for this cycle. Phase advancement
-        # will see the updated state on the next cycle (correct — the task was re-queued).
-
-        # Phase advancement: implement (goal) → test_campaign
-        if by_phase["goal"] and self._all_terminal(by_phase["goal"]):
-            backlog_test = [i for i in by_phase["test_campaign"] if _status(i) == "backlog"]
-            for issue in backlog_test:
+        # Phase promotion (no LLM): when phase N is terminal, transition
+        # backlog tasks in phase N+1 to Ready for AI so the backend picks
+        # them up. The spec rewrite itself is emitted as a PendingPhaseAdvance
+        # for the caller to enqueue as a spec-author task.
+        for current_kind, next_phase_id in _PHASE_ADVANCE_CHAIN:
+            current = by_phase[current_kind]
+            if not (current and self._all_terminal(current)):
+                continue
+            # Map next_phase_id ("test" / "improve") to the bucket.
+            next_kind = "test_campaign" if next_phase_id == "test" else "improve_campaign"
+            backlog_next = [i for i in by_phase[next_kind] if _status(i) == "backlog"]
+            for issue in backlog_next:
                 self._client.transition_issue(str(issue["id"]), "Ready for AI")
                 result.phases_advanced += 1
-            if backlog_test:
+            if backlog_next:
                 self._comment_parent(
                     by_phase["parent"],
-                    f"Advancing to test phase: {len(backlog_test)} tasks promoted.",
+                    f"Advancing to {next_kind} phase: {len(backlog_next)} tasks promoted.",
                 )
                 logger.info(
-                    '{"event": "phase_advanced", "campaign_id": "%s", "to": "test_campaign", "count": %d}',
-                    campaign_id, len(backlog_test),
+                    '{"event": "phase_advanced", "campaign_id": "%s", "to": "%s", "count": %d}',
+                    campaign_id, next_kind, len(backlog_next),
                 )
 
-        # Phase advancement: test_campaign → improve_campaign
-        if by_phase["test_campaign"] and self._all_terminal(by_phase["test_campaign"]):
-            backlog_improve = [i for i in by_phase["improve_campaign"] if _status(i) == "backlog"]
-            for issue in backlog_improve:
-                self._client.transition_issue(str(issue["id"]), "Ready for AI")
-                result.phases_advanced += 1
-            if backlog_improve:
-                self._comment_parent(
-                    by_phase["parent"],
-                    f"Advancing to improve phase: {len(backlog_improve)} tasks promoted.",
+            # Emit a PendingPhaseAdvance describing the spec-rewrite the
+            # spec-author handler needs to perform. The caller dedupes
+            # against the board (one in-flight phase-advance task per
+            # spec+phase) before creating the Plane task.
+            result.pending_advances.append(
+                PendingPhaseAdvance(
+                    campaign_id=campaign_id,
+                    spec_slug=campaign.slug,
+                    spec_file_path=campaign.spec_file or str(
+                        self._specs_dir / f"{campaign.slug}.md"
+                    ),
+                    current_phase=current_kind,
+                    next_phase=next_phase_id,
+                    task_summaries=_summarize_phase_tasks(by_phase),
                 )
-                logger.info(
-                    '{"event": "phase_advanced", "campaign_id": "%s", "to": "improve_campaign", "count": %d}',
-                    campaign_id, len(backlog_improve),
-                )
+            )
 
-        # Campaign completion: all child tasks terminal
+        # Campaign completion: all child tasks terminal.
         all_tasks = by_phase["goal"] + by_phase["test_campaign"] + by_phase["improve_campaign"]
         if all_tasks and self._all_terminal(all_tasks):
             done_n = sum(1 for i in all_tasks if _status(i) == "done")
@@ -222,9 +236,6 @@ class PhaseOrchestrator:
                     parent_id,
                     f"Campaign complete. {done_n} tasks done, {cancelled_n} cancelled.",
                 )
-                # Tag the campaign parent task as archived so any future
-                # processor knows this branch of the work is terminal-and-
-                # frozen — no rewrites, no re-promotion, no further automation.
                 try:
                     existing = [
                         (lab.get("name", "") if isinstance(lab, dict) else str(lab)).strip()
@@ -232,7 +243,9 @@ class PhaseOrchestrator:
                     ]
                     existing = [n for n in existing if n]
                     if "lifecycle: archived" not in existing:
-                        self._client.update_issue_labels(parent_id, existing + ["lifecycle: archived"])
+                        self._client.update_issue_labels(
+                            parent_id, existing + ["lifecycle: archived"],
+                        )
                 except Exception as exc:
                     logger.warning(
                         '{"event": "lifecycle_archive_failed", "task_id": "%s", "error": "%s"}',
@@ -248,132 +261,22 @@ class PhaseOrchestrator:
     def _all_terminal(self, issues: list[dict]) -> bool:
         return bool(issues) and all(_status(i) in _TERMINAL_STATES for i in issues)
 
-    def _handle_blocked(self, issue: dict, result: PhaseOrchestrationResult) -> None:
-        task_id = str(issue["id"])
-
-        # Lifecycle guard: a task carrying `lifecycle: expanded` has been
-        # decomposed into children whose own runs do the real work. Don't
-        # rewrite the description — the parent is intentionally quiescent
-        # and waiting for its children to finish (then the board_worker
-        # auto-closes it). Without this guard the orchestrator generates
-        # ghost rewrites against meta-tasks. See
-        # docs/architecture/ghost_work_audit.md G12.
-        if _has_lifecycle_label(issue, "expanded"):
-            logger.info(
-                '{"event": "blocked_rewrite_skipped", "task_id": "%s", "reason": "lifecycle_expanded"}',
-                task_id,
-            )
-            return
-        if _has_lifecycle_label(issue, "archived"):
-            logger.info(
-                '{"event": "blocked_rewrite_skipped", "task_id": "%s", "reason": "lifecycle_archived"}',
-                task_id,
-            )
-            return
-
-        try:
-            full = self._client.fetch_issue(task_id)
-            description = str(
-                full.get("description") or full.get("description_stripped") or ""
-            )
-        except Exception:
-            description = str(
-                issue.get("description") or issue.get("description_stripped") or ""
-            )
-
-        if len(description.strip()) < 20:
-            logger.warning(
-                '{"event": "blocked_rewrite_skipped", "task_id": "%s", "reason": "empty_description"}',
-                task_id,
-            )
-            return
-
-        # Fetch the most recent comment (failure comment left by the executor)
-        last_comment_body: str | None = None
-        try:
-            comments = self._client.list_issue_comments(task_id)
-            if comments:
-                last_comment_body = str(comments[-1].get("body", "") or "")
-        except Exception:
-            logger.debug(
-                '{"event": "blocked_comments_fetch_failed", "task_id": "%s"}',
-                task_id,
-            )
-
-        rewrite_count = _parse_rewrite_count(description)
-        if rewrite_count >= self._max_rewrites:
-            cancel_reason = last_comment_body or "no reason available"
-            self._client.transition_issue(task_id, "Cancelled")
-            self._client.comment_issue(
-                task_id,
-                f"Task cancelled after {self._max_rewrites} rewrite attempts: {cancel_reason}",
-            )
-            result.tasks_cancelled += 1
-            logger.info(
-                '{"event": "blocked_task_cancelled", "task_id": "%s", "rewrites": %d}',
-                task_id, rewrite_count,
-            )
-            return
-
-        spec_text = _read_spec_text(description, self._specs_dir)
-        title = str(issue.get("name", ""))
-        prompt = (
-            "Rewrite this Plane task description to be clearer and more actionable.\n"
-            "Keep all ## section headers. Do NOT change repo:, base_branch:, mode:, "
-            "spec_campaign_id:, spec_file:, task_phase: fields in ## Execution.\n"
-            "Output ONLY the rewritten task description with no preamble.\n\n"
-            f"## Task title\n{title}\n\n"
-            f"## Current description\n{description}\n"
-        )
-        if spec_text:
-            prompt += f"\n## Spec context (do not change the spec)\n{spec_text[:3000]}\n"
-        if last_comment_body:
-            prompt += f"\n## Failure comment\n{last_comment_body}\n"
-
-        try:
-            rewritten = call_claude(prompt)
-        except Exception as exc:
-            logger.warning(
-                '{"event": "blocked_rewrite_failed", "task_id": "%s", "error": "%s"}',
-                task_id, str(exc),
-            )
-            return
-
-        new_count = rewrite_count + 1
-        rewritten = _set_rewrite_count(rewritten, new_count)
-        # Preserve the previous description in a comment so history is
-        # auditable. Mark the original version as superseded — the task id is
-        # the same, but the *version we replaced* is gone from the
-        # description field. Operators can read the comment to see what was
-        # there before the rewrite, and detectors can spot whether something
-        # rewrote a task that shouldn't have been rewritten.
-        try:
-            self._client.comment_issue(
-                task_id,
-                "lifecycle: superseded — previous description superseded by rewrite "
-                f"attempt {new_count}/{self._max_rewrites}. Original version below "
-                "for traceability:\n\n"
-                "```\n"
-                f"{description[:2000]}\n"
-                "```",
-            )
-        except Exception:
-            pass  # non-fatal — best-effort traceability
-        self._client.update_issue_description(task_id, rewritten)
-        self._client.transition_issue(task_id, "Ready for AI")
-        self._client.comment_issue(
-            task_id,
-            f"Description rewritten (attempt {new_count}/{self._max_rewrites}). Re-queued.",
-        )
-        result.tasks_unblocked += 1
-        logger.info(
-            '{"event": "blocked_task_unblocked", "task_id": "%s", "rewrite_count": %d}',
-            task_id, new_count,
-        )
-
     def _comment_parent(self, parents: list[dict], message: str) -> None:
         for parent in parents:
             try:
                 self._client.comment_issue(str(parent["id"]), message)
             except Exception as exc:
-                logger.debug('{"event": "comment_parent_failed", "parent_id": "%s", "error": "%s"}', parent.get("id"), exc)
+                logger.debug(
+                    '{"event": "comment_parent_failed", "parent_id": "%s", "error": "%s"}',
+                    parent.get("id"), exc,
+                )
+
+
+def _summarize_phase_tasks(by_phase: dict[str, list[dict]]) -> list[tuple[str, str, str]]:
+    """Compact (kind, status, title) tuples used to populate the rewrite
+    prompt's seed_text so the LLM sees current phase state."""
+    out: list[tuple[str, str, str]] = []
+    for kind in ("goal", "test_campaign", "improve_campaign"):
+        for issue in by_phase.get(kind, []):
+            out.append((kind, _status(issue), str(issue.get("name", "")).strip()))
+    return out

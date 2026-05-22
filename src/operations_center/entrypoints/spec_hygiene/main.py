@@ -35,8 +35,16 @@ from operations_center.spec_director.models import (
     CampaignRecord,
     SpecFrontMatter,
 )
-from operations_center.spec_director.phase_orchestrator import PhaseOrchestrator
+from operations_center.spec_director.phase_orchestrator import (
+    PendingPhaseAdvance,
+    PhaseOrchestrator,
+)
 from operations_center.spec_director.recovery import RecoveryService
+from operations_center.spec_director.spec_author_task import (
+    SpecAuthorPayload,
+    create_spec_author_task,
+    find_in_flight_phase_advance,
+)
 from operations_center.spec_director.spec_writer import SpecWriter
 from operations_center.spec_director.state import CampaignStateManager
 
@@ -274,6 +282,78 @@ def _auto_promote_backlog(client: PlaneClient, issues: list[dict]) -> None:
         }, ensure_ascii=False))
 
 
+def _build_phase_advance_seed(advance: PendingPhaseAdvance) -> str:
+    """Compose the seed_text the spec-author handler will see for a phase
+    advance. Captures the current spec, the phase we're moving from/to, and
+    the per-task status snapshot so the rewrite prompt has everything it
+    needs without re-reading the board.
+    """
+    lines: list[str] = []
+    lines.append(f"Phase advance: {advance.current_phase} -> {advance.next_phase}")
+    lines.append(f"Campaign: {advance.campaign_id}")
+    lines.append(f"Spec: {advance.spec_file_path}")
+    lines.append("")
+    lines.append("Current task state:")
+    if advance.task_summaries:
+        for kind, status, title in advance.task_summaries:
+            lines.append(f"  - [{kind}] [{status}] {title}")
+    else:
+        lines.append("  (no child tasks recorded)")
+    return "\n".join(lines)
+
+
+def _emit_phase_advance_tasks(
+    *,
+    client: PlaneClient,
+    all_issues: list[dict],
+    pending: list[PendingPhaseAdvance],
+) -> int:
+    """Create a spec-author Plane task with ``task_phase`` set for each
+    pending advance. Dedupes against the board: skip if a non-Done
+    spec-author task with the same spec_slug + task_phase already exists.
+    Returns the count of newly created tasks.
+    """
+    created = 0
+    for advance in pending:
+        existing = find_in_flight_phase_advance(
+            all_issues, advance.spec_slug, advance.next_phase,
+        )
+        if existing is not None:
+            logger.info(json.dumps({
+                "event": "spec_phase_advance_skip_dedupe",
+                "spec_slug": advance.spec_slug,
+                "task_phase": advance.next_phase,
+                "existing_issue_id": existing,
+            }, ensure_ascii=False))
+            continue
+        payload = SpecAuthorPayload(
+            spec_slug=advance.spec_slug,
+            trigger_source="phase_advance",
+            target_path=advance.spec_file_path,
+            seed_text=_build_phase_advance_seed(advance),
+            task_phase=advance.next_phase,
+        )
+        try:
+            issue_id = create_spec_author_task(client, payload)
+        except Exception as exc:
+            logger.error(json.dumps({
+                "event": "spec_phase_advance_create_failed",
+                "spec_slug": advance.spec_slug,
+                "task_phase": advance.next_phase,
+                "error": str(exc),
+            }, ensure_ascii=False))
+            continue
+        created += 1
+        logger.info(json.dumps({
+            "event": "spec_phase_advance_task_created",
+            "issue_id": issue_id,
+            "spec_slug": advance.spec_slug,
+            "task_phase": advance.next_phase,
+            "campaign_id": advance.campaign_id,
+        }, ensure_ascii=False))
+    return created
+
+
 def run_once(settings: Any, client: PlaneClient) -> None:
     sd = settings.spec_director
     if not sd.enabled:
@@ -310,27 +390,32 @@ def run_once(settings: Any, client: PlaneClient) -> None:
     # Step 3: Auto-promote Backlog → Ready for AI for tier-≥2 families.
     _auto_promote_backlog(client, all_issues)
 
-    # Step 4: Phase orchestration — detection of phase advances + blocked-task
-    # handling. Phase advance detection only; LLM rewrite still happens via
-    # phase_orchestrator until ADR 0007 Phase D.
+    # Step 4: Phase orchestration — detection-only (ADR 0007 Phase D).
+    # Runs phase-advance + completion detection synchronously (no LLM) and
+    # returns pending advances; we then create spec-author Plane tasks with
+    # `task_phase` set so board_worker drives the LLM rewrite through the
+    # backend executor pipeline.
     orch = PhaseOrchestrator(
         client=client,
         state_manager=state_mgr,
         specs_dir=_SPECS_DIR,
     )
     orch_result = orch.run(all_issues)
+    tasks_emitted = _emit_phase_advance_tasks(
+        client=client,
+        all_issues=all_issues,
+        pending=orch_result.pending_advances,
+    )
     if any([
         orch_result.phases_advanced,
-        orch_result.tasks_unblocked,
-        orch_result.tasks_cancelled,
         orch_result.campaigns_completed,
+        tasks_emitted,
     ]):
         logger.info(json.dumps({
             "event": "spec_phase_orchestration",
             "phases_advanced": orch_result.phases_advanced,
-            "tasks_unblocked": orch_result.tasks_unblocked,
-            "tasks_cancelled": orch_result.tasks_cancelled,
             "campaigns_completed": orch_result.campaigns_completed,
+            "phase_advance_tasks_emitted": tasks_emitted,
         }, ensure_ascii=False))
 
     # Step 5: Recovery scan — abandon stale campaigns past the threshold.

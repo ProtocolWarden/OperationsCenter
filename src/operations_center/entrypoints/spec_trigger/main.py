@@ -20,7 +20,6 @@ import logging
 import re
 import subprocess
 import time
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -28,6 +27,12 @@ from typing import Any
 from operations_center.adapters.plane import PlaneClient
 from operations_center.config import load_settings
 from operations_center.spec_director.models import TriggerSource
+from operations_center.spec_director.spec_author_task import (
+    LABEL_SOURCE as _LABEL_SOURCE,
+    LABEL_TASK_KIND as _LABEL_TASK_KIND,
+    SpecAuthorPayload,
+    create_spec_author_task,
+)
 from operations_center.spec_director.trigger import TriggerDetector, TriggerResult
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -35,15 +40,6 @@ logger = logging.getLogger(__name__)
 
 _SPECS_DIR = Path("docs/specs")
 _ACTIVE_CAMPAIGNS_PATH = Path("state/campaigns/active.json")
-
-# Initial state for newly created spec-author tasks. Matches CampaignBuilder's
-# default for the `implement` phase (the canonical "pick this up now" state).
-_INITIAL_STATE = "Ready for AI"
-
-# Labels that mark in-flight spec-author work. Dedupe key for the watcher:
-# if any non-Done issue carries BOTH labels, this cycle skips.
-_LABEL_SOURCE = "source: spec-director"
-_LABEL_TASK_KIND = "task-kind: spec-author"
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 _GIT_LOG_COMMITS = 10
@@ -138,71 +134,12 @@ def _collect_existing_specs(specs_dir: Path) -> list[str]:
     )
 
 
-@dataclass
-class _Payload:
-    spec_slug: str
-    trigger_source: str
-    target_path: str
-    seed_text: str
-    recent_git_log_repos: dict[str, str]
-    existing_specs: list[str]
-    ready_count: int
-    running_count: int
-    drained: bool
-
-
-def _render_task_body(p: _Payload) -> str:
-    """Compose the Plane task description.
-
-    The body is plain markdown wrapping a single YAML block — matches the
-    shape the planning subprocess parses from existing task descriptions
-    (see CampaignBuilder._build for the original layout). The
-    `## Spec Authoring` heading delimits the YAML block from any future
-    operator commentary appended in Plane's UI.
-    """
-    git_block = (
-        "\n".join(f"    {repo}: |\n      {log.replace(chr(10), chr(10) + '      ')}"
-                  for repo, log in p.recent_git_log_repos.items())
-        if p.recent_git_log_repos
-        else "    {}"
-    )
-    specs_block = (
-        "\n".join(f"    - {slug}" for slug in p.existing_specs)
-        if p.existing_specs
-        else "    []"
-    )
-    seed_block = (
-        "  " + p.seed_text.replace("\n", "\n  ") if p.seed_text else "  ''"
-    )
-    return f"""## Spec Authoring
-
-```yaml
-task-kind: spec-author
-source: spec-director
-spec_slug: {p.spec_slug}
-trigger_source: {p.trigger_source}
-target_path: {p.target_path}
-seed_text: |
-{seed_block}
-context_bundle:
-  recent_git_log_repos:
-{git_block}
-  existing_specs:
-{specs_block}
-  board_snapshot:
-    ready: {p.ready_count}
-    running: {p.running_count}
-    drained: {str(p.drained).lower()}
-```
-"""
-
-
 def _build_payload(
     trigger: TriggerResult,
     settings: Any,
     ready_count: int,
     running_count: int,
-) -> _Payload:
+) -> SpecAuthorPayload:
     slug = _derive_spec_slug(trigger)
     git_logs: dict[str, str] = {}
     for repo_key, repo_cfg in (settings.repos or {}).items():
@@ -212,7 +149,7 @@ def _build_payload(
         log = _collect_git_log(Path(local_path))
         if log:
             git_logs[repo_key] = log
-    return _Payload(
+    return SpecAuthorPayload(
         spec_slug=slug,
         trigger_source=trigger.source.value,
         target_path=f"docs/specs/{slug}.md",
@@ -223,28 +160,6 @@ def _build_payload(
         running_count=running_count,
         drained=(ready_count == 0 and running_count == 0),
     )
-
-
-def _create_spec_author_task(
-    client: PlaneClient,
-    payload: _Payload,
-) -> str:
-    """Create the Plane task and return its id."""
-    title = f"[Spec] {payload.spec_slug}"
-    body = _render_task_body(payload)
-    labels = [
-        _LABEL_TASK_KIND,
-        _LABEL_SOURCE,
-        f"trigger: {payload.trigger_source}",
-        f"spec-slug: {payload.spec_slug}",
-    ]
-    issue = client.create_issue(
-        name=title,
-        description=body,
-        label_names=labels,
-        state=_INITIAL_STATE,
-    )
-    return str(issue["id"])
 
 
 def run_once(settings: Any, client: PlaneClient) -> None:
@@ -298,7 +213,7 @@ def run_once(settings: Any, client: PlaneClient) -> None:
 
     payload = _build_payload(trigger, settings, ready_count, running_count)
     try:
-        issue_id = _create_spec_author_task(client, payload)
+        issue_id = create_spec_author_task(client, payload)
     except Exception as exc:  # noqa: BLE001 — log and skip; drop-file stays so we can retry
         logger.error(json.dumps(
             {

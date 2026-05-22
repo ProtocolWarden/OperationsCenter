@@ -1756,6 +1756,89 @@ def _parse_spec_author_payload(description: str) -> dict | None:
     return data
 
 
+def _build_phase_advance_goal_text(
+    *,
+    spec_slug: str,
+    target_path: str,
+    task_phase: str,
+    seed_text: str,
+    ctx: dict,
+    run_id_placeholder: str,
+) -> str:
+    """Phase-advance spec rewrite prompt (ADR 0007 Phase D).
+
+    Naive full-regen template: the agent reads the existing spec at
+    ``target_path``, rewrites it for ``task_phase``, and writes it back.
+    When the prompt-diff primitive (ADR 0007 follow-up note) is integrated,
+    only the contents of this function change — the surrounding pipeline,
+    payload shape, and ``_handle_spec_author_success`` (phase-advance branch)
+    do not.
+    """
+    parts: list[str] = []
+    parts.append(
+        f"# Spec phase advance — {spec_slug} -> {task_phase}\n\n"
+        f"The campaign spec at `{target_path}` is currently between phases. "
+        f"Its predecessor phase has finished; the spec now needs to describe "
+        f"the **{task_phase}** phase concretely so the next batch of campaign "
+        f"tasks has clear ground truth."
+    )
+
+    parts.append(
+        "## Required actions\n"
+        f"1. Read the existing spec at `{target_path}` (it is already in the "
+        f"workspace — this repository is `OperationsCenter` and the file is "
+        f"committed on the current branch).\n"
+        f"2. Rewrite the spec for the `{task_phase}` phase. **Preserve**:\n"
+        "   - The YAML front-matter (campaign_id, slug, repos, area_keywords, "
+        "created_at). Update only the `status:` field if appropriate.\n"
+        "   - The provenance comment on line 1 (`<!-- generated_by_run: ... -->`). "
+        "If absent, add one using the run id below.\n"
+        "   - All prior decisions, constraints, and references to completed work. "
+        "Phase-advance is additive — earlier phases are history, not waste.\n"
+        f"3. Replace the `## Goals` section with goals specific to the "
+        f"`{task_phase}` phase. Each goal must be one bounded executor run "
+        "(under 1 hour); 2–4 goals total.\n"
+        "4. Update `## Success Criteria` to reflect what \"done\" means for "
+        f"this phase specifically.\n"
+        f"5. Write the updated spec back to `{target_path}`. Touch no other file.\n"
+    )
+
+    parts.append(
+        "## Provenance\n"
+        f"If the spec is missing its `<!-- generated_by_run: ... -->` header, "
+        f"add `<!-- generated_by_run: {run_id_placeholder} -->` as the first "
+        f"line. Otherwise leave the existing header untouched — phase advances "
+        f"do not overwrite original authorship provenance.\n"
+    )
+
+    if seed_text:
+        parts.append(
+            "## Phase state (from spec_hygiene)\n"
+            "Use this to ground the rewrite — it is the orchestrator's view of "
+            "what just finished and what should come next.\n\n"
+            f"```\n{seed_text}\n```"
+        )
+
+    repos = ctx.get("recent_git_log_repos") or {}
+    if isinstance(repos, dict):
+        for repo_key, log_text in repos.items():
+            if log_text:
+                parts.append(
+                    f"## Recent Git Activity ({repo_key})\n```\n{log_text}\n```"
+                )
+
+    parts.append(
+        "## Boundaries\n"
+        f"- Touch exactly one file: `{target_path}`.\n"
+        "- Do not create new files.\n"
+        "- Do not modify the campaign_id, slug, repos, or area_keywords.\n"
+        f"- Output is the rewritten spec written back to `{target_path}`, "
+        "committed and pushed by the backend.\n"
+    )
+
+    return "\n\n".join(parts)
+
+
 def _build_spec_author_goal_text(payload: dict, run_id_placeholder: str) -> str:
     """Compose the spec-authoring prompt the backend will execute.
 
@@ -1777,12 +1860,26 @@ def _build_spec_author_goal_text(payload: dict, run_id_placeholder: str) -> str:
     ctx          = payload.get("context_bundle") or {}
 
     if task_phase:
-        # TODO(ADR 0007 Phase D): when phase_orchestrator emits spec-author
-        # with task_phase set, branch into the "rewrite existing spec for
-        # this phase" prompt (load current spec, apply phase-state diff).
-        # For now, fall through to the draft prompt so the structural wire-up
-        # is exercisable end-to-end.
-        pass
+        # ADR 0007 Phase D: phase-advance rewrite prompt.
+        #
+        # The agent runs in a workspace where the OC repo is checked out;
+        # the existing spec is on disk at `target_path`. The task is to
+        # rewrite the spec in-place for the next phase, preserving prior
+        # decisions and structure.
+        #
+        # NOTE: this is the naive "full regen" approach the ADR's follow-up
+        # section calls out. When the prompt-diff primitive (cloned from
+        # temm1e-labs/promptlabs) lands, ONLY the body of this branch
+        # changes — the payload shape, board interaction, and
+        # _handle_spec_author_success all stay identical.
+        return _build_phase_advance_goal_text(
+            spec_slug=spec_slug,
+            target_path=target_path,
+            task_phase=task_phase,
+            seed_text=seed_text,
+            ctx=ctx if isinstance(ctx, dict) else {},
+            run_id_placeholder=run_id_placeholder,
+        )
 
     parts: list[str] = []
     parts.append(
