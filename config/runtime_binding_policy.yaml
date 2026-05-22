@@ -20,7 +20,7 @@ rules:
     bind:
       kind: cli_subscription
       provider: anthropic
-      model: sonnet
+      model: haiku
 
   - name: feature_balanced
     when:
@@ -29,7 +29,7 @@ rules:
     bind:
       kind: cli_subscription
       provider: anthropic
-      model: sonnet
+      model: haiku
 
   - name: test_balanced
     when:
@@ -38,7 +38,7 @@ rules:
     bind:
       kind: cli_subscription
       provider: anthropic
-      model: sonnet
+      model: haiku
 
   - name: lint_cheap
     when:
@@ -53,4 +53,4 @@ default:
   bind:
     kind: cli_subscription
     provider: anthropic
-    model: sonnet
+    model: haiku
