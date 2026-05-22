@@ -1,5 +1,13 @@
 # Log
 
+## 2026-05-22 — P6: annotate continuous-improvement design with anchor-host paths
+
+Branch: `feat/p6-cleanup`. Phase 6 of work order `PlatformDeployment/docs/architecture/adr/0002-work-order-manifest-cognition.md`.
+
+Audited `docs/architecture` and `docs/design` for stale `.context/` references. Only `docs/design/continuous-improvement/design.md` (a DRAFT) carried bare `.context/{active,checkpoints,capsules,handoffs}/...` paths from before the manifest-host migration. Rather than rewriting every example in a draft that's still in flight, added a single "Updated post-ADR 0002 P3" callout at the top instructing readers to mentally prefix every `.context/...` path with `<CL_ANCHOR>/.context/sessions/<CL_SESSION_ID>/`. The relative shapes (per-attempt subdirs, lineage.json layout, etc.) are still correct — only the host changed.
+
+ADRs 0001-0006 already clean; none referenced per-repo `.context/`.
+
 ## 2026-05-22 — P4: dispatcher CL hydrate/capture wrap
 
 Branch: `feat/p4-dispatcher-cl-wrap`. Companion to CL `feat/p4-public-api`

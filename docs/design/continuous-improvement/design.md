@@ -6,6 +6,15 @@
 **Primary contract:** `OcPlanningProposal` + new `ContinuousImprovementSpec` block  
 **Draft schema:** `docs/design/continuous-improvement/draft_schema.py`
 
+> **Updated post-ADR 0002 P3 (2026-05-22):** path examples below show
+> `.context/active/...`, `.context/checkpoints/...`, `.context/capsules/...`
+> as bare paths. OC no longer hosts a local `.context/` directory; all CL
+> state lives on the anchoring manifest. Read every such path as
+> `<CL_ANCHOR>/.context/sessions/<CL_SESSION_ID>/{active,checkpoints,handoffs,capsules}/...`
+> per the work order at `PlatformDeployment/docs/architecture/adr/0002-work-order-manifest-cognition.md`
+> (Phases 3–4) and OC's own `CLAUDE.md` "Cognition Lifecycle" section.
+> The relative shapes shown here are still correct; only the host changed.
+
 ---
 
 ## 1. Summary
