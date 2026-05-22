@@ -29,6 +29,7 @@ WATCHDOG_LOOP_LOCK = REPO_ROOT / "logs/local/watchdog_loop.lock"
 STOP_FLAG = REPO_ROOT / "logs/local/loop_stop.flag"
 SCHEDULE_FILE = REPO_ROOT / ".context/loop_schedule.json"
 LOG_FILE = REPO_ROOT / "logs/local/loop_controller.log"
+SESSION_LOG_DIR = REPO_ROOT / "logs/local/sessions"
 SESSION_PROMPT_FILE = REPO_ROOT / "tools/loop/oc_session_prompt.txt"
 
 # Fallback delays (seconds) when session doesn't write loop_schedule.json.
@@ -147,12 +148,17 @@ def get_delay() -> int:
     return DEFAULT_DELAY
 
 
-def run_session() -> int:
+def run_session(iteration: int) -> int:
     """Spawn one bounded claude -p session. Returns exit code."""
     prompt = load_session_prompt()
     cmd = ["claude", "-p", prompt, "--dangerously-skip-permissions", "--output-format", "text"]
-    _log(f"Spawning session (prompt: {SESSION_PROMPT_FILE.name}, {len(prompt)} chars) ...")
-    # Source env before spawning so the session inherits OC credentials
+
+    SESSION_LOG_DIR.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    session_log = SESSION_LOG_DIR / f"iter_{iteration:04d}_{ts}.log"
+
+    _log(f"Spawning session (prompt: {SESSION_PROMPT_FILE.name}, {len(prompt)} chars) → {session_log.name}")
+
     env = os.environ.copy()
     env_file = REPO_ROOT / ".env.operations-center.local"
     if env_file.exists():
@@ -161,7 +167,10 @@ def run_session() -> int:
             if line and not line.startswith("#") and "=" in line:
                 k, _, v = line.partition("=")
                 env.setdefault(k.strip(), v.strip())
-    proc = subprocess.run(cmd, cwd=REPO_ROOT, env=env)
+
+    with session_log.open("w") as log_fh:
+        proc = subprocess.run(cmd, cwd=REPO_ROOT, env=env, stdout=log_fh, stderr=log_fh)
+
     return proc.returncode
 
 
@@ -235,7 +244,7 @@ def main() -> None:
             # Clear stale schedule from previous session before spawning
             SCHEDULE_FILE.unlink(missing_ok=True)
 
-            rc = run_session()
+            rc = run_session(iteration)
             _log(f"Session exited rc={rc}")
 
             if _stop or STOP_FLAG.exists():
