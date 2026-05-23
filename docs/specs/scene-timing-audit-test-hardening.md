@@ -6,7 +6,7 @@ phases:
   - test
   - improve
 repos:
-  - VideoFoundry
+  - managed-video-project
 area_keywords:
   - workflow/long_form/stages
   - tools/audit
@@ -17,7 +17,7 @@ created_at: 2026-05-18T16:11:30+00:00
 
 ## Overview
 
-The scene-timing stage and its audit emission layer in VideoFoundry have accumulated 7+ point-fix commits in recent history (tail trim buffer, boundary gap clamp, reconcile mode emission, CPS recalibration, word-reveal row drop). Each fix addressed a production-discovered defect that existing tests did not catch. This campaign adds targeted unit tests to cover the specific code paths those fixes touched, preventing regression and reducing future fix churn.
+The scene-timing stage and its audit emission layer in the managed video project have accumulated 7+ point-fix commits in recent history (tail trim buffer, boundary gap clamp, reconcile mode emission, CPS recalibration, word-reveal row drop). Each fix addressed a production-discovered defect that existing tests did not catch. This campaign adds targeted unit tests to cover the specific code paths those fixes touched, preventing regression and reducing future fix churn.
 
 ## Goals
 
