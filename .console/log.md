@@ -1,3 +1,8 @@
+## Operator change — 2026-05-23 UTC
+
+- Committed loop's `.custodian/config.yaml`: W2 suppressed (CI has no core.hooksPath), F3 suppressed for ComplianceInput Pydantic fields, maintenance/spec_hygiene/cl_wrap exclusions
+- Controller sessions switched to `claude-opus-4-7`
+
 ## OC Platform Watchdog Cycle — 2026-05-23 07:27 UTC (Cycle 22)
 
 - Branch: oc-watchdog/20260522-1710-fix-ci-regressions

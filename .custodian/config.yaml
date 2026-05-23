@@ -3,6 +3,10 @@ src_root: src/operations_center
 tests_root: tests
 
 audit:
+  # W2 (core.hooksPath must be set): developer-machine setup check, not applicable
+  # in CI where the repo is freshly cloned and git config is not persisted.
+  ignore_rules:
+    - W2
   # C1/C6 (TODO/FIXME markers): exclude paths where TODO/FIXME appear as
   # strings being analysed (todo_signal, todo_accumulation, artifact_writer)
   # or in comments already tagged [deferred, reviewed] and covered by OC2.
@@ -92,6 +96,9 @@ audit:
         - daily_used
         - hourly_cap
         - hourly_used
+        # rate limit display keys (computed from hourly/daily caps at display time)
+        - max_per_day
+        - max_per_hour
         # per-backend counter keys (built by _per_backend_live_counters)
         - hourly
         - daily
@@ -172,6 +179,7 @@ audit:
       - "src/operations_center/queue_healing/**"
       - "src/operations_center/recovery/**"
       - "src/operations_center/recovery_policies/**"
+      - "src/operations_center/maintenance/**"
     T7:
       # Same rationale as T6. Listed per-layer (not src/**) so a NEW
       # top-level package without parallel tests still gets flagged.
@@ -219,6 +227,8 @@ audit:
       - "src/operations_center/queue_healing/**"
       - "src/operations_center/recovery/**"
       - "src/operations_center/recovery_policies/**"
+      # Maintenance subsystem — tested through integration paths.
+      - "src/operations_center/maintenance/**"
       # Top-level scheduled-task entry modules — wired into scheduler, exercised
       # via integration paths.
       - src/operations_center/cross_repo_impact.py
@@ -237,6 +247,8 @@ audit:
       # mocks; the test is the side-effect check.
       - tests/unit/er000_phase0_golden/test_golden.py
       - tests/unit/executors/test_startup_wiring.py
+      # cl_wrap tests assert dispatch succeeds by absence of exception — no assert statement needed.
+      - tests/unit/execution/test_coordinator_cl_wrap.py
     D11:
       # The local backends (aider_local, direct_local, team_executor) share a
       # common lifecycle by design — _read_capture, _discover_changed_files,
@@ -294,6 +306,8 @@ audit:
       - src/operations_center/observer/collectors/validation_history.py
       - src/operations_center/tuning/metrics.py
       - src/operations_center/insights/derivers/quality_trend.py
+      # Phase D placeholder TODO — intentional, tracked in ADR 0007 Phase D work.
+      - src/operations_center/entrypoints/board_worker/main.py
     C6:
       - src/operations_center/observer/collectors/todo_signal.py
       - src/operations_center/decision/rules/todo_accumulation.py
@@ -410,6 +424,8 @@ audit:
       - src/operations_center/config/settings.py
       # coordinator.py is OC's execution coordinator (central dispatcher).
       - src/operations_center/execution/coordinator.py
+      # spec_hygiene/main.py wires the full spec-hygiene worker lifecycle.
+      - src/operations_center/entrypoints/spec_hygiene/main.py
     C11:
       # Agent-spawning entrypoints: board_worker, intake, pr_review_watcher invoke
       # the coding backend (team_executor, aider, etc.) which runs for an unbounded
@@ -581,6 +597,11 @@ audit:
     - validation_loop
     - velocity_cap_exceeded
     - verified
+    # ADR 0007 rename: spec_director → spec_author. Stale doc references remain
+    # in roadmap.md and the ADR itself as historical context. spec_hygiene is
+    # an entrypoint package name (not a def/class), surfaced in the ADR as prose.
+    - spec_director
+    - spec_hygiene
     # Autonomy-gap design doc references internal helper symbols that were
     # renamed/removed; the doc is a design retrospective, not an API spec.
     - _is_quota_exhausted_result
@@ -602,6 +623,10 @@ audit:
     - evidence_id
     - ref_id
     - workdir_name
+    # ComplianceInput fields — passed as a Pydantic model to an API, serialized
+    # via model_dump(); never accessed as Python attributes at callsites.
+    - diff
+    - task_constraints
 
   # Plugin-defined audit config keys — suppresses unknown-key warnings in doctor.
   plugin_audit_keys:
@@ -645,6 +670,7 @@ doc_conventions:
     - docs/operator/platformdeployment_compose_smoke.md
     - docs/operator/watchdog_loop.md
     - docs/specs/cxrp-backend-card-vocabulary.md
+    - docs/specs/ci-coordinator-decision-tests.md
     - docs/specs/decision-rules-test-coverage.md
     - docs/specs/operational-health-test-coverage.md
     - docs/specs/recovery-subsystem-test-coverage.md

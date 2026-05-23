@@ -189,7 +189,7 @@ def get_delay() -> int:
 def run_session(iteration: int) -> tuple[int, Path]:
     """Spawn one bounded claude -p session. Returns (exit_code, session_log_path)."""
     prompt = load_session_prompt()
-    cmd = ["claude", "-p", prompt, "--dangerously-skip-permissions", "--output-format", "text"]
+    cmd = ["claude", "-p", prompt, "--model", "claude-opus-4-7", "--dangerously-skip-permissions", "--output-format", "text"]
 
     SESSION_LOG_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
