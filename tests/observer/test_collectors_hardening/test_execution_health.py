@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 ProtocolWarden
 """Tests for ExecutionArtifactCollector with hardening."""
 import json
 from pathlib import Path
