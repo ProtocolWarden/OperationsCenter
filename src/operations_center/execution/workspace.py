@@ -113,17 +113,15 @@ class WorkspaceManager:
         # back into the repo, producing 25K-LOC garbage PRs.
         for pattern in _LOCAL_EXCLUDE_PATTERNS:
             self._git.add_local_exclude(ws, pattern)
-        # C-K3 bootstrap chain — only fires when the repo opts in via
-        # explicit install_dev_command or bootstrap_commands. Default
-        # config (no bootstrap fields set) is a no-op so existing repos
-        # see no behavior change.
-        self._maybe_bootstrap(ws, request)
-        # Baseline validation — if the repo declares validation_commands and
-        # hasn't opted out via skip_baseline_validation, run them here.
-        # Failure leaves a marker file the coordinator reads (so we don't
-        # mutate the prepare() return shape). The actual abort decision
-        # happens in the coordinator path.
-        self._run_baseline_validation(ws, request)
+        # Check out the base branch on the pristine clone BEFORE any step that
+        # writes artifacts into the tree (bootstrap, baseline validation). If a
+        # tooling artifact such as `.baseline-validation.json` is tracked on the
+        # clone's default branch (it slipped into the self-repo's main), writing
+        # it before the checkout dirties a tracked file and `git checkout
+        # <base_branch>` aborts with "local changes would be overwritten". Doing
+        # the checkout first keeps the working tree clean for the switch and lets
+        # baseline validation run against the branch we actually build on.
+        #
         # If base_branch is a sandbox like "autonomy-staging" that the operator
         # forgot to create, fail with a clear error rather than a cryptic
         # `git checkout` failure. Plane will surface the reason via the new
@@ -138,6 +136,17 @@ class WorkspaceManager:
                 f"Underlying: {exc}"
             ) from exc
         self._git.checkout_base(ws, request.base_branch)
+        # C-K3 bootstrap chain — only fires when the repo opts in via
+        # explicit install_dev_command or bootstrap_commands. Default
+        # config (no bootstrap fields set) is a no-op so existing repos
+        # see no behavior change.
+        self._maybe_bootstrap(ws, request)
+        # Baseline validation — if the repo declares validation_commands and
+        # hasn't opted out via skip_baseline_validation, run them here.
+        # Failure leaves a marker file the coordinator reads (so we don't
+        # mutate the prepare() return shape). The actual abort decision
+        # happens in the coordinator path.
+        self._run_baseline_validation(ws, request)
         self._git.create_task_branch(ws, request.task_branch)
         logger.info(
             "WorkspaceManager.prepare: cloned %s into %s on branch %s",

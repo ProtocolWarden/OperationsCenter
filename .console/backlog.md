@@ -153,3 +153,7 @@ None of these items reopen boundaries.
 - [x] Update dag_executor/team_executor audit verdicts to CxRP 0.3.1
 - [ ] Custodian/regression-check: add detector for invalid backend enum references in tests (promotion candidate from cycle 9)
 - [ ] PR cb56d53 merge: oc-watchdog/20260522-0137-fix-kodo-removal-regressions → main
+
+## Cycle 28 updates (2026-05-23)
+- [x] Fix workspace-prep ordering bug: checkout base branch before bootstrap/baseline so a tracked `.baseline-validation.json` on the clone default branch can't dirty the tree and abort `git checkout <base_branch>` (workspace.py). Was blocking ALL OC goal tasks (e.g. bfb289b3). Goal worker restarted with fresh code.
+- [ ] HYGIENE: untrack `.baseline-validation.json` from OperationsCenter main on the GitHub remote + add to .gitignore (operator/remote-push; impact already neutralized by the workspace.py reorder).

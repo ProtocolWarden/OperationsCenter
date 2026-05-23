@@ -10677,3 +10677,54 @@ Cross-cycle repeating patterns:
 - 41bcd097: recycled Blocked→Backlog (CLEAN_BLOCKED_RETRY, pre-execution no-result, safe retry).
 - Operator-blocked: none | Parked: no
 - KNOWN OPEN: Campaign 10c50210 CANCELLED (carry forward)
+
+## OC Platform Watchdog Cycle — 2026-05-23 20:34 UTC (Cycle 28)
+
+- Health state: ACTIVE — DIRECT INFRA FIX dispatched this cycle. New systematic workspace-prep bug found and fixed (`.baseline-validation.json` checkout-ordering). Fix landed on workspace.py + goal worker restarted with fresh editable code; needs next-cycle validation (bfb289b3 re-attempt).
+- Next cadence: 900s — direct fix dispatched, validation pending. HEALTHY forbidden (fix not yet validated end-to-end; bfb289b3 must re-run through prep with corrected code).
+- Services: Plane OK, SwitchBoard OK; CLIs OK. 16/16 repos synced.
+
+### PREFLIGHT — git divergence resolved
+- Local main was ahead 3 (cycle 25–27 log commits) / behind 11 (origin had merged PR #171 goal/3a3c202f + Stage-2 fixes). Rebased the 3 log-only commits cleanly onto origin/main (`.console/log.md` only, no conflicts). Now ahead 3 (rebased log commits), even with origin otherwise.
+
+### STEP 1 — audits (parallel; all CLEAN)
+- custodian-sweep: all detectors 0, error=null, plane=commented (exit 0)
+- ghost-audit: 4 events all status=fixed (G10 sample = Cancelled task)
+- flow-audit: 0 open gaps | graph-doctor: ✓ 11 nodes / 12 edges
+- reaudit-check: no backends needed; CxRP 0.3.1 | check-regressions: 0 findings
+- invariants: pytest er000_phase0_golden → 15 passed (179 passed incl. workspace/git suites post-fix)
+
+### STEP 2 — triage: 0 actions (rescore/awaiting/queue_healing all empty)
+
+### STEP 2.5 — board-unblock (ran twice; second run after fix as 5m-age threshold crossed):
+- Run 1: GOAL_BACKLOG_PROMOTE 41bcd097 Backlog→Ready-for-AI (parent improve fa470a1f Done).
+- Run 2: CLEAN_BLOCKED_RETRY ×3 → 89fc5782, 0f1612ea, 3a3c202f Blocked→Backlog (pre-execution failures, safe retry, 5m age met).
+- mem_available 24.7GB.
+
+### STEP 3 — convergence: CONVERGENT
+- NEW failure this cycle: task bfb289b3 ("Add pytest-cov...", repo=OperationsCenter, kind=goal) failed 16:28:44 local with:
+  `Workspace preparation failed: git checkout operations-center-testing-branch — local changes to .baseline-validation.json would be overwritten. Aborting`
+- ROOT CAUSE (traced to OC source): `.baseline-validation.json` is TRACKED on origin/main (a tooling artifact that slipped into main) but absent on the testing branch. WorkspaceManager.prepare() (workspace.py) ran baseline validation — which overwrites that tracked file — BEFORE `checkout_base(base_branch)`. The dirtied tracked file blocked the branch switch. Systematic: blocks EVERY OC goal task (4 occurrences of the marker-checkout error in goal log). This is why OC self-modify tasks could not advance regardless of the cycle-25 missing-branch fix.
+- 3a3c202f (cycles 19–28): missing-branch (c25) FIXED → reached stage 3 with partial merges (PR #171 merged Stage-2 work) → now failing at later stages ("3 of 7 stages failed", "execute produced no result"). Outcomes CHANGE across attempts (different failure stages, partial merges = net state change) → WEAKLY-CONVERGENT, NOT dead-remediation. Recycled to Backlog for re-attempt.
+- Forward progress: YES — fix applied + worker restarted; 41bcd097 promoted to R4AI; 3 stale-blocked tasks recycled. No starvation, no closed-loop stagnation, no divergence.
+
+### STEP 4/5/6 — execution gate + DIRECT FIX
+- bfb289b3 root cause passes all execution-gate conditions (reproduced this cycle; scoped to OperationsCenter; implementation-level; no creds; non-destructive; no policy widening; not stagnation-classified). DIRECT FIX applied:
+  - workspace.py: moved verify_remote_branch_exists + checkout_base to BEFORE _maybe_bootstrap and _run_baseline_validation. Base branch is now checked out on the pristine clone before any artifact-producing step. Baseline validation now runs on the actual base branch (more correct) and a tracked artifact on the clone default branch can no longer dirty the tree pre-checkout. Makes OC behave like every other (non-tracked) repo.
+  - Validated: import OK, ruff clean, 179 unit tests pass (golden + workspace_bootstrap + git_client).
+  - Restarted goal worker (TERM to python child; wrapper respawned PID 281693, exit_code=143 benign) so editable change is live.
+- No autonomy-cycle dispatched (team_executor max_concurrent=1; goal worker owns the slot; fix was a loop-owned source edit, not a dispatched cycle).
+
+### STEP 7 — invariants: 15 passed (golden); 179 passed across touched suites ✓
+
+### STEP 8 — watcher health: 8/8 running. Only intentional restart was the loop-initiated goal-worker bounce (exit 143, benign). No non-143 crashes, no new tracebacks.
+
+### Blocked work classification
+- bfb289b3: ROOT-CAUSED + FIXED (workspace-prep ordering bug). Will re-attempt next cycle via board-unblock recycle (failed <5m ago, age gate not yet met this cycle) — validates the fix.
+- 3a3c202f: weakly-convergent multi-stage task, recycled Blocked→Backlog. Partial merges occurring; not dead-remediation.
+- 89fc5782, 0f1612ea: CLEAN_BLOCKED_RETRY recycled to Backlog.
+- Operator-blocked: none | Parked: no
+
+### KNOWN OPEN ISSUES (carry forward)
+- Campaign 10c50210 CANCELLED.
+- HYGIENE (low priority, operator/remote-push): `.baseline-validation.json` is tracked on OperationsCenter main and should be untracked (`git rm --cached`) + added to `.gitignore` on the remote. Operationally neutralized by the cycle-28 workspace.py reorder; remaining cleanup requires a push to the GitHub remote (outward-facing, out of loop scope). Not a Plane task — would be non-actionable via the sandbox/testing-branch autonomy flow.
