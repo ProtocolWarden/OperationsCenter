@@ -2,6 +2,7 @@
 
 - Committed loop's `.custodian/config.yaml`: W2 suppressed (CI has no core.hooksPath), F3 suppressed for ComplianceInput Pydantic fields, maintenance/spec_hygiene/cl_wrap exclusions
 - Controller sessions switched to `claude-opus-4-7`
+- Added `ignore_rules` to `plugin_audit_keys` — doctor --strict rejected it as unknown even though loader honors it
 
 ## OC Platform Watchdog Cycle — 2026-05-23 07:27 UTC (Cycle 22)
 
@@ -10325,3 +10326,40 @@ Cross-cycle repeating patterns:
 
 ### Operator-blocked: none
 ### Parked state: no
+
+## OC Platform Watchdog Cycle — 2026-05-23 07:42 UTC (Cycle 23)
+
+- Health state: HEALTHY — all audits clean, queue evolving, 8/8 watchers up
+- Next cadence: 3600s — no starvation, no stagnation, forward progress confirmed
+- Services: Plane OK, SwitchBoard OK
+- Watchers: 8/8 running (intake, goal, test, improve, propose, review, spec, watchdog)
+- Repos: all 16 already up to date (ff-only)
+
+### STEP 1 findings (all env-sourced; first-pass token failures were missing-env, re-run clean)
+- graph-doctor: ✓ OK — 11 nodes / 12 edges / graph_built=True
+- ghost-audit: total_ghost_events=2 (G7 claim-refused thin goal ×2, status=fixed/handled); all other categories count=0
+- flow-audit: 0 open gaps (F8 partial, persistent non-critical)
+- reaudit-check: no backends needed (dag/team both needed=false), CxRP 0.3.1
+- regression-check: 0 findings ✓
+- custodian-sweep: clean (exit 0, no findings)
+
+### STEP 2 triage: 0 actions (rescore/awaiting/queue_healing all empty)
+
+### STEP 2.5 board-unblock — 1 action applied
+- 74af58c5 ("Add Rule evidence type and boundary validation tests"): Blocked→Backlog
+  rule=CLEAN_BLOCKED_RETRY — no executor-signal/exit-code/blocked-by labels = pre-execution
+  failure (workspace prep / infra config), safe to retry after 5m min age. mem_available=23.15GB.
+
+### STEP 3 — Convergence analysis
+- Queue evolution this cycle: 74af58c5 moved Running(prior)→Blocked→Backlog (self-healed) = forward progress
+- No starvation: triage clean, propose active, R4AI nonzero, audits clean
+- No closed-loop stagnation, no semantic duplicates, no dead-remediation
+- Behavioral convergence: CONVERGENT (queue state materially changed; no repeated stuck patterns)
+
+### STEP 7 — Invariant tests: 15 passed ✓
+### STEP 8 — Watcher health: 8/8 running ✓
+- Log ERRORs (03:16-03:18, 23:29) are STALE — SwitchBoard was down then; up now (preflight confirmed). No current non-143 crashes.
+
+### Blocked work classification: none currently blocked (74af58c5 requeued to Backlog)
+### Operator-blocked: none | Parked: no
+### Note: .custodian/config.yaml auto-mutation (plugin_audit_keys += ignore_rules) emitted by sweep — left unstaged (generated, not committed)

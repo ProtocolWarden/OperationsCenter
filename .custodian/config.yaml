@@ -630,6 +630,7 @@ audit:
 
   # Plugin-defined audit config keys — suppresses unknown-key warnings in doctor.
   plugin_audit_keys:
+    - ignore_rules
     - known_values
     - oc1_exempt
     - oc7_exempt
