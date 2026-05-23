@@ -89,12 +89,12 @@ class TestExecutionRequestMapper:
             provider="anthropic", model="opus",
         )
         oc = _request(runtime_binding=binding)
-        cxrp_req = to_cxrp_execution_request(oc, executor="claude_cli", backend="openclaw")
+        cxrp_req = to_cxrp_execution_request(oc, executor="claude_cli", backend="team_executor")
         assert cxrp_req.runtime_binding is not None
         assert cxrp_req.runtime_binding.kind.value == "cli_subscription"
         assert cxrp_req.runtime_binding.model == "opus"
 
     def test_oc_request_without_binding_emits_cxrp_without_binding(self):
         oc = _request()
-        cxrp_req = to_cxrp_execution_request(oc, executor="claude_cli", backend="openclaw")
+        cxrp_req = to_cxrp_execution_request(oc, executor="claude_cli", backend="team_executor")
         assert cxrp_req.runtime_binding is None

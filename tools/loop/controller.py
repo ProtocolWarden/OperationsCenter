@@ -19,13 +19,15 @@ Usage:
 import argparse
 import json
 import os
+import re
 import signal
 import socket
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 REPO_ROOT = Path("/home/dev/Documents/GitHub/OperationsCenter")
 LOCK_PATH = REPO_ROOT / "logs/local/loop_controller.lock"
@@ -134,6 +136,38 @@ def write_watchdog_loop_lock() -> None:
     WATCHDOG_LOOP_LOCK.write_text(json.dumps(lock, indent=2))
 
 
+_RATE_LIMIT_RE = re.compile(
+    r"resets\s+(\d{1,2}:\d{2}(?:am|pm))\s+\(([^)]+)\)", re.IGNORECASE
+)
+_RATE_LIMIT_BUFFER = 120  # seconds to wait after the stated reset time
+
+
+def parse_rate_limit_reset(session_log: Path) -> datetime | None:
+    """Return UTC datetime of Claude usage reset if the session hit the rate limit."""
+    try:
+        text = session_log.read_text(errors="replace")
+        m = _RATE_LIMIT_RE.search(text)
+        if not m:
+            return None
+        time_str, tz_name = m.group(1).lower(), m.group(2)
+        try:
+            tz = ZoneInfo(tz_name)
+        except ZoneInfoNotFoundError:
+            _log(f"Unknown timezone '{tz_name}' in rate-limit message — cannot parse reset time.")
+            return None
+        now_local = datetime.now(tz)
+        reset_naive = datetime.strptime(time_str, "%I:%M%p")
+        reset_local = reset_naive.replace(
+            year=now_local.year, month=now_local.month, day=now_local.day, tzinfo=tz
+        )
+        if reset_local <= now_local:
+            reset_local += timedelta(days=1)
+        return reset_local.astimezone(timezone.utc)
+    except Exception as e:
+        _log(f"Failed to parse rate-limit reset time: {e}")
+        return None
+
+
 def get_delay() -> int:
     """Read delay from schedule file written by the session at STEP 10."""
     try:
@@ -152,8 +186,8 @@ def get_delay() -> int:
     return DEFAULT_DELAY
 
 
-def run_session(iteration: int) -> int:
-    """Spawn one bounded claude -p session. Returns exit code."""
+def run_session(iteration: int) -> tuple[int, Path]:
+    """Spawn one bounded claude -p session. Returns (exit_code, session_log_path)."""
     prompt = load_session_prompt()
     cmd = ["claude", "-p", prompt, "--dangerously-skip-permissions", "--output-format", "text"]
 
@@ -175,7 +209,7 @@ def run_session(iteration: int) -> int:
     with session_log.open("w") as log_fh:
         proc = subprocess.run(cmd, cwd=REPO_ROOT, env=env, stdout=log_fh, stderr=log_fh)
 
-    return proc.returncode
+    return proc.returncode, session_log
 
 
 def interruptible_sleep(seconds: int) -> None:
@@ -248,11 +282,19 @@ def main() -> None:
             # Clear stale schedule from previous session before spawning
             SCHEDULE_FILE.unlink(missing_ok=True)
 
-            rc = run_session(iteration)
+            rc, session_log = run_session(iteration)
             _log(f"Session exited rc={rc}")
 
             if _stop or STOP_FLAG.exists():
                 break
+
+            if rc != 0:
+                reset_dt = parse_rate_limit_reset(session_log)
+                if reset_dt is not None:
+                    delay = max(60, int((reset_dt - datetime.now(timezone.utc)).total_seconds()) + _RATE_LIMIT_BUFFER)
+                    _log(f"Rate limit detected — reset at {reset_dt.strftime('%Y-%m-%dT%H:%M:%SZ')} UTC; sleeping {delay}s ({delay // 60}m)")
+                    interruptible_sleep(delay)
+                    continue
 
             delay = get_delay()
             _log(f"Sleeping {delay}s ...")
