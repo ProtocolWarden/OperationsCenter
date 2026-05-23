@@ -172,3 +172,10 @@ class EvaluationCommandSource(str, Enum):
     OC_DERIVED = "oc_derived"
     PROPOSER_SUGGESTED = "proposer_suggested"
     VALIDATION_PROFILE = "validation_profile"
+
+
+class EvidenceType(str, Enum):
+    """Discriminator for evidence payloads carried in an observation record."""
+    CHANGED_FILES = "changed_files"
+    VALIDATION = "validation"
+    RULE = "rule"

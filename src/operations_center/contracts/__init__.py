@@ -28,6 +28,7 @@ from .enums import (
     EnforcedGuardrail,
     EvaluationCommandSource,
     EvaluationOutcome,
+    EvidenceType,
     ExecutionMode,
     ExecutionStatus,
     FailureReasonCategory,
@@ -40,6 +41,7 @@ from .enums import (
     TaskType,
     ValidationStatus,
 )
+from .evidence import RuleEvidence
 from .ci import (
     ClpBinding,
     ContinuousImprovementSpec,
@@ -79,6 +81,7 @@ __all__ = [
     "EnforcedGuardrail",
     "EvaluationCommandSource",
     "EvaluationOutcome",
+    "EvidenceType",
     "ExecutionMode",
     "ExecutionStatus",
     "FailureReasonCategory",
@@ -90,6 +93,8 @@ __all__ = [
     "RiskLevel",
     "TaskType",
     "ValidationStatus",
+    # evidence models
+    "RuleEvidence",
     # value objects
     "BranchPolicy",
     "ChangedFileRef",
