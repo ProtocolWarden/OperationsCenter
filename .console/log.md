@@ -1,5 +1,73 @@
 # Log
 
+## OC Platform Watchdog Cycle — 2026-05-23 02:30 UTC (Cycle 18)
+
+- Branch: oc-watchdog/20260522-1710-fix-ci-regressions
+- Health state: ACTIVE (direct fix applied — ruff DTZ007 in controller.py; PR #170 CI unblocked; 74af58c5 executing attempt 4; 14 tasks promoted to R4AI)
+- Next cadence: 900s — direct fix committed; task in flight; 14 tasks queued for dispatch
+
+### STEP 0 — Preflight
+- All 16 repos: Already up to date (ff-only pull) ✓
+- Plane: OK ✓ | SwitchBoard: OK ✓ | Watchers: 8/8 running ✓ | CLIs: OK ✓
+- Working tree: contracts/__init__.py, enums.py (modified), evidence.py (untracked) — executor work for 74af58c5, NOT staged by loop
+
+### STEP 1 — Investigation findings
+- graph-doctor: ✓ OK — 11 nodes / 12 edges / graph_built=True
+- ghost-audit: G10 ×1 (b67bc0e0 "Fix lint regression" Cancelled, lagging — expected); G7 ×1 (89191ff5 "Emit JUnit XML" thin goal — normal quality gate)
+- flow-audit: 0 open gaps ✓; F8 partial (persistent/non-critical)
+- reaudit-check: dag_executor + team_executor `needed=false` (CxRP 0.3.1) ✓
+- regression-check: 0 findings ✓
+- custodian-sweep: 7 repos swept, all delta=0 ✓
+
+### STEP 1 — CI investigation
+- PR #170 (current branch): ruff FAIL at tools/loop/controller.py:159 — DTZ007 (naive datetime.strptime without %z)
+  - Root cause: CI runs `ruff check .` (full tree); local was checking `src/` only
+  - Fix: replace naive strptime + replace() pattern with now_local.replace(hour=..., minute=...) using parsed components
+  - File: tools/loop/controller.py — fixed this cycle
+- PR #169 (oc-watchdog/20260522-0644-fix-ci-failures): audit FAIL — older custodian-audit.yml without skip-when-unconfigured; superseded by PR #170 changes
+
+### STEP 2 — Triage
+- triage-scan: 0 actions (no blocked tasks, no queue healing needed)
+
+### STEP 2.5 — Board unblock
+- GOAL_BACKLOG_PROMOTE: 14 tasks promoted Backlog→R4AI (parent improve tasks Done)
+  - cd783c69, b4b40a95, b7719888, 1ad727e3, bd7817c6, ff19d39b, c7df5422, 360cff3a, 89191ff5, bfb289b3 (improve 2824d46e/a969024e parents)
+  - 41bcd097, 89fc5782, 0f1612ea, 3a3c202f (improve fa470a1f parent)
+
+### STEP 3 — Blocked/stalled analysis
+- 74af58c5 ("Add Rule evidence type and boundary validation tests"): Running — 4th attempt active per goal watcher heartbeat (02:32 UTC); prior failures 1/5→2/5→3/5 stages; working tree shows EvidenceType+RuleEvidence partial changes from current execution; ~40 min into current attempt
+  - Classification: temporarily-blocked context (active execution, not yet dead-remediation)
+  - If 4th attempt fails: classify dead-remediation, investigate stage failure root cause
+- 0 Blocked tasks on board; 14 R4AI freshly promoted; no starvation
+- SwitchBoard DOWN errors at 03:16 local: from earlier session logs; SwitchBoard currently UP
+- Behavioral convergence: ACTIVE (fix applied, task executing, board moving)
+
+### STEP 4 — Convergence promotion
+- No new candidates this cycle
+
+### STEP 5/6 — Direct fix
+- Repo: OperationsCenter (tools/loop/controller.py)
+- Issue: DTZ007 violation in `parse_rate_limit_reset()` — datetime.strptime used without timezone
+- Fix: use now_local.replace(hour=parsed.hour, minute=parsed.minute, ...) instead of naive strptime + replace(tzinfo=tz)
+- Full ruff check passes ✓
+
+### STEP 7 — Invariant tests: 15 passed ✓
+
+### STEP 8 — Watcher health
+- 8/8 watchers running; goal watcher heartbeat 02:32 UTC "executing" (74af58c5 in flight)
+- No non-143 crashes; no new watcher errors in current session
+
+### Blocked work classification
+- 74af58c5: temporarily-blocked (active 4th attempt; monitor for completion)
+- PR #169: stale CI failure (superseded by PR #170; can be closed by operator)
+- PR #170: ruff fixed this cycle
+
+### Behavioral convergence: ACTIVE
+- CI unblocked (ruff fix), 14 tasks promoted, task in flight
+
+### Operator-blocked: none
+### Parked state: no
+
 ## OC Platform Watchdog Cycle — 2026-05-23 01:55 UTC (Cycle 17)
 
 - Branch: oc-watchdog/20260522-1710-fix-ci-regressions

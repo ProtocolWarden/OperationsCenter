@@ -156,9 +156,9 @@ def parse_rate_limit_reset(session_log: Path) -> datetime | None:
             _log(f"Unknown timezone '{tz_name}' in rate-limit message — cannot parse reset time.")
             return None
         now_local = datetime.now(tz)
-        reset_naive = datetime.strptime(time_str, "%I:%M%p")
-        reset_local = reset_naive.replace(
-            year=now_local.year, month=now_local.month, day=now_local.day, tzinfo=tz
+        parsed = datetime.strptime(time_str, "%I:%M%p")  # noqa: DTZ007 — naive; immediately reused for h/m only
+        reset_local = now_local.replace(
+            hour=parsed.hour, minute=parsed.minute, second=0, microsecond=0
         )
         if reset_local <= now_local:
             reset_local += timedelta(days=1)
