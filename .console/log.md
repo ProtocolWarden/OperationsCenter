@@ -10552,3 +10552,47 @@ Cross-cycle repeating patterns:
 - Behavioral convergence: WEAKLY-CONVERGENT (Blocked drained this cycle) but execution layer non-convergent (no executor success). Worst-state governs → STALLED.
 - Operator-blocked component: Claude session-limit (external quota) — escalated under 3860f469, not separately parked (queue evolving).
 - KNOWN OPEN: Campaign 10c50210 CANCELLED (carry forward)
+
+## OC Platform Watchdog Cycle — 2026-05-23 19:30 UTC (Cycle 25)
+
+- Health state: ACTIVE — direct infra fix dispatched this cycle (missing sandbox base branch created); remediation in flight, verify executor success next cycle
+- Next cadence: 900s — forward progress made; execution-layer success not yet confirmed (HEALTHY forbidden: rate gate + unproven executor success)
+- Services: Plane OK, SwitchBoard OK. CLIs OK. 8/8 watchers running (stable PIDs, no non-143 crashes).
+- Repos: all 16 already up to date (ff-only).
+
+### Plane 429 — self-inflicted, resolved
+- STEP 1 fired 6 Plane-hitting CLIs in parallel; combined with 8 polling watchers this tripped Plane's local rate limiter (429). custodian-sweep crashed (raise_for_status after PlaneClient._request exhausted its 4-attempt/~12s 429 backoff); triage-scan also 429'd.
+- PlaneClient._request ALREADY has correct 429 retry honoring Retry-After (client.py:260) — not a code bug; the burst simply outlasted the backoff window. Re-ran every affected op SERIALLY: all clean. No code change. Operating discipline: do not fan out Plane-querying CLIs concurrently.
+
+### STEP 1 findings (all clean on serial re-run)
+- custodian-sweep: all delta categories 0, plane=commented ✓
+- ghost-audit: 4 events, all status=fixed (G10 sample = a Cancelled task) ✓
+- flow-audit: 0 open gaps (F8 partial, persistent non-critical) ✓
+- graph-doctor: ✓ OK — 11 nodes / 12 edges
+- reaudit-check: no backends needed; CxRP 0.3.1 ✓
+- check-regressions: 0 findings ✓
+
+### STEP 2 / 2.5 — triage + board-unblock: 0 actions (queue_healing/awaiting/rescore empty; board-unblock no actions). mem_available 24.5GB.
+
+### STEP 3 — ROOT CAUSE of the cycle-19..24 closed-loop recycle FOUND + FIXED
+- Task 3a3c202f ("Harden Collector...", repo:OperationsCenter kind:goal) reblocked at 15:17/15:19 UTC with backend_error: workspace prep failed because sandbox base_branch 'operations-center-testing-branch' did NOT exist on origin. Config sets sandbox_base_branch across 7 repo blocks but the branch was never created on origin (git ls-remote empty, no local copy).
+- Cycle 24 misattributed the recycle to the 4/hr rate gate + Claude session-limit and went STALLED — it MISSED this root cause.
+- REMEDY (direct, loop-owned infra fix; passes execution gate — reproduced this cycle, scoped to OC origin, additive/reversible, non-destructive): `git push origin main:operations-center-testing-branch`. Branch now resolves on origin. (Resolved to 1116a3c via concurrent controller commit of cycle-24 log; valid main-lineage baseline.)
+- Requeued 3a3c202f Blocked -> Ready for AI with a comment documenting root cause + remedy. Queue evolved (Blocked -> R4AI) = forward progress + demonstrable remediation adaptation (not a replay; precondition genuinely changed).
+- Note: rate gate raised to 8/hr per operator change (4) today; if dispatch is still gated the worker skips benignly (budget_exhausted) rather than reblocking on the prior cause.
+
+### STEP 4 — convergence promotion
+- Gap: no preflight verifies sandbox_base_branch exists on origin; the miss only surfaces reactively as repeated per-task reblocks burning dispatch budget. Loop had to diagnose manually.
+- Created promotion task c3a9fc85 (convergence-promotion / source:watchdog): add preflight/custodian check that verifies (and optionally auto-creates) each configured sandbox_base_branch on origin BEFORE goal dispatch. Distinct from 3860f469 (budget-gate auto-recovery).
+
+### STEP 5/6 — execution gate: branch creation was a direct infra fix (board+git state action), not an autonomy-cycle replay of the stagnating task (correctly avoided replaying via autonomy-cycle, condition g). No autonomy-cycle dispatched.
+
+### STEP 7 — invariants: pytest tests/unit/er000_phase0_golden/ -q → 15 passed ✓
+
+### STEP 8 — watcher health: 8/8 running, stable PIDs. Only ERROR is stale 23:29 prior-day (3a3c202f "execute produced no result"). No current non-143 crashes, no new tracebacks (the custodian 429 crash is understood + resolved).
+
+### Blocked work classification
+- 3a3c202f: was closed-loop recycle (missing-branch root cause) -> RESOLVED precondition, requeued to R4AI. Validate executor success next cycle.
+- Behavioral convergence: CONVERGENT this cycle — remediation strategy demonstrably adapted (new root cause found + fixed), queue state evolved, closed-loop cause removed.
+- Operator-blocked: none | Parked: no
+- KNOWN OPEN: Campaign 10c50210 CANCELLED (carry forward)
