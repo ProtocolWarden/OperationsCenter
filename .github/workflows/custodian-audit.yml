@@ -69,4 +69,4 @@ jobs:
       - name: Run Custodian audit
         if: env.REPOGRAPH_BOUNDARY_ARTIFACT_FILE != ''
         run: |
-          custodian-multi --repos . --fail-on-findings --no-color --verbose
+          custodian-multi --repos . --fail-on-findings --no-color

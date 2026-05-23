@@ -7,6 +7,12 @@ audit:
   # in CI where the repo is freshly cloned and git config is not persisted.
   ignore_rules:
     - W2
+    # P3: plumbing path-fragment check requires the reader repo to be
+    # checked out alongside OC (../OperatorConsole/). In CI, only OC is
+    # present — the reader path doesn't exist so P3 always fires a
+    # false "reader not found" finding. P1/P2 still run and verify
+    # key presence in the writer; P3 adds no signal in single-repo CI.
+    - P3
   # C1/C6 (TODO/FIXME markers): exclude paths where TODO/FIXME appear as
   # strings being analysed (todo_signal, todo_accumulation, artifact_writer)
   # or in comments already tagged [deferred, reviewed] and covered by OC2.

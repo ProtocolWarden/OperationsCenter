@@ -1,6 +1,12 @@
 ## Operator change — 2026-05-23 UTC (3)
 
-- Added --verbose to custodian-multi CI command to identify which 3 patterns are firing (all paths/suppressions look correct locally but CI still shows 3 findings)
+- Identified 3 CI findings via --verbose: all P3 (plumbing path-fragment check)
+  - [heartbeat] reader '../OperatorConsole/.../watcher_status_pane.py' not found
+  - [usage] same
+  - [campaigns] same
+- Root cause: P3 requires sibling repos to be checked out; CI is a single-repo clone
+- Fix: added P3 to audit.ignore_rules (P1/P2 still verify key presence; P3 adds no signal in single-repo CI)
+- Reverted --verbose flag from workflow
 
 ## Operator change — 2026-05-23 UTC (2)
 
