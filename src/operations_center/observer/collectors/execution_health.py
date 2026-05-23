@@ -9,6 +9,7 @@ from pathlib import Path
 from operations_center.observer.models import ExecutionHealthSignal, ExecutionRunRecord
 from operations_center.observer.service import ObserverContext
 from operations_center.observer.validation import (
+    ArtifactValidator,
     ExecutionOutcomeValidator,
     RequestValidator,
     ValidationHistoryValidator,
