@@ -1,1 +1,1 @@
-{"delay_s": 300, "state": "DEGRADED", "reason": "session limits exhausted (resets 05:40 UTC); R4AI queue saturated at 15/8 cap; all audits clean"}
+{"delay_s": 900, "state": "ACTIVE", "reason": "task 74af58c5 freshly dispatched via board-unblock; executor running; session limits just reset; PR 170 CI fully passes awaiting operator merge"}

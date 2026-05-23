@@ -1,5 +1,90 @@
 # Log
 
+## OC Platform Watchdog Cycle — 2026-05-23 01:55 UTC (Cycle 17)
+
+- Branch: oc-watchdog/20260522-1710-fix-ci-regressions
+- Health state: ACTIVE (board-unblock triggered 74af58c5 dispatch; session limits just reset; task in flight)
+- Next cadence: 900s — task 74af58c5 freshly launched (executor pid 1331905, 2 min old); sessions available; await completion
+
+### STEP 0 — Preflight
+- All 16 repos: Already up to date (ff-only pull) ✓
+- Plane: OK ✓ | SwitchBoard: OK ✓ | Watchers: 8/8 running ✓ | CLIs: OK ✓
+- Working tree: contracts/__init__.py, enums.py (modified), evidence.py (untracked), tools/loop/controller.py (modified) — operator in-progress work, NOT staged by loop
+- loop_schedule.json: deleted by controller (expected)
+- Session limits: reset at 01:40 UTC (9:40pm ET); 15 min post-reset — capacity available
+
+### STEP 1 — Investigation findings
+- graph-doctor: ✓ OK — 11 nodes / 12 edges / graph_built=True
+- ghost-audit: G10 ×1 (b67bc0e0 "Fix lint regression" Cancelled, lagging — expected, clears naturally); G7 ×1 (89191ff5 "Emit JUnit XML" thin goal — normal quality gate); total_ghost_events=2
+- flow-audit: 0 open gaps ✓; F8 partial (persistent/non-critical)
+- reaudit-check: dag_executor + team_executor `needed=false` (CxRP 0.3.1) ✓
+- regression-check: 0 findings ✓ (24h lookback also 0)
+- custodian-sweep: 7 repos, all deltas=0 ✓
+
+### STEP 1 — CI status (PR #170)
+- CI workflow (PR run 26316400422): ALL PASS — Custodian doctor ✓, License headers ✓, Lint (ruff) ✓, Test (pytest) ✓, Type check (ty) ✓
+- custodian-audit workflow (26316400432): FAIL — "Materialize boundary artifact file" step: missing REPOGRAPH_BOUNDARY_ARTIFACT_FILE secret — PRE-EXISTING infrastructure issue; all pushes to main and all PRs have failed this since inception. Not caused by PR #170 changes.
+- **PR #170 is ready to merge** — all CI checks pass; custodian-audit failure is operator-blocked infrastructure issue
+- Main CI: still failing (last push `1cb614a` at 18:18 UTC 2026-05-22 → 9/11 families gated by family_deferred_initial_gating)
+- PR #169 (oc-watchdog/20260522-0644-fix-ci-failures): OPEN/stale — superseded by PR #170; recommend closing
+
+### STEP 1 — Executor failure investigation
+- No OOM, no SIGKILL, no executor signals; memory: 25Gi available ✓
+- Session limits reset at 01:40 UTC — capacity now available
+- board_worker rate gate: hourly window reset; current capacity available
+
+### STEP 2 — Triage: 0 actions
+
+### STEP 2.5 — Board-unblock: 3 actions applied
+- `0f1612ea` "Handle Optional observed_at in the Deriver" → Backlog (CLEAN_BLOCKED_RETRY: no executor-signal/exit-code labels, safe retry)
+- `3a3c202f` "Harden Collector against malformed JSON statuses payloads" → Backlog (CLEAN_BLOCKED_RETRY: same)
+- `74af58c5` "Add Rule evidence type and boundary validation tests" → Ready for AI (GOAL_BACKLOG_PROMOTE: parent improve fa470a1f Done)
+- **Effect**: goal watcher immediately claimed 74af58c5 at 01:53 UTC; executor pid 1331905 launched; claude coordinator pid 1338145 running (1:07 elapsed at observation)
+
+### STEP 3 — Blocked/stalled analysis
+- propose dry-run: 2 emitted (observation_coverage, test_visibility), 11 suppressed (9 family_deferred_initial_gating from CI failure, 2 cooldown_active)
+  - 2 passing candidates likely semantically equivalent to existing Backlog tasks (a969024e, 2824d46e) — NOT dispatched via --execute to avoid duplicate creation
+- **74af58c5**: ACTIVE (freshly dispatched via board-unblock; prior attempts: 1→2→3 stage failures = convergent progression)
+- **3a3c202f, 0f1612ea**: temporarily-blocked → moved to Backlog; sessions available for retry
+- **CI gating (9 families)**: operator-blocked (PR #170 not merged; all CI checks pass; merge unblocks 9 families)
+- **custodian-audit**: operator-blocked (REPOGRAPH_BOUNDARY_ARTIFACT_FILE secret missing — pre-existing, not PR #170 introduced)
+- Behavioral convergence: ACTIVE (board-unblock triggered dispatch; session limits reset; task in flight)
+
+### STEP 4 — Convergence promotion
+- Duplicate propose vs Backlog: propose emitting `observation_coverage`/`test_visibility` candidates that likely match existing Backlog tasks (a969024e, 2824d46e). Duplicate suppression may only check R4AI/Running states, not Backlog. First cycle observation — note but don't escalate yet.
+- No other new promotion candidates
+
+### STEP 5/6 — Direct fixes: none dispatched
+- Execution gate: 74af58c5 in flight (max_concurrent=1 occupied); propose candidates may be duplicates; no qualifying code regression findings
+- No autonomy-cycle --execute (duplicate risk)
+
+### STEP 7 — Invariant tests: 15 passed ✓
+
+### STEP 8 — Watcher health
+- 8/8 watchers running, all heartbeats fresh (02:00 UTC)
+- goal: executing (74af58c5 just launched 01:53 UTC)
+- review: active (polling GitHub APIs)
+- spec.json heartbeat stale (07:20 2026-05-22): benign legacy artifact — spec_hygiene + spec_trigger replaced spec watcher post-ADR 0007-F; active watchers heartbeating correctly
+- No non-143 crashes in current session; no OOM
+
+### Blocked work classification
+- 74af58c5: active (freshly dispatched this cycle; convergent stage progression)
+- 3a3c202f, 0f1612ea: temporarily-blocked (Backlog; safe retry; sessions available)
+- CI gating: operator-blocked (PR #170 needs operator merge; all CI checks passing)
+- custodian-audit: operator-blocked (REPOGRAPH_BOUNDARY_ARTIFACT_FILE secret missing; pre-existing)
+
+### Behavioral convergence: ACTIVE
+- Board-unblock triggered dispatch of 74af58c5; sessions reset; executor running
+- No starvation (task dispatched; board-unblock working; tasks in Backlog ready for subsequent dispatch)
+- No closed-loop stagnation (stage progression convergent; each attempt gets further)
+
+### Operator actions pending
+1. Merge PR #170 (`oc-watchdog/20260522-1710-fix-ci-regressions` → main) — CI fully passes; unblocks 9 families
+2. Close PR #169 (`oc-watchdog/20260522-0644-fix-ci-failures`) — stale, superseded by PR #170
+3. (Optional) Add REPOGRAPH_BOUNDARY_ARTIFACT_FILE secret to repo settings — resolves custodian-audit CI check
+
+---
+
 ## OC Platform Watchdog Cycle — 2026-05-22 23:06 UTC (Cycle 16)
 
 - Branch: oc-watchdog/20260522-1710-fix-ci-regressions
