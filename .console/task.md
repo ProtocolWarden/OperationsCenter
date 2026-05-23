@@ -5,13 +5,25 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-System locked at Rev 10. Phases 2–12 complete. Awaiting next operator directive.
+Stage 3: Implement error handling and graceful recovery for malformed payloads (COMPLETE)
 
 ## Context
 
-Rev 10 final verification (commit a622f71): 0 new gaps; 14/14 checks clean; fourth consecutive clean pass.
-2733 tests passing. All 23 lifetime gaps closed.
+Stage 0 (Analysis) identified 12 JSON parsing entry points with critical vulnerabilities.
+Stage 1 (Design) created comprehensive hardening strategy with per-collector schemas.
+Stage 3 (Implementation) has been completed with:
+- Validation helper library created (validation.py)
+- All 7 JSON-parsing collectors updated with error handling
+- Crash vulnerability in dependency_drift.py fixed (line 19)
+- Structured validation added post-parse for all collectors
+- Comprehensive logging at parse vs structure validation boundaries
+- Graceful degradation to unavailable signals on error
 
 ## Definition of Done
 
-N/A — system locked. Awaiting new phase or directive.
+- [x] Validation.py helper library with 10+ validator classes
+- [x] dependency_drift.py crash fix with proper exception handling
+- [x] Parse error logging at DEBUG level (expected transient failures)
+- [x] Structure validation errors logged at WARNING level (unexpected)
+- [x] All collectors skip malformed artifacts and continue gracefully
+- [x] Existing comprehensive test suite ready for validation

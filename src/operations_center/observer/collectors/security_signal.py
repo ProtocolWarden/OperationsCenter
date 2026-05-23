@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
 from operations_center.observer.models import SecuritySignal
 from operations_center.observer.service import ObserverContext
+
+logger = logging.getLogger(__name__)
 
 # Glob patterns for audit artifact discovery
 _AUDIT_PATTERNS = [
@@ -54,8 +57,16 @@ class SecuritySignalCollector:
 
         for fpath in found_files:
             try:
-                data = json.loads(fpath.read_text(encoding="utf-8", errors="replace"))
-            except (json.JSONDecodeError, OSError):
+                text = fpath.read_text(encoding="utf-8", errors="replace")
+                data = json.loads(text)
+            except json.JSONDecodeError as e:
+                logger.debug(
+                    f"Failed to parse security audit {fpath}: {e.msg} at "
+                    f"line {e.lineno}, col {e.colno}"
+                )
+                continue
+            except OSError as e:
+                logger.debug(f"Failed to read security audit {fpath}: {e}")
                 continue
 
             fname = fpath.name.lower()

@@ -7,6 +7,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+from operations_center.observer.validation import ParseErrorMetadata
+
 
 OBSERVER_VERSION = 1
 
@@ -44,6 +46,7 @@ class DependencyDriftSignal(BaseModel):
     source: str | None = None
     observed_at: datetime | None = None
     summary: str | None = None
+    parse_errors: ParseErrorMetadata = Field(default_factory=ParseErrorMetadata)
 
 
 class TodoFileCount(BaseModel):
@@ -74,6 +77,7 @@ class ExecutionHealthSignal(BaseModel):
     error_count: int = 0
     validation_failed_count: int = 0
     recent_runs: list[ExecutionRunRecord] = Field(default_factory=list)
+    parse_errors: ParseErrorMetadata = Field(default_factory=ParseErrorMetadata)
 
 
 class BacklogItem(BaseModel):
@@ -100,6 +104,7 @@ class LintSignal(BaseModel):
     distinct_file_count: int = 0
     top_violations: list[LintViolation] = Field(default_factory=list)
     source: str | None = None
+    parse_errors: ParseErrorMetadata = Field(default_factory=ParseErrorMetadata)
 
 
 class TypeError(BaseModel):
@@ -116,6 +121,7 @@ class TypeSignal(BaseModel):
     distinct_file_count: int = 0
     top_errors: list[TypeError] = Field(default_factory=list)
     source: str | None = None
+    parse_errors: ParseErrorMetadata = Field(default_factory=ParseErrorMetadata)
 
 
 class ValidationFailureRecord(BaseModel):
@@ -132,6 +138,7 @@ class ValidationHistorySignal(BaseModel):
     tasks_with_repeated_failures: list[ValidationFailureRecord] = Field(default_factory=list)
     overall_failure_rate: float = 0.0
     source: str | None = None
+    parse_errors: ParseErrorMetadata = Field(default_factory=ParseErrorMetadata)
 
 
 class CICheckRunRecord(BaseModel):

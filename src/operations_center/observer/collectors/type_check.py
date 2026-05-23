@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 
 from operations_center.observer.models import TypeError, TypeSignal
 from operations_center.observer.service import ObserverContext
+from operations_center.observer.validation import ArtifactValidator
+
+logger = logging.getLogger(__name__)
 
 _MAX_ERRORS = 20
 
@@ -67,21 +71,43 @@ class TypeSignalCollector:
 
         try:
             data = json.loads(raw)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            logger.debug(
+                f"Failed to parse ty output: {e.msg} at "
+                f"line {e.lineno}, col {e.colno}"
+            )
             return TypeSignal(status="unavailable", source="ty_parse_error")
 
-        # ty JSON output: {"diagnostics": [...], ...}
-        diagnostics = data.get("diagnostics", []) if isinstance(data, dict) else []
+        if not isinstance(data, dict):
+            logger.warning(
+                f"ty output: expected dict, got {type(data).__name__}"
+            )
+            return TypeSignal(status="unavailable", source="ty_unexpected_format")
+
+        diagnostics = data.get("diagnostics", [])
         if not isinstance(diagnostics, list):
+            logger.warning(
+                f"ty diagnostics: expected list, "
+                f"got {type(diagnostics).__name__}"
+            )
             return TypeSignal(status="unavailable", source="ty_unexpected_format")
 
         total = len(diagnostics)
-        distinct_file_count = len({item.get("file", "") for item in diagnostics if item.get("file")})
+        distinct_file_count = len({item.get("file", "") for item in diagnostics if isinstance(item, dict) and item.get("file")})
 
         errors: list[TypeError] = []
-        for item in diagnostics[:_MAX_ERRORS]:
+        for idx, item in enumerate(diagnostics[:_MAX_ERRORS]):
+            if not isinstance(item, dict):
+                logger.debug(
+                    f"Skipping non-dict ty diagnostic[{idx}]: "
+                    f"{type(item).__name__}"
+                )
+                continue
+
             try:
-                loc = item.get("range", {}).get("start", {})
+                loc = ArtifactValidator.safe_get(
+                    item, ["range", "start"], {}
+                )
                 errors.append(
                     TypeError(
                         path=str(item.get("file", "")),
@@ -91,7 +117,8 @@ class TypeSignalCollector:
                         message=str(item.get("message", "")),
                     )
                 )
-            except Exception:
+            except (TypeError, ValueError) as e:
+                logger.debug(f"Failed to construct type error: {e}")
                 continue
 
         return TypeSignal(
@@ -111,11 +138,22 @@ class TypeSignalCollector:
 
         all_error_files: set[str] = set()
         error_items: list[dict] = []
-        for line in lines:
+        for line_idx, line in enumerate(lines):
             try:
                 item = json.loads(line)
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as e:
+                logger.debug(
+                    f"Failed to parse mypy line {line_idx}: {e.msg}"
+                )
                 continue
+
+            if not isinstance(item, dict):
+                logger.debug(
+                    f"mypy line {line_idx}: expected dict, "
+                    f"got {type(item).__name__}"
+                )
+                continue
+
             if item.get("severity") != "error":
                 continue
             f = item.get("file", "")
@@ -124,7 +162,7 @@ class TypeSignalCollector:
             error_items.append(item)
 
         errors: list[TypeError] = []
-        for item in error_items[:_MAX_ERRORS]:
+        for idx, item in enumerate(error_items[:_MAX_ERRORS]):
             try:
                 errors.append(
                     TypeError(
@@ -135,7 +173,8 @@ class TypeSignalCollector:
                         message=str(item.get("message", "")),
                     )
                 )
-            except Exception:
+            except (TypeError, ValueError) as e:
+                logger.debug(f"Failed to construct type error: {e}")
                 continue
 
         return TypeSignal(

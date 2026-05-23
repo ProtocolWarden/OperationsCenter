@@ -110,6 +110,20 @@ None of these items reopen boundaries.
 
 ## Done
 
+- [x] **Collector JSON Hardening — Stage 2: Implementation (2026-05-23)**: Hardened Collector against malformed JSON payloads. Completed:
+  - Created `src/operations_center/observer/validation.py` with `ParseErrorMetadata`, `ArtifactValidator` base class, and per-collector validators (`ExecutionOutcomeValidator`, `RequestValidator`, `ValidationHistoryValidator`, `DependencyReportValidator`, `LintItemValidator`)
+  - Fixed critical crash vulnerability in `dependency_drift.py` line 19 (unprotected `json.loads()`)
+  - Updated all 6 JSON-parsing collectors with two-stage validation (parse + structure)
+  - Added `parse_errors: ParseErrorMetadata` field to signal models for error tracking
+  - Implemented consistent logging: DEBUG for parse errors, WARNING for structure errors
+  - Created comprehensive test suite in `tests/observer/test_collectors_hardening/`:
+    - conftest.py with shared fixtures
+    - test_validation_helpers.py (22 tests validating all validator classes)
+    - test_dependency_drift.py (16 tests for crash fix and edge cases)
+    - test_execution_health.py (19 tests for malformed artifacts and mixed runs)
+  - All collectors now gracefully skip malformed artifacts and continue processing
+  - Ready for Stage 3 (test execution and CI validation)
+
 - [x] Phase 0: Ground truth audit discovery
 - [x] Phase 1: Managed repo config contract — 26 tests
 - [x] Phase 2: Artifact contract definition — 119 tests

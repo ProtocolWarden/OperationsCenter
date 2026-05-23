@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
 from operations_center.observer.models import BenchmarkSignal
 from operations_center.observer.service import ObserverContext
+
+logger = logging.getLogger(__name__)
 
 # Glob patterns for benchmark artifact discovery
 _BENCHMARK_PATTERNS = [
@@ -55,8 +58,16 @@ class BenchmarkSignalCollector:
 
         for fpath in found_files:
             try:
-                data = json.loads(fpath.read_text(encoding="utf-8", errors="replace"))
-            except (json.JSONDecodeError, OSError):
+                text = fpath.read_text(encoding="utf-8", errors="replace")
+                data = json.loads(text)
+            except json.JSONDecodeError as e:
+                logger.debug(
+                    f"Failed to parse benchmark {fpath}: {e.msg} at "
+                    f"line {e.lineno}, col {e.colno}"
+                )
+                continue
+            except OSError as e:
+                logger.debug(f"Failed to read benchmark {fpath}: {e}")
                 continue
 
             if isinstance(data, dict):
