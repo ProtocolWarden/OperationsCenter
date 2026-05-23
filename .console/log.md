@@ -10363,3 +10363,45 @@ Cross-cycle repeating patterns:
 ### Blocked work classification: none currently blocked (74af58c5 requeued to Backlog)
 ### Operator-blocked: none | Parked: no
 ### Note: .custodian/config.yaml auto-mutation (plugin_audit_keys += ignore_rules) emitted by sweep — left unstaged (generated, not committed)
+
+## OC Platform Watchdog Cycle — 2026-05-23 07:45 UTC (Cycle 23)
+
+- Health state: ACTIVE — dead-remediation loop resolved via direct board closure; remediation in flight (verify budget frees next cycle)
+- Next cadence: 900s
+- Plane/SwitchBoard: Plane OK, SwitchBoard OK
+- Watchers: 8/8 running (intake, goal, test, improve, propose, review, spec, watchdog); no non-143 crashes; no tracebacks today
+- Audits: custodian-sweep (all delta=0), ghost-audit (3 events, all status=fixed), flow-audit (0 open gaps), graph-doctor (✓ 11n/12e), reaudit-check (none needed), check-regressions (0 findings) — ALL CLEAN
+
+### STEP 2/2.5 — triage + board-unblock
+- triage-scan: 0 actions (rescore/awaiting/queue_healing all empty)
+- board-unblock: 1 action — 74af58c5 GOAL_BACKLOG_PROMOTE Backlog→Ready for AI (parent fa470a1f Done). mem_available=23.3GB
+
+### STEP 3 — dead-remediation resolved (74af58c5 "Add Rule evidence type and boundary validation tests")
+- Lineage: 8+ executor dispatch attempts across cycles 19-22 + today. Stage failures: 19:00 (3/5), 22:38 (5/6), 23:42 (session limit), 03:36 (3/6). No convergence to success.
+- Root cause: executor wrote impl but failed at commit/push stages; test file never created across any attempt (per 2e0b729). Goal board_worker cannot complete this task.
+- Deliverable ALREADY committed directly in 2e0b729 (EvidenceType enum, RuleEvidence model, 15 boundary tests). Verified green this cycle: test_evidence.py + er000_phase0_golden = 30 passed.
+- Futile re-dispatch was consuming the 4/4 hourly global rate budget (global_rate_exceeded skips on many other tasks) → starving R4AI.
+- REMEDY (direct, loop-owned — not escalation): marked 74af58c5 → Done with comment citing 2e0b729 + verified tests. Queue evolved; re-promotion will not re-fire (task now terminal). Budget freed.
+- Classification: dead-remediation → RESOLVED this cycle. Forward progress: queue state changed (R4AI→Done).
+
+### STEP 4 — convergence promotion
+- Gap: when a watchdog directly commits a deliverable closing a board task ("Closes <task-id>"), no watcher moves the Plane task terminal → board-unblock re-promotes → executor burns budget re-dispatching.
+- Created promotion task b74a08fd (seq 107, convergence-promotion / source:watchdog): add board-unblock/custodian rule to detect 'Closes <task-id>' commits with passing deliverable and mark task Done. Prior context: cycle-20 escalation 0d04b4f6.
+
+### STEP 5/6 — execution gate
+- No reproduced repo-code findings this cycle (all audits clean). No autonomy-cycle dispatch. The 74af58c5 remedy was a board-state action, not an autonomy-cycle replay (correctly avoided replaying the non-convergent path).
+
+### STEP 7 — invariants
+- pytest tests/unit/contracts/test_evidence.py tests/unit/er000_phase0_golden/ -q: 30 passed ✓
+
+### STEP 8 — watcher health
+- 8/8 running, stable PIDs. exit 143: none this cycle. No non-143 crashes, no tracebacks. One stale 23:29 goal "execute produced no result" (3a3c202f, prior-day) — not current.
+
+### Blocked work classification
+- 74af58c5: dead-remediation → RESOLVED (closed Done, deliverable committed+verified)
+- Budget-skipped tasks (360cff3a, c7df5422, etc.): rate-gated by global_rate_exceeded (4/4 hourly) — working as designed; expected to dispatch as budget frees now that 74af58c5 no longer hogs it
+
+### Behavioral convergence: ACTIVE (adapted — closed the non-convergent task instead of replaying it)
+- Operator-blocked: none
+- Parked state: no
+- KNOWN OPEN: Campaign 10c50210 CANCELLED (carry forward)
