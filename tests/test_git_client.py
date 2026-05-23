@@ -204,6 +204,30 @@ def test_checkout_base_delegates_correct_command() -> None:
     ]
 
 
+def test_create_remote_branch_from_pushes_then_fetches_tracking_ref() -> None:
+    client = TrackingGitClient()
+
+    client.create_remote_branch_from(Path("/repo"), "sandbox-base", "origin/main")
+
+    assert client.calls == [
+        (["git", "push", "origin", "origin/main:refs/heads/sandbox-base"], Path("/repo")),
+        (
+            ["git", "fetch", "origin", "sandbox-base:refs/remotes/origin/sandbox-base"],
+            Path("/repo"),
+        ),
+    ]
+
+
+def test_remote_default_branch_strips_ref_prefix() -> None:
+    client = FakeGitClient(
+        {
+            ("git", "symbolic-ref", "refs/remotes/origin/HEAD"): b"refs/remotes/origin/main\n",
+        },
+    )
+
+    assert client.remote_default_branch(Path("/repo")) == "main"
+
+
 def test_set_identity_calls_name_and_email_in_order() -> None:
     client = TrackingGitClient()
 

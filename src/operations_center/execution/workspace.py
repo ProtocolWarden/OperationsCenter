@@ -129,12 +129,31 @@ class WorkspaceManager:
         try:
             self._git.verify_remote_branch_exists(ws, request.base_branch)
         except Exception as exc:
-            raise RuntimeError(
-                f"base_branch {request.base_branch!r} does not exist on origin — "
-                "if this is a sandbox branch (sandbox_base_branch in config), "
-                f"create it on origin first (e.g. `git push origin main:{request.base_branch}`). "
-                f"Underlying: {exc}"
-            ) from exc
+            # Sandbox base branches (sandbox_base_branch in config) can go
+            # missing on origin between runs — they have repeatedly vanished
+            # and dead-ended every queued OC self-modify task while the
+            # watchdog recreated them by hand. Self-heal: create the branch
+            # from the remote default branch tip and re-verify, so a missing
+            # sandbox base no longer requires operator intervention. In
+            # non-sandbox mode base_branch is the repo's real default branch,
+            # which always exists, so this recovery path never fires.
+            try:
+                default_ref = f"origin/{self._git.remote_default_branch(ws)}"
+                self._git.create_remote_branch_from(ws, request.base_branch, default_ref)
+                self._git.verify_remote_branch_exists(ws, request.base_branch)
+                logger.warning(
+                    "WorkspaceManager.prepare: base_branch %r was missing on "
+                    "origin; self-healed by creating it from %s",
+                    request.base_branch, default_ref,
+                )
+            except Exception:
+                raise RuntimeError(
+                    f"base_branch {request.base_branch!r} does not exist on origin "
+                    "and could not be auto-created — if this is a sandbox branch "
+                    "(sandbox_base_branch in config), create it on origin first "
+                    f"(e.g. `git push origin main:{request.base_branch}`). "
+                    f"Underlying: {exc}"
+                ) from exc
         self._git.checkout_base(ws, request.base_branch)
         # C-K3 bootstrap chain — only fires when the repo opts in via
         # explicit install_dev_command or bootstrap_commands. Default

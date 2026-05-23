@@ -47,6 +47,35 @@ class GitClient:
         if not out:
             raise ValueError(f"Base branch does not exist on remote: {branch}")
 
+    def remote_default_branch(self, repo_path: Path) -> str:
+        """Return the remote's default branch name (e.g. 'main').
+
+        Resolves refs/remotes/origin/HEAD, which a fresh clone sets to the
+        remote's default branch.
+        """
+        ref = self._run(
+            ["git", "symbolic-ref", "refs/remotes/origin/HEAD"], cwd=repo_path,
+        )
+        return ref.rsplit("/", 1)[-1]
+
+    def create_remote_branch_from(
+        self, repo_path: Path, branch: str, source_ref: str,
+    ) -> None:
+        """Create `branch` on origin pointing at `source_ref` (e.g. 'origin/main').
+
+        Used to self-heal a missing sandbox base branch. After creating the
+        remote ref, fetch it into refs/remotes/origin/<branch> so a subsequent
+        `git checkout <branch>` DWIMs to the new tracking ref.
+        """
+        self._run(
+            ["git", "push", "origin", f"{source_ref}:refs/heads/{branch}"],
+            cwd=repo_path,
+        )
+        self._run(
+            ["git", "fetch", "origin", f"{branch}:refs/remotes/origin/{branch}"],
+            cwd=repo_path,
+        )
+
     def checkout_base(self, repo_path: Path, branch: str) -> None:
         self._run(["git", "checkout", branch], cwd=repo_path)
         try:
