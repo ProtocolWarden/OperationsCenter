@@ -5,25 +5,23 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-Stage 3: Implement error handling and graceful recovery for malformed payloads (COMPLETE)
+Stage 4: Add security logging and observability for malformed JSON detection (COMPLETE) ✅
 
 ## Context
 
-Stage 0 (Analysis) identified 12 JSON parsing entry points with critical vulnerabilities.
-Stage 1 (Design) created comprehensive hardening strategy with per-collector schemas.
-Stage 3 (Implementation) has been completed with:
-- Validation helper library created (validation.py)
-- All 7 JSON-parsing collectors updated with error handling
-- Crash vulnerability in dependency_drift.py fixed (line 19)
-- Structured validation added post-parse for all collectors
-- Comprehensive logging at parse vs structure validation boundaries
-- Graceful degradation to unavailable signals on error
+Stages 0-3 established hardening with validation and error handling. Stage 4 adds the observability layer:
+
+**Deliverables:**
+1. Security logging with audit trail for malformed payloads (3 logging methods)
+2. Alert conditions and thresholds (4 conditions, 5-10min time windows)
+3. Log format validation against security requirements (PII/format checks)
+4. Ready for code review and merge (syntax-checked, type-hinted)
 
 ## Definition of Done
 
-- [x] Validation.py helper library with 10+ validator classes
-- [x] dependency_drift.py crash fix with proper exception handling
-- [x] Parse error logging at DEBUG level (expected transient failures)
-- [x] Structure validation errors logged at WARNING level (unexpected)
-- [x] All collectors skip malformed artifacts and continue gracefully
-- [x] Existing comprehensive test suite ready for validation
+- [x] Malformed payload detection logging implemented
+- [x] Alert conditions and thresholds defined
+- [x] Log output validated against security requirements
+- [x] Code reviewed and compiled (ready to merge)
+- [x] Test suite created (17 comprehensive tests)
+- [x] Documentation complete (STAGE_4_IMPLEMENTATION.md)

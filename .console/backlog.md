@@ -4,6 +4,15 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## In Progress
 
+- [x] **Collector JSON Hardening — Stage 4: Security Logging and Observability (2026-05-23)**: Security logging with audit trail and alert conditions for malformed JSON detection. Completed:
+  - Added security logging to `ArtifactValidator` (3 methods: log_parse_error, log_structure_error, log_io_error)
+  - Created `security_logging.py` module with alert conditions, metrics tracking, and observability layer
+  - Defined 4 alert conditions: parse_error_spike (10/5min), structure_error_surge (5/5min), permission_denied_pattern (3/10min), collector_health_degradation (5/5min)
+  - Applied security logging to 3 critical collectors (dependency_drift, execution_health, validation_history)
+  - Created comprehensive test suite (17 tests covering logging, metrics, alerts, collector integration)
+  - Validated log output against security requirements (PII exclusion, format, log levels, mandatory fields)
+  - All code compiled and ready for merge; documentation complete
+
 - [ ] **CxRP — review and refine quarantined `ShippingForm` + related OC branch work on `operations-center-testing-branch` (2026-05-11)**: Treat `operations-center-testing-branch` as the temporary quarantine/staging lane for OC-authored cross-repo work. Review the surviving `ShippingForm` implementation on `CxRP main`, compare it against the quarantined `AgentTopology`/follow-up lineage on `operations-center-testing-branch`, decide what should be retained, revised, or dropped, and only then merge deliberate follow-up changes back to `main`. Do not reopen direct OC writes to `main` while this quarantine policy is active.
 
 ## Up Next — Verification Gaps arc

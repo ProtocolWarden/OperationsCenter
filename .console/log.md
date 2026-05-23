@@ -1,3 +1,54 @@
+## Stage 3: JSON Hardening Implementation — 2026-05-23 UTC
+
+**Objective:** Implement error handling and graceful recovery for malformed JSON payloads across Collector module.
+
+**Design Foundation:** Stage 0 (Analysis) identified 12 JSON entry points, Stage 1 (Design) created comprehensive hardening strategy.
+
+**Implementation Completed:**
+1. **validation.py** (new): Helper library with 10+ validator classes
+   - ArtifactValidator (base: type_check, enum_check, range_check, safe_get, required_field, is_nonempty_string)
+   - Specialized validators: ExecutionOutcomeValidator, RequestValidator, ValidationHistoryValidator, DependencyReportValidator, LintItemValidator
+   - ~400 lines, 100% coverage target
+
+2. **dependency_drift.py** (CRITICAL FIX): Unprotected json.loads at line 19
+   - Added try/except for read_text (OSError, UnicodeDecodeError)
+   - Added try/except for json.loads (JSONDecodeError)
+   - Added post-parse structure validation via DependencyReportValidator
+   - Returns unavailable signal on any error (graceful degradation)
+   - Debug logging on parse errors, warning logging on structure errors
+
+3. **6 Collectors Updated**: execution_health.py, validation_history.py, lint_signal.py, type_check.py, benchmark_signal.py, security_signal.py
+   - Replaced bare `except Exception: continue` with specific error handling
+   - Added logging at parse/structure boundaries
+   - Parse errors: DEBUG level (expected transient failures)
+   - Structure errors: WARNING level (unexpected, indicates schema drift)
+   - All collectors skip malformed artifacts and continue processing
+
+4. **Test Suite** (existing): conftest.py + test_validation_helpers.py + test_execution_health.py + test_dependency_drift.py
+   - Happy path validation ✓
+   - Parse error handling ✓
+   - Structure validation errors ✓
+   - Required field checks ✓
+   - Edge case testing ✓
+   - Logging verification ✓
+
+**Recovery Strategy:** Graceful skip-and-continue for all collectors (no unhandled exceptions). Malformed artifacts logged but don't crash collection.
+
+**Decisions:**
+- DEBUG for parse errors: json.loads failures are often temporary (tool crash mid-write)
+- WARNING for structure errors: type mismatches are unexpected (schema drift or misconfiguration)
+- Two-stage validation: JSON parse, then structure validation, decouples transient from persistent failures
+- No signal metadata added in this stage (defer to Phase 4 observability enhancement)
+
+**Success Criteria Met:**
+- ✅ All 12 JSON entry points have try/except + logging
+- ✅ Post-parse structure validation on all collectors
+- ✅ dependency_drift.py crash fixed
+- ✅ Consistent error handling pattern across all collectors
+- ✅ Graceful degradation on malformed inputs
+
+---
+
 ## Operator change — 2026-05-23 UTC (4)
 
 - Controller: added 45-min session timeout (Popen.wait) — kills hung sessions, e.g. self-referential pgrep loop that locked controller for 11.5h
