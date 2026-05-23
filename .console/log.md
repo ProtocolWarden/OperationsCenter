@@ -1,3 +1,7 @@
+## Operator change — 2026-05-23 UTC (3)
+
+- Added --verbose to custodian-multi CI command to identify which 3 patterns are firing (all paths/suppressions look correct locally but CI still shows 3 findings)
+
 ## Operator change — 2026-05-23 UTC (2)
 
 - CI retrigger to pick up Custodian ignore_rules fix (94f849e+b8f942d landed at 08:07/08:16 UTC, borderline vs last CI run at 08:16 UTC)
