@@ -1,3 +1,92 @@
+## OC Platform Watchdog Cycle — 2026-05-23 07:27 UTC (Cycle 22)
+
+- Branch: oc-watchdog/20260522-1710-fix-ci-regressions
+- Health state: ACTIVE (74af58c5 Running; 14 R4AI tasks queued; queue healthy; all audits clean)
+- Next cadence: 900s — goal watcher actively executing 74af58c5; 14 R4AI tasks will drain as session windows allow
+- Plane status: 1 Running (74af58c5), 14 R4AI, 25 Backlog, 13 Done, 0 Blocked
+- PlatformDeployment / SwitchBoard: Plane OK / SwitchBoard OK
+- Watchers: 8/8 running | all healthy; no non-143 crashes
+- Audits run: custodian-sweep ghost-audit flow-audit graph-doctor reaudit-check regressions
+
+### STEP 0 — Preflight
+- All 16 repos: Already up to date (ff-only pull) ✓
+- Plane: OK ✓ | SwitchBoard: OK ✓ | Watchers: 8/8 running ✓ | CLIs: OK ✓
+- Working tree: .custodian/config.yaml (modified — executor residue from 74af58c5 attempt; NOT staged by loop)
+- loop_schedule.json: deleted by controller (expected); new path = tools/loop/loop_schedule.json (operator moved, commit e2b52ee)
+- New operator commit e2b52ee: refactor(loop) — loop_schedule.json path moved from .console/ to tools/loop/
+
+### STEP 1 — Investigation findings
+- graph-doctor: ✓ OK — 11 nodes / 12 edges / graph_built=True
+- ghost-audit: G7×2 (89191ff5 "Emit JUnit XML" — thin goal, normal quality gate); G10×1 (b67bc0e0 "Fix lint regression" Cancelled — lagging, persistent)
+- flow-audit: 0 open gaps ✓; F8 partial (persistent/non-critical)
+- reaudit-check: dag_executor + team_executor `needed=false` (CxRP 0.3.1) ✓
+- regression-check: 0 findings ✓
+- custodian-sweep: OC F3=-1, W2=-1 (improvements from cycle 21 direct fix); all other delta=0 ✓
+
+### STEP 2 — Triage: 0 actions
+
+### STEP 2.5 — Board-unblock: 0 actions (no qualifying tasks)
+
+### STEP 3 — Blocked/stalled analysis
+
+**74af58c5 "Add Rule evidence type and boundary validation tests" — RUNNING**
+- Claimed by goal watcher at local 03:04 (07:04 UTC), ~25 min into current execution
+- Cycle 21 committed test_evidence.py (15 tests) + EvidenceType/RuleEvidence directly; task promoted to R4AI
+- Goal watcher re-claimed and is executing — may succeed with committed implementation in place
+- .custodian/config.yaml modified in working tree (executor residue — loop does not interfere)
+- Classification: in-flight (goal watcher executing)
+
+**14 R4AI tasks**: queued, waiting for goal watcher to complete 74af58c5 and claim next task
+- Rate gate (4/hour global): last night showed normal back-pressure cycling; expected to continue
+- All tasks temporarily gated by hourly limit; not starvation — directional progress
+
+**Propose 0 emitted (12-13 suppressed)**: correct behavior
+- Suppressions: family_deferred_initial_gating×8, cooldown_active×4-5
+- Board saturated (15 tasks active) — propose correctly skipping
+- NOT starvation
+
+**PR #170**: audit FAILING (pre-existing REPOGRAPH_BOUNDARY_ARTIFACT_FILE secret missing) — operator-blocked
+- All other CI checks: PASS (Lint, Type check, Custodian doctor, License headers, Test) ✓
+- Operator merge required
+
+**Behavioral convergence: ACTIVE**
+- 74af58c5 executing; queue healthy; no Blocked tasks; all audits clean
+- Cycle 21 direct fix (test_evidence.py) is on branch — executor should succeed or find work done
+- No starvation, no stagnation, no dead-remediation
+
+### STEP 4 — Convergence promotion
+- 0d04b4f6 Plane task: update to note cycle 21 resolved 74af58c5 via direct fix; not actionable this cycle (task is Backlog, execution gate applies)
+- No new loop-only judgments requiring promotion
+
+### STEP 5/6 — Direct fixes
+- No direct fixes dispatched (no qualifying execution-gate findings)
+- 74af58c5: Running — do not interfere
+- PR #170 audit: operator-blocked (external secret)
+
+### STEP 7 — Invariant tests
+- pytest tests/unit/er000_phase0_golden/ -q: 15 passed ✓
+- test_evidence.py: 15 passed ✓ (cycle 21 direct fix verified)
+
+### STEP 8 — Watcher health
+- 8/8 watchers running; no non-143 crashes
+- Only ERROR in logs: 23:29 "execute produced no result" for 3a3c202f (prior night, prior cycle — task now in R4AI)
+- Goal watcher: actively executing 74af58c5 since 07:04 UTC
+- Rate gate hits (19:37-23:59): normal back-pressure (hourly limit=4); not crash
+
+### Blocked work classification
+- 74af58c5: in-flight (Running)
+- 14 R4AI tasks: temporarily-gated (hourly rate limit; directional forward progress)
+- PR #170 audit: operator-blocked (REPOGRAPH_BOUNDARY_ARTIFACT_FILE secret, pre-existing)
+
+### Behavioral convergence: ACTIVE
+- Queue healthy; all audits clean; execution in flight
+- No starvation, no stagnation, no SIGKILL
+
+### Operator-blocked: PR #170 audit (pre-existing)
+### Parked state: no
+
+---
+
 ## Operator change — 2026-05-23 UTC
 
 - Moved `loop_schedule.json` from `.console/` to `tools/loop/` — controller runtime state collocated with controller script
