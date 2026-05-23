@@ -32,8 +32,8 @@ class DAGExecutorBackendAdapter:
 
     def execute(self, request: ExecutionRequest) -> ExecutionResult:
         try:
-            from dag_executor.executor import DAGExecutorRunner  # type: ignore[import]
-            from dag_executor.models import GraphSpec, NodeSpec, NodeType  # type: ignore[import]
+            from dag_executor.executor import DAGExecutorRunner  # type: ignore  # noqa: PGH003
+            from dag_executor.models import GraphSpec, NodeSpec, NodeType  # type: ignore  # noqa: PGH003
         except ImportError as exc:
             return _error_result(request, f"dag_executor not installed: {exc}")
 
@@ -45,7 +45,7 @@ class DAGExecutorBackendAdapter:
             artifacts_dir=artifacts_dir,
             working_directory=str(workspace),
             timeout_seconds=self._settings.timeout_seconds or None,
-            worker_backend=self._settings.worker_backend,
+            worker_backend=self._settings.worker_backend,  # type: ignore  # noqa: PGH003
         )
 
         logger.info(

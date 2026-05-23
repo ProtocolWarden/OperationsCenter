@@ -45,7 +45,7 @@ def test_register_and_list(tmp_path):
     reg = MaintenanceRegistry(state_path=tmp_path / "state.json")
     t = _StubTask(name="a")
     reg.register(t)
-    assert reg.list() == [t]
+    assert reg.list_tasks() == [t]
 
 
 def test_register_rejects_duplicate(tmp_path):

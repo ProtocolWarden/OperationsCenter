@@ -163,10 +163,10 @@ def _rebuild_active_projection(
         rebuilt.append(
             CampaignRecord(
                 campaign_id=cid,
-                slug=slug,
+                slug=str(slug),
                 spec_file=spec_file,
                 status=status,  # type: ignore[arg-type]
-                created_at=created_at,
+                created_at=str(created_at),
             )
         )
 

@@ -26,7 +26,7 @@ class CritiqueExecutorBackendAdapter:
 
     def execute(self, request: ExecutionRequest) -> ExecutionResult:
         try:
-            from critique_executor.executor import CritiqueExecutorRunner  # type: ignore[import]
+            from critique_executor.executor import CritiqueExecutorRunner  # type: ignore  # noqa: PGH003
         except ImportError as exc:
             return _error_result(request, f"critique_executor not installed: {exc}")
 

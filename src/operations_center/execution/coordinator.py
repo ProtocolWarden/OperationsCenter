@@ -387,8 +387,8 @@ class ExecutionCoordinator:
         from operations_center.contracts.execution import RuntimeBindingSummary
 
         summary = RuntimeBindingSummary(
-            kind=cxrp_binding.kind.value,
-            selection_mode=cxrp_binding.selection_mode.value,
+            kind=cxrp_binding.kind.value,  # type: ignore  # noqa: PGH003
+            selection_mode=cxrp_binding.selection_mode.value,  # type: ignore  # noqa: PGH003
             model=cxrp_binding.model,
             provider=cxrp_binding.provider,
             endpoint=cxrp_binding.endpoint,

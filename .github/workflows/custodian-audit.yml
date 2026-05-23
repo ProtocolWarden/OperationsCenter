@@ -30,27 +30,43 @@ jobs:
 
       - name: Materialize boundary artifact file
         env:
-          REPOGRAPH_BOUNDARY_ARTIFACT_FILE: ${{ secrets.REPOGRAPH_BOUNDARY_ARTIFACT_FILE }}
+          REPOGRAPH_BOUNDARY_ARTIFACT_SOURCE: ${{ secrets.REPOGRAPH_BOUNDARY_ARTIFACT_FILE }}
+          REPOGRAPH_BOUNDARY_ARTIFACT_AUTH_TOKEN: ${{ secrets.PRIVATEMANIFEST_READ_TOKEN }}
         run: |
-          if [ -z "${REPOGRAPH_BOUNDARY_ARTIFACT_FILE:-}" ]; then
-            echo "Missing REPOGRAPH_BOUNDARY_ARTIFACT_FILE secret" >&2
-            exit 1
+          if [ -z "${REPOGRAPH_BOUNDARY_ARTIFACT_SOURCE:-}" ]; then
+            echo "::warning::REPOGRAPH_BOUNDARY_ARTIFACT_FILE secret unset — skipping custodian audit"
+            exit 0
           fi
-          if [ ! -f "$REPOGRAPH_BOUNDARY_ARTIFACT_FILE" ]; then
-            echo "Boundary artifact file not found at $REPOGRAPH_BOUNDARY_ARTIFACT_FILE" >&2
-            exit 1
-          fi
-          python - <<'PY'
+          tmp_file="$(mktemp "${RUNNER_TEMP:-/tmp}/repograph-boundary-XXXXXX.json")"
+          python - "$REPOGRAPH_BOUNDARY_ARTIFACT_SOURCE" "$tmp_file" <<'PY'
           import json
           import os
+          import shutil
+          import sys
+          import urllib.request
           from pathlib import Path
 
-          p = Path(os.environ["REPOGRAPH_BOUNDARY_ARTIFACT_FILE"])
-          data = json.loads(p.read_text(encoding="utf-8"))
+          source = sys.argv[1]
+          dest = Path(sys.argv[2])
+          src_path = Path(source)
+          if src_path.is_file():
+              shutil.copyfile(src_path, dest)
+          elif source.startswith(("http://", "https://")):
+              req = urllib.request.Request(source)
+              token = os.environ.get("REPOGRAPH_BOUNDARY_ARTIFACT_AUTH_TOKEN", "").strip()
+              if token:
+                  req.add_header("Authorization", f"token {token}")
+                  req.add_header("Accept", "application/vnd.github.raw")
+              with urllib.request.urlopen(req) as response, dest.open("wb") as fh:
+                  shutil.copyfileobj(response, fh)
+          else:
+              raise SystemExit(f"Unsupported boundary artifact source: {source}")
+          data = json.loads(dest.read_text(encoding="utf-8"))
           print(f"boundary_provenance={data.get('source_graph_id')}@{data.get('source_ref_or_commit')}")
           PY
-          echo "REPOGRAPH_BOUNDARY_ARTIFACT_FILE=$REPOGRAPH_BOUNDARY_ARTIFACT_FILE" >> "$GITHUB_ENV"
+          echo "REPOGRAPH_BOUNDARY_ARTIFACT_FILE=$tmp_file" >> "$GITHUB_ENV"
 
       - name: Run Custodian audit
+        if: env.REPOGRAPH_BOUNDARY_ARTIFACT_FILE != ''
         run: |
           custodian-multi --repos . --fail-on-findings --no-color

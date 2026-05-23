@@ -53,14 +53,14 @@ def fake_cl(monkeypatch):
     fake.hydrate = state.hydrate  # type: ignore[attr-defined]
     fake.capture = state.capture  # type: ignore[attr-defined]
 
-    class _AnchorMissing(Exception):
+    class _AnchorMissingError(Exception):
         pass
 
-    class _SessionNotStarted(Exception):
+    class _SessionNotStartedError(Exception):
         pass
 
-    fake.AnchorMissing = _AnchorMissing  # type: ignore[attr-defined]
-    fake.SessionNotStarted = _SessionNotStarted  # type: ignore[attr-defined]
+    fake.AnchorMissing = _AnchorMissingError  # type: ignore[attr-defined]
+    fake.SessionNotStarted = _SessionNotStartedError  # type: ignore[attr-defined]
 
     monkeypatch.setitem(sys.modules, "context_lifecycle", fake)
     monkeypatch.setenv("CL_ANCHOR", "/tmp/fake-anchor")

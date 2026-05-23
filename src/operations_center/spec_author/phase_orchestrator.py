@@ -203,7 +203,7 @@ class PhaseOrchestrator:
             if backlog_next:
                 self._comment_parent(
                     by_phase["parent"],
-                    f"Advancing to {next_kind} phase: {len(backlog_next)} tasks promoted.",
+                    f"Advancing to {next_phase_id} phase: {len(backlog_next)} tasks promoted.",
                 )
                 logger.info(
                     '{"event": "phase_advanced", "campaign_id": "%s", "to": "%s", "count": %d}',

@@ -6,9 +6,9 @@
 Replaces /loop + ScheduleWakeup. Spawns a fresh bounded claude -p session
 for each watchdog cycle. Context never accumulates; each session reconstructs
 from the anchor manifest's `.context/sessions/<sid>/checkpoints/`.
-The session writes `.console/loop_schedule.json` at STEP 10 (instead of
-calling ScheduleWakeup) to communicate the adaptive delay; this is OC-local
-runtime state (not cognition), so it lives under .console/.
+The session writes `tools/loop/loop_schedule.json` at STEP 10 (instead of
+calling ScheduleWakeup) to communicate the adaptive delay; this is controller
+runtime state, collocated with the controller script.
 
 Usage:
   python tools/loop/controller.py          # start (foreground; nohup & for overnight)
@@ -19,19 +19,21 @@ Usage:
 import argparse
 import json
 import os
+import re
 import signal
 import socket
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 REPO_ROOT = Path("/home/dev/Documents/GitHub/OperationsCenter")
 LOCK_PATH = REPO_ROOT / "logs/local/loop_controller.lock"
 WATCHDOG_LOOP_LOCK = REPO_ROOT / "logs/local/watchdog_loop.lock"
 STOP_FLAG = REPO_ROOT / "logs/local/loop_stop.flag"
-SCHEDULE_FILE = REPO_ROOT / ".console/loop_schedule.json"
+SCHEDULE_FILE = REPO_ROOT / "tools/loop/loop_schedule.json"
 LOG_FILE = REPO_ROOT / "logs/local/loop_controller.log"
 SESSION_LOG_DIR = REPO_ROOT / "logs/local/sessions"
 SESSION_PROMPT_FILE = REPO_ROOT / "tools/loop/oc_session_prompt.txt"
@@ -125,13 +127,45 @@ def write_watchdog_loop_lock() -> None:
     """
     lock = {
         "pid": os.getpid(),
-        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "hostname": socket.gethostname(),
         "repo_root": str(REPO_ROOT),
         "purpose": "OC Platform Watchdog Loop",
     }
     WATCHDOG_LOOP_LOCK.parent.mkdir(parents=True, exist_ok=True)
     WATCHDOG_LOOP_LOCK.write_text(json.dumps(lock, indent=2))
+
+
+_RATE_LIMIT_RE = re.compile(
+    r"resets\s+(\d{1,2}:\d{2}(?:am|pm))\s+\(([^)]+)\)", re.IGNORECASE
+)
+_RATE_LIMIT_BUFFER = 120  # seconds to wait after the stated reset time
+
+
+def parse_rate_limit_reset(session_log: Path) -> datetime | None:
+    """Return UTC datetime of Claude usage reset if the session hit the rate limit."""
+    try:
+        text = session_log.read_text(errors="replace")
+        m = _RATE_LIMIT_RE.search(text)
+        if not m:
+            return None
+        time_str, tz_name = m.group(1).lower(), m.group(2)
+        try:
+            tz = ZoneInfo(tz_name)
+        except ZoneInfoNotFoundError:
+            _log(f"Unknown timezone '{tz_name}' in rate-limit message — cannot parse reset time.")
+            return None
+        now_local = datetime.now(tz)
+        parsed = datetime.strptime(time_str, "%I:%M%p")  # noqa: DTZ007 — naive; immediately reused for h/m only
+        reset_local = now_local.replace(
+            hour=parsed.hour, minute=parsed.minute, second=0, microsecond=0
+        )
+        if reset_local <= now_local:
+            reset_local += timedelta(days=1)
+        return reset_local.astimezone(timezone.utc)
+    except Exception as e:
+        _log(f"Failed to parse rate-limit reset time: {e}")
+        return None
 
 
 def get_delay() -> int:
@@ -152,10 +186,10 @@ def get_delay() -> int:
     return DEFAULT_DELAY
 
 
-def run_session(iteration: int) -> int:
-    """Spawn one bounded claude -p session. Returns exit code."""
+def run_session(iteration: int) -> tuple[int, Path]:
+    """Spawn one bounded claude -p session. Returns (exit_code, session_log_path)."""
     prompt = load_session_prompt()
-    cmd = ["claude", "-p", prompt, "--dangerously-skip-permissions", "--output-format", "text"]
+    cmd = ["claude", "-p", prompt, "--model", "claude-opus-4-7", "--dangerously-skip-permissions", "--output-format", "text"]
 
     SESSION_LOG_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -175,7 +209,7 @@ def run_session(iteration: int) -> int:
     with session_log.open("w") as log_fh:
         proc = subprocess.run(cmd, cwd=REPO_ROOT, env=env, stdout=log_fh, stderr=log_fh)
 
-    return proc.returncode
+    return proc.returncode, session_log
 
 
 def interruptible_sleep(seconds: int) -> None:
@@ -235,8 +269,8 @@ def main() -> None:
     write_watchdog_loop_lock()
     STOP_FLAG.unlink(missing_ok=True)
     _log(f"OC watchdog loop controller started. pid={os.getpid()}")
-    _log(f"Stop with: python tools/loop/controller.py --stop")
-    _log(f"Status:    python tools/loop/controller.py --status")
+    _log("Stop with: python tools/loop/controller.py --stop")
+    _log("Status:    python tools/loop/controller.py --status")
     _log(f"Log:       {LOG_FILE}")
 
     iteration = 0
@@ -248,11 +282,19 @@ def main() -> None:
             # Clear stale schedule from previous session before spawning
             SCHEDULE_FILE.unlink(missing_ok=True)
 
-            rc = run_session(iteration)
+            rc, session_log = run_session(iteration)
             _log(f"Session exited rc={rc}")
 
             if _stop or STOP_FLAG.exists():
                 break
+
+            if rc != 0:
+                reset_dt = parse_rate_limit_reset(session_log)
+                if reset_dt is not None:
+                    delay = max(60, int((reset_dt - datetime.now(timezone.utc)).total_seconds()) + _RATE_LIMIT_BUFFER)
+                    _log(f"Rate limit detected — reset at {reset_dt.strftime('%Y-%m-%dT%H:%M:%SZ')} UTC; sleeping {delay}s ({delay // 60}m)")
+                    interruptible_sleep(delay)
+                    continue
 
             delay = get_delay()
             _log(f"Sleeping {delay}s ...")

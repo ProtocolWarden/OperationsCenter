@@ -7,7 +7,6 @@
 !.console/validation/**
 # P3: OC-local operational config and runtime state (migrated from .context/)
 !.console/workers.yaml
-!.console/loop_schedule.json
 CLAUDE.md
 .custodian/tmp*.yaml
 __pycache__/
@@ -32,6 +31,7 @@ state/
 .worktrees/
 .kodo/
 .claude/scheduled_tasks.lock
+tools/loop/loop_schedule.json
 .operations_center/
 .codex
 .coverage

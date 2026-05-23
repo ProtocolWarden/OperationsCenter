@@ -42,7 +42,7 @@ class MaintenanceRegistry:
                 raise ValueError(f"MaintenanceTask {task.name!r} already registered")
         self._tasks.append(task)
 
-    def list(self) -> list[MaintenanceTask]:
+    def list_tasks(self) -> list[MaintenanceTask]:
         return list(self._tasks)
 
     # ---- scheduling ----------------------------------------------------

@@ -24,6 +24,15 @@ from operations_center.repo_graph_factory import (
     build_effective_repo_graph_from_settings,
 )
 
+# Private manifest fallback uses the sibling PlatformManifest source tree,
+# which is only available in local dev environments — not in CI checkouts.
+_SIBLING_PM = Path(__file__).resolve().parents[4] / "PlatformManifest" / "src" / "platform_manifest" / "__init__.py"
+_SIBLING_PM_AVAILABLE = _SIBLING_PM.is_file()
+_requires_sibling_pm = pytest.mark.skipif(
+    not _SIBLING_PM_AVAILABLE,
+    reason="requires sibling PlatformManifest source tree (not available in CI)",
+)
+
 
 class _PlatformManifestSettingsLike(BaseModel):
     enabled: bool = True
@@ -99,6 +108,7 @@ class TestProjectExplicit:
         assert g.resolve("MyProjAPI") is not None
 
 
+@_requires_sibling_pm
 class TestPrivateExplicit:
     def test_explicit_private_manifest_path_loads(self, tmp_path: Path) -> None:
         private = tmp_path / "private.yaml"
@@ -202,6 +212,7 @@ class TestProjectByRepoRootConvention:
         assert g.resolve("OperationsCenter") is not None
 
 
+@_requires_sibling_pm
 class TestPrivateBySlugConvention:
     def test_private_manifest_discovered_from_private_topology_sibling(
         self, tmp_path: Path
