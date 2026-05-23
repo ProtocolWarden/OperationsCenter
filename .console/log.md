@@ -2,6 +2,7 @@
 
 - Committed loop's `.custodian/config.yaml`: W2 suppressed (CI has no core.hooksPath), F3 suppressed for ComplianceInput Pydantic fields, maintenance/spec_hygiene/cl_wrap exclusions
 - Fixed B1 boundary violation in docs/specs/scene-timing-audit-test-hardening.md: replaced private project name with generic reference
+- Removed privacy.exclude_paths exemption for that doc — exemption was masking the real fix locally; doc is now clean so no exemption needed
 - Controller sessions switched to `claude-opus-4-7`
 - Added `ignore_rules` to `plugin_audit_keys` — doctor --strict rejected it as unknown even though loader honors it
 

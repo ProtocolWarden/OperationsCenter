@@ -798,7 +798,3 @@ tools:
 # file that mentions them, with the noted path patterns excluded.
 privacy:
   require_boundary_artifact: true
-  # scene-timing spec is an operator-private audit doc that legitimately names
-  # the managed repo being analysed; exclude from B1 public-surface scan.
-  exclude_paths:
-    - docs/specs/scene-timing-audit-test-hardening.md
