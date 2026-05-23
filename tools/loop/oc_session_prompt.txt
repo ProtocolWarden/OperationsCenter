@@ -337,7 +337,7 @@ do NOT blindly restart it — escalate with a Plane task instead.
 Restart a stopped watcher (only after root-cause is understood):
   scripts/operations-center.sh watch --role <role>
 
-STEP 9 — LOG + COMMIT HYGIENE:
+STEP 9 — LOG + COMMIT + PUSH:
 Append the structured cycle summary to .console/log.md (see template in docs/operator/watchdog_loop.md).
 Update .console/backlog.md for any new/closed gaps.
 IMPORTANT: Run git diff --staged before committing to ensure only loop-owned files are staged.
@@ -345,6 +345,13 @@ Commit only after validation passes. If not on main or not allowed: create a bra
   git checkout -b oc-watchdog/<YYYYMMDD-HHMM>-<short-topic>
 One logical commit per repo per cycle. Commit message must name: root cause, affected repo,
 gate/check fixed. Never force-push, amend old loop commits, or commit generated noise.
+
+PUSH AFTER COMMIT — push immediately after a successful commit. Do not wait for operator:
+  git push origin <current-branch>
+Push applies to all branches (main, oc-watchdog/*, operations-center-testing-branch).
+Invariant gate (STEP 7) passing is sufficient self-review — no additional operator approval needed.
+If push fails (non-auth error): note it in the cycle summary and continue; do not retry in a loop.
+If push fails with auth error: classify as infra-blocked and note in cycle summary.
 
 STEP 10 — WRITE SCHEDULE AND EXIT:
 Assess platform health state and choose the appropriate delay:

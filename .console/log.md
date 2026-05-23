@@ -1,3 +1,9 @@
+## Operator change — 2026-05-23 UTC
+
+- Wired self-push into STEP 9 of session prompt: controller now commits and immediately pushes, no operator needed.
+- STEP 7 invariant gate (15/15) is sufficient self-review. Push applies to all branches.
+- Auth push failures → infra-blocked; non-auth → noted in cycle summary, no retry loop.
+
 ## Stage 2 Merge Process — 2026-05-23 UTC
 
 **Objective:** Complete Stage 2 JSON hardening by addressing code review findings and merging to main.
