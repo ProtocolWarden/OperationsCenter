@@ -4,6 +4,15 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## In Progress
 
+- [x] **Collector JSON Hardening — Stage 4: Security Logging and Observability (2026-05-23)**: Security logging with audit trail and alert conditions for malformed JSON detection. Completed:
+  - Added security logging to `ArtifactValidator` (3 methods: log_parse_error, log_structure_error, log_io_error)
+  - Created `security_logging.py` module with alert conditions, metrics tracking, and observability layer
+  - Defined 4 alert conditions: parse_error_spike (10/5min), structure_error_surge (5/5min), permission_denied_pattern (3/10min), collector_health_degradation (5/5min)
+  - Applied security logging to 3 critical collectors (dependency_drift, execution_health, validation_history)
+  - Created comprehensive test suite (17 tests covering logging, metrics, alerts, collector integration)
+  - Validated log output against security requirements (PII exclusion, format, log levels, mandatory fields)
+  - All code compiled and ready for merge; documentation complete
+
 - [ ] **CxRP — review and refine quarantined `ShippingForm` + related OC branch work on `operations-center-testing-branch` (2026-05-11)**: Treat `operations-center-testing-branch` as the temporary quarantine/staging lane for OC-authored cross-repo work. Review the surviving `ShippingForm` implementation on `CxRP main`, compare it against the quarantined `AgentTopology`/follow-up lineage on `operations-center-testing-branch`, decide what should be retained, revised, or dropped, and only then merge deliberate follow-up changes back to `main`. Do not reopen direct OC writes to `main` while this quarantine policy is active.
 
 ## Up Next — Verification Gaps arc
@@ -109,6 +118,20 @@ None of these items reopen boundaries.
 - [ ] **ER-004 — Swarm Primitive (DEFERRED)**: Not approved for implementation. Entry criteria (all required before kickoff): (1) real workflow fails without swarm, (2) one-shot insufficient, (3) lifecycle insufficient, (4) required roles defined, (5) merge behavior defined. If unmet → DO NOT IMPLEMENT.
 
 ## Done
+
+- [x] **Collector JSON Hardening — Stage 2: Implementation (2026-05-23)**: Hardened Collector against malformed JSON payloads. Completed:
+  - Created `src/operations_center/observer/validation.py` with `ParseErrorMetadata`, `ArtifactValidator` base class, and per-collector validators (`ExecutionOutcomeValidator`, `RequestValidator`, `ValidationHistoryValidator`, `DependencyReportValidator`, `LintItemValidator`)
+  - Fixed critical crash vulnerability in `dependency_drift.py` line 19 (unprotected `json.loads()`)
+  - Updated all 6 JSON-parsing collectors with two-stage validation (parse + structure)
+  - Added `parse_errors: ParseErrorMetadata` field to signal models for error tracking
+  - Implemented consistent logging: DEBUG for parse errors, WARNING for structure errors
+  - Created comprehensive test suite in `tests/observer/test_collectors_hardening/`:
+    - conftest.py with shared fixtures
+    - test_validation_helpers.py (22 tests validating all validator classes)
+    - test_dependency_drift.py (16 tests for crash fix and edge cases)
+    - test_execution_health.py (19 tests for malformed artifacts and mixed runs)
+  - All collectors now gracefully skip malformed artifacts and continue processing
+  - Ready for Stage 3 (test execution and CI validation)
 
 - [x] Phase 0: Ground truth audit discovery
 - [x] Phase 1: Managed repo config contract — 26 tests

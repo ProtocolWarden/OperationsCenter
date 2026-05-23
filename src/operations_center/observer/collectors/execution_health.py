@@ -3,10 +3,19 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 from operations_center.observer.models import ExecutionHealthSignal, ExecutionRunRecord
 from operations_center.observer.service import ObserverContext
+from operations_center.observer.validation import (
+    ArtifactValidator,
+    ExecutionOutcomeValidator,
+    RequestValidator,
+    ValidationHistoryValidator,
+)
+
+logger = logging.getLogger(__name__)
 
 _ARTIFACT_SCAN_LIMIT = 60
 _RECENT_RUNS_IN_SIGNAL = 10
@@ -45,9 +54,51 @@ class ExecutionArtifactCollector:
                 continue
 
             try:
-                outcome = json.loads(outcome_file.read_text(encoding="utf-8"))
-                request = json.loads(request_file.read_text(encoding="utf-8"))
-            except Exception:
+                outcome_text = outcome_file.read_text(encoding="utf-8")
+                outcome = json.loads(outcome_text)
+            except (OSError, UnicodeDecodeError) as e:
+                ArtifactValidator.log_io_error(
+                    outcome_file, e, context={"collector": "ExecutionArtifactCollector"}
+                )
+                continue
+            except json.JSONDecodeError as e:
+                ArtifactValidator.log_parse_error(
+                    outcome_file, e, context={"collector": "ExecutionArtifactCollector"}
+                )
+                continue
+
+            is_valid, error_msg = ExecutionOutcomeValidator.validate(outcome)
+            if not is_valid:
+                ArtifactValidator.log_structure_error(
+                    outcome_file,
+                    error_msg,
+                    expected_schema="control_outcome.json",
+                    context={"collector": "ExecutionArtifactCollector"},
+                )
+                continue
+
+            try:
+                request_text = request_file.read_text(encoding="utf-8")
+                request = json.loads(request_text)
+            except (OSError, UnicodeDecodeError) as e:
+                ArtifactValidator.log_io_error(
+                    request_file, e, context={"collector": "ExecutionArtifactCollector"}
+                )
+                continue
+            except json.JSONDecodeError as e:
+                ArtifactValidator.log_parse_error(
+                    request_file, e, context={"collector": "ExecutionArtifactCollector"}
+                )
+                continue
+
+            is_valid, error_msg = RequestValidator.validate(request)
+            if not is_valid:
+                ArtifactValidator.log_structure_error(
+                    request_file,
+                    error_msg,
+                    expected_schema="request.json",
+                    context={"collector": "ExecutionArtifactCollector"},
+                )
                 continue
 
             task = request.get("task", {})
@@ -59,12 +110,33 @@ class ExecutionArtifactCollector:
             validation_file = run_dir / "validation.json"
             if validation_file.exists():
                 try:
-                    v = json.loads(validation_file.read_text(encoding="utf-8"))
-                    raw = v.get("passed")
-                    if raw is not None:
-                        validation_passed = bool(raw)
-                except Exception:
-                    pass
+                    v_text = validation_file.read_text(encoding="utf-8")
+                    v = json.loads(v_text)
+                except (OSError, UnicodeDecodeError) as e:
+                    ArtifactValidator.log_io_error(
+                        validation_file,
+                        e,
+                        context={"collector": "ExecutionArtifactCollector"},
+                    )
+                except json.JSONDecodeError as e:
+                    ArtifactValidator.log_parse_error(
+                        validation_file,
+                        e,
+                        context={"collector": "ExecutionArtifactCollector"},
+                    )
+                else:
+                    is_valid, error_msg = ValidationHistoryValidator.validate(v)
+                    if is_valid:
+                        raw = v.get("passed")
+                        if raw is not None:
+                            validation_passed = bool(raw)
+                    else:
+                        ArtifactValidator.log_structure_error(
+                            validation_file,
+                            error_msg,
+                            expected_schema="validation.json",
+                            context={"collector": "ExecutionArtifactCollector"},
+                        )
 
             outcome_status = str(outcome.get("status", "unknown"))
             outcome_reason = outcome.get("reason")

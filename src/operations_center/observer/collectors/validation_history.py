@@ -3,11 +3,20 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections import defaultdict
 from pathlib import Path
 
 from operations_center.observer.models import ValidationFailureRecord, ValidationHistorySignal
 from operations_center.observer.service import ObserverContext
+from operations_center.observer.validation import (
+    ArtifactValidator,
+    ExecutionOutcomeValidator,
+    RequestValidator,
+    ValidationHistoryValidator,
+)
+
+logger = logging.getLogger(__name__)
 
 _ARTIFACT_SCAN_LIMIT = 60
 _MIN_RUNS_FOR_PATTERN = 2   # task must have at least this many runs to be flagged
@@ -62,9 +71,59 @@ class ValidationHistoryCollector:
                 continue
 
             try:
-                outcome = json.loads(outcome_file.read_text(encoding="utf-8"))
-                request = json.loads(request_file.read_text(encoding="utf-8"))
-            except Exception:
+                outcome_text = outcome_file.read_text(encoding="utf-8")
+                outcome = json.loads(outcome_text)
+            except (OSError, UnicodeDecodeError) as e:
+                ArtifactValidator.log_io_error(
+                    outcome_file,
+                    e,
+                    context={"collector": "ValidationHistoryCollector"},
+                )
+                continue
+            except json.JSONDecodeError as e:
+                ArtifactValidator.log_parse_error(
+                    outcome_file,
+                    e,
+                    context={"collector": "ValidationHistoryCollector"},
+                )
+                continue
+
+            is_valid, error_msg = ExecutionOutcomeValidator.validate(outcome)
+            if not is_valid:
+                ArtifactValidator.log_structure_error(
+                    outcome_file,
+                    error_msg,
+                    expected_schema="control_outcome.json",
+                    context={"collector": "ValidationHistoryCollector"},
+                )
+                continue
+
+            try:
+                request_text = request_file.read_text(encoding="utf-8")
+                request = json.loads(request_text)
+            except (OSError, UnicodeDecodeError) as e:
+                ArtifactValidator.log_io_error(
+                    request_file,
+                    e,
+                    context={"collector": "ValidationHistoryCollector"},
+                )
+                continue
+            except json.JSONDecodeError as e:
+                ArtifactValidator.log_parse_error(
+                    request_file,
+                    e,
+                    context={"collector": "ValidationHistoryCollector"},
+                )
+                continue
+
+            is_valid, error_msg = RequestValidator.validate(request)
+            if not is_valid:
+                ArtifactValidator.log_structure_error(
+                    request_file,
+                    error_msg,
+                    expected_schema="request.json",
+                    context={"collector": "ValidationHistoryCollector"},
+                )
                 continue
 
             task = request.get("task", {})
@@ -88,12 +147,33 @@ class ValidationHistoryCollector:
             validation_file = run_dir / "validation.json"
             if validation_file.exists():
                 try:
-                    v = json.loads(validation_file.read_text(encoding="utf-8"))
-                    if v.get("passed") is False:
-                        task_stats[task_id]["validation_failures"] += 1
-                        total_validation_failures += 1
-                except Exception:
-                    pass
+                    v_text = validation_file.read_text(encoding="utf-8")
+                    v = json.loads(v_text)
+                except (OSError, UnicodeDecodeError) as e:
+                    ArtifactValidator.log_io_error(
+                        validation_file,
+                        e,
+                        context={"collector": "ValidationHistoryCollector"},
+                    )
+                except json.JSONDecodeError as e:
+                    ArtifactValidator.log_parse_error(
+                        validation_file,
+                        e,
+                        context={"collector": "ValidationHistoryCollector"},
+                    )
+                else:
+                    is_valid, error_msg = ValidationHistoryValidator.validate(v)
+                    if is_valid:
+                        if v.get("passed") is False:
+                            task_stats[task_id]["validation_failures"] += 1
+                            total_validation_failures += 1
+                    else:
+                        ArtifactValidator.log_structure_error(
+                            validation_file,
+                            error_msg,
+                            expected_schema="validation.json",
+                            context={"collector": "ValidationHistoryCollector"},
+                        )
 
         if total_runs == 0:
             return ValidationHistorySignal(status="unavailable", source="no_runs_found")
