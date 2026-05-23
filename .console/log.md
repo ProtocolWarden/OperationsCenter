@@ -1,3 +1,8 @@
+## Operator change — 2026-05-23 UTC
+
+- Moved `loop_schedule.json` from `.console/` to `tools/loop/` — controller runtime state collocated with controller script
+- Updated `.gitignore`, `CLAUDE.md`, `controller.py`, and session prompt path accordingly
+
 ## OC Platform Watchdog Cycle — 2026-05-23 07:04 UTC (Cycle 21)
 
 - Branch: oc-watchdog/20260522-1710-fix-ci-regressions

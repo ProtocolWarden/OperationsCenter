@@ -28,7 +28,7 @@ OC uses [ContextLifecycle](https://github.com/ProtocolWarden/ContextLifecycle) f
 |----------------------------------------|----------------------------------------------------------------------|
 | `.console/`                            | Operational truth — task, guidelines, backlog, log                   |
 | `.console/workers.yaml`                | OC worker/watcher definitions (replaces old `.context/config.yaml`)  |
-| `.console/loop_schedule.json`          | Runtime watchdog state (cycle delay) — local runtime, not cognition  |
+| `tools/loop/loop_schedule.json`        | Runtime watchdog state (cycle delay) — controller-local, not cognition |
 | `<anchor>/.context/sessions/<sid>/`    | Durable cognition (capsules, checkpoints, handoffs) on the manifest  |
 | `.claude/`                             | Claude Code adapter — ContextGuard hooks (CL shim per ADR 0002 P5)   |
 

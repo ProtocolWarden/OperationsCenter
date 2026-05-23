@@ -6,9 +6,9 @@
 Replaces /loop + ScheduleWakeup. Spawns a fresh bounded claude -p session
 for each watchdog cycle. Context never accumulates; each session reconstructs
 from the anchor manifest's `.context/sessions/<sid>/checkpoints/`.
-The session writes `.console/loop_schedule.json` at STEP 10 (instead of
-calling ScheduleWakeup) to communicate the adaptive delay; this is OC-local
-runtime state (not cognition), so it lives under .console/.
+The session writes `tools/loop/loop_schedule.json` at STEP 10 (instead of
+calling ScheduleWakeup) to communicate the adaptive delay; this is controller
+runtime state, collocated with the controller script.
 
 Usage:
   python tools/loop/controller.py          # start (foreground; nohup & for overnight)
@@ -33,7 +33,7 @@ REPO_ROOT = Path("/home/dev/Documents/GitHub/OperationsCenter")
 LOCK_PATH = REPO_ROOT / "logs/local/loop_controller.lock"
 WATCHDOG_LOOP_LOCK = REPO_ROOT / "logs/local/watchdog_loop.lock"
 STOP_FLAG = REPO_ROOT / "logs/local/loop_stop.flag"
-SCHEDULE_FILE = REPO_ROOT / ".console/loop_schedule.json"
+SCHEDULE_FILE = REPO_ROOT / "tools/loop/loop_schedule.json"
 LOG_FILE = REPO_ROOT / "logs/local/loop_controller.log"
 SESSION_LOG_DIR = REPO_ROOT / "logs/local/sessions"
 SESSION_PROMPT_FILE = REPO_ROOT / "tools/loop/oc_session_prompt.txt"

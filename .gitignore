@@ -31,6 +31,7 @@ state/
 .worktrees/
 .kodo/
 .claude/scheduled_tasks.lock
+tools/loop/loop_schedule.json
 .operations_center/
 .codex
 .coverage
