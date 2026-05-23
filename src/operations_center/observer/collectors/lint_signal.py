@@ -45,14 +45,14 @@ class LintSignalCollector:
             items = json.loads(raw)
         except json.JSONDecodeError as e:
             logger.debug(
-                f"Failed to parse ruff output: {e.msg} at "
-                f"line {e.lineno}, col {e.colno}"
+                "Failed to parse ruff output: %s at line %d, col %d",
+                e.msg, e.lineno, e.colno
             )
             return LintSignal(status="unavailable", source="ruff_parse_error")
 
         if not isinstance(items, list):
             logger.warning(
-                f"ruff output: expected list, got {type(items).__name__}"
+                "ruff output: expected list, got %s", type(items).__name__
             )
             return LintSignal(status="unavailable", source="ruff_unexpected_format")
 
@@ -62,7 +62,7 @@ class LintSignalCollector:
         for idx, item in enumerate(items[:_MAX_VIOLATIONS]):
             is_valid, error_msg = LintItemValidator.validate(item, idx)
             if not is_valid:
-                logger.debug(f"Skipping invalid lint item: {error_msg}")
+                logger.debug("Skipping invalid lint item: %s", error_msg)
                 continue
 
             try:
@@ -77,7 +77,7 @@ class LintSignalCollector:
                     )
                 )
             except (TypeError, ValueError) as e:
-                logger.debug(f"Failed to construct lint violation: {e}")
+                logger.debug("Failed to construct lint violation: %s", e)
                 continue
 
         return LintSignal(

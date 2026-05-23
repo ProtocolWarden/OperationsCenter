@@ -62,12 +62,12 @@ class BenchmarkSignalCollector:
                 data = json.loads(text)
             except json.JSONDecodeError as e:
                 logger.debug(
-                    f"Failed to parse benchmark {fpath}: {e.msg} at "
-                    f"line {e.lineno}, col {e.colno}"
+                    "Failed to parse benchmark %s: %s at line %d, col %d",
+                    fpath, e.msg, e.lineno, e.colno
                 )
                 continue
             except OSError as e:
-                logger.debug(f"Failed to read benchmark {fpath}: {e}")
+                logger.debug("Failed to read benchmark %s: %s", fpath, e)
                 continue
 
             if isinstance(data, dict):

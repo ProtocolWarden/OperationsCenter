@@ -73,22 +73,21 @@ class TypeSignalCollector:
             data = json.loads(raw)
         except json.JSONDecodeError as e:
             logger.debug(
-                f"Failed to parse ty output: {e.msg} at "
-                f"line {e.lineno}, col {e.colno}"
+                "Failed to parse ty output: %s at line %d, col %d",
+                e.msg, e.lineno, e.colno
             )
             return TypeSignal(status="unavailable", source="ty_parse_error")
 
         if not isinstance(data, dict):
             logger.warning(
-                f"ty output: expected dict, got {type(data).__name__}"
+                "ty output: expected dict, got %s", type(data).__name__
             )
             return TypeSignal(status="unavailable", source="ty_unexpected_format")
 
         diagnostics = data.get("diagnostics", [])
         if not isinstance(diagnostics, list):
             logger.warning(
-                f"ty diagnostics: expected list, "
-                f"got {type(diagnostics).__name__}"
+                "ty diagnostics: expected list, got %s", type(diagnostics).__name__
             )
             return TypeSignal(status="unavailable", source="ty_unexpected_format")
 
@@ -99,8 +98,8 @@ class TypeSignalCollector:
         for idx, item in enumerate(diagnostics[:_MAX_ERRORS]):
             if not isinstance(item, dict):
                 logger.debug(
-                    f"Skipping non-dict ty diagnostic[{idx}]: "
-                    f"{type(item).__name__}"
+                    "Skipping non-dict ty diagnostic[%d]: %s",
+                    idx, type(item).__name__
                 )
                 continue
 
@@ -118,7 +117,7 @@ class TypeSignalCollector:
                     )
                 )
             except (TypeError, ValueError) as e:
-                logger.debug(f"Failed to construct type error: {e}")
+                logger.debug("Failed to construct type error: %s", e)
                 continue
 
         return TypeSignal(
@@ -143,14 +142,14 @@ class TypeSignalCollector:
                 item = json.loads(line)
             except json.JSONDecodeError as e:
                 logger.debug(
-                    f"Failed to parse mypy line {line_idx}: {e.msg}"
+                    "Failed to parse mypy line %d: %s", line_idx, e.msg
                 )
                 continue
 
             if not isinstance(item, dict):
                 logger.debug(
-                    f"mypy line {line_idx}: expected dict, "
-                    f"got {type(item).__name__}"
+                    "mypy line %d: expected dict, got %s",
+                    line_idx, type(item).__name__
                 )
                 continue
 
@@ -174,7 +173,7 @@ class TypeSignalCollector:
                     )
                 )
             except (TypeError, ValueError) as e:
-                logger.debug(f"Failed to construct type error: {e}")
+                logger.debug("Failed to construct type error: %s", e)
                 continue
 
         return TypeSignal(
