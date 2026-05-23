@@ -38,6 +38,11 @@ LOG_FILE = REPO_ROOT / "logs/local/loop_controller.log"
 SESSION_LOG_DIR = REPO_ROOT / "logs/local/sessions"
 SESSION_PROMPT_FILE = REPO_ROOT / "tools/loop/oc_session_prompt.txt"
 
+# Hard ceiling on a single session. A normal cycle runs 10-20 min.
+# If the session hasn't exited after this many seconds it is hung
+# (e.g. self-referential pgrep loop) and must be killed.
+SESSION_TIMEOUT_SECONDS = 45 * 60  # 45 minutes
+
 # Fallback delays (seconds) when session doesn't write loop_schedule.json.
 STATE_DELAYS: dict[str, int] = {
     "CRITICAL": 180,
@@ -207,7 +212,20 @@ def run_session(iteration: int) -> tuple[int, Path]:
                 env.setdefault(k.strip(), v.strip())
 
     with session_log.open("w") as log_fh:
-        proc = subprocess.run(cmd, cwd=REPO_ROOT, env=env, stdout=log_fh, stderr=log_fh)
+        proc = subprocess.Popen(
+            cmd, cwd=REPO_ROOT, env=env, stdout=log_fh, stderr=log_fh,
+        )
+        try:
+            proc.wait(timeout=SESSION_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+            _log(
+                f"[WARN] Session exceeded {SESSION_TIMEOUT_SECONDS}s timeout — "
+                f"killed (likely hung subprocess, e.g. self-referential pgrep loop). "
+                f"Log: {session_log.name}"
+            )
+            return -1, session_log
 
     return proc.returncode, session_log
 

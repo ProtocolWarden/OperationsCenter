@@ -1,3 +1,9 @@
+## Operator change — 2026-05-23 UTC (4)
+
+- Controller: added 45-min session timeout (Popen.wait) — kills hung sessions, e.g. self-referential pgrep loop that locked controller for 11.5h
+- Session prompt: banned pgrep -f for background job waiting; documented `pid=$!; wait $pid` pattern
+- Rate limits: raised to max_per_hour=8, max_per_day=40 (local config, gitignored)
+
 ## Operator change — 2026-05-23 UTC (3)
 
 - Identified 3 CI findings via --verbose: all P3 (plumbing path-fragment check)

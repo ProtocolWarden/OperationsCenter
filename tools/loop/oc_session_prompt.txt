@@ -54,6 +54,15 @@ STEP 1 — INVESTIGATE (run in parallel where safe):
   .venv/bin/operations-center-graph-doctor
   .venv/bin/operations-center-reaudit-check   --json
   .venv/bin/operations-center-check-regressions --config config/operations_center.local.yaml --lookback-hours 1 --dry-run
+
+BACKGROUND PROCESS DISCIPLINE — critical: if you run any command in the background (&) and
+need to wait for it, capture its PID immediately and use `wait $pid`, NOT `pgrep -f <name>`.
+`pgrep -f` matches against the full command line of every process including this claude session
+itself (whose --prompt argument contains every tool name). Self-referential pgrep loops hang
+forever. Correct pattern:
+  some-command & pid=$!; wait $pid; echo "exit: $?"
+Never use: until ! kill -0 $(pgrep -f some-command); do sleep N; done
+
 Collect exit codes and finding counts. Determine affected repos only from tool output — not from vibes or unrelated logs. If an affected repo cannot be determined confidently, create a Plane task and skip direct execution for that finding.
 
 EXECUTOR FAILURE INVESTIGATION — run this whenever triage output shows executor_exit_code/executor_signal
