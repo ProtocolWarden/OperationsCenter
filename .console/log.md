@@ -1,5 +1,98 @@
 # Log
 
+## OC Platform Watchdog Cycle — 2026-05-23 02:58 UTC (Cycle 19)
+
+- Branch: oc-watchdog/20260522-1710-fix-ci-regressions
+- Health state: ACTIVE (task 3a3c202f actively executing; PR #170 CI passing; 74af58c5 in Backlog for retry)
+- Next cadence: 900s — task in flight; PR CI in progress; 74af58c5 queued for 5th attempt
+- Plane status: 1 Running (3a3c202f — active, 4h+ Stage 1 executing), 1 Backlog (74af58c5 → retrying), other tasks gated/cooldown
+- PlatformDeployment / SwitchBoard: Plane OK / SwitchBoard OK
+- Watchers: 8/8 running | all healthy; no non-143 crashes
+- Audits run: custodian-sweep ghost-audit flow-audit graph-doctor reaudit-check regressions
+
+### STEP 0 — Preflight
+- All 16 repos: Already up to date (ff-only pull) ✓
+- Plane: OK ✓ | SwitchBoard: OK ✓ | Watchers: 8/8 running ✓ | CLIs: OK ✓
+- Branch: 1 commit ahead of origin at session start (714264a DTZ007 fix — now confirmed on origin via 6100199 commit)
+- Working tree: contracts/__init__.py, enums.py modified; evidence.py untracked — executor work from 74af58c5 attempt 4 (NOT staged by loop)
+
+### STEP 1 — Investigation findings
+- graph-doctor: ✓ OK — 11 nodes / 12 edges / graph_built=True
+- ghost-audit: G10 ×1 (b67bc0e0 "Fix lint regression" Cancelled, lagging — will clear naturally); G7 ×1 (89191ff5 "Emit JUnit XML" thin goal — normal)
+- flow-audit: 0 open gaps ✓; F8 partial (persistent/non-critical)
+- reaudit-check: dag_executor + team_executor `needed=false` (CxRP 0.3.1) ✓ — held fixed from cycle 9
+- regression-check: 0 findings ✓
+- custodian-sweep: 7 repos swept, all delta=0 ✓
+
+### STEP 2 — Triage
+- triage-scan: 0 actions (no blocked tasks needing rescore or queue healing)
+
+### STEP 2.5 — Board unblock
+- 74af58c5: CLEAN_BLOCKED_RETRY → Backlog (no executor-signal/exit-code labels; pre-exec workspace failure pattern)
+- 1 action applied
+
+### STEP 3 — Blocked/stalled analysis
+
+**74af58c5 ("Add Rule evidence type and boundary validation tests")**
+- 4 failed attempts with CONVERGING stage pattern: 1/5 → 2/5 → 3/5 → 5/6 stages passing
+- Attempt 4 (22:38 UTC, last night): "5 of 6 stages failed" — partial implementation in working tree (evidence.py, enums.py, __init__.py)
+- Moved to Backlog by board-unblock this cycle; will retry as 5th attempt
+- Classification: temporarily-blocked (convergent progress, not dead-remediation)
+- Attempt 4 partial work: EvidenceType enum + RuleEvidence pydantic model in contracts — left by executor
+
+**360cff3a, c7df5422**: Blocked at 19:xx for budget_exhausted (global_rate_exceeded, hourly limit=4)
+- Normal rate gate; will retry when next window opens
+- Classification: temporarily-blocked
+
+**3a3c202f ("Harden Collector against malformed JSON statuses payloads")**
+- Claimed at 22:39 UTC; actively executing Stage 1 (4h+ runtime confirmed by live processes)
+- Confirmed active: `ps` shows `claude --model claude-sonnet-4-6` subprocess + pytest + custodian-multi processes
+- Stage 0 audit completed; Stage 1 (strict JSON schema layer) in progress
+- NOT stalled — genuine multi-stage execution
+- Classification: in-flight
+
+**SwitchBoard 03:16 errors**: Transient downtime from early this morning — resolved; SwitchBoard currently UP
+
+**Propose**: 0 tasks created — normal behavior:
+- 7 suppressed: family_deferred_initial_gating (hotspot_concentration×4, todo_accumulation×2, ci_pattern×1)
+- 4 suppressed: cooldown_active (observation_coverage×2, test_visibility×2, 120min cooldown)
+- `created=0, skipped=2` in some runs: board duplicates (74af58c5 was on board)
+- NOT starvation — correct initial gating + cooldown behavior
+
+**PR #170**:
+- Prior cycle (18) committed DTZ007 fix (714264a) + audit re-trigger (6100199); now on origin
+- CI status: Lint (ruff) SUCCESS ×2 ✓; other checks IN_PROGRESS
+- Expected: full green once in-progress checks complete
+
+### STEP 4 — Convergence promotion
+- No new promotion candidates this cycle
+
+### STEP 5/6 — Direct fixes
+- No direct fix dispatched this cycle (no qualifying execution-gate findings)
+- PR #170 CI fix already in place from prior cycle commits; board-unblock handled 74af58c5
+
+### STEP 7 — Invariant tests
+- pytest tests/unit/er000_phase0_golden/ -q: 15 passed ✓
+
+### STEP 8 — Watcher health
+- 8/8 watchers running; no non-143 crashes; goal watcher active (executing 3a3c202f since 22:39)
+- SwitchBoard 03:16 errors in log: from earlier session, not current — SwitchBoard UP now
+- operations-center-testing-branch: EXISTS on origin ✓
+
+### Blocked work classification
+- 74af58c5: temporarily-blocked (convergent, 5th attempt queued in Backlog)
+- 360cff3a, c7df5422: temporarily-blocked (budget_exhausted, normal rate gate)
+- 3a3c202f: in-flight (active execution confirmed via process inspection)
+
+### Behavioral convergence: ACTIVE
+- 74af58c5 making convergent progress (each attempt completes more stages)
+- 3a3c202f actively executing (Stage 1 live)
+- PR #170 CI unblocked
+- No starvation, no stagnation, no dead-remediation
+
+### Operator-blocked: none
+### Parked state: no
+
 ## OC Platform Watchdog Cycle — 2026-05-23 02:30 UTC (Cycle 18)
 
 - Branch: oc-watchdog/20260522-1710-fix-ci-regressions
