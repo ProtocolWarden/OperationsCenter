@@ -196,8 +196,8 @@ class ArtifactValidator:
         log_data = {
             "event": "artifact_parse_error",
             "artifact": str(artifact_path),
-            "error_type": error_class,
-            "error_msg": str(error),
+            "error_type": "parse_error",
+            "error_msg": f"{error_class}: {str(error)}",
             "severity": "MEDIUM",
             "component": "observer_collector",
             **context,
@@ -239,7 +239,8 @@ class ArtifactValidator:
         log_data = {
             "event": "artifact_structure_error",
             "artifact": str(artifact_path),
-            "error": error_msg,
+            "error_type": "StructureValidationError",
+            "error_msg": error_msg,
             "expected_schema": expected_schema,
             "severity": "HIGH",
             "component": "observer_collector",
@@ -248,7 +249,7 @@ class ArtifactValidator:
         }
 
         logger.warning(
-            "Invalid artifact structure: %(artifact)s — %(error)s",
+            "Invalid artifact structure: %(artifact)s — %(error_type)s: %(error_msg)s",
             log_data,
             extra=log_data,
         )
@@ -275,8 +276,8 @@ class ArtifactValidator:
         log_data = {
             "event": "artifact_io_error",
             "artifact": str(artifact_path),
-            "error_type": error_class,
-            "error_msg": str(error),
+            "error_type": "io_error",
+            "error_msg": f"{error_class}: {str(error)}",
             "severity": "MEDIUM" if isinstance(error, PermissionError) else "LOW",
             "component": "observer_collector",
             **context,
