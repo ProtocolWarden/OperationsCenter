@@ -239,7 +239,7 @@ class ArtifactValidator:
         log_data = {
             "event": "artifact_structure_error",
             "artifact": str(artifact_path),
-            "error_type": "StructureValidationError",
+            "error_type": "structure_error",
             "error_msg": error_msg,
             "expected_schema": expected_schema,
             "severity": "HIGH",
