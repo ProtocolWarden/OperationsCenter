@@ -10782,3 +10782,44 @@ Cross-cycle repeating patterns:
 - Campaign 10c50210 CANCELLED.
 - Local main is 5 commits ahead of origin/main (cycle 25–28 commits + loop self-push wiring 2f7c1df + this cycle's fix) — unpushed. Custodian pre-push guard reports 8 findings (0 HIGH/1 MED/2 LOW) blocking `git push`; pushing to the GitHub remote is operator/outward-facing. Executor clones origin/main so the unpushed self-heal is live only via local editable install — operator should merge/push to make it durable on origin.
 - HYGIENE: `.baseline-validation.json` tracked on OC main (operationally neutralized by cycle-28 reorder).
+
+## OC Platform Watchdog Cycle — 2026-05-23 21:55 UTC (Cycle 30)
+
+- Health state: ACTIVE — cycle 28/29 workspace-prep fixes now VALIDATED through prep end-to-end. Branch `operations-center-testing-branch` present on origin (4b214ca); goal worker dispatched a LIVE execution (41bcd097, PID 546225) that cleared workspace prep and is running stages — the deepest the loop has reached on the corrected code path. Final completion (task→Done) not yet observed → ACTIVE, not HEALTHY.
+- Next cadence: 900s — remediation in flight (live goal execution validating the prep fixes); end-to-end completion pending. HEALTHY forbidden (no task has reached Done yet on the corrected path; final stage outcome unverified).
+- Services: Plane OK, SwitchBoard OK; CLIs OK; git clean pre-cycle. 16/16 repos synced (CoreRunner +2 files, PlatformDeployment + PW.github.io added sync-topology docs; all ff-only).
+- Note: CL_ANCHOR unset this session — CL dispatch wrap is a no-op (pre-P4 behavior), audits unaffected.
+
+### STEP 1 — audits (serial per cycle-25 Plane-429 lesson; all CLEAN)
+- custodian-sweep: all detectors 0, error=null, plane=commented (exit 0)
+- ghost-audit: 5 events all status=fixed (G11 sample = Cancelled lint task) (exit 0)
+- flow-audit: 0 open gaps (exit 0) | graph-doctor: ✓ 11 nodes / 12 edges / graph_built=True
+- reaudit-check: no backends needed (dag/team false); CxRP 0.3.1 | check-regressions: 0 findings
+
+### STEP 2 — triage: 0 actions (rescore/awaiting/queue_healing all empty)
+
+### STEP 2.5 — board-unblock: 3 CLEAN_BLOCKED_RETRY — 89fc5782 + 0f1612ea ("Handle Optional observed_at in the Deriver") + 3a3c202f ("Harden Collector against malformed JSON") Blocked→Backlog (pre-execution workspace-prep failures from PRE-FIX attempts; no signal/exit labels; safe retry, 5m age met). mem_available 24GB.
+
+### STEP 3 — convergence: CONVERGENT (closed loop BROKEN — prep now succeeds)
+- Board (Plane API): Backlog 30, Ready-for-AI 9, Running 1, Done 11, Cancelled 48, Blocked 1 (vs cycle-29-era Blocked 0 / R4AI 12 — queue actively churning, Blocked near-zero).
+- NEW EVIDENCE (yes): execution path reached a NEW code path — workspace prep now SUCCEEDS where every prior attempt failed. Live evidence: goal worker claimed 41bcd097 @17:53:54 EDT, dispatched execute.main PID 546225; workspace /tmp/oc-goal-rp7bzxvr checked out `operations-center-testing-branch`@4b214ca cleanly; PID alive 43s into stages (prep failures historically died <5s). Reviewer self-review (review/PlatformDepl PID 534167) also in flight on the executor.
+- Root cause history: the recurring "base_branch does not exist on origin" / "git checkout operations-center-testing-branch" prep failures (cycles 25–29, dozens of log lines through 17:28 EDT) are PRE-FIX. After cycle 29 recreated the branch on origin + landed the self-heal, prep is passing. This validates cycle 28 (checkout-ordering) + cycle 29 (self-heal + branch recreate) end-to-end through prep.
+- Budget gate: earlier session-limit ("resets 7:40am") + hourly rate (current=4 limit=4) blocks were historical (00:xx–05:xx EDT); reset long past — current dispatch succeeded. No budget block this cycle. (Plane 3860f469 covers budget-gate auto-recovery.)
+- Classification: CONVERGENT. NOT starvation (executor in flight, queue draining), NOT closed-loop stagnation (prep outcome materially changed: fail→success), NOT dead-remediation (remediation adapted and now produces better outcomes), NOT divergent (Blocked near-zero), NOT operator-blocked, NOT parked.
+
+### STEP 4 — promotion: no new loop-only judgment repeated 2+ cycles this cycle. Sandbox-base self-heal already promoted into workspace code (cycle 29, covers c3a9fc85). No new promotion task.
+
+### STEP 5/6 — execution gate: no direct fix. Audits all clean (no reproduced repo-code finding). 41bcd097 is a board_worker goal dispatch, not loop-dispatched; team_executor max_concurrent=1 slot occupied (goal execution + reviewer self-review) → no autonomy-cycle dispatched (correct).
+
+### STEP 7 — invariants: pytest tests/unit/er000_phase0_golden/ -q → 15 passed ✓
+
+### STEP 8 — watcher health: 8/8 running, stable PIDs. Only restart events = benign exit-143 goal bounces from cycles 28/29. Two "execute produced no result" ERRORs are historical (15:43 + 23:29, prior cycles). No non-143 crashes, no new tracebacks this cycle.
+
+### Blocked work classification
+- 41bcd097: EXECUTING (Running) — cleared prep, running stages on the corrected code path. Validate final result/merge next cycle.
+- 0f1612ea, 3a3c202f, 89fc5782: recycled Blocked→Backlog (CLEAN_BLOCKED_RETRY, pre-fix prep failures, safe retry) — will re-attempt now that prep succeeds.
+- Operator-blocked: none | Parked: no
+
+### KNOWN OPEN ISSUES (carry forward)
+- Campaign 10c50210 CANCELLED.
+- HYGIENE: `.baseline-validation.json` tracked on OC main (operationally neutralized by cycle-28 reorder).
