@@ -61,12 +61,12 @@ class SecuritySignalCollector:
                 data = json.loads(text)
             except json.JSONDecodeError as e:
                 logger.debug(
-                    f"Failed to parse security audit {fpath}: {e.msg} at "
-                    f"line {e.lineno}, col {e.colno}"
+                    "Failed to parse security audit %s: %s at line %s, col %s",
+                    fpath, e.msg, e.lineno, e.colno,
                 )
                 continue
             except OSError as e:
-                logger.debug(f"Failed to read security audit {fpath}: {e}")
+                logger.debug("Failed to read security audit %s: %s", fpath, e)
                 continue
 
             fname = fpath.name.lower()

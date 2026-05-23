@@ -432,6 +432,12 @@ audit:
       - src/operations_center/execution/coordinator.py
       # spec_hygiene/main.py wires the full spec-hygiene worker lifecycle.
       - src/operations_center/entrypoints/spec_hygiene/main.py
+      # workspace.py manages the full workspace lifecycle (checkout, prep, cleanup)
+      # across many code paths — single responsibility, cannot cleanly split.
+      - src/operations_center/execution/workspace.py
+      # validation.py is the canonical per-collector validator library — all
+      # artifact validation helpers live in one module by design.
+      - src/operations_center/observer/validation.py
     C11:
       # Agent-spawning entrypoints: board_worker, intake, pr_review_watcher invoke
       # the coding backend (team_executor, aider, etc.) which runs for an unbounded

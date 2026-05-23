@@ -11,7 +11,7 @@ Defines:
 from __future__ import annotations
 
 from dataclasses import dataclass, field as dataclass_field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Optional
 
@@ -200,7 +200,7 @@ def should_trigger_alert(
         return False
 
     # Filter errors from the lookback window
-    cutoff_time = datetime.now() - timedelta(minutes=lookback_minutes)
+    cutoff_time = datetime.now(tz=timezone.utc) - timedelta(minutes=lookback_minutes)
     recent_errors = [
         e
         for e in metrics.recent_errors
