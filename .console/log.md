@@ -1,3 +1,9 @@
+## Operator change — 2026-05-23 UTC (2)
+
+- CI retrigger to pick up Custodian ignore_rules fix (94f849e+b8f942d landed at 08:07/08:16 UTC, borderline vs last CI run at 08:16 UTC)
+- Confirmed RUFF/VULTURE/SEMGREP all return 0 locally; only W2 unresolved in CI (now suppressed via ignore_rules)
+- Local audit with boundary artifact: 0 findings ✓
+
 ## Operator change — 2026-05-23 UTC
 
 - Committed loop's `.custodian/config.yaml`: W2 suppressed (CI has no core.hooksPath), F3 suppressed for ComplianceInput Pydantic fields, maintenance/spec_hygiene/cl_wrap exclusions
