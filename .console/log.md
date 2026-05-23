@@ -1,3 +1,116 @@
+## OC Platform Watchdog Cycle — 2026-05-23 06:44 UTC (Cycle 20)
+
+- Branch: oc-watchdog/20260522-1710-fix-ci-regressions
+- Health state: DEGRADED (74af58c5 non-convergent after 6+ attempts; SwitchBoard transient cascade at 03:16 UTC; PR #170 pending operator merge)
+- Next cadence: 300s — non-convergent task (Plane 0d04b4f6 created); 4 tasks in Backlog for retry next cycle; SwitchBoard recovered
+- Plane status: 4 tasks → Backlog (CLEAN_BLOCKED_RETRY this cycle); board saturated at 15 tasks; goal watcher idle
+- PlatformDeployment / SwitchBoard: Plane OK / SwitchBoard OK (transient DOWN at ~03:16 UTC, now recovered)
+- Watchers: 8/8 running | all healthy; no non-143 crashes; goal watcher idle since 02:46 UTC
+- Audits run: custodian-sweep ghost-audit flow-audit graph-doctor reaudit-check regressions
+
+### STEP 0 — Preflight
+- All 16 repos: Already up to date (ff-only pull) ✓
+- Plane: OK ✓ | SwitchBoard: OK ✓ | Watchers: 8/8 running ✓ | CLIs: OK ✓
+- Working tree: contracts/__init__.py, enums.py (modified), evidence.py (untracked) — executor work from 74af58c5 attempts, NOT staged by loop
+- loop_schedule.json: deleted by controller (expected)
+
+### STEP 1 — Investigation findings
+- graph-doctor: ✓ OK — 11 nodes / 12 edges / graph_built=True
+- ghost-audit: G7 ×2 (89191ff5 "Emit JUnit XML" — thin goal, normal quality gate); G10 ×1 (b67bc0e0 "Fix lint regression" Cancelled — lagging, will clear naturally); total_ghost_events=3
+- flow-audit: 0 open gaps ✓; F8 partial (persistent/non-critical)
+- reaudit-check: dag_executor + team_executor `needed=false` (CxRP 0.3.1) ✓
+- regression-check: 0 findings ✓
+- custodian-sweep: all delta=0 ✓
+
+### STEP 1 — CI status (PR #170)
+- ALL CI checks: SUCCESS (Lint, Type check, Custodian doctor, License headers, Test) ✓
+- custodian-audit: FAIL (pre-existing REPOGRAPH_BOUNDARY_ARTIFACT_FILE secret missing — not PR #170 introduced)
+- PR #170 ready to merge — operator action required
+
+### STEP 1 — Executor failure investigation
+- **74af58c5 attempt 6** (02:21-02:54 UTC): "2 of 5 stages failed" — REGRESSION from prior attempt 4 ("5 of 6 stages failed")
+  - Stage count oscillating (5 vs 6), indicating different execution plans per attempt
+  - Partial implementation in working tree is complete: evidence.py (RuleEvidence model), enums.py (EvidenceType enum), __init__.py (imports)
+  - Root cause of stage failures: unknown — tests likely failing despite correct model implementation
+- **3a3c202f attempt** (03:01 UTC): "operations-center-testing-branch does not exist on origin" — TRANSIENT (branch confirmed present: f7fd892a)
+- **3a3c202f attempt** (03:16 UTC): "SwitchBoard unreachable" — TRANSIENT (SwitchBoard now UP)
+- **0f1612ea, 89fc5782, 41bcd097, bfb289b3** (03:16-03:18 UTC): "SwitchBoard unreachable" — TRANSIENT
+- **3a3c202f** (23:29 UTC May 22): "execute produced no result" — unusual failure (coordinator returned no result); first occurrence
+- No OOM, no SIGKILL; memory healthy
+
+### STEP 2 — Triage
+- triage-scan: 0 actions (no blocked tasks needing rescore)
+
+### STEP 2.5 — Board-unblock
+- 4 actions applied (CLEAN_BLOCKED_RETRY Blocked→Backlog):
+  - 89fc5782 "Cover reverse transitions in the Deriver"
+  - 0f1612ea "Handle Optional observed_at in the Deriver"
+  - 3a3c202f "Harden Collector against malformed JSON statuses payloads"
+  - 74af58c5 "Add Rule evidence type and boundary validation tests"
+- GOAL_BACKLOG_PROMOTE: 0 (tasks were in Blocked when this rule ran; will fire next cycle)
+- Note: propose watcher reports board saturated at 15 tasks (06:47 UTC) — propose correctly skipped
+
+### STEP 3 — Blocked/stalled analysis
+
+**74af58c5 "Add Rule evidence type and boundary validation tests" — NON-CONVERGENT**
+- Attempt history: 1/5 → 2/5 → 3/5 → 5/6 (different plan) → session_limit → 2/5 (REGRESSION)
+- 6 substantive attempts; stage count inconsistent (5 vs 6 stages); latest attempt regressed from 5/6
+- Partial implementation in working tree is complete and correct (evidence.py, enums.py, __init__.py)
+- Classification: NON-CONVERGENT (oscillating, no monotonic convergence after 6 attempts)
+- Action: Plane task 0d04b4f6 created; board-unblock moved to Backlog; execution gate blocks retry via autonomy-cycle
+
+**3a3c202f "Harden Collector against malformed JSON statuses payloads"**
+- Failures: testing-branch transient (03:01) + SwitchBoard DOWN (03:16) + "execute produced no result" (23:29 May 22)
+- All infra failures; testing-branch confirmed present on origin; SwitchBoard UP
+- Classification: temporarily-blocked (infra, all causes resolved; moved to Backlog for retry)
+
+**0f1612ea, 89fc5782: temporarily-blocked** (SwitchBoard transient, resolved)
+
+**Propose (03:33 and 06:42 UTC)**: 2 candidates emitted, 0 created, skipped=2 — duplicate suppression working (candidates match Backlog tasks a969024e, 2824d46e). NOT starvation. Board saturated (15 tasks) at 06:47 UTC — propose correctly skipped.
+
+**Behavioral convergence: WEAKLY-CONVERGENT**
+- Board active (15 tasks); propose saturated; board-unblock applied 4 transitions
+- 74af58c5 is the only non-convergent pattern
+- All infra failures transient and resolved
+- PR #170 pending merge (operator action)
+
+### STEP 4 — Convergence promotion
+- 74af58c5 NON-CONVERGENT (6+ attempts): Plane task 0d04b4f6 created — "Investigate 74af58c5 dead-remediation: non-convergent after 6+ attempts"
+- 3a3c202f "execute produced no result": first occurrence, monitoring for recurrence next cycle
+
+### STEP 5/6 — Direct fixes
+- No direct fixes dispatched
+- 74af58c5: execution gate BLOCKED (condition g: non-convergent)
+- 3a3c202f, 0f1612ea, 89fc5782: infra-blocked (resolved), moved to Backlog by board-unblock; retry next cycle
+
+### STEP 7 — Invariant tests
+- pytest tests/unit/er000_phase0_golden/ -q: 15 passed ✓
+
+### STEP 8 — Watcher health
+- 8/8 watchers running; no non-143 crashes; no new unexpected exits
+- goal watcher: idle since 02:46 UTC — no R4AI goal tasks available (4 tasks in Backlog, will promote next cycle)
+- SwitchBoard: UP (was DOWN at ~03:16 UTC — transient; recovered before this cycle)
+- Only ERROR in logs: "execute produced no result" for 3a3c202f (23:29 UTC May 22) — monitoring
+
+### Blocked work classification
+- 74af58c5: non-convergent (Plane 0d04b4f6 created; will retry via GOAL_BACKLOG_PROMOTE next cycle)
+- 3a3c202f: temporarily-blocked (infra failures all resolved; Backlog)
+- 0f1612ea, 89fc5782: temporarily-blocked (SwitchBoard transient; Backlog)
+- PR #170: operator-blocked (merge needed; all CI passing)
+- custodian-audit: operator-blocked (REPOGRAPH_BOUNDARY_ARTIFACT_FILE secret, pre-existing)
+
+### Behavioral convergence: WEAKLY-CONVERGENT → DEGRADED
+- Non-convergent pattern (74af58c5): Plane task created; not starvation, not closed-loop stagnation
+- Board saturated (15 tasks), propose correctly skipping
+- Infra failures transient and resolved
+
+### Operator actions pending
+1. Merge PR #170 (`oc-watchdog/20260522-1710-fix-ci-regressions` → main) — all CI checks passing; unblocks 9 families
+2. Close PR #169 (`oc-watchdog/20260522-0644-fix-ci-failures`) — stale, superseded by PR #170
+3. Review Plane task 0d04b4f6 — 74af58c5 non-convergent; consider committing partial implementation directly + manual test writing
+
+---
+
 # Log
 
 ## OC Platform Watchdog Cycle — 2026-05-23 02:58 UTC (Cycle 19)

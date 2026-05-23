@@ -1,1 +1,1 @@
-{"delay_s": 900, "state": "ACTIVE", "reason": "task 3a3c202f actively executing (4h+ Stage 1); 74af58c5 queued for 5th convergent attempt; PR #170 CI in progress"}
+{"delay_s": 300, "state": "DEGRADED", "reason": "74af58c5 non-convergent after 6+ attempts (Plane 0d04b4f6); SwitchBoard transient cascade recovered; 4 tasks in Backlog for retry next cycle"}
