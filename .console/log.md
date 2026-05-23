@@ -10429,3 +10429,55 @@ Cross-cycle repeating patterns:
 - Operator-blocked: none
 - Parked state: no
 - KNOWN OPEN: Campaign 10c50210 CANCELLED (carry forward)
+
+## OC Platform Watchdog Cycle — 2026-05-23 19:15 UTC (Cycle 24)
+
+- Health state: STALLED — execution-layer closed-loop recycle; queue evolved but zero executor success
+- Next cadence: 600s — driving signal: propose created=0 (candidates emitted) + observed promote→reblock recycle (3a3c202f) under 4/hr rate gate + Claude session-limit throttle
+- Services: Plane OK, SwitchBoard OK; CLIs OK; git clean at start
+- Watchers: 8/8 running (intake, goal, test, improve, propose, review, spec, watchdog); no non-143 crashes; no tracebacks today
+- Repos: all 16 up to date (ff-only)
+- NOTE: env (.env.operations-center.local) must be sourced per-Bash-call; first-pass custodian/regression token failures were missing-env, re-ran clean
+
+### STEP 1 — audits (all env-sourced, all CLEAN)
+- custodian-sweep: all detectors=0, error=null, plane=commented (exit 0)
+- ghost-audit: total_ghost_events=3, all status=fixed/count=0
+- flow-audit: 0 open gaps
+- graph-doctor: ✓ 11 nodes / 12 edges / graph_built=True (project=video-foundry)
+- reaudit-check: no backends needed (dag/team false), CxRP 0.3.1
+- check-regressions: 0 findings
+
+### STEP 2 — triage: 0 actions (rescore/awaiting/queue_healing all empty)
+
+### STEP 2.5 — board-unblock: 14 GOAL_BACKLOG_PROMOTE applied (Backlog→Ready for AI)
+- Drained Blocked queue: ~14 → 1. Repopulated Ready-for-AI → 13.
+- Tasks: cd783c69 b4b40a95 b7719888 1ad727e3 bd7817c6 ff19d39b c7df5422 360cff3a 89191ff5 bfb289b3 41bcd097 89fc5782 0f1612ea 3a3c202f
+- (board-unblock --apply was run twice; 1st run did IMPROVE_UNBLOCK Blocked→Backlog (stale>4h), 2nd did GOAL_BACKLOG_PROMOTE Backlog→R4AI. Net: blocked drained, R4AI populated.)
+
+### STEP 3 — convergence/starvation analysis
+- Board state (Plane API): Backlog 26, Ready-for-AI 13, Done 11, Cancelled 49, Blocked 1
+- Forward progress THIS cycle: YES — Blocked 14→1, R4AI 0→13 (queue materially evolved)
+- BUT closed-loop at execution layer: goal board_worker logs show ZERO successful completions. The 14 recycled tasks fail repeatedly with:
+  1. global_rate_exceeded (hourly 4/4 — OC dispatch policy)
+  2. claude is_error=true "You've hit your session limit" (EXTERNAL Claude quota — operator/infra)
+  3. some "N of M stages failed" backend_errors
+- Real-time recycle observed: 3a3c202f promoted→R4AI then re-Blocked within ~1 min.
+- propose: decide emits 2 candidates → propose created=0/skipped=2 (candidates duplicate the 39 already-queued tasks). Execution throughput — not proposal — is the bottleneck.
+- Classification: closed-loop stagnation at execution layer (throughput-limited). NOT divergent (Blocked decreasing, not increasing). NOT parked (queue evolved materially this cycle → park criteria fail).
+
+### STEP 4 — promotion: existing escalation 3860f469 ("[Watchdog] triage_scan: no auto-recovery for budget-gate-blocked improve tasks") COVERS this pattern.
+- Commented new evidence on 3860f469 (no duplicate created): session-limit as distinct 2nd cause; mass-promote/budget interaction (board-unblock promotes more tasks than 4/hr gate consumes → re-skip/re-block recycle); suggested guardrail = cap promotions to available hourly budget and/or label repeated session/budget failures dead-remediation after N recycles.
+
+### STEP 5/6 — execution gate: NO direct fix
+- All audits clean → no reproduced repo-code finding. Execution-gate (g) blocks retrying the stagnating tasks via autonomy-cycle. No autonomy-cycle dispatched.
+
+### STEP 7 — invariants: pytest tests/unit/er000_phase0_golden/ -q → 15 passed ✓
+
+### STEP 8 — watcher health: 8/8 running, stable PIDs. No non-143 crashes, no tracebacks today. board_worker WARN/ERROR entries (19:46→05:10 prior) are budget/session-limit dispatch outcomes, not watcher crashes.
+
+### Blocked work classification
+- 13 R4AI tasks: remediation in flight — executor will attempt with reset budget (Claude session reset 7:40am ET; now ~14:12 ET). Convergence measured next cycle.
+- 3a3c202f (lone Blocked): closed-loop recycle — covered by 3860f469.
+- Behavioral convergence: WEAKLY-CONVERGENT (Blocked drained this cycle) but execution layer non-convergent (no executor success). Worst-state governs → STALLED.
+- Operator-blocked component: Claude session-limit (external quota) — escalated under 3860f469, not separately parked (queue evolving).
+- KNOWN OPEN: Campaign 10c50210 CANCELLED (carry forward)
