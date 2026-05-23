@@ -1,3 +1,23 @@
+## Stage 2 Merge Process — 2026-05-23 UTC
+
+**Objective:** Complete Stage 2 JSON hardening by addressing code review findings and merging to main.
+
+**Actions Completed:**
+1. Created PR #171 for Stage 2 implementation
+2. Performed code review (3 issues identified and fixed):
+   - Added missing "error_type" field to log_structure_error
+   - Changed error_type values to match ErrorCategory enum (parse_error, io_error, structure_error)
+   - Fixed alert filtering logic by using category names instead of exception class names
+   - Preserved exception class names in error_msg for debugging context
+3. Pushed fixes to feature branch
+4. CI checks running on updated code
+
+**Next Steps:**
+- Wait for CI to pass
+- Merge PR #171 to main
+
+---
+
 ## Stage 3: JSON Hardening Implementation — 2026-05-23 UTC
 
 **Objective:** Implement error handling and graceful recovery for malformed JSON payloads across Collector module.
