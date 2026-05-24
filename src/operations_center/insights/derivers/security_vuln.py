@@ -28,7 +28,7 @@ class SecurityVulnDeriver:
             return []
 
         insights: list[DerivedInsight] = []
-        observed_at = snapshots[0].observed_at
+        observed_at = sec.observed_at or snapshots[0].observed_at
 
         if sec.status == "advisories" and sec.advisory_count > 0:
             insights.append(

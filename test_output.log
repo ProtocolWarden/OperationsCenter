@@ -1,0 +1,20 @@
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.0.3, pluggy-1.6.0 -- /tmp/oc-goal-qg4bcr24/workspace/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /tmp/oc-goal-qg4bcr24/workspace
+configfile: pyproject.toml
+plugins: anyio-4.13.0
+collecting ... collected 3500 items / 1 error
+
+==================================== ERRORS ====================================
+_______________ ERROR collecting tests/test_execution_health.py ________________
+import file mismatch:
+imported module 'test_execution_health' has this __file__ attribute:
+  /tmp/oc-goal-qg4bcr24/workspace/tests/observer/test_collectors_hardening/test_execution_health.py
+which is not the same as the test file we want to collect:
+  /tmp/oc-goal-qg4bcr24/workspace/tests/test_execution_health.py
+HINT: remove __pycache__ / .pyc files and/or use a unique basename for your test file modules
+=========================== short test summary info ============================
+ERROR tests/test_execution_health.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+=============================== 1 error in 6.93s ===============================

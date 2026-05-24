@@ -42,6 +42,13 @@ class ObservationCoverageDeriver:
                 matching.append(snapshot)
 
             suffix = "persistent_unavailable" if consecutive >= 2 else "unavailable"
+            first_seen = matching[-1].observed_at
+            last_seen = matching[0].observed_at
+            # Use signal-level observed_at if available (for CheckSignal and other signals with optional observed_at)
+            if signal == "test_signal" and matching[-1].signals.test_signal.observed_at:
+                first_seen = matching[-1].signals.test_signal.observed_at
+            if signal == "test_signal" and matching[0].signals.test_signal.observed_at:
+                last_seen = matching[0].signals.test_signal.observed_at
             insights.append(
                 self.normalizer.normalize(
                     kind="observation_coverage",
@@ -49,8 +56,8 @@ class ObservationCoverageDeriver:
                     status="present",
                     key_parts=[signal, suffix],
                     evidence={"signal": signal, "consecutive_snapshots": consecutive},
-                    first_seen_at=matching[-1].observed_at,
-                    last_seen_at=matching[0].observed_at,
+                    first_seen_at=first_seen,
+                    last_seen_at=last_seen,
                 )
             )
         return insights

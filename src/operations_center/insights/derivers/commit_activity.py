@@ -34,7 +34,8 @@ class CommitActivityDeriver:
             )
         ]
         if len(snapshots) > 1:
-            previous_count = len(snapshots[1].signals.recent_commits)
+            previous = snapshots[1]
+            previous_count = len(previous.signals.recent_commits)
             if previous_count != current_count:
                 insights.append(
                     self.normalizer.normalize(
@@ -46,7 +47,7 @@ class CommitActivityDeriver:
                             "current_commit_count": current_count,
                             "previous_commit_count": previous_count,
                         },
-                        first_seen_at=snapshots[1].observed_at,
+                        first_seen_at=previous.observed_at,
                         last_seen_at=current.observed_at,
                     )
                 )
