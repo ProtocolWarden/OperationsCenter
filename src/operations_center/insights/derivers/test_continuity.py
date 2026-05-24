@@ -33,7 +33,7 @@ class TestContinuityDeriver:
             consecutive_snapshots.append(snapshot)
 
         insights: list[DerivedInsight] = []
-        if consecutive >= 2:
+        if consecutive >= 2 and consecutive_snapshots:
             insights.append(
                 self.normalizer.normalize(
                     kind="test_status_continuity",

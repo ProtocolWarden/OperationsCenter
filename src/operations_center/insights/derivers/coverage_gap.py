@@ -34,14 +34,14 @@ class CoverageGapDeriver:
             return []
 
         insights: list[DerivedInsight] = []
-        first_seen = latest.observed_at
-        last_seen = latest.observed_at
+        last_seen = sig.observed_at or latest.observed_at
+        first_seen = last_seen
 
         # Look back further for first_seen
         for snap in reversed(snapshots):
             snap_sig = snap.signals.coverage_signal
             if snap_sig.status == "measured":
-                first_seen = snap.observed_at
+                first_seen = snap_sig.observed_at or snap.observed_at
                 break
 
         if sig.total_coverage_pct < _LOW_OVERALL_THRESHOLD:

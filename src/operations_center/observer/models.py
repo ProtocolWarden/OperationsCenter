@@ -1,5 +1,50 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
+"""Signal models for repository observation and analysis.
+
+## Timestamp Strategy: Signal-Level vs Snapshot-Level
+
+Signals in this module may have two timestamp sources:
+1. **Signal-level `observed_at`**: Timestamp when the external tool ran (optional, may be None)
+2. **Snapshot-level `observed_at`**: Timestamp when the snapshot was captured (always present in RepoStateSnapshot)
+
+### When to Use Each Timestamp
+
+**Signal-level observed_at is populated when:**
+- The signal comes from out-of-process analysis (security scanner, benchmark tool, linter)
+- The external tool provides its own timestamp (invocation time)
+- The tool ran at a different time than the snapshot was captured
+
+**Signal-level observed_at is None when:**
+- The signal is computed locally without external tools
+- The tool does not provide timing information
+- The snapshot was taken but the external tool never ran
+
+### Usage Pattern in Derivers
+
+When using signals with optional observed_at in derivers, follow this pattern:
+
+    # Prefer signal-level if available, fall back to snapshot-level
+    observed_at = signal.observed_at or snapshots[0].observed_at
+
+This ensures:
+- More accurate timestamps when external tools provide them
+- No null timestamps (snapshot-level is guaranteed non-None)
+- Consistent timestamp semantics across all derivers
+
+### Signals with Optional observed_at
+
+These 6 signals perform out-of-process analysis and have optional observed_at:
+- CheckSignal (test execution)
+- DependencyDriftSignal (dependency analysis)
+- ArchitectureSignal (module structure analysis)
+- BenchmarkSignal (performance metrics)
+- SecuritySignal (vulnerability scanning)
+- CoverageSignal (code coverage analysis)
+
+All other signals (TodoSignal, ExecutionHealthSignal, etc.) are computed locally
+and use snapshot-level observed_at only.
+"""
 from __future__ import annotations
 
 from datetime import datetime
@@ -34,6 +79,27 @@ class FileHotspot(BaseModel):
 
 
 class CheckSignal(BaseModel):
+    """Test execution results and status.
+
+    Represents the outcome of test runs (unit, integration, or end-to-end tests)
+    from an external testing framework or CI system.
+
+    Attributes:
+        status: Overall test status ("passing", "failing", "flaky", "unavailable", etc.)
+        test_count: Total number of tests executed, or None if not available
+        source: Name of the tool/framework that ran tests (e.g., "pytest", "jest", "cargo test")
+        observed_at: Timestamp when the test execution completed. Optional because:
+            - Test runs may not provide timing information
+            - Tests may not have run yet (deferred)
+            - Status may be inferred from snapshot state rather than from live execution
+            If None, use snapshot.observed_at as fallback: `signal.observed_at or snapshot.observed_at`
+        summary: Human-readable summary of test results (e.g., "5 passed, 2 failed")
+
+    When observed_at is used in derivers, prefer the signal-level value over snapshot-level:
+
+        # In derivers that access test_signal
+        observed_at = signal.test_signal.observed_at or snapshots[0].observed_at
+    """
     status: str
     test_count: int | None = None
     source: str | None = None
@@ -42,6 +108,27 @@ class CheckSignal(BaseModel):
 
 
 class DependencyDriftSignal(BaseModel):
+    """Dependency manifest analysis and drift detection.
+
+    Represents the analysis results from dependency manifest scanning tools
+    (e.g., SBOM generators, dependency checkers, package auditors).
+
+    Attributes:
+        status: Overall dependency status ("healthy", "drift", "missing", "unavailable", etc.)
+        source: Name of the tool that analyzed dependencies (e.g., "pip-audit", "cargo-audit", "yarn audit")
+        observed_at: Timestamp when the dependency analysis was performed. Optional because:
+            - The tool may not record execution timestamps
+            - Analysis may be deferred or cached
+            - Results may be imported from an external system
+            If None, use snapshot.observed_at as fallback: `signal.observed_at or snapshot.observed_at`
+        summary: Human-readable summary of dependency health
+        parse_errors: Metadata about any parsing errors during collection
+
+    When observed_at is used in derivers, prefer the signal-level value over snapshot-level:
+
+        # In derivers that access dependency_drift
+        observed_at = signal.dependency_drift.observed_at or snapshots[0].observed_at
+    """
     status: str
     source: str | None = None
     observed_at: datetime | None = None
@@ -158,6 +245,29 @@ class CIHistorySignal(BaseModel):
 
 
 class ArchitectureSignal(BaseModel):
+    """Code architecture and module dependency analysis.
+
+    Represents the results of static architecture analysis tools that examine
+    module structure, import relationships, and coupling.
+
+    Attributes:
+        status: Overall architecture health ("healthy", "warnings", "unavailable", etc.)
+        source: Name of the analysis tool (e.g., "depcheck", "import-sort", "pydeps")
+        observed_at: Timestamp when the architecture analysis was performed. Optional because:
+            - Architecture analysis tools may not provide execution timestamps
+            - Analysis results may be cached or imported
+            - Analysis is expensive and may run less frequently than snapshots
+            If None, use snapshot.observed_at as fallback: `signal.observed_at or snapshot.observed_at`
+        max_import_depth: Maximum import depth in the module graph
+        circular_dependencies: List of module pairs with circular import relationships
+        coupling_score: Quantitative measure of module coupling (0.0-1.0, higher = worse)
+        summary: Human-readable summary of architectural health
+
+    When observed_at is used in derivers, prefer the signal-level value over snapshot-level:
+
+        # In derivers that access architecture_signal
+        observed_at = signal.architecture_signal.observed_at or snapshots[0].observed_at
+    """
     status: str  # "healthy", "warnings", "unavailable"
     source: str | None = None
     observed_at: datetime | None = None
@@ -168,6 +278,28 @@ class ArchitectureSignal(BaseModel):
 
 
 class BenchmarkSignal(BaseModel):
+    """Performance benchmark results and regression detection.
+
+    Represents the output of performance measurement tools that track metrics
+    like execution time, memory usage, throughput, or latency over time.
+
+    Attributes:
+        status: Performance status ("nominal", "regression", "improvement", "unavailable", etc.)
+        source: Name of the benchmark tool (e.g., "criterion", "JMH", "wrk", "hyperfine")
+        observed_at: Timestamp when the benchmarks were executed. Optional because:
+            - Benchmark tools may not record invocation timestamps
+            - Benchmarks are computationally expensive and may not run on every snapshot
+            - Results may be imported from external CI/performance tracking systems
+            If None, use snapshot.observed_at as fallback: `signal.observed_at or snapshot.observed_at`
+        benchmark_count: Number of benchmarks executed
+        regressions: List of benchmarks that regressed (slowed down) compared to baseline
+        summary: Human-readable summary of performance changes
+
+    When observed_at is used in derivers, prefer the signal-level value over snapshot-level:
+
+        # In derivers that access benchmark_signal
+        observed_at = signal.benchmark_signal.observed_at or snapshots[0].observed_at
+    """
     status: str  # "nominal", "regression", "unavailable"
     source: str | None = None
     observed_at: datetime | None = None
@@ -177,6 +309,29 @@ class BenchmarkSignal(BaseModel):
 
 
 class SecuritySignal(BaseModel):
+    """Security vulnerability and advisory scanning results.
+
+    Represents the output of security analysis tools that detect vulnerabilities,
+    outdated dependencies, and compliance issues.
+
+    Attributes:
+        status: Security status ("clean", "advisories", "critical", "unavailable", etc.)
+        source: Name of the security scanner (e.g., "trivy", "snyk", "bandit", "semgrep")
+        observed_at: Timestamp when the security scan was performed. Optional because:
+            - Security scanners may not provide execution timestamps
+            - Scans may be expensive and run less frequently than snapshots
+            - Results may be imported from external security platforms
+            If None, use snapshot.observed_at as fallback: `signal.observed_at or snapshot.observed_at`
+        advisory_count: Total number of vulnerabilities found
+        critical_count: Number of critical-severity vulnerabilities
+        high_count: Number of high-severity vulnerabilities
+        summary: Human-readable summary of security findings
+
+    When observed_at is used in derivers, prefer the signal-level value over snapshot-level:
+
+        # In derivers that access security_signal
+        observed_at = signal.security_signal.observed_at or snapshots[0].observed_at
+    """
     status: str  # "clean", "advisories", "unavailable"
     source: str | None = None
     observed_at: datetime | None = None
@@ -192,6 +347,30 @@ class UncoveredFile(BaseModel):
 
 
 class CoverageSignal(BaseModel):
+    """Code coverage analysis results.
+
+    Represents the output of code coverage measurement tools that track
+    what fraction of the codebase is exercised by tests.
+
+    Attributes:
+        status: Coverage measurement status ("measured", "partial", "unavailable", etc.)
+        total_coverage_pct: Overall code coverage percentage (0-100)
+        uncovered_file_count: Number of files below the uncovered_threshold_pct
+        uncovered_threshold_pct: Threshold for marking files as under-covered (default 80%)
+        top_uncovered: List of files with lowest coverage, for focused improvement effort
+        source: Name of the coverage tool (e.g., "coverage.py", "jacoco", "nyc", "llvm-cov")
+        observed_at: Timestamp when coverage was measured. Optional because:
+            - Coverage tools may not record measurement timestamps
+            - Coverage analysis is computationally expensive and may not run on every snapshot
+            - Results may be imported from external CI/coverage services
+            If None, use snapshot.observed_at as fallback: `signal.observed_at or snapshot.observed_at`
+        summary: Human-readable summary of coverage status and trends
+
+    When observed_at is used in derivers, prefer the signal-level value over snapshot-level:
+
+        # In derivers that access coverage_signal
+        observed_at = signal.coverage_signal.observed_at or snapshots[0].observed_at
+    """
     status: str  # "measured", "partial", "unavailable"
     total_coverage_pct: float | None = None
     uncovered_file_count: int = 0
@@ -221,6 +400,35 @@ class RepoSignalsSnapshot(BaseModel):
 
 
 class RepoStateSnapshot(BaseModel):
+    """A complete snapshot of repository state at a point in time.
+
+    Captures all signals (test results, dependencies, architecture, etc.) along with
+    repository metadata at a single moment.
+
+    Attributes:
+        run_id: Unique identifier for this snapshot run
+        observed_at: Timestamp when this snapshot was captured. This is a required field
+            that serves as the fallback timestamp for signals with optional observed_at.
+            When a signal's observed_at is None, use: `signal.observed_at or snapshot.observed_at`
+        observer_version: Version of the observer that created this snapshot (for compatibility)
+        source_command: The command/trigger that created this snapshot
+        repo: Repository context metadata (name, branch, dirty status, etc.)
+        signals: Collection of all signals captured in this snapshot
+        collector_errors: Map of signal types to error messages if collection failed
+
+    ## Timestamp Semantics
+
+    The snapshot's observed_at represents when the snapshot collection completed.
+    Individual signals may have their own observed_at timestamps that differ:
+    - Earlier: If the signal was collected from a cache or external system
+    - Later: Unlikely, but possible if async collection delayed snapshot finalization
+    - None: If the signal tool didn't provide timing or hasn't run yet
+
+    For derivers: always prefer signal-level observed_at over snapshot-level when available:
+
+        # Safe fallback pattern used by all derivers
+        observed_at = signal.observed_at or snapshot.observed_at
+    """
     run_id: str
     observed_at: datetime
     observer_version: int = OBSERVER_VERSION
