@@ -304,6 +304,8 @@ audit:
       # code under audit — they probe via subprocess + filesystem.
       - tests/test_architecture_cleanup_guards.py
       - tests/unit/audit_dispatch/test_lock_store_concurrency.py
+      # Loop-controller tests exercise the top-level tool entrypoint directly.
+      - tests/test_loop_controller.py
     C1:
       - src/operations_center/observer/collectors/todo_signal.py
       - src/operations_center/observer/artifact_writer.py

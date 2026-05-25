@@ -45,6 +45,12 @@ Updated `tools/loop/controller.py` so watchdog sessions stay pinned to
 Added focused controller tests and updated `LOOP_START.md` plus the watchdog runbook
 to match the new controller behavior.
 
+## 2026-05-25 20:10:00Z — Exclude direct loop-controller tool test from T8
+Custodian T8 flagged `tests/test_loop_controller.py` because it exercises the
+top-level `tools/loop/controller.py` entrypoint directly rather than importing a
+`src/operations_center/**` package. Added a narrow T8 exclusion for that test in
+`.custodian/config.yaml`; targeted controller tests still pass.
+
 ## Operator change — 2026-05-23 UTC
 
 - Fixed custodian pre-push blockers (8 findings → 0): RUFF G004 (security_signal.py % formatting), RUFF DTZ005 (security_logging.py timezone), T4 (3 unused conftest fixtures removed), C29 (workspace.py + validation.py added to exception list).
