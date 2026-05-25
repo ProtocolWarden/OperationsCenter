@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import logging
 
+from operations_center.backends.tiering import select_tier, tier_profile
 from operations_center.config.settings import CritiqueExecutorSettings
 from operations_center.contracts.common import ValidationSummary
 from operations_center.contracts.enums import ExecutionStatus, FailureReasonCategory, ValidationStatus
 from operations_center.contracts.execution import ExecutionRequest, ExecutionResult
+from operations_center.execution.usage_store import UsageStore
 
 logger = logging.getLogger(__name__)
 
@@ -21,27 +23,54 @@ logger = logging.getLogger(__name__)
 class CritiqueExecutorBackendAdapter:
     """Canonical adapter for CritiqueExecutor backend execution."""
 
-    def __init__(self, settings: CritiqueExecutorSettings) -> None:
+    def __init__(self, settings: CritiqueExecutorSettings, usage_store: UsageStore | None = None) -> None:
         self._settings = settings
+        self._usage_store = usage_store
 
     def execute(self, request: ExecutionRequest) -> ExecutionResult:
         try:
             from critique_executor.executor import CritiqueExecutorRunner  # type: ignore  # noqa: PGH003
+            from critique_executor.models import CritiqueConfig, CritiqueTopology  # type: ignore  # noqa: PGH003
         except ImportError as exc:
             return _error_result(request, f"critique_executor not installed: {exc}")
 
         working_dir = self._settings.working_dir or str(request.workspace_path)
+        tier = select_tier(
+            configured="default",
+            runtime_binding=request.runtime_binding,
+            usage_store=self._usage_store or UsageStore(),
+            dynamic_enabled=self._settings.dynamic_tier_selection,
+            pressure_threshold=self._settings.budget_pressure_threshold,
+        )
+        profile = tier_profile(tier)
+        config = CritiqueConfig(
+            topology=CritiqueTopology(self._settings.topology),
+            proposer_model=profile["claude_code"]["model"],
+            critic_model=profile["claude_code"]["model"],
+            proposer_effort=profile["claude_code"]["effort"],
+            critic_effort=profile["claude_code"]["effort"],
+            proposer_backend_models={"codex_cli": profile["codex_cli"]["model"]},
+            critic_backend_models={"codex_cli": profile["codex_cli"]["model"]},
+            proposer_backend_efforts={"codex_cli": profile["codex_cli"]["effort"]},
+            critic_backend_efforts={"codex_cli": profile["codex_cli"]["effort"]},
+            max_rounds=self._settings.max_rounds,
+            working_dir=working_dir,
+            timeout_seconds=self._settings.timeout_seconds,
+            worker_backend=self._settings.worker_backend,
+        )
 
         logger.info(
-            "CritiqueExecutorAdapter: run=%s topology=%s backend=%s rounds=%d",
+            "CritiqueExecutorAdapter: run=%s topology=%s backend=%s rounds=%d tier=%s",
             request.run_id,
             self._settings.topology,
             self._settings.worker_backend,
             self._settings.max_rounds,
+            tier,
         )
 
         runner = CritiqueExecutorRunner(
             topology=self._settings.topology,
+            config=config,
             worker_backend=self._settings.worker_backend,  # type: ignore[arg-type]
             working_dir=working_dir,
         )

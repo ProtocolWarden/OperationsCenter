@@ -20,7 +20,8 @@ rules:
     bind:
       kind: cli_subscription
       provider: anthropic
-      model: haiku
+      model: opus
+      config_ref: team_executor:premium
 
   - name: feature_balanced
     when:
@@ -29,7 +30,28 @@ rules:
     bind:
       kind: cli_subscription
       provider: anthropic
-      model: haiku
+      model: opus
+      config_ref: team_executor:premium
+
+  - name: refactor_codex_balanced
+    when:
+      task_type: refactor
+      lane: codex_cli
+    bind:
+      kind: cli_subscription
+      provider: openai
+      model: gpt-5.4
+      config_ref: team_executor:premium
+
+  - name: feature_codex_balanced
+    when:
+      task_type: feature
+      lane: codex_cli
+    bind:
+      kind: cli_subscription
+      provider: openai
+      model: gpt-5.4
+      config_ref: team_executor:premium
 
   - name: test_balanced
     when:
@@ -38,7 +60,18 @@ rules:
     bind:
       kind: cli_subscription
       provider: anthropic
-      model: haiku
+      model: sonnet
+      config_ref: team_executor:default
+
+  - name: test_codex_balanced
+    when:
+      task_type: test_fix
+      lane: codex_cli
+    bind:
+      kind: cli_subscription
+      provider: openai
+      model: gpt-5.4
+      config_ref: team_executor:default
 
   - name: lint_cheap
     when:
@@ -48,9 +81,21 @@ rules:
       kind: cli_subscription
       provider: anthropic
       model: haiku
+      config_ref: team_executor:budget
+
+  - name: lint_codex_cheap
+    when:
+      task_type: lint_fix
+      lane: codex_cli
+    bind:
+      kind: cli_subscription
+      provider: openai
+      model: gpt-5.4-mini
+      config_ref: team_executor:budget
 
 default:
   bind:
     kind: cli_subscription
     provider: anthropic
-    model: haiku
+    model: sonnet
+    config_ref: team_executor:default

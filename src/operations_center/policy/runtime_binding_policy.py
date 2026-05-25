@@ -157,6 +157,7 @@ DEFAULT_POLICY = RuntimeBindingPolicy(
             kind="cli_subscription",
             provider="anthropic",
             model="opus",
+            config_ref="team_executor:premium",
         ),
         RuntimeBindingRule(
             name="feature_premium",
@@ -164,6 +165,23 @@ DEFAULT_POLICY = RuntimeBindingPolicy(
             kind="cli_subscription",
             provider="anthropic",
             model="opus",
+            config_ref="team_executor:premium",
+        ),
+        RuntimeBindingRule(
+            name="refactor_codex_premium",
+            when={"task_type": "refactor", "lane": "codex_cli"},
+            kind="cli_subscription",
+            provider="openai",
+            model="gpt-5.4",
+            config_ref="team_executor:premium",
+        ),
+        RuntimeBindingRule(
+            name="feature_codex_premium",
+            when={"task_type": "feature", "lane": "codex_cli"},
+            kind="cli_subscription",
+            provider="openai",
+            model="gpt-5.4",
+            config_ref="team_executor:premium",
         ),
         RuntimeBindingRule(
             name="test_balanced",
@@ -171,6 +189,15 @@ DEFAULT_POLICY = RuntimeBindingPolicy(
             kind="cli_subscription",
             provider="anthropic",
             model="sonnet",
+            config_ref="team_executor:default",
+        ),
+        RuntimeBindingRule(
+            name="test_codex_balanced",
+            when={"task_type": "test_fix", "lane": "codex_cli"},
+            kind="cli_subscription",
+            provider="openai",
+            model="gpt-5.4",
+            config_ref="team_executor:default",
         ),
         RuntimeBindingRule(
             name="lint_cheap",
@@ -178,6 +205,15 @@ DEFAULT_POLICY = RuntimeBindingPolicy(
             kind="cli_subscription",
             provider="anthropic",
             model="haiku",
+            config_ref="team_executor:budget",
+        ),
+        RuntimeBindingRule(
+            name="lint_codex_cheap",
+            when={"task_type": "lint_fix", "lane": "codex_cli"},
+            kind="cli_subscription",
+            provider="openai",
+            model="gpt-5.4-mini",
+            config_ref="team_executor:budget",
         ),
     ),
     default=RuntimeBindingRule(
@@ -186,5 +222,6 @@ DEFAULT_POLICY = RuntimeBindingPolicy(
         kind="cli_subscription",
         provider="anthropic",
         model="sonnet",
+        config_ref="team_executor:default",
     ),
 )

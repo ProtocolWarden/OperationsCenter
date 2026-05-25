@@ -134,12 +134,16 @@ class TeamExecutorSettings(BaseModel):
     team_name: str = "default"
     timeout_seconds: int = 3600
     worker_backend: str = "claude_code"
+    dynamic_team_selection: bool = True
+    budget_pressure_threshold: float = 0.75
 
 
 class DAGExecutorSettings(BaseModel):
     timeout_seconds: int = 3600
     artifacts_dir: str = ""
     worker_backend: str = "claude_code"
+    dynamic_tier_selection: bool = True
+    budget_pressure_threshold: float = 0.75
 
 
 class CritiqueExecutorSettings(BaseModel):
@@ -148,6 +152,8 @@ class CritiqueExecutorSettings(BaseModel):
     timeout_seconds: int = 3600
     worker_backend: str = "claude_code"
     working_dir: str = ""
+    dynamic_tier_selection: bool = True
+    budget_pressure_threshold: float = 0.75
 
 
 class AiderSettings(BaseModel):

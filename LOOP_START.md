@@ -59,6 +59,15 @@ through Codex CLI, pinned to `gpt-5.4` at `medium` reasoning effort, until the
 reset time passes. The session writes `.console/loop_schedule.json` at STEP 10;
 the controller reads it for adaptive delay before spawning the next session.
 
+Execution backends inside OC are separate from the controller session itself.
+`team_executor`, `dag_executor`, and `critique_executor` now use runtime-binding
+tiers plus budget-pressure downgrade:
+- `premium` -> Claude `opus` / Codex `gpt-5.4` at `high`
+- `default` -> Claude `sonnet` / Codex `gpt-5.4` at `medium`
+- `budget` -> Claude `haiku` / Codex `gpt-5.4-mini` at `low`
+- if execution-budget pressure reaches `0.75`, OC downgrades one tier for the
+  dispatch (`premium -> default`, `default -> budget`)
+
 ### What the controller passes to each session
 
 ```

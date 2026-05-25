@@ -145,9 +145,10 @@ Before starting the loop, confirm:
    scripts/operations-center.sh watch-all
    scripts/operations-center.sh watch-all-status   # all 8 must show running
    ```
-4. **Runtime model is low-cost** (sonnet/haiku, not opus):
-   - `config/operations_center.local.yaml` → `team_executor.orchestrator: claude-code:sonnet`
-   - `config/runtime_binding_policy.yaml` → refactor + feature rules → `model: sonnet`
+4. **Runtime tier policy is intentional**:
+   - `config/runtime_binding_policy.yaml` encodes the desired tier per lane/task shape
+   - backend settings keep `dynamic_*_selection: true`
+   - `budget_pressure_threshold: 0.75` downgrades one tier under execution-budget pressure
 5. **team_executor max_concurrent = 1** — verify in `config/operations_center.local.yaml`
 
 ---
@@ -187,9 +188,9 @@ scripts/operations-center.sh watchdog-loop-status
 # 8. Working tree state
 git status --short | head -10
 
-# 9. Runtime model
-grep "orchestrator:" config/operations_center.local.yaml
-grep "model:" config/runtime_binding_policy.yaml | head -5
+# 9. Runtime tier policy
+grep -n "dynamic_.*selection\\|budget_pressure_threshold" config/operations_center.local.yaml
+grep -n "model:\\|config_ref:" config/runtime_binding_policy.yaml | head -12
 
 # 10. executor concurrency
 python3 -c "import yaml; d=yaml.safe_load(open('config/operations_center.local.yaml')); \
@@ -795,7 +796,7 @@ The loop must **never** do the following without explicit operator approval:
 - Force-pushing (`git push --force`)
 - Changing secrets or credentials
 - Modifying ADRs (`docs/architecture/adr/`)
-- Changing runtime model policy (`config/runtime_binding_policy.yaml`)
+- Changing runtime model/tier policy (`config/runtime_binding_policy.yaml`)
 - Widening `team_executor max_concurrent` beyond 1
 - Replacing `ScheduleWakeup` with cron/systemd/daemon behavior
 

@@ -38,6 +38,18 @@
 - Campaign 10c50210 CANCELLED.
 - HYGIENE: `.baseline-validation.json` tracked on OC main (operationally neutralized by cycle-28 reorder).
 
+## 2026-05-25 — Backend tier selection unified across TE / DAG / Critique
+
+- Added shared backend tiering helper for runtime-binding tier inference plus one-step downgrade at budget pressure `>= 0.75`.
+- `team_executor` now selects `budget` / `default` / `premium` dynamically from runtime binding, then downgrades one tier under pressure.
+- `dag_executor` now injects tier defaults into fallback and workflow agent nodes:
+  - budget = haiku / gpt-5.4-mini @ low
+  - default = sonnet / gpt-5.4 @ medium
+  - premium = opus / gpt-5.4 @ high
+- `critique_executor` now builds tiered proposer/critic config from the same mapping.
+- Restored checked-in runtime binding policy to intentional tiering and added `config_ref` hints so Codex `default` vs `premium` are distinguishable even when both use `gpt-5.4`.
+- Updated setup rendering, example config, and operator docs to expose the new knobs. Focused OC backend/policy/setup tests passed.
+
 ## 2026-05-25 20:02:00Z — Pin watchdog controller backends and add Codex fallback
 Updated `tools/loop/controller.py` so watchdog sessions stay pinned to
 `claude-sonnet-4-6` with `medium` effort and fall back to `codex exec` using

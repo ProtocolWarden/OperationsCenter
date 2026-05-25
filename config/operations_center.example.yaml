@@ -33,6 +33,33 @@ git:
 # Team executor settings
 # ---------------------------------------------------------------------------
 # See src/operations_center/backends/team_executor/
+team_executor:
+  team_name: default
+  timeout_seconds: 3600
+  worker_backend: claude_code
+  dynamic_team_selection: true
+  budget_pressure_threshold: 0.75
+
+# ---------------------------------------------------------------------------
+# DAG executor settings
+# ---------------------------------------------------------------------------
+dag_executor:
+  timeout_seconds: 3600
+  worker_backend: claude_code
+  dynamic_tier_selection: true
+  budget_pressure_threshold: 0.75
+
+# ---------------------------------------------------------------------------
+# Critique executor settings
+# ---------------------------------------------------------------------------
+critique_executor:
+  topology: reflexion
+  max_rounds: 5
+  timeout_seconds: 3600
+  worker_backend: claude_code
+  working_dir: ""
+  dynamic_tier_selection: true
+  budget_pressure_threshold: 0.75
 
 # ---------------------------------------------------------------------------
 # Repos
