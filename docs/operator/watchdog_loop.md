@@ -12,10 +12,14 @@ The loop is **not merely an hourly audit runner**. When the platform is
 unhealthy it shortens its cadence and actively works to restore forward
 progress. When healthy it backs off to maintenance frequency.
 
-The loop is controller-driven: `tools/loop/controller.py` spawns a fresh
-`claude -p` session for each iteration so context never accumulates. Each session
-exits cleanly after writing `.console/loop_schedule.json`; the controller reads
-that file for adaptive timing before launching the next session.
+The loop is controller-driven: `tools/loop/controller.py` spawns a fresh agent
+session for each iteration so context never accumulates. Claude is the primary
+backend and is pinned to `claude-sonnet-4-6` at `medium` effort. When Claude
+usage is rate-limited the controller runs the same prompt through Codex CLI,
+pinned to `gpt-5.4` at `medium` reasoning effort, until the reset time passes.
+Each session exits cleanly after writing `.console/loop_schedule.json`; the
+controller reads that file for adaptive timing before launching the next
+session.
 
 **Related docs:**
 - [`self_healing_model.md`](self_healing_model.md) — convergence phases 1–7, architecture, ownership model

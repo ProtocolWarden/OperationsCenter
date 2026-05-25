@@ -38,6 +38,13 @@
 - Campaign 10c50210 CANCELLED.
 - HYGIENE: `.baseline-validation.json` tracked on OC main (operationally neutralized by cycle-28 reorder).
 
+## 2026-05-25 20:02:00Z — Pin watchdog controller backends and add Codex fallback
+Updated `tools/loop/controller.py` so watchdog sessions stay pinned to
+`claude-sonnet-4-6` with `medium` effort and fall back to `codex exec` using
+`gpt-5.4` with `medium` reasoning effort when Claude is rate-limited or unavailable.
+Added focused controller tests and updated `LOOP_START.md` plus the watchdog runbook
+to match the new controller behavior.
+
 ## Operator change — 2026-05-23 UTC
 
 - Fixed custodian pre-push blockers (8 findings → 0): RUFF G004 (security_signal.py % formatting), RUFF DTZ005 (security_logging.py timezone), T4 (3 unused conftest fixtures removed), C29 (workspace.py + validation.py added to exception list).

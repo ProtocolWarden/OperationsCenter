@@ -3,12 +3,14 @@
 # Copyright (C) 2026 ProtocolWarden
 """OC platform watchdog loop controller.
 
-Replaces /loop + ScheduleWakeup. Spawns a fresh bounded claude -p session
-for each watchdog cycle. Context never accumulates; each session reconstructs
-from the anchor manifest's `.context/sessions/<sid>/checkpoints/`.
-The session writes `tools/loop/loop_schedule.json` at STEP 10 (instead of
-calling ScheduleWakeup) to communicate the adaptive delay; this is controller
-runtime state, collocated with the controller script.
+Replaces /loop + ScheduleWakeup. Spawns a fresh bounded agent session for each
+watchdog cycle. Claude is the primary backend; Codex CLI is used as a fallback
+when Claude usage is rate-limited or the Claude CLI is unavailable. Context
+never accumulates; each session reconstructs from the anchor manifest's
+`.context/sessions/<sid>/checkpoints/`. The session writes
+`tools/loop/loop_schedule.json` at STEP 10 (instead of calling ScheduleWakeup)
+to communicate the adaptive delay; this is controller runtime state,
+collocated with the controller script.
 
 Usage:
   python tools/loop/controller.py          # start (foreground; nohup & for overnight)
@@ -20,6 +22,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import signal
 import socket
 import subprocess
@@ -37,6 +40,10 @@ SCHEDULE_FILE = REPO_ROOT / "tools/loop/loop_schedule.json"
 LOG_FILE = REPO_ROOT / "logs/local/loop_controller.log"
 SESSION_LOG_DIR = REPO_ROOT / "logs/local/sessions"
 SESSION_PROMPT_FILE = REPO_ROOT / "tools/loop/oc_session_prompt.txt"
+CLAUDE_MODEL = "claude-sonnet-4-6"
+CLAUDE_EFFORT = "medium"
+CODEX_MODEL = "gpt-5.4"
+CODEX_EFFORT = "medium"
 
 # Hard ceiling on a single session. A normal cycle runs 10-20 min.
 # If the session hasn't exited after this many seconds it is hung
@@ -61,6 +68,7 @@ def load_session_prompt() -> str:
     except OSError as e:
         raise SystemExit(f"Cannot read session prompt file {SESSION_PROMPT_FILE}: {e}")
 
+
 _stop = False
 
 
@@ -77,6 +85,60 @@ def _log(msg: str) -> None:
             f.write(line + "\n")
     except OSError:
         pass
+
+
+def _command_available(command: str) -> bool:
+    return shutil.which(command) is not None
+
+
+def _session_command(backend: str, prompt: str) -> list[str]:
+    if backend == "claude":
+        return [
+            "claude",
+            "-p",
+            prompt,
+            "--model",
+            CLAUDE_MODEL,
+            "--effort",
+            CLAUDE_EFFORT,
+            "--dangerously-skip-permissions",
+            "--output-format",
+            "text",
+        ]
+    if backend == "codex":
+        return [
+            "codex",
+            "exec",
+            "--dangerously-bypass-approvals-and-sandbox",
+            "--cd",
+            str(REPO_ROOT),
+            "--model",
+            CODEX_MODEL,
+            "-c",
+            f'model_reasoning_effort="{CODEX_EFFORT}"',
+            prompt,
+        ]
+    raise ValueError(f"Unknown backend '{backend}'")
+
+
+def _session_log_path(iteration: int, backend: str) -> Path:
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return SESSION_LOG_DIR / f"iter_{iteration:04d}_{ts}_{backend}.log"
+
+
+def _select_backend(codex_fallback_until: datetime | None) -> str:
+    now = datetime.now(timezone.utc)
+    if (
+        codex_fallback_until is not None
+        and now < codex_fallback_until
+        and _command_available("codex")
+    ):
+        return "codex"
+    if _command_available("claude"):
+        return "claude"
+    if _command_available("codex"):
+        return "codex"
+    raise SystemExit("Neither claude nor codex CLI is available on PATH.")
 
 
 def handle_signal(signum, frame) -> None:
@@ -141,9 +203,7 @@ def write_watchdog_loop_lock() -> None:
     WATCHDOG_LOOP_LOCK.write_text(json.dumps(lock, indent=2))
 
 
-_RATE_LIMIT_RE = re.compile(
-    r"resets\s+(\d{1,2}:\d{2}(?:am|pm))\s+\(([^)]+)\)", re.IGNORECASE
-)
+_RATE_LIMIT_RE = re.compile(r"resets\s+(\d{1,2}:\d{2}(?:am|pm))\s+\(([^)]+)\)", re.IGNORECASE)
 _RATE_LIMIT_BUFFER = 120  # seconds to wait after the stated reset time
 
 
@@ -191,16 +251,18 @@ def get_delay() -> int:
     return DEFAULT_DELAY
 
 
-def run_session(iteration: int) -> tuple[int, Path]:
-    """Spawn one bounded claude -p session. Returns (exit_code, session_log_path)."""
+def run_session(iteration: int, backend: str = "claude") -> tuple[int, Path]:
+    """Spawn one bounded agent session. Returns (exit_code, session_log_path)."""
     prompt = load_session_prompt()
-    cmd = ["claude", "-p", prompt, "--model", "claude-opus-4-7", "--dangerously-skip-permissions", "--output-format", "text"]
+    cmd = _session_command(backend, prompt)
 
     SESSION_LOG_DIR.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    session_log = SESSION_LOG_DIR / f"iter_{iteration:04d}_{ts}.log"
+    session_log = _session_log_path(iteration, backend)
 
-    _log(f"Spawning session (prompt: {SESSION_PROMPT_FILE.name}, {len(prompt)} chars) → {session_log.name}")
+    _log(
+        f"Spawning {backend} session "
+        f"(prompt: {SESSION_PROMPT_FILE.name}, {len(prompt)} chars) → {session_log.name}"
+    )
 
     env = os.environ.copy()
     env_file = REPO_ROOT / ".env.operations-center.local"
@@ -213,7 +275,11 @@ def run_session(iteration: int) -> tuple[int, Path]:
 
     with session_log.open("w") as log_fh:
         proc = subprocess.Popen(
-            cmd, cwd=REPO_ROOT, env=env, stdout=log_fh, stderr=log_fh,
+            cmd,
+            cwd=REPO_ROOT,
+            env=env,
+            stdout=log_fh,
+            stderr=log_fh,
         )
         try:
             proc.wait(timeout=SESSION_TIMEOUT_SECONDS)
@@ -254,7 +320,9 @@ def cmd_status() -> None:
     if SCHEDULE_FILE.exists():
         try:
             s = json.loads(SCHEDULE_FILE.read_text())
-            print(f"Last schedule: state={s.get('state')}, delay={s.get('delay_s')}s — {s.get('reason')}")
+            print(
+                f"Last schedule: state={s.get('state')}, delay={s.get('delay_s')}s — {s.get('reason')}"
+            )
         except Exception:
             pass
 
@@ -266,8 +334,14 @@ def cmd_stop() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="OC watchdog loop controller")
-    parser.add_argument("--stop", action="store_true", help="Signal the controller to stop after the current session")
-    parser.add_argument("--status", action="store_true", help="Show controller lock state and last schedule")
+    parser.add_argument(
+        "--stop",
+        action="store_true",
+        help="Signal the controller to stop after the current session",
+    )
+    parser.add_argument(
+        "--status", action="store_true", help="Show controller lock state and last schedule"
+    )
     args = parser.parse_args()
 
     if args.status:
@@ -292,6 +366,7 @@ def main() -> None:
     _log(f"Log:       {LOG_FILE}")
 
     iteration = 0
+    codex_fallback_until: datetime | None = None
     try:
         while not _stop and not STOP_FLAG.exists():
             iteration += 1
@@ -300,17 +375,51 @@ def main() -> None:
             # Clear stale schedule from previous session before spawning
             SCHEDULE_FILE.unlink(missing_ok=True)
 
-            rc, session_log = run_session(iteration)
-            _log(f"Session exited rc={rc}")
+            backend = _select_backend(codex_fallback_until)
+            rc, session_log = run_session(iteration, backend)
+            _log(f"{backend.capitalize()} session exited rc={rc}")
 
             if _stop or STOP_FLAG.exists():
                 break
 
+            if backend == "claude" and rc != 0:
+                reset_dt = parse_rate_limit_reset(session_log)
+                if reset_dt is not None:
+                    if _command_available("codex"):
+                        codex_fallback_until = reset_dt
+                        _log(
+                            "Claude usage is rate-limited; "
+                            f"running Codex fallback until {reset_dt.strftime('%Y-%m-%dT%H:%M:%SZ')} UTC."
+                        )
+                        rc, session_log = run_session(iteration, "codex")
+                        _log(f"Codex fallback session exited rc={rc}")
+                    else:
+                        delay = max(
+                            60,
+                            int((reset_dt - datetime.now(timezone.utc)).total_seconds())
+                            + _RATE_LIMIT_BUFFER,
+                        )
+                        _log(
+                            f"Rate limit detected — reset at "
+                            f"{reset_dt.strftime('%Y-%m-%dT%H:%M:%SZ')} UTC; "
+                            f"sleeping {delay}s ({delay // 60}m)"
+                        )
+                        interruptible_sleep(delay)
+                        continue
+
             if rc != 0:
                 reset_dt = parse_rate_limit_reset(session_log)
                 if reset_dt is not None:
-                    delay = max(60, int((reset_dt - datetime.now(timezone.utc)).total_seconds()) + _RATE_LIMIT_BUFFER)
-                    _log(f"Rate limit detected — reset at {reset_dt.strftime('%Y-%m-%dT%H:%M:%SZ')} UTC; sleeping {delay}s ({delay // 60}m)")
+                    delay = max(
+                        60,
+                        int((reset_dt - datetime.now(timezone.utc)).total_seconds())
+                        + _RATE_LIMIT_BUFFER,
+                    )
+                    _log(
+                        f"Rate limit detected — reset at "
+                        f"{reset_dt.strftime('%Y-%m-%dT%H:%M:%SZ')} UTC; "
+                        f"sleeping {delay}s ({delay // 60}m)"
+                    )
                     interruptible_sleep(delay)
                     continue
 

@@ -52,9 +52,12 @@ python tools/loop/controller.py --status   # confirm running
 # Log:      logs/local/loop_controller.log
 ```
 
-Each iteration is a fresh `claude -p` session — context never accumulates across cycles.
-The session writes `.console/loop_schedule.json` at STEP 10; the controller reads it for
-adaptive delay before spawning the next session.
+Each iteration is a fresh agent session — context never accumulates across cycles.
+Claude is the primary backend and is pinned to `claude-sonnet-4-6` at `medium`
+effort. When Claude usage is rate-limited the controller runs the same prompt
+through Codex CLI, pinned to `gpt-5.4` at `medium` reasoning effort, until the
+reset time passes. The session writes `.console/loop_schedule.json` at STEP 10;
+the controller reads it for adaptive delay before spawning the next session.
 
 ### What the controller passes to each session
 
