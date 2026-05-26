@@ -43,6 +43,7 @@ def _usage_store(*, remaining: int, max_per_hour: int = 10, max_per_day: int = 5
     return SimpleNamespace(
         settings=settings,
         remaining_exec_capacity=lambda *, now: remaining,
+        worker_backend_cooldown_until=lambda worker_backend, *, now: None,
     )
 
 
@@ -121,3 +122,46 @@ def test_adapter_downgrades_premium_to_default_under_pressure(monkeypatch) -> No
     adapter.execute(_request(model="opus", config_ref="team_executor:premium"))
 
     assert captured["config"].proposer_model == "claude-sonnet-4-6"
+
+
+def test_adapter_falls_back_to_codex_when_claude_backend_is_cooling_down(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeRunner:
+        def __init__(self, topology: str, config, worker_backend: str, working_dir: str) -> None:
+            captured["worker_backend"] = worker_backend
+
+        def run(self, goal_text: str, max_rounds: int | None = None):
+            return SimpleNamespace(status="succeeded", error_summary=None)
+
+    class FakeCritiqueTopology:
+        def __call__(self, value: str):
+            return value
+
+    class FakeCritiqueConfig:
+        def __init__(self, **kwargs) -> None:
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+
+    fake_executor = SimpleNamespace(CritiqueExecutorRunner=FakeRunner)
+    fake_models = SimpleNamespace(CritiqueConfig=FakeCritiqueConfig, CritiqueTopology=FakeCritiqueTopology())
+    monkeypatch.setitem(sys.modules, "critique_executor.executor", fake_executor)
+    monkeypatch.setitem(sys.modules, "critique_executor.models", fake_models)
+
+    def _cooldown(worker_backend: str, *, now):
+        if worker_backend == "claude_code":
+            return now.replace(hour=now.hour + 1)
+        return None
+
+    usage_store = _usage_store(remaining=10)
+    usage_store.worker_backend_cooldown_until = _cooldown
+
+    adapter = CritiqueExecutorBackendAdapter(
+        CritiqueExecutorSettings(worker_backend="claude_code", topology="reflexion"),
+        usage_store=usage_store,
+    )
+
+    result = adapter.execute(_request(model="sonnet"))
+
+    assert result.success is True
+    assert captured["worker_backend"] == "codex_cli"

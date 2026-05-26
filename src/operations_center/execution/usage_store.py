@@ -417,6 +417,60 @@ class UsageStore:
                 now=now,
             )
 
+    def record_worker_backend_cooldown(
+        self,
+        *,
+        worker_backend: str,
+        reset_at: datetime,
+        now: datetime,
+    ) -> None:
+        """Record a worker-backend cooldown horizon after a limit event.
+
+        This is distinct from executor-backend quota events: the executor family
+        (team/dag/critique) may stay healthy while one worker backend
+        (``claude_code`` or ``codex_cli``) needs a timed cooldown.
+        """
+        with self._exclusive():
+            data = self.load()
+            self._append_event(
+                data,
+                {
+                    "kind": "worker_backend_cooldown",
+                    "worker_backend": worker_backend,
+                    "reset_at": reset_at.isoformat(),
+                    "timestamp": now.isoformat(),
+                },
+                now=now,
+            )
+
+    def worker_backend_cooldown_until(
+        self,
+        worker_backend: str,
+        *,
+        now: datetime,
+    ) -> datetime | None:
+        """Return the latest future cooldown reset recorded for worker_backend."""
+        data = self.load()
+        events = self._prune_events(list(data.get("events", [])), now=now)
+        latest: datetime | None = None
+        for event in events:
+            if event.get("kind") != "worker_backend_cooldown":
+                continue
+            if event.get("worker_backend") != worker_backend:
+                continue
+            reset_raw = event.get("reset_at")
+            if not isinstance(reset_raw, str):
+                continue
+            try:
+                reset_at = datetime.fromisoformat(reset_raw)
+            except ValueError:
+                continue
+            if reset_at <= now:
+                continue
+            if latest is None or reset_at > latest:
+                latest = reset_at
+        return latest
+
     # ---------------------------------------------------------------------------
     # S6-2: Per-repo execution budget
     # ---------------------------------------------------------------------------

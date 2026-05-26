@@ -56,6 +56,19 @@
   becomes runnable again.
 - Focused watchdog controller tests passed in the repo venv.
 
+## 2026-05-25 — Add executor worker-backend round robin
+
+- Added shared worker-backend selection + cooldown parsing for
+  `team_executor`, `dag_executor`, and `critique_executor`.
+- `worker_backend` is now the preferred backend, not a hard pin:
+  `claude_code` stays primary by default, `codex_cli` is used when Claude is
+  cooling down, and the adapters immediately retry once on the alternate
+  backend after a limit-triggered cooldown event.
+- Persisted worker-backend cooldown windows in `UsageStore` so fallback state
+  survives across watcher cycles.
+- Updated example config, setup rendering, and operator runtime docs to expose
+  `dynamic_worker_backend_selection`.
+
 ## 2026-05-25 — Backend tier selection unified across TE / DAG / Critique
 
 - Added shared backend tiering helper for runtime-binding tier inference plus one-step downgrade at budget pressure `>= 0.75`.

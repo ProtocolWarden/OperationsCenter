@@ -71,6 +71,8 @@ This directory holds OC-specific material.
     4-phase work order for the owned execution topology layer (ADR 0005).
   - [architecture/adr/0005-work-order-p5.md](architecture/adr/0005-work-order-p5.md) —
     Phase 5 cross-repo wiring: executor adapters, LaneDecision metadata, worker_backend.
+    Current executor runtime also supports worker-backend round robin
+    (`claude_code` preferred, `codex_cli` fallback with cooldown persistence).
 
 ### Managed-repo audit contracts
 

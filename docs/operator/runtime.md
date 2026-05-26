@@ -204,6 +204,44 @@ propose_skip_when_ready_count: 12   # allow up to 12 ready tasks before pausing 
 
 Set to 0 to disable. Look for `watch_propose_skipped_backlog` in the propose watcher log.
 
+## Worker Backend Round Robin
+
+The executor families `team_executor`, `dag_executor`, and
+`critique_executor` now treat `worker_backend` as the preferred backend, not a
+hard pin.
+
+Default policy:
+- prefer `claude_code`
+- if the selected worker backend returns a limit error with a parseable reset
+  time, record a cooldown for that worker backend
+- immediately retry the same task once on the alternate backend when it is
+  runnable
+- if both worker backends are cooling down, fail fast with a backend error
+  instead of sleeping inside the worker
+
+Config knobs:
+
+```yaml
+team_executor:
+  worker_backend: claude_code
+  dynamic_worker_backend_selection: true
+
+dag_executor:
+  worker_backend: claude_code
+  dynamic_worker_backend_selection: true
+
+critique_executor:
+  worker_backend: claude_code
+  dynamic_worker_backend_selection: true
+```
+
+Notes:
+- set `worker_backend: codex_cli` to reverse the preference order
+- set `dynamic_worker_backend_selection: false` to disable the round robin and
+  hard-pin the configured worker backend
+- cooldown state is persisted in `UsageStore`, so the preference survives
+  across watcher cycles rather than resetting every process launch
+
 ## Spend Report
 
 To see how many tasks have been executed and their estimated cost:

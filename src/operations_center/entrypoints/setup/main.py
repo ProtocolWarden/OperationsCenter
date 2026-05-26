@@ -637,12 +637,14 @@ def render_settings_yaml(answers: SetupAnswers) -> str:
             "timeout_seconds": 3600,
             "worker_backend": "claude_code",
             "dynamic_team_selection": True,
+            "dynamic_worker_backend_selection": True,
             "budget_pressure_threshold": 0.75,
         },
         "dag_executor": {
             "timeout_seconds": 3600,
             "worker_backend": "claude_code",
             "dynamic_tier_selection": True,
+            "dynamic_worker_backend_selection": True,
             "budget_pressure_threshold": 0.75,
         },
         "critique_executor": {
@@ -652,6 +654,7 @@ def render_settings_yaml(answers: SetupAnswers) -> str:
             "worker_backend": "claude_code",
             "working_dir": "",
             "dynamic_tier_selection": True,
+            "dynamic_worker_backend_selection": True,
             "budget_pressure_threshold": 0.75,
         },
         "repos": repos,

@@ -11,10 +11,14 @@ Workflow resolution order:
 """
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import logging
 from pathlib import Path
 
 from operations_center.backends.tiering import select_tier, tier_profile
+from operations_center.backends.worker_backend_selector import (
+    execute_with_worker_backend_round_robin,
+)
 from operations_center.config.settings import DAGExecutorSettings
 from operations_center.contracts.common import ValidationSummary
 from operations_center.contracts.enums import ExecutionStatus, FailureReasonCategory, ValidationStatus
@@ -44,17 +48,12 @@ class DAGExecutorBackendAdapter:
         workspace = Path(request.workspace_path)
         workflow_path = workspace / _WORKFLOW_FILENAME
         artifacts_dir = self._settings.artifacts_dir or None
+        usage_store = self._usage_store or UsageStore()
 
-        runner = DAGExecutorRunner(
-            artifacts_dir=artifacts_dir,
-            working_directory=str(workspace),
-            timeout_seconds=self._settings.timeout_seconds or None,
-            worker_backend=self._settings.worker_backend,  # type: ignore  # noqa: PGH003
-        )
         tier = select_tier(
             configured="default",
             runtime_binding=request.runtime_binding,
-            usage_store=self._usage_store or UsageStore(),
+            usage_store=usage_store,
             dynamic_enabled=self._settings.dynamic_tier_selection,
             pressure_threshold=self._settings.budget_pressure_threshold,
         )
@@ -68,23 +67,66 @@ class DAGExecutorBackendAdapter:
             tier,
         )
 
-        try:
+        def _run_once(worker_backend: str) -> dict:
+            runner = DAGExecutorRunner(
+                artifacts_dir=artifacts_dir,
+                working_directory=str(workspace),
+                timeout_seconds=self._settings.timeout_seconds or None,
+                worker_backend=worker_backend,  # type: ignore  # noqa: PGH003
+            )
             if workflow_path.exists():
                 spec = load_graph_file(str(workflow_path), goal_text=request.goal_text)
                 _apply_agent_tier_defaults(spec, profile)
-                result_dict = runner.run_graph(spec)
-            else:
-                spec = GraphSpec(
-                    workflow_id=request.run_id,
-                    goal_text=request.goal_text,
-                    nodes=[_default_agent_node(NodeSpec, NodeType, profile)],
-                )
-                result_dict = runner.run_graph(spec)
+                return runner.run_graph(spec)
+            spec = GraphSpec(
+                workflow_id=request.run_id,
+                goal_text=request.goal_text,
+                nodes=[_default_agent_node(NodeSpec, NodeType, profile)],
+            )
+            return runner.run_graph(spec)
+
+        try:
+            executed = execute_with_worker_backend_round_robin(
+                preferred_backend=self._settings.worker_backend,
+                usage_store=usage_store,
+                dynamic_enabled=self._settings.dynamic_worker_backend_selection,
+                execute_once=_run_once,
+                failed=lambda payload: payload.get("status") != "succeeded",
+                failure_text=lambda payload: payload.get("error_summary"),
+                logger=lambda msg: logger.info(
+                    "DAGExecutorAdapter[%s]: %s", request.run_id, msg
+                ),
+            )
         except Exception as exc:
             logger.error("DAGExecutorAdapter: run=%s raised %s", request.run_id, exc)
             return _error_result(request, str(exc))
 
-        return _dict_to_result(request, result_dict)
+        if executed.selected_backend is None or executed.payload is None:
+            return _worker_backend_unavailable_result(
+                request,
+                executed.selection.reason or "no worker backend available",
+            )
+
+        if executed.fallback_used:
+            logger.info(
+                "DAGExecutorAdapter: run=%s fallback worker backend=%s",
+                request.run_id,
+                executed.selected_backend,
+            )
+
+        result = _dict_to_result(request, executed.payload)
+        if (
+            not result.success
+            and "limit" in (result.failure_reason or "").lower()
+            and hasattr(usage_store, "record_quota_event")
+        ):
+            usage_store.record_quota_event(
+                task_id=request.run_id,
+                role="dag_executor",
+                backend=executed.selected_backend,
+                now=datetime.now(UTC),
+            )
+        return result
 
 
 def _dict_to_result(request: ExecutionRequest, result_dict: dict) -> ExecutionResult:
@@ -115,6 +157,16 @@ def _error_result(request: ExecutionRequest, reason: str) -> ExecutionResult:
         branch_name=request.task_branch,
         failure_category=FailureReasonCategory.BACKEND_ERROR,
         failure_reason=reason,
+    )
+
+
+def _worker_backend_unavailable_result(
+    request: ExecutionRequest,
+    reason: str,
+) -> ExecutionResult:
+    return _error_result(
+        request,
+        f"worker backend round robin blocked dispatch: {reason}",
     )
 
 

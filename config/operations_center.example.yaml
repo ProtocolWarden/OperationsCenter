@@ -36,8 +36,9 @@ git:
 team_executor:
   team_name: default
   timeout_seconds: 3600
-  worker_backend: claude_code
+  worker_backend: claude_code          # preferred worker backend; codex_cli is used when Claude is cooling down
   dynamic_team_selection: true
+  dynamic_worker_backend_selection: true
   budget_pressure_threshold: 0.75
 
 # ---------------------------------------------------------------------------
@@ -45,8 +46,9 @@ team_executor:
 # ---------------------------------------------------------------------------
 dag_executor:
   timeout_seconds: 3600
-  worker_backend: claude_code
+  worker_backend: claude_code          # preferred worker backend; codex_cli is used when Claude is cooling down
   dynamic_tier_selection: true
+  dynamic_worker_backend_selection: true
   budget_pressure_threshold: 0.75
 
 # ---------------------------------------------------------------------------
@@ -56,9 +58,10 @@ critique_executor:
   topology: reflexion
   max_rounds: 5
   timeout_seconds: 3600
-  worker_backend: claude_code
+  worker_backend: claude_code          # preferred worker backend; codex_cli is used when Claude is cooling down
   working_dir: ""
   dynamic_tier_selection: true
+  dynamic_worker_backend_selection: true
   budget_pressure_threshold: 0.75
 
 # ---------------------------------------------------------------------------

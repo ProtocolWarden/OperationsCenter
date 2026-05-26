@@ -78,6 +78,7 @@ def test_render_settings_yaml_contains_local_repo_bootstrap_defaults() -> None:
     assert "- .venv/bin/pytest -q" in rendered
     assert "dynamic_team_selection: true" in rendered
     assert "dynamic_tier_selection: true" in rendered
+    assert "dynamic_worker_backend_selection: true" in rendered
 
 
 def test_provider_default_orchestrator_prefers_cli_sessions() -> None:

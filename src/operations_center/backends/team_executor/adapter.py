@@ -8,10 +8,14 @@ contract. Reads team_name and worker_backend from TeamExecutorSettings.
 """
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import logging
 
 from operations_center.config.settings import TeamExecutorSettings
 from operations_center.backends.tiering import select_tier
+from operations_center.backends.worker_backend_selector import (
+    execute_with_worker_backend_round_robin,
+)
 from operations_center.contracts.common import ValidationSummary
 from operations_center.contracts.enums import ExecutionStatus, FailureReasonCategory, ValidationStatus
 from operations_center.contracts.execution import ExecutionRequest, ExecutionResult
@@ -33,36 +37,74 @@ class TeamExecutorBackendAdapter:
         except ImportError as exc:
             return _error_result(request, f"team_executor not installed: {exc}")
 
+        usage_store = self._usage_store or UsageStore()
         working_dir = str(request.workspace_path)
         team_name = _select_team_name(
             self._settings,
             request,
-            usage_store=self._usage_store or UsageStore(),
+            usage_store=usage_store,
         )
         logger.info(
-            "TeamExecutorAdapter: run=%s team=%s backend=%s dir=%s",
+            "TeamExecutorAdapter: run=%s team=%s preferred_backend=%s dir=%s",
             request.run_id,
             team_name,
             self._settings.worker_backend,
             working_dir,
         )
 
-        runner = TeamExecutorRunner(
-            team_name=team_name,
-            working_dir=working_dir,
-            worker_backend=self._settings.worker_backend,  # type: ignore  # noqa: PGH003
-        )
-
-        try:
-            rxp_result = runner.run(
+        def _run_once(worker_backend: str):
+            runner = TeamExecutorRunner(
+                team_name=team_name,
+                working_dir=working_dir,
+                worker_backend=worker_backend,  # type: ignore  # noqa: PGH003
+            )
+            return runner.run(
                 goal_text=request.goal_text,
                 invocation_id=request.run_id,
+            )
+
+        try:
+            executed = execute_with_worker_backend_round_robin(
+                preferred_backend=self._settings.worker_backend,
+                usage_store=usage_store,
+                dynamic_enabled=self._settings.dynamic_worker_backend_selection,
+                execute_once=_run_once,
+                failed=lambda payload: payload.status != "succeeded",
+                failure_text=lambda payload: payload.error_summary,
+                logger=lambda msg: logger.info(
+                    "TeamExecutorAdapter[%s]: %s", request.run_id, msg
+                ),
             )
         except Exception as exc:
             logger.error("TeamExecutorAdapter: run=%s raised %s", request.run_id, exc)
             return _error_result(request, str(exc))
 
-        return _rxp_to_result(request, rxp_result)
+        if executed.selected_backend is None or executed.payload is None:
+            return _worker_backend_unavailable_result(
+                request,
+                executed.selection.reason or "no worker backend available",
+            )
+
+        if executed.fallback_used:
+            logger.info(
+                "TeamExecutorAdapter: run=%s fallback worker backend=%s",
+                request.run_id,
+                executed.selected_backend,
+            )
+
+        result = _rxp_to_result(request, executed.payload)
+        if (
+            not result.success
+            and "limit" in (result.failure_reason or "").lower()
+            and hasattr(usage_store, "record_quota_event")
+        ):
+            usage_store.record_quota_event(
+                task_id=request.run_id,
+                role="team_executor",
+                backend=executed.selected_backend,
+                now=datetime.now(UTC),
+            )
+        return result
 
 
 def _rxp_to_result(request: ExecutionRequest, rxp_result) -> ExecutionResult:
@@ -108,4 +150,14 @@ def _error_result(request: ExecutionRequest, reason: str) -> ExecutionResult:
         branch_name=request.task_branch,
         failure_category=FailureReasonCategory.BACKEND_ERROR,
         failure_reason=reason,
+    )
+
+
+def _worker_backend_unavailable_result(
+    request: ExecutionRequest,
+    reason: str,
+) -> ExecutionResult:
+    return _error_result(
+        request,
+        f"worker backend round robin blocked dispatch: {reason}",
     )

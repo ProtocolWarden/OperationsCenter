@@ -358,6 +358,21 @@ def test_audit_export_uses_quota_event_kind(monkeypatch, tmp_path: Path) -> None
     assert quota_rows[0].get("backend") == "dag_executor"
 
 
+def test_record_worker_backend_cooldown_round_trips(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
+    store = UsageStore()
+    now = datetime(2026, 5, 8, 12, tzinfo=UTC)
+    reset_at = now + timedelta(hours=5)
+    store.record_worker_backend_cooldown(
+        worker_backend="claude_code",
+        reset_at=reset_at,
+        now=now,
+    )
+
+    assert store.worker_backend_cooldown_until("claude_code", now=now) == reset_at
+    assert store.worker_backend_cooldown_until("codex_cli", now=now) is None
+
+
 def test_circuit_breaker_uses_backend_version_only(monkeypatch, tmp_path: Path) -> None:
     """Mixed-version window blocks the breaker; single-version triggers it.
 

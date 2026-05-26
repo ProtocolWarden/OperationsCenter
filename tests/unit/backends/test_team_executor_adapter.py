@@ -48,6 +48,7 @@ def _usage_store(*, remaining: int, max_per_hour: int = 10, max_per_day: int = 5
     return SimpleNamespace(
         settings=settings,
         remaining_exec_capacity=lambda *, now: remaining,
+        worker_backend_cooldown_until=lambda worker_backend, *, now: None,
     )
 
 
@@ -137,3 +138,35 @@ def test_adapter_execute_passes_selected_team_to_runner(monkeypatch) -> None:
     assert result.success is True
     assert captured["team_name"] == "default"
     assert captured["worker_backend"] == "codex_cli"
+
+
+def test_adapter_falls_back_to_codex_when_claude_backend_is_cooling_down(monkeypatch) -> None:
+    captured: list[str] = []
+
+    class FakeRunner:
+        def __init__(self, team_name: str, working_dir: str, worker_backend: str) -> None:
+            captured.append(worker_backend)
+
+        def run(self, goal_text: str, invocation_id: str | None = None):
+            return SimpleNamespace(status="succeeded", error_summary=None)
+
+    fake_module = SimpleNamespace(TeamExecutorRunner=FakeRunner)
+    monkeypatch.setitem(sys.modules, "team_executor.executor", fake_module)
+
+    def _cooldown(worker_backend: str, *, now):
+        if worker_backend == "claude_code":
+            return now.replace(hour=now.hour + 1)
+        return None
+
+    usage_store = _usage_store(remaining=10)
+    usage_store.worker_backend_cooldown_until = _cooldown
+
+    adapter = TeamExecutorBackendAdapter(
+        TeamExecutorSettings(worker_backend="claude_code"),
+        usage_store=usage_store,
+    )
+
+    result = adapter.execute(_request(model="sonnet"))
+
+    assert result.success is True
+    assert captured == ["codex_cli"]
