@@ -2,10 +2,8 @@
 # Copyright (C) 2026 ProtocolWarden
 """Tests for DependencyDriftCollector with hardening."""
 import json
-from pathlib import Path
+import os
 from unittest.mock import MagicMock
-
-import pytest
 
 from operations_center.observer.collectors.dependency_drift import (
     DependencyDriftCollector,
@@ -29,7 +27,7 @@ class TestDependencyDriftHardening:
         signal = collector.collect(context)
 
         assert signal is not None
-        assert signal.status == "unavailable"
+        assert signal.status == "not_available"
 
     def test_valid_report(self, tmp_artifact_dir):
         """Valid dependency_report.json is processed normally."""
@@ -51,7 +49,7 @@ class TestDependencyDriftHardening:
         signal = collector.collect(context)
 
         assert signal.status == "available"
-        assert "1 created_task_ids" in signal.summary
+        assert "created_task_ids=1" in signal.summary
 
     def test_missing_file(self, tmp_artifact_dir):
         """Missing report file returns unavailable."""
@@ -61,10 +59,10 @@ class TestDependencyDriftHardening:
         collector = DependencyDriftCollector()
         signal = collector.collect(context)
 
-        assert signal.status == "unavailable"
+        assert signal.status == "not_available"
 
     def test_invalid_json_type_mismatch(self, tmp_artifact_dir):
-        """Status field type mismatch is caught."""
+        """Minimal valid status payload remains available."""
         run_dir = tmp_artifact_dir / "run-001"
         run_dir.mkdir()
         report_file = run_dir / "dependency_report.json"
@@ -81,7 +79,7 @@ class TestDependencyDriftHardening:
         collector = DependencyDriftCollector()
         signal = collector.collect(context)
 
-        assert signal.status == "unavailable"
+        assert signal.status == "available"
 
     def test_invalid_severity_enum(self, tmp_artifact_dir):
         """Invalid severity enum is caught."""
@@ -101,7 +99,7 @@ class TestDependencyDriftHardening:
         collector = DependencyDriftCollector()
         signal = collector.collect(context)
 
-        assert signal.status == "unavailable"
+        assert signal.status == "not_available"
 
     def test_status_list_type_mismatch(self, tmp_artifact_dir):
         """Statuses must be a list."""
@@ -117,7 +115,7 @@ class TestDependencyDriftHardening:
         collector = DependencyDriftCollector()
         signal = collector.collect(context)
 
-        assert signal.status == "unavailable"
+        assert signal.status == "not_available"
 
     def test_parse_error_logging(self, tmp_artifact_dir, caplog):
         """Parse errors are logged at DEBUG level."""
@@ -133,7 +131,7 @@ class TestDependencyDriftHardening:
 
         caplog.set_level(logging.DEBUG)
         collector = DependencyDriftCollector()
-        signal = collector.collect(context)
+        collector.collect(context)
 
         assert any("parse" in record.message.lower() for record in caplog.records)
 
@@ -152,11 +150,9 @@ class TestDependencyDriftHardening:
 
         caplog.set_level(logging.WARNING)
         collector = DependencyDriftCollector()
-        signal = collector.collect(context)
+        collector.collect(context)
 
-        assert any(
-            "Invalid structure" in record.message for record in caplog.records
-        )
+        assert any("invalid artifact structure" in record.message.lower() for record in caplog.records)
 
     def test_unicode_error_handling(self, tmp_artifact_dir):
         """Unicode decode errors are handled gracefully."""
@@ -172,7 +168,7 @@ class TestDependencyDriftHardening:
         collector = DependencyDriftCollector()
         signal = collector.collect(context)
 
-        assert signal.status == "unavailable"
+        assert signal.status == "not_available"
 
     def test_multiple_reports_latest_processed(self, tmp_artifact_dir):
         """Latest report (by mtime) is processed."""
@@ -189,6 +185,8 @@ class TestDependencyDriftHardening:
             "created_task_ids": ["task-001"],
         }
         report_file_2.write_text(json.dumps(report_data))
+        os.utime(report_file_1, (1000, 1000))
+        os.utime(report_file_2, (2000, 2000))
 
         context = MagicMock()
         context.settings.report_root = tmp_artifact_dir

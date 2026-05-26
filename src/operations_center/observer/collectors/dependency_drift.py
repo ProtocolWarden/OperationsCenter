@@ -21,7 +21,7 @@ class DependencyDriftCollector:
     def collect(self, context: ObserverContext) -> DependencyDriftSignal:
         candidate = self._latest_dependency_report(context.settings.report_root)
         if candidate is None:
-            return DependencyDriftSignal(status="unavailable")
+            return DependencyDriftSignal(status="not_available")
 
         try:
             text = candidate.read_text(encoding="utf-8")
@@ -29,7 +29,7 @@ class DependencyDriftCollector:
             ArtifactValidator.log_io_error(
                 candidate, e, context={"collector": "DependencyDriftCollector"}
             )
-            return DependencyDriftSignal(status="unavailable")
+            return DependencyDriftSignal(status="not_available")
 
         try:
             payload = json.loads(text)
@@ -37,7 +37,7 @@ class DependencyDriftCollector:
             ArtifactValidator.log_parse_error(
                 candidate, e, context={"collector": "DependencyDriftCollector"}
             )
-            return DependencyDriftSignal(status="unavailable")
+            return DependencyDriftSignal(status="not_available")
 
         is_valid, error_msg = DependencyReportValidator.validate(payload)
         if not is_valid:
@@ -47,7 +47,7 @@ class DependencyDriftCollector:
                 expected_schema="dependency_report.json",
                 context={"collector": "DependencyDriftCollector"},
             )
-            return DependencyDriftSignal(status="unavailable")
+            return DependencyDriftSignal(status="not_available")
 
         statuses = payload.get("statuses", [])
         created_task_ids = payload.get("created_task_ids", [])

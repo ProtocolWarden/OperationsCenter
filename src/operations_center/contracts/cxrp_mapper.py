@@ -57,9 +57,23 @@ _OC_LANE_TO_ECP_CATEGORY: dict[str, LaneType] = {
     "aider_local": LaneType.CODING_AGENT,
 }
 
+_OC_BACKEND_TO_CXRP_BACKEND: dict[str, str] = {
+    "direct_local": "direct_local",
+    "aider_local": "aider_local",
+    "team_executor": "direct_local",
+    "dag_executor": "direct_local",
+    "critique_executor": "direct_local",
+    "openclaw": "openclaw",
+    "demo_stub": "direct_local",
+}
+
 
 def _category_for(oc_lane_value: str) -> LaneType:
     return _OC_LANE_TO_ECP_CATEGORY.get(oc_lane_value, LaneType.CODING_AGENT)
+
+
+def _cxrp_backend_for(oc_backend_value: str) -> str:
+    return _OC_BACKEND_TO_CXRP_BACKEND.get(oc_backend_value, oc_backend_value)
 
 
 def to_cxrp_task_proposal(oc: OcPlanningProposal) -> CxrpTaskProposal:
@@ -116,7 +130,7 @@ def to_cxrp_lane_decision(
         metadata=metadata,
         lane=_category_for(oc.selected_lane.value),
         executor=CxrpExecutorName(oc.selected_lane.value),
-        backend=CxrpBackendName(oc.selected_backend.value),
+        backend=CxrpBackendName(_cxrp_backend_for(oc.selected_backend.value)),
         rationale=oc.rationale or "",
         confidence=oc.confidence,
         alternatives=[
@@ -202,7 +216,7 @@ def to_cxrp_execution_request(
         metadata={"executor": executor, "backend": backend},
         lane=_category_for(executor),
         executor=CxrpExecutorName(executor),
-        backend=CxrpBackendName(backend),
+        backend=CxrpBackendName(_cxrp_backend_for(backend)),
         scope=oc.goal_text[:120],
         input_payload=input_payload,
         input_payload_schema=CODING_AGENT_INPUT_SCHEMA_ID,

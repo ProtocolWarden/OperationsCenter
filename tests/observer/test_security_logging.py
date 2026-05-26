@@ -6,14 +6,14 @@ from __future__ import annotations
 import json
 import logging
 import tempfile
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from operations_center.observer.collectors.dependency_drift import DependencyDriftCollector
 from operations_center.observer.collectors.execution_health import ExecutionArtifactCollector
-from operations_center.observer.collectors.validation_history import ValidationHistoryCollector
 from operations_center.observer.security_logging import (
     ALERT_CONDITIONS,
     SECURITY_LOG_REQUIREMENTS,
@@ -24,14 +24,26 @@ from operations_center.observer.security_logging import (
     SecurityLogEntry,
     should_trigger_alert,
 )
-from operations_center.observer.service import ObserverContext, Settings
+from operations_center.observer.service import ObserverContext
 from operations_center.observer.validation import (
     ArtifactValidator,
-    DependencyReportValidator,
-    ExecutionOutcomeValidator,
-    RequestValidator,
-    ValidationHistoryValidator,
 )
+
+
+def _observer_context(report_root: Path, *, repo_name: str) -> ObserverContext:
+    return ObserverContext(
+        repo_path=report_root,
+        repo_name=repo_name,
+        base_branch="main",
+        run_id="obs_test_security",
+        observed_at=datetime.now(UTC),
+        source_command="test",
+        settings=SimpleNamespace(report_root=report_root),
+        commit_limit=10,
+        hotspot_window=30,
+        todo_limit=20,
+        logs_root=report_root / "logs",
+    )
 
 
 class TestSecurityLogEntry:
@@ -40,7 +52,7 @@ class TestSecurityLogEntry:
     def test_security_log_entry_creation(self) -> None:
         """SecurityLogEntry can be created with required fields."""
         entry = SecurityLogEntry(
-            timestamp=datetime.now(),
+            timestamp=datetime.now(UTC),
             event="artifact_parse_error",
             artifact="/path/to/outcome.json",
             error_type="parse_error",
@@ -55,7 +67,7 @@ class TestSecurityLogEntry:
 
     def test_security_log_entry_to_dict(self) -> None:
         """SecurityLogEntry serializes to dict correctly."""
-        now = datetime.now()
+        now = datetime.now(UTC)
         entry = SecurityLogEntry(
             timestamp=now,
             event="artifact_structure_error",
@@ -83,7 +95,7 @@ class TestMalformedPayloadMetrics:
         assert metrics.total_errors() == 0
 
         entry = SecurityLogEntry(
-            timestamp=datetime.now(),
+            timestamp=datetime.now(UTC),
             event="artifact_parse_error",
             artifact="/path/outcome.json",
             error_type="parse_error",
@@ -101,7 +113,7 @@ class TestMalformedPayloadMetrics:
     def test_metrics_error_rate_calculation(self) -> None:
         """Metrics correctly calculate error rate per minute."""
         metrics = MalformedPayloadMetrics()
-        now = datetime.now()
+        now = datetime.now(UTC)
 
         for i in range(5):
             entry = SecurityLogEntry(
@@ -154,7 +166,7 @@ class TestShouldTriggerAlert:
     def test_alert_triggered_on_threshold(self) -> None:
         """Alert triggers when error threshold exceeded."""
         metrics = MalformedPayloadMetrics()
-        now = datetime.now()
+        now = datetime.now(UTC)
 
         condition = ALERT_CONDITIONS["parse_error_spike"]
         # Add enough errors to trigger
@@ -175,7 +187,7 @@ class TestShouldTriggerAlert:
     def test_alert_not_triggered_below_threshold(self) -> None:
         """Alert does not trigger below threshold."""
         metrics = MalformedPayloadMetrics()
-        now = datetime.now()
+        now = datetime.now(UTC)
 
         condition = ALERT_CONDITIONS["parse_error_spike"]
         # Add fewer errors than threshold
@@ -284,17 +296,14 @@ class TestDependencyDriftSecurityLogging:
             report_file.write_text("{invalid json")
 
             # Create mock context
-            settings = Settings(report_root=report_root)
-            context = ObserverContext(
-                repo_name="test", settings=settings, parent_lineage_id=None
-            )
+            context = _observer_context(report_root, repo_name="test")
 
             collector = DependencyDriftCollector()
             with caplog.at_level(logging.DEBUG):
                 signal = collector.collect(context)
 
             # Should return unavailable, not crash
-            assert signal.status == "unavailable"
+            assert signal.status == "not_available"
             # Should have logged parse error
             assert any("parse" in r.message.lower() for r in caplog.records)
 
@@ -309,16 +318,13 @@ class TestDependencyDriftSecurityLogging:
             report_file = run_dir / "dependency_report.json"
             report_file.write_text(json.dumps({"statuses": "not_a_list"}))
 
-            settings = Settings(report_root=report_root)
-            context = ObserverContext(
-                repo_name="test", settings=settings, parent_lineage_id=None
-            )
+            context = _observer_context(report_root, repo_name="test")
 
             collector = DependencyDriftCollector()
             with caplog.at_level(logging.WARNING):
                 signal = collector.collect(context)
 
-            assert signal.status == "unavailable"
+            assert signal.status == "not_available"
             assert any("structure" in r.message.lower() for r in caplog.records)
 
 
@@ -342,10 +348,7 @@ class TestExecutionHealthSecurityLogging:
             request_file = run_dir / "request.json"
             request_file.write_text(json.dumps({"task": {"repo_key": "test"}}))
 
-            settings = Settings(report_root=report_root)
-            context = ObserverContext(
-                repo_name="test", settings=settings, parent_lineage_id=None
-            )
+            context = _observer_context(report_root, repo_name="test")
 
             collector = ExecutionArtifactCollector()
             with caplog.at_level(logging.DEBUG):
@@ -379,14 +382,11 @@ class TestExecutionHealthSecurityLogging:
             request_file = run_dir / "request.json"
             request_file.write_text(json.dumps({"task": {"repo_key": "test"}}))
 
-            settings = Settings(report_root=report_root)
-            context = ObserverContext(
-                repo_name="test", settings=settings, parent_lineage_id=None
-            )
+            context = _observer_context(report_root, repo_name="test")
 
             collector = ExecutionArtifactCollector()
             with caplog.at_level(logging.WARNING):
-                signal = collector.collect(context)
+                collector.collect(context)
 
             # Should log structure error
             assert any("structure" in r.message.lower() for r in caplog.records)

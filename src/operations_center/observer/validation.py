@@ -325,7 +325,14 @@ class ExecutionOutcomeValidator(ArtifactValidator):
             return False, msg
 
         status = outcome["status"]
-        valid_statuses = {"executed", "failed", "timeout", "unknown"}
+        valid_statuses = {
+            "executed",
+            "failed",
+            "timeout",
+            "unknown",
+            "no_op",
+            "error",
+        }
         if status not in valid_statuses:
             return False, (
                 f"status '{status}' not in allowed values: "

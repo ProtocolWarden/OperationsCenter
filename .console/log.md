@@ -40,6 +40,18 @@
 
 ## 2026-05-25
 
+- Fixed the pre-existing repo-wide pytest collection blocker by renaming the duplicate hardening module to `tests/observer/test_collectors_hardening/test_execution_health_hardening.py`, avoiding the `test_execution_health` import collision.
+- Restored observer test consistency around dependency drift and execution health artifacts:
+  - `ExecutionOutcomeValidator` now accepts the retained artifact statuses `no_op` and `error` in addition to `executed`, `failed`, `timeout`, and `unknown`.
+  - `DependencyDriftCollector` now returns `not_available` consistently so `ObservationCoverageDeriver` can detect persistent missing coverage correctly.
+- Fixed malformed-payload alert handling to normalize naive timestamps to UTC before lookback comparisons in `observer/security_logging.py`.
+- Added OC→CxRP backend normalization in `contracts/cxrp_mapper.py` so OC executor backends like `team_executor`, `dag_executor`, and `critique_executor` serialize onto the current CxRP backend enum without failing mapper tests.
+- Validation:
+  - `python -m pytest` → `3536 passed, 7 skipped`
+  - `python -m pytest -m integration` → `3 passed`
+
+## 2026-05-25
+
 - Added executor worker-backend observability end to end: the `team_executor`, `dag_executor`, and `critique_executor` adapters now expose `execute_and_capture()` with `observed_runtime` showing preferred backend, selected backend, fallback usage, and backend cooldown snapshot.
 - Added a live operator status surface for worker-backend cooldowns via `operations-center-worker-backend-status` and `./scripts/operations-center.sh worker-backend-status`, backed by a new `UsageStore.current_worker_backend_cooldowns()` summary API.
 - Extended retained trace visibility so `operations-center-run-show <run_id>` prints the `Observed runtime` block, making actual `claude_code` vs `codex_cli` selection visible per run without re-reading raw record metadata.

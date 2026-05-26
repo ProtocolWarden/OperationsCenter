@@ -2,10 +2,7 @@
 # Copyright (C) 2026 ProtocolWarden
 """Tests for ExecutionArtifactCollector with hardening."""
 import json
-from pathlib import Path
 from unittest.mock import MagicMock
-
-import pytest
 
 from operations_center.observer.collectors.execution_health import (
     ExecutionArtifactCollector,

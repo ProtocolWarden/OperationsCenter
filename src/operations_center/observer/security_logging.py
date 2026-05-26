@@ -48,6 +48,11 @@ class SecurityLogEntry:
     line: Optional[int] = None
     col: Optional[int] = None
 
+    def normalized_timestamp(self) -> datetime:
+        if self.timestamp.tzinfo is None:
+            return self.timestamp.replace(tzinfo=timezone.utc)
+        return self.timestamp.astimezone(timezone.utc)
+
     def to_dict(self) -> dict:
         """Convert to dictionary for logging."""
         return {
@@ -120,7 +125,7 @@ class MalformedPayloadMetrics:
 
         self.recent_errors.append(entry)
         self.recent_errors = self.recent_errors[-keep_recent_count:]
-        self.last_error_time = entry.timestamp
+        self.last_error_time = entry.normalized_timestamp()
 
     def total_errors(self) -> int:
         """Return total count of all errors."""
@@ -131,8 +136,8 @@ class MalformedPayloadMetrics:
         if not self.recent_errors or len(self.recent_errors) < 2:
             return 0.0
 
-        first = self.recent_errors[0].timestamp
-        last = self.recent_errors[-1].timestamp
+        first = self.recent_errors[0].normalized_timestamp()
+        last = self.recent_errors[-1].normalized_timestamp()
         elapsed = (last - first).total_seconds() / 60.0
         if elapsed <= 0:
             return float(len(self.recent_errors))
@@ -204,7 +209,8 @@ def should_trigger_alert(
     recent_errors = [
         e
         for e in metrics.recent_errors
-        if e.timestamp >= cutoff_time and e.error_type == condition.category.value
+        if e.normalized_timestamp() >= cutoff_time
+        and e.error_type == condition.category.value
     ]
 
     return len(recent_errors) >= condition.trigger_threshold

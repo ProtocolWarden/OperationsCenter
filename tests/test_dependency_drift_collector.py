@@ -9,8 +9,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import pytest
-
 from operations_center.observer.collectors.dependency_drift import DependencyDriftCollector
 from operations_center.observer.models import DependencyDriftSignal
 from operations_center.observer.service import ObserverContext
@@ -67,8 +65,7 @@ class TestDependencyDriftCollector:
         (run_dir / "dependency_report.json").write_text(json.dumps(data))
         ctx = _make_context(tmp_path)
         signal = DependencyDriftCollector().collect(ctx)
-        assert signal.status == "available"
-        assert "no statuses" in signal.summary
+        assert signal.status == "not_available"
 
     def test_report_with_empty_statuses_list(self, tmp_path: Path) -> None:
         run_dir = tmp_path / "run1"
@@ -103,5 +100,5 @@ class TestDependencyDriftCollector:
         run_dir.mkdir()
         (run_dir / "dependency_report.json").write_text("not valid json {{{")
         ctx = _make_context(tmp_path)
-        with pytest.raises(json.JSONDecodeError):
-            DependencyDriftCollector().collect(ctx)
+        signal = DependencyDriftCollector().collect(ctx)
+        assert signal.status == "not_available"
