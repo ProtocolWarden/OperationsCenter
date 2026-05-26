@@ -48,6 +48,14 @@
   backends are unavailable.
 - Focused watchdog controller tests passed in the repo venv.
 
+## 2026-05-25 — Add watchdog controller backend cooldown observability
+
+- Added a controller runtime-state file so `--status` now shows the preferred
+  backend, current runnable backend, and per-backend cooldown deadlines.
+- Added explicit log events when a backend cooldown expires and that backend
+  becomes runnable again.
+- Focused watchdog controller tests passed in the repo venv.
+
 ## 2026-05-25 — Backend tier selection unified across TE / DAG / Critique
 
 - Added shared backend tiering helper for runtime-binding tier inference plus one-step downgrade at budget pressure `>= 0.75`.

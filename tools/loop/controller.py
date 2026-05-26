@@ -35,6 +35,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 REPO_ROOT = Path("/home/dev/Documents/GitHub/OperationsCenter")
 LOCK_PATH = REPO_ROOT / "logs/local/loop_controller.lock"
+STATE_PATH = REPO_ROOT / "logs/local/loop_controller_state.json"
 WATCHDOG_LOOP_LOCK = REPO_ROOT / "logs/local/watchdog_loop.lock"
 STOP_FLAG = REPO_ROOT / "logs/local/loop_stop.flag"
 SCHEDULE_FILE = REPO_ROOT / "tools/loop/loop_schedule.json"
@@ -134,6 +135,14 @@ def _backend_available(backend: str, cooldowns: dict[str, datetime | None]) -> b
     )
 
 
+def _clear_expired_cooldowns(cooldowns: dict[str, datetime | None]) -> None:
+    now = datetime.now(timezone.utc)
+    for backend, until in list(cooldowns.items()):
+        if until is not None and now >= until:
+            cooldowns[backend] = None
+            _log(f"{backend.capitalize()} cooldown expired — backend runnable again.")
+
+
 def _select_backend(cooldowns: dict[str, datetime | None]) -> str | None:
     if _backend_available("claude", cooldowns):
         return "claude"
@@ -192,6 +201,24 @@ def write_lock() -> None:
     LOCK_PATH.write_text(json.dumps(lock, indent=2))
 
 
+def write_runtime_state(
+    cooldowns: dict[str, datetime | None],
+    runnable_backend: str | None,
+    *,
+    preferred_backend: str = "claude",
+) -> None:
+    state = {
+        "updated": _ts(),
+        "preferred_backend": preferred_backend,
+        "runnable_backend": runnable_backend,
+        "backend_cooldowns": {
+            backend: dt.strftime("%Y-%m-%dT%H:%M:%SZ") if dt is not None else None
+            for backend, dt in cooldowns.items()
+        },
+    }
+    STATE_PATH.write_text(json.dumps(state, indent=2))
+
+
 def check_and_acquire_lock() -> bool:
     """Return True if we acquired the lock (no live owner)."""
     if LOCK_PATH.exists():
@@ -213,6 +240,7 @@ def check_and_acquire_lock() -> bool:
 
 def release_lock() -> None:
     LOCK_PATH.unlink(missing_ok=True)
+    STATE_PATH.unlink(missing_ok=True)
     WATCHDOG_LOOP_LOCK.unlink(missing_ok=True)
 
 
@@ -401,6 +429,16 @@ def cmd_status() -> None:
             print(f"STALE: pid={pid} is dead (lock from {d.get('started')})")
     except Exception as e:
         print(f"ERROR reading lock: {e}")
+    if STATE_PATH.exists():
+        try:
+            s = json.loads(STATE_PATH.read_text())
+            print(f"Preferred backend: {s.get('preferred_backend')}")
+            print(f"Current runnable backend: {s.get('runnable_backend')}")
+            cooldowns = s.get("backend_cooldowns", {})
+            for backend in ("claude", "codex"):
+                print(f"{backend} cooldown until: {cooldowns.get(backend)}")
+        except Exception as e:
+            print(f"ERROR reading runtime state: {e}")
     if SCHEDULE_FILE.exists():
         try:
             s = json.loads(SCHEDULE_FILE.read_text())
@@ -444,6 +482,7 @@ def main() -> None:
 
     write_watchdog_loop_lock()
     STOP_FLAG.unlink(missing_ok=True)
+    STATE_PATH.unlink(missing_ok=True)
     _log(f"OC watchdog loop controller started. pid={os.getpid()}")
     _log("Stop with: python tools/loop/controller.py --stop")
     _log("Status:    python tools/loop/controller.py --status")
@@ -459,11 +498,15 @@ def main() -> None:
             # Clear stale schedule from previous session before spawning
             SCHEDULE_FILE.unlink(missing_ok=True)
 
+            _clear_expired_cooldowns(cooldowns)
             backend = _select_backend(cooldowns)
+            write_runtime_state(cooldowns, backend)
             if backend is None:
                 if _sleep_until_backend_reset(cooldowns):
+                    write_runtime_state(cooldowns, None)
                     continue
                 _log("No runnable backend is currently available.")
+                write_runtime_state(cooldowns, None)
                 break
             rc, session_log = run_session(iteration, backend)
             _log(f"{backend.capitalize()} session exited rc={rc}")
@@ -473,18 +516,21 @@ def main() -> None:
 
             if rc != 0:
                 if _handle_backend_limit(backend, session_log, cooldowns):
+                    write_runtime_state(cooldowns, None)
                     alternate = _alternate_backend(backend)
                     if _backend_available(alternate, cooldowns):
                         _log(
                             f"{backend.capitalize()} is cooling down; "
                             f"running immediate {alternate.capitalize()} fallback."
                         )
+                        write_runtime_state(cooldowns, alternate)
                         rc, session_log = run_session(iteration, alternate)
                         backend = alternate
                         _log(f"{alternate.capitalize()} fallback session exited rc={rc}")
                         if _stop or STOP_FLAG.exists():
                             break
                         if rc != 0 and _handle_backend_limit(backend, session_log, cooldowns):
+                            write_runtime_state(cooldowns, None)
                             if _sleep_until_backend_reset(cooldowns):
                                 continue
                     else:

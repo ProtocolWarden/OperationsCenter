@@ -120,3 +120,29 @@ def test_parse_rate_limit_reset_relative_message(monkeypatch, tmp_path: Path) ->
     reset_dt = controller.parse_rate_limit_reset(log_path, "codex")
 
     assert reset_dt == datetime(2026, 5, 25, 21, 0, tzinfo=timezone.utc)
+
+
+def test_clear_expired_cooldowns_logs_and_resets(monkeypatch) -> None:
+    frozen_now = datetime(2026, 5, 25, 16, 0, tzinfo=timezone.utc)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):  # type: ignore[override]
+            if tz is None:
+                return frozen_now.replace(tzinfo=None)
+            return frozen_now.astimezone(tz)
+
+    logged: list[str] = []
+    monkeypatch.setattr(controller, "datetime", FrozenDateTime)
+    monkeypatch.setattr(controller, "_log", logged.append)
+
+    cooldowns = {
+        "claude": datetime(2026, 5, 25, 15, 30, tzinfo=timezone.utc),
+        "codex": datetime(2026, 5, 25, 17, 0, tzinfo=timezone.utc),
+    }
+
+    controller._clear_expired_cooldowns(cooldowns)
+
+    assert cooldowns["claude"] is None
+    assert cooldowns["codex"] == datetime(2026, 5, 25, 17, 0, tzinfo=timezone.utc)
+    assert any("Claude cooldown expired" in msg for msg in logged)
