@@ -50,6 +50,13 @@
 - Restored checked-in runtime binding policy to intentional tiering and added `config_ref` hints so Codex `default` vs `premium` are distinguishable even when both use `gpt-5.4`.
 - Updated setup rendering, example config, and operator docs to expose the new knobs. Focused OC backend/policy/setup tests passed.
 
+## 2026-05-25 — Clarify CritiqueExecutor proposer wording at the OC boundary
+
+- Added an adapter docstring note that CritiqueExecutor's historical
+  `proposer_*` config fields refer to its internal draft agent.
+- This avoids collision with OC's separate board-facing proposer subsystem
+  without changing any runtime field names or contracts.
+
 ## 2026-05-25 20:02:00Z — Pin watchdog controller backends and add Codex fallback
 Updated `tools/loop/controller.py` so watchdog sessions stay pinned to
 `claude-sonnet-4-6` with `medium` effort and fall back to `codex exec` using

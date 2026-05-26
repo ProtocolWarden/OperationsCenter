@@ -21,7 +21,12 @@ logger = logging.getLogger(__name__)
 
 
 class CritiqueExecutorBackendAdapter:
-    """Canonical adapter for CritiqueExecutor backend execution."""
+    """Canonical adapter for CritiqueExecutor backend execution.
+
+    CritiqueExecutor's config still uses historical `proposer_*` field names.
+    In that backend those fields refer to the internal draft agent, not OC's
+    separate board-facing proposer subsystem.
+    """
 
     def __init__(self, settings: CritiqueExecutorSettings, usage_store: UsageStore | None = None) -> None:
         self._settings = settings
