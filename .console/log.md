@@ -38,6 +38,14 @@
 - Campaign 10c50210 CANCELLED.
 - HYGIENE: `.baseline-validation.json` tracked on OC main (operationally neutralized by cycle-28 reorder).
 
+## 2026-05-26 18:55:00Z — Harden watchdog backend fallback under service PATH
+Patched `tools/loop/controller.py` so Claude cooldown parsing accepts timezone
+reset messages without minutes, including `resets 9am (America/New_York)`.
+Also added backend executable resolution plus per-session PATH prepending so
+Codex can execute under service environments that do not inherit NVM's node
+bin directory. Focused controller tests passed (`10 passed`) after mirroring
+the new fallback and parser regression coverage in `tests/test_loop_controller.py`.
+
 ## 2026-05-26 — Executor tiering hard cutover
 
 - Pinned debug-phase executor defaults to `budget` across `team_executor`, `dag_executor`, and `critique_executor`; worker-backend round robin remains enabled.

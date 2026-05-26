@@ -89,14 +89,68 @@ def _log(msg: str) -> None:
         pass
 
 
+def _fallback_command_candidates(command: str) -> list[Path]:
+    home = Path.home()
+    candidates: list[Path] = []
+    if command == "claude":
+        candidates.extend(
+            [
+                home / ".local" / "bin" / "claude",
+                home / "bin" / "claude",
+            ]
+        )
+    elif command == "codex":
+        candidates.extend(
+            [
+                home / ".local" / "bin" / "codex",
+                home / "bin" / "codex",
+            ]
+        )
+        candidates.extend(sorted((home / ".nvm" / "versions" / "node").glob("*/bin/codex")))
+    return candidates
+
+
+def _resolve_command(command: str) -> str | None:
+    resolved = shutil.which(command)
+    if resolved is not None:
+        return resolved
+    for candidate in _fallback_command_candidates(command):
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return None
+
+
 def _command_available(command: str) -> bool:
-    return shutil.which(command) is not None
+    return _resolve_command(command) is not None
+
+
+def _session_env(backend: str) -> dict[str, str]:
+    env = os.environ.copy()
+    executable = _resolve_command(backend)
+    if executable is None:
+        return env
+    executable_path = Path(executable)
+    path_candidates = [str(executable_path.parent)]
+    resolved_parent = str(executable_path.resolve().parent)
+    if resolved_parent not in path_candidates:
+        path_candidates.append(resolved_parent)
+    current_path = env.get("PATH", "")
+    path_parts = [part for part in current_path.split(os.pathsep) if part]
+    prepend = [part for part in path_candidates if part not in path_parts]
+    if prepend:
+        env["PATH"] = (
+            os.pathsep.join([*prepend, *path_parts])
+            if path_parts
+            else os.pathsep.join(prepend)
+        )
+    return env
 
 
 def _session_command(backend: str, prompt: str) -> list[str]:
     if backend == "claude":
+        executable = _resolve_command("claude") or "claude"
         return [
-            "claude",
+            executable,
             "-p",
             prompt,
             "--model",
@@ -108,8 +162,9 @@ def _session_command(backend: str, prompt: str) -> list[str]:
             "text",
         ]
     if backend == "codex":
+        executable = _resolve_command("codex") or "codex"
         return [
-            "codex",
+            executable,
             "exec",
             "--dangerously-bypass-approvals-and-sandbox",
             "--cd",
@@ -263,7 +318,9 @@ def write_watchdog_loop_lock() -> None:
     WATCHDOG_LOOP_LOCK.write_text(json.dumps(lock, indent=2))
 
 
-_TIMEZONE_RESET_RE = re.compile(r"resets\s+(\d{1,2}:\d{2}(?:am|pm))\s+\(([^)]+)\)", re.IGNORECASE)
+_TIMEZONE_RESET_RE = re.compile(
+    r"resets\s+(\d{1,2}(?::\d{2})?(?:am|pm))\s+\(([^)]+)\)", re.IGNORECASE
+)
 _ISO_RESET_RE = re.compile(
     r"resets?(?:\s+at)?\s+(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?Z)",
     re.IGNORECASE,
@@ -297,7 +354,8 @@ def parse_rate_limit_reset(session_log: Path, backend: str = "claude") -> dateti
                 )
                 return None
             now_local = datetime.now(tz)
-            parsed = datetime.strptime(time_str, "%I:%M%p")  # noqa: DTZ007 — naive; immediately reused for h/m only
+            time_format = "%I:%M%p" if ":" in time_str else "%I%p"
+            parsed = datetime.strptime(time_str, time_format)  # noqa: DTZ007 — naive; immediately reused for h/m only
             reset_local = now_local.replace(
                 hour=parsed.hour, minute=parsed.minute, second=0, microsecond=0
             )
@@ -367,6 +425,7 @@ def run_session(iteration: int, backend: str = "claude") -> tuple[int, Path]:
     """Spawn one bounded agent session. Returns (exit_code, session_log_path)."""
     prompt = load_session_prompt()
     cmd = _session_command(backend, prompt)
+    env = _session_env(backend)
 
     SESSION_LOG_DIR.mkdir(parents=True, exist_ok=True)
     session_log = _session_log_path(iteration, backend)
@@ -375,8 +434,6 @@ def run_session(iteration: int, backend: str = "claude") -> tuple[int, Path]:
         f"Spawning {backend} session "
         f"(prompt: {SESSION_PROMPT_FILE.name}, {len(prompt)} chars) → {session_log.name}"
     )
-
-    env = os.environ.copy()
     env_file = REPO_ROOT / ".env.operations-center.local"
     if env_file.exists():
         for line in env_file.read_text().splitlines():

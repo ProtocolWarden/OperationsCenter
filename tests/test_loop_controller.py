@@ -11,7 +11,8 @@ from tools.loop import controller
 def test_claude_session_command() -> None:
     cmd = controller._session_command("claude", "hello world")
 
-    assert cmd[:4] == ["claude", "-p", "hello world", "--model"]
+    assert Path(cmd[0]).name == "claude"
+    assert cmd[1:4] == ["-p", "hello world", "--model"]
     assert "claude-sonnet-4-6" in cmd
     assert "--effort" in cmd
     assert "medium" in cmd
@@ -21,7 +22,7 @@ def test_claude_session_command() -> None:
 def test_codex_session_command_uses_repo_root() -> None:
     cmd = controller._session_command("codex", "hello world")
 
-    assert cmd[:5] == [
+    assert [Path(cmd[0]).name, *cmd[1:5]] == [
         "codex",
         "exec",
         "--dangerously-bypass-approvals-and-sandbox",
@@ -35,6 +36,35 @@ def test_codex_session_command_uses_repo_root() -> None:
         'model_reasoning_effort="medium"',
     ]
     assert cmd[-1] == "hello world"
+
+
+def test_command_available_uses_fallback_candidates(monkeypatch, tmp_path: Path) -> None:
+    fallback = tmp_path / "codex"
+    fallback.write_text("#!/bin/sh\n")
+    fallback.chmod(0o755)
+
+    monkeypatch.setattr(controller.shutil, "which", lambda command: None)
+    monkeypatch.setattr(
+        controller,
+        "_fallback_command_candidates",
+        lambda command: [fallback] if command == "codex" else [],
+    )
+
+    assert controller._command_available("codex") is True
+    assert controller._resolve_command("codex") == str(fallback)
+
+
+def test_session_env_prepends_backend_bin_dir(monkeypatch) -> None:
+    monkeypatch.setattr(
+        controller,
+        "_resolve_command",
+        lambda command: "/tmp/tools/bin/codex" if command == "codex" else None,
+    )
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+
+    env = controller._session_env("codex")
+
+    assert env["PATH"].split(":")[:3] == ["/tmp/tools/bin", "/usr/bin", "/bin"]
 
 
 def test_select_backend_prefers_codex_when_claude_cooling_down(monkeypatch) -> None:
@@ -100,6 +130,28 @@ def test_parse_rate_limit_reset_timezone_message(monkeypatch, tmp_path: Path) ->
     reset_dt = controller.parse_rate_limit_reset(log_path, "claude")
 
     assert reset_dt == datetime(2026, 5, 25, 17, 15, tzinfo=timezone.utc)
+
+
+def test_parse_rate_limit_reset_timezone_message_without_minutes(
+    monkeypatch, tmp_path: Path
+) -> None:
+    frozen_now = datetime(2026, 5, 26, 22, 45, tzinfo=timezone.utc)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):  # type: ignore[override]
+            if tz is None:
+                return frozen_now.replace(tzinfo=None)
+            return frozen_now.astimezone(tz)
+
+    monkeypatch.setattr(controller, "datetime", FrozenDateTime)
+
+    log_path = tmp_path / "session.log"
+    log_path.write_text("You've hit your weekly limit · resets 9am (America/New_York)\n")
+
+    reset_dt = controller.parse_rate_limit_reset(log_path, "claude")
+
+    assert reset_dt == datetime(2026, 5, 27, 13, 0, tzinfo=timezone.utc)
 
 
 def test_parse_rate_limit_reset_relative_message(monkeypatch, tmp_path: Path) -> None:
