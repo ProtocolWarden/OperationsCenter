@@ -4,9 +4,10 @@
 """OC platform watchdog loop controller.
 
 Replaces /loop + ScheduleWakeup. Spawns a fresh bounded agent session for each
-watchdog cycle. Claude is the primary backend; Codex CLI is used as a fallback
-when Claude usage is rate-limited or the Claude CLI is unavailable. Context
-never accumulates; each session reconstructs from the anchor manifest's
+watchdog cycle. Claude is the primary backend; both Claude and Codex backends
+feed backend-specific cooldown windows when they hit usage limits, and the
+controller switches to the other backend whenever possible. Context never
+accumulates; each session reconstructs from the anchor manifest's
 `.context/sessions/<sid>/checkpoints/`. The session writes
 `tools/loop/loop_schedule.json` at STEP 10 (instead of calling ScheduleWakeup)
 to communicate the adaptive delay; this is controller runtime state,
@@ -126,19 +127,50 @@ def _session_log_path(iteration: int, backend: str) -> Path:
     return SESSION_LOG_DIR / f"iter_{iteration:04d}_{ts}_{backend}.log"
 
 
-def _select_backend(codex_fallback_until: datetime | None) -> str:
-    now = datetime.now(timezone.utc)
-    if (
-        codex_fallback_until is not None
-        and now < codex_fallback_until
-        and _command_available("codex")
-    ):
-        return "codex"
-    if _command_available("claude"):
+def _backend_available(backend: str, cooldowns: dict[str, datetime | None]) -> bool:
+    until = cooldowns.get(backend)
+    return _command_available(backend) and (
+        until is None or datetime.now(timezone.utc) >= until
+    )
+
+
+def _select_backend(cooldowns: dict[str, datetime | None]) -> str | None:
+    if _backend_available("claude", cooldowns):
         return "claude"
-    if _command_available("codex"):
+    if _backend_available("codex", cooldowns):
         return "codex"
-    raise SystemExit("Neither claude nor codex CLI is available on PATH.")
+    if not _command_available("claude") and not _command_available("codex"):
+        raise SystemExit("Neither claude nor codex CLI is available on PATH.")
+    return None
+
+
+def _next_backend_reset(cooldowns: dict[str, datetime | None]) -> datetime | None:
+    now = datetime.now(timezone.utc)
+    future_resets = [dt for dt in cooldowns.values() if dt is not None and dt > now]
+    if not future_resets:
+        return None
+    return min(future_resets)
+
+
+def _sleep_until_backend_reset(cooldowns: dict[str, datetime | None]) -> bool:
+    reset_dt = _next_backend_reset(cooldowns)
+    if reset_dt is None:
+        return False
+    delay = max(
+        60,
+        int((reset_dt - datetime.now(timezone.utc)).total_seconds())
+        + _RATE_LIMIT_BUFFER,
+    )
+    _log(
+        f"All available backends are cooling down until "
+        f"{reset_dt.strftime('%Y-%m-%dT%H:%M:%SZ')} UTC; sleeping {delay}s ({delay // 60}m)"
+    )
+    interruptible_sleep(delay)
+    return True
+
+
+def _alternate_backend(backend: str) -> str:
+    return "codex" if backend == "claude" else "claude"
 
 
 def handle_signal(signum, frame) -> None:
@@ -203,34 +235,86 @@ def write_watchdog_loop_lock() -> None:
     WATCHDOG_LOOP_LOCK.write_text(json.dumps(lock, indent=2))
 
 
-_RATE_LIMIT_RE = re.compile(r"resets\s+(\d{1,2}:\d{2}(?:am|pm))\s+\(([^)]+)\)", re.IGNORECASE)
+_TIMEZONE_RESET_RE = re.compile(r"resets\s+(\d{1,2}:\d{2}(?:am|pm))\s+\(([^)]+)\)", re.IGNORECASE)
+_ISO_RESET_RE = re.compile(
+    r"resets?(?:\s+at)?\s+(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?Z)",
+    re.IGNORECASE,
+)
+_RELATIVE_RESET_RE = re.compile(
+    r"(?:try again|retry|resets?|reset|available again)[^\n]{0,80}?\bin\s+"
+    r"(?:(?P<hours>\d+)\s*h(?:ours?)?)?\s*"
+    r"(?:(?P<minutes>\d+)\s*m(?:in(?:ute)?s?)?)?\s*"
+    r"(?:(?P<seconds>\d+)\s*s(?:ec(?:ond)?s?)?)?",
+    re.IGNORECASE,
+)
+_LIMIT_SIGNAL_RE = re.compile(
+    r"rate limit|usage limit|weekly limit|quota|too many requests|429",
+    re.IGNORECASE,
+)
 _RATE_LIMIT_BUFFER = 120  # seconds to wait after the stated reset time
 
 
-def parse_rate_limit_reset(session_log: Path) -> datetime | None:
-    """Return UTC datetime of Claude usage reset if the session hit the rate limit."""
+def parse_rate_limit_reset(session_log: Path, backend: str = "claude") -> datetime | None:
+    """Return UTC datetime when a backend becomes runnable again after a limit hit."""
     try:
         text = session_log.read_text(errors="replace")
-        m = _RATE_LIMIT_RE.search(text)
-        if not m:
-            return None
-        time_str, tz_name = m.group(1).lower(), m.group(2)
-        try:
-            tz = ZoneInfo(tz_name)
-        except ZoneInfoNotFoundError:
-            _log(f"Unknown timezone '{tz_name}' in rate-limit message — cannot parse reset time.")
-            return None
-        now_local = datetime.now(tz)
-        parsed = datetime.strptime(time_str, "%I:%M%p")  # noqa: DTZ007 — naive; immediately reused for h/m only
-        reset_local = now_local.replace(
-            hour=parsed.hour, minute=parsed.minute, second=0, microsecond=0
-        )
-        if reset_local <= now_local:
-            reset_local += timedelta(days=1)
-        return reset_local.astimezone(timezone.utc)
-    except Exception as e:
-        _log(f"Failed to parse rate-limit reset time: {e}")
+        m = _TIMEZONE_RESET_RE.search(text)
+        if m:
+            time_str, tz_name = m.group(1).lower(), m.group(2)
+            try:
+                tz = ZoneInfo(tz_name)
+            except ZoneInfoNotFoundError:
+                _log(
+                    f"Unknown timezone '{tz_name}' in {backend} limit message — cannot parse reset time."
+                )
+                return None
+            now_local = datetime.now(tz)
+            parsed = datetime.strptime(time_str, "%I:%M%p")  # noqa: DTZ007 — naive; immediately reused for h/m only
+            reset_local = now_local.replace(
+                hour=parsed.hour, minute=parsed.minute, second=0, microsecond=0
+            )
+            if reset_local <= now_local:
+                reset_local += timedelta(days=1)
+            return reset_local.astimezone(timezone.utc)
+
+        m = _ISO_RESET_RE.search(text)
+        if m:
+            iso_text = m.group(1)
+            return datetime.fromisoformat(iso_text.replace("Z", "+00:00")).astimezone(
+                timezone.utc
+            )
+
+        m = _RELATIVE_RESET_RE.search(text)
+        if m:
+            hours = int(m.group("hours") or 0)
+            minutes = int(m.group("minutes") or 0)
+            seconds = int(m.group("seconds") or 0)
+            delta = timedelta(hours=hours, minutes=minutes, seconds=seconds)
+            if delta.total_seconds() > 0:
+                return datetime.now(timezone.utc) + delta
+
+        if _LIMIT_SIGNAL_RE.search(text):
+            _log(
+                f"{backend.capitalize()} limit detected but no reset time was parseable from {session_log.name}."
+            )
         return None
+    except Exception as e:
+        _log(f"Failed to parse {backend} rate-limit reset time: {e}")
+        return None
+
+
+def _handle_backend_limit(
+    backend: str, session_log: Path, cooldowns: dict[str, datetime | None]
+) -> bool:
+    reset_dt = parse_rate_limit_reset(session_log, backend)
+    if reset_dt is None:
+        return False
+    cooldowns[backend] = reset_dt
+    _log(
+        f"{backend.capitalize()} limit detected — backend cooling down until "
+        f"{reset_dt.strftime('%Y-%m-%dT%H:%M:%SZ')} UTC."
+    )
+    return True
 
 
 def get_delay() -> int:
@@ -366,7 +450,7 @@ def main() -> None:
     _log(f"Log:       {LOG_FILE}")
 
     iteration = 0
-    codex_fallback_until: datetime | None = None
+    cooldowns: dict[str, datetime | None] = {"claude": None, "codex": None}
     try:
         while not _stop and not STOP_FLAG.exists():
             iteration += 1
@@ -375,53 +459,37 @@ def main() -> None:
             # Clear stale schedule from previous session before spawning
             SCHEDULE_FILE.unlink(missing_ok=True)
 
-            backend = _select_backend(codex_fallback_until)
+            backend = _select_backend(cooldowns)
+            if backend is None:
+                if _sleep_until_backend_reset(cooldowns):
+                    continue
+                _log("No runnable backend is currently available.")
+                break
             rc, session_log = run_session(iteration, backend)
             _log(f"{backend.capitalize()} session exited rc={rc}")
 
             if _stop or STOP_FLAG.exists():
                 break
 
-            if backend == "claude" and rc != 0:
-                reset_dt = parse_rate_limit_reset(session_log)
-                if reset_dt is not None:
-                    if _command_available("codex"):
-                        codex_fallback_until = reset_dt
-                        _log(
-                            "Claude usage is rate-limited; "
-                            f"running Codex fallback until {reset_dt.strftime('%Y-%m-%dT%H:%M:%SZ')} UTC."
-                        )
-                        rc, session_log = run_session(iteration, "codex")
-                        _log(f"Codex fallback session exited rc={rc}")
-                    else:
-                        delay = max(
-                            60,
-                            int((reset_dt - datetime.now(timezone.utc)).total_seconds())
-                            + _RATE_LIMIT_BUFFER,
-                        )
-                        _log(
-                            f"Rate limit detected — reset at "
-                            f"{reset_dt.strftime('%Y-%m-%dT%H:%M:%SZ')} UTC; "
-                            f"sleeping {delay}s ({delay // 60}m)"
-                        )
-                        interruptible_sleep(delay)
-                        continue
-
             if rc != 0:
-                reset_dt = parse_rate_limit_reset(session_log)
-                if reset_dt is not None:
-                    delay = max(
-                        60,
-                        int((reset_dt - datetime.now(timezone.utc)).total_seconds())
-                        + _RATE_LIMIT_BUFFER,
-                    )
-                    _log(
-                        f"Rate limit detected — reset at "
-                        f"{reset_dt.strftime('%Y-%m-%dT%H:%M:%SZ')} UTC; "
-                        f"sleeping {delay}s ({delay // 60}m)"
-                    )
-                    interruptible_sleep(delay)
-                    continue
+                if _handle_backend_limit(backend, session_log, cooldowns):
+                    alternate = _alternate_backend(backend)
+                    if _backend_available(alternate, cooldowns):
+                        _log(
+                            f"{backend.capitalize()} is cooling down; "
+                            f"running immediate {alternate.capitalize()} fallback."
+                        )
+                        rc, session_log = run_session(iteration, alternate)
+                        backend = alternate
+                        _log(f"{alternate.capitalize()} fallback session exited rc={rc}")
+                        if _stop or STOP_FLAG.exists():
+                            break
+                        if rc != 0 and _handle_backend_limit(backend, session_log, cooldowns):
+                            if _sleep_until_backend_reset(cooldowns):
+                                continue
+                    else:
+                        if _sleep_until_backend_reset(cooldowns):
+                            continue
 
             delay = get_delay()
             _log(f"Sleeping {delay}s ...")

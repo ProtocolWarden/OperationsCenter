@@ -37,7 +37,7 @@ def test_codex_session_command_uses_repo_root() -> None:
     assert cmd[-1] == "hello world"
 
 
-def test_select_backend_prefers_codex_during_fallback_window(monkeypatch) -> None:
+def test_select_backend_prefers_codex_when_claude_cooling_down(monkeypatch) -> None:
     frozen_now = datetime(2026, 5, 25, 15, 0, tzinfo=timezone.utc)
 
     class FrozenDateTime(datetime):
@@ -51,10 +51,15 @@ def test_select_backend_prefers_codex_during_fallback_window(monkeypatch) -> Non
     monkeypatch.setattr(
         controller,
         "_command_available",
-        lambda command: command == "codex",
+        lambda command: command in {"claude", "codex"},
     )
 
-    assert controller._select_backend(datetime(2026, 5, 25, 16, 0, tzinfo=timezone.utc)) == "codex"
+    assert controller._select_backend(
+        {
+            "claude": datetime(2026, 5, 25, 16, 0, tzinfo=timezone.utc),
+            "codex": None,
+        }
+    ) == "codex"
 
 
 def test_select_backend_uses_claude_when_not_fallback(monkeypatch) -> None:
@@ -74,10 +79,10 @@ def test_select_backend_uses_claude_when_not_fallback(monkeypatch) -> None:
         lambda command: command == "claude",
     )
 
-    assert controller._select_backend(None) == "claude"
+    assert controller._select_backend({"claude": None, "codex": None}) == "claude"
 
 
-def test_parse_rate_limit_reset(monkeypatch, tmp_path: Path) -> None:
+def test_parse_rate_limit_reset_timezone_message(monkeypatch, tmp_path: Path) -> None:
     frozen_now = datetime(2026, 5, 25, 16, 0, tzinfo=timezone.utc)
 
     class FrozenDateTime(datetime):
@@ -92,6 +97,26 @@ def test_parse_rate_limit_reset(monkeypatch, tmp_path: Path) -> None:
     log_path = tmp_path / "session.log"
     log_path.write_text("rate limit hit; resets 5:15pm (UTC)\n")
 
-    reset_dt = controller.parse_rate_limit_reset(log_path)
+    reset_dt = controller.parse_rate_limit_reset(log_path, "claude")
 
     assert reset_dt == datetime(2026, 5, 25, 17, 15, tzinfo=timezone.utc)
+
+
+def test_parse_rate_limit_reset_relative_message(monkeypatch, tmp_path: Path) -> None:
+    frozen_now = datetime(2026, 5, 25, 16, 0, tzinfo=timezone.utc)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):  # type: ignore[override]
+            if tz is None:
+                return frozen_now.replace(tzinfo=None)
+            return frozen_now.astimezone(tz)
+
+    monkeypatch.setattr(controller, "datetime", FrozenDateTime)
+
+    log_path = tmp_path / "session.log"
+    log_path.write_text("codex usage limit hit, please try again in 5h 0m\n")
+
+    reset_dt = controller.parse_rate_limit_reset(log_path, "codex")
+
+    assert reset_dt == datetime(2026, 5, 25, 21, 0, tzinfo=timezone.utc)

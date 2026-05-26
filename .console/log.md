@@ -38,6 +38,16 @@
 - Campaign 10c50210 CANCELLED.
 - HYGIENE: `.baseline-validation.json` tracked on OC main (operationally neutralized by cycle-28 reorder).
 
+## 2026-05-25 — Make watchdog controller backend cooldowns symmetric
+
+- Reworked `tools/loop/controller.py` so Claude and Codex both feed
+  backend-specific cooldown windows parsed from backend limit errors.
+- Claude remains primary whenever runnable, but the controller now falls
+  through to Codex during Claude cooldowns, applies the same reset-driven
+  cooldown logic to Codex, and sleeps until the earliest parsed reset when both
+  backends are unavailable.
+- Focused watchdog controller tests passed in the repo venv.
+
 ## 2026-05-25 — Backend tier selection unified across TE / DAG / Critique
 
 - Added shared backend tiering helper for runtime-binding tier inference plus one-step downgrade at budget pressure `>= 0.75`.
