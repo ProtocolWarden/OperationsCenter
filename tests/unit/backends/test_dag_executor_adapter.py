@@ -188,3 +188,52 @@ def test_adapter_falls_back_to_codex_when_claude_backend_is_cooling_down(monkeyp
 
     assert result.success is True
     assert captured["worker_backend"] == "codex_cli"
+
+
+def test_adapter_execute_and_capture_reports_fallback_usage(monkeypatch) -> None:
+    class FakeRunner:
+        def __init__(self, **kwargs) -> None:
+            self.worker_backend = kwargs["worker_backend"]
+
+        def run_graph(self, spec):
+            return {"status": "succeeded"}
+
+    class FakeNodeType:
+        AGENT = "agent"
+
+    class FakeNodeSpec:
+        def __init__(self, **kwargs) -> None:
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+
+    class FakeGraphSpec:
+        def __init__(self, workflow_id, goal_text, nodes) -> None:
+            self.workflow_id = workflow_id
+            self.goal_text = goal_text
+            self.nodes = nodes
+
+    fake_executor = SimpleNamespace(DAGExecutorRunner=FakeRunner)
+    fake_models = SimpleNamespace(GraphSpec=FakeGraphSpec, NodeSpec=FakeNodeSpec, NodeType=FakeNodeType)
+    fake_loader = SimpleNamespace(load_graph_file=lambda path, goal_text="": None)
+    monkeypatch.setitem(sys.modules, "dag_executor.executor", fake_executor)
+    monkeypatch.setitem(sys.modules, "dag_executor.models", fake_models)
+    monkeypatch.setitem(sys.modules, "dag_executor.loader", fake_loader)
+
+    def _cooldown(worker_backend: str, *, now):
+        if worker_backend == "claude_code":
+            return now.replace(hour=now.hour + 1)
+        return None
+
+    usage_store = _usage_store(remaining=10)
+    usage_store.worker_backend_cooldown_until = _cooldown
+
+    adapter = DAGExecutorBackendAdapter(
+        DAGExecutorSettings(worker_backend="claude_code"),
+        usage_store=usage_store,
+    )
+
+    result, capture = adapter.execute_and_capture(_request(model="sonnet"))
+
+    assert result.success is True
+    assert capture.observed_runtime["selected_worker_backend"] == "codex_cli"
+    assert capture.observed_runtime["fallback_used"] is False

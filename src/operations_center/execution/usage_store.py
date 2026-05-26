@@ -471,6 +471,25 @@ class UsageStore:
                 latest = reset_at
         return latest
 
+    def current_worker_backend_cooldowns(
+        self,
+        *,
+        now: datetime,
+    ) -> dict[str, dict[str, object]]:
+        """Return current cooldown status for each supported worker backend."""
+        snapshot: dict[str, dict[str, object]] = {}
+        for worker_backend in ("claude_code", "codex_cli"):
+            reset_at = self.worker_backend_cooldown_until(worker_backend, now=now)
+            seconds_remaining: int | None = None
+            if reset_at is not None:
+                seconds_remaining = max(0, int((reset_at - now).total_seconds()))
+            snapshot[worker_backend] = {
+                "cooling_down": reset_at is not None,
+                "reset_at": reset_at.isoformat() if reset_at is not None else None,
+                "seconds_remaining": seconds_remaining,
+            }
+        return snapshot
+
     # ---------------------------------------------------------------------------
     # S6-2: Per-repo execution budget
     # ---------------------------------------------------------------------------

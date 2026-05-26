@@ -51,6 +51,22 @@ class WorkerBackendExecution(Generic[_T]):
     selection: WorkerBackendSelection
 
 
+def worker_backend_observed_runtime(
+    execution: WorkerBackendExecution[object],
+) -> dict[str, object]:
+    cooldowns = {
+        backend: reset_at.isoformat() if reset_at is not None else None
+        for backend, reset_at in execution.selection.cooldowns.items()
+    }
+    return {
+        "worker_backend_strategy": "round_robin",
+        "preferred_worker_backend": execution.selection.preferred_backend,
+        "selected_worker_backend": execution.selected_backend,
+        "fallback_used": execution.fallback_used,
+        "worker_backend_cooldowns": cooldowns,
+    }
+
+
 def worker_backend_candidates(preferred_backend: str) -> tuple[str, ...]:
     if preferred_backend not in _SUPPORTED_WORKER_BACKENDS:
         return (preferred_backend,)

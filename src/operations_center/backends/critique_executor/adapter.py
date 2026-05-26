@@ -10,10 +10,12 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 import logging
+from types import SimpleNamespace
 
 from operations_center.backends.tiering import select_tier, tier_profile
 from operations_center.backends.worker_backend_selector import (
     execute_with_worker_backend_round_robin,
+    worker_backend_observed_runtime,
 )
 from operations_center.config.settings import CritiqueExecutorSettings
 from operations_center.contracts.common import ValidationSummary
@@ -37,11 +39,17 @@ class CritiqueExecutorBackendAdapter:
         self._usage_store = usage_store
 
     def execute(self, request: ExecutionRequest) -> ExecutionResult:
+        result, _ = self.execute_and_capture(request)
+        return result
+
+    def execute_and_capture(
+        self, request: ExecutionRequest
+    ) -> tuple[ExecutionResult, object | None]:
         try:
             from critique_executor.executor import CritiqueExecutorRunner  # type: ignore  # noqa: PGH003
             from critique_executor.models import CritiqueConfig, CritiqueTopology  # type: ignore  # noqa: PGH003
         except ImportError as exc:
-            return _error_result(request, f"critique_executor not installed: {exc}")
+            return _error_result(request, f"critique_executor not installed: {exc}"), None
 
         usage_store = self._usage_store or UsageStore()
         working_dir = self._settings.working_dir or str(request.workspace_path)
@@ -104,12 +112,19 @@ class CritiqueExecutorBackendAdapter:
             )
         except Exception as exc:
             logger.error("CritiqueExecutorAdapter: run=%s raised %s", request.run_id, exc)
-            return _error_result(request, str(exc))
+            return _error_result(request, str(exc)), None
+
+        capture = SimpleNamespace(
+            observed_runtime=worker_backend_observed_runtime(executed),
+        )
 
         if executed.selected_backend is None or executed.payload is None:
-            return _worker_backend_unavailable_result(
-                request,
-                executed.selection.reason or "no worker backend available",
+            return (
+                _worker_backend_unavailable_result(
+                    request,
+                    executed.selection.reason or "no worker backend available",
+                ),
+                capture,
             )
 
         if executed.fallback_used:
@@ -131,7 +146,7 @@ class CritiqueExecutorBackendAdapter:
                 backend=executed.selected_backend,
                 now=datetime.now(UTC),
             )
-        return result
+        return result, capture
 
 
 def _rxp_to_result(request: ExecutionRequest, rxp_result) -> ExecutionResult:

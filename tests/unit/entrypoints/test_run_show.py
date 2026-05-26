@@ -24,6 +24,12 @@ def _trace_payload() -> dict:
         "validation_summary": {"status": "skipped"},
         "warnings": ["validation was skipped for this run"],
         "backend_detail_refs": [],
+        "observed_runtime": {
+            "worker_backend_strategy": "round_robin",
+            "preferred_worker_backend": "claude_code",
+            "selected_worker_backend": "codex_cli",
+            "fallback_used": True,
+        },
         "runtime_invocation_ref": {
             "invocation_id": "iv-1",
             "runtime_name": "direct_local",
@@ -66,6 +72,8 @@ def test_show_by_run_id_with_explicit_root(tmp_path: Path) -> None:
     assert "iv-1" in result.output
     assert "lint_fix_to_aider_local" in result.output
     assert "0.4.2" in result.output
+    assert "selected_worker_backend" in result.output
+    assert "codex_cli" in result.output
 
 
 def test_show_resolves_unambiguous_prefix(tmp_path: Path) -> None:
@@ -107,6 +115,7 @@ def test_show_json_emits_full_payload(tmp_path: Path) -> None:
     parsed = json.loads(result.output)
     assert parsed["runtime_invocation_ref"]["invocation_id"] == "iv-1"
     assert parsed["routing"]["switchboard_version"] == "0.4.2"
+    assert parsed["observed_runtime"]["selected_worker_backend"] == "codex_cli"
 
 
 def test_show_complains_when_run_id_missing(tmp_path: Path) -> None:

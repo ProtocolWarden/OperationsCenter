@@ -74,6 +74,7 @@ class ExecutionTrace(BaseModel):
     # provenance chain. None for adapters that do not invoke CoreRunner
     # (e.g. demo_stub).
     runtime_invocation_ref: Optional[RuntimeInvocationRef] = None
+    observed_runtime: dict[str, Any] = Field(default_factory=dict)
     # G-V03 — forward SwitchBoard routing provenance from
     # ExecutionRecord.metadata["routing"]. Empty dict when no routing
     # block was recorded.
@@ -95,6 +96,7 @@ class RunReportBuilder:
         meta = record.metadata if isinstance(record.metadata, dict) else {}
         routing = meta.get("routing")
         provenance = meta.get("provenance")
+        observed_runtime = meta.get("observed_runtime")
         return ExecutionTrace(
             record_id=record.record_id,
             headline=self._headline(record),
@@ -106,6 +108,9 @@ class RunReportBuilder:
             warnings=self._warnings(record),
             backend_detail_refs=list(record.backend_detail_refs),
             runtime_invocation_ref=record.result.runtime_invocation_ref,
+            observed_runtime=(
+                {**observed_runtime} if isinstance(observed_runtime, dict) else {}
+            ),  # type: ignore  # noqa: PGH003
             routing={**routing} if isinstance(routing, dict) else {},  # type: ignore  # noqa: PGH003
             provenance={**provenance} if isinstance(provenance, dict) else {},  # type: ignore  # noqa: PGH003
         )

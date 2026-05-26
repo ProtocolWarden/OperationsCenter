@@ -122,6 +122,24 @@ def _print_trace(trace: dict) -> None:
     else:
         _console.print("[dim](no SourceRegistry provenance on this trace)[/dim]")
 
+    observed_runtime = trace.get("observed_runtime") or {}
+    if observed_runtime:
+        table = Table(title="Observed runtime", show_header=True, header_style="bold")
+        table.add_column("field")
+        table.add_column("value")
+        for field in (
+            "worker_backend_strategy",
+            "preferred_worker_backend",
+            "selected_worker_backend",
+            "fallback_used",
+            "worker_backend_cooldowns",
+        ):
+            if field in observed_runtime:
+                table.add_row(field, _render(observed_runtime[field]))
+        _console.print(table)
+    else:
+        _console.print("[dim](no observed_runtime block on this trace)[/dim]")
+
     ref = trace.get("runtime_invocation_ref")
     if ref:
         table = Table(title="RxP runtime invocation", show_header=True, header_style="bold")

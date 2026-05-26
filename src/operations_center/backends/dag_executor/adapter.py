@@ -14,10 +14,12 @@ from __future__ import annotations
 from datetime import UTC, datetime
 import logging
 from pathlib import Path
+from types import SimpleNamespace
 
 from operations_center.backends.tiering import select_tier, tier_profile
 from operations_center.backends.worker_backend_selector import (
     execute_with_worker_backend_round_robin,
+    worker_backend_observed_runtime,
 )
 from operations_center.config.settings import DAGExecutorSettings
 from operations_center.contracts.common import ValidationSummary
@@ -38,12 +40,18 @@ class DAGExecutorBackendAdapter:
         self._usage_store = usage_store
 
     def execute(self, request: ExecutionRequest) -> ExecutionResult:
+        result, _ = self.execute_and_capture(request)
+        return result
+
+    def execute_and_capture(
+        self, request: ExecutionRequest
+    ) -> tuple[ExecutionResult, object | None]:
         try:
             from dag_executor.executor import DAGExecutorRunner  # type: ignore  # noqa: PGH003
             from dag_executor.models import GraphSpec, NodeSpec, NodeType  # type: ignore  # noqa: PGH003
             from dag_executor.loader import load_graph_file  # type: ignore  # noqa: PGH003
         except ImportError as exc:
-            return _error_result(request, f"dag_executor not installed: {exc}")
+            return _error_result(request, f"dag_executor not installed: {exc}"), None
 
         workspace = Path(request.workspace_path)
         workflow_path = workspace / _WORKFLOW_FILENAME
@@ -99,12 +107,19 @@ class DAGExecutorBackendAdapter:
             )
         except Exception as exc:
             logger.error("DAGExecutorAdapter: run=%s raised %s", request.run_id, exc)
-            return _error_result(request, str(exc))
+            return _error_result(request, str(exc)), None
+
+        capture = SimpleNamespace(
+            observed_runtime=worker_backend_observed_runtime(executed),
+        )
 
         if executed.selected_backend is None or executed.payload is None:
-            return _worker_backend_unavailable_result(
-                request,
-                executed.selection.reason or "no worker backend available",
+            return (
+                _worker_backend_unavailable_result(
+                    request,
+                    executed.selection.reason or "no worker backend available",
+                ),
+                capture,
             )
 
         if executed.fallback_used:
@@ -126,7 +141,7 @@ class DAGExecutorBackendAdapter:
                 backend=executed.selected_backend,
                 now=datetime.now(UTC),
             )
-        return result
+        return result, capture
 
 
 def _dict_to_result(request: ExecutionRequest, result_dict: dict) -> ExecutionResult:

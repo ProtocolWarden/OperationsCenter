@@ -242,6 +242,17 @@ Notes:
 - cooldown state is persisted in `UsageStore`, so the preference survives
   across watcher cycles rather than resetting every process launch
 
+Live cooldown status:
+
+```bash
+./scripts/operations-center.sh worker-backend-status
+./scripts/operations-center.sh worker-backend-status --json
+```
+
+This reads the execution usage store and reports whether `claude_code` or
+`codex_cli` is currently cooling down, the recorded reset time, and remaining
+seconds until each backend becomes runnable again.
+
 ## Spend Report
 
 To see how many tasks have been executed and their estimated cost:

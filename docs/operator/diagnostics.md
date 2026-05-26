@@ -71,6 +71,41 @@ Retained `result_summary.md` files align with board/log language and include:
 - `follow_up_task_ids`
 - `human_attention_required` when relevant
 
+## Worker Backend Cooldowns
+
+To inspect live executor worker-backend cooldown state:
+
+```bash
+./scripts/operations-center.sh worker-backend-status
+./scripts/operations-center.sh worker-backend-status --json
+```
+
+This reports the current `UsageStore` view for:
+
+- `claude_code`
+- `codex_cli`
+
+Use it when executions are unexpectedly landing on Codex or when both executor
+worker backends appear unavailable.
+
+## Per-Run Worker Backend Selection
+
+Retained execution traces now surface the actual worker backend used by the
+executor family when that backend supports round robin.
+
+Inspect one run with:
+
+```bash
+operations-center-run-show <run_id>
+```
+
+Look for the `Observed runtime` block. It includes:
+
+- `preferred_worker_backend`
+- `selected_worker_backend`
+- `fallback_used`
+- `worker_backend_cooldowns`
+
 ## Watcher Heartbeat Check
 
 ```bash

@@ -157,6 +157,7 @@ Usage:
   scripts/operations-center.sh analyze-artifacts [--repo NAME] [--limit N] [--json]
   scripts/operations-center.sh tune-autonomy [--window N] [--apply]
   scripts/operations-center.sh promote-backlog [--family FAMILY] [--execute]
+  scripts/operations-center.sh worker-backend-status [--json]
   scripts/operations-center.sh watchdog-loop-acquire
   scripts/operations-center.sh watchdog-loop-release
   scripts/operations-center.sh watchdog-loop-status
@@ -604,7 +605,7 @@ shift || true
 cd "${ROOT_DIR}"
 # Skip janitor for read-only / stop commands — they're fast and don't need it.
 case "${cmd}" in
-  watch-all-status|dev-status|watch-all-stop|watch-stop|watchdog-stop|plane-status|providers-status|doctor|status|loop-start|loop-stop|loop-status|loop-log) ;;
+  watch-all-status|dev-status|watch-all-stop|watch-stop|watchdog-stop|plane-status|providers-status|doctor|status|worker-backend-status|loop-start|loop-stop|loop-status|loop-log) ;;
   *) run_janitor ;;
 esac
 
@@ -882,6 +883,11 @@ PYEOF
     ensure_venv
     load_env_file
     run_with_log promote-backlog "${VENV_DIR}/bin/python" -m operations_center.entrypoints.promote_backlog.main --config "${CONFIG_PATH}" "$@"
+    ;;
+  worker-backend-status)
+    ensure_venv
+    load_env_file
+    "${VENV_DIR}/bin/python" -m operations_center.entrypoints.worker_backend_status.main "$@"
     ;;
   plane-doctor)
     ensure_venv

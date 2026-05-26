@@ -38,6 +38,13 @@
 - Campaign 10c50210 CANCELLED.
 - HYGIENE: `.baseline-validation.json` tracked on OC main (operationally neutralized by cycle-28 reorder).
 
+## 2026-05-25
+
+- Added executor worker-backend observability end to end: the `team_executor`, `dag_executor`, and `critique_executor` adapters now expose `execute_and_capture()` with `observed_runtime` showing preferred backend, selected backend, fallback usage, and backend cooldown snapshot.
+- Added a live operator status surface for worker-backend cooldowns via `operations-center-worker-backend-status` and `./scripts/operations-center.sh worker-backend-status`, backed by a new `UsageStore.current_worker_backend_cooldowns()` summary API.
+- Extended retained trace visibility so `operations-center-run-show <run_id>` prints the `Observed runtime` block, making actual `claude_code` vs `codex_cli` selection visible per run without re-reading raw record metadata.
+- Validation: focused pytest slices passed (`68 passed`) and targeted Ruff checks passed. Repo-wide `python -m pytest` and `python -m pytest -m integration` are still blocked by the pre-existing duplicate-module import mismatch between `tests/test_execution_health.py` and `tests/observer/test_collectors_hardening/test_execution_health.py`.
+
 ## 2026-05-25 — Make watchdog controller backend cooldowns symmetric
 
 - Reworked `tools/loop/controller.py` so Claude and Codex both feed

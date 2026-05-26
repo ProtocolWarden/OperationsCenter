@@ -165,3 +165,39 @@ def test_adapter_falls_back_to_codex_when_claude_backend_is_cooling_down(monkeyp
 
     assert result.success is True
     assert captured["worker_backend"] == "codex_cli"
+
+
+def test_adapter_execute_and_capture_reports_selected_worker_backend(monkeypatch) -> None:
+    class FakeRunner:
+        def __init__(self, topology: str, config, worker_backend: str, working_dir: str) -> None:
+            self.worker_backend = worker_backend
+
+        def run(self, goal_text: str, max_rounds: int | None = None):
+            return SimpleNamespace(status="succeeded", error_summary=None)
+
+    class FakeCritiqueTopology:
+        def __call__(self, value: str):
+            return value
+
+    class FakeCritiqueConfig:
+        def __init__(self, **kwargs) -> None:
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+
+    fake_executor = SimpleNamespace(CritiqueExecutorRunner=FakeRunner)
+    fake_models = SimpleNamespace(CritiqueConfig=FakeCritiqueConfig, CritiqueTopology=FakeCritiqueTopology())
+    monkeypatch.setitem(sys.modules, "critique_executor.executor", fake_executor)
+    monkeypatch.setitem(sys.modules, "critique_executor.models", fake_models)
+
+    adapter = CritiqueExecutorBackendAdapter(
+        CritiqueExecutorSettings(worker_backend="codex_cli", topology="reflexion"),
+        usage_store=_usage_store(remaining=10),
+    )
+
+    result, capture = adapter.execute_and_capture(
+        _request(model="gpt-5.4-mini", config_ref="team_executor:budget")
+    )
+
+    assert result.success is True
+    assert capture.observed_runtime["preferred_worker_backend"] == "codex_cli"
+    assert capture.observed_runtime["selected_worker_backend"] == "codex_cli"

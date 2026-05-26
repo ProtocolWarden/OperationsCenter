@@ -170,3 +170,27 @@ def test_adapter_falls_back_to_codex_when_claude_backend_is_cooling_down(monkeyp
 
     assert result.success is True
     assert captured == ["codex_cli"]
+
+
+def test_adapter_execute_and_capture_reports_selected_worker_backend(monkeypatch) -> None:
+    class FakeRunner:
+        def __init__(self, team_name: str, working_dir: str, worker_backend: str) -> None:
+            self.worker_backend = worker_backend
+
+        def run(self, goal_text: str, invocation_id: str | None = None):
+            return SimpleNamespace(status="succeeded", error_summary=None)
+
+    fake_module = SimpleNamespace(TeamExecutorRunner=FakeRunner)
+    monkeypatch.setitem(sys.modules, "team_executor.executor", fake_module)
+
+    adapter = TeamExecutorBackendAdapter(
+        TeamExecutorSettings(worker_backend="claude_code"),
+        usage_store=_usage_store(remaining=10),
+    )
+
+    result, capture = adapter.execute_and_capture(_request(model="sonnet"))
+
+    assert result.success is True
+    assert capture.observed_runtime["preferred_worker_backend"] == "claude_code"
+    assert capture.observed_runtime["selected_worker_backend"] == "claude_code"
+    assert capture.observed_runtime["fallback_used"] is False

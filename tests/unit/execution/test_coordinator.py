@@ -198,6 +198,37 @@ def test_capture_capable_adapter_populates_backend_detail_refs() -> None:
     assert outcome.record.backend_detail_refs[0].detail_type == "event_trace"
 
 
+def test_capture_observed_runtime_flows_into_record_and_trace() -> None:
+    bundle = _bundle()
+    capture = {
+        "events": ["x"],
+    }
+    adapter = _CaptureAdapter(_success_result(bundle), capture=capture)
+    adapter.capture = type(
+        "Capture",
+        (),
+        {
+            "observed_runtime": {
+                "preferred_worker_backend": "claude_code",
+                "selected_worker_backend": "codex_cli",
+                "fallback_used": True,
+            }
+        },
+    )()
+    coordinator = ExecutionCoordinator(
+        adapter_registry=_Registry(adapter),
+        policy_engine=_StubPolicyEngine(PolicyDecision(status=PolicyStatus.ALLOW)),
+    )
+
+    outcome = coordinator.execute(bundle, _runtime())
+
+    assert (
+        outcome.record.metadata["observed_runtime"]["selected_worker_backend"]
+        == "codex_cli"
+    )
+    assert outcome.trace.observed_runtime["fallback_used"] is True
+
+
 def test_non_capture_adapter_keeps_backend_detail_refs_empty() -> None:
     bundle = _bundle()
     adapter = _RecordingAdapter(_success_result(bundle))
@@ -270,5 +301,4 @@ def test_capture_capable_adapter_persists_runtime_duration_metadata() -> None:
     outcome = coordinator.execute(bundle, _runtime())
 
     assert outcome.record.metadata["duration_ms"] == 1234
-
 
