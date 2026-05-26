@@ -34,10 +34,10 @@ git:
 # ---------------------------------------------------------------------------
 # See src/operations_center/backends/team_executor/
 team_executor:
-  team_name: default
+  team_name: budget                  # debug-phase baseline; later phases may promote based on task classification
   timeout_seconds: 3600
   worker_backend: claude_code          # preferred worker backend; codex_cli is used when Claude is cooling down
-  dynamic_team_selection: true
+  dynamic_team_selection: false        # keep tiering static while pipeline behavior is being debugged
   dynamic_worker_backend_selection: true
   budget_pressure_threshold: 0.75
 
@@ -45,9 +45,10 @@ team_executor:
 # DAG executor settings
 # ---------------------------------------------------------------------------
 dag_executor:
+  tier_name: budget
   timeout_seconds: 3600
   worker_backend: claude_code          # preferred worker backend; codex_cli is used when Claude is cooling down
-  dynamic_tier_selection: true
+  dynamic_tier_selection: false        # later phases can re-enable dynamic promotion
   dynamic_worker_backend_selection: true
   budget_pressure_threshold: 0.75
 
@@ -55,12 +56,13 @@ dag_executor:
 # Critique executor settings
 # ---------------------------------------------------------------------------
 critique_executor:
+  tier_name: budget
   topology: reflexion
   max_rounds: 5
   timeout_seconds: 3600
   worker_backend: claude_code          # preferred worker backend; codex_cli is used when Claude is cooling down
   working_dir: ""
-  dynamic_tier_selection: true
+  dynamic_tier_selection: false        # later phases can re-enable dynamic promotion
   dynamic_worker_backend_selection: true
   budget_pressure_threshold: 0.75
 

@@ -59,7 +59,7 @@ class DAGExecutorBackendAdapter:
         usage_store = self._usage_store or UsageStore()
 
         tier = select_tier(
-            configured="default",
+            configured=self._settings.tier_name,
             runtime_binding=request.runtime_binding,
             usage_store=usage_store,
             dynamic_enabled=self._settings.dynamic_tier_selection,

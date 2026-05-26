@@ -53,16 +53,16 @@ def _usage_store(*, remaining: int, max_per_hour: int = 10, max_per_day: int = 5
 
 
 def test_select_team_name_uses_runtime_binding_tier_without_pressure() -> None:
-    settings = TeamExecutorSettings(team_name="default", dynamic_team_selection=True)
+    settings = TeamExecutorSettings(team_name="standard", dynamic_team_selection=True)
 
     assert _select_team_name(settings, _request(model="opus"), usage_store=_usage_store(remaining=10)) == "premium"
-    assert _select_team_name(settings, _request(model="sonnet"), usage_store=_usage_store(remaining=10)) == "default"
+    assert _select_team_name(settings, _request(model="sonnet"), usage_store=_usage_store(remaining=10)) == "standard"
     assert _select_team_name(settings, _request(model="haiku"), usage_store=_usage_store(remaining=10)) == "budget"
     assert _select_team_name(settings, _request(model="gpt-5.4-mini"), usage_store=_usage_store(remaining=10)) == "budget"
 
 
 def test_select_team_name_prefers_config_ref_tier_hint() -> None:
-    settings = TeamExecutorSettings(team_name="default", dynamic_team_selection=True)
+    settings = TeamExecutorSettings(team_name="standard", dynamic_team_selection=True)
     request = _request(model="gpt-5.4")
     request = request.model_copy(
         update={
@@ -81,13 +81,13 @@ def test_select_team_name_prefers_config_ref_tier_hint() -> None:
 
 def test_select_team_name_downgrades_one_tier_under_budget_pressure() -> None:
     settings = TeamExecutorSettings(
-        team_name="default",
+        team_name="standard",
         dynamic_team_selection=True,
         budget_pressure_threshold=0.75,
     )
     pressured = _usage_store(remaining=2)
 
-    assert _select_team_name(settings, _request(model="opus"), usage_store=pressured) == "default"
+    assert _select_team_name(settings, _request(model="opus"), usage_store=pressured) == "standard"
     assert _select_team_name(settings, _request(model="sonnet"), usage_store=pressured) == "budget"
     assert _select_team_name(settings, _request(model="haiku"), usage_store=pressured) == "budget"
 
@@ -125,7 +125,7 @@ def test_adapter_execute_passes_selected_team_to_runner(monkeypatch) -> None:
 
     adapter = TeamExecutorBackendAdapter(
         TeamExecutorSettings(
-            team_name="default",
+            team_name="standard",
             worker_backend="codex_cli",
             dynamic_team_selection=True,
             budget_pressure_threshold=0.75,
@@ -136,7 +136,7 @@ def test_adapter_execute_passes_selected_team_to_runner(monkeypatch) -> None:
     result = adapter.execute(_request(model="opus"))
 
     assert result.success is True
-    assert captured["team_name"] == "default"
+    assert captured["team_name"] == "standard"
     assert captured["worker_backend"] == "codex_cli"
 
 

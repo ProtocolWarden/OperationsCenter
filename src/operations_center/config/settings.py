@@ -131,30 +131,32 @@ class ResourceGateSettings(BaseModel):
 
 
 class TeamExecutorSettings(BaseModel):
-    team_name: str = "default"
+    team_name: str = "budget"
     timeout_seconds: int = 3600
     worker_backend: str = "claude_code"
-    dynamic_team_selection: bool = True
+    dynamic_team_selection: bool = False
     dynamic_worker_backend_selection: bool = True
     budget_pressure_threshold: float = 0.75
 
 
 class DAGExecutorSettings(BaseModel):
+    tier_name: str = "budget"
     timeout_seconds: int = 3600
     artifacts_dir: str = ""
     worker_backend: str = "claude_code"
-    dynamic_tier_selection: bool = True
+    dynamic_tier_selection: bool = False
     dynamic_worker_backend_selection: bool = True
     budget_pressure_threshold: float = 0.75
 
 
 class CritiqueExecutorSettings(BaseModel):
+    tier_name: str = "budget"
     topology: str = "reflexion"
     max_rounds: int = 5
     timeout_seconds: int = 3600
     worker_backend: str = "claude_code"
     working_dir: str = ""
-    dynamic_tier_selection: bool = True
+    dynamic_tier_selection: bool = False
     dynamic_worker_backend_selection: bool = True
     budget_pressure_threshold: float = 0.75
 

@@ -15,3 +15,4 @@ Cross-repo decisions live in `PlatformDeployment/docs/architecture/adr/`.
 | [0005-work-order-p5](0005-work-order-p5.md) | Work order — owned execution topology P5 |
 | [0006](0006-corerunner-subprocess-consolidation.md) | CoreRunner subprocess consolidation |
 | [0007](0007-spec-director-refactor.md) | Fold spec_director into the backend executor pipeline |
+| [0008](0008-executor-tiering-policy-phases.md) | Executor tiering policy phases |

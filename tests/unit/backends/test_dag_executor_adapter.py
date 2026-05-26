@@ -131,7 +131,12 @@ def test_adapter_downgrades_tier_under_budget_pressure(monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "dag_executor.loader", fake_loader)
 
     adapter = DAGExecutorBackendAdapter(
-        DAGExecutorSettings(worker_backend="claude_code", budget_pressure_threshold=0.75),
+        DAGExecutorSettings(
+            tier_name="standard",
+            worker_backend="claude_code",
+            dynamic_tier_selection=True,
+            budget_pressure_threshold=0.75,
+        ),
         usage_store=_usage_store(remaining=2),
     )
 

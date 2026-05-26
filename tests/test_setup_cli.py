@@ -40,7 +40,7 @@ def test_render_settings_yaml_contains_local_repo_bootstrap_defaults() -> None:
         git_signing_key="ABC12345",
         executor_binary="team-executor",
         executor_install_ref=None,
-        executor_team="default",
+        executor_team="budget",
         executor_cycles=3,
         executor_exchanges=20,
         executor_orchestrator="api",
@@ -76,8 +76,10 @@ def test_render_settings_yaml_contains_local_repo_bootstrap_defaults() -> None:
     assert "venv_dir: .venv" in rendered
     assert "install_dev_command: .venv/bin/pip install -e .[dev]" in rendered
     assert "- .venv/bin/pytest -q" in rendered
-    assert "dynamic_team_selection: true" in rendered
-    assert "dynamic_tier_selection: true" in rendered
+    assert "team_name: budget" in rendered
+    assert "tier_name: budget" in rendered
+    assert "dynamic_team_selection: false" in rendered
+    assert "dynamic_tier_selection: false" in rendered
     assert "dynamic_worker_backend_selection: true" in rendered
 
 
@@ -199,7 +201,7 @@ def test_render_settings_yaml_supports_multiple_repos() -> None:
         git_signing_key=None,
         executor_binary="team-executor",
         executor_install_ref=None,
-        executor_team="default",
+        executor_team="budget",
         executor_cycles=3,
         executor_exchanges=20,
         executor_orchestrator="api",
@@ -264,7 +266,7 @@ def test_render_task_template_uses_default_repo() -> None:
         git_signing_key=None,
         executor_binary="team-executor",
         executor_install_ref=None,
-        executor_team="default",
+        executor_team="budget",
         executor_cycles=3,
         executor_exchanges=20,
         executor_orchestrator="api",

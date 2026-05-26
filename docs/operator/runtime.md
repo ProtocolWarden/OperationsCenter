@@ -253,6 +253,38 @@ This reads the execution usage store and reports whether `claude_code` or
 `codex_cli` is currently cooling down, the recorded reset time, and remaining
 seconds until each backend becomes runnable again.
 
+## Executor Tier Policy
+
+Current debugging-phase policy:
+- `team_executor` starts on `budget`
+- `dag_executor` starts on `budget`
+- `critique_executor` starts on `budget`
+- worker-backend round robin stays enabled
+- dynamic tier promotion is disabled by default while pipeline behavior is being debugged
+
+Config knobs:
+
+```yaml
+team_executor:
+  team_name: budget
+  dynamic_team_selection: false
+
+dag_executor:
+  tier_name: budget
+  dynamic_tier_selection: false
+
+critique_executor:
+  tier_name: budget
+  dynamic_tier_selection: false
+```
+
+Tier vocabulary:
+- `budget`: cheapest tier, intended as the baseline for routine debugging and low-risk work
+- `standard`: middle tier for normal implementation and verification work
+- `premium`: highest tier for hard or high-risk tasks
+
+Longer-term promotion policy is tracked in [ADR 0008](../architecture/adr/0008-executor-tiering-policy-phases.md).
+
 ## Spend Report
 
 To see how many tasks have been executed and their estimated cost:

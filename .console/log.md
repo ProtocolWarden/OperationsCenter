@@ -38,6 +38,13 @@
 - Campaign 10c50210 CANCELLED.
 - HYGIENE: `.baseline-validation.json` tracked on OC main (operationally neutralized by cycle-28 reorder).
 
+## 2026-05-26 — Executor tiering hard cutover
+
+- Pinned debug-phase executor defaults to `budget` across `team_executor`, `dag_executor`, and `critique_executor`; worker-backend round robin remains enabled.
+- Renamed the middle execution tier from `default` to `standard` as a hard cutover. Removed tier alias handling so `default` is no longer valid for executor tier selection.
+- Added ADR 0008 to define the phased tiering policy, long-term decision order, and current Phase 0 debugging posture.
+- Verified with focused backend/policy/setup tests, full `pytest`, and `pytest -m integration`.
+
 ## 2026-05-25
 
 - Fixed the pre-existing repo-wide pytest collection blocker by renaming the duplicate hardening module to `tests/observer/test_collectors_hardening/test_execution_health_hardening.py`, avoiding the `test_execution_health` import collision.

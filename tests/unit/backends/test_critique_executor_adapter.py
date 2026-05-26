@@ -90,7 +90,7 @@ def test_adapter_builds_budget_profile_for_codex(monkeypatch) -> None:
     assert captured["worker_backend"] == "codex_cli"
 
 
-def test_adapter_downgrades_premium_to_default_under_pressure(monkeypatch) -> None:
+def test_adapter_downgrades_premium_to_standard_under_pressure(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     class FakeRunner:
@@ -115,7 +115,12 @@ def test_adapter_downgrades_premium_to_default_under_pressure(monkeypatch) -> No
     monkeypatch.setitem(sys.modules, "critique_executor.models", fake_models)
 
     adapter = CritiqueExecutorBackendAdapter(
-        CritiqueExecutorSettings(worker_backend="claude_code", topology="adversarial"),
+        CritiqueExecutorSettings(
+            tier_name="standard",
+            worker_backend="claude_code",
+            topology="adversarial",
+            dynamic_tier_selection=True,
+        ),
         usage_store=_usage_store(remaining=2),
     )
 

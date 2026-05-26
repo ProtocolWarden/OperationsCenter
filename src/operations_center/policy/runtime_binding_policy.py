@@ -147,7 +147,7 @@ def _rule_from_dict(entry: dict[str, Any]) -> RuntimeBindingRule:
 # Default policy — bundled fallback when no config file is provided
 # ---------------------------------------------------------------------------
 
-# Sensible defaults: opus for heavy work, sonnet for medium, haiku for cheap.
+# Sensible defaults: opus for heavy work, sonnet for standard, haiku for cheap.
 # Operators override by writing config/runtime_binding_policy.yaml.
 DEFAULT_POLICY = RuntimeBindingPolicy(
     rules=(
@@ -184,20 +184,20 @@ DEFAULT_POLICY = RuntimeBindingPolicy(
             config_ref="team_executor:premium",
         ),
         RuntimeBindingRule(
-            name="test_balanced",
+            name="test_standard",
             when={"task_type": "test_fix", "lane": "claude_cli"},
             kind="cli_subscription",
             provider="anthropic",
             model="sonnet",
-            config_ref="team_executor:default",
+            config_ref="team_executor:standard",
         ),
         RuntimeBindingRule(
-            name="test_codex_balanced",
+            name="test_codex_standard",
             when={"task_type": "test_fix", "lane": "codex_cli"},
             kind="cli_subscription",
             provider="openai",
             model="gpt-5.4",
-            config_ref="team_executor:default",
+            config_ref="team_executor:standard",
         ),
         RuntimeBindingRule(
             name="lint_cheap",
@@ -217,11 +217,11 @@ DEFAULT_POLICY = RuntimeBindingPolicy(
         ),
     ),
     default=RuntimeBindingRule(
-        name="default_balanced",
+        name="fallback_standard",
         when={},
         kind="cli_subscription",
         provider="anthropic",
         model="sonnet",
-        config_ref="team_executor:default",
+        config_ref="team_executor:standard",
     ),
 )

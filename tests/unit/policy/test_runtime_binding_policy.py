@@ -232,6 +232,6 @@ class TestBundledDefaults:
         assert b is not None and b.model == "haiku"
 
     def test_default_policy_falls_through_to_sonnet(self):
-        # An unmodelled (task_type, lane) pair should hit the default rule (sonnet).
+        # An unmodelled (task_type, lane) pair should hit the fallback standard rule (sonnet).
         b = DEFAULT_POLICY.select(_proposal(TaskType.REFACTOR), _decision(LaneName.AIDER_LOCAL))
         assert b is not None and b.model == "sonnet"

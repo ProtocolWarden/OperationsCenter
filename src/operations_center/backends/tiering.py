@@ -11,7 +11,7 @@ _TIER_PROFILES = {
         "claude_code": {"model": "claude-haiku-4-5-20251001", "effort": "low"},
         "codex_cli": {"model": "gpt-5.4-mini", "effort": "low"},
     },
-    "default": {
+    "standard": {
         "claude_code": {"model": "claude-sonnet-4-6", "effort": "medium"},
         "codex_cli": {"model": "gpt-5.4", "effort": "medium"},
     },
@@ -22,13 +22,22 @@ _TIER_PROFILES = {
 }
 
 
+def normalize_tier_name(tier: str | None) -> str | None:
+    if tier is None:
+        return None
+    lowered = str(tier).strip().lower()
+    if lowered in _TIER_PROFILES:
+        return lowered
+    return lowered
+
+
 def tier_name_for_runtime_binding(runtime_binding) -> str | None:
     config_ref = getattr(runtime_binding, "config_ref", None)
     if config_ref:
         lowered_ref = str(config_ref).strip().lower()
-        for team_name in ("budget", "default", "premium"):
+        for team_name in ("budget", "standard", "premium"):
             if lowered_ref.endswith(f":{team_name}") or lowered_ref == team_name:
-                return team_name
+                return normalize_tier_name(team_name)
 
     model = getattr(runtime_binding, "model", None)
     if not model:
@@ -39,7 +48,7 @@ def tier_name_for_runtime_binding(runtime_binding) -> str | None:
     if "opus" in lowered:
         return "premium"
     if any(token in lowered for token in ("sonnet", "gpt-5.4", "gpt-5")):
-        return "default"
+        return "standard"
     return None
 
 
@@ -64,9 +73,10 @@ def budget_pressure(usage_store: UsageStore) -> float:
 
 
 def downgrade_tier(tier: str) -> str:
+    tier = normalize_tier_name(tier) or "budget"
     if tier == "premium":
-        return "default"
-    if tier == "default":
+        return "standard"
+    if tier == "standard":
         return "budget"
     return tier
 
@@ -79,14 +89,15 @@ def select_tier(
     dynamic_enabled: bool,
     pressure_threshold: float,
 ) -> str:
+    configured = normalize_tier_name(configured) or "budget"
     if not dynamic_enabled:
         return configured
 
-    inferred = tier_name_for_runtime_binding(runtime_binding) or configured
+    inferred = normalize_tier_name(tier_name_for_runtime_binding(runtime_binding)) or configured
     if budget_pressure(usage_store) >= pressure_threshold:
         return downgrade_tier(inferred)
     return inferred
 
 
 def tier_profile(tier: str) -> dict[str, dict[str, str]]:
-    return _TIER_PROFILES.get(tier, _TIER_PROFILES["default"])
+    return _TIER_PROFILES.get(normalize_tier_name(tier) or "standard", _TIER_PROFILES["standard"])

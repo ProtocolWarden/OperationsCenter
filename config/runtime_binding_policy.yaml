@@ -53,7 +53,7 @@ rules:
       model: gpt-5.4
       config_ref: team_executor:premium
 
-  - name: test_balanced
+  - name: test_standard
     when:
       task_type: test_fix
       lane: claude_cli
@@ -61,9 +61,9 @@ rules:
       kind: cli_subscription
       provider: anthropic
       model: sonnet
-      config_ref: team_executor:default
+      config_ref: team_executor:standard
 
-  - name: test_codex_balanced
+  - name: test_codex_standard
     when:
       task_type: test_fix
       lane: codex_cli
@@ -71,7 +71,7 @@ rules:
       kind: cli_subscription
       provider: openai
       model: gpt-5.4
-      config_ref: team_executor:default
+      config_ref: team_executor:standard
 
   - name: lint_cheap
     when:
@@ -98,4 +98,4 @@ default:
     kind: cli_subscription
     provider: anthropic
     model: sonnet
-    config_ref: team_executor:default
+    config_ref: team_executor:standard

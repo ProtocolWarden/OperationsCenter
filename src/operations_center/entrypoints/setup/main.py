@@ -636,24 +636,26 @@ def render_settings_yaml(answers: SetupAnswers) -> str:
             "team_name": answers.executor_team,
             "timeout_seconds": 3600,
             "worker_backend": "claude_code",
-            "dynamic_team_selection": True,
+            "dynamic_team_selection": False,
             "dynamic_worker_backend_selection": True,
             "budget_pressure_threshold": 0.75,
         },
         "dag_executor": {
+            "tier_name": "budget",
             "timeout_seconds": 3600,
             "worker_backend": "claude_code",
-            "dynamic_tier_selection": True,
+            "dynamic_tier_selection": False,
             "dynamic_worker_backend_selection": True,
             "budget_pressure_threshold": 0.75,
         },
         "critique_executor": {
+            "tier_name": "budget",
             "topology": "reflexion",
             "max_rounds": 5,
             "timeout_seconds": 3600,
             "worker_backend": "claude_code",
             "working_dir": "",
-            "dynamic_tier_selection": True,
+            "dynamic_tier_selection": False,
             "dynamic_worker_backend_selection": True,
             "budget_pressure_threshold": 0.75,
         },
@@ -1129,7 +1131,7 @@ def main(
     print_section("Executor", "Execution defaults for the local coding engine.")
     executor_team = prompt_with_default(
         "Executor team name",
-        existing_config_value(existing_config, "team_executor", "team_name") or "default",
+        existing_config_value(existing_config, "team_executor", "team_name") or "budget",
         note="Using saved value." if existing_config_value(existing_config, "team_executor", "team_name") else None,
     )
     executor_orchestrator = prompt_with_default(
