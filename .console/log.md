@@ -1,3 +1,49 @@
+## OC Platform Watchdog Cycle — 2026-05-27 13:11 UTC (Cycle 36)
+
+- Health state: ACTIVE — queue healed; improve worker executing a2d10dcf.
+- 14 tasks unblocked by board-unblock: 13 IMPROVE_UNBLOCK (stale Blocked >4h → Backlog) + 1 STALE_IN_REVIEW (0f1612ea → Backlog). Key tasks healed: 3a3c202f "Harden Collector" (was Blocked after Stage-5 run) and 0f1612ea "Handle Optional observed_at" (was stale In Review). Both back in Backlog for goal-worker re-dispatch.
+- NEW EVIDENCE: 3a3c202f and 0f1612ea both left Blocked/InReview after executor runs without transitioning to Done — board-unblock rules handled this cleanly. Queue evolution: 14 Blocked/InReview → Backlog + 1 new task created by propose (a2d10dcf).
+- Improve worker (PID 27219) claimed a2d10dcf ("Restore repeated missing test_signal coverage") at 09:09:33 and actively executing (claude haiku coordinator PID 32934 @17.6% CPU). Remediation in flight → ACTIVE.
+- Next cadence: 900s — improve execution in flight (a2d10dcf live). HEALTHY forbidden (improvement in flight; CI still failing ruff+ty; propose created 1 new task).
+- Services: Plane OK, SwitchBoard OK; CLIs OK; git pre-existing mod (docs/specs/ci-coordinator-decision-tests.md status→cancelled, not loop-owned, not committed). 16/16 repos synced.
+- Note: CL_ANCHOR unset this session — CL dispatch wrap is a no-op (pre-P4), audits unaffected.
+
+### STEP 1 — audits (parallel; all CLEAN)
+- custodian-sweep: 7 repos swept, all detector deltas=0, errors null, plane=commented (exit 0). VideoFoundry RUFF -9/T2 -1/W4 -1 = improvements, not regressions.
+- ghost-audit: 1 event (G10 runaway follow-up loop — "Fix lint regression +1 ruff violations" state=Cancelled, fixed) (exit 0)
+- flow-audit: 0 open gaps; F8 partial (back-pressure, count=0) | graph-doctor: ✓ 11 nodes / 12 edges (platform 9 / private 2)
+- reaudit-check: no backends needed (dag/team false); CxRP 0.3.1 | check-regressions: 0 findings
+
+### STEP 2 — triage: 0 actions (rescore/awaiting/queue_healing all empty)
+
+### STEP 2.5 — board-unblock: 14 actions applied. mem_available 27.1GB.
+- 13 IMPROVE_UNBLOCK: Blocked→Backlog (stale >4h no executor progress): cd783c69, b4b40a95, b7719888, 1ad727e3, bd7817c6, ff19d39b, c7df5422, 360cff3a, 89191ff5, bfb289b3, 41bcd097, 89fc5782, 3a3c202f
+- 1 STALE_IN_REVIEW: 0f1612ea "Handle Optional observed_at in the Deriver" InReview→Backlog (stale >4h, PR never created or closed)
+
+### STEP 3 — convergence: CONVERGENT (queue evolved materially; execution in flight)
+- 14 Blocked/InReview tasks healed → Backlog. Propose created 1 task (a2d10dcf). Improve worker claimed and is executing a2d10dcf. Direct, attributable queue evolution.
+- Pattern noted: 3a3c202f executed through Stage 5 but landed in Blocked (not Done); 0f1612ea landed in In Review (not Done). Board-unblock handles both via IMPROVE_UNBLOCK and STALE_IN_REVIEW rules respectively. No Plane escalation needed — rules are working.
+- CI signal failing: ruff + ty. ci_pattern family deferred by initial gating (normal). test_signal unknown → generated new task a2d10dcf.
+- Classification: CONVERGENT. NOT starvation (execution in flight, queue evolved), NOT closed-loop stagnation (14 tasks transitioned + 1 new task executing), NOT dead-remediation, NOT divergent, NOT operator-blocked, NOT parked.
+
+### STEP 4 — promotion: no loop-only judgment repeated 2+ cycles needing new promotion. Board-unblock rules (IMPROVE_UNBLOCK + STALE_IN_REVIEW) covering execution-completes-without-Done pattern — no new watcher promotion needed this cycle.
+
+### STEP 5/6 — execution gate: no direct fix. Audits all clean (no reproduced repo-code finding). Improve worker active (a2d10dcf) → no autonomy-cycle dispatch (would violate max_concurrent=1 spirit; also no reproduced finding to fix).
+
+### STEP 7 — invariants: pytest tests/unit/er000_phase0_golden/ -q → 15 passed ✓
+
+### STEP 8 — watcher health: 8/8 running, stable PIDs (intake 19334, goal 19345, test 19360, improve 19371, propose 19389, review 19407, spec 19431, watchdog 19441). No non-143 crashes. Transient 429 at goal 09:11:05 — handled gracefully. No Tracebacks in any log.
+
+### Blocked work classification
+- a2d10dcf: EXECUTING (live, improve worker) — validate result/task→Done next cycle.
+- 0f1612ea + 3a3c202f + 12 others: Backlog — available for re-dispatch.
+- Operator-blocked: none | Parked: no
+
+### KNOWN OPEN ISSUES (carry forward)
+- Campaign 10c50210 CANCELLED.
+- HYGIENE: `.baseline-validation.json` tracked on OC main (operationally neutralized by cycle-28 reorder).
+- CI: ruff + ty failing for OC — monitored via propose pipeline (a2d10dcf addresses test_signal; ci_pattern deferred by gating).
+
 ## OC Platform Watchdog Cycle — 2026-05-24 00:50 UTC (Cycle 34)
 
 - Health state: ACTIVE — closed loop still draining. 3a3c202f ("Harden Collector against malformed JSON statuses payloads") LIVE-EXECUTING (execute.main PID 972746; active child claude PID 1106443 @11.9% CPU running Stage 4: "Comprehensive testing with malformed inputs"). Stages 0–2 completed with REAL code landed in workspace (validation.py +250 LOC, 5 collectors hardened: benchmark/security/coverage/architecture/ci_history; STAGE_3_IMPLEMENTATION.md written). result.json still unwritten → ACTIVE, not HEALTHY.

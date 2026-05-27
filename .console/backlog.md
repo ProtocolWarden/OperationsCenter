@@ -157,3 +157,10 @@ None of these items reopen boundaries.
 ## Cycle 28 updates (2026-05-23)
 - [x] Fix workspace-prep ordering bug: checkout base branch before bootstrap/baseline so a tracked `.baseline-validation.json` on the clone default branch can't dirty the tree and abort `git checkout <base_branch>` (workspace.py). Was blocking ALL OC goal tasks (e.g. bfb289b3). Goal worker restarted with fresh code.
 - [ ] HYGIENE: untrack `.baseline-validation.json` from OperationsCenter main on the GitHub remote + add to .gitignore (operator/remote-push; impact already neutralized by the workspace.py reorder).
+
+## Cycle 36 updates (2026-05-27)
+- [x] Board-unblock healed 14 tasks: 13 IMPROVE_UNBLOCK (stale Blocked >4h → Backlog) + 1 STALE_IN_REVIEW (0f1612ea InReview→Backlog). Key tasks re-queued: 3a3c202f "Harden Collector" + 0f1612ea "Handle Optional observed_at".
+- [x] Propose created a2d10dcf "Restore repeated missing test_signal coverage" — improve worker active.
+- [ ] Monitor a2d10dcf execution outcome next cycle (test_signal coverage restoration for OC).
+- [ ] Monitor 0f1612ea + 3a3c202f re-dispatch by goal worker (now in Backlog).
+- [ ] CI: ruff + ty failing for OC — monitored via propose; ci_pattern family deferred by initial gating.
