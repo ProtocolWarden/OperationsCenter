@@ -84,6 +84,7 @@ operations-center-spec-hygiene      = "operations_center.entrypoints.spec_hygien
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0",
+  "pytest-xdist>=3.0",
   "ruff>=0.5",
   "ty>=0.0.28",
   "custodian @ git+https://github.com/ProtocolWarden/Custodian.git@main",
@@ -101,6 +102,14 @@ filterwarnings = [
 markers = [
   "integration: tests that require a live external service (run with: pytest tests/integration/ -v)",
 ]
+# xdist configuration for parallel test execution
+# Distribution strategy: loadscope (groups tests by class/module to respect fixture boundaries)
+# Usage: pytest -n auto --dist=loadscope  (auto-detect CPU count)
+#        pytest -n 4 --dist=loadscope     (4 workers)
+#        pytest -n auto --dist=loadfile   (one file per worker; alternative strategy)
+# For CI/batch runs: pytest -n auto --dist=loadscope -x (stop on first failure)
+# For fixture audits: pytest -n 1 (single worker; disables parallelization)
+addopts = "--strict-markers"
 
 [tool.ruff]
 line-length = 100
