@@ -43,19 +43,37 @@ class DependencyDriftDeriver:
                         last_seen_at=available_snapshots[0].observed_at,
                     )
                 )
-        if len(snapshots) > 1 and current_status != snapshots[1].signals.dependency_drift.status and current_status == "not_available":
-            insights.append(
-                self.normalizer.normalize(
-                    kind="dependency_drift_continuity",
-                    subject="dependency_drift",
-                    status="present",
-                    key_parts=["not_available", "transition"],
-                    evidence={
-                        "previous_status": snapshots[1].signals.dependency_drift.status,
-                        "current_status": current_status,
-                    },
-                    first_seen_at=snapshots[1].observed_at,
-                    last_seen_at=snapshots[0].observed_at,
-                )
-            )
+        if len(snapshots) > 1:
+            previous_status = snapshots[1].signals.dependency_drift.status
+            if current_status != previous_status:
+                if current_status == "not_available":
+                    insights.append(
+                        self.normalizer.normalize(
+                            kind="dependency_drift_continuity",
+                            subject="dependency_drift",
+                            status="present",
+                            key_parts=["not_available", "transition"],
+                            evidence={
+                                "previous_status": previous_status,
+                                "current_status": current_status,
+                            },
+                            first_seen_at=snapshots[1].observed_at,
+                            last_seen_at=snapshots[0].observed_at,
+                        )
+                    )
+                elif current_status == "available" and previous_status == "not_available":
+                    insights.append(
+                        self.normalizer.normalize(
+                            kind="dependency_drift_continuity",
+                            subject="dependency_drift",
+                            status="present",
+                            key_parts=["available", "recovery"],
+                            evidence={
+                                "previous_status": previous_status,
+                                "current_status": current_status,
+                            },
+                            first_seen_at=snapshots[1].observed_at,
+                            last_seen_at=snapshots[0].observed_at,
+                        )
+                    )
         return insights

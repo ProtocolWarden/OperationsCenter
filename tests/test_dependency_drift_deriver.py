@@ -114,3 +114,30 @@ class TestDependencyDriftDeriver:
         assert current.last_seen_at == newer
         assert persistent.first_seen_at == older
         assert persistent.last_seen_at == newer
+
+    def test_transition_not_available_to_available_recovery(self) -> None:
+        deriver = DependencyDriftDeriver(_normalizer())
+        newer = datetime(2026, 4, 7, 12, 0, 0, tzinfo=UTC)
+        older = datetime(2026, 4, 6, 12, 0, 0, tzinfo=UTC)
+        snap_recent = _make_snapshot(dependency_drift_status="available", observed_at=newer)
+        snap_older = _make_snapshot(dependency_drift_status="not_available", observed_at=older)
+        insights = deriver.derive([snap_recent, snap_older])
+        # Recovery generates both 'current' and 'recovery' insights
+        assert len(insights) == 2
+        recovery = [i for i in insights if "recovery" in i.dedup_key][0]
+        assert recovery.evidence["previous_status"] == "not_available"
+        assert recovery.evidence["current_status"] == "available"
+
+    def test_recovery_followed_by_persistence(self) -> None:
+        deriver = DependencyDriftDeriver(_normalizer())
+        t1 = datetime(2026, 4, 5, 12, 0, 0, tzinfo=UTC)
+        t2 = datetime(2026, 4, 6, 12, 0, 0, tzinfo=UTC)
+        t3 = datetime(2026, 4, 7, 12, 0, 0, tzinfo=UTC)
+        snap_broken = _make_snapshot(dependency_drift_status="not_available", observed_at=t1)
+        snap_recovered = _make_snapshot(dependency_drift_status="available", observed_at=t2)
+        snap_persistent = _make_snapshot(dependency_drift_status="available", observed_at=t3)
+        insights = deriver.derive([snap_persistent, snap_recovered, snap_broken])
+        assert len(insights) == 2
+        kinds = {i.dedup_key for i in insights}
+        assert any("current" in k for k in kinds)
+        assert any("persistent" in k for k in kinds)
