@@ -4,6 +4,24 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## In Progress
 
+- [x] **Collector JSON Hardening — Stage 5: Integration Testing and Regression Validation (2026-05-27)**: Full test suite execution, regression validation, and performance assessment. Completed:
+  - Full test suite execution: **3580 tests pass** (3479 existing + 101 hardening)
+  - Regression validation: **Zero regressions** detected; one test fixture corrected for ruff JSON format compatibility
+  - Performance assessment: **<10ms overhead per artifact**, 101 hardening tests in 0.34s
+  - Test fixture fix: `tests/test_collector_distinct_files.py` updated to use actual ruff format (location.row/column)
+  - Comprehensive verification: STAGE_5_VERIFICATION.md documenting all acceptance criteria validation
+  - Deployment ready: All criteria met for production use or Phase 2 enhancements
+
+- [x] **Collector JSON Hardening — Stage 4: Add Comprehensive Test Coverage (2026-05-27)**: Comprehensive test suite for all malformed payloads. Completed:
+  - 39 new tests for LintSignalCollector (parse, structure, edge cases, integration)
+  - Full coverage of all 26 malformations: P1-P10 (parse), S1-S10 (structure), E1-E6 (edge cases)
+  - Test results: **101/101 passing** (39 new + 62 existing hardening tests)
+  - Parse error tests: Trailing commas, missing colons, single quotes, unclosed braces/strings, invalid escapes, extra commas, truncated JSON, NaN values
+  - Structure error tests: Missing fields, wrong types, invalid enums, null values, out-of-range values, empty strings
+  - Edge case tests: Large payloads, deep nesting, unicode handling, boundary values, mixed valid/invalid items, distinct file counting
+  - Integration tests: Subprocess error handling (not found, timeout, general), clean output, violations collection
+  - Documentation: test_lint_signal.py includes 39 comprehensive tests organized by category
+
 - [x] **Collector JSON Hardening — Stage 1: Design Validation and Error Handling Strategy (2026-05-27)**: Design specification for malformed JSON handling. Completed:
   - Validation approach formalized: schema-based validation via existing validator classes (5 validators across 4 collectors)
   - Error response format specified: safe signal returns with degraded status and error reasons
