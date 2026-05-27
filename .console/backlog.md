@@ -4,14 +4,44 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## In Progress
 
-- [x] **Collector JSON Hardening — Stage 4: Security Logging and Observability (2026-05-23)**: Security logging with audit trail and alert conditions for malformed JSON detection. Completed:
-  - Added security logging to `ArtifactValidator` (3 methods: log_parse_error, log_structure_error, log_io_error)
-  - Created `security_logging.py` module with alert conditions, metrics tracking, and observability layer
-  - Defined 4 alert conditions: parse_error_spike (10/5min), structure_error_surge (5/5min), permission_denied_pattern (3/10min), collector_health_degradation (5/5min)
-  - Applied security logging to 3 critical collectors (dependency_drift, execution_health, validation_history)
-  - Created comprehensive test suite (17 tests covering logging, metrics, alerts, collector integration)
-  - Validated log output against security requirements (PII exclusion, format, log levels, mandatory fields)
-  - All code compiled and ready for merge; documentation complete
+- [x] **Collector JSON Hardening — Stage 2: Implementation Verification (2026-05-27)**: Independent verification of Stage 2 JSON validation and error handling implementation. Completed:
+  - Code audit: Confirmed validation.py with 5 validators and 3 logging methods properly imported in all collectors
+  - Pattern verification: Three-stage error handling (File I/O → JSON Parse → Structure) implemented in all 6 collectors  
+  - Crash prevention: 0 unprotected json.loads() calls, all exceptions caught, all error paths return safe signals
+  - Test coverage: 101+ tests in 5 files covering 26+ malformation scenarios
+  - Documentation: STAGE_2_IMPLEMENTATION_VERIFICATION.md created with full acceptance criteria verification
+  - All three acceptance criteria met: input validation ✅, error handling ✅, no crashes ✅
+
+- [x] **Collector JSON Hardening — Stage 6: Documentation and Deployment Preparation (2026-05-27)**: Complete stage documentation with error handling examples, deployment checklist, and release notes. Completed:
+  - STAGE_6_DEPLOYMENT.md created with 3 parts: (1) Error Handling Behavior with 8+ examples per error type, (2) Deployment Checklist with pre/post/rollback procedures, (3) Release Notes with backward compatibility verification
+  - CHANGELOG.md updated with [1.2.4] release section including Added, Fixed, Changed, Verified, and Documentation subsections
+  - .console/task.md, backlog.md, log.md updated to mark Stage 6 complete
+  - All 6 stages (0-6) complete: 3580 tests passing, zero regressions, ready for production deployment
+
+- [x] **Collector JSON Hardening — Stage 5: Integration Testing and Regression Validation (2026-05-27)**: Full test suite execution, regression validation, and performance assessment. Completed:
+  - Full test suite execution: **3580 tests pass** (3479 existing + 101 hardening)
+  - Regression validation: **Zero regressions** detected; one test fixture corrected for ruff JSON format compatibility
+  - Performance assessment: **<10ms overhead per artifact**, 101 hardening tests in 0.34s
+  - Test fixture fix: `tests/test_collector_distinct_files.py` updated to use actual ruff format (location.row/column)
+  - Comprehensive verification: STAGE_5_VERIFICATION.md documenting all acceptance criteria validation
+  - Deployment ready: All criteria met for production use or Phase 2 enhancements
+
+- [x] **Collector JSON Hardening — Stage 4: Add Comprehensive Test Coverage (2026-05-27)**: Comprehensive test suite for all malformed payloads. Completed:
+  - 39 new tests for LintSignalCollector (parse, structure, edge cases, integration)
+  - Full coverage of all 26 malformations: P1-P10 (parse), S1-S10 (structure), E1-E6 (edge cases)
+  - Test results: **101/101 passing** (39 new + 62 existing hardening tests)
+  - Parse error tests: Trailing commas, missing colons, single quotes, unclosed braces/strings, invalid escapes, extra commas, truncated JSON, NaN values
+  - Structure error tests: Missing fields, wrong types, invalid enums, null values, out-of-range values, empty strings
+  - Edge case tests: Large payloads, deep nesting, unicode handling, boundary values, mixed valid/invalid items, distinct file counting
+  - Integration tests: Subprocess error handling (not found, timeout, general), clean output, violations collection
+  - Documentation: test_lint_signal.py includes 39 comprehensive tests organized by category
+
+- [x] **Collector JSON Hardening — Stage 1: Design Validation and Error Handling Strategy (2026-05-27 → REVALIDATED)**: Formal specification meeting all acceptance criteria. Completed:
+  - **REQUIREMENT 1: Validation Rules Defined** — Part I specifies 5+ rules per collector (DependencyDrift: 5 rules, ExecutionHealth: 15+ rules, LintSignal: 8+ rules) with complete validation tables showing stage, rule ID, description, type, requirement level, constraint
+  - **REQUIREMENT 2: Error Handling Approach Documented** — Part II documents three-stage architecture (File I/O → JSON Parse → Structure), error flow diagram, exception guarantee ("no collector raises to caller"), logging format with concrete examples for parse/structure/IO errors
+  - **REQUIREMENT 3: Recovery/Resilience Strategy Approved** — Part III specifies graceful degradation levels (0-3 from full data to unavailable), partial data handling with code examples, system continuity preventing cascade failures, four concrete recovery scenarios
+  - **Implementation Readiness Checklist:** All items verified (validation rules formalized, error handling flow documented, recovery strategy documented, safe signal formats defined, logging spec complete, test strategy identified)
+  - Documentation: `STAGE_1_VALIDATION_RULES_AND_ERROR_HANDLING.md` (supersedes STAGE_1_DESIGN.md, provides formal acceptance-grade deliverable)
 
 - [ ] **CxRP — review and refine quarantined `ShippingForm` + related OC branch work on `operations-center-testing-branch` (2026-05-11)**: Treat `operations-center-testing-branch` as the temporary quarantine/staging lane for OC-authored cross-repo work. Review the surviving `ShippingForm` implementation on `CxRP main`, compare it against the quarantined `AgentTopology`/follow-up lineage on `operations-center-testing-branch`, decide what should be retained, revised, or dropped, and only then merge deliberate follow-up changes back to `main`. Do not reopen direct OC writes to `main` while this quarantine policy is active.
 
@@ -118,6 +148,15 @@ None of these items reopen boundaries.
 - [ ] **ER-004 — Swarm Primitive (DEFERRED)**: Not approved for implementation. Entry criteria (all required before kickoff): (1) real workflow fails without swarm, (2) one-shot insufficient, (3) lifecycle insufficient, (4) required roles defined, (5) merge behavior defined. If unmet → DO NOT IMPLEMENT.
 
 ## Done
+
+- [x] **Collector JSON Hardening — Stage 3: Verification and Testing (2026-05-27)**: Verified Stage 2 implementation and fixed critical LintItemValidator bug. Deliverables:
+  - ✅ **All 118 tests passing** (101 hardening + 17 security logging tests)
+  - ✅ **Parse exceptions:** All 9 parse-level malformations (P1-P10) tested; JSONDecodeError, OSError, UnicodeDecodeError all caught
+  - ✅ **Error messages:** Structured logging with field names, types, line/column numbers; all collectors return safe signals on error
+  - ✅ **Error codes:** Parse→400, Structure→422, I/O→403/404 mapped and implemented
+  - **Critical fix:** LintItemValidator format mismatch corrected (location.row/column vs location.start.line/column)
+  - **Test suite:** 22 validator unit tests + 39 lint signal tests + 16 dependency drift + 19 execution health + 17 security logging
+  - **Documentation:** STAGE_3_VERIFICATION.md completed with independent verification results
 
 - [x] **Collector JSON Hardening — Stage 2: Implementation (2026-05-23)**: Hardened Collector against malformed JSON payloads. Completed:
   - Created `src/operations_center/observer/validation.py` with `ParseErrorMetadata`, `ArtifactValidator` base class, and per-collector validators (`ExecutionOutcomeValidator`, `RequestValidator`, `ValidationHistoryValidator`, `DependencyReportValidator`, `LintItemValidator`)
