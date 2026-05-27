@@ -532,29 +532,57 @@ class LintItemValidator(ArtifactValidator):
                 f"got {type(loc).__name__}"
             )
 
-        if "start" not in loc:
-            return False, (
-                f"[{item_idx}].location: missing required field 'start'"
-            )
+        # ruff output uses location.row/column, not location.start.line/column
+        # Validate that at least one coordinate exists and is valid
+        has_row = "row" in loc
+        has_column = "column" in loc
 
-        start = loc["start"]
-        if not isinstance(start, dict):
-            return False, (
-                f"[{item_idx}].location.start: expected dict, "
-                f"got {type(start).__name__}"
-            )
-
-        if "line" in start:
-            line = start["line"]
-            if not isinstance(line, int):
+        if has_row:
+            row = loc["row"]
+            if not isinstance(row, int):
                 return False, (
-                    f"[{item_idx}].location.start.line: expected int, "
-                    f"got {type(line).__name__}"
+                    f"[{item_idx}].location.row: expected int, "
+                    f"got {type(row).__name__}"
                 )
-            if not (1 <= line <= 1000000):
+            if not (1 <= row <= 1000000):
                 return False, (
-                    f"[{item_idx}].location.start.line {line} "
+                    f"[{item_idx}].location.row {row} "
                     f"out of range [1, 1000000]"
+                )
+
+        if has_column:
+            column = loc["column"]
+            if not isinstance(column, int):
+                return False, (
+                    f"[{item_idx}].location.column: expected int, "
+                    f"got {type(column).__name__}"
+                )
+            if not (0 <= column <= 1000000):
+                return False, (
+                    f"[{item_idx}].location.column {column} "
+                    f"out of range [0, 1000000]"
+                )
+
+        # At least one coordinate should be present
+        if not (has_row or has_column):
+            return False, (
+                f"[{item_idx}].location: missing required fields 'row' or 'column'"
+            )
+
+        # Validate optional but expected fields
+        if "code" in item:
+            code = item["code"]
+            if not ArtifactValidator.is_nonempty_string(code):
+                return False, (
+                    f"[{item_idx}].code: must be non-empty string if present"
+                )
+
+        if "message" in item:
+            message = item["message"]
+            if not isinstance(message, str):
+                return False, (
+                    f"[{item_idx}].message: expected str, "
+                    f"got {type(message).__name__}"
                 )
 
         return True, ""

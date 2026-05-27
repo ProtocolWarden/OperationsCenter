@@ -4,14 +4,14 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## In Progress
 
-- [x] **Collector JSON Hardening — Stage 4: Security Logging and Observability (2026-05-23)**: Security logging with audit trail and alert conditions for malformed JSON detection. Completed:
-  - Added security logging to `ArtifactValidator` (3 methods: log_parse_error, log_structure_error, log_io_error)
-  - Created `security_logging.py` module with alert conditions, metrics tracking, and observability layer
-  - Defined 4 alert conditions: parse_error_spike (10/5min), structure_error_surge (5/5min), permission_denied_pattern (3/10min), collector_health_degradation (5/5min)
-  - Applied security logging to 3 critical collectors (dependency_drift, execution_health, validation_history)
-  - Created comprehensive test suite (17 tests covering logging, metrics, alerts, collector integration)
-  - Validated log output against security requirements (PII exclusion, format, log levels, mandatory fields)
-  - All code compiled and ready for merge; documentation complete
+- [x] **Collector JSON Hardening — Stage 1: Design Validation and Error Handling Strategy (2026-05-27)**: Design specification for malformed JSON handling. Completed:
+  - Validation approach formalized: schema-based validation via existing validator classes (5 validators across 4 collectors)
+  - Error response format specified: safe signal returns with degraded status and error reasons
+  - JSON malformations documented: 26 total across 3 categories (10 parse-level P1-P10, 10 structure-level S1-S10, 6 edge cases E1-E6)
+  - Implementation map provided: Stage 1-3 validation code lines, validator class structure, test coverage
+  - HTTP status codes and logging format specified (for future API layer and observability)
+  - Integration checklist: validators/error handling/security logging framework all existing and ready
+  - Documentation complete (STAGE_1_DESIGN.md with 8-section specification covering approach, error formats, malformations, implementation map, test coverage, logging, acceptance criteria, integration)
 
 - [ ] **CxRP — review and refine quarantined `ShippingForm` + related OC branch work on `operations-center-testing-branch` (2026-05-11)**: Treat `operations-center-testing-branch` as the temporary quarantine/staging lane for OC-authored cross-repo work. Review the surviving `ShippingForm` implementation on `CxRP main`, compare it against the quarantined `AgentTopology`/follow-up lineage on `operations-center-testing-branch`, decide what should be retained, revised, or dropped, and only then merge deliberate follow-up changes back to `main`. Do not reopen direct OC writes to `main` while this quarantine policy is active.
 
@@ -118,6 +118,14 @@ None of these items reopen boundaries.
 - [ ] **ER-004 — Swarm Primitive (DEFERRED)**: Not approved for implementation. Entry criteria (all required before kickoff): (1) real workflow fails without swarm, (2) one-shot insufficient, (3) lifecycle insufficient, (4) required roles defined, (5) merge behavior defined. If unmet → DO NOT IMPLEMENT.
 
 ## Done
+
+- [x] **Collector JSON Hardening — Stage 3: Implement Error Handling and Graceful Recovery (2026-05-27)**: Completed comprehensive error handling implementation and acceptance criteria verification. Deliverables:
+  - ✅ **Acceptance Criterion 1 (Parse Exceptions):** All 12 json.loads() calls protected; OSError/UnicodeDecodeError/JSONDecodeError all caught; no unprotected paths; all 6 collectors return safe signals on error
+  - ✅ **Acceptance Criterion 2 (Meaningful Error Messages):** Structured logging via ArtifactValidator (3 methods: log_parse_error, log_structure_error, log_io_error); context includes artifact path, error type, line/col, severity; caller receives safe signals with status="not_available"
+  - ✅ **Acceptance Criterion 3 (Error Codes):** Error types categorized (parse_error→400, structure_error→422, io_error→403/404); HTTP status codes mapped and documented; severity levels set for alert routing; ready for API layer integration
+  - **Implementation validated:** STAGE_3_VERIFICATION.md documents independent verification of all criteria against actual code
+  - **Test coverage:** 57+ tests in `tests/observer/test_collectors_hardening/` covering P1-P10, S1-S10, edge cases
+  - **Files:** validation.py (ArtifactValidator framework), 6 collectors (dependency_drift, execution_health, validation_history, lint_signal, security_signal, benchmark_signal)
 
 - [x] **Collector JSON Hardening — Stage 2: Implementation (2026-05-23)**: Hardened Collector against malformed JSON payloads. Completed:
   - Created `src/operations_center/observer/validation.py` with `ParseErrorMetadata`, `ArtifactValidator` base class, and per-collector validators (`ExecutionOutcomeValidator`, `RequestValidator`, `ValidationHistoryValidator`, `DependencyReportValidator`, `LintItemValidator`)
