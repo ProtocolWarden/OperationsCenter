@@ -4,6 +4,12 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## In Progress
 
+- [x] **Collector JSON Hardening — Stage 6: Documentation and Deployment Preparation (2026-05-27)**: Complete stage documentation with error handling examples, deployment checklist, and release notes. Completed:
+  - STAGE_6_DEPLOYMENT.md created with 3 parts: (1) Error Handling Behavior with 8+ examples per error type, (2) Deployment Checklist with pre/post/rollback procedures, (3) Release Notes with backward compatibility verification
+  - CHANGELOG.md updated with [1.2.4] release section including Added, Fixed, Changed, Verified, and Documentation subsections
+  - .console/task.md, backlog.md, log.md updated to mark Stage 6 complete
+  - All 6 stages (0-6) complete: 3580 tests passing, zero regressions, ready for production deployment
+
 - [x] **Collector JSON Hardening — Stage 5: Integration Testing and Regression Validation (2026-05-27)**: Full test suite execution, regression validation, and performance assessment. Completed:
   - Full test suite execution: **3580 tests pass** (3479 existing + 101 hardening)
   - Regression validation: **Zero regressions** detected; one test fixture corrected for ruff JSON format compatibility
