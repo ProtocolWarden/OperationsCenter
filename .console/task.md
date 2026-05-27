@@ -5,9 +5,9 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-Stage 2: Implement JSON Validation and Error Handling in Collector (COMPLETE) ✅
+Collector JSON Hardening — All 6 Stages Complete ✅
 
-**Implementation verified:** All acceptance criteria met with validation.py and hardened collectors deployed
+**Final Status:** Production-ready hardening with 3580 tests passing, zero regressions
 
 ## Context
 
@@ -20,24 +20,43 @@ Stages 0–2 complete:
 - **Stage 5 (2026-05-27):** Integration testing with full test suite execution, regression validation, performance assessment
 - **Stage 6 (2026-05-27):** Completed documentation and deployment preparation with examples, checklist, and release notes
 
-## Definition of Done - Stage 2 Implementation
+## Definition of Done - All Stages Complete
 
-- [x] **Input Validation at Entry Point:** Created validation.py with ArtifactValidator base class and 5 per-collector validators (ExecutionOutcomeValidator, RequestValidator, ValidationHistoryValidator, DependencyReportValidator, LintItemValidator)
-- [x] **Error Handling Implemented:** All 6 collectors (dependency_drift, execution_health, lint_signal, type_check, validation_history, and others) implement three-stage validation:
-  - Stage 1: File I/O (catch OSError, UnicodeDecodeError) → safe signal
-  - Stage 2: JSON Parse (catch JSONDecodeError) → safe signal  
-  - Stage 3: Structure Validation (deterministic type/range/enum checks) → skip or safe signal
-- [x] **Graceful Error Handling:** All error paths logged with ArtifactValidator logging methods (log_parse_error, log_structure_error, log_io_error) and return safe signals — no crashes
+### Stage 0: Vulnerability Analysis ✅
+- 8 JSON parse sites identified
+- 26 malformed payload scenarios documented
+- Vulnerable code paths cataloged
 
-**Status: COMPLETE ✅**
+### Stage 1: Design Specification ✅
+- Validation rules defined for 5+ collectors (30+ rules total)
+- Three-stage error handling architecture specified
+- Recovery/resilience strategy documented
 
-All acceptance criteria met:
-- **Criterion 1:** Input validation added at JSON parsing entry point ✅ (validation.py + 6 collectors)
-- **Criterion 2:** Error handling implemented to gracefully handle malformed data ✅ (three-stage pattern, try/except, safe signals)
-- **Criterion 3:** Collector no longer crashes on malformed JSON payloads ✅ (all errors caught, logged, handled)
+### Stage 2: Implementation ✅
+- `validation.py` created: 589 lines, 5 validators, 8 helper methods
+- All 6 collectors hardened with three-stage error handling
+- 0 unprotected `json.loads()` calls remaining
+- Structured logging: artifact path, error type, line/column, severity
 
-**Implementation Details:**
-- validation.py: 589 lines, 5 validator classes, 8 helper methods
-- Updated collectors: dependency_drift.py (50 lines), execution_health.py (181 lines), lint_signal.py (90 lines), + others
-- Test coverage: 5 test files in tests/observer/test_collectors_hardening/ with 101+ tests
-- Logging: Structured context with artifact path, error type, severity, collector name, line/column for JSON errors
+### Stage 3: Verification & Testing ✅
+- 118 tests passing (101 hardening + 17 security logging)
+- All 26 malformations covered: P1-P10 (parse), S1-S10 (structure), E1-E6 (edge cases)
+- Critical fix: LintItemValidator ruff format compatibility
+
+### Stage 4: Comprehensive Test Coverage ✅
+- 39 new tests for LintSignalCollector
+- Full coverage of parse, structure, edge case, and integration scenarios
+- 101/101 hardening tests passing
+
+### Stage 5: Integration Testing ✅
+- Full test suite: **3580 tests pass** (3479 existing + 101 hardening)
+- **Zero regressions** detected
+- Performance: <10ms overhead per artifact
+- Ready for production deployment
+
+### Stage 6: Documentation & Deployment ✅
+- STAGE_6_DEPLOYMENT.md: Error handling examples, deployment checklist, release notes
+- CHANGELOG.md updated with [1.2.4] release section
+- All documentation complete and verified
+
+**Status: PRODUCTION-READY** ✅

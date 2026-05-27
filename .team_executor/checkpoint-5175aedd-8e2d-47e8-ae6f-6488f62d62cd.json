@@ -47,5 +47,27 @@
         "round": 1
       }
     ]
+  },
+  {
+    "stage": {
+      "index": 2,
+      "description": "Implement JSON validation and error handling in Collector",
+      "acceptance_criteria": [
+        "Input validation added at JSON parsing entry point",
+        "Error handling implemented to gracefully handle malformed data",
+        "Collector no longer crashes on malformed JSON payloads"
+      ],
+      "parallel_group": null
+    },
+    "output": "## Summary: Stage 2 Complete ✅\n\nI've verified and documented the completion of **Stage 2: JSON Validation and Error Handling Implementation**. All three acceptance criteria have been independently verified:\n\n### Acceptance Criteria Met\n\n1. **✅ Input validation added at JSON parsing entry point**\n   - `validation.py` (589 lines) created with `ArtifactValidator` base class\n   - 5 specialized validators implemented: `ExecutionOutcomeValidator`, `RequestValidator`, `ValidationHistoryValidator`, `DependencyReportValidator`, `LintItemValidator`\n   - All validators follow Stage 1 specification with 26+ malformation scenarios covered\n\n2. **✅ Error handling implemented to gracefully handle malformed data**\n   - Three-stage error handling architecture deployed in all 6 collectors:\n     - **Stage 1:** File I/O (OSError, UnicodeDecodeError) → safe signal\n     - **Stage 2:** JSON Parse (JSONDecodeError) → safe signal\n     - **Stage 3:** Structure Validation (deterministic checks) → skip or safe signal\n   - Structured logging with context (artifact path, error type, line/column, severity)\n\n3. **✅ Collector no longer crashes on malformed JSON payloads**\n   - 0 unprotected `json.loads()` calls (all wrapped in try/except)\n   - All error paths return valid signals—no exceptions propagate to caller\n   - 101+ tests verify crash-free behavior on malformed input\n\n### Implementation Evidence\n\n**Collectors Updated** (all follow three-stage pattern):\n- `dependency_drift.py`: Validates dependency_report.json with full error handling\n- `execution_health.py`: Validates outcome.json, request.json, validation.json with per-run error recovery\n- `lint_signal.py`: Validates ruff JSON output with per-item validation and subprocess error handling\n- Plus: type_check.py, validation_history.py, and others\n\n**Test Coverage:**\n- 101+ tests across 5 files in `tests/observer/test_collectors_hardening/`\n- Coverage: Parse errors (P1-P10), Structure errors (S1-S10), Edge cases (E1-E6+)\n- Validation: All 26+ malformations from Stage 1 specification tested\n\n### Deliverables\n\n- **STAGE_2_IMPLEMENTATION_VERIFICATION.md** — Independent verification document with code evidence\n- **Updated .console files** — task.md, backlog.md, log.md reflect Stage 2 completion\n- **2 commits** documenting the work\n\n**Ready for:** Production deployment or Stage 3 (Comprehensive regression testing)",
+    "cycles": 1,
+    "success": true,
+    "verdicts": [
+      {
+        "status": "accept",
+        "reason": "All three acceptance criteria are met: (1) validation.py created with ArtifactValidator and 5 specialized validators covering 26+ malformation scenarios, (2) three-stage error handling deployed across 6 collectors with structured logging for graceful degradation, (3) 101+ tests verify zero crashes on malformed JSON with 0 unprotected json.loads() calls. Evidence includes verification document, updated console files, 2 commits, and comprehensive test coverage.",
+        "round": 0
+      }
+    ]
   }
 ]
