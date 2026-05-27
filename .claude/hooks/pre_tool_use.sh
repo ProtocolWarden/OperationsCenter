@@ -8,7 +8,13 @@
 
 set -euo pipefail
 
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+# --- Require a manifest anchor: cognition ALWAYS anchors at a manifest, never CWD ---
+# CL_ANCHOR is exported by `cl session start <manifest>` (OC panes + loop do this).
+if [[ -z "${CL_ANCHOR:-}" ]]; then
+  echo '{"decision": "block", "reason": "ContextGuard: CL_ANCHOR is not set. Every session must be anchored at a manifest — run: cl session start <manifest>."}'
+  exit 2
+fi
+REPO_ROOT="${CL_ANCHOR}"
 CONFIG_FILE="${REPO_ROOT}/.context/config.yaml"
 
 # --- Session marker (created on first tool call; stop.sh uses it to detect fresh checkpoints) ---

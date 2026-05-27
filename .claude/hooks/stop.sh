@@ -9,7 +9,12 @@
 
 set -euo pipefail
 
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+# Manifest anchor: skip gracefully when unanchored (enforcement is in pre_tool_use).
+if [[ -z "${CL_ANCHOR:-}" ]]; then
+  echo "ContextGuard: CL_ANCHOR not set — no manifest anchor, skipping stop checks." >&2
+  exit 0
+fi
+REPO_ROOT="${CL_ANCHOR}"
 CONFIG_FILE="${REPO_ROOT}/.context/config.yaml"
 
 # --- Session marker (written by pre_tool_use.sh on first tool call this session) ---

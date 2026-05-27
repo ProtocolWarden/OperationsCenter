@@ -11284,3 +11284,7 @@ Cross-cycle repeating patterns:
 
 **Next**: Stage 1 (Add reverse transition tests), Stage 2 (Implement recovery/improvement insights)
 
+
+## 2026-05-24 — Hook hard-requires CL_ANCHOR (rollout)
+
+- .claude/hooks/{pre_tool_use,stop}.sh: resolve .context under CL_ANCHOR (manifest anchor), no CWD fallback. pre_tool_use blocks if unset; stop skips gracefully. CL_ANCHOR supplied by panes + loop (cl session start).
