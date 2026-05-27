@@ -11288,3 +11288,7 @@ Cross-cycle repeating patterns:
 ## 2026-05-24 — Hook hard-requires CL_ANCHOR (rollout)
 
 - .claude/hooks/{pre_tool_use,stop}.sh: resolve .context under CL_ANCHOR (manifest anchor), no CWD fallback. pre_tool_use blocks if unset; stop skips gracefully. CL_ANCHOR supplied by panes + loop (cl session start).
+
+## 2026-05-24 — Loop session-boundary hydrate/capture for codex/aider
+
+- tools/loop/controller.py: run_session now wraps non-claude (codex/aider) sessions with `cl context hydrate` (prepends prior context to the prompt) + `cl context capture` (records exit/log), gated on CL_ANCHOR. claude skipped (per-tool hooks handle it). Stable lineage oc-loop. Gated/no-op if unanchored or cl missing. Tests extended.

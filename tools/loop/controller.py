@@ -151,6 +151,63 @@ def _anchor_via_cl(env: dict[str, str]) -> None:
             env[key.strip()] = val.strip().strip("'\"")
 
 
+# Stable lineage for this loop's session-boundary cognition (resumes across runs
+# within an anchored session).
+_CL_LINEAGE = "oc-loop"
+
+
+def _cl_session_boundary(backend: str, env: dict[str, str]) -> bool:
+    """True for backends that need session-boundary CL (no per-tool hooks).
+
+    claude runs the ContextGuard hooks per tool call, so it does NOT use the
+    boundary hydrate/capture path. codex (PostToolUse-only, no live PreToolUse)
+    and aider (no hooks) DO. Gated on an active anchor.
+    """
+    return backend != "claude" and bool(env.get("CL_ANCHOR"))
+
+
+def _cl_hydrate(backend: str, env: dict[str, str], iteration: int, prompt: str) -> str:
+    """Prepend prior ContextLifecycle context to the prompt for non-hook backends.
+
+    No-op for claude, when unanchored, or if `cl` is unavailable.
+    """
+    if not _cl_session_boundary(backend, env):
+        return prompt
+    work_item = json.dumps({"loop": "oc", "iteration": iteration, "backend": backend})
+    try:
+        out = subprocess.run(
+            ["cl", "context", "hydrate", "--lineage", _CL_LINEAGE, "--work-item", work_item],
+            cwd=REPO_ROOT, env=env, capture_output=True, text=True, timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return prompt
+    if out.returncode != 0 or not out.stdout.strip():
+        return prompt
+    return (
+        "# Prior session context (ContextLifecycle hydrate)\n```json\n"
+        + out.stdout.strip()
+        + "\n```\n\n"
+        + prompt
+    )
+
+
+def _cl_capture(backend: str, env: dict[str, str], iteration: int, exit_code: int, log_path: Path) -> None:
+    """Capture the session result into ContextLifecycle for non-hook backends. No-op otherwise."""
+    if not _cl_session_boundary(backend, env):
+        return
+    result = json.dumps(
+        {"loop": "oc", "iteration": iteration, "backend": backend,
+         "exit_code": exit_code, "log": str(log_path)}
+    )
+    try:
+        subprocess.run(
+            ["cl", "context", "capture", "--lineage", _CL_LINEAGE, "--result", result],
+            cwd=REPO_ROOT, env=env, capture_output=True, text=True, timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
 def _session_env(backend: str) -> dict[str, str]:
     env = os.environ.copy()
     _anchor_via_cl(env)
@@ -452,8 +509,9 @@ def get_delay() -> int:
 def run_session(iteration: int, backend: str = "claude") -> tuple[int, Path]:
     """Spawn one bounded agent session. Returns (exit_code, session_log_path)."""
     prompt = load_session_prompt()
-    cmd = _session_command(backend, prompt)
     env = _session_env(backend)
+    prompt = _cl_hydrate(backend, env, iteration, prompt)
+    cmd = _session_command(backend, prompt)
 
     SESSION_LOG_DIR.mkdir(parents=True, exist_ok=True)
     session_log = _session_log_path(iteration, backend)
@@ -488,8 +546,10 @@ def run_session(iteration: int, backend: str = "claude") -> tuple[int, Path]:
                 f"killed (likely hung subprocess, e.g. self-referential pgrep loop). "
                 f"Log: {session_log.name}"
             )
+            _cl_capture(backend, env, iteration, -1, session_log)
             return -1, session_log
 
+    _cl_capture(backend, env, iteration, proc.returncode, session_log)
     return proc.returncode, session_log
 
 
