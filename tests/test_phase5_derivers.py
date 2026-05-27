@@ -536,6 +536,66 @@ class TestNoneObservedAtEdgeCases:
         assert insights[0].first_seen_at == snap.observed_at
 
 
+class TestNoneObservedAtNoDataScenarios:
+    """Edge case: signal with None observed_at AND no meaningful data (unavailable/empty)."""
+
+    def test_architecture_signal_no_data_with_none_observed_at(self) -> None:
+        """Architecture signal with None observed_at and unavailable status produces no insights."""
+        deriver = ArchitectureDriftDeriver(_normalizer())
+        snap = _make_snapshot(
+            architecture_signal=ArchitectureSignal(
+                status="unavailable",
+                observed_at=None,  # No timestamp
+            )
+        )
+        insights = deriver.derive([snap])
+        assert len(insights) == 0
+
+    def test_benchmark_signal_no_data_with_none_observed_at(self) -> None:
+        """Benchmark signal with None observed_at and empty regressions produces no insights."""
+        deriver = BenchmarkRegressionDeriver(_normalizer())
+        snap = _make_snapshot(
+            benchmark_signal=BenchmarkSignal(
+                status="regression",
+                benchmark_count=0,
+                regressions=[],  # No data
+                observed_at=None,
+            )
+        )
+        insights = deriver.derive([snap])
+        assert len(insights) == 0
+
+    def test_security_signal_no_data_with_none_observed_at(self) -> None:
+        """Security signal with None observed_at and zero advisories produces no insights."""
+        deriver = SecurityVulnDeriver(_normalizer())
+        snap = _make_snapshot(
+            security_signal=SecuritySignal(
+                status="advisories",
+                advisory_count=0,
+                critical_count=0,
+                high_count=0,
+                observed_at=None,  # No timestamp
+            )
+        )
+        insights = deriver.derive([snap])
+        assert len(insights) == 0
+
+    def test_coverage_signal_no_data_with_none_observed_at(self) -> None:
+        """Coverage signal with None observed_at and good coverage produces no insights."""
+        deriver = CoverageGapDeriver(_normalizer())
+        snap = _make_snapshot(
+            coverage_signal=CoverageSignal(
+                status="measured",
+                total_coverage_pct=95.0,  # Good coverage, no gap
+                uncovered_file_count=0,
+                uncovered_threshold_pct=80.0,
+                observed_at=None,
+            )
+        )
+        insights = deriver.derive([snap])
+        assert len(insights) == 0
+
+
 # ── Wiring test ──────────────────────────────────────────────────────
 
 
