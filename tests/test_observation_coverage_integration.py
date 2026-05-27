@@ -75,3 +75,79 @@ class TestObservationCoveragePipeline:
         assert spec.proposal_outline.title_hint == (
             "Restore repeated missing dependency_drift coverage"
         )
+
+
+# ── Tests for None observed_at (Stage 3 coverage) ─────────────────────
+
+
+class TestObservationCoverageWithNoneObservedAt:
+    """Verify ObservationCoverageDeriver handles signal.observed_at=None correctly."""
+
+    def test_unknown_test_signal_with_none_observed_at(self) -> None:
+        """CheckSignal with None observed_at should use snapshot's observed_at as fallback."""
+        from pathlib import Path
+        from operations_center.observer.models import CheckSignal, RepoContextSnapshot, RepoSignalsSnapshot, RepoStateSnapshot, TodoSignal, DependencyDriftSignal
+
+        deriver = ObservationCoverageDeriver(_normalizer())
+        now = datetime(2026, 4, 20, 12, tzinfo=UTC)
+        snap = RepoStateSnapshot(
+            run_id="obs_none_check",
+            observed_at=now,
+            source_command="test",
+            repo=RepoContextSnapshot(
+                name="test-repo",
+                path=Path("/tmp/test-repo"),
+                current_branch="main",
+                base_branch="main",
+                is_dirty=False,
+            ),
+            signals=RepoSignalsSnapshot(
+                test_signal=CheckSignal(status="unknown", observed_at=None),  # signal has no timestamp
+                dependency_drift=DependencyDriftSignal(status="available"),
+                todo_signal=TodoSignal(),
+            ),
+        )
+        insights = deriver.derive([snap])
+        assert len(insights) >= 1
+        test_insights = [i for i in insights if i.subject == "test_signal"]
+        assert len(test_insights) == 1
+        # Should use snapshot.observed_at as fallback
+        assert test_insights[0].first_seen_at == now
+        assert test_insights[0].last_seen_at == now
+
+    def test_persistent_unknown_with_none_observed_at(self) -> None:
+        """Multiple snapshots with CheckSignal.observed_at=None should use snapshot times."""
+        from pathlib import Path
+        from operations_center.observer.models import CheckSignal, RepoContextSnapshot, RepoSignalsSnapshot, RepoStateSnapshot, TodoSignal, DependencyDriftSignal
+
+        deriver = ObservationCoverageDeriver(_normalizer())
+        t0 = datetime(2026, 4, 20, 12, tzinfo=UTC)
+        snaps = []
+        for i in range(3):
+            snap = RepoStateSnapshot(
+                run_id=f"obs_none_{i}",
+                observed_at=t0 - timedelta(hours=i),
+                source_command="test",
+                repo=RepoContextSnapshot(
+                    name="test-repo",
+                    path=Path("/tmp/test-repo"),
+                    current_branch="main",
+                    base_branch="main",
+                    is_dirty=False,
+                ),
+                signals=RepoSignalsSnapshot(
+                    test_signal=CheckSignal(status="unknown", observed_at=None),
+                    dependency_drift=DependencyDriftSignal(status="available"),
+                    todo_signal=TodoSignal(),
+                ),
+            )
+            snaps.append(snap)
+
+        insights = deriver.derive(snaps)
+        test_insights = [i for i in insights if i.subject == "test_signal"]
+        # Should get persistent insight (consecutive unavailable)
+        persistent = [i for i in test_insights if "persistent" in i.dedup_key]
+        assert len(persistent) == 1
+        # Timestamps should come from snapshots (fallback)
+        assert persistent[0].first_seen_at == t0 - timedelta(hours=2)
+        assert persistent[0].last_seen_at == t0
