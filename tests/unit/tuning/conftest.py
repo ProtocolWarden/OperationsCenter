@@ -21,9 +21,6 @@ from operations_center.observability.recorder import ExecutionRecorder
 from operations_center.observability.models import ExecutionRecord
 
 
-_recorder = ExecutionRecorder()
-
-
 def make_result(
     *,
     run_id: str = "run-0001",
@@ -89,7 +86,8 @@ def make_record(
     if risk_level is not None:
         metadata["risk_level"] = risk_level
 
-    return _recorder.record(
+    recorder = ExecutionRecorder()
+    return recorder.record(
         result,
         backend=backend,
         lane=lane,
@@ -156,7 +154,8 @@ def make_unknown_changed_files(
     metadata: dict[str, str] = {}
     if "duration_ms" in kw:
         metadata["duration_ms"] = str(kw.pop("duration_ms"))
-    return _recorder.record(result, backend=backend, lane=lane, metadata=metadata)
+    recorder = ExecutionRecorder()
+    return recorder.record(result, backend=backend, lane=lane, metadata=metadata)
 
 
 def make_n_successes(
