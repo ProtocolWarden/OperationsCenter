@@ -60,24 +60,83 @@ class LintDriftDeriver:
 
         if len(snapshots) > 1:
             previous_lint = snapshots[1].signals.lint_signal
-            if (
-                previous_lint.status != "unavailable"
-                and current_lint.violation_count > previous_lint.violation_count
-            ):
-                delta = current_lint.violation_count - previous_lint.violation_count
+            status_changed = current_lint.status != previous_lint.status
+            if previous_lint.status != "unavailable" and not status_changed:
+                if current_lint.violation_count > previous_lint.violation_count:
+                    delta = current_lint.violation_count - previous_lint.violation_count
+                    insights.append(
+                        self.normalizer.normalize(
+                            kind="lint_drift",
+                            subject="lint_violations",
+                            status="worsened",
+                            key_parts=["lint_violations", "worsened"],
+                            evidence={
+                                "current_count": current_lint.violation_count,
+                                "previous_count": previous_lint.violation_count,
+                                "delta": delta,
+                                "distinct_file_count": (
+                                    current_lint.distinct_file_count
+                                    or len({v.path for v in current_lint.top_violations})
+                                ),
+                            },
+                            first_seen_at=snapshots[1].observed_at,
+                            last_seen_at=snapshots[0].observed_at,
+                        )
+                    )
+                elif current_lint.violation_count < previous_lint.violation_count:
+                    delta = previous_lint.violation_count - current_lint.violation_count
+                    insights.append(
+                        self.normalizer.normalize(
+                            kind="lint_drift",
+                            subject="lint_violations",
+                            status="improved",
+                            key_parts=["lint_violations", "improved"],
+                            evidence={
+                                "current_count": current_lint.violation_count,
+                                "previous_count": previous_lint.violation_count,
+                                "delta": delta,
+                                "distinct_file_count": (
+                                    current_lint.distinct_file_count
+                                    or len({v.path for v in current_lint.top_violations})
+                                ),
+                            },
+                            first_seen_at=snapshots[1].observed_at,
+                            last_seen_at=snapshots[0].observed_at,
+                        )
+                    )
+
+            if current_lint.status == "violations" and previous_lint.status == "clean":
                 insights.append(
                     self.normalizer.normalize(
                         kind="lint_drift",
                         subject="lint_violations",
-                        status="worsened",
-                        key_parts=["lint_violations", "worsened"],
+                        status="regressed",
+                        key_parts=["lint_violations", "regressed"],
                         evidence={
                             "current_count": current_lint.violation_count,
-                            "previous_count": previous_lint.violation_count,
-                            "delta": delta,
+                            "previous_count": previous_lint.violation_count or 0,
                             "distinct_file_count": (
                                 current_lint.distinct_file_count
                                 or len({v.path for v in current_lint.top_violations})
+                            ),
+                        },
+                        first_seen_at=snapshots[1].observed_at,
+                        last_seen_at=snapshots[0].observed_at,
+                    )
+                )
+            elif current_lint.status == "clean" and previous_lint.status == "violations":
+                insights.append(
+                    self.normalizer.normalize(
+                        kind="lint_drift",
+                        subject="lint_violations",
+                        status="resolved",
+                        key_parts=["lint_violations", "resolved"],
+                        evidence={
+                            "current_count": current_lint.violation_count or 0,
+                            "previous_count": previous_lint.violation_count,
+                            "distinct_file_count": (
+                                previous_lint.distinct_file_count
+                                or len({v.path for v in previous_lint.top_violations})
                             ),
                         },
                         first_seen_at=snapshots[1].observed_at,

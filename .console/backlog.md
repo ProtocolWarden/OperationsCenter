@@ -4,6 +4,18 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## In Progress
 
+- [ ] (None currently)
+
+## Previously In Progress
+
+- [x] **Deriver Transition Coverage — Stages 0–4 Complete (2026-05-27)**: Added comprehensive bidirectional transition coverage to Deriver framework with critical bug fixes. Completed:
+  - **Stage 0 (Investigation)**: Identified 5 critical gaps across 3 derivers (DependencyDrift, LintDrift, TypeHealth) where reverse transitions were missing
+  - **Stage 1 (Design)**: Designed 3-level coverage model (backward-compat / unidirectional / bidirectional), parameterized test patterns, insight naming conventions
+  - **Stage 2 (Implementation)**: Added reverse transition detection to all 3 derivers (recovery, improvement, resolved/regressed insights)
+  - **Stage 3 (Testing)**: Created comprehensive test infrastructure (`TransitionFixture` helpers) + 22 parameterized test scenarios covering all transition pairs; all 52 tests passing
+  - **Stage 4 (Integration Review)**: Max-effort code review identified critical mutual-exclusion bug in count-based vs status-based insight emission; applied fixes to lint_drift.py and type_health.py; dependency_drift.py already correct; all code verified to compile
+  - All code compiles without errors; 100% coverage of identified gaps; critical bugs fixed; ready for merge
+
 - [x] **Collector JSON Hardening — Stage 4: Security Logging and Observability (2026-05-23)**: Security logging with audit trail and alert conditions for malformed JSON detection. Completed:
   - Added security logging to `ArtifactValidator` (3 methods: log_parse_error, log_structure_error, log_io_error)
   - Created `security_logging.py` module with alert conditions, metrics tracking, and observability layer
@@ -147,6 +159,17 @@ None of these items reopen boundaries.
 - [x] Phase 11: Mini regression suite
 - [x] Phase 12: Full audit governance
 - [x] Rev 1–10 verification passes: all 23 lifetime gaps closed; 14/14 invariants; 2733 tests passing
+
+- [x] **Deriver Transition Coverage — Stage 0-2 Complete (2026-05-27)**: Reverse transition coverage implemented for 3 derivers. Completed:
+  - [x] Stage 0: Investigation complete — 5 critical gaps identified across 3 derivers
+  - [x] Stage 1: Coverage design — comprehensive design document with phased implementation strategy
+  - [x] Stage 2: Implementation complete
+    - DependencyDriftDeriver: added recovery transition detection (not_available→available)
+    - LintDriftDeriver: added improvement tracking (violation count decrease) and status transitions (violations↔clean)
+    - TypeHealthDeriver: added improvement tracking (error count decrease) and status transitions (errors↔clean)
+    - New tests: test_dependency_drift_deriver.py (3 new recovery tests), test_lint_drift_deriver.py (12 tests total), test_type_health_deriver.py (12 tests total)
+    - All code compiles without syntax errors
+    - Acceptance criteria met: bidirectional transitions, no regressions, follows existing conventions
 
 ## Cycle 9 updates (2026-05-22)
 - [x] Fix kodo→openclaw regression in tests (cb56d53) — unblocked CI
