@@ -8,6 +8,12 @@ The cross-repo platform architecture (ownership, contracts, routing, backend
 adapters, policy guardrails) lives in [PlatformDeployment/docs/architecture/](https://github.com/ProtocolWarden/PlatformDeployment/tree/main/docs/architecture).
 This directory holds OC-specific material.
 
+## Testing
+
+- [TESTING.md](TESTING.md) — Parallel test execution with pytest-xdist: setup, usage, configuration, and performance.
+- [TESTING_DEVELOPER_GUIDE.md](TESTING_DEVELOPER_GUIDE.md) — Writing parallel-safe tests: fixture patterns, common pitfalls, and best practices.
+- [TESTING_TROUBLESHOOTING.md](TESTING_TROUBLESHOOTING.md) — Diagnosing and fixing parallel test issues: shared state, race conditions, worker crashes.
+
 ## Operator
 
 - [operator/setup.md](operator/setup.md) — First-time setup and config.
