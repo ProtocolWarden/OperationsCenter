@@ -19,9 +19,11 @@ logger = logging.getLogger(__name__)
 
 class DependencyDriftCollector:
     def collect(self, context: ObserverContext) -> DependencyDriftSignal:
-        candidate = self._latest_dependency_report(context.settings.report_root)
-        if candidate is None:
+        result = self._latest_dependency_report(context.settings.report_root)
+        if result is None:
             return DependencyDriftSignal(status="not_available")
+
+        candidate, observed_mtime = result
 
         try:
             text = candidate.read_text(encoding="utf-8")
@@ -64,10 +66,22 @@ class DependencyDriftCollector:
         return DependencyDriftSignal(
             status="available",
             source=str(candidate),
-            observed_at=datetime.fromtimestamp(candidate.stat().st_mtime, tz=UTC),
+            observed_at=datetime.fromtimestamp(observed_mtime, tz=UTC),
             summary=summary,
         )
 
-    def _latest_dependency_report(self, report_root: Path) -> Path | None:
-        candidates = sorted(report_root.glob("*/dependency_report.json"), key=lambda path: path.stat().st_mtime, reverse=True)
-        return candidates[0] if candidates else None
+    def _latest_dependency_report(self, report_root: Path) -> tuple[Path, float] | None:
+        candidates_with_mtime = []
+        for path in report_root.glob("*/dependency_report.json"):
+            try:
+                mtime = path.stat().st_mtime
+                candidates_with_mtime.append((path, mtime))
+            except (FileNotFoundError, OSError):
+                logger.debug("Skipped file during dependency report discovery: %s", path)
+                continue
+
+        if not candidates_with_mtime:
+            return None
+
+        latest_path, latest_mtime = max(candidates_with_mtime, key=lambda x: x[1])
+        return (latest_path, latest_mtime)

@@ -199,3 +199,144 @@ def test_unknown_on_zero_tests_collected(tmp_path: Path) -> None:
         sig = CheckSignalCollector().collect(ctx)
 
     assert sig.status == "unknown"
+
+
+# ------------------------------------------------------------------
+# 8. Guard mechanism: file deleted during discovery (TOCTOU)
+# ------------------------------------------------------------------
+
+
+def test_guard_single_file_deleted_during_discovery(tmp_path: Path) -> None:
+    """Simulate file deleted between glob() and stat() in discovery."""
+    ctx = _make_context(tmp_path)
+
+    # Create multiple log files
+    log1 = ctx.logs_root / "unit_test.log"
+    log2 = ctx.logs_root / "integration_test.log"
+    log1.write_text("collected 2 items\n2 passed in 0.5s\n")
+    log2.write_text("collected 3 items\n3 passed in 1.2s\n")
+
+    # Mock glob to return paths, but stat() for log1 will raise FileNotFoundError
+    # (simulating the file being deleted between glob and stat)
+    from unittest.mock import MagicMock
+
+    original_glob = Path.glob
+    original_stat = Path.stat
+
+    def mock_glob(self, pattern):
+        """Return both paths."""
+        paths = list(original_glob(self, pattern))
+        return iter(paths)
+
+    def mock_stat(self):
+        """Raise FileNotFoundError for log1, normal stat for log2."""
+        if self.name == "unit_test.log":
+            raise FileNotFoundError(f"File deleted: {self}")
+        return original_stat(self)
+
+    with patch.object(Path, 'glob', mock_glob):
+        with patch.object(Path, 'stat', mock_stat):
+            sig = CheckSignalCollector().collect(ctx)
+
+    # Should use log2 (the one that didn't get deleted)
+    assert sig.status == "passed"
+    assert "integration_test.log" in sig.source
+
+
+def test_guard_all_files_deleted_during_discovery(tmp_path: Path) -> None:
+    """Simulate all files deleted during discovery."""
+    ctx = _make_context(tmp_path)
+
+    # Create log file
+    log = ctx.logs_root / "unit_test.log"
+    log.write_text("collected 2 items\n2 passed in 0.5s\n")
+
+    # Mock stat() to always raise FileNotFoundError
+    original_glob = Path.glob
+
+    def mock_glob(self, pattern):
+        """Return the path."""
+        return original_glob(self, pattern)
+
+    def mock_stat(self):
+        """Always raise FileNotFoundError."""
+        raise FileNotFoundError(f"File deleted: {self}")
+
+    with patch.object(Path, 'glob', mock_glob):
+        with patch.object(Path, 'stat', mock_stat):
+            sig = CheckSignalCollector().collect(ctx)
+
+    # Should fall back to discovery (not available → no_config/discoverable/unknown)
+    # Since repo has no pytest config, should be no_config
+    assert sig.status in ("no_config", "unknown")
+
+
+def test_guard_uses_captured_mtime_not_new_stat(tmp_path: Path) -> None:
+    """Verify that captured mtime from discovery is used, not re-stat'd."""
+    ctx = _make_context(tmp_path)
+    log = ctx.logs_root / "unit_test.log"
+    log.write_text("collected 2 items\n2 passed in 0.5s\n")
+
+    # Set mtime to a specific value
+    import os
+    os.utime(log, (1000, 1000))  # old mtime
+
+    stat_call_count = 0
+    original_stat = Path.stat
+
+    def counting_stat(self):
+        """Count stat calls and fail on second call to log (simulating file modified)."""
+        nonlocal stat_call_count
+        if self.name == "unit_test.log":
+            stat_call_count += 1
+            if stat_call_count == 1:
+                # First call (discovery): return old mtime
+                result = original_stat(self)
+                # Create new stat_result with old mtime
+                import os
+                class FakeStat:
+                    def __init__(self, mtime):
+                        self.st_mtime = mtime
+                return FakeStat(1000)
+            else:
+                # Second call should NOT happen (guard should use captured mtime)
+                raise RuntimeError("stat() called twice on same file (race condition not guarded!)")
+        return original_stat(self)
+
+    with patch.object(Path, 'stat', counting_stat):
+        sig = CheckSignalCollector().collect(ctx)
+
+    # Should succeed and use the old mtime from first stat
+    assert sig.status == "passed"
+    # observed_at should be based on old mtime (1000)
+    from datetime import datetime, UTC
+    expected_time = datetime.fromtimestamp(1000, tz=UTC)
+    assert sig.observed_at == expected_time
+
+
+def test_guard_oserror_also_skipped(tmp_path: Path) -> None:
+    """Verify that OSError (not just FileNotFoundError) is handled in discovery."""
+    ctx = _make_context(tmp_path)
+
+    # Create multiple log files
+    log1 = ctx.logs_root / "unit_test.log"
+    log2 = ctx.logs_root / "integration_test.log"
+    log1.write_text("collected 1 items\n1 passed in 0.5s\n")
+    log2.write_text("collected 2 items\n2 passed in 1.2s\n")
+
+    original_glob = Path.glob
+    original_stat = Path.stat
+
+    def mock_stat(self):
+        """Raise OSError for log1 (e.g., permission denied), normal stat for log2."""
+        if self.name == "unit_test.log":
+            raise OSError("Permission denied")
+        return original_stat(self)
+
+    with patch.object(Path, 'glob', lambda self, p: original_glob(self, p)):
+        with patch.object(Path, 'stat', mock_stat):
+            sig = CheckSignalCollector().collect(ctx)
+
+    # Should use log2 since log1 failed
+    assert sig.status == "passed"
+    assert "integration_test.log" in sig.source

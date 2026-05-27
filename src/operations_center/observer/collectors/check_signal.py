@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import configparser
 import itertools
+import logging
 import re
 import subprocess
 from datetime import UTC, datetime
@@ -13,24 +14,38 @@ from operations_center.observer.models import CheckSignal
 from operations_center.observer.service import ObserverContext
 
 _TEST_FILE_GLOB_LIMIT = 5
+logger = logging.getLogger(__name__)
 
 
-def latest_matching_file(root: Path, pattern: str) -> Path | None:
-    files = sorted(root.glob(pattern), key=lambda path: path.stat().st_mtime, reverse=True)
-    return files[0] if files else None
+def latest_matching_file(root: Path, pattern: str) -> tuple[Path, float] | None:
+    candidates_with_mtime = []
+    for path in root.glob(pattern):
+        try:
+            mtime = path.stat().st_mtime
+            candidates_with_mtime.append((path, mtime))
+        except (FileNotFoundError, OSError):
+            logger.debug("Skipped file during log discovery: %s", path)
+            continue
+
+    if not candidates_with_mtime:
+        return None
+
+    latest_path, latest_mtime = max(candidates_with_mtime, key=lambda x: x[1])
+    return (latest_path, latest_mtime)
 
 
 class CheckSignalCollector:
     def collect(self, context: ObserverContext) -> CheckSignal:
-        log_path = latest_matching_file(context.logs_root, "*_test.log")
-        if log_path is not None:
+        result = latest_matching_file(context.logs_root, "*_test.log")
+        if result is not None:
+            log_path, observed_mtime = result
             text = log_path.read_text(encoding="utf-8", errors="replace")
             summary = self._extract_summary_line(text)
             status = self._classify_text(text)
             return CheckSignal(
                 status=status,
                 source=str(log_path),
-                observed_at=datetime.fromtimestamp(log_path.stat().st_mtime, tz=UTC),
+                observed_at=datetime.fromtimestamp(observed_mtime, tz=UTC),
                 summary=summary,
             )
         return self._fallback_discovery(context)
