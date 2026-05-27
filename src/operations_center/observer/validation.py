@@ -180,7 +180,7 @@ class ArtifactValidator:
     def log_parse_error(
         artifact_path: Path | str,
         error: Exception,
-        context: dict = None,
+        context: dict | None = None,
     ) -> None:
         """Log malformed payload with security context.
 
@@ -222,8 +222,8 @@ class ArtifactValidator:
     def log_structure_error(
         artifact_path: Path | str,
         error_msg: str,
-        expected_schema: str = None,
-        context: dict = None,
+        expected_schema: str | None = None,
+        context: dict | None = None,
     ) -> None:
         """Log structure validation failure with security context.
 
@@ -258,7 +258,7 @@ class ArtifactValidator:
     def log_io_error(
         artifact_path: Path | str,
         error: Exception,
-        context: dict = None,
+        context: dict | None = None,
     ) -> None:
         """Log file I/O errors with security context.
 
