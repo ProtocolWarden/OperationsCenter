@@ -60,24 +60,83 @@ class TypeHealthDeriver:
 
         if len(snapshots) > 1:
             previous_type = snapshots[1].signals.type_signal
-            if (
-                previous_type.status != "unavailable"
-                and current_type.error_count > previous_type.error_count
-            ):
-                delta = current_type.error_count - previous_type.error_count
+            status_changed = current_type.status != previous_type.status
+            if previous_type.status != "unavailable" and not status_changed:
+                if current_type.error_count > previous_type.error_count:
+                    delta = current_type.error_count - previous_type.error_count
+                    insights.append(
+                        self.normalizer.normalize(
+                            kind="type_health",
+                            subject="type_errors",
+                            status="worsened",
+                            key_parts=["type_errors", "worsened"],
+                            evidence={
+                                "current_count": current_type.error_count,
+                                "previous_count": previous_type.error_count,
+                                "delta": delta,
+                                "distinct_file_count": (
+                                    current_type.distinct_file_count
+                                    or len({e.path for e in current_type.top_errors})
+                                ),
+                            },
+                            first_seen_at=snapshots[1].observed_at,
+                            last_seen_at=snapshots[0].observed_at,
+                        )
+                    )
+                elif current_type.error_count < previous_type.error_count:
+                    delta = previous_type.error_count - current_type.error_count
+                    insights.append(
+                        self.normalizer.normalize(
+                            kind="type_health",
+                            subject="type_errors",
+                            status="improved",
+                            key_parts=["type_errors", "improved"],
+                            evidence={
+                                "current_count": current_type.error_count,
+                                "previous_count": previous_type.error_count,
+                                "delta": delta,
+                                "distinct_file_count": (
+                                    current_type.distinct_file_count
+                                    or len({e.path for e in current_type.top_errors})
+                                ),
+                            },
+                            first_seen_at=snapshots[1].observed_at,
+                            last_seen_at=snapshots[0].observed_at,
+                        )
+                    )
+
+            if current_type.status == "errors" and previous_type.status == "clean":
                 insights.append(
                     self.normalizer.normalize(
                         kind="type_health",
                         subject="type_errors",
-                        status="worsened",
-                        key_parts=["type_errors", "worsened"],
+                        status="regressed",
+                        key_parts=["type_errors", "regressed"],
                         evidence={
                             "current_count": current_type.error_count,
-                            "previous_count": previous_type.error_count,
-                            "delta": delta,
+                            "previous_count": previous_type.error_count or 0,
                             "distinct_file_count": (
                                 current_type.distinct_file_count
                                 or len({e.path for e in current_type.top_errors})
+                            ),
+                        },
+                        first_seen_at=snapshots[1].observed_at,
+                        last_seen_at=snapshots[0].observed_at,
+                    )
+                )
+            elif current_type.status == "clean" and previous_type.status == "errors":
+                insights.append(
+                    self.normalizer.normalize(
+                        kind="type_health",
+                        subject="type_errors",
+                        status="resolved",
+                        key_parts=["type_errors", "resolved"],
+                        evidence={
+                            "current_count": current_type.error_count or 0,
+                            "previous_count": previous_type.error_count,
+                            "distinct_file_count": (
+                                previous_type.distinct_file_count
+                                or len({e.path for e in previous_type.top_errors})
                             ),
                         },
                         first_seen_at=snapshots[1].observed_at,
