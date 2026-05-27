@@ -28,14 +28,12 @@ _Durable work inventory. Update after each meaningful chunk of progress._
   - Integration tests: Subprocess error handling (not found, timeout, general), clean output, violations collection
   - Documentation: test_lint_signal.py includes 39 comprehensive tests organized by category
 
-- [x] **Collector JSON Hardening — Stage 1: Design Validation and Error Handling Strategy (2026-05-27)**: Design specification for malformed JSON handling. Completed:
-  - Validation approach formalized: schema-based validation via existing validator classes (5 validators across 4 collectors)
-  - Error response format specified: safe signal returns with degraded status and error reasons
-  - JSON malformations documented: 26 total across 3 categories (10 parse-level P1-P10, 10 structure-level S1-S10, 6 edge cases E1-E6)
-  - Implementation map provided: Stage 1-3 validation code lines, validator class structure, test coverage
-  - HTTP status codes and logging format specified (for future API layer and observability)
-  - Integration checklist: validators/error handling/security logging framework all existing and ready
-  - Documentation complete (STAGE_1_DESIGN.md with 8-section specification covering approach, error formats, malformations, implementation map, test coverage, logging, acceptance criteria, integration)
+- [x] **Collector JSON Hardening — Stage 1: Design Validation and Error Handling Strategy (2026-05-27 → REVALIDATED)**: Formal specification meeting all acceptance criteria. Completed:
+  - **REQUIREMENT 1: Validation Rules Defined** — Part I specifies 5+ rules per collector (DependencyDrift: 5 rules, ExecutionHealth: 15+ rules, LintSignal: 8+ rules) with complete validation tables showing stage, rule ID, description, type, requirement level, constraint
+  - **REQUIREMENT 2: Error Handling Approach Documented** — Part II documents three-stage architecture (File I/O → JSON Parse → Structure), error flow diagram, exception guarantee ("no collector raises to caller"), logging format with concrete examples for parse/structure/IO errors
+  - **REQUIREMENT 3: Recovery/Resilience Strategy Approved** — Part III specifies graceful degradation levels (0-3 from full data to unavailable), partial data handling with code examples, system continuity preventing cascade failures, four concrete recovery scenarios
+  - **Implementation Readiness Checklist:** All items verified (validation rules formalized, error handling flow documented, recovery strategy documented, safe signal formats defined, logging spec complete, test strategy identified)
+  - Documentation: `STAGE_1_VALIDATION_RULES_AND_ERROR_HANDLING.md` (supersedes STAGE_1_DESIGN.md, provides formal acceptance-grade deliverable)
 
 - [ ] **CxRP — review and refine quarantined `ShippingForm` + related OC branch work on `operations-center-testing-branch` (2026-05-11)**: Treat `operations-center-testing-branch` as the temporary quarantine/staging lane for OC-authored cross-repo work. Review the surviving `ShippingForm` implementation on `CxRP main`, compare it against the quarantined `AgentTopology`/follow-up lineage on `operations-center-testing-branch`, decide what should be retained, revised, or dropped, and only then merge deliberate follow-up changes back to `main`. Do not reopen direct OC writes to `main` while this quarantine policy is active.
 
