@@ -21,7 +21,7 @@ def _ruff_item(filename: str, code: str = "E501", message: str = "line too long"
         "filename": filename,
         "code": code,
         "message": message,
-        "location": {"start": {"line": 1, "column": 1}},
+        "location": {"row": 1, "column": 1},
     }
 
 
