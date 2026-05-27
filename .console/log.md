@@ -9,7 +9,7 @@
 - **Starting point:** 101 tests (from Stages 0-2)
 - **New tests added:** 57 validation unit tests
 - **Final total:** 158 tests passing
-- **New test file:** tests/observer/test_collectors_hardening/test_validation_helpers.py (768 lines)
+- **New test file:** tests/observer/test_collectors_hardening/test_validation_helpers.py (811 lines)
 
 **Test Coverage by Component:**
 - ArtifactValidator base class: 22 tests (8 static methods fully tested)

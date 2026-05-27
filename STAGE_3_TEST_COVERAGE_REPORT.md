@@ -199,7 +199,7 @@ Completed Stage 3 with comprehensive unit tests for all validation rules and err
 ### Organization
 ```
 tests/observer/test_collectors_hardening/
-├── test_validation_helpers.py       # 98 tests (NEW: +76 tests)
+├── test_validation_helpers.py       # 98 tests (NEW: +57 tests)
 ├── test_dependency_drift.py         # 10 tests (existing)
 ├── test_execution_health_hardening.py # 19 tests (existing)
 ├── test_lint_signal.py              # 31 tests (existing)
