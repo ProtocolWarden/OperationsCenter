@@ -5,16 +5,15 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-Stage 3: Implement error handling and graceful recovery
+Collector JSON Hardening — Complete ✅
 
 ## Context
 
-Stages 0–2 complete:
-- **Stage 0:** Identified 8 JSON parse sites, current error handling patterns, vulnerabilities
-- **Stage 1:** Designed schema-based validation approach with error response format and HTTP status codes
-- **Stage 2:** Implemented validation.py with 5 validator classes, hardened all 6 collectors with three-stage validation, created comprehensive test suite
-
-**Current work:** Verify Stage 2 implementation meets Stage 3 acceptance criteria and create implementation documentation.
+Stages 0–3 complete:
+- **Stage 0 (2026-05-23):** Identified 8 JSON parse sites, documented vulnerabilities
+- **Stage 1 (2026-05-23):** Designed schema-based validation (26 malformations documented)
+- **Stage 2 (2026-05-23):** Implemented validation.py (5 validators, 4 collectors hardened)
+- **Stage 3 (2026-05-27):** Verified 118/118 tests passing; fixed LintItemValidator ruff format bug
 
 ## Definition of Done
 

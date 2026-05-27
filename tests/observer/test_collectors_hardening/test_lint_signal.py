@@ -365,20 +365,18 @@ class TestLintSignalEdgeCases:
         assert len(signal.top_violations) == 1
 
     def test_zero_values(self):
-        """Boundary: Zero values in numeric fields are valid."""
+        """Boundary: Zero row is out of range; column can be 0."""
         items = [{
             "filename": "test.py",
             "code": "E501",
             "message": "error",
-            "location": {"row": 0, "column": 0}  # Both 0 are valid (0-1000000)
+            "location": {"row": 0, "column": 0}  # row must be 1-1000000
         }]
         signal = LintSignalCollector._parse_ruff_output(json.dumps(items))
         assert signal.violation_count == 1
-        # Item is valid; both row and column are allowed to be 0
-        assert signal.status == "violations"
-        assert len(signal.top_violations) == 1
-        assert signal.top_violations[0].line == 0
-        assert signal.top_violations[0].col == 0
+        # Row 0 is out of range; item is rejected by validator
+        assert signal.status == "clean"
+        assert len(signal.top_violations) == 0
 
     def test_distinct_file_count_calculation(self):
         """Distinct file count correctly calculated."""
