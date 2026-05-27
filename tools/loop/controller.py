@@ -124,8 +124,36 @@ def _command_available(command: str) -> bool:
     return _resolve_command(command) is not None
 
 
+def _anchor_via_cl(env: dict[str, str]) -> None:
+    """Anchor the loop's session at this repo's owning manifest via CL.
+
+    Runs `cl session start` (no arg → RepoGraph resolves cwd→manifest) and merges
+    its exported CL_ANCHOR/CL_SESSION_ID into ``env``. No-op if the repo isn't
+    hooked to a manifest or `cl` is unavailable — the loop then runs unanchored,
+    exactly as before, so cl_wrap stays a no-op.
+    """
+    try:
+        out = subprocess.run(
+            ["cl", "session", "start"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return
+    if out.returncode != 0:
+        return
+    for line in out.stdout.splitlines():
+        line = line.strip()
+        if line.startswith("export ") and "=" in line:
+            key, _, val = line[len("export "):].partition("=")
+            env[key.strip()] = val.strip().strip("'\"")
+
+
 def _session_env(backend: str) -> dict[str, str]:
     env = os.environ.copy()
+    _anchor_via_cl(env)
     executable = _resolve_command(backend)
     if executable is None:
         return env

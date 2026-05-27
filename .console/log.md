@@ -11122,3 +11122,7 @@ Cross-cycle repeating patterns:
 ### KNOWN OPEN ISSUES (carry forward)
 - Campaign 10c50210 CANCELLED.
 - HYGIENE: `.baseline-validation.json` tracked on OC main (operationally neutralized by cycle-28 reorder).
+
+## 2026-05-24 — OC loop anchors via cl session start (Phase 4)
+
+- tools/loop/controller.py: _session_env now calls _anchor_via_cl, which runs `cl session start` (RepoGraph resolves OC→PlatformManifest) and merges CL_ANCHOR/CL_SESSION_ID into the loop session env. No-op if unhooked / cl missing (cl_wrap stays a no-op). Matches CLAUDE.md "every session targeting OC must cl session start". Test: tools/loop/test_anchor.py (3).
