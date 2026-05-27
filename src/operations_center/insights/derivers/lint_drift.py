@@ -14,7 +14,10 @@ class LintDriftDeriver:
 
     Fires on:
     - lint_violations_present: current snapshot has ruff violations.
-    - lint_violations_worsened: violation count increased since last snapshot.
+    - lint_violations_worsened: violation count increased (status unchanged).
+    - lint_violations_improved: violation count decreased (status unchanged).
+    - lint_violations_regressed: transition from clean to violations status.
+    - lint_violations_resolved: transition from violations to clean status.
     """
 
     def __init__(self, normalizer: InsightNormalizer) -> None:
