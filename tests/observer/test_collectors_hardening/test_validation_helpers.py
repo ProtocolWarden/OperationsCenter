@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Tests for validation helper library."""
+import json
+import logging
 from pathlib import Path
 from unittest.mock import patch
 
