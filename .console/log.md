@@ -1,3 +1,10 @@
+## 2026-05-28 — Operator: re-rebase PR #180 onto new main (post #181 merge)
+
+Resolved conftest.py conflict: took PR #180 tmp_path refactor, ruff auto-fixed unused import.
+All 3609 tests pass.
+
+---
+
 ## 2026-05-28 — Operator: fix CI on PR #181 (goal/0f1612ea)
 
 Rebased onto main, resolved code conflict in dependency_drift.py (merged null-safe

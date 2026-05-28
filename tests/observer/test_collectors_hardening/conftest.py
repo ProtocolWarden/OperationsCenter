@@ -1,20 +1,15 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Shared fixtures for collector hardening tests."""
-import tempfile
 from pathlib import Path
 
 import pytest
 
 
 @pytest.fixture
-def tmp_artifact_dir():
-    """Temporary directory for test artifacts."""
-    tmp = Path(tempfile.mkdtemp())
-    yield tmp
-    import shutil
-
-    shutil.rmtree(tmp, ignore_errors=True)
+def tmp_artifact_dir(tmp_path: Path) -> Path:
+    """Temporary directory for test artifacts (pytest-managed)."""
+    return tmp_path
 
 
 @pytest.fixture

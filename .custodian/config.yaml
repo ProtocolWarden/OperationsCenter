@@ -558,6 +558,10 @@ audit:
     - refactor
     - migrate
     - restructure
+    - loadscope
+    - loadfile
+    - loaddist
+    - dist
     - rewrite
     - lint_cluster
     - type_cluster
