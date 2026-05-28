@@ -9,6 +9,13 @@ Four spec-author bugs fixed (cherry-picked from oc-watchdog/20260528-1825-board-
 ---
 
 
+## 2026-05-28 — Replace board_unblock test file (remove unresolvable board_unblock_support deps)
+
+The cherry-picked test file required board_unblock_support module (not on main).
+Replaced with 6 focused unit tests covering Rules 8 (spec-author extension) and 9 (SPEC_AUTHOR_BACKLOG_PROMOTE).
+
+---
+
 ## 2026-05-28 — Fix git client: explicitly fetch remote tracking ref before task branch checkout
 
 Shallow --no-single-branch clones may not store the remote tracking ref for branches
