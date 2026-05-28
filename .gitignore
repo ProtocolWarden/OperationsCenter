@@ -50,3 +50,11 @@ config/managed_repos/local/
 
 # (Per ADR 0002 P3, OC's .context/ is removed — cognition is hosted by
 # the anchoring manifest. Former scratch-state ignores deleted.)
+
+# Goal-worker scratchpad artifacts — never commit these
+STAGE_*.md
+STAGE[0-9]*.md
+DERIVER_AUDIT*.md
+LOOP_START.md
+=*.*/
+test_output.log

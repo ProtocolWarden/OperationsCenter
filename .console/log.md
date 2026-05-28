@@ -1,3 +1,10 @@
+## 2026-05-28 — P2: delete STAGE_*.md scratchpads + gitignore guard
+
+Deleted 22 goal-worker scratchpad files from repo root (STAGE_*.md, DERIVER_AUDIT_*.md,
+LOOP_START.md, =3.0). Added .gitignore patterns to block future ones.
+
+---
+
 ## 2026-05-28 — Operator: work order 0009 — execution hygiene
 
 6 execution quality problems documented and assigned. See ADR 0009.
