@@ -10,6 +10,15 @@ from operations_center.observer.models import RepoStateSnapshot
 
 
 class DependencyDriftDeriver:
+    """Derive dependency-related insights from observer snapshots.
+
+    Fires on:
+    - dependency_drift_continuity/present/current: current snapshot has available dependencies.
+    - dependency_drift_continuity/present/persistent: dependencies have remained available across multiple snapshots.
+    - dependency_drift_continuity/present/transition: transition to unavailable status.
+    - dependency_drift_continuity/present/recovery: transition from unavailable to available status.
+    """
+
     def __init__(self, normalizer: InsightNormalizer) -> None:
         self.normalizer = normalizer
 

@@ -14,7 +14,10 @@ class TypeHealthDeriver:
 
     Fires on:
     - type_errors_present: current snapshot has type errors.
-    - type_errors_worsened: error count increased since last snapshot.
+    - type_errors_worsened: error count increased (status unchanged).
+    - type_errors_improved: error count decreased (status unchanged).
+    - type_errors_regressed: transition from clean to errors status.
+    - type_errors_resolved: transition from errors to clean status.
     """
 
     def __init__(self, normalizer: InsightNormalizer) -> None:

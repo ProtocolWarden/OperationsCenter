@@ -105,6 +105,12 @@ shape, not any particular bound repo.
 - [design/autonomy/repo_aware_autonomy.md](design/autonomy/repo_aware_autonomy.md)
 - [design/execution_budget_and_safety_controls.md](design/execution_budget_and_safety_controls.md)
 - [design/observer-race-condition-guard.md](design/observer-race-condition-guard.md) — TOCTOU hardening for CheckSignal and DependencyDrift collectors
+- [design/deriver-coverage/DERIVER_REVERSE_TRANSITION_COVERAGE_ANALYSIS.md](design/deriver-coverage/DERIVER_REVERSE_TRANSITION_COVERAGE_ANALYSIS.md) — Deriver reverse transition coverage analysis
+- [design/deriver-coverage/IMPLEMENTATION_VERIFICATION_CHECKLIST.md](design/deriver-coverage/IMPLEMENTATION_VERIFICATION_CHECKLIST.md) — Deriver implementation verification checklist
+- [design/deriver-coverage/STAGE0_INVESTIGATION_SUMMARY.md](design/deriver-coverage/STAGE0_INVESTIGATION_SUMMARY.md) — Stage 0 investigation summary
+- [design/deriver-coverage/STAGE3_COMPLETION_REPORT.md](design/deriver-coverage/STAGE3_COMPLETION_REPORT.md) — Stage 3 testing completion report
+- [design/deriver-coverage/STAGE3_TESTING_VERIFICATION.md](design/deriver-coverage/STAGE3_TESTING_VERIFICATION.md) — Stage 3 testing verification
+- [design/deriver-coverage/STAGE3_TEST_INVENTORY.md](design/deriver-coverage/STAGE3_TEST_INVENTORY.md) — Stage 3 test inventory
 - [design/autonomy/autonomy_decision_engine.md](design/autonomy/autonomy_decision_engine.md)
 - [design/autonomy/autonomy_gaps.md](design/autonomy/autonomy_gaps.md)
 - [design/autonomy/autonomy_insight_engine.md](design/autonomy/autonomy_insight_engine.md)
