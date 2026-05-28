@@ -85,8 +85,8 @@ operations-center-spec-hygiene      = "operations_center.entrypoints.spec_hygien
 dev = [
   "pytest>=8.0",
   "pytest-xdist>=3.0",
-  "ruff>=0.5",
-  "ty>=0.0.28",
+  "ruff==0.15.13",
+  "ty==0.0.40",
   "custodian @ git+https://github.com/ProtocolWarden/Custodian.git@main",
 ]
 

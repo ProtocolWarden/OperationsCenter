@@ -237,6 +237,35 @@ def _claim_next(client, role: str, settings) -> dict | None:
         return None
     task_id = str(issue["id"])
 
+    # P3 OPEN_PR_GATE (ADR 0009): refuse to claim goal tasks while an open PR
+    # exists for the same repo — prevents simultaneous PRs that conflict on merge.
+    if role == "goal":
+        _gate_labels   = issue.get("labels", [])
+        _gate_repo_key = _label_value(_gate_labels, "repo")
+        _gate_repo_cfg = settings.repos.get(_gate_repo_key) if _gate_repo_key else None
+        _gate_clone_url = _gate_repo_cfg.clone_url if _gate_repo_cfg else None
+        _gh_token = settings.git_token()
+        if _gh_token and _gate_clone_url:
+            try:
+                from operations_center.adapters.github_pr import GitHubPRClient
+                _gh = GitHubPRClient(_gh_token)
+                _owner, _repo_name = GitHubPRClient.owner_repo_from_clone_url(_gate_clone_url)
+                _open_prs = _gh.list_open_prs(_owner, _repo_name)
+                if _open_prs:
+                    _pr_nums = [pr.get("number") for pr in _open_prs[:5]]
+                    logger.info(
+                        "board_worker[goal]: OPEN_PR_GATE — repo=%s has %d open PR(s) %s; "
+                        "skipping task_id=%s until merged",
+                        _gate_repo_key, len(_open_prs), _pr_nums, task_id,
+                    )
+                    _add_label(client, issue, "OPEN_PR_GATE")
+                    return None
+            except Exception as _gate_exc:
+                logger.warning(
+                    "board_worker[goal]: OPEN_PR_GATE check failed repo=%s — %s; proceeding",
+                    _gate_repo_key, _gate_exc,
+                )
+
     try:
         client.transition_issue(task_id, _STATE_RUNNING)
         logger.info("board_worker[%s]: claimed task_id=%s title=%r", role, task_id, issue.get("name", ""))

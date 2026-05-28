@@ -1,3 +1,7 @@
+## 2026-05-28 — P3: open-PR gate implemented; P6: ruff==0.15.13, ty==0.0.40 pinned
+
+---
+
 ## 2026-05-28 — Patch session prompt: read task.md, stop polluting log.md
 
 Added STEP 0 to read .console/task.md for operator directives as primary objective.
