@@ -28,7 +28,7 @@ class BenchmarkRegressionDeriver:
             return []
 
         insights: list[DerivedInsight] = []
-        observed_at = snapshots[0].observed_at
+        observed_at = bench.observed_at or snapshots[0].observed_at
 
         if bench.status == "regression" and bench.regressions:
             insights.append(

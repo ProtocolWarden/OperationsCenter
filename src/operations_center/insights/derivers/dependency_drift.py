@@ -20,32 +20,37 @@ class DependencyDriftDeriver:
         insights: list[DerivedInsight] = []
         if current_status == "available":
             available_snapshots = [snapshot for snapshot in snapshots if snapshot.signals.dependency_drift.status == "available"]
-            insights.append(
-                self.normalizer.normalize(
-                    kind="dependency_drift_continuity",
-                    subject="dependency_drift",
-                    status="present",
-                    key_parts=["present", "current"],
-                    evidence={"current_status": current_status},
-                    first_seen_at=available_snapshots[-1].observed_at,
-                    last_seen_at=available_snapshots[0].observed_at,
-                )
-            )
-            if len(available_snapshots) >= 2:
+            if available_snapshots:
+                first_seen = available_snapshots[-1].signals.dependency_drift.observed_at or available_snapshots[-1].observed_at
+                last_seen = available_snapshots[0].signals.dependency_drift.observed_at or available_snapshots[0].observed_at
                 insights.append(
                     self.normalizer.normalize(
                         kind="dependency_drift_continuity",
                         subject="dependency_drift",
                         status="present",
-                        key_parts=["present", "persistent"],
-                        evidence={"consecutive_snapshots": len(available_snapshots)},
-                        first_seen_at=available_snapshots[-1].observed_at,
-                        last_seen_at=available_snapshots[0].observed_at,
+                        key_parts=["present", "current"],
+                        evidence={"current_status": current_status},
+                        first_seen_at=first_seen,
+                        last_seen_at=last_seen,
                     )
                 )
+                if len(available_snapshots) >= 2:
+                    insights.append(
+                        self.normalizer.normalize(
+                            kind="dependency_drift_continuity",
+                            subject="dependency_drift",
+                            status="present",
+                            key_parts=["present", "persistent"],
+                            evidence={"consecutive_snapshots": len(available_snapshots)},
+                            first_seen_at=first_seen,
+                            last_seen_at=last_seen,
+                        )
+                    )
         if len(snapshots) > 1:
             previous_status = snapshots[1].signals.dependency_drift.status
             if current_status != previous_status:
+                first_seen = snapshots[1].signals.dependency_drift.observed_at or snapshots[1].observed_at
+                last_seen = snapshots[0].signals.dependency_drift.observed_at or snapshots[0].observed_at
                 if current_status == "not_available":
                     insights.append(
                         self.normalizer.normalize(
@@ -57,8 +62,8 @@ class DependencyDriftDeriver:
                                 "previous_status": previous_status,
                                 "current_status": current_status,
                             },
-                            first_seen_at=snapshots[1].observed_at,
-                            last_seen_at=snapshots[0].observed_at,
+                            first_seen_at=first_seen,
+                            last_seen_at=last_seen,
                         )
                     )
                 elif current_status == "available" and previous_status == "not_available":
@@ -72,8 +77,8 @@ class DependencyDriftDeriver:
                                 "previous_status": previous_status,
                                 "current_status": current_status,
                             },
-                            first_seen_at=snapshots[1].observed_at,
-                            last_seen_at=snapshots[0].observed_at,
+                            first_seen_at=first_seen,
+                            last_seen_at=last_seen,
                         )
                     )
         return insights

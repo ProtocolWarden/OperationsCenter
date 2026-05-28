@@ -20,6 +20,8 @@ class DirtyTreeDeriver:
         if not current.repo.is_dirty:
             return []
         dirty_snapshots = [snapshot for snapshot in snapshots if snapshot.repo.is_dirty]
+        if not dirty_snapshots:
+            return []
         return [
             self.normalizer.normalize(
                 kind="dirty_tree",

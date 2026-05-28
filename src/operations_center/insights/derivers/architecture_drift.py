@@ -29,7 +29,7 @@ class ArchitectureDriftDeriver:
             return []
 
         insights: list[DerivedInsight] = []
-        observed_at = snapshots[0].observed_at
+        observed_at = arch.observed_at or snapshots[0].observed_at
 
         if arch.coupling_score is not None and arch.coupling_score >= 0.7:
             insights.append(
