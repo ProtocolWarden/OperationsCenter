@@ -222,7 +222,7 @@ class RepoSignalsSnapshot(BaseModel):
 
 class RepoStateSnapshot(BaseModel):
     run_id: str
-    observed_at: datetime
+    observed_at: datetime | None = None
     observer_version: int = OBSERVER_VERSION
     source_command: str
     repo: RepoContextSnapshot

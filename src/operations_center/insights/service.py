@@ -2,6 +2,7 @@
 # Copyright (C) 2026 ProtocolWarden
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -11,6 +12,8 @@ from operations_center.insights.artifact_writer import InsightArtifactWriter
 from operations_center.insights.loader import SnapshotLoader
 from operations_center.insights.models import InsightRepoRef, RepoInsightsArtifact, SourceSnapshotRef
 from operations_center.observer.models import RepoStateSnapshot
+
+logger = logging.getLogger(__name__)
 
 
 class InsightDeriver(Protocol):
@@ -40,6 +43,53 @@ class InsightEngineService:
         self.derivers = derivers
         self.artifact_writer = artifact_writer or InsightArtifactWriter()
 
+    def _infer_timestamp(
+        self, snapshot: RepoStateSnapshot, index: int, snapshots: Sequence[RepoStateSnapshot],
+        emergency_fallback: datetime | None = None,
+    ) -> datetime:
+        for j in range(index + 1, len(snapshots)):
+            if snapshots[j].observed_at is not None:
+                return snapshots[j].observed_at
+
+        for j in range(index - 1, -1, -1):
+            if snapshots[j].observed_at is not None:
+                return snapshots[j].observed_at
+
+        if emergency_fallback is None:
+            logger.warning(
+                f"No observed_at timestamps available in snapshot sequence; "
+                f"using current time as fallback for run_id={snapshot.run_id}"
+            )
+            emergency_fallback = datetime.now(UTC)
+        return emergency_fallback
+
+    def _normalize_snapshots(self, snapshots: Sequence[RepoStateSnapshot]) -> list[RepoStateSnapshot]:
+        if not snapshots:
+            return []
+
+        normalized = []
+        has_missing = False
+        emergency_fallback: datetime | None = None
+
+        for i, snapshot in enumerate(snapshots):
+            if snapshot.observed_at is None:
+                has_missing = True
+                if emergency_fallback is None:
+                    emergency_fallback = datetime.now(UTC)
+                fallback_time = self._infer_timestamp(snapshot, i, snapshots, emergency_fallback)
+                snapshot_copy = snapshot.model_copy(update={"observed_at": fallback_time})
+                normalized.append(snapshot_copy)
+            else:
+                normalized.append(snapshot.model_copy())
+
+        if has_missing:
+            logger.warning(
+                "RepoStateSnapshot.observed_at missing for some snapshot(s); "
+                "applied timestamp inference fallback; artifacts may lack temporal precision"
+            )
+
+        return normalized
+
     def generate(self, context: InsightGenerationContext) -> tuple[RepoInsightsArtifact, list[str]]:
         snapshots = self.loader.load(
             repo=context.repo_filter,
@@ -58,10 +108,12 @@ class InsightEngineService:
             )
             written = self.artifact_writer.write(artifact) if self.artifact_writer else []
             return artifact, written
-        current = snapshots[0]
+
+        normalized_snapshots = self._normalize_snapshots(snapshots)
+        current = normalized_snapshots[0]
         insights = []
         for deriver in self.derivers:
-            insights.extend(deriver.derive(snapshots))
+            insights.extend(deriver.derive(normalized_snapshots))
         artifact = RepoInsightsArtifact(
             run_id=context.run_id,
             generated_at=context.generated_at,
@@ -69,7 +121,7 @@ class InsightEngineService:
             repo=InsightRepoRef(name=current.repo.name, path=current.repo.path),
             source_snapshots=[
                 SourceSnapshotRef(run_id=snapshot.run_id, observed_at=snapshot.observed_at)
-                for snapshot in snapshots
+                for snapshot in normalized_snapshots
             ],
             insights=insights,
         )
