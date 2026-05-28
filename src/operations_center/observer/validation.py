@@ -180,7 +180,7 @@ class ArtifactValidator:
     def log_parse_error(
         artifact_path: Path | str,
         error: Exception,
-        context: dict = None,
+        context: dict[str, Any] | None = None,
     ) -> None:
         """Log malformed payload with security context.
 
@@ -222,8 +222,8 @@ class ArtifactValidator:
     def log_structure_error(
         artifact_path: Path | str,
         error_msg: str,
-        expected_schema: str = None,
-        context: dict = None,
+        expected_schema: str | None = None,
+        context: dict[str, Any] | None = None,
     ) -> None:
         """Log structure validation failure with security context.
 
@@ -258,7 +258,7 @@ class ArtifactValidator:
     def log_io_error(
         artifact_path: Path | str,
         error: Exception,
-        context: dict = None,
+        context: dict[str, Any] | None = None,
     ) -> None:
         """Log file I/O errors with security context.
 
@@ -419,7 +419,7 @@ class ValidationHistoryValidator(ArtifactValidator):
                         f"got {type(err).__name__}"
                     )
                 if "code" in err:
-                    code = err["code"]
+                    code = err["code"]  # ty: ignore[invalid-argument-type]
                     if not ArtifactValidator.is_nonempty_string(code):
                         return False, (
                             f"errors[{idx}].code: must be non-empty string"
@@ -474,7 +474,7 @@ class DependencyReportValidator(ArtifactValidator):
                 )
 
             if "severity" in status:
-                severity = status["severity"]
+                severity = status["severity"]  # ty: ignore[invalid-argument-type]
                 if not isinstance(severity, str):
                     return False, (
                         f"statuses[{idx}].severity: expected str, "

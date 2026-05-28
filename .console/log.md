@@ -1,3 +1,5 @@
+## 2026-05-28 — P6 follow-up: fixed 10 pre-existing ty errors exposed by ty==0.0.40 pin
+
 ## 2026-05-28 — P3: open-PR gate implemented; P6: ruff==0.15.13, ty==0.0.40 pinned
 
 ---

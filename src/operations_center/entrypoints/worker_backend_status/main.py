@@ -23,7 +23,7 @@ _console = Console()
 
 
 @app.command()
-def main(
+def _command(
     usage_path: Path | None = typer.Option(
         None,
         "--usage-path",
@@ -65,5 +65,9 @@ def main(
     _console.print(table)
 
 
+def main() -> None:
+    app()
+
+
 if __name__ == "__main__":
-    main()
+    app()
