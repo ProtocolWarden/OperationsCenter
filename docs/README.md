@@ -98,6 +98,7 @@ shape, not any particular bound repo.
 - [design/plane_kodo_wrapper.md](design/plane_kodo_wrapper.md) — Historical: Plane/kodo integration design (kodo replaced by TeamExecutor)
 - [design/autonomy/repo_aware_autonomy.md](design/autonomy/repo_aware_autonomy.md)
 - [design/execution_budget_and_safety_controls.md](design/execution_budget_and_safety_controls.md)
+- [design/observer-race-condition-guard.md](design/observer-race-condition-guard.md) — TOCTOU hardening for CheckSignal and DependencyDrift collectors
 - [design/autonomy/autonomy_decision_engine.md](design/autonomy/autonomy_decision_engine.md)
 - [design/autonomy/autonomy_gaps.md](design/autonomy/autonomy_gaps.md)
 - [design/autonomy/autonomy_insight_engine.md](design/autonomy/autonomy_insight_engine.md)

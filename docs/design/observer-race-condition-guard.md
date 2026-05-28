@@ -1,3 +1,6 @@
+---
+status: accepted
+---
 # Observer Race Condition Guard
 
 ## Overview
