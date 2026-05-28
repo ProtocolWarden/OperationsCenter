@@ -107,6 +107,10 @@ def _fallback_command_candidates(command: str) -> list[Path]:
             ]
         )
         candidates.extend(sorted((home / ".nvm" / "versions" / "node").glob("*/bin/codex")))
+    elif command == "cl":
+        cl_home = os.environ.get("CL_HOME")
+        if cl_home:
+            candidates.append(Path(cl_home) / "bin" / "cl")
     return candidates
 
 
@@ -134,7 +138,7 @@ def _anchor_via_cl(env: dict[str, str]) -> None:
     """
     try:
         out = subprocess.run(
-            ["cl", "session", "start"],
+            [_resolve_command("cl") or "cl", "session", "start"],
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,
@@ -159,7 +163,7 @@ def _end_cl_session(anchor_vars: dict[str, str]) -> None:
     env.update(anchor_vars)
     try:
         subprocess.run(
-            ["cl", "session", "end", "--archive"],
+            [_resolve_command("cl") or "cl", "session", "end", "--archive"],
             cwd=REPO_ROOT,
             env=env,
             capture_output=True,
@@ -195,7 +199,7 @@ def _cl_hydrate(backend: str, env: dict[str, str], iteration: int, prompt: str) 
     work_item = json.dumps({"loop": "oc", "iteration": iteration, "backend": backend})
     try:
         out = subprocess.run(
-            ["cl", "context", "hydrate", "--lineage", _CL_LINEAGE, "--work-item", work_item],
+            [_resolve_command("cl") or "cl", "context", "hydrate", "--lineage", _CL_LINEAGE, "--work-item", work_item],
             cwd=REPO_ROOT, env=env, capture_output=True, text=True, timeout=15,
         )
     except (OSError, subprocess.SubprocessError):
@@ -220,7 +224,7 @@ def _cl_capture(backend: str, env: dict[str, str], iteration: int, exit_code: in
     )
     try:
         subprocess.run(
-            ["cl", "context", "capture", "--lineage", _CL_LINEAGE, "--result", result],
+            [_resolve_command("cl") or "cl", "context", "capture", "--lineage", _CL_LINEAGE, "--result", result],
             cwd=REPO_ROOT, env=env, capture_output=True, text=True, timeout=15,
         )
     except (OSError, subprocess.SubprocessError):

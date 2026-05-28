@@ -1,3 +1,18 @@
+## 2026-05-28 — Loop controller: robustly resolve `cl` (CL_HOME fallback)
+
+The loop controller resolved `claude`/`codex` robustly via `_resolve_command`
+(PATH + `~/.local/bin` fallbacks) but invoked `cl` as a bare `["cl", ...]`,
+relying solely on PATH. That works when the loop is launched `nohup` from an
+interactive shell (whose `~/.bashrc` puts `$CL_HOME/bin` on PATH) but fails
+silently under cron/systemd/clean shells — `cl` not found → no anchor → loop
+runs unanchored → ContextGuard blocks claude. Mirrors the OperatorConsole pane
+bug just fixed.
+
+Added a `cl` branch to `_fallback_command_candidates` (uses `CL_HOME`) and
+routed all four `cl` calls (session start/end, hydrate, capture) through
+`_resolve_command`. Verified: with `cl` off PATH but `CL_HOME` set, the
+controller resolves it and anchors at PlatformManifest.
+
 ## 2026-05-27 — Deriver Transition Coverage: Stage 4 Integration Review and Critical Bug Fix
 
 **Stage 4 Complete**: Comprehensive max-effort code review identified and fixed critical mutual-exclusion bugs in transition insight emission.
