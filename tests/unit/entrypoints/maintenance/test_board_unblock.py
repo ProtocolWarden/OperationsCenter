@@ -572,3 +572,70 @@ def test_goal_backlog_promote_improvement_applied_skips_when_gate_active():
     assert len(promote) == 1
     assert promote[0].get("skipped") is True
     assert "gate" in promote[0]["reason"].lower()
+
+
+# ── Rule 9 — SPEC_AUTHOR_BACKLOG_PROMOTE ─────────────────────────────────────
+
+def test_spec_author_backlog_promote_when_gate_cleared():
+    issue = _issue(
+        "spec-1",
+        state="Backlog",
+        labels=["task-kind: spec-author", "source: spec-director"],
+        latest_comment="board_worker[spec-author] failed\ncategory: budget_exhausted\nreason: dispatch skipped",
+        latest_comment_ts="2026-05-28T07:39:00+00:00",
+    )
+    actions = _apply_rules(
+        [issue],
+        now=datetime(2026, 5, 28, 10, 0, tzinfo=UTC),
+        stale_blocked_hours=4,
+        stale_running_hours=2,
+        clean_blocked_min_minutes=5,
+        mem_available_gb=16.0,
+        daily_gate_active=False,  # gate has cleared
+    )
+    r9 = [a for a in actions if a.get("rule") == "SPEC_AUTHOR_BACKLOG_PROMOTE"]
+    assert len(r9) == 1
+    assert r9[0].get("skipped") is not True
+    assert r9[0]["to_state"] == "Ready for AI"
+
+
+def test_spec_author_backlog_promote_skipped_when_gate_active():
+    issue = _issue(
+        "spec-2",
+        state="Backlog",
+        labels=["task-kind: spec-author", "source: spec-director"],
+        latest_comment="board_worker[spec-author] failed\ncategory: budget_exhausted\nreason: dispatch skipped",
+        latest_comment_ts="2026-05-28T07:39:00+00:00",
+    )
+    actions = _apply_rules(
+        [issue],
+        now=datetime(2026, 5, 28, 10, 0, tzinfo=UTC),
+        stale_blocked_hours=4,
+        stale_running_hours=2,
+        clean_blocked_min_minutes=5,
+        mem_available_gb=16.0,
+        daily_gate_active=True,  # gate still active
+    )
+    r9 = [a for a in actions if a.get("rule") == "SPEC_AUTHOR_BACKLOG_PROMOTE"]
+    assert len(r9) == 1
+    assert r9[0].get("skipped") is True
+    assert "budget_exhausted" in r9[0]["reason"]
+
+
+def test_spec_author_backlog_promote_skipped_low_memory():
+    issue = _issue(
+        "spec-3",
+        state="Backlog",
+        labels=["task-kind: spec-author", "source: spec-director"],
+    )
+    actions = _apply_rules(
+        [issue],
+        now=datetime(2026, 5, 28, 10, 0, tzinfo=UTC),
+        stale_blocked_hours=4,
+        stale_running_hours=2,
+        clean_blocked_min_minutes=5,
+        mem_available_gb=4.0,  # below 8GB threshold
+        daily_gate_active=False,
+    )
+    r9 = [a for a in actions if a.get("rule") == "SPEC_AUTHOR_BACKLOG_PROMOTE"]
+    assert len(r9) == 0  # rule does not fire below memory threshold

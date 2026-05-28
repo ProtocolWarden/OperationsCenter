@@ -9,6 +9,13 @@ Four spec-author bugs fixed (cherry-picked from oc-watchdog/20260528-1825-board-
 ---
 
 
+## 2026-05-28 — Fix board_unblock Rule 9: SPEC_AUTHOR_BACKLOG_PROMOTE
+
+Rule 8 (CLEAN_BLOCKED_RETRY) moves spec-author tasks Blocked → Backlog but no watcher
+re-promoted them Backlog → R4AI. Added Rule 9 SPEC_AUTHOR_BACKLOG_PROMOTE.
+
+---
+
 ## 2026-05-28 — Fix board_unblock Rule 7: extend to cover improvement_applied follow-on goal tasks
 
 Pattern B: tasks produced by the goal board_worker when an improvement is applied

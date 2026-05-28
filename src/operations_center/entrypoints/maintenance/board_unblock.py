@@ -6,7 +6,7 @@ The loop is the operator for all conditions handled here.  Do not add "operator 
 required" notes for patterns this tool covers.  When a new stuck pattern emerges, add a
 rule here rather than logging it and waiting.
 
-Applies eight rules on every run:
+Applies nine rules on every run:
 
   Rule 1 — DEAD_REMEDIATION_CANCEL
     Tasks with label "dead-remediation" OR (executor-signal: sigkill + retry-count ≥ 3)
@@ -69,6 +69,13 @@ Applies eight rules on every run:
     sandbox branch, transient infra config issues) where no executor ran and the
     failure is safe to retry once the underlying infrastructure is fixed.
     The minimum age avoids re-queuing before the board_worker finishes writing labels.
+
+  Rule 9 — SPEC_AUTHOR_BACKLOG_PROMOTE
+    spec-author tasks in Backlog state with no active retry blocker → move to Ready for AI.
+    Rule 8 (CLEAN_BLOCKED_RETRY) moves budget-exhausted spec-author tasks Blocked → Backlog,
+    but no watcher re-promotes them to R4AI once the gate clears.  This rule closes that gap.
+    Skipped when memory is below the executor dispatch threshold or when any active retry
+    blocker is present (budget_exhausted, session_limit, global_rate_exceeded, etc.).
 
 Usage:
     python -m operations_center.entrypoints.maintenance.board_unblock \\
@@ -420,6 +427,23 @@ def _apply_rules(
                         f"{clean_blocked_min_minutes}m min age"
                     ),
                 })
+
+        # Rule 9 — spec-author Backlog promotion.
+        # Rule 8 moves budget-exhausted spec-author tasks Blocked → Backlog, but no watcher
+        # re-promotes them to R4AI once the gate clears.  This rule closes that gap.
+        if (
+            state_lower == "backlog"
+            and _has_label(labels, _SPEC_AUTHOR_LABEL)
+            and mem_available_gb >= _MEM_R4AI_THRESHOLD_GB
+        ):
+            actions.append({
+                "task_id": task_id,
+                "title": title,
+                "rule": "SPEC_AUTHOR_BACKLOG_PROMOTE",
+                "from_state": state,
+                "to_state": "Ready for AI",
+                "reason": "spec-author task in Backlog; promoting for board_worker dispatch",
+            })
 
     return actions
 
