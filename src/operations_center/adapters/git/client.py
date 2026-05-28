@@ -87,6 +87,15 @@ class GitClient:
         """Create or checkout the task branch. Returns True if branch already existed on remote."""
         out = self._run(["git", "ls-remote", "--heads", "origin", task_branch], cwd=repo_path)
         if out:
+            # Explicitly refresh the remote tracking ref before checkout.
+            # A shallow --no-single-branch clone may not have stored the ref
+            # for branches that diverged early, causing `checkout -b ... origin/...`
+            # to fail with an empty-stderr git error.
+            self._run(
+                ["git", "fetch", "origin",
+                 f"{task_branch}:refs/remotes/origin/{task_branch}"],
+                cwd=repo_path,
+            )
             self._run(["git", "checkout", "-b", task_branch, f"origin/{task_branch}"], cwd=repo_path)
             return True
         self._run(["git", "checkout", "-b", task_branch], cwd=repo_path)

@@ -560,7 +560,7 @@ def test_commit_all_runs_git_add_before_noop_status_check() -> None:
 # ---------------------------------------------------------------------------
 
 def test_create_task_branch_remote_exists() -> None:
-    """When the branch already exists on the remote, track it."""
+    """When the branch already exists on the remote, fetch tracking ref then check it out."""
     calls: list[tuple[str, ...]] = []
 
     class TrackingFake(GitClient):
@@ -572,7 +572,11 @@ def test_create_task_branch_remote_exists() -> None:
 
     client = TrackingFake()
     client.create_task_branch(Path("."), "task-1")
+    assert ("git", "fetch", "origin", "task-1:refs/remotes/origin/task-1") in calls
     assert ("git", "checkout", "-b", "task-1", "origin/task-1") in calls
+    fetch_idx = calls.index(("git", "fetch", "origin", "task-1:refs/remotes/origin/task-1"))
+    checkout_idx = calls.index(("git", "checkout", "-b", "task-1", "origin/task-1"))
+    assert fetch_idx < checkout_idx, "fetch must precede checkout"
 
 
 def test_create_task_branch_new_branch() -> None:

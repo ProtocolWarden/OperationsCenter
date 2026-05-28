@@ -9,6 +9,14 @@ Four spec-author bugs fixed (cherry-picked from oc-watchdog/20260528-1825-board-
 ---
 
 
+## 2026-05-28 — Fix git client: explicitly fetch remote tracking ref before task branch checkout
+
+Shallow --no-single-branch clones may not store the remote tracking ref for branches
+that diverged early, causing checkout -b to fail silently. Added explicit git fetch
+before checkout -b when remote branch exists.
+
+---
+
 ## 2026-05-28 — Fix board_unblock Rule 9: SPEC_AUTHOR_BACKLOG_PROMOTE
 
 Rule 8 (CLEAN_BLOCKED_RETRY) moves spec-author tasks Blocked → Backlog but no watcher
