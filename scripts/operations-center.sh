@@ -352,10 +352,10 @@ start_watch_role() {
     " >>"${log_file}" 2>&1 < /dev/null &
   elif [[ "${role}" == "spec" ]]; then
     # ADR 0007 Phase F: spec_director retired. The `spec` role now supervises
-    # two sibling watchers — spec_hygiene (board hygiene + active.json
-    # projection) and spec_trigger (drop-file / queue-drain detection that
-    # emits spec-author Plane tasks). Phase orchestration moved to the
-    # spec-author task-kind handler inside board_worker. See
+    # three sibling watchers — spec_hygiene (board hygiene + active.json
+    # projection), spec_trigger (drop-file / queue-drain detection that
+    # emits spec-author Plane tasks), and a board_worker for the spec-author
+    # role (executes spec-author tasks through the backend pipeline). See
     # docs/architecture/adr/0007-spec-director-refactor.md.
     setsid /bin/bash -lc "
       cd '${ROOT_DIR}'
@@ -364,7 +364,8 @@ start_watch_role() {
       set +a
       _hyg_pid=''
       _trig_pid=''
-      trap 'kill \$_hyg_pid \$_trig_pid 2>/dev/null; exit 0' TERM INT
+      _bw_pid=''
+      trap 'kill \$_hyg_pid \$_trig_pid \$_bw_pid 2>/dev/null; exit 0' TERM INT
       while true; do
         set -a
         source '${ENV_PATH}' 2>/dev/null || true
@@ -377,12 +378,19 @@ start_watch_role() {
           --config '${CONFIG_PATH}' \
           --status-dir '${WATCH_DIR}' &
         _trig_pid=\$!
-        # If either sibling exits, kill the other and restart the pair.
-        wait -n \$_hyg_pid \$_trig_pid
+        '${VENV_DIR}/bin/python' -m operations_center.entrypoints.board_worker.main \
+          --config '${CONFIG_PATH}' \
+          --role 'spec-author' \
+          --poll-interval-seconds '60' \
+          --status-dir '${WATCH_DIR}' &
+        _bw_pid=\$!
+        # If any sibling exits, kill the others and restart the group.
+        wait -n \$_hyg_pid \$_trig_pid \$_bw_pid
         _exit=\$?
-        kill \$_hyg_pid \$_trig_pid 2>/dev/null || true
+        kill \$_hyg_pid \$_trig_pid \$_bw_pid 2>/dev/null || true
         wait \$_hyg_pid 2>/dev/null || true
         wait \$_trig_pid 2>/dev/null || true
+        wait \$_bw_pid 2>/dev/null || true
         [[ ! -f '${pid_file}' ]] && exit 0
         echo \"{\\\"event\\\":\\\"watcher_restart\\\",\\\"role\\\":\\\"${role}\\\",\\\"exit_code\\\":\$_exit}\"
         sleep 30

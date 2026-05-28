@@ -58,7 +58,7 @@ Applies eight rules on every run:
     executor-signal: SIGKILL is present.
 
   Rule 8 — CLEAN_BLOCKED_RETRY
-    Tasks with "task-kind: goal" or "task-kind: improve" in Blocked state where:
+    Tasks with "task-kind: goal", "task-kind: improve", or "task-kind: spec-author" in Blocked state where:
       - No "blocked-by:" label (not held by an explicit dependency gate)
       - No "executor-signal:" label (executor was never killed by a signal)
       - No "executor-exit-code:" label (executor never ran — pre-execution failure)
@@ -103,6 +103,7 @@ _DEAD_REMEDIATION_LABEL = "dead-remediation"
 _INVESTIGATE_LABEL = "task-kind: investigate"
 _IMPROVE_LABEL = "task-kind: improve"
 _GOAL_LABEL = "task-kind: goal"
+_SPEC_AUTHOR_LABEL = "task-kind: spec-author"
 _SELF_MODIFY_APPROVED_LABEL = "self-modify: approved"
 _SIGKILL_SIGNAL_PREFIX = "executor-signal:"  # value checked separately
 _RETRY_COUNT_PREFIX = "retry-count:"
@@ -388,7 +389,11 @@ def _apply_rules(
         # underlying infrastructure is fixed.  Min age avoids racing with label writes.
         is_clean_blocked = (
             state_lower == "blocked"
-            and (_has_label(labels, _IMPROVE_LABEL) or _has_label(labels, _GOAL_LABEL))
+            and (
+                _has_label(labels, _IMPROVE_LABEL)
+                or _has_label(labels, _GOAL_LABEL)
+                or _has_label(labels, _SPEC_AUTHOR_LABEL)
+            )
             and not _has_label(labels, _SELF_MODIFY_APPROVED_LABEL)
             and not _has_label_prefix(labels, _SIGKILL_SIGNAL_PREFIX)
             and not _has_label_prefix(labels, "executor-exit-code:")

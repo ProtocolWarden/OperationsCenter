@@ -75,13 +75,22 @@ def _has_active_campaign(state_path: Path = _ACTIVE_CAMPAIGNS_PATH) -> bool:
     return False
 
 
+_SPEC_AUTHOR_ACTIVE_STATES = frozenset({"ready for ai", "running"})
+
+
 def _existing_spec_author_in_flight(issues: list[dict[str, Any]]) -> str | None:
-    """Return the issue id of any non-Done spec-author task, else None."""
+    """Return the issue id of an actively queued or executing spec-author task, else None.
+
+    Only Ready-for-AI and Running states are considered in-flight.  Blocked or
+    Backlog tasks have failed (e.g. budget_exhausted) and should not suppress a
+    new trigger; board_unblock Rule 8 handles cleanup of those stuck tasks.
+    Done and Cancelled are terminal and also do not suppress a new trigger.
+    """
     src = _LABEL_SOURCE.lower()
     kind = _LABEL_TASK_KIND.lower()
     for issue in issues:
         state_name = str((issue.get("state") or {}).get("name", "")).lower()
-        if state_name == "done":
+        if state_name not in _SPEC_AUTHOR_ACTIVE_STATES:
             continue
         names: list[str] = []
         for label in issue.get("labels", []) or []:

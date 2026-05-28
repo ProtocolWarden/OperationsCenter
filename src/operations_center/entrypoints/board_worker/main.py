@@ -295,7 +295,7 @@ def _process_issue(issue: dict, role: str, config_path: Path, settings, client) 
     repo_key  = _label_value(labels, "repo")
     task_kind = _label_value(labels, "task-kind")
 
-    description = issue.get("description") or issue.get("description_stripped") or ""
+    description = issue.get("description") or issue.get("description_stripped") or issue.get("description_html") or ""
 
     # ADR 0007 Phase C: spec-author tasks carry a YAML payload (parsed below)
     # rather than a `## Goal` block. The whole path is distinct: planning text
@@ -1743,8 +1743,16 @@ def _parse_spec_author_payload(description: str) -> dict | None:
         ...
         ```
     """
+    import html as _html
     import re as _re
     import yaml as _yaml
+    # Normalize HTML descriptions returned by Plane's API (description_html
+    # uses <br> for newlines; strip other tags so the fenced YAML block is
+    # readable by the regex below).
+    if "<" in description:
+        description = _re.sub(r"<br\s*/?>", "\n", description)
+        description = _re.sub(r"<[^>]+>", "", description)
+        description = _html.unescape(description)
     m = _re.search(r"```yaml\s*\n(.*?)\n```", description, _re.DOTALL)
     if not m:
         return None

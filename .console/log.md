@@ -1,3 +1,13 @@
+## 2026-05-28 — Fix spec-author watcher gap + HTML parsing + board_unblock Rule 8
+
+Four spec-author bugs fixed (cherry-picked from oc-watchdog/20260528-1825-board-unblock-rate-clear):
+1. `watch --role spec` never launched `board_worker --role spec-author`; spec-author R4AI tasks had no consumer.
+2. `_parse_spec_author_payload` read `description_stripped` (empty); Plane only returns `description_html`.
+3. `_existing_spec_author_in_flight` blocked new triggers for Blocked/Backlog tasks (should be R4AI/Running only).
+4. `board_unblock` Rule 8 (CLEAN_BLOCKED_RETRY) excluded `task-kind: spec-author`; no re-queue path on budget-gate failures.
+
+---
+
 ## 2026-05-28 — P1: prune watchdog cycle dumps from log.md
 
 Moved 792 watchdog cycle / loop cycle sections (11k+ lines) to
