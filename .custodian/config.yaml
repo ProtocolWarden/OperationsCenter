@@ -437,6 +437,9 @@ audit:
       # workspace.py manages the full workspace lifecycle (checkout, prep, cleanup)
       # across many code paths — single responsibility, cannot cleanly split.
       - src/operations_center/execution/workspace.py
+      # board_unblock.py is a growing rules engine — each autonomous recovery rule
+      # adds ~20 lines; splitting by rule would fragment context.
+      - src/operations_center/entrypoints/maintenance/board_unblock.py
       # validation.py is the canonical per-collector validator library — all
       # artifact validation helpers live in one module by design.
       - src/operations_center/observer/validation.py
