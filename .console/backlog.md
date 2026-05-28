@@ -2,11 +2,14 @@
 
 _Durable work inventory. Update after each meaningful chunk of progress._
 
-## Cycle 51 updates (2026-05-28)
+## Cycle 36 updates (2026-05-28 20:36 UTC)
 
-- [x] Board-unblock promoted 4 tasks Backlog→R4AI (41bcd097, 89fc5782, 0f1612ea, 3a3c202f) — parent fa470a1f Done.
-- [ ] Validate live outcomes for 3a3c202f (goal worker) and c4ab9666 (improve worker) next cycle.
-- [ ] Monitor 4 CONFLICTING PRs (#178-#181) — if still CONFLICTING next 2 cycles with no watcher adaptation, open Plane task for conflict-resolution handling.
+- [x] Board-unblock promoted 20 tasks Backlog→R4AI (GOAL_BACKLOG_PROMOTE, 4 parent improve tasks Done).
+- [x] Marked 89fc5782 and 41bcd097 as Done (squash-merged PRs #178/#179 detected by watchdog).
+- [x] Created Plane task e820f528: "Goal executor: detect squash-merged branches and auto-mark tasks Done".
+- [ ] Validate 0f1612ea (Running, re-executing merged work) completes Done next cycle.
+- [ ] Validate 3a3c202f (Blocked concurrency) re-queues and executes after 0f1612ea completes.
+- [ ] Monitor e820f528 for watcher-side fix prioritization.
 
 ## In Progress
 

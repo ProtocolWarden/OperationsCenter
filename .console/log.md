@@ -11357,3 +11357,52 @@ Cross-cycle repeating patterns:
 ## 2026-05-27 — Fix: wire boundary_artifact_file in OC custodian config (B2)
 
 Added `boundary_artifact_file: ../PrivateManifest/dist/boundary_disclosure_artifact.json` to `.custodian/config.yaml`. This was a pre-existing B2 finding — not introduced by the loop session change.
+
+## OC Platform Watchdog Cycle — 2026-05-28 20:36 UTC (Cycle 36)
+
+- Health state: ACTIVE — goal executor running 0f1612ea ("Handle Optional observed_at in the Deriver") which is re-executing already-merged work (PR #181 squash-merged); executor at Stage 0 investigation on existing goal/0f1612ea branch; will self-complete gracefully as code already present. 20 tasks promoted Backlog→R4AI by GOAL_BACKLOG_PROMOTE. 2 stale tasks marked Done by watchdog.
+- Next cadence: 900s — executor in flight; queue evolving; cadence: ACTIVE.
+- Services: Plane OK, SwitchBoard OK; CLIs OK; git clean. 16/16 repos ff-only up to date.
+- Note: CL_ANCHOR unset this session — CL dispatch wrap is a no-op (pre-P4), audits unaffected.
+
+### STEP 1 — audits (parallel; all CLEAN)
+- custodian-sweep: 7 repos, all deltas 0; OC B2 resolved (delta -1). error=null, plane=commented (exit 0)
+- ghost-audit: 2 events (G7 thin task refused, G10 runaway follow-up — both status=fixed, exit 0)
+- flow-audit: 0 open gaps (F8 partial, others fixed) | graph-doctor: ✓ 12 nodes / 12 edges (platform 9 / private 3)
+- reaudit-check: no backends needed; CxRP 0.3.1 | check-regressions: 0 findings
+
+### STEP 2 — triage: 0 actions (rescore/awaiting/queue_healing all empty)
+
+### STEP 2.5 — board-unblock: 20 GOAL_BACKLOG_PROMOTE actions — 4 parent improve tasks (c4ab9666, 2824d46e, a969024e, fa470a1f) all Done → 20 child goal tasks promoted Backlog→R4AI. mem_available 25.83GB.
+
+### STEP 3 — convergence: CONVERGENT
+- Board state (accurate, deduplicated): Backlog 18, Ready-for-AI 15, Running 1, Done 11, Cancelled 53, Blocked 2.
+- Running: 0f1612ea ("Handle Optional observed_at in the Deriver") — re-executing work already merged as PR #181; executor at Stage 0; will self-complete since code already present on goal/0f1612ea branch.
+- Blocked: d765c140 ([Spec] queue-drain-20260528T093334 — rate limit + concurrency; self-resolves); 3a3c202f ("Harden Collector" — concurrency gate current=1 limit=1; will re-queue when 0f1612ea completes).
+- Propose: 0 emitted, 11 suppressed as duplicates — CORRECT, R4AI=15 tasks already queued; not starvation.
+- Classification: CONVERGENT. Not starvation, not closed-loop stagnation, not dead-remediation.
+- NEW EVIDENCE: 4 parent improve tasks transitioned to Done since cycle 35 → board evolved significantly (20 tasks promoted). Execution slot rotated from 3a3c202f → 4a741734 (completed) → 0f1612ea.
+
+### Watchdog direct actions
+- 89fc5782 ("Cover reverse transitions in Deriver"): marked Done via Plane API. PR #178 (82638fc) already merged; task was stuck in Backlog→R4AI loop due to squash-merge not detectable by git branch check.
+- 41bcd097 ("Guard Collector against glob/stat race condition"): marked Done via Plane API. PR #179 (1a53778) already merged; same squash-merge detection gap.
+- e820f528: Plane task created — "Goal executor: detect squash-merged branches and auto-mark tasks Done". Structural gap: executor cannot detect squash-merged branches via standard git ancestry check.
+
+### STEP 4 — promotion: Plane task e820f528 created this cycle for squash-merge detection gap. Pattern: 3 tasks (89fc5782, 41bcd097, 0f1612ea) re-queued after squash-merge because branch still exists but ancestry check returns NOT_MERGED. Fix: `git log main..origin/goal/<task_id>` returning 0 commits = already merged.
+
+### STEP 5/6 — execution gate: no autonomy-cycle dispatched. Audits all clean (no reproduced repo-code finding). max_concurrent=1 slot occupied by 0f1612ea → no dispatch (correct). Board-unblock promotions are the queue work for this cycle.
+
+### STEP 7 — invariants: pytest tests/unit/er000_phase0_golden/ -q → 15 passed ✓
+
+### STEP 8 — watcher health: 8/8 running (intake/goal/test/improve/propose/review/spec/watchdog). All PIDs stable. Review watcher errors (from yesterday's SwitchBoard downtime) are historical; SwitchBoard now OK. No non-143 crashes this cycle.
+
+### Blocked work classification
+- 0f1612ea: RUNNING (re-executing merged work; self-resolving) — validate Done next cycle.
+- 3a3c202f: Blocked (concurrency gate) — will re-queue when 0f1612ea completes. Watch next cycle.
+- d765c140: Blocked (rate limit + concurrency; spec-author; will self-resolve at rate reset).
+- Operator-blocked: none | Parked: no
+
+### KNOWN OPEN ISSUES (carry forward)
+- Campaign 10c50210 CANCELLED.
+- HYGIENE: `.baseline-validation.json` tracked on OC main (operationally neutralized by cycle-28 reorder).
+- e820f528: Squash-merge detection gap in goal executor (created this cycle).
