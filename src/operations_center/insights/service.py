@@ -48,17 +48,17 @@ class InsightEngineService:
         emergency_fallback: datetime | None = None,
     ) -> datetime:
         for j in range(index + 1, len(snapshots)):
-            if snapshots[j].observed_at is not None:
-                return snapshots[j].observed_at
+            if (ts := snapshots[j].observed_at) is not None:
+                return ts
 
         for j in range(index - 1, -1, -1):
-            if snapshots[j].observed_at is not None:
-                return snapshots[j].observed_at
+            if (ts := snapshots[j].observed_at) is not None:
+                return ts
 
         if emergency_fallback is None:
             logger.warning(
-                f"No observed_at timestamps available in snapshot sequence; "
-                f"using current time as fallback for run_id={snapshot.run_id}"
+                "No observed_at timestamps available in snapshot sequence; "
+                "using current time as fallback for run_id=%s", snapshot.run_id
             )
             emergency_fallback = datetime.now(UTC)
         return emergency_fallback
@@ -120,7 +120,10 @@ class InsightEngineService:
             source_command=context.source_command,
             repo=InsightRepoRef(name=current.repo.name, path=current.repo.path),
             source_snapshots=[
-                SourceSnapshotRef(run_id=snapshot.run_id, observed_at=snapshot.observed_at)
+                SourceSnapshotRef(
+                    run_id=snapshot.run_id,
+                    observed_at=snapshot.observed_at or datetime.now(UTC),
+                )
                 for snapshot in normalized_snapshots
             ],
             insights=insights,

@@ -2,7 +2,7 @@
 # Copyright (C) 2026 ProtocolWarden
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from operations_center.insights.models import DerivedInsight
 
@@ -16,9 +16,10 @@ class InsightNormalizer:
         status: str,
         key_parts: list[str],
         evidence: dict[str, object],
-        first_seen_at: datetime,
-        last_seen_at: datetime,
+        first_seen_at: datetime | None,
+        last_seen_at: datetime | None,
     ) -> DerivedInsight:
+        now = datetime.now(UTC)
         dedup_key = "|".join([kind, *key_parts])
         insight_id = dedup_key.replace("|", ":")
         return DerivedInsight(
@@ -28,6 +29,6 @@ class InsightNormalizer:
             subject=subject,
             status=status,
             evidence=evidence,
-            first_seen_at=first_seen_at,
-            last_seen_at=last_seen_at,
+            first_seen_at=first_seen_at or now,
+            last_seen_at=last_seen_at or now,
         )

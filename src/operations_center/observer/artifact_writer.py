@@ -22,7 +22,7 @@ class ObserverArtifactWriter:
         md_lines = [
             "# Repo State Snapshot",
             f"- run_id: {snapshot.run_id}",
-            f"- observed_at: {snapshot.observed_at.isoformat()}",
+            f"- observed_at: {snapshot.observed_at.isoformat() if snapshot.observed_at else 'none'}",
             f"- repo_name: {snapshot.repo.name}",
             f"- repo_path: {snapshot.repo.path}",
             f"- current_branch: {snapshot.repo.current_branch}",

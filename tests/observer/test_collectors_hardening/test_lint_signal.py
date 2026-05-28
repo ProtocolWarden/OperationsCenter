@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 from operations_center.observer.collectors.lint_signal import LintSignalCollector
 
 
-def valid_lint_item():
+def _valid_lint_item():
     """Valid lint item matching validator expectations."""
     return {
         "filename": "test.py",
