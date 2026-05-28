@@ -149,3 +149,4 @@ guidance.
   development log and remediation summaries.
 
 - [ADR 0006 — CoreRunner rename and subprocess safety consolidation](architecture/adr/0006-corerunner-subprocess-consolidation.md)
+- [ADR 0009 — Work Order: Execution Hygiene](architecture/adr/0009-work-order-execution-hygiene.md)
