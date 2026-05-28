@@ -1,3 +1,11 @@
+## 2026-05-28 — Loop controller: settings.json fallback for cl resolution
+
+Extended the `cl` resolver to read `CL_HOME` from `~/.claude/settings.json` when
+it's absent from the environment — making it identical to OperatorConsole's pane
+resolver (CL_HOME env → settings.json → PATH). The controller now resolves `cl`
+with neither `CL_HOME` nor PATH set (verified via `env -i`), so it anchors
+correctly regardless of launcher (nohup, systemd, cron).
+
 ## 2026-05-28 — Loop controller: robustly resolve `cl` (CL_HOME fallback)
 
 The loop controller resolved `claude`/`codex` robustly via `_resolve_command`

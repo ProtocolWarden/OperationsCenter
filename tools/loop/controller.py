@@ -109,6 +109,16 @@ def _fallback_command_candidates(command: str) -> list[Path]:
         candidates.extend(sorted((home / ".nvm" / "versions" / "node").glob("*/bin/codex")))
     elif command == "cl":
         cl_home = os.environ.get("CL_HOME")
+        if not cl_home:
+            # settings.json is the machine-provisioned CL_HOME source readable
+            # from non-interactive contexts (systemd/cron) that never source
+            # ~/.bashrc. Mirrors OperatorConsole's pane resolver.
+            try:
+                settings = Path.home() / ".claude" / "settings.json"
+                if settings.exists():
+                    cl_home = json.loads(settings.read_text()).get("env", {}).get("CL_HOME", "")
+            except Exception:
+                cl_home = ""
         if cl_home:
             candidates.append(Path(cl_home) / "bin" / "cl")
     return candidates
