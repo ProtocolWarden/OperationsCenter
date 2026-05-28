@@ -812,3 +812,4 @@ tools:
 # file that mentions them, with the noted path patterns excluded.
 privacy:
   require_boundary_artifact: true
+  boundary_artifact_file: ../PrivateManifest/dist/boundary_disclosure_artifact.json
