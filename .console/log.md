@@ -1,3 +1,11 @@
+## 2026-05-28 — Operator: work order 0009 — execution hygiene
+
+6 execution quality problems documented and assigned. See ADR 0009.
+P1/P5: stop polluting .console/ truth files; P2: delete STAGE_*.md; P3: open-PR gate;
+P4: squash stage commits; P6: pin tool versions.
+
+---
+
 ## 2026-05-28 — Operator: fix pre-existing ty failures in dag_executor/adapter.py
 
 Two ty 0.0.40 errors blocking all PR CI runs:

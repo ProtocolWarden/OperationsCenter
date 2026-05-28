@@ -5,47 +5,32 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-✅ COMPLETE: Deriver Reverse Transition Coverage — Stages 0–4 Complete + Code Review
+Execute Work Order 0009 — Execution Hygiene.
 
-## Context
+See: `docs/architecture/adr/0009-work-order-execution-hygiene.md`
 
-Full implementation of bidirectional transition coverage across the Deriver framework is complete, tested, reviewed, and ready for merge. All 5 critical coverage gaps have been identified, designed, implemented, tested, and verified. Stage 4 code review identified and fixed documentation gaps.
+## Priority order
 
-**Commits**: 
-- `5fe2c5f` — "feat: Add reverse transition coverage for Deriver framework"
-- `b530a3b` — "docs: Add Deriver reverse transition coverage analysis and verification"
+1. **P2 (immediate)** — Delete all STAGE_*.md / DERIVER_AUDIT_*.md / LOOP_START.md
+   files from the repo root. Add gitignore guard. Commit directly to main.
 
-## Definition of Done — All Items Completed ✅
+2. **P1 + P5 (same root cause)** — Stop writing watchdog cycle summaries to
+   `.console/log.md`. Redirect to `logs/local/watchdog_cycles/`. Watchdog commits
+   only on meaningful actions, not every cycle.
 
-### Stage 0: Investigation ✅
-- [x] Identified 5 critical coverage gaps across 3 derivers
-- [x] Root cause analysis: Unidirectional vs. bidirectional design patterns documented
+3. **P3** — Add open-PR gate in board-worker pre-promotion check. Zero new goal
+   promotions while any PR is open.
 
-### Stage 1: Design ✅
-- [x] 3-level coverage model defined (backward-compatible / unidirectional / bidirectional)
-- [x] Parameterized test patterns established (52 test scenarios)
-- [x] Insight naming conventions agreed (recovery, improvement, resolved, regressed)
+4. **P4** — Goal workers squash stage commits before opening a PR.
 
-### Stage 2: Implementation ✅
-- [x] DependencyDriftDeriver: Recovery transitions (not_available→available) — lines 64–78
-- [x] LintDriftDeriver: Improvement + status transitions — lines 86–145
-- [x] TypeHealthDeriver: Improvement + status transitions (analogous implementation)
+5. **P6** — Pin `ty` and `ruff` versions in pyproject.toml. Add preflight CI check
+   to watchdog step 0.
 
-### Stage 3: Testing ✅
-- [x] 25+ parameterized test scenarios covering all transition pairs (14 explicit @pytest.mark.parametrize + 11 additional explicit tests covering parameterized scenarios)
-- [x] All 52 tests passing (verified execution with pytest 9.0.3)
-- [x] Zero regressions detected
-- [x] Complete test inventory documented in STAGE3_TEST_SCENARIOS_DETAILED.md
+## Definition of Done
 
-### Stage 4: Integration Review ✅
-- [x] Code review completed (high-effort analysis)
-- [x] Documentation gaps identified and fixed:
-  - Added missing docstring to DependencyDriftDeriver
-  - Completed incomplete docstrings in LintDriftDeriver and TypeHealthDeriver
-  - All docstrings now accurately document all insight types emitted (improved, resolved, regressed)
-- [x] All code compiles without errors
-- [x] Index safety verified (available_snapshots access is guarded by status check)
-- [x] Mutual-exclusion logic verified (count-based and status-based insights properly separated)
-- [x] Ready for merge
-
-**Ready for**: PR review and merge to main
+- [ ] Repo root has no STAGE_*.md files; .gitignore blocks future ones
+- [ ] `.console/log.md` no longer receives watchdog cycle dumps
+- [ ] `git log` on main shows no `chore(watchdog): cycle N` commits after this point
+- [ ] Board-worker refuses to promote goals when open PRs exist
+- [ ] Goal workers produce ≤2 commits per goal before opening PR
+- [ ] Tool versions pinned; CI matches local
