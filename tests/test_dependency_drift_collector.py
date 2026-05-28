@@ -197,7 +197,7 @@ class TestDependencyDriftGuardMechanism:
                 stat_call_count["count"] += 1
                 if stat_call_count["count"] == 1:
                     # First call (discovery): return specific mtime
-                    result = original_stat(self)
+                    original_stat(self)
                     # Create fake stat with old mtime
                     class FakeStat:
                         def __init__(self, mtime):

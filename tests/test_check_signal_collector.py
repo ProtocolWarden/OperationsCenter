@@ -218,7 +218,6 @@ def test_guard_single_file_deleted_during_discovery(tmp_path: Path) -> None:
 
     # Mock glob to return paths, but stat() for log1 will raise FileNotFoundError
     # (simulating the file being deleted between glob and stat)
-    from unittest.mock import MagicMock
 
     original_glob = Path.glob
     original_stat = Path.stat
@@ -291,9 +290,8 @@ def test_guard_uses_captured_mtime_not_new_stat(tmp_path: Path) -> None:
             stat_call_count += 1
             if stat_call_count == 1:
                 # First call (discovery): return old mtime
-                result = original_stat(self)
+                original_stat(self)
                 # Create new stat_result with old mtime
-                import os
                 class FakeStat:
                     def __init__(self, mtime):
                         self.st_mtime = mtime
