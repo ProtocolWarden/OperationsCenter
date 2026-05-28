@@ -8,6 +8,16 @@ Four spec-author bugs fixed (cherry-picked from oc-watchdog/20260528-1825-board-
 
 ---
 
+
+## 2026-05-28 — Fix board_unblock Rule 7: extend to cover improvement_applied follow-on goal tasks
+
+Pattern B: tasks produced by the goal board_worker when an improvement is applied
+(`source: board_worker` + `handoff-reason: improvement_applied`) were invisible to
+GOAL_BACKLOG_PROMOTE because Rule 7 only matched Pattern A (`source: autonomy` +
+`source: improve-suggestion`). Cherry-picked from c14ea4a on watchdog branch.
+
+---
+
 ## 2026-05-28 — P1: prune watchdog cycle dumps from log.md
 
 Moved 792 watchdog cycle / loop cycle sections (11k+ lines) to

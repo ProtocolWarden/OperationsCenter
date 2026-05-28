@@ -48,12 +48,12 @@ Applies eight rules on every run:
     long-running tasks are not incorrectly recovered.
 
   Rule 7 — GOAL_BACKLOG_PROMOTE
-    Tasks with "task-kind: goal" + "source: autonomy" + "source: improve-suggestion"
-    in Backlog state whose parent improve task (original-task-id: label) has reached a
-    terminal state (Done/Cancelled) → move to Ready for AI.
-    These tasks are created by the improve board_worker as follow-on sub-tasks, but no
-    watcher moves them from Backlog to R4AI.  Once the parent is terminal the sub-tasks
-    are ready for the goal board_worker to claim.
+    Goal tasks in Backlog whose parent task (original-task-id: label) has reached a
+    terminal state (Done/Cancelled) → move to Ready for AI.  Matches two patterns:
+    (A) "source: autonomy" + "source: improve-suggestion" — improve board_worker sub-tasks.
+    (B) "source: board_worker" + "handoff-reason: improvement_applied" — goal board_worker
+        follow-on tasks created after an improvement was applied.
+    No watcher promotes either pattern from Backlog to R4AI automatically.
     Skipped when memory is below the executor dispatch threshold or when
     executor-signal: SIGKILL is present.
 
@@ -111,6 +111,8 @@ _BLOCKED_BY_PREFIX = "blocked-by:"
 _ORIGINAL_TASK_PREFIX = "original-task-id:"
 _SOURCE_AUTONOMY_LABEL = "source: autonomy"
 _SOURCE_IMPROVE_SUGGESTION_LABEL = "source: improve-suggestion"
+_SOURCE_BOARD_WORKER_LABEL = "source: board_worker"
+_HANDOFF_IMPROVEMENT_LABEL = "handoff-reason: improvement_applied"
 
 
 def _labels(issue: dict[str, Any]) -> list[str]:
@@ -354,15 +356,19 @@ def _apply_rules(
                     ),
                 })
 
-        # Rule 7 — improve-suggestion goal tasks whose parent task is terminal
-        # The improve board_worker creates task-kind:goal sub-tasks in Backlog as follow-on
-        # work, but no watcher promotes them to Ready for AI for the goal worker to claim.
-        # Once the parent improve task reaches a terminal state, these sub-tasks are ready.
+        # Rule 7 — goal tasks whose parent task is terminal (patterns A and B).
+        _is_improve_suggestion = (
+            _has_label(labels, _SOURCE_AUTONOMY_LABEL)
+            and _has_label(labels, _SOURCE_IMPROVE_SUGGESTION_LABEL)
+        )
+        _is_improvement_applied = (
+            _has_label(labels, _SOURCE_BOARD_WORKER_LABEL)
+            and _has_label(labels, _HANDOFF_IMPROVEMENT_LABEL)
+        )
         if (
             state_lower == "backlog"
             and _has_label(labels, _GOAL_LABEL)
-            and _has_label(labels, _SOURCE_AUTONOMY_LABEL)
-            and _has_label(labels, _SOURCE_IMPROVE_SUGGESTION_LABEL)
+            and (_is_improve_suggestion or _is_improvement_applied)
             and not _has_label_prefix(labels, _SIGKILL_SIGNAL_PREFIX)
             and mem_available_gb >= _MEM_R4AI_THRESHOLD_GB
         ):
