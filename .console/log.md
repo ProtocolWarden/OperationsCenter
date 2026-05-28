@@ -1,3 +1,53 @@
+## OC Platform Watchdog — Cycle (2026-05-28 22:20 UTC) — ACTIVE/900s
+
+**Health state:** ACTIVE
+**Cadence:** 900s
+**Driving signal:** 2 tasks in Running, R4AI=18, board_unblock 3 actions applied this cycle
+
+**Board state:**
+- Backlog: 20 | Ready for AI: 18 | Running: 2 | Blocked: 0 | In Review: 1 | Done: 21 | Cancelled: 69
+- Prior cycle: Backlog: 21 | Ready for AI: 18 | Running: 1 | Blocked: 0 | In Review: 1 | Done: 21 | Cancelled: 69
+- Delta: Backlog -1, Running +1 — forward progress confirmed
+
+**STEP 0 — Preflight:** All 16 repos up to date. Plane OK. SwitchBoard OK. All 8 watchers running. CLIs OK. Git clean.
+
+**STEP 1 — Investigate:**
+- custodian-sweep: timed out (120s, exit 143) — known issue, tracked as Backlog task 8da50821
+- ghost-audit: 3 events — G7 (2 thin-goal refuses on 89191ff5 "Emit JUnit XML", fixed), G10 (1 cancelled runaway follow-up, fixed)
+- flow-audit: 0 open gaps
+- graph-doctor: OK (12 nodes / 12 edges, graph_built=True)
+- reaudit-check: no reaudit needed
+- check-regressions: 0 findings (last 1h)
+
+**STEP 2 — Triage:** 0 rescores. 0 queue healing.
+
+**STEP 2.5 — Board unblock:** 3 actions applied:
+- 878948a6 Blocked→Backlog (CLEAN_BLOCKED_RETRY: no executor-signal labels, pre-execution infra failure)
+- 0020c1da Backlog→Ready-for-AI (GOAL_BACKLOG_PROMOTE: parent improve c4ab9666 is Done)
+- d765c140 Backlog→Ready-for-AI (SPEC_AUTHOR_BACKLOG_PROMOTE)
+
+**STEP 3 — Blocked/Stalled Investigation:**
+- No starvation: R4AI=18, Running=2, Blocked=0
+- No closed-loop stagnation: board state evolved (Backlog -1, Running +1 from prior cycle)
+- Behavioral convergence: WEAKLY-CONVERGENT — active execution, R4AI queue large but consuming
+- Running tasks: d765c140 ([Spec] queue-drain-20260528T093334) and 3a3c202f (Harden Collector against malformed JSON)
+- Known issues with Plane escalations: custodian-sweep timeout (8da50821/Backlog), PR merge 405 (c5d985ef/Backlog)
+- Codex backend "Reading from stdin" failures (17:15-17:29 UTC yesterday) — 8 tasks blocked, all recovered by prior board_unblock cycles, Blocked=0 now
+- PR #178/#180 merge 405 failures: tracked in c5d985ef; PRs now returning 404 on comment fetch, may be closed
+- In Review: 0f1612ea "Handle Optional observed_at in the Deriver" — succeeded at 16:57 UTC, awaiting review watcher merge
+
+**STEP 4 — Convergence Promotion:** No new promotion needed; all recurring patterns already have Plane tasks.
+
+**STEP 5/6 — Execution Gate / Direct Fixes:** No direct fixes this cycle. Blocked=0, running tasks active, no gate-passing findings.
+
+**STEP 7 — Invariants:** 15/15 passed.
+
+**STEP 8 — Watcher Health:** All 8 watchers running. No non-143 restarts. No crash loops. SwitchBoard errors from ~20:05-20:17 UTC and prior resolved; SwitchBoard now OK.
+
+**Cadence rationale:** ACTIVE (900s) — 2 tasks in Running state, R4AI=18, board evolving. Not HEALTHY because improve tasks hitting concurrency gate (global_concurrency_exceeded still active).
+
+---
+
 ## 2026-05-28 — Fix spec-author watcher gap + HTML parsing + board_unblock Rule 8
 
 Four spec-author bugs fixed (cherry-picked from oc-watchdog/20260528-1825-board-unblock-rate-clear):
