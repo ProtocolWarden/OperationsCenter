@@ -1,3 +1,14 @@
+## 2026-05-28 — Operator: fix pre-existing ty failures in dag_executor/adapter.py
+
+Two ty 0.0.40 errors blocking all PR CI runs:
+1. Line 83: removed unused `# type: ignore` (ty no longer flags the assignment)
+2. Line 113: added `# type: ignore[arg-type]` for WorkerBackendExecution[dict] covariance issue
+
+These were introduced by a direct push to main (#182/#183) and not caught since CI is
+only enforced on PRs, not direct pushes.
+
+---
+
 ## 2026-05-28 — Operator: re-rebase PR #180 onto new main (post #181 merge)
 
 Resolved conftest.py conflict: took PR #180 tmp_path refactor, ruff auto-fixed unused import.

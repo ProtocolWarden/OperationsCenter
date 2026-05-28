@@ -80,7 +80,7 @@ class DAGExecutorBackendAdapter:
                 artifacts_dir=artifacts_dir,
                 working_directory=str(workspace),
                 timeout_seconds=self._settings.timeout_seconds or None,
-                worker_backend=worker_backend,  # type: ignore  # noqa: PGH003
+                worker_backend=worker_backend,  # noqa: PGH003
             )
             if workflow_path.exists():
                 spec = load_graph_file(str(workflow_path), goal_text=request.goal_text)
@@ -110,7 +110,7 @@ class DAGExecutorBackendAdapter:
             return _error_result(request, str(exc)), None
 
         capture = SimpleNamespace(
-            observed_runtime=worker_backend_observed_runtime(executed),
+            observed_runtime=worker_backend_observed_runtime(executed),  # type: ignore[arg-type]
         )
 
         if executed.selected_backend is None or executed.payload is None:
