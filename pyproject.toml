@@ -150,8 +150,9 @@ extend-select = [
 # CLI scripts and entrypoints are allowed to print() and broad-except.
 "scripts/**/*.py" = ["T201", "BLE001", "S110"]
 "src/operations_center/entrypoints/**/*.py" = ["T201"]
-# Tools / one-shots
+# Tools / one-shots (test_*.py files use assert like tests/)
 "tools/**/*.py" = ["T201", "BLE001"]
+"tools/**/test_*.py" = ["S101"]
 
 [tool.ty.environment]
 python-version = "3.11"

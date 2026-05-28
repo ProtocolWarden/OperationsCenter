@@ -58,6 +58,64 @@ it second.
 - [ ] **(Follow-up arc, not this one) — synthesized siblings**: `orchestration_profile.synthesized.yaml` derived from observed `runtime_invocation_ref` counts per OC run; declared-vs-observed diff becomes the runtime-truth-reconciliation signal.
 - [ ] **(Follow-up arc, not this one) — SwitchBoard rules consuming the new axes**: incoherent-tuple rejection (e.g. `swarm_parallel + managed_cli`); topology-aware lane preferences. Out of scope for the bring-up arc per ADR 0002.
 
+## Up Next — Glob/Stat Race Condition Guards arc
+
+Harden Collector observer against TOCTOU race condition where files are stat'd twice with a race window between calls.
+
+- [x] **Stage 1: Design guard mechanism (DONE 2026-05-27)**: Designed metadata capture strategy; detailed implementation roadmap documented
+  - Design decision: Capture mtime at discovery time; eliminate second stat() call entirely
+  - Tuple return `(Path, float) | None` from helper methods; callers unpack and use captured mtime
+  - Guard discovery-time stat() with try-except; skip deleted files gracefully
+  - Full backwards compatibility verified (signal format & public API unchanged)
+  - Design document: `.console/MITIGATION_DESIGN.md`
+
+- [x] **Stage 2: Implement guards in DependencyDriftCollector and CheckSignalCollector (DONE 2026-05-27)**
+  - Refactored `_latest_dependency_report()` to return `tuple[Path, float] | None`
+  - Refactored `latest_matching_file()` to return `tuple[Path, float] | None`
+  - Guarded discovery-time stat() calls with try-except (handles FileNotFoundError and OSError)
+  - Updated collect() methods to unpack tuple and use captured mtime (eliminates race window)
+  - Added debug logging for skipped files during discovery
+  - All existing tests pass (16 tests + 62 hardening tests); backwards compatibility verified
+
+- [x] **Stage 3: Unit tests for guard mechanism (DONE 2026-05-27)**
+  - Written 4 guard tests for CheckSignalCollector
+  - Written 7 guard tests for DependencyDriftCollector
+  - Verified all race condition scenarios (single/all files deleted, OSError, graceful fallback)
+  - Confirmed guard mechanism effectiveness (stat called once per file, captured mtime used)
+  - All 27 collector tests passing; 0 regressions
+
+- [x] **Stage 4: Integration tests for guard mechanism (DONE 2026-05-27)**
+  - Written 24 comprehensive integration tests in test_race_condition_guards.py
+  - Tested happy paths: single file, multiple files, latest file selection by mtime
+  - Tested race conditions: file deletion during discovery, all files deleted, graceful fallback
+  - Tested error handling: permission errors, I/O errors, symbolic links, special characters
+  - Tested concurrent operations: background file deletion during collector runs
+  - Tested edge cases: large mtime values, empty directories, nested patterns
+  - All 103 observer tests passing (79 hardening + 24 new race condition); 0 regressions
+  - Guard mechanism verified: TOCTOU race eliminated, graceful degradation, observer resilience
+  - Completion report: `.console/STAGE4_COMPLETION.md`
+
+- [x] **Stage 5: Run full test suite and verify no regressions (DONE 2026-05-27)**
+  - Executed full test suite: 3576 passed, 5 skipped, 0 failed
+  - Verified guard mechanism in full integration context
+  - Confirmed backward compatibility: signal format unchanged, public API unchanged
+  - Verified no regressions across entire codebase
+  - Performance acceptable: full suite completes in 26.67 seconds
+  - Guard mechanism fully operational and production-ready
+
+- [x] **Stage 6: Update documentation and changelog (DONE 2026-05-27)**
+  - Created comprehensive design documentation: `docs/design/observer-race-condition-guard.md`
+    - TOCTOU vulnerability explanation with timeline and attack scenario
+    - Metadata capture solution design and implementation examples
+    - Error handling strategy (graceful degradation patterns)
+    - Testing strategy and comprehensive test coverage
+    - Operational impact and performance analysis
+  - Updated CHANGELOG.md with Keep a Changelog format
+    - Security fix entry documenting race condition elimination
+    - Changed items (tuple return types in discovery helpers)
+    - Documentation section linking to design doc
+  - All acceptance criteria met (documented, changelog added, API/ops docs updated)
+
 ## Up Next — Runtime Observability Hardening arc
 
 Operational/observational polish on top of the validated architecture.
