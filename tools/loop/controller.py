@@ -127,10 +127,10 @@ def _command_available(command: str) -> bool:
 def _anchor_via_cl(env: dict[str, str]) -> None:
     """Anchor the loop's session at this repo's owning manifest via CL.
 
-    Runs `cl session start` (no arg → RepoGraph resolves cwd→manifest) and merges
-    its exported CL_ANCHOR/CL_SESSION_ID into ``env``. No-op if the repo isn't
-    hooked to a manifest or `cl` is unavailable — the loop then runs unanchored,
-    exactly as before, so cl_wrap stays a no-op.
+    Runs `cl session start` once per loop run (called from main() before the
+    iteration loop). Merges CL_ANCHOR/CL_SESSION_ID into ``env``. No-op if the
+    repo isn't hooked to a manifest or `cl` is unavailable — the loop then runs
+    unanchored, exactly as before.
     """
     try:
         out = subprocess.run(
@@ -149,6 +149,25 @@ def _anchor_via_cl(env: dict[str, str]) -> None:
         if line.startswith("export ") and "=" in line:
             key, _, val = line[len("export "):].partition("=")
             env[key.strip()] = val.strip().strip("'\"")
+
+
+def _end_cl_session(anchor_vars: dict[str, str]) -> None:
+    """Archive the CL session started at loop startup. No-op if unanchored."""
+    if not anchor_vars.get("CL_SESSION_ID"):
+        return
+    env = os.environ.copy()
+    env.update(anchor_vars)
+    try:
+        subprocess.run(
+            ["cl", "session", "end", "--archive"],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
 
 
 # Stable lineage for this loop's session-boundary cognition (resumes across runs
@@ -208,9 +227,12 @@ def _cl_capture(backend: str, env: dict[str, str], iteration: int, exit_code: in
         pass
 
 
-def _session_env(backend: str) -> dict[str, str]:
+def _session_env(backend: str, anchor_vars: dict[str, str] | None = None) -> dict[str, str]:
     env = os.environ.copy()
-    _anchor_via_cl(env)
+    if anchor_vars:
+        env.update(anchor_vars)
+    else:
+        _anchor_via_cl(env)
     executable = _resolve_command(backend)
     if executable is None:
         return env
@@ -506,10 +528,10 @@ def get_delay() -> int:
     return DEFAULT_DELAY
 
 
-def run_session(iteration: int, backend: str = "claude") -> tuple[int, Path]:
+def run_session(iteration: int, backend: str = "claude", anchor_vars: dict[str, str] | None = None) -> tuple[int, Path]:
     """Spawn one bounded agent session. Returns (exit_code, session_log_path)."""
     prompt = load_session_prompt()
-    env = _session_env(backend)
+    env = _session_env(backend, anchor_vars)
     prompt = _cl_hydrate(backend, env, iteration, prompt)
     cmd = _session_command(backend, prompt)
 
@@ -633,6 +655,13 @@ def main() -> None:
     _log("Status:    python tools/loop/controller.py --status")
     _log(f"Log:       {LOG_FILE}")
 
+    anchor_vars: dict[str, str] = {}
+    _anchor_via_cl(anchor_vars)
+    if anchor_vars.get("CL_SESSION_ID"):
+        _log(f"Anchored: CL_SESSION_ID={anchor_vars['CL_SESSION_ID']}")
+    else:
+        _log("Running unanchored (cl unavailable or manifest not registered)")
+
     iteration = 0
     cooldowns: dict[str, datetime | None] = {"claude": None, "codex": None}
     try:
@@ -653,7 +682,7 @@ def main() -> None:
                 _log("No runnable backend is currently available.")
                 write_runtime_state(cooldowns, None)
                 break
-            rc, session_log = run_session(iteration, backend)
+            rc, session_log = run_session(iteration, backend, anchor_vars)
             _log(f"{backend.capitalize()} session exited rc={rc}")
 
             if _stop or STOP_FLAG.exists():
@@ -669,7 +698,7 @@ def main() -> None:
                             f"running immediate {alternate.capitalize()} fallback."
                         )
                         write_runtime_state(cooldowns, alternate)
-                        rc, session_log = run_session(iteration, alternate)
+                        rc, session_log = run_session(iteration, alternate, anchor_vars)
                         backend = alternate
                         _log(f"{alternate.capitalize()} fallback session exited rc={rc}")
                         if _stop or STOP_FLAG.exists():
@@ -686,6 +715,7 @@ def main() -> None:
             _log(f"Sleeping {delay}s ...")
             interruptible_sleep(delay)
     finally:
+        _end_cl_session(anchor_vars)
         release_lock()
         _log(f"OC watchdog loop controller stopped after {iteration} iteration(s).")
         print(f"\nStopped. Log: {LOG_FILE}")

@@ -11292,3 +11292,11 @@ Cross-cycle repeating patterns:
 ## 2026-05-24 — Loop session-boundary hydrate/capture for codex/aider
 
 - tools/loop/controller.py: run_session now wraps non-claude (codex/aider) sessions with `cl context hydrate` (prepends prior context to the prompt) + `cl context capture` (records exit/log), gated on CL_ANCHOR. claude skipped (per-tool hooks handle it). Stable lineage oc-loop. Gated/no-op if unanchored or cl missing. Tests extended.
+
+## 2026-05-27 — Persistent loop session: anchor once per run
+
+`tools/loop/controller.py`: move `cl session start` from per-iteration `_session_env()` to a single call in `main()` before the iteration loop. Added `_end_cl_session()` to archive the session on shutdown. `run_session()` and `_session_env()` now accept `anchor_vars` to reuse the stable `CL_SESSION_ID` across all iterations.
+
+## 2026-05-27 — Fix: wire boundary_artifact_file in OC custodian config (B2)
+
+Added `boundary_artifact_file: ../PrivateManifest/dist/boundary_disclosure_artifact.json` to `.custodian/config.yaml`. This was a pre-existing B2 finding — not introduced by the loop session change.
