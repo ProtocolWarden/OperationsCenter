@@ -33,7 +33,14 @@ Then exit cleanly.
 
 Run the OC/Platform stabilization and audit cycle from /home/dev/Documents/GitHub/OperationsCenter. Source .env.operations-center.local first. Use .venv/bin/ for all CLIs.
 
-STEP 0 — PREFLIGHT:
+STEP 0 — READ OPERATOR DIRECTIVES:
+Read .console/task.md NOW. If it contains an active work order or operator directive,
+that is your PRIMARY objective this cycle — execute it before normal watchdog work.
+Check .console/task.md for unchecked definition-of-done items and work through them
+in priority order. Only proceed to standard watchdog steps after the directive's
+in-scope items for this cycle are done (or genuinely blocked on an external dependency).
+
+STEP 1 — PREFLIGHT:
 Sync all repos:
   for repo in OperationsCenter SwitchBoard TeamExecutor DAGExecutor CritiqueExecutor CoreRunner CxRP RxP PlatformDeployment PlatformManifest Custodian SourceRegistry OperatorConsole RepoGraph ProtocolWarden ProtocolWarden.github.io; do
     dir="/home/dev/Documents/GitHub/$repo"
@@ -47,7 +54,7 @@ Then confirm each of the following with a single, non-blocking check — do NOT 
   git status --short
 If a service is DOWN, note it and continue — do not block on it. Bring it up in STEP 2 if needed.
 
-STEP 1 — INVESTIGATE (run in parallel where safe):
+STEP 2 — INVESTIGATE (run in parallel where safe):
   .venv/bin/operations-center-custodian-sweep --config config/operations_center.local.yaml --emit
   .venv/bin/operations-center-ghost-audit     --config config/operations_center.local.yaml --since 1h
   .venv/bin/operations-center-flow-audit      --config config/operations_center.local.yaml
@@ -78,14 +85,14 @@ If root cause is determinable from these logs, include it directly in the task o
 This investigation applies to ALL backends (team_executor, aider) — not just one. Any executor
 that exits with a signal or unexpected code should be investigated the same way.
 
-STEP 2 — TRIAGE:
+STEP 3 — TRIAGE:
   .venv/bin/operations-center-triage-scan --config config/operations_center.local.yaml --apply
 This scan now includes queue self-healing when tasks carry structured evidence labels:
   retry_safe, queue_deadlock/no_consumer, dedup:<key>, retry-lineage:<id>.
 It may transition Blocked→Ready-for-AI or Blocked→Backlog only when retry budgets
 and safety evidence allow it; otherwise it comments an escalation.
 
-STEP 2.5 — AUTONOMOUS BOARD UNBLOCKING:
+STEP 3.5 — AUTONOMOUS BOARD UNBLOCKING:
   .venv/bin/operations-center-board-unblock --config config/operations_center.local.yaml --apply
 
 GOVERNING PRINCIPLE: The loop is the operator for all conditions handled here.
@@ -109,8 +116,10 @@ This step resolves known stuck patterns without human intervention:
     Operator approval is already on record; holding these Blocked is queue waste.
 Log all actions taken (applied or would_apply) in the cycle summary.
 
-STEP 3 — BLOCKED/STALLED WORK INVESTIGATION:
-Read the last 3 cycle summaries from .console/log.md to identify repeated patterns.
+STEP 4 — BLOCKED/STALLED WORK INVESTIGATION:
+Read the last 3 cycle summaries from logs/local/watchdog_cycles/ (newest files) to
+identify repeated patterns. Do NOT read .console/log.md for cycle history — it
+contains only operator decisions, not cycle dumps.
 
 STARVATION — classify immediately (single cycle is sufficient) when ANY of these hold:
   - Propose repeatedly emits candidates that are skipped because duplicates exist in Blocked
@@ -155,7 +164,7 @@ WATCHER HANDOFF INVESTIGATION — for each blocked/stalled item:
 If the answer required manual log inference, that inference is a promotion candidate.
 
 BEHAVIORAL CONVERGENCE CHECK — after stagnation/starvation classification:
-Read the last 3 cycle summaries and classify automation behavior:
+Read the last 3 cycle summaries from logs/local/watchdog_cycles/ and classify automation behavior:
   CONVERGENT: retries materially evolve platform state toward resolution
   WEAKLY-CONVERGENT: progress occurring slowly but directionally
   NON-CONVERGENT: retries reproduce semantically equivalent outcomes with no net state change
@@ -280,7 +289,7 @@ If none apply and remediation is actively running, classify as stagnation, not t
 KNOWN OPEN ISSUES (carry forward until resolved, remove when closed):
 - Campaign 10c50210: CANCELLED.
 
-STEP 4 — CONVERGENCE PROMOTION CHECK:
+STEP 5 — CONVERGENCE PROMOTION CHECK:
 For each blocked/stalled/non-convergent behavior found in STEP 3, ask:
   - Did the /loop perform this same judgment in a prior cycle?
   - Which watcher should eventually own this detection or transition?
@@ -292,7 +301,7 @@ If the same loop-only judgment occurred in 2+ cycles: create/update a Plane task
 promote that behavior into the responsible watcher or guardrail.
 Do NOT redesign immediately. Capture evidence and ownership.
 
-STEP 5 — EXECUTION GATE:
+STEP 6 — EXECUTION GATE:
 For each finding, decide: Plane task only vs direct fix.
 Direct fix is allowed ONLY when ALL of these hold:
   (a) finding reproduced in the current cycle
@@ -309,7 +318,7 @@ task via autonomy-cycle. It does NOT block writing a direct infrastructure fix t
 causing the stagnation. If a PARKED_OPERATOR_BLOCKED pattern has a known root cause
 traceable to a specific bug in OC source code, fix it directly — do not wait for operator.
 
-STEP 6 — DIRECT FIXES (only if loop owns the lock):
+STEP 7 — DIRECT FIXES (only if loop owns the lock):
 For each affected repo that passes the execution gate, run one at a time:
   scripts/operations-center.sh autonomy-cycle --config config/operations_center.local.yaml --execute --repo <path>
 Respect team_executor max_concurrent=1 — do not dispatch two repos simultaneously.
@@ -320,12 +329,12 @@ In training mode (sandbox_base_branch = operations-center-testing-branch), the s
 on the testing branch, not main — the operator reviews before merging. The proposer already adds
 "self-modify: approved" to all OC-targeted tasks automatically. No additional approval gate needed.
 
-STEP 7 — INVARIANT ENFORCEMENT:
+STEP 8 — INVARIANT ENFORCEMENT:
   .venv/bin/pytest tests/unit/er000_phase0_golden/ -q --tb=short
 Also run targeted tests for any repo touched in STEP 6.
 If any test fails and cannot be fixed safely in this cycle → create/update Plane task.
 
-STEP 8 — WATCHER HEALTH + RESTART INVESTIGATION:
+STEP 9 — WATCHER HEALTH + RESTART INVESTIGATION:
   scripts/operations-center.sh watch-all-status
   grep -h "watcher_restart\|exit_code\|ERROR\|Traceback" logs/local/watch-all/*.log | tail -50
 Classify restarts:
@@ -337,9 +346,16 @@ do NOT blindly restart it — escalate with a Plane task instead.
 Restart a stopped watcher (only after root-cause is understood):
   scripts/operations-center.sh watch --role <role>
 
-STEP 9 — LOG + COMMIT + PUSH:
-Append the structured cycle summary to .console/log.md (see template in docs/operator/watchdog_loop.md).
-Update .console/backlog.md for any new/closed gaps.
+STEP 10 — LOG + COMMIT + PUSH:
+Write the cycle summary to logs/local/watchdog_cycles/<YYYYMMDD>_cycle.md (append).
+Do NOT write to .console/log.md — that file is operator-owned. The ONLY exception:
+if you completed a work order item from .console/task.md, append one line to log.md
+noting it (e.g. "## YYYY-MM-DD — P3: open-PR gate implemented"). Nothing else.
+Do NOT touch .console/backlog.md — it is operator-curated.
+
+COMMIT DISCIPLINE: Only commit if you made a meaningful change (code fix, config change,
+new test). Do NOT commit if the cycle was observation-only (no files changed). The
+chore(watchdog): cycle N commit pattern is retired — do not use it.
 IMPORTANT: Run git diff --staged before committing to ensure only loop-owned files are staged.
 Commit only after validation passes. If not on main or not allowed: create a branch:
   git checkout -b oc-watchdog/<YYYYMMDD-HHMM>-<short-topic>
@@ -353,7 +369,7 @@ Invariant gate (STEP 7) passing is sufficient self-review — no additional oper
 If push fails (non-auth error): note it in the cycle summary and continue; do not retry in a loop.
 If push fails with auth error: classify as infra-blocked and note in cycle summary.
 
-STEP 10 — WRITE SCHEDULE AND EXIT:
+STEP 11 — WRITE SCHEDULE AND EXIT:
 Assess platform health state and choose the appropriate delay:
 
   CRITICAL                — crash loops / graph broken / autonomy failing repeatedly:              180s

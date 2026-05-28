@@ -1,3 +1,12 @@
+## 2026-05-28 — Patch session prompt: read task.md, stop polluting log.md
+
+Added STEP 0 to read .console/task.md for operator directives as primary objective.
+Redirected cycle history reads from log.md to logs/local/watchdog_cycles/.
+STEP 10 (was 9): stop writing cycle dumps to log.md; only log meaningful events;
+retired chore(watchdog): cycle N commit pattern.
+
+---
+
 ## OC Platform Watchdog — Cycle (2026-05-28 22:20 UTC) — ACTIVE/900s
 
 **Health state:** ACTIVE
