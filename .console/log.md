@@ -48,6 +48,56 @@ GOAL_BACKLOG_PROMOTE because Rule 7 only matched Pattern A (`source: autonomy` +
 
 ---
 
+## OC Platform Watchdog — Cycle (2026-05-28 21:37 UTC) — ACTIVE/900s
+
+**Health state:** ACTIVE
+**Cadence:** 900s
+**Driving signal:** 4 cherry-picked fixes deployed; board_unblock 19 actions applied; spec-author pipeline fully wired
+
+**Board state:**
+- Backlog: 21 | Ready for AI: 18 | Running: 1 | Blocked: 0 | In Review: 1 | Done: 21 | Cancelled: 69
+
+**STEP 0 — Preflight:** All 16 repos up to date. Plane OK. SwitchBoard OK. All watchers running. CLIs OK. Git clean.
+
+**STEP 1 — Investigate:**
+- custodian-sweep: 0 findings
+- ghost-audit: 3 events (all fixed)
+- flow-audit: 0 gaps
+- graph-doctor: OK (12 nodes / 12 edges)
+- reaudit-check: no reaudit needed
+- check-regressions: 0 findings
+
+**STEP 2 — Triage:** 0 rescores. 0 queue healing.
+
+**STEP 2.5 — Board unblock (initial):** 4 CLEAN_BLOCKED_RETRY applied (Blocked→Backlog).
+
+**STEP 3 — Blocked/stalled investigation:**
+Root cause: spec-author tasks stuck in Blocked had no re-queue path. Four bugs on watchdog branch never merged to main:
+1.  missing  subprocess
+2.  read description_stripped (empty) vs description_html
+3.  blocked triggers for Blocked/Backlog states
+4.  Rule 8 excluded spec-author task kind
+
+Cherry-picked fixes (73a4102, c14ea4a, b01f52f, 19a925d) from oc-watchdog/20260528-1825-board-unblock-rate-clear.
+Added Rule 9 SPEC_AUTHOR_BACKLOG_PROMOTE. Simplified to not require watchdog-branch-only .
+Added C29 custodian exclusion for board_unblock.py.
+
+**Behavioral convergence:** CONVERGENT — active execution, tasks draining, forward progress visible.
+Prior 2 cycles (iter 2-3) were rate-limit failures with no schedule written; not stagnation.
+
+**STEP 5 — Execution gate:** Direct fixes deployed (all criteria met: reproduced, OC-scoped, impl-level, no destructive ops).
+
+**STEP 6 — Direct fixes:** No autonomy-cycle dispatched (spec-author pipeline fix is infrastructure, not task dispatch).
+
+**STEP 7 — Tests:** 15/15 golden passed. 6/6 board_unblock unit tests passed. Custodian clean.
+
+**STEP 8 — Watcher health:** All 8 watchers running. Spec watcher restarted (PID 3776042) to pick up spec-author board_worker.
+Prior SwitchBoard errors at 22:46 UTC were temporary — SwitchBoard is up. 405 merge errors for PRs #178/#180 are expected (already merged).
+
+**STEP 2.5 (post-fix) — Board unblock:** Applied 19 actions: 2 CLEAN_BLOCKED_RETRY (including spec task d765c140 Blocked→Backlog), 17 GOAL_BACKLOG_PROMOTE.
+
+---
+
 ## 2026-05-28 — P1: prune watchdog cycle dumps from log.md
 
 Moved 792 watchdog cycle / loop cycle sections (11k+ lines) to
