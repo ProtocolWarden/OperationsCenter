@@ -1,3 +1,11 @@
+## 2026-05-29 — fix(tests): timing-dependent cooldown test failure at hour 23
+
+`now.replace(hour=now.hour + 1)` raises ValueError when `now.hour == 23`. Changed to
+`now + timedelta(hours=1)` in critique/dag/team backend adapter test fakes. Pre-existing
+bug that caused CI failures on PRs opened after 11 PM. Blocked PR #201 from merging.
+
+---
+
 ## 2026-05-29 — fix(review-watcher): guard _merge_and_done against CONFLICTING PRs
 
 Review watcher was getting 405 errors every cycle for PRs #184, #186, #192 because
