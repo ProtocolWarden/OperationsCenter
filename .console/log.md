@@ -1,3 +1,9 @@
+## 2026-05-29 — Controller writes sleeping_until_utc to state file
+
+Enables status pane to show idle countdown instead of blank Active section between iterations.
+
+---
+
 ## 2026-05-29 — Merge operations-center-testing-branch into main
 
 Reconciled testing branch (ty/custodian fixes, spec tasks #185/#193/#199). Conflicts resolved in favor of main.

@@ -382,11 +382,13 @@ def write_runtime_state(
     runnable_backend: str | None,
     *,
     preferred_backend: str = "claude",
+    sleep_until: str | None = None,
 ) -> None:
     state = {
         "updated": _ts(),
         "preferred_backend": preferred_backend,
         "runnable_backend": runnable_backend,
+        "sleeping_until_utc": sleep_until,
         "backend_cooldowns": {
             backend: dt.strftime("%Y-%m-%dT%H:%M:%SZ") if dt is not None else None
             for backend, dt in cooldowns.items()
@@ -727,6 +729,8 @@ def main() -> None:
 
             delay = get_delay()
             _log(f"Sleeping {delay}s ...")
+            wake_dt = datetime.now(timezone.utc) + timedelta(seconds=delay)
+            write_runtime_state(cooldowns, None, sleep_until=wake_dt.strftime("%Y-%m-%dT%H:%M:%SZ"))
             interruptible_sleep(delay)
     finally:
         _end_cl_session(anchor_vars)
