@@ -47,9 +47,9 @@ class DAGExecutorBackendAdapter:
         self, request: ExecutionRequest
     ) -> tuple[ExecutionResult, object | None]:
         try:
-            from dag_executor.executor import DAGExecutorRunner  # noqa: PGH003
-            from dag_executor.models import GraphSpec, NodeSpec, NodeType  # noqa: PGH003
-            from dag_executor.loader import load_graph_file  # noqa: PGH003
+            from dag_executor.executor import DAGExecutorRunner  # ty: ignore[unresolved-import]  # noqa: PGH003
+            from dag_executor.models import GraphSpec, NodeSpec, NodeType  # ty: ignore[unresolved-import]  # noqa: PGH003
+            from dag_executor.loader import load_graph_file  # ty: ignore[unresolved-import]  # noqa: PGH003
         except ImportError as exc:
             return _error_result(request, f"dag_executor not installed: {exc}"), None
 
