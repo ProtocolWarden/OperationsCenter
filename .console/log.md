@@ -1,3 +1,13 @@
+## 2026-05-29 — fix(ty): clear stale/broken type-ignore suppressions blocking CI
+
+Two suppressions on main were causing ty CI failure on every open PR (11 PRs affected):
+1. dag_executor/adapter.py:113: `# type: ignore[arg-type]` used mypy's code alias which
+   ty 0.0.40 doesn't recognize. Changed to `# ty: ignore[invalid-argument-type]` (matches
+   line 83 in same file). Regression introduced by 155c8fc (taxonomy fix changed type of
+   `executed` in a way that broke the previously-working-by-accident suppression).
+2. board_worker/main.py:1339: stale `# ty:ignore[invalid-assignment]` emitted an
+   `unused-ignore-comment` warning (ty treats this as a CI failure).
+
 ## 2026-05-29 — fix(github-pr): follow redirects in get_pr_diff
 
 get_pr_diff used httpx.get without follow_redirects=True. After the Velascat→ProtocolWarden
