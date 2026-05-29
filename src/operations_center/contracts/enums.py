@@ -33,7 +33,20 @@ class LaneName(str, Enum):
 
 
 class BackendName(str, Enum):
-    """Backend implementations that execute tasks inside a lane."""
+    """Backend implementations that execute tasks.
+
+    Two subtypes:
+
+    **Executor Lanes** — orchestration services that coordinate one or more
+    worker backends.  OC routes to these when multi-agent or critique topology
+    is wanted:
+      - ``team_executor``, ``dag_executor``, ``critique_executor``
+
+    **Direct Worker Backends** — single-agent runtimes invoked directly by OC
+    (conceptually equivalent to ``claude_code`` / ``codex_cli`` but run locally).
+    Will migrate into executor services in a future work order:
+      - ``aider_local``, ``direct_local``
+    """
     DIRECT_LOCAL = "direct_local"
     AIDER_LOCAL = "aider_local"
     TEAM_EXECUTOR = "team_executor"
@@ -41,6 +54,18 @@ class BackendName(str, Enum):
     CRITIQUE_EXECUTOR = "critique_executor"
     OPENCLAW = "openclaw"
     DEMO_STUB = "demo_stub"
+
+
+EXECUTOR_LANE_NAMES: frozenset[str] = frozenset({
+    BackendName.TEAM_EXECUTOR,
+    BackendName.DAG_EXECUTOR,
+    BackendName.CRITIQUE_EXECUTOR,
+})
+
+DIRECT_WORKER_BACKEND_NAMES: frozenset[str] = frozenset({
+    BackendName.AIDER_LOCAL,
+    BackendName.DIRECT_LOCAL,
+})
 
 
 class ExecutionMode(str, Enum):

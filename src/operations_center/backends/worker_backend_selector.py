@@ -14,7 +14,13 @@ from operations_center.backends._capacity_classifier import (
 
 _T = TypeVar("_T")
 
-_SUPPORTED_WORKER_BACKENDS = ("claude_code", "codex_cli")
+# All worker backends — remote (cloud) and local. The executor services
+# (team_executor, dag_executor, critique_executor) use round-robin over the
+# remote subset; aider_local and direct_local are local equivalents dispatched
+# directly by OC until executor services support them natively.
+_SUPPORTED_WORKER_BACKENDS = ("claude_code", "codex_cli", "aider_local", "direct_local")
+_REMOTE_WORKER_BACKENDS = ("claude_code", "codex_cli")
+_LOCAL_WORKER_BACKENDS = ("aider_local", "direct_local")
 _TIMEZONE_RESET_RE = re.compile(
     r"resets\s+(\d{1,2}:\d{2}(?:am|pm))\s+\(([^)]+)\)", re.IGNORECASE
 )
@@ -70,16 +76,21 @@ def worker_backend_observed_runtime(
 def worker_backend_candidates(preferred_backend: str) -> tuple[str, ...]:
     if preferred_backend not in _SUPPORTED_WORKER_BACKENDS:
         return (preferred_backend,)
-    alternates = tuple(
-        backend
-        for backend in _SUPPORTED_WORKER_BACKENDS
-        if backend != preferred_backend
-    )
+    # Executor services (team_executor, dag_executor, critique_executor) can only
+    # dispatch to remote worker backends. Local backends round-robin only among
+    # themselves (currently a set of one, so no fallback until executor services
+    # support them natively).
+    if preferred_backend in _REMOTE_WORKER_BACKENDS:
+        pool = _REMOTE_WORKER_BACKENDS
+    else:
+        pool = _LOCAL_WORKER_BACKENDS
+    alternates = tuple(backend for backend in pool if backend != preferred_backend)
     return (preferred_backend, *alternates)
 
 
 def alternate_worker_backend(worker_backend: str) -> str | None:
-    for candidate in _SUPPORTED_WORKER_BACKENDS:
+    pool = _REMOTE_WORKER_BACKENDS if worker_backend in _REMOTE_WORKER_BACKENDS else _LOCAL_WORKER_BACKENDS
+    for candidate in pool:
         if candidate != worker_backend:
             return candidate
     return None

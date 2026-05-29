@@ -31,7 +31,23 @@ This directory holds OC-specific material.
 - [operator/propagation/post-merge-hook.md](operator/propagation/post-merge-hook.md) — Post-merge propagation hook setup.
 - [operator/archon_workflow_registration.md](operator/archon_workflow_registration.md) — Historical: Archon workflow registration handshake (Archon removed; kept for historical reference).
 
-## Backends
+## Executor Lanes & Worker Backends
+
+OC dispatches work through two categories of backend:
+
+**Executor Lanes** — orchestration services that coordinate one or more worker
+backends. Route tasks here when multi-agent or critique topology is needed:
+- `team_executor` — parallel team of agents with configurable team composition
+- `dag_executor` — DAG-structured workflow with per-node agent assignments
+- `critique_executor` — proposer + critic refinement loop
+
+**Direct Worker Backends** — single-agent runtimes invoked by OC directly.
+Conceptually equivalent to `claude_code`/`codex_cli` but run locally. These
+will migrate into executor services in a future work order:
+- `aider_local` — aider against a local Ollama model
+- `direct_local` — aider against a remote SwitchBoard model proxy
+
+Backend docs:
 
 - [backends/aider_local.md](backends/aider_local.md) — `aider_local` backend
   adapter behaviour and config.

@@ -56,6 +56,9 @@ class CanonicalBackendRegistry:
         openclaw_runner: "OpenClawRunner | None" = None,
     ) -> "CanonicalBackendRegistry":
         adapters: dict[BackendName, CanonicalBackendAdapter] = {
+            # Direct worker backends — conceptually equivalent to claude_code/codex_cli
+            # but invoked by OC directly. Will migrate into executor services in a future
+            # work order so they are treated uniformly as worker backends.
             BackendName.DIRECT_LOCAL: DirectLocalBackendAdapter(
                 settings.aider,
             ),

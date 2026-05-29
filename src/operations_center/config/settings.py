@@ -31,8 +31,9 @@ class GitSettings(BaseModel):
 class BackendCapSettings(BaseModel):
     """Per-backend execution cap and resource thresholds.
 
-    Keyed on the backend that powers the dispatch (``team_executor``, ``dag_executor``,
-    ``aider``, ``openclaw``, ``pi``, ...). All fields are optional;
+    Keyed on the executor lane name (``team_executor``, ``dag_executor``,
+    ``critique_executor``) or direct worker backend name (``aider_local``,
+    ``direct_local``). All fields are optional;
     backends with no entry in ``Settings.backend_caps`` are
     unconstrained at this layer — the global cap still applies.
 
@@ -65,10 +66,10 @@ class BackendCapSettings(BaseModel):
             max_per_day: 5                  # trust-building rate cap
             min_available_memory_mb: 8192   # container baseline + SDK call
             max_concurrent: 4
-          aider:
+          aider_local:
             min_available_memory_mb: 1024
             max_concurrent: 2
-          pi:
+          direct_local:
             min_available_memory_mb: 16384  # local LLM weights
             max_concurrent: 1
     """
@@ -331,7 +332,7 @@ class RepoSettings(BaseModel):
     # whose names contain any of these strings are excluded from the failed list.
     ci_ignored_checks: list[str] = Field(default_factory=list)
     # Executor selection hint for this repo. Valid values: ``"team_executor"``,
-    # ``"dag_executor"``, ``"critique_executor"``, ``"aider_local"``, ``"direct_local"``.
+    # ``"dag_executor"``, ``"critique_executor"``.
     # Routing decisions are made by SwitchBoard; this is an operator preference hint only.
     executor: str = "team_executor"
 

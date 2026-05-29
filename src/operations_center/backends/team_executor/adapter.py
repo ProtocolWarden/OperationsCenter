@@ -116,7 +116,7 @@ class TeamExecutorBackendAdapter:
             usage_store.record_quota_event(
                 task_id=request.run_id,
                 role="team_executor",
-                backend=executed.selected_backend,
+                backend="team_executor",
                 now=datetime.now(UTC),
             )
         return result, capture

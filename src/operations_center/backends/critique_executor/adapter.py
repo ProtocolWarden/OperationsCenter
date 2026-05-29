@@ -143,7 +143,7 @@ class CritiqueExecutorBackendAdapter:
             usage_store.record_quota_event(
                 task_id=request.run_id,
                 role="critique_executor",
-                backend=executed.selected_backend,
+                backend="critique_executor",
                 now=datetime.now(UTC),
             )
         return result, capture

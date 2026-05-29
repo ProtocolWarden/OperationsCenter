@@ -1,3 +1,11 @@
+## 2026-05-28 — Fix taxonomy: classify aider_local/direct_local as direct worker backends
+
+Added EXECUTOR_LANE_NAMES / DIRECT_WORKER_BACKEND_NAMES frozensets to enums.py.
+Fixed quota_event backend= in team/dag/critique executor adapters to use the lane
+name instead of the selected worker backend. Expanded worker_backend_selector to
+include local backends with correct pool-partitioned round-robin. Updated settings.py
+docstrings and docs/README.md to reflect the two-category taxonomy.
+
 ## 2026-05-29 — P4: squash stage commits before opening PR; P6 follow-up: remove 6 stale type: ignore comments
 
 ## 2026-05-28 — P6 follow-up: fixed 10 pre-existing ty errors exposed by ty==0.0.40 pin
