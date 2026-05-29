@@ -8,7 +8,6 @@ response body, causing the review watcher to skip all PRs ("empty diff").
 """
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from operations_center.adapters.github_pr import GitHubPRClient
 
