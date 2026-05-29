@@ -12,8 +12,6 @@ from types import SimpleNamespace
 
 import pytest
 
-pytestmark = pytest.mark.slow
-
 from operations_center.observer.collectors.dependency_drift import DependencyDriftCollector
 from operations_center.observer.collectors.execution_health import ExecutionArtifactCollector
 from operations_center.observer.security_logging import (
@@ -30,6 +28,7 @@ from operations_center.observer.service import ObserverContext
 from operations_center.observer.validation import (
     ArtifactValidator,
 )
+pytestmark = pytest.mark.slow
 
 
 def _observer_context(report_root: Path, *, repo_name: str) -> ObserverContext:

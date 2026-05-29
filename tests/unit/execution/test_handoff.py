@@ -8,14 +8,14 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.smoke
-
 from operations_center.contracts.enums import BackendName, LaneName
 from operations_center.contracts.routing import LaneDecision
 from operations_center.execution.handoff import ExecutionRequestBuilder, ExecutionRuntimeContext
 from operations_center.planning.models import PlanningContext, ProposalDecisionBundle
 from operations_center.planning.proposal_builder import build_proposal
 from operations_center.policy.models import PolicyDecision, PolicyStatus
+
+pytestmark = pytest.mark.smoke
 
 
 def _bundle() -> ProposalDecisionBundle:

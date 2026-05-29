@@ -1,11 +1,15 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 ProtocolWarden
 """Example tests demonstrating pytest markers for smoke and slow tests."""
 import pytest
 
+from operations_center.contracts.enums import ExecutionMode
+
 
 @pytest.mark.smoke
-def test_smoke_critical_feature():
-    """Quick smoke test for critical functionality."""
-    assert True
+def test_smoke_execution_mode_enum():
+    """Smoke: ExecutionMode enum is importable and has expected members."""
+    assert ExecutionMode.AUTONOMOUS in ExecutionMode
 
 
 @pytest.mark.slow

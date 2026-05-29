@@ -13,13 +13,12 @@ from __future__ import annotations
 
 import pytest
 
-pytestmark = pytest.mark.smoke
-
 from operations_center.audit_contracts.profiles import EXAMPLE_MANAGED_REPO_PROFILE, ManagedRepoAuditProfile
 from operations_center.audit_contracts.vocabulary import (
     GENERIC_ENUMS,
     ExampleManagedRepoAuditType,
 )
+pytestmark = pytest.mark.smoke
 
 
 class TestExampleManagedRepoProfileSeparation:

@@ -15,8 +15,6 @@ import json
 
 import pytest
 
-pytestmark = pytest.mark.smoke
-
 from operations_center.audit_contracts.vocabulary import (
     ConsumerType,
     GENERIC_ENUMS,
@@ -30,6 +28,8 @@ from operations_center.audit_contracts.vocabulary import (
     ExampleManagedRepoSourceStage,
     EXAMPLE_MANAGED_REPO_PROFILE_ENUMS,
 )
+
+pytestmark = pytest.mark.smoke
 
 
 class TestGenericVsProfileSeparation:

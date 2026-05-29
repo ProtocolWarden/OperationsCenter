@@ -7,14 +7,13 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-pytestmark = pytest.mark.slow
-
 from operations_center.decision.candidate_builder import CandidateSpec
 from operations_center.decision.rules.observation_coverage import ObservationCoverageRule
 from operations_center.insights.derivers.observation_coverage import ObservationCoverageDeriver
 from operations_center.insights.normalizer import InsightNormalizer
 
 from test_insights import _make_snapshot as make_snapshot
+pytestmark = pytest.mark.slow
 
 
 def _normalizer() -> InsightNormalizer:

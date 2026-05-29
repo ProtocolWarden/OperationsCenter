@@ -9,9 +9,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-pytestmark = pytest.mark.slow
-
 from operations_center.observer.collectors.lint_signal import LintSignalCollector
+pytestmark = pytest.mark.slow
 
 
 def _valid_lint_item():

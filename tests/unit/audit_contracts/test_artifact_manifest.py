@@ -8,8 +8,6 @@ from datetime import datetime, timezone
 
 import pytest
 
-pytestmark = pytest.mark.smoke
-
 from operations_center.audit_contracts.artifact_manifest import (
     ExcludedPath,
     ManagedArtifactEntry,
@@ -24,6 +22,7 @@ from operations_center.audit_contracts.vocabulary import (
     PathRole,
     ValidFor,
 )
+pytestmark = pytest.mark.smoke
 
 _NOW = datetime(2026, 4, 26, 15, 34, 55, tzinfo=timezone.utc)
 

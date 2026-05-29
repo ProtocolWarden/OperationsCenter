@@ -6,8 +6,6 @@ from __future__ import annotations
 
 import pytest
 
-pytestmark = pytest.mark.smoke
-
 from operations_center.contracts.enums import (
     ExecutionMode,
     Priority,
@@ -19,6 +17,8 @@ from operations_center.planning.proposal_builder import (
     build_proposal,
     build_proposal_with_result,
 )
+
+pytestmark = pytest.mark.smoke
 
 
 def _ctx(**kw) -> PlanningContext:

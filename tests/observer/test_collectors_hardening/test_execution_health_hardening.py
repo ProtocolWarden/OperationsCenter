@@ -6,11 +6,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-pytestmark = pytest.mark.slow
-
 from operations_center.observer.collectors.execution_health import (
     ExecutionArtifactCollector,
 )
+pytestmark = pytest.mark.slow
 
 
 class TestExecutionHealthHardening:

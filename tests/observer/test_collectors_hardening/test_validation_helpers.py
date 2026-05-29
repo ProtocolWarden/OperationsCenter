@@ -4,8 +4,6 @@
 
 import pytest
 
-pytestmark = pytest.mark.slow
-
 from operations_center.observer.validation import (
     ArtifactValidator,
     DependencyReportValidator,
@@ -13,6 +11,7 @@ from operations_center.observer.validation import (
     RequestValidator,
     ValidationHistoryValidator,
 )
+pytestmark = pytest.mark.slow
 
 
 class TestArtifactValidator:

@@ -26,8 +26,6 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = [pytest.mark.integration, pytest.mark.slow]
-
 from operations_center.backends.direct_local.adapter import DirectLocalBackendAdapter
 from operations_center.config.settings import AiderSettings
 from operations_center.contracts.enums import ExecutionStatus, FailureReasonCategory
@@ -38,6 +36,8 @@ from operations_center.execution.artifact_writer import RunArtifactWriter
 from operations_center.execution.handoff import ExecutionRequestBuilder, ExecutionRuntimeContext
 from operations_center.planning.models import PlanningContext, ProposalDecisionBundle
 from operations_center.planning.proposal_builder import build_proposal
+
+pytestmark = [pytest.mark.integration, pytest.mark.slow]
 
 
 # ---------------------------------------------------------------------------

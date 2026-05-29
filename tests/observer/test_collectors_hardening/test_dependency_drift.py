@@ -7,11 +7,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-pytestmark = pytest.mark.slow
-
 from operations_center.observer.collectors.dependency_drift import (
     DependencyDriftCollector,
 )
+pytestmark = pytest.mark.slow
 
 
 class TestDependencyDriftHardening:
