@@ -149,6 +149,12 @@ None of these items reopen boundaries.
 
 ## Done
 
+- [x] **Queue-Drain Spec Authoring Campaign — Stages 0-2 Complete (2026-05-29)**: Authored focused improvement-campaign spec targeting queue-drain subsystem. Completed:
+  - Stage 0: Analyzed queue-drain context, identified 4 improvement goals grounded in recent production fixes (spec_trigger floods, thin-goal loops, rate-gating issues)
+  - Stage 1: Wrote campaign spec file at `docs/specs/queue-drain-20260529T075025.md` with HTML comment, valid YAML front-matter, Overview (3 sentences), Goals (4 numbered <1 hour each), Constraints (6), Success Criteria (5)
+  - Stage 2: Validated spec compliance — all 13 acceptance criteria met (HTML comment, YAML fields, UUID v4 format, ISO 8601 timestamp, markdown sections, goal count, file count)
+  - Campaign ready for Plane dispatch with 4 executor task goals (QueueHealingEngine tests, board-unblock rule tests, rate-gating metrics, Plane API error resilience)
+
 - [x] **Collector JSON Hardening — Stage 3: Verification and Testing (2026-05-27)**: Verified Stage 2 implementation and fixed critical LintItemValidator bug. Deliverables:
   - ✅ **All 118 tests passing** (101 hardening + 17 security logging tests)
   - ✅ **Parse exceptions:** All 9 parse-level malformations (P1-P10) tested; JSONDecodeError, OSError, UnicodeDecodeError all caught

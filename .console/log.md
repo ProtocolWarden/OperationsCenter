@@ -11425,3 +11425,70 @@ Completed final verification of Stage 2 implementation. Fixed critical LintItemV
 
 **Ready for Merge:** All 118 tests passing. Implementation solid. No regressions.
 
+
+## Queue-Drain Spec Authoring Campaign — 2026-05-29 07:50+ UTC
+
+### Stage 0: Analyze queue-drain context ✅
+**Completed 2026-05-29**
+
+Scoped the queue-drain improvement campaign targeting the QueueHealingEngine + board-unblock rules subsystem. Recent fixes (spec_trigger floods, thin-goal re-promotion loops) identified as entry point for comprehensive test coverage + observability work.
+
+**Outcomes:**
+- 4 concrete improvement goals defined (each <1 hour execution)
+- Grounded in recent production fixes and architectural stability
+- No code changes required — test coverage + metrics focus
+
+### Stage 1: Write queue-drain spec file ✅
+**Completed 2026-05-29 07:50:25 UTC**
+
+Authored campaign spec at `docs/specs/queue-drain-20260529T075025.md`
+
+**File Details:**
+- HTML comment with run ID: `c2cfefd6-2bec-4acd-b848-d72d5f0762ea`
+- Campaign ID: `5f8a3b1e-72c4-4a9c-b1f2-8e9d7c3a1b5e` (UUID v4)
+- Target repo: OperationsCenter
+- Phases: implement, test, improve
+
+**Content:**
+- Overview: 3 sentences on queue-drain hardening + rate-gating
+- Goals: 4 numbered, <1 hour each
+  1. QueueHealingEngine unit tests (stale-blocked, deadlock, budgets)
+  2. Board-unblock rule tests (Rules 7/8, concurrency, rate-gating)
+  3. Rate-gating metrics & audit trail (transition counts, 5-min window)
+  4. Plane API error resilience (timeouts, rate-limits, dry-run mode)
+- Constraints: 6 approach decisions (pure unit tests, no engine changes, optional metrics, dry-run mode, file size caps, configurable thresholds)
+- Success Criteria: 5 concrete acceptance criteria (test counts, metrics emission, dry-run behavior, regressions)
+
+### Stage 2: Validate spec compliance and structure ✅
+**Completed 2026-05-29 07:55+ UTC**
+
+Comprehensive validation against all required spec format and content requirements.
+
+**Validation Results:**
+- ✓ HTML comment format valid (generated_by_run: c2cfefd6-2bec-4acd-b848-d72d5f0762ea)
+- ✓ YAML front-matter complete (all 7 required fields)
+- ✓ campaign_id: 5f8a3b1e-72c4-4a9c-b1f2-8e9d7c3a1b5e (valid UUID v4)
+- ✓ slug matches filename: queue-drain-20260529T075025
+- ✓ phases array: [implement, test, improve]
+- ✓ repos array: single repo (OperationsCenter)
+- ✓ area_keywords: queue_healing, entrypoints/maintenance, board-unblock rules
+- ✓ status: active
+- ✓ created_at: 2026-05-29T07:50:25Z (ISO 8601 UTC)
+- ✓ Overview: 3 sentences (describe queue-drain subsystem + recent fixes)
+- ✓ Goals: 4 numbered items (all <1 hour, concrete, measurable)
+- ✓ Constraints: 6 specific approach decisions (test-only, no engine logic changes, optional metrics, dry-run mode, file caps, thresholds)
+- ✓ Success Criteria: 5 acceptance criteria (test counts, metrics, dry-run, regression testing)
+- ✓ File count: exactly 1 spec file (docs/specs/queue-drain-20260529T075025.md)
+
+**Acceptance Criteria Met:**
+- ✅ File exists at correct path
+- ✅ HTML comment matches required format with correct run ID
+- ✅ YAML front-matter parses without syntax errors
+- ✅ campaign_id is valid UUID v4 format
+- ✅ created_at is valid ISO 8601 UTC timestamp
+- ✅ All 4 required markdown sections present and well-formed
+- ✅ Only 1 file modified (spec file)
+
+**Status: SPEC FILE READY FOR PLANE CAMPAIGN DISPATCH** ✅
+
+All three stages (0, 1, 2) complete. Campaign specification validated and ready for executor task dispatch via Plane.
