@@ -128,9 +128,9 @@ def select_worker_backend(
                 cooldowns=cooldowns,
             )
     reason = ", ".join(
-        f"{backend} until {cooldowns[backend].isoformat()}"
+        f"{backend} until {dt.isoformat()}"
         for backend in candidates
-        if cooldowns.get(backend) is not None
+        if (dt := cooldowns.get(backend)) is not None
     )
     return WorkerBackendSelection(
         preferred_backend=preferred_backend,

@@ -419,7 +419,7 @@ class ValidationHistoryValidator(ArtifactValidator):
                         f"got {type(err).__name__}"
                     )
                 if "code" in err:
-                    code = err["code"]
+                    code = err["code"]  # ty: ignore[invalid-argument-type]
                     if not ArtifactValidator.is_nonempty_string(code):
                         return False, (
                             f"errors[{idx}].code: must be non-empty string"
@@ -474,7 +474,7 @@ class DependencyReportValidator(ArtifactValidator):
                 )
 
             if "severity" in status:
-                severity = status["severity"]
+                severity = status["severity"]  # ty: ignore[invalid-argument-type]
                 if not isinstance(severity, str):
                     return False, (
                         f"statuses[{idx}].severity: expected str, "

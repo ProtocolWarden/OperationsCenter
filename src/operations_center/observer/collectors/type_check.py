@@ -116,7 +116,7 @@ class TypeSignalCollector:
                         message=str(item.get("message", "")),
                     )
                 )
-            except (TypeError, ValueError) as e:
+            except Exception as e:
                 logger.debug("Failed to construct type error: %s", e)
                 continue
 
@@ -172,7 +172,7 @@ class TypeSignalCollector:
                         message=str(item.get("message", "")),
                     )
                 )
-            except (TypeError, ValueError) as e:
+            except Exception as e:
                 logger.debug("Failed to construct type error: %s", e)
                 continue
 
