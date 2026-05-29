@@ -1,3 +1,12 @@
+## 2026-05-29 — fix(spec_trigger): stop queue-drain flood when rate-gated tasks accumulate
+
+spec_trigger was creating 10+ duplicate queue-drain tasks in ~30 min: (1) running_count
+used "in progress" but Plane state is "Running" → always 0, making detect() see an
+always-drained board; (2) _existing_spec_author_in_flight only checked R4AI/Running,
+so Blocked tasks were invisible and spec_trigger fired every cycle. Fixed by adding
+_any_queued_spec_author() covering Blocked/Backlog states; queue_drain suppressed when
+any non-terminal spec-author task exists. Drop-file bypasses suppression. 13 tests added.
+
 ## 2026-05-29 — fix(workspace): restore .baseline-validation.json before task-branch checkout
 
 .baseline-validation.json slipped into goal-branch commits; baseline validation

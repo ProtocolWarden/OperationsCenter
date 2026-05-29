@@ -76,6 +76,18 @@ def _has_active_campaign(state_path: Path = _ACTIVE_CAMPAIGNS_PATH) -> bool:
 
 
 _SPEC_AUTHOR_ACTIVE_STATES = frozenset({"ready for ai", "running"})
+_SPEC_AUTHOR_QUEUED_STATES = frozenset({"ready for ai", "running", "blocked", "backlog"})
+
+
+def _spec_author_label_names(issue: dict[str, Any]) -> list[str]:
+    """Extract lowercased label name strings from an issue."""
+    names: list[str] = []
+    for label in issue.get("labels", []) or []:
+        if isinstance(label, dict):
+            names.append(str(label.get("name", "")).lower())
+        else:
+            names.append(str(label).lower())
+    return names
 
 
 def _existing_spec_author_in_flight(issues: list[dict[str, Any]]) -> str | None:
@@ -92,12 +104,25 @@ def _existing_spec_author_in_flight(issues: list[dict[str, Any]]) -> str | None:
         state_name = str((issue.get("state") or {}).get("name", "")).lower()
         if state_name not in _SPEC_AUTHOR_ACTIVE_STATES:
             continue
-        names: list[str] = []
-        for label in issue.get("labels", []) or []:
-            if isinstance(label, dict):
-                names.append(str(label.get("name", "")).lower())
-            else:
-                names.append(str(label).lower())
+        names = _spec_author_label_names(issue)
+        if src in names and kind in names:
+            return str(issue.get("id", ""))
+    return None
+
+
+def _any_queued_spec_author(issues: list[dict[str, Any]]) -> str | None:
+    """Return the issue id of any non-terminal spec-author task (R4AI/Running/Blocked/Backlog).
+
+    Used to suppress queue_drain creation when rate-gated tasks have already
+    accumulated.  Drop-file triggers bypass this check (operator intent wins).
+    """
+    src = _LABEL_SOURCE.lower()
+    kind = _LABEL_TASK_KIND.lower()
+    for issue in issues:
+        state_name = str((issue.get("state") or {}).get("name", "")).lower()
+        if state_name not in _SPEC_AUTHOR_QUEUED_STATES:
+            continue
+        names = _spec_author_label_names(issue)
         if src in names and kind in names:
             return str(issue.get("id", ""))
     return None
@@ -197,7 +222,7 @@ def run_once(settings: Any, client: PlaneClient) -> None:
         return
 
     ready_count = _count_state(all_issues, "ready for ai")
-    running_count = _count_state(all_issues, "in progress")
+    running_count = _count_state(all_issues, "running")
     has_active = _has_active_campaign()
 
     # Detection — TriggerDetector already encodes the
@@ -219,6 +244,17 @@ def run_once(settings: Any, client: PlaneClient) -> None:
             ensure_ascii=False,
         ))
         return
+
+    # For queue_drain triggers: also suppress when rate-gated tasks have already
+    # accumulated in Blocked/Backlog.  Drop-file triggers bypass this (operator wins).
+    if trigger.source == TriggerSource.QUEUE_DRAIN:
+        queued = _any_queued_spec_author(all_issues)
+        if queued is not None:
+            logger.info(json.dumps(
+                {"event": "spec_trigger_skip_queued", "issue_id": queued},
+                ensure_ascii=False,
+            ))
+            return
 
     payload = _build_payload(trigger, settings, ready_count, running_count)
     try:
