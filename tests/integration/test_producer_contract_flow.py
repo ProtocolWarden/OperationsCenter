@@ -16,9 +16,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 
 from operations_center.artifact_index import build_artifact_index, load_artifact_manifest
 from operations_center.audit_toolset.discovery import load_run_status_entrypoint
+pytestmark = [pytest.mark.integration, pytest.mark.slow]
 
 
 _REPO_ID = "example_managed_repo"

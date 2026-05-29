@@ -4,9 +4,12 @@
 import json
 from unittest.mock import MagicMock
 
+import pytest
+
 from operations_center.observer.collectors.execution_health import (
     ExecutionArtifactCollector,
 )
+pytestmark = pytest.mark.slow
 
 
 class TestExecutionHealthHardening:

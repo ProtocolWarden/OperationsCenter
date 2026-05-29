@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 
+import pytest
 
 from operations_center.audit_contracts.vocabulary import (
     ConsumerType,
@@ -27,6 +28,8 @@ from operations_center.audit_contracts.vocabulary import (
     ExampleManagedRepoSourceStage,
     EXAMPLE_MANAGED_REPO_PROFILE_ENUMS,
 )
+
+pytestmark = pytest.mark.smoke
 
 
 class TestGenericVsProfileSeparation:

@@ -30,6 +30,7 @@ from operations_center.audit_contracts.vocabulary import (
     RunStatus,
     ValidFor,
 )
+pytestmark = pytest.mark.smoke
 
 _EXAMPLES = Path(__file__).parent.parent.parent.parent / "examples" / "audit_contracts"
 

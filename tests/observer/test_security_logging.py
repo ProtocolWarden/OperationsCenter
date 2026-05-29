@@ -28,6 +28,7 @@ from operations_center.observer.service import ObserverContext
 from operations_center.observer.validation import (
     ArtifactValidator,
 )
+pytestmark = pytest.mark.slow
 
 
 def _observer_context(report_root: Path, *, repo_name: str) -> ObserverContext:

@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 
 from operations_center.artifact_index import build_artifact_index, load_artifact_manifest
 from operations_center.fixture_harvesting import (
@@ -27,6 +28,8 @@ from operations_center.mini_regression import (
     run_mini_regression_suite,
 )
 from operations_center.slice_replay.models import SliceReplayProfile
+
+pytestmark = [pytest.mark.integration, pytest.mark.slow]
 
 
 _RUN_ROOT = "tools/audit/report/representative/ChainTest_run001"

@@ -18,6 +18,8 @@ from operations_center.planning.proposal_builder import (
     build_proposal_with_result,
 )
 
+pytestmark = pytest.mark.smoke
+
 
 def _ctx(**kw) -> PlanningContext:
     defaults = dict(

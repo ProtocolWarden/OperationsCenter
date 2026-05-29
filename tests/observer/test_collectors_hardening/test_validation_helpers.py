@@ -2,6 +2,8 @@
 # Copyright (C) 2026 ProtocolWarden
 """Tests for validation helper library."""
 
+import pytest
+
 from operations_center.observer.validation import (
     ArtifactValidator,
     DependencyReportValidator,
@@ -9,6 +11,7 @@ from operations_center.observer.validation import (
     RequestValidator,
     ValidationHistoryValidator,
 )
+pytestmark = pytest.mark.slow
 
 
 class TestArtifactValidator:

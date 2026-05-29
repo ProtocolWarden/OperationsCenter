@@ -101,6 +101,8 @@ filterwarnings = [
 ]
 markers = [
   "integration: tests that require a live external service (run with: pytest tests/integration/ -v)",
+  "slow: marks tests as slow-running and typically excluded from quick validation runs",
+  "smoke: marks tests as smoke tests for quick validation of core functionality",
 ]
 # xdist configuration for parallel test execution
 # Distribution strategy: loadscope (groups tests by class/module to respect fixture boundaries)

@@ -5,9 +5,12 @@ import json
 import os
 from unittest.mock import MagicMock
 
+import pytest
+
 from operations_center.observer.collectors.dependency_drift import (
     DependencyDriftCollector,
 )
+pytestmark = pytest.mark.slow
 
 
 class TestDependencyDriftHardening:

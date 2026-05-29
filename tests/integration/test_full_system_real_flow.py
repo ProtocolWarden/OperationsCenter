@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 
 from operations_center.artifact_index import build_artifact_index, load_artifact_manifest
 from operations_center.audit_dispatch.models import DispatchStatus, ManagedAuditDispatchResult
@@ -49,6 +50,8 @@ from operations_center.mini_regression import (
     run_mini_regression_suite,
 )
 from operations_center.slice_replay.models import SliceReplayProfile
+
+pytestmark = [pytest.mark.integration, pytest.mark.slow]
 
 
 _REPO_ID = "example_managed_repo"

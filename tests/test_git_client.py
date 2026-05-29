@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from operations_center.adapters.git.client import GitClient, branch_allowed
+pytestmark = pytest.mark.slow
 
 
 class FakeGitClient(GitClient):

@@ -28,7 +28,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.slow]
 
 
 _PROJECT_MANIFEST = """\

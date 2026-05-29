@@ -37,6 +37,8 @@ from operations_center.execution.handoff import ExecutionRequestBuilder, Executi
 from operations_center.planning.models import PlanningContext, ProposalDecisionBundle
 from operations_center.planning.proposal_builder import build_proposal
 
+pytestmark = [pytest.mark.integration, pytest.mark.slow]
+
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
