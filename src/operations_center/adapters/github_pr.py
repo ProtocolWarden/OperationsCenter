@@ -214,8 +214,17 @@ class GitHubPRClient:
         except Exception:
             return []
         ignored = [s.lower() for s in (ignored_checks or [])]
-        failed = []
+        # Deduplicate by name: when multiple runs exist for the same check (e.g.
+        # after a force-push triggers two CI runs on the same HEAD SHA), keep only
+        # the most recent run per name so a stale failure doesn't block a PR that
+        # has since been fixed. GitHub IDs are monotonically increasing.
+        latest: dict[str, dict] = {}
         for cr in check_runs:
+            name = cr.get("name", "unknown")
+            if cr.get("id", 0) > latest.get(name, {}).get("id", 0):
+                latest[name] = cr
+        failed = []
+        for cr in latest.values():
             if cr.get("conclusion") in ("failure", "timed_out", "cancelled"):
                 name = cr.get("name", "unknown")
                 if ignored and any(pat in name.lower() for pat in ignored):
