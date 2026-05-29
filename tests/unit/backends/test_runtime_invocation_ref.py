@@ -14,6 +14,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pytest
+
 from rxp.contracts import RuntimeInvocation, RuntimeResult
 
 from operations_center.backends._runtime_ref import runtime_invocation_ref
@@ -127,39 +129,51 @@ class TestRuntimeInvocationRefHelper:
 
 
 class TestDirectLocalRuntimeInvocationRef:
-    def test_success_populates_runtime_invocation_ref(self, tmp_path: Path) -> None:
-        runtime = _CapturingFakeRuntime()
+    @pytest.mark.parametrize("status", [
+        "pending",
+        "running",
+        "succeeded",
+        "failed",
+        "timed_out",
+        "cancelled",
+        "rejected",
+    ])
+    def test_all_statuses_populate_runtime_invocation_ref(
+        self, status: str, tmp_path: Path
+    ) -> None:
+        """All 7 valid RuntimeResult statuses are properly handled and refs are populated.
+
+        Tests both implicit (default exit_code=1) and explicit adapter branches
+        (rejected and timed_out have special handling in direct_local/adapter.py).
+        """
+        runtime = _CapturingFakeRuntime(status=status)
         adapter = DirectLocalBackendAdapter(
             AiderSettings(binary="/bin/true", timeout_seconds=10), runtime=runtime,
         )
         result = adapter.execute(_request(tmp_path))
 
+        # Ref is always populated (even for non-success statuses)
         assert result.runtime_invocation_ref is not None
         ref = result.runtime_invocation_ref
-        # Identity invariant: ExecutionResult ref points at the
-        # exact RuntimeInvocation that CoreRunner received.
+
+        # Identity invariant: ExecutionResult ref points at the exact
+        # RuntimeInvocation that CoreRunner received.
         assert runtime.last_invocation is not None
         assert ref.invocation_id == runtime.last_invocation.invocation_id
-        # Schema fields propagated.
+
+        # Schema fields are propagated
         assert ref.runtime_name == "direct_local"
         assert ref.runtime_kind == "subprocess"
-        # Linked artifacts are present and resolvable.
+
+        # Success determination: only "succeeded" status → success=True,
+        # all others → success=False
+        expected_success = status == "succeeded"
+        assert result.success == expected_success
+
+        # Linked artifacts are present and resolvable
         assert ref.stdout_path and Path(ref.stdout_path).exists()
         assert ref.stderr_path and Path(ref.stderr_path).exists()
         assert ref.artifact_directory and Path(ref.artifact_directory).is_dir()
-
-    def test_timeout_still_populates_runtime_invocation_ref(self, tmp_path: Path) -> None:
-        runtime = _CapturingFakeRuntime(status="timed_out")
-        adapter = DirectLocalBackendAdapter(
-            AiderSettings(binary="/bin/true", timeout_seconds=1), runtime=runtime,
-        )
-        result = adapter.execute(_request(tmp_path))
-
-        assert result.runtime_invocation_ref is not None
-        assert (
-            result.runtime_invocation_ref.invocation_id
-            == runtime.last_invocation.invocation_id  # type: ignore[union-attr]
-        )
 
     def test_binary_missing_still_populates_runtime_invocation_ref(self, tmp_path: Path) -> None:
         class _NotFoundRuntime:
