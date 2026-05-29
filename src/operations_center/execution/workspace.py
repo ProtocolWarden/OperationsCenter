@@ -257,8 +257,17 @@ class WorkspaceManager:
             )
             return result
 
+        # Squash all stage commits into one before pushing (ADR 0009 P4).
+        # Rewritten history requires force-push; single-commit branches use
+        # regular push so the first push of a new branch doesn't force.
+        squash_message = self._commit_message(request)
+        squashed = self._git.squash_commits(ws, request.base_branch, squash_message)
+
         try:
-            self._git.push_branch(ws, request.task_branch)
+            if squashed:
+                self._git.push_branch_force(ws, request.task_branch)
+            else:
+                self._git.push_branch(ws, request.task_branch)
         except Exception as exc:
             logger.warning("WorkspaceManager.finalize: push failed — %s", exc)
             return result

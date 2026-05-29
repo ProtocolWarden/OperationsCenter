@@ -1,3 +1,5 @@
+## 2026-05-29 — P4: squash stage commits before opening PR; P6 follow-up: remove 6 stale type: ignore comments
+
 ## 2026-05-28 — P6 follow-up: fixed 10 pre-existing ty errors exposed by ty==0.0.40 pin
 
 ## 2026-05-28 — P3: open-PR gate implemented; P6: ruff==0.15.13, ty==0.0.40 pinned

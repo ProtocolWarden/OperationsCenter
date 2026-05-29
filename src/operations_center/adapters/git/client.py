@@ -191,6 +191,35 @@ class GitClient:
         """Force-push branch to origin using --force-with-lease."""
         self._run(["git", "push", "--force-with-lease", "origin", branch], cwd=repo_path)
 
+    def squash_commits(self, repo_path: Path, base_branch: str, message: str) -> bool:
+        """Squash all commits since origin/<base_branch> into one.
+
+        Returns True if squash was performed (>1 commits collapsed), False when
+        there is already ≤1 commit (no-op).  History is rewritten — the caller
+        must force-push the branch after this succeeds.
+        """
+        try:
+            count_out = self._run(
+                ["git", "rev-list", "--count", f"origin/{base_branch}..HEAD"],
+                cwd=repo_path,
+            )
+            count = int(count_out.strip())
+        except (RuntimeError, ValueError):
+            return False
+        if count <= 1:
+            return False
+        merge_base = self._run(
+            ["git", "merge-base", "HEAD", f"origin/{base_branch}"],
+            cwd=repo_path,
+        ).strip()
+        self._run(["git", "reset", "--soft", merge_base], cwd=repo_path)
+        self._run(["git", "commit", "-m", message], cwd=repo_path)
+        logger.info(
+            "GitClient.squash_commits: collapsed %d commits into 1 (base=%s)",
+            count, base_branch,
+        )
+        return True
+
     def checkout_branch(self, repo_path: Path, branch: str) -> None:
         """Check out an existing local or remote-tracking branch."""
         self._run(["git", "checkout", branch], cwd=repo_path)

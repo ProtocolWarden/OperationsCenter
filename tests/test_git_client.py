@@ -2451,3 +2451,56 @@ def test_rebase_onto_origin_abort_failure_silently_caught() -> None:
 
     assert result is False
     assert len(client.calls) == 3
+
+
+# ---------------------------------------------------------------------------
+# squash_commits tests
+# ---------------------------------------------------------------------------
+
+
+class CountingGitClient(GitClient):
+    """GitClient that returns a configurable count for rev-list and empty strings for reset/commit."""
+
+    def __init__(self, commit_count: int) -> None:
+        self.commit_count = commit_count
+        self.calls: list[tuple[list[str], Path | None]] = []
+
+    def _run(self, args: list[str], cwd: Path | None = None) -> str:
+        self.calls.append((args, cwd))
+        if "rev-list" in args and "--count" in args:
+            return str(self.commit_count)
+        if "merge-base" in args:
+            return "deadbeef"
+        return ""
+
+
+def test_squash_commits_no_op_when_single_commit() -> None:
+    client = CountingGitClient(commit_count=1)
+    result = client.squash_commits(Path("/ws/repo"), "main", "my change")
+
+    assert result is False
+    assert len(client.calls) == 1  # only rev-list was called
+
+
+def test_squash_commits_no_op_when_zero_commits() -> None:
+    client = CountingGitClient(commit_count=0)
+    result = client.squash_commits(Path("/ws/repo"), "main", "my change")
+
+    assert result is False
+
+
+def test_squash_commits_squashes_multiple_commits() -> None:
+    client = CountingGitClient(commit_count=5)
+    result = client.squash_commits(Path("/ws/repo"), "main", "squashed message")
+
+    assert result is True
+    cmds = [tuple(c[0]) for c in client.calls]
+    assert ("git", "reset", "--soft", "deadbeef") in cmds
+    assert ("git", "commit", "-m", "squashed message") in cmds
+
+
+def test_squash_commits_returns_false_on_rev_list_error() -> None:
+    client = RaisingGitClient([("git", "rev-list")])
+    result = client.squash_commits(Path("/ws/repo"), "main", "msg")
+
+    assert result is False

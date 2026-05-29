@@ -92,7 +92,7 @@ def _cl_active() -> bool:
     if not os.environ.get("CL_ANCHOR"):
         return False
     try:
-        import context_lifecycle  # type: ignore  # noqa: F401,PGH003
+        import context_lifecycle  # noqa: F401,PGH003
     except ImportError:
         return False
     return True
@@ -127,7 +127,7 @@ def cl_dispatch_wrap(work_item: Any) -> Iterator[dict[str, Any]]:
         yield state
         return
 
-    from context_lifecycle import (  # type: ignore  # noqa: PGH003
+    from context_lifecycle import (  # noqa: PGH003
         AnchorMissing,
         SessionNotStarted,
         capture,
