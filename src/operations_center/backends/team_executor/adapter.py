@@ -41,7 +41,7 @@ class TeamExecutorBackendAdapter:
         self, request: ExecutionRequest
     ) -> tuple[ExecutionResult, object | None]:
         try:
-            from team_executor.executor import TeamExecutorRunner  # type: ignore  # noqa: PGH003
+            from team_executor.executor import TeamExecutorRunner  # noqa: PGH003
         except ImportError as exc:
             return _error_result(request, f"team_executor not installed: {exc}"), None
 
@@ -116,7 +116,7 @@ class TeamExecutorBackendAdapter:
             usage_store.record_quota_event(
                 task_id=request.run_id,
                 role="team_executor",
-                backend=executed.selected_backend,
+                backend="team_executor",
                 now=datetime.now(UTC),
             )
         return result, capture
