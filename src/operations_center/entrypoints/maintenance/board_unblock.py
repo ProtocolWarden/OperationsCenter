@@ -383,6 +383,7 @@ def _apply_rules(
             state_lower == "backlog"
             and _has_label(labels, _GOAL_LABEL)
             and (_is_improve_suggestion or _is_improvement_applied)
+            and not _has_label(labels, _THIN_GOAL_LABEL)
             and not _has_label_prefix(labels, _SIGKILL_SIGNAL_PREFIX)
             and mem_available_gb >= _MEM_R4AI_THRESHOLD_GB
         ):

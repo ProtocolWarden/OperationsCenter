@@ -168,3 +168,26 @@ def test_rule8_thin_goal_label_prevents_retry():
     actions = _apply_rules([issue], **_RULES_KWARGS)
     retry_actions = [a for a in actions if a["rule"] == "CLEAN_BLOCKED_RETRY"]
     assert len(retry_actions) == 0
+
+
+def test_rule7_goal_backlog_promote_skips_thin_goal():
+    """GOAL_BACKLOG_PROMOTE must NOT fire for Backlog goal tasks carrying thin-goal."""
+    parent = _issue(
+        "parent_done",
+        state="Done",
+        labels=["task-kind: improve"],
+    )
+    child = _issue(
+        "t_thin_backlog",
+        state="Backlog",
+        labels=[
+            "task-kind: goal",
+            "source: autonomy",
+            "source: improve-suggestion",
+            "original-task-id: parent_done",
+            "thin-goal",
+        ],
+    )
+    actions = _apply_rules([parent, child], **_RULES_KWARGS)
+    promote_actions = [a for a in actions if a["rule"] == "GOAL_BACKLOG_PROMOTE"]
+    assert len(promote_actions) == 0
