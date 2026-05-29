@@ -28,9 +28,9 @@ See: `docs/architecture/adr/0009-work-order-execution-hygiene.md`
 
 ## Definition of Done
 
-- [ ] Repo root has no STAGE_*.md files; .gitignore blocks future ones
-- [ ] `.console/log.md` no longer receives watchdog cycle dumps
-- [ ] `git log` on main shows no `chore(watchdog): cycle N` commits after this point
-- [ ] Board-worker refuses to promote goals when open PRs exist
-- [ ] Goal workers produce ≤2 commits per goal before opening PR
-- [ ] Tool versions pinned; CI matches local
+- [x] Repo root has no STAGE_*.md files; .gitignore blocks future ones
+- [x] `.console/log.md` no longer receives watchdog cycle dumps
+- [x] `git log` on main shows no `chore(watchdog): cycle N` commits after this point
+- [x] Board-worker refuses to promote goals when open PRs exist
+- [x] Goal workers produce ≤2 commits per goal before opening PR
+- [x] Tool versions pinned; CI matches local

@@ -1,3 +1,9 @@
+## 2026-05-29 — Work Order 0009 complete
+
+All ADR 0009 execution hygiene items checked off by controller.
+
+---
+
 ## 2026-05-29 — fix(ty): clear stale/broken type-ignore suppressions blocking CI
 
 Two suppressions on main were causing ty CI failure on every open PR (11 PRs affected):
