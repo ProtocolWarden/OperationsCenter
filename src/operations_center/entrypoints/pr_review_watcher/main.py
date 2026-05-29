@@ -242,6 +242,16 @@ def _merge_and_done(
     reason: str,
 ) -> None:
     pr_number = state["pr_number"]
+    # Guard: skip merge when GitHub reports a conflict — avoids 405 spam every cycle.
+    # get_mergeable() returns None while GitHub is still computing; treat that as
+    # "unknown, try anyway" so we don't hold up clean PRs during GitHub's lazy eval.
+    if gh_client.get_mergeable(owner, repo, pr_number) is False:
+        logger.warning(
+            "pr_review_watcher: PR #%d has merge conflicts — skipping merge (reason=%s); "
+            "branch must be rebased before auto-merge will proceed",
+            pr_number, reason,
+        )
+        return
     try:
         gh_client.merge_pr(owner, repo, pr_number, merge_method="squash")
         logger.info("pr_review_watcher: merged PR #%d repo=%s reason=%s", pr_number, state["repo_key"], reason)

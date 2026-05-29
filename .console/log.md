@@ -1,3 +1,11 @@
+## 2026-05-29 — fix(review-watcher): guard _merge_and_done against CONFLICTING PRs
+
+Review watcher was getting 405 errors every cycle for PRs #184, #186, #192 because
+it attempted merge when CI was green but PRs had merge conflicts. Added get_mergeable()
+guard in _merge_and_done — skips merge when explicitly False, proceeds when None.
+
+---
+
 ## 2026-05-29 — Controller writes sleeping_until_utc to state file
 
 Enables status pane to show idle countdown instead of blank Active section between iterations.
