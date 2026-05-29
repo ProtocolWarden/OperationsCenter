@@ -264,6 +264,7 @@ class GitHubPRClient:
                 f"{self._API}/repos/{owner}/{repo}/pulls/{pr_number}",
                 headers=diff_headers,
                 timeout=30,
+                follow_redirects=True,
             )
             resp.raise_for_status()
             return resp.text

@@ -1,3 +1,9 @@
+## 2026-05-29 — fix(github-pr): follow redirects in get_pr_diff
+
+get_pr_diff used httpx.get without follow_redirects=True. After the Velascat→ProtocolWarden
+repo rename, the pulls diff endpoint returns a 301 whose empty body was returned as the diff,
+causing pr_review_watcher to skip every OC PR with "empty diff". Added follow_redirects=True.
+
 ## 2026-05-29 — fix(spec_trigger): stop queue-drain flood when rate-gated tasks accumulate
 
 spec_trigger was creating 10+ duplicate queue-drain tasks in ~30 min: (1) running_count
