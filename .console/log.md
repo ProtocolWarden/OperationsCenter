@@ -6,6 +6,12 @@ guard in _merge_and_done — skips merge when explicitly False, proceeds when No
 
 ---
 
+## 2026-05-29 — Fix duplicate log lines in nohup mode
+
+_log() printed to stdout AND wrote to file; nohup redirect doubled every line. Removed print().
+
+---
+
 ## 2026-05-29 — Controller writes sleeping_until_utc to state file
 
 Enables status pane to show idle countdown instead of blank Active section between iterations.

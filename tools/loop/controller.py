@@ -80,7 +80,6 @@ def _ts() -> str:
 
 def _log(msg: str) -> None:
     line = f"[{_ts()}] {msg}"
-    print(line, flush=True)
     try:
         LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
         with LOG_FILE.open("a") as f:
