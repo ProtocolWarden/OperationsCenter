@@ -2,6 +2,7 @@
 # Copyright (C) 2026 ProtocolWarden
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
 import sys
@@ -155,7 +156,7 @@ def test_adapter_falls_back_to_codex_when_claude_backend_is_cooling_down(monkeyp
 
     def _cooldown(worker_backend: str, *, now):
         if worker_backend == "claude_code":
-            return now.replace(hour=now.hour + 1)
+            return now + timedelta(hours=1)
         return None
 
     usage_store = _usage_store(remaining=10)

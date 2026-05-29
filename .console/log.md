@@ -1,3 +1,8 @@
+## 2026-05-29 — fix(ci): WorkerBackendExecution invariant generic + time-dependent test failures
+
+- `worker_backend_observed_runtime` typed `WorkerBackendExecution[object]` but receives `WorkerBackendExecution[dict]`; invariant generic causes error[invalid-argument-type] in ty 0.0.40. Fix: use `WorkerBackendExecution[Any]`.
+- Three cooldown tests used `now.replace(hour=now.hour+1)` which raises ValueError at 23:xx UTC (hour=24 invalid). Fix: `now + timedelta(hours=1)`.
+
 ## 2026-05-28 — fix(ty + custodian): resolved ty errors and N2 finding blocking PR #184
 
 ## 2026-05-28 — Stage 5: Deriver Optional observed_at Handling — Final Review and Merge Complete

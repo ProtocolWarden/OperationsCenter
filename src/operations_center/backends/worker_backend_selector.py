@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 import re
-from typing import Callable, Generic, TypeVar
+from typing import Any, Callable, Generic, TypeVar
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from operations_center.backends._capacity_classifier import (
@@ -52,7 +52,7 @@ class WorkerBackendExecution(Generic[_T]):
 
 
 def worker_backend_observed_runtime(
-    execution: WorkerBackendExecution[object],
+    execution: WorkerBackendExecution[Any],
 ) -> dict[str, object]:
     cooldowns = {
         backend: reset_at.isoformat() if reset_at is not None else None
