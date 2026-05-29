@@ -9,7 +9,7 @@ from operations_center.contracts.enums import ExecutionMode
 @pytest.mark.smoke
 def test_smoke_execution_mode_enum():
     """Smoke: ExecutionMode enum is importable and has expected members."""
-    assert ExecutionMode.AUTONOMOUS in ExecutionMode
+    assert ExecutionMode.GOAL in ExecutionMode
 
 
 @pytest.mark.slow
