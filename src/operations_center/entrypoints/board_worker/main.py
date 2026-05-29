@@ -254,12 +254,20 @@ def _claim_next(client, role: str, settings) -> dict | None:
                 _gh = GitHubPRClient(_gh_token)
                 _owner, _repo_name = GitHubPRClient.owner_repo_from_clone_url(_gate_clone_url)
                 _open_prs = _gh.list_open_prs(_owner, _repo_name)
-                if _open_prs:
-                    _pr_nums = [pr.get("number") for pr in _open_prs[:5]]
+                # Exclude spec-author PRs — they only touch docs/specs/ and cannot
+                # conflict with goal PRs on merge.  Spec branches are named
+                # "spec-author/<id>" by the spec-author board_worker.
+                _blocking_prs = [
+                    pr for pr in _open_prs
+                    if not (pr.get("head") or {}).get("ref", "").startswith("spec-author/")
+                ]
+                if _blocking_prs:
+                    _pr_nums = [pr.get("number") for pr in _blocking_prs[:5]]
                     logger.info(
-                        "board_worker[goal]: OPEN_PR_GATE — repo=%s has %d open PR(s) %s; "
-                        "skipping task_id=%s until merged",
-                        _gate_repo_key, len(_open_prs), _pr_nums, task_id,
+                        "board_worker[goal]: OPEN_PR_GATE — repo=%s has %d blocking PR(s) %s "
+                        "(%d spec-author PRs excluded); skipping task_id=%s until merged",
+                        _gate_repo_key, len(_blocking_prs), _pr_nums,
+                        len(_open_prs) - len(_blocking_prs), task_id,
                     )
                     _add_label(client, issue, "OPEN_PR_GATE")
                     return None
