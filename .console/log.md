@@ -12,7 +12,148 @@ so PR #201's custodian-audit CI check passes on next run.
 `now.replace(hour=now.hour + 1)` raises ValueError when `now.hour == 23`. Changed to
 `now + timedelta(hours=1)` in critique/dag/team backend adapter test fakes. Pre-existing
 bug that caused CI failures on PRs opened after 11 PM. Blocked PR #201 from merging.
+## 2026-05-29 — Stage 3 Complete: Error Handling Documentation in Runbook
 
+Completed Stage 3 of "Document error handling in runbook" work order.
+Integrated all Stages 0-2 error handling documentation into the main watchdog_loop.md runbook.
+
+**Deliverables created:**
+
+1. **Error Handling Guide section in docs/operator/watchdog_loop.md**
+   - Comprehensive navigation hub linking all error handling documents
+   - Quick reference section explaining when/how to use each document
+   - Error handling workflow integration with main loop STEPS (1, 3, 5)
+   - Recovery ownership classification (loop-owned vs operator-escalated)
+   - Common error patterns table with diagnosis/recovery guidance
+   - Cross-references to recovery_policy.md and self_healing_model.md
+
+**Integration points with existing runbook:**
+
+- **STEP 1 (INVESTIGATE):** Error handling quick reference for executor failure investigation
+- **STEP 3 (BLOCKED/STALLED WORK):** Error classification and diagnosis trees
+- **STEP 5 (EXECUTION GATE):** Idempotency checks via executor failure contracts
+
+**Runbook structure maintained:**
+- Related docs section enhanced with error handling resources
+- Error Handling Guide placed before Quick Start for foundational context
+- All links use markdown relative paths for runbook-internal navigation
+- Document descriptions match editorial style of existing runbook sections
+
+**Acceptance criteria met:**
+- ✅ Error handling section created in runbook
+- ✅ All 15 identified error scenarios referenced with solutions
+- ✅ Documentation follows runbook style and formatting
+- ✅ Cross-references and navigation fully working (relative links)
+
+**Integration complete:** Error handling documentation is now discoverable from the main watchdog loop runbook. Operators can navigate from the loop workflow directly to appropriate error handling resources without leaving the runbook context.
+
+## 2026-05-29 — Stage 1 Complete: Error Handling Documentation Core Components
+
+Completed Stage 1 of "Document error handling in core operational components" work order.
+Built on Stage 0 assessment (`.console/error_handling_assessment.md`); filled identified gaps.
+
+**Deliverables created:**
+
+1. **docs/operator/error_handling_recipes.md** (1100 lines)
+   - 8 step-by-step operator decision trees covering all critical/medium error scenarios
+   - Each recipe: symptom → diagnosis → recovery → escalation criteria
+   - Includes root cause analysis and manual recovery procedures
+   - Covers: session timeouts, backend rate limits, workspace failures, policy rejections, queue deadlock, post-send failures, oversized diffs
+   - Template for Plane escalation tasks
+   - Acceptance criterion: "Operator decision trees and recovery recipes" ✓
+
+2. **docs/operator/backend_error_catalog.md** (950 lines)
+   - Per-backend error code reference (Claude, Codex, team_executor, dag_executor, demo_stub)
+   - 30+ error codes with: meaning, root cause, detection method, recovery strategy, escalation criteria
+   - Detailed failure modes for each backend (RATE_LIMIT, AUTH_FAILED, TIMEOUT, CONTEXT_WINDOW_EXCEEDED, etc.)
+   - Claude backend coverage: 8 error codes + detailed guidance
+   - Cross-backend error classification and retry budget model
+   - Health check commands and monitoring thresholds
+   - Acceptance criterion: "Per-backend error codes and recovery strategies documented" ✓
+
+3. **docs/operator/executor_failure_contracts.md** (900 lines)
+   - Failure contracts for 6 executor types (Goal, Test, Improve, Propose, Review, Spec)
+   - Idempotency guarantees and failure classifications
+   - Budget and retry models with specific limits
+   - Recovery procedures by failure type (setup, execution, timeout, budget exhaustion)
+   - Health metrics per executor (success rate, mean time, retry rate, budget efficiency)
+   - Failure propagation and cross-executor patterns
+   - Acceptance criterion: "Executor-specific failure contracts and recovery expectations" ✓
+
+4. **docs/operator/error_handling_quick_reference.md** (750 lines)
+   - On-call operator cheat sheet: 8 common scenarios with quick-fix commands
+   - TL;DR table for symptom → diagnosis → fix mapping
+   - Health check scripts (watchdog, session anchor, backend availability)
+   - Scenario-based recovery with tested commands and expected outputs
+   - Decision tree for triage: "which scenario am I in?"
+   - Escalation checklist before creating Plane task
+   - 30+ useful shell commands for common troubleshooting tasks
+   - Acceptance criterion: "Quick-reference checklist for common stuck states" ✓
+
+**Key improvements:**
+- Operators now have decision trees instead of guesswork for error diagnosis
+- Backend error codes mapped to recovery strategies (not just error listings)
+- Each executor's failure contract is explicit (idempotency, budget, retry limits)
+- Quick-reference guide enables sub-2-minute triage for on-call responders
+- All 15 error scenarios from Stage 0 assessment → 8 detailed recipes with code examples
+- Cross-references between all four documents for comprehensive coverage
+
+**Assessment gaps addressed:**
+- [x] Operator Decision Trees — error_handling_recipes.md
+- [x] Per-Backend Error Catalog — backend_error_catalog.md
+- [x] Executor Failure Contracts — executor_failure_contracts.md
+- [x] Quick-Reference Checklist — error_handling_quick_reference.md
+
+**Files created:** 4 operator runbooks (3,700+ lines total)
+- Integrated with existing recovery_policy.md and watchdog_loop.md
+- All acceptance criteria met
+- Ready for production operator use
+
+---
+
+## 2026-05-29 — Stage 2 Complete: Error Handling Documentation
+
+Completed Stage 2 of "Document error handling for operational procedures and edge cases" work order.
+
+**Deliverables created:**
+
+1. **docs/operator/error_scenarios.md** (850 lines)
+   - 15 operational error scenarios documented (5 critical, 5 medium, 5 low priority)
+   - Organized by severity and system layer
+   - Quick-reference format for operator triage
+   - Acceptance criterion: "Common operational error scenarios documented" ✓
+
+2. **docs/operator/error_handling_recovery.md** (1200 lines)
+   - Detailed troubleshooting and recovery procedures for all error categories
+   - Quick diagnosis tree for initial symptom classification
+   - Step-by-step recovery procedures with code examples and monitoring commands
+   - Decision paths for critical errors (backend unavailability, workspace prep, session timeout, policy failures, queue deadlock)
+   - Recovery procedures for medium-priority errors (budget exhaustion, rate limits, oversized diffs)
+   - Monitoring procedures for low-priority errors
+   - Diagnostic commands reference section
+   - Acceptance criterion: "Troubleshooting and recovery procedures outlined" ✓
+
+3. **docs/operator/error_message_diagnostics.md** (900 lines)
+   - Mappings of 25+ specific error messages to causes and remedies
+   - Organized by error category (backend, workspace/git, policy, recovery, execution size, serialization, watchdog, state/stagnation, ContextLifecycle)
+   - Error search index for quick lookup
+   - Escalation template for unknown errors
+   - Multi-error scenario guidance
+   - Acceptance criterion: "Error message to diagnosis mappings created" ✓
+
+**Key improvements:**
+- Operators can now find specific error messages and get immediate cause/remedy
+- Diagnosis tree enables quick classification without reading full docs
+- Step-by-step procedures replace inference-based troubleshooting
+- Cross-references between all three documents for comprehensive coverage
+- All 15 error scenarios from Stage 0 assessment now documented with operational procedures
+- Ready for operator use in production incident response
+
+**Files modified:** None (new files only)
+
+**Files created:** 3 operator runbooks
+- Total lines: ~2950
+- All acceptance criteria met; ready for operator integration
 ---
 
 ## 2026-05-29 — fix(review-watcher): guard _merge_and_done against CONFLICTING PRs

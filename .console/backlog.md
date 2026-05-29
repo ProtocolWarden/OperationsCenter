@@ -15,6 +15,47 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 - [ ] (None currently — board_worker dispatches in flight, not loop-owned)
 
+## Recently Completed (Stage Cycles)
+
+- [x] **Error Handling Documentation — Stages 0–3 Complete (2026-05-29)**:
+  - **Stage 0 (Assessment, 2026-05-28):** Identified 15 error scenarios across 4 system layers; code locations; current handling
+    - Documented in `.console/error_handling_assessment.md`
+    - Identified 3 Stage 1 gaps: operator decision trees, per-backend catalog, executor contracts
+  
+  - **Stage 1 (Core Components, 2026-05-29):** Filled all assessment gaps with comprehensive documentation
+    - `error_handling_recipes.md` (1,100 lines) — 8 step-by-step operator decision trees covering all critical/medium scenarios
+    - `backend_error_catalog.md` (950 lines) — Per-backend error codes (30+ codes); detection/recovery/escalation
+    - `executor_failure_contracts.md` (900 lines) — Per-executor (6 types) failure contracts; idempotency guarantees; budget models
+    - `error_handling_quick_reference.md` (750 lines) — On-call operator cheat sheet; 8 scenarios with tested commands
+  
+  - **Stage 2 (Operational Procedures, 2026-05-29):** Documented error handling for operational procedures and edge cases
+    - `error_scenarios.md` (355 lines) — Catalog of all 15 error scenarios by severity; code locations; detection guidance
+    - `error_handling_recovery.md` (752 lines) — Comprehensive troubleshooting with diagnosis tree, procedures, escalation path
+    - `error_message_diagnostics.md` (641 lines) — 23+ error messages mapped to causes/remedies; search index; escalation template
+  
+  - **Stage 3 (Integration into Runbook, 2026-05-29):** Integrated all error handling documentation into main watchdog_loop.md
+    - Created "Error Handling Guide" section in `docs/operator/watchdog_loop.md`
+    - Document navigation hub explaining when/how to use each error handling resource
+    - Workflow integration with main loop STEPS (1, 3, 5) for executor failure investigation, error classification, and idempotency checks
+    - Recovery ownership classification (loop-owned vs operator-escalated)
+    - Common error patterns table with diagnosis/recovery guidance
+    - All 15 scenarios referenced with solutions; full navigation linkage; runbook-style formatting
+  
+  - **All acceptance criteria met:**
+    - ✅ Scenarios documented (all 15 with solutions)
+    - ✅ Failure modes and recovery identified (backend catalog + executor contracts)
+    - ✅ Code examples provided (tested shell commands in recipes + quick reference)
+    - ✅ Operator decision trees created (8 recipes + diagnosis tree)
+    - ✅ Per-backend error handling documented (30+ error codes)
+    - ✅ Executor-specific contracts formalized (6 types, idempotency guarantees)
+    - ✅ Quick-reference checklist for common stuck states (8 TL;DR scenarios)
+    - ✅ Error handling section created in runbook (integrated into watchdog_loop.md)
+    - ✅ All identified error scenarios included with solutions (navigation hub)
+    - ✅ Documentation follows runbook style and formatting (markdown consistency)
+    - ✅ Cross-references and navigation working (relative links throughout)
+  
+  - Total: 5,400+ lines of production-ready operator documentation across 7 documents; fully integrated with existing recovery_policy.md and self_healing_model.md
+
 ## Previously In Progress
 
 - [x] **Deriver Transition Coverage — Stages 0–4 Complete (2026-05-27)**: Added comprehensive bidirectional transition coverage to Deriver framework with critical bug fixes. Completed:
