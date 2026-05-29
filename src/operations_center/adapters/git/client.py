@@ -83,6 +83,18 @@ class GitClient:
         except RuntimeError:
             pass  # not a fatal error — proceed with local state as-is
 
+    def restore_to_head(self, repo_path: Path, filepath: str) -> None:
+        """Restore a single file to HEAD state, silently ignoring errors.
+
+        Used to clean up workspace-written artifacts (e.g. .baseline-validation.json)
+        before a task-branch checkout so git doesn't refuse the switch because a
+        tracked file has local modifications.
+        """
+        try:
+            self._run(["git", "checkout", "HEAD", "--", filepath], cwd=repo_path)
+        except RuntimeError:
+            pass  # file absent from HEAD or other benign error — no-op
+
     def create_task_branch(self, repo_path: Path, task_branch: str) -> bool:
         """Create or checkout the task branch. Returns True if branch already existed on remote."""
         out = self._run(["git", "ls-remote", "--heads", "origin", task_branch], cwd=repo_path)

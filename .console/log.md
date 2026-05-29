@@ -1,3 +1,10 @@
+## 2026-05-29 — fix(workspace): restore .baseline-validation.json before task-branch checkout
+
+.baseline-validation.json slipped into goal-branch commits; baseline validation
+overwrites it on base branch, blocking retry-path checkout with "local changes would
+be overwritten". Added restore_to_head() to GitClient and called it in prepare()
+between _run_baseline_validation and create_task_branch.
+
 ## 2026-05-29 — fix(board-unblock): STALE_IN_REVIEW false-positive on tasks with open PRs
 
 Rule 5 demoted task 0f1612ea from In Review → Backlog despite PR #184 being open with

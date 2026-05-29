@@ -45,6 +45,7 @@ _LOCAL_EXCLUDE_PATTERNS = (
     ".operations_center/",
     ".codex",
     ".coverage",
+    ".baseline-validation.json",
 )
 
 # Soft limits on the size of a single autonomy commit. A diff that exceeds
@@ -166,6 +167,11 @@ class WorkspaceManager:
         # mutate the prepare() return shape). The actual abort decision
         # happens in the coordinator path.
         self._run_baseline_validation(ws, request)
+        # Restore .baseline-validation.json to HEAD so create_task_branch can
+        # checkout origin/task_branch without "local changes would be overwritten".
+        # The file has slipped into several goal-branch commits; baseline validation
+        # overwrites it, making it dirty and blocking the retry-path checkout.
+        self._git.restore_to_head(ws, ".baseline-validation.json")
         self._git.create_task_branch(ws, request.task_branch)
         logger.info(
             "WorkspaceManager.prepare: cloned %s into %s on branch %s",
