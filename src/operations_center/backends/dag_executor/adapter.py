@@ -110,7 +110,7 @@ class DAGExecutorBackendAdapter:
             return _error_result(request, str(exc)), None
 
         capture = SimpleNamespace(
-            observed_runtime=worker_backend_observed_runtime(executed),
+            observed_runtime=worker_backend_observed_runtime(executed),  # ty: ignore[invalid-argument-type]
         )
 
         if executed.selected_backend is None or executed.payload is None:

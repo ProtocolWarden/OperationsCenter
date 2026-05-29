@@ -1291,8 +1291,7 @@ def _split_files_into_chunks(files: list[str], chunk_size: int = 15, max_chunks:
     for f in files:
         top = f.split("/", 1)[0] if "/" in f else "."
         by_top.setdefault(top, []).append(f)
-    # ty narrows sorted(..., key=len) to list[Sized]; we know better — values are list[str].
-    groups: list[list[str]] = sorted(by_top.values(), key=len, reverse=True)  # ty:ignore[invalid-assignment]
+    groups: list[list[str]] = sorted(by_top.values(), key=len, reverse=True)
     chunks: list[list[str]] = []
     for group in groups:
         for i in range(0, len(group), chunk_size):
