@@ -242,6 +242,16 @@ def _merge_and_done(
     reason: str,
 ) -> None:
     pr_number = state["pr_number"]
+    # Guard: skip merge when GitHub reports a conflict — avoids 405 spam every cycle.
+    # get_mergeable() returns None while GitHub is still computing; treat that as
+    # "unknown, try anyway" so we don't hold up clean PRs during GitHub's lazy eval.
+    if gh_client.get_mergeable(owner, repo, pr_number) is False:
+        logger.warning(
+            "pr_review_watcher: PR #%d has merge conflicts — skipping merge (reason=%s); "
+            "branch must be rebased before auto-merge will proceed",
+            pr_number, reason,
+        )
+        return
     try:
         gh_client.merge_pr(owner, repo, pr_number, merge_method="squash")
         logger.info("pr_review_watcher: merged PR #%d repo=%s reason=%s", pr_number, state["repo_key"], reason)
@@ -407,7 +417,52 @@ def _phase1(
     state["self_review_loops"] += 1
 
     if verdict is None:
-        logger.warning("pr_review_watcher: no verdict PR #%d — will retry next poll", pr_number)
+        if state["self_review_loops"] >= reviewer.max_self_review_loops:
+            state["phase"]             = "human_review"
+            state["phase2_entered_at"] = datetime.now(UTC).isoformat()
+            escalation_body = (
+                f"{reviewer.bot_comment_marker}\n"
+                f"**Escalated to human review** — review pipeline produced no verdict "
+                f"after {state['self_review_loops']} attempt(s).\n\n"
+                "Reply `/lgtm` or add a 👍 reaction to approve and merge.\n"
+                "Leave a comment to request specific changes."
+            )
+            try:
+                gh_client.post_comment(owner, repo, pr_number, escalation_body)
+            except Exception as exc:
+                logger.warning(
+                    "pr_review_watcher: failed to post no-verdict escalation comment PR #%d — %s",
+                    pr_number, exc,
+                )
+            plane_task_id = state.get("task_id")
+            if plane_task_id:
+                try:
+                    from operations_center.adapters.plane import PlaneClient
+                    pc = PlaneClient(
+                        base_url=settings.plane.base_url,
+                        api_token=settings.plane_token(),
+                        workspace_slug=settings.plane.workspace_slug,
+                        project_id=settings.plane.project_id,
+                    )
+                    try:
+                        issue = pc.fetch_issue(plane_task_id)
+                        existing = [
+                            (lab.get("name", "") if isinstance(lab, dict) else str(lab)).strip()
+                            for lab in issue.get("labels", [])
+                        ]
+                        existing = [n for n in existing if n]
+                        if "lifecycle: escalated" not in existing:
+                            pc.update_issue_labels(plane_task_id, existing + ["lifecycle: escalated"])
+                    finally:
+                        pc.close()
+                except Exception as exc:
+                    logger.warning("pr_review_watcher: failed to label Plane task escalated — %s", exc)
+            logger.info(
+                "pr_review_watcher: PR #%d no-verdict escalated to human review loop=%d",
+                pr_number, state["self_review_loops"],
+            )
+        else:
+            logger.warning("pr_review_watcher: no verdict PR #%d — will retry next poll", pr_number)
         _save_state(state_path, state)
         return
 

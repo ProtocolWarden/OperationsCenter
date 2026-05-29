@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import pytest
 
 from operations_center.entrypoints.board_worker.main import _desc_text, _extract_goal
 

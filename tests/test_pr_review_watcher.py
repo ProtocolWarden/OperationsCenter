@@ -432,6 +432,28 @@ def test_merge_and_done_keeps_state_on_merge_failure(tmp_path: Path) -> None:
     assert sp.exists()  # state preserved for operator inspection
 
 
+def test_merge_and_done_skips_when_not_mergeable(tmp_path: Path) -> None:
+    state, sp = _make_state(tmp_path, plane_task_id=None)
+    gh = _make_gh()
+    gh.get_mergeable.return_value = False
+
+    watcher._merge_and_done(state, sp, _pr_data(), gh, "owner", "repo", SETTINGS, reason="auto_merge_on_ci_green")
+
+    gh.merge_pr.assert_not_called()
+    assert sp.exists()  # state preserved — branch must be rebased
+
+
+def test_merge_and_done_proceeds_when_mergeable_unknown(tmp_path: Path) -> None:
+    state, sp = _make_state(tmp_path, plane_task_id=None)
+    gh = _make_gh()
+    gh.get_mergeable.return_value = None  # GitHub still computing
+
+    watcher._merge_and_done(state, sp, _pr_data(), gh, "owner", "repo", SETTINGS, reason="auto_merge_on_ci_green")
+
+    gh.merge_pr.assert_called_once_with("owner", "repo", PR_NUMBER, merge_method="squash")
+    assert not sp.exists()  # merged successfully, state cleaned up
+
+
 # ── allowed_reviewer_logins filter ───────────────────────────────────────────
 
 def test_phase2_lgtm_only_from_allowed_logins(tmp_path: Path) -> None:
