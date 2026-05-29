@@ -663,6 +663,7 @@ def _process_issue(issue: dict, role: str, config_path: Path, settings, client) 
             _handle_success(
                 client, issue, role, task_kind, needs_verification, settings,
                 improve_suggestions=improve_suggestions,
+                pr_url=result.get("pull_request_url") or None,
             )
         else:
             log_reason = "scope_too_wide" if scope_too_wide else status
@@ -1157,7 +1158,8 @@ def _read_improve_output(workspace: Path) -> list[dict]:
 
 
 def _handle_success(client, issue: dict, role: str, _task_kind: str, needs_verification: bool, settings,
-                    *, improve_suggestions: list[dict] | None = None) -> None:
+                    *, improve_suggestions: list[dict] | None = None,
+                    pr_url: str | None = None) -> None:
     task_id = str(issue["id"])
     labels  = issue.get("labels", [])
     repo_key = _label_value(labels, "repo")
@@ -1173,6 +1175,8 @@ def _handle_success(client, issue: dict, role: str, _task_kind: str, needs_verif
                 client.transition_issue(task_id, _STATE_DONE)
             elif await_review:
                 client.transition_issue(task_id, _STATE_REVIEW)
+                if pr_url:
+                    _add_label(client, issue, f"pr-url: {pr_url}")
                 client.comment_issue(task_id, "Implementation complete — moved to In Review")
             else:
                 client.transition_issue(task_id, _STATE_DONE)

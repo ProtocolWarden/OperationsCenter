@@ -1,3 +1,9 @@
+## 2026-05-29 — fix(board-unblock): STALE_IN_REVIEW false-positive on tasks with open PRs
+
+Rule 5 demoted task 0f1612ea from In Review → Backlog despite PR #184 being open with
+all CI passing. Fixed: goal board_worker now adds pr-url label when opening PR; Rule 5
+skips tasks with pr-url label. Task restored to In Review. 3 tests added.
+
 ## 2026-05-28 — Fix taxonomy: classify aider_local/direct_local as direct worker backends
 
 Added EXECUTOR_LANE_NAMES / DIRECT_WORKER_BACKEND_NAMES frozensets to enums.py.

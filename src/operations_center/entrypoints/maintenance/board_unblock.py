@@ -37,7 +37,9 @@ Applies nine rules on every run:
     move to Backlog.  Catches tasks whose PR was never created, was closed without
     merging, or whose reviewer state was set prematurely.  The pr_review_watcher only
     processes open PRs it discovers on GitHub; orphaned In Review tasks are invisible
-    to it and will never self-resolve.
+    to it and will never self-resolve.  Tasks carrying a "pr-url:" label are SKIPPED
+    — a pr-url label means the goal worker successfully opened a PR, which is actively
+    monitored by pr_review_watcher; those tasks must not be demoted mid-review.
 
   Rule 6 — STALE_RUNNING_REQUEUE
     Tasks in "Running" state for longer than --stale-running-hours (default 2h) →
@@ -120,6 +122,7 @@ _SOURCE_AUTONOMY_LABEL = "source: autonomy"
 _SOURCE_IMPROVE_SUGGESTION_LABEL = "source: improve-suggestion"
 _SOURCE_BOARD_WORKER_LABEL = "source: board_worker"
 _HANDOFF_IMPROVEMENT_LABEL = "handoff-reason: improvement_applied"
+_PR_URL_PREFIX = "pr-url:"
 
 
 def _labels(issue: dict[str, Any]) -> list[str]:
@@ -333,7 +336,9 @@ def _apply_rules(
                     })
 
         # Rule 5 — orphaned In Review tasks (pr_review_watcher is PR-driven, not task-driven)
-        if state_lower == "in review":
+        # Skip tasks with a pr-url: label — those have an open PR being monitored by
+        # pr_review_watcher and must not be demoted mid-review.
+        if state_lower == "in review" and not _has_label_prefix(labels, _PR_URL_PREFIX):
             updated_at = _parse_updated_at(issue)
             if updated_at and (now - updated_at) > timedelta(hours=stale_blocked_hours):
                 actions.append({

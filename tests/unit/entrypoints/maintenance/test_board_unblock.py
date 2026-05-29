@@ -113,3 +113,45 @@ def test_rule9_skip_when_low_memory():
     actions = _apply_rules([issue], **low_mem_kwargs)
     promote_actions = [a for a in actions if a["rule"] == "SPEC_AUTHOR_BACKLOG_PROMOTE"]
     assert len(promote_actions) == 0
+
+
+# --- Rule 5: STALE_IN_REVIEW ---
+
+def test_rule5_stale_in_review_fires_without_pr_url():
+    """Rule 5 should demote stale In Review tasks with no pr-url label."""
+    issue = _issue(
+        "t7",
+        state="In Review",
+        labels=["task-kind: goal"],
+        updated_at="2026-05-28T07:00:00+00:00",  # 5h before _NOW
+    )
+    actions = _apply_rules([issue], **_RULES_KWARGS)
+    stale_actions = [a for a in actions if a["rule"] == "STALE_IN_REVIEW"]
+    assert len(stale_actions) == 1
+    assert stale_actions[0]["to_state"] == "Backlog"
+
+
+def test_rule5_stale_in_review_skipped_with_pr_url_label():
+    """Rule 5 must NOT demote In Review tasks that carry a pr-url: label (open PR)."""
+    issue = _issue(
+        "t8",
+        state="In Review",
+        labels=["task-kind: goal", "pr-url: https://github.com/org/repo/pull/42"],
+        updated_at="2026-05-28T07:00:00+00:00",  # 5h before _NOW
+    )
+    actions = _apply_rules([issue], **_RULES_KWARGS)
+    stale_actions = [a for a in actions if a["rule"] == "STALE_IN_REVIEW"]
+    assert len(stale_actions) == 0
+
+
+def test_rule5_stale_in_review_not_stale():
+    """Rule 5 must NOT fire for In Review tasks updated within the staleness window."""
+    issue = _issue(
+        "t9",
+        state="In Review",
+        labels=["task-kind: goal"],
+        updated_at="2026-05-28T10:00:00+00:00",  # 2h before _NOW — within 4h threshold
+    )
+    actions = _apply_rules([issue], **_RULES_KWARGS)
+    stale_actions = [a for a in actions if a["rule"] == "STALE_IN_REVIEW"]
+    assert len(stale_actions) == 0
