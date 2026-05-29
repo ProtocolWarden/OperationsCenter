@@ -1,3 +1,9 @@
+## 2026-05-29 — Merge operations-center-testing-branch into main
+
+Reconciled testing branch (ty/custodian fixes, spec tasks #185/#193/#199). Conflicts resolved in favor of main.
+
+---
+
 ## 2026-05-29 — Work Order 0009 complete
 
 All ADR 0009 execution hygiene items checked off by controller.

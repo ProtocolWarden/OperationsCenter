@@ -699,6 +699,8 @@ doc_conventions:
     - docs/specs/adaptive-loop-integration-tests.md
     - docs/specs/admin-api-test-coverage.md
     - docs/specs/scene-timing-audit-test-hardening.md
+    # Auto-generated spec-author queue-drain task docs — not linked from parent index by design
+    - docs/specs/queue-drain-*.md
 
 architecture:
   layers:
