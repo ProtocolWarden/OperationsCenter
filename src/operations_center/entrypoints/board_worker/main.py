@@ -209,7 +209,7 @@ def _claim_next(client, role: str, settings) -> dict | None:
     # executor to do anything meaningful. A 16-minute run on an empty description is pure
     # quota-burn. We mark the task Blocked with a clear reason so the operator
     # (or spec_director) can fill in details and re-promote.
-    desc = issue.get("description") or issue.get("description_stripped") or ""
+    desc = _desc_text(issue)
     title = issue.get("name", "")
     # ADR 0007 Phase C: spec-author tasks carry their intent in a YAML payload,
     # not a `## Goal` block. The thin-goal-text guard would reject them on
@@ -227,6 +227,9 @@ def _claim_next(client, role: str, settings) -> dict | None:
                 f"({len(candidate_goal)} chars; minimum {_MIN_GOAL_TEXT_CHARS}). "
                 "Add concrete description and re-promote to Ready for AI.",
             )
+            # Label prevents CLEAN_BLOCKED_RETRY from re-promoting this until
+            # a human adds content and removes the label.
+            _add_label(client, issue, "thin-goal")
         except Exception as exc:
             logger.warning("board_worker[%s]: empty-goal block failed task_id=%s — %s",
                             role, issue.get("id"), exc)
@@ -324,7 +327,7 @@ def _process_issue(issue: dict, role: str, config_path: Path, settings, client) 
     repo_key  = _label_value(labels, "repo")
     task_kind = _label_value(labels, "task-kind")
 
-    description = issue.get("description") or issue.get("description_stripped") or issue.get("description_html") or ""
+    description = _desc_text(issue)
 
     # ADR 0007 Phase C: spec-author tasks carry a YAML payload (parsed below)
     # rather than a `## Goal` block. The whole path is distinct: planning text
@@ -1722,6 +1725,25 @@ def _heartbeat_loop(status_dir: Path, role: str, stop_event) -> None:
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _desc_text(issue: dict) -> str:
+    """Return best-available plain text from a Plane work-item dict.
+
+    The Plane list endpoint only populates description_html (not description or
+    description_stripped).  Strip HTML tags so that downstream text processing
+    (thin-goal guard, _extract_goal) sees plain text instead of raw markup.
+    """
+    text = issue.get("description") or issue.get("description_stripped") or ""
+    if not text:
+        html_val = issue.get("description_html") or ""
+        if html_val:
+            import re as _re
+            import html as _html
+            text = _re.sub(r"<br\s*/?>", "\n", html_val)
+            text = _re.sub(r"<[^>]+>", "", text)
+            text = _html.unescape(text)
+    return text
+
 
 def _extract_goal(description: str, title: str) -> str:
     """Pull goal text from ## Goal section, fall back to title."""

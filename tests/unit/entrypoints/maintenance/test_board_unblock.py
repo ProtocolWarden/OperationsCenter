@@ -155,3 +155,16 @@ def test_rule5_stale_in_review_not_stale():
     actions = _apply_rules([issue], **_RULES_KWARGS)
     stale_actions = [a for a in actions if a["rule"] == "STALE_IN_REVIEW"]
     assert len(stale_actions) == 0
+
+
+def test_rule8_thin_goal_label_prevents_retry():
+    """CLEAN_BLOCKED_RETRY must NOT fire for tasks carrying the thin-goal label."""
+    issue = _issue(
+        "t_thin",
+        state="Blocked",
+        labels=["task-kind: goal", "thin-goal"],
+        updated_at="2026-05-28T10:00:00+00:00",
+    )
+    actions = _apply_rules([issue], **_RULES_KWARGS)
+    retry_actions = [a for a in actions if a["rule"] == "CLEAN_BLOCKED_RETRY"]
+    assert len(retry_actions) == 0

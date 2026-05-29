@@ -65,6 +65,7 @@ Applies nine rules on every run:
       - No "executor-signal:" label (executor was never killed by a signal)
       - No "executor-exit-code:" label (executor never ran — pre-execution failure)
       - Not "self-modify: approved" (those are handled by Rule 4)
+      - Not "thin-goal" (board_worker adds this when goal text is too short; needs human to enrich)
       - Blocked for at least --clean-blocked-min-minutes (default 5) minutes
     → move to Backlog for retry.
     These represent pre-execution failures (workspace preparation errors, missing
@@ -114,6 +115,7 @@ _IMPROVE_LABEL = "task-kind: improve"
 _GOAL_LABEL = "task-kind: goal"
 _SPEC_AUTHOR_LABEL = "task-kind: spec-author"
 _SELF_MODIFY_APPROVED_LABEL = "self-modify: approved"
+_THIN_GOAL_LABEL = "thin-goal"
 _SIGKILL_SIGNAL_PREFIX = "executor-signal:"  # value checked separately
 _RETRY_COUNT_PREFIX = "retry-count:"
 _BLOCKED_BY_PREFIX = "blocked-by:"
@@ -413,6 +415,7 @@ def _apply_rules(
                 or _has_label(labels, _SPEC_AUTHOR_LABEL)
             )
             and not _has_label(labels, _SELF_MODIFY_APPROVED_LABEL)
+            and not _has_label(labels, _THIN_GOAL_LABEL)
             and not _has_label_prefix(labels, _SIGKILL_SIGNAL_PREFIX)
             and not _has_label_prefix(labels, "executor-exit-code:")
             and not _has_label_prefix(labels, _BLOCKED_BY_PREFIX)
