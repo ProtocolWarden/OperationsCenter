@@ -19,6 +19,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.smoke
+
 from operations_center.audit_contracts.artifact_manifest import (
     ManagedArtifactManifest,
 )

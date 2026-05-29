@@ -6,6 +6,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.smoke
+
 from operations_center.contracts.enums import BackendName, LaneName
 from operations_center.contracts.routing import LaneDecision
 from operations_center.execution.handoff import ExecutionRequestBuilder, ExecutionRuntimeContext

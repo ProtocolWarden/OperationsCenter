@@ -6,6 +6,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import pytest
+
+pytestmark = pytest.mark.smoke
 
 from operations_center.audit_contracts.artifact_manifest import (
     ExcludedPath,

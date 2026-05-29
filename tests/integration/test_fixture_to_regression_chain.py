@@ -12,6 +12,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
+pytestmark = [pytest.mark.integration, pytest.mark.slow]
 
 from operations_center.artifact_index import build_artifact_index, load_artifact_manifest
 from operations_center.fixture_harvesting import (

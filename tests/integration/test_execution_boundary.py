@@ -26,6 +26,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = [pytest.mark.integration, pytest.mark.slow]
+
 from operations_center.backends.direct_local.adapter import DirectLocalBackendAdapter
 from operations_center.config.settings import AiderSettings
 from operations_center.contracts.enums import ExecutionStatus, FailureReasonCategory

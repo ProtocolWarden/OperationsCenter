@@ -23,6 +23,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+pytestmark = [pytest.mark.integration, pytest.mark.slow]
 
 from operations_center.artifact_index import build_artifact_index, load_artifact_manifest
 from operations_center.audit_dispatch.models import DispatchStatus, ManagedAuditDispatchResult

@@ -36,6 +36,7 @@ def _full_decision(**overrides) -> LaneDecision:
     return LaneDecision(**base)
 
 
+@pytest.mark.smoke
 def test_complete_decision_passes() -> None:
     assert_decision_complete(_full_decision())
 

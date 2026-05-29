@@ -13,6 +13,9 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
+pytestmark = pytest.mark.smoke
 
 from operations_center.audit_contracts.vocabulary import (
     ConsumerType,

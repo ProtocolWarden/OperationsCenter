@@ -7,6 +7,10 @@ Note: Tests are written using the actual ruff output format (location.row/column
 import json
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+pytestmark = pytest.mark.slow
+
 from operations_center.observer.collectors.lint_signal import LintSignalCollector
 
 

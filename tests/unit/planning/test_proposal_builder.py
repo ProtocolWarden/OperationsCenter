@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import pytest
 
+pytestmark = pytest.mark.smoke
+
 from operations_center.contracts.enums import (
     ExecutionMode,
     Priority,
