@@ -84,12 +84,40 @@ def test_select_backend_prefers_codex_when_claude_cooling_down(monkeypatch) -> N
         lambda command: command in {"claude", "codex"},
     )
 
+    # Both claude and opus (same CLI) cooling down → fall through to codex.
     assert controller._select_backend(
         {
             "claude": datetime(2026, 5, 25, 16, 0, tzinfo=timezone.utc),
+            "opus": datetime(2026, 5, 25, 16, 0, tzinfo=timezone.utc),
             "codex": None,
         }
     ) == "codex"
+
+
+def test_select_backend_prefers_opus_when_only_sonnet_cooling_down(monkeypatch) -> None:
+    frozen_now = datetime(2026, 5, 25, 15, 0, tzinfo=timezone.utc)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):  # type: ignore[override]
+            if tz is None:
+                return frozen_now.replace(tzinfo=None)
+            return frozen_now.astimezone(tz)
+
+    monkeypatch.setattr(controller, "datetime", FrozenDateTime)
+    monkeypatch.setattr(
+        controller,
+        "_command_available",
+        lambda command: command in {"claude", "codex"},
+    )
+
+    assert controller._select_backend(
+        {
+            "claude": datetime(2026, 5, 25, 16, 0, tzinfo=timezone.utc),
+            "opus": None,
+            "codex": None,
+        }
+    ) == "opus"
 
 
 def test_select_backend_uses_claude_when_not_fallback(monkeypatch) -> None:
@@ -127,7 +155,7 @@ def test_parse_rate_limit_reset_timezone_message(monkeypatch, tmp_path: Path) ->
     log_path = tmp_path / "session.log"
     log_path.write_text("rate limit hit; resets 5:15pm (UTC)\n")
 
-    reset_dt = controller.parse_rate_limit_reset(log_path, "claude")
+    reset_dt, _ = controller.parse_rate_limit_reset(log_path, "claude")
 
     assert reset_dt == datetime(2026, 5, 25, 17, 15, tzinfo=timezone.utc)
 
@@ -149,7 +177,7 @@ def test_parse_rate_limit_reset_timezone_message_without_minutes(
     log_path = tmp_path / "session.log"
     log_path.write_text("You've hit your weekly limit · resets 9am (America/New_York)\n")
 
-    reset_dt = controller.parse_rate_limit_reset(log_path, "claude")
+    reset_dt, _ = controller.parse_rate_limit_reset(log_path, "claude")
 
     assert reset_dt == datetime(2026, 5, 27, 13, 0, tzinfo=timezone.utc)
 
@@ -169,7 +197,7 @@ def test_parse_rate_limit_reset_relative_message(monkeypatch, tmp_path: Path) ->
     log_path = tmp_path / "session.log"
     log_path.write_text("codex usage limit hit, please try again in 5h 0m\n")
 
-    reset_dt = controller.parse_rate_limit_reset(log_path, "codex")
+    reset_dt, _ = controller.parse_rate_limit_reset(log_path, "codex")
 
     assert reset_dt == datetime(2026, 5, 25, 21, 0, tzinfo=timezone.utc)
 
@@ -198,3 +226,69 @@ def test_clear_expired_cooldowns_logs_and_resets(monkeypatch) -> None:
     assert cooldowns["claude"] is None
     assert cooldowns["codex"] == datetime(2026, 5, 25, 17, 0, tzinfo=timezone.utc)
     assert any("Claude cooldown expired" in msg for msg in logged)
+
+
+def test_opus_session_command() -> None:
+    cmd = controller._session_command("opus", "hello world")
+
+    assert Path(cmd[0]).name == "claude"  # opus runs on the claude CLI
+    assert cmd[1:4] == ["-p", "hello world", "--model"]
+    assert "claude-opus-4-8" in cmd
+    assert cmd[-2:] == ["--output-format", "text"]
+
+
+def test_alternate_backend_follows_priority_order() -> None:
+    assert controller._alternate_backend("claude") == "opus"
+    assert controller._alternate_backend("opus") == "codex"
+    assert controller._alternate_backend("codex") == "claude"
+
+
+def test_handle_backend_limit_sonnet_model_limit_leaves_opus_runnable(
+    monkeypatch, tmp_path: Path
+) -> None:
+    frozen_now = datetime(2026, 5, 25, 15, 0, tzinfo=timezone.utc)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):  # type: ignore[override]
+            if tz is None:
+                return frozen_now.replace(tzinfo=None)
+            return frozen_now.astimezone(tz)
+
+    monkeypatch.setattr(controller, "datetime", FrozenDateTime)
+    monkeypatch.setattr(controller, "_log", lambda *a, **k: None)
+
+    log_path = tmp_path / "session.log"
+    log_path.write_text("rate limit hit; resets 5:15pm (UTC)\n")
+    cooldowns: dict = {"claude": None, "opus": None, "codex": None}
+
+    assert controller._handle_backend_limit("claude", log_path, cooldowns) is True
+    assert cooldowns["claude"] == datetime(2026, 5, 25, 17, 15, tzinfo=timezone.utc)
+    assert cooldowns["opus"] is None
+
+
+def test_handle_backend_limit_global_claude_limit_cools_opus_too(
+    monkeypatch, tmp_path: Path
+) -> None:
+    frozen_now = datetime(2026, 5, 25, 15, 0, tzinfo=timezone.utc)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):  # type: ignore[override]
+            if tz is None:
+                return frozen_now.replace(tzinfo=None)
+            return frozen_now.astimezone(tz)
+
+    monkeypatch.setattr(controller, "datetime", FrozenDateTime)
+    monkeypatch.setattr(controller, "_log", lambda *a, **k: None)
+
+    log_path = tmp_path / "session.log"
+    log_path.write_text(
+        "You've reached your 5-hour session limit; resets 5:15pm (UTC)\n"
+    )
+    cooldowns: dict = {"claude": None, "opus": None, "codex": None}
+
+    assert controller._handle_backend_limit("claude", log_path, cooldowns) is True
+    reset = datetime(2026, 5, 25, 17, 15, tzinfo=timezone.utc)
+    assert cooldowns["claude"] == reset
+    assert cooldowns["opus"] == reset

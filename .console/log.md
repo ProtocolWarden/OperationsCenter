@@ -1,3 +1,9 @@
+## 2026-05-30 — controller: make opus fallback reachable
+
+_backend_available checked _command_available(backend) with the raw name, so _command_available("opus") always failed (opus has no binary; it uses the claude CLI). The sonnet→opus→codex fallback was therefore dead code — opus could never be selected. Resolve the cli ("claude" for opus) so opus is reachable. Also repaired 3 parse_rate_limit_reset tests left broken by the earlier (reset, log_text) tuple-return change and added opus/priority/global-limit selection tests. 15 passed.
+
+---
+
 ## 2026-05-30 — Stage 4: performance tests wired into CI (dedicated `performance` job in ci.yml, 50ms bounds, docs/design/dependency-report-performance-tests.md)
 
 ---

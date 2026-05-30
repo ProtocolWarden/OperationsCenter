@@ -325,8 +325,12 @@ def _session_log_path(iteration: int, backend: str) -> Path:
 
 
 def _backend_available(backend: str, cooldowns: dict[str, datetime | None]) -> bool:
+    # opus runs on the claude CLI binary, so its command availability is keyed
+    # to "claude" — checking for an "opus" executable would always fail and make
+    # the opus fallback unreachable.
+    cli = "claude" if backend in ("claude", "opus") else backend
     until = cooldowns.get(backend)
-    return _command_available(backend) and (
+    return _command_available(cli) and (
         until is None or datetime.now(timezone.utc) >= until
     )
 
