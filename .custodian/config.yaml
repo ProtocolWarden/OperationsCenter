@@ -449,6 +449,10 @@ audit:
       # board_unblock.py is a growing rules engine — each autonomous recovery rule
       # adds ~20 lines; splitting by rule would fragment context.
       - src/operations_center/entrypoints/maintenance/board_unblock.py
+      # outcomes.py holds all board_worker outcome handlers (success/failure/follow-up/
+      # CI loop) in one cohesive module. Splitting by handler type would fragment the
+      # tightly coupled state transitions and Plane client calls.
+      - src/operations_center/entrypoints/board_worker/outcomes.py
       # validation.py is the canonical per-collector validator library — all
       # artifact validation helpers live in one module by design.
       - src/operations_center/observer/validation.py
@@ -635,6 +639,11 @@ audit:
     # Autonomy-gap design doc references internal helper symbols that were
     # renamed/removed; the doc is a design retrospective, not an API spec.
     - repo_untrusted
+    # Refactored board_worker private names — referenced in ADR 0007 and autonomy_gaps.md
+    # as historical identifiers before the P3 refactor renamed them.
+    - _process_issue
+    - _handle_spec_author_success
+    - _build_phase_advance_goal_text
     - _is_quota_exhausted_result
     - _run_subprocess
     - _run_with_claude_fallback

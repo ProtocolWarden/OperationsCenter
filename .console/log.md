@@ -2187,3 +2187,9 @@ Fixed K1/OC8/DC7 findings on ADR 0010 (linked in README, renamed proposed field,
 
 2186-line monolith split into 8 cohesive modules. main.py: 145 lines.
 All 3866 tests pass. No behaviour changes — pure extraction with renames.
+
+---
+
+## 2026-05-30 — Custodian fixes after board_worker refactor
+
+C29 exemption for outcomes.py, old private names added to common_words.
