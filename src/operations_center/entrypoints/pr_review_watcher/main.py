@@ -207,7 +207,16 @@ def _run_pipeline(
             "--output",         str(result_file),
             "--source",         source,
         ]
-        exec_proc = subprocess.run(exec_cmd, cwd=oc_root, env=env, capture_output=True, text=True)
+        try:
+            exec_proc = subprocess.run(
+                exec_cmd, cwd=oc_root, env=env, capture_output=True, text=True,
+                timeout=1800,  # 30 min hard cap — prevents hung executor blocking the watcher
+            )
+        except subprocess.TimeoutExpired:
+            logger.warning(
+                "pr_review_watcher: execute pipeline timed out after 30m for state_key=%s", state_key,
+            )
+            return None
         if exec_proc.returncode != 0:
             logger.warning(
                 "pr_review_watcher: execute pipeline exited rc=%d for state_key=%s\nstderr: %s",

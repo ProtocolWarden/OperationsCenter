@@ -2055,3 +2055,9 @@ get_failed_checks returns 'Lint (ruff): failure' format; strip colon suffix befo
 1. Restore auto_merge_on_ci_green fast-path in _phase1 (was in deleted _phase2)
 2. Add custodian-doctor to OC validation_commands — catch CI audit failures pre-PR
 3. Review watcher relaunched via operations-center.sh for auto-restart on crash/SIGTERM
+
+---
+
+## 2026-05-30 — Add 30min timeout to exec pipeline subprocess
+
+Prevents hung executor from blocking the review watcher indefinitely.
