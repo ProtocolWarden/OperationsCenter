@@ -207,7 +207,13 @@ def _run_pipeline(
             "--output",         str(result_file),
             "--source",         source,
         ]
-        subprocess.run(exec_cmd, cwd=oc_root, env=env, capture_output=True, text=True)
+        exec_proc = subprocess.run(exec_cmd, cwd=oc_root, env=env, capture_output=True, text=True)
+        if exec_proc.returncode != 0:
+            logger.warning(
+                "pr_review_watcher: execute pipeline exited rc=%d for state_key=%s\nstderr: %s",
+                exec_proc.returncode, state_key,
+                (exec_proc.stderr or exec_proc.stdout or "").strip()[-2000:],
+            )
 
         verdict_path = workspace / "verdict.json"
         if verdict_path.exists():
@@ -215,6 +221,11 @@ def _run_pipeline(
                 return json.loads(verdict_path.read_text(encoding="utf-8"))
             except Exception:
                 logger.warning("pr_review_watcher: malformed verdict.json for state_key=%s", state_key)
+        else:
+            logger.warning(
+                "pr_review_watcher: no verdict.json produced for state_key=%s (rc=%d)",
+                state_key, exec_proc.returncode,
+            )
         return None
 
 

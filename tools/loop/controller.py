@@ -421,6 +421,27 @@ def release_lock() -> None:
     WATCHDOG_LOOP_LOCK.unlink(missing_ok=True)
 
 
+WATCH_DIR = REPO_ROOT / "logs/local/watch-all"
+_WATCHER_ROLES = ["goal", "test", "improve", "propose", "review", "spec", "intake", "watchdog"]
+
+def _restart_watchers() -> None:
+    """Send SIGTERM to every running watcher so the process supervisor relaunches
+    them with the freshly-pulled code.  Only kills processes we own (pid file present
+    and process alive); silently skips missing/dead watchers."""
+    for role in _WATCHER_ROLES:
+        pid_file = WATCH_DIR / f"{role}.pid"
+        if not pid_file.exists():
+            continue
+        try:
+            pid = int(pid_file.read_text().strip())
+            os.kill(pid, signal.SIGTERM)
+            _log(f"Restarted watcher '{role}' (pid {pid}) — code updated")
+        except (ProcessLookupError, ValueError):
+            pass
+        except Exception as exc:
+            _log(f"Failed to restart watcher '{role}': {exc}")
+
+
 def write_watchdog_loop_lock() -> None:
     """Write watchdog_loop.lock owned by this controller process.
 
@@ -679,10 +700,28 @@ def main() -> None:
 
     iteration = 0
     cooldowns: dict[str, datetime | None] = {"claude": None, "codex": None}
+    _last_known_sha: str = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, capture_output=True, text=True,
+    ).stdout.strip()
     try:
         while not _stop and not STOP_FLAG.exists():
             iteration += 1
             _log(f"--- Iteration {iteration} ---")
+
+            # Detect code changes merged since controller started and restart
+            # watcher processes so fixes take effect without manual intervention.
+            try:
+                _current_sha = subprocess.run(
+                    ["git", "rev-parse", "origin/main"], cwd=REPO_ROOT,
+                    capture_output=True, text=True,
+                ).stdout.strip()
+                if _current_sha and _current_sha != _last_known_sha:
+                    _log(f"Code updated {_last_known_sha[:8]}→{_current_sha[:8]} — pulling and restarting watchers")
+                    subprocess.run(["git", "pull", "--ff-only"], cwd=REPO_ROOT, capture_output=True)
+                    _last_known_sha = _current_sha
+                    _restart_watchers()
+            except Exception as _upd_exc:
+                _log(f"Code-update check failed: {_upd_exc}")
 
             # Clear stale schedule from previous session before spawning
             SCHEDULE_FILE.unlink(missing_ok=True)

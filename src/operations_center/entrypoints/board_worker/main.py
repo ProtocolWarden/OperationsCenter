@@ -254,13 +254,22 @@ def _claim_next(client, role: str, settings) -> dict | None:
                 _gh = GitHubPRClient(_gh_token)
                 _owner, _repo_name = GitHubPRClient.owner_repo_from_clone_url(_gate_clone_url)
                 _open_prs = _gh.list_open_prs(_owner, _repo_name)
-                # Exclude spec-author PRs — they only touch docs/specs/ and cannot
-                # conflict with goal PRs on merge.  Spec branches are named
-                # "spec-author/<id>" by the spec-author board_worker.
-                _blocking_prs = [
-                    pr for pr in _open_prs
-                    if not (pr.get("head") or {}).get("ref", "").startswith("spec-author/")
-                ]
+                # Exclude PRs that cannot conflict with new goal work:
+                #   - spec-author/* branches (docs/specs/ only)
+                #   - PRs whose CI is still in-flight (mergeable=UNKNOWN / state=pending)
+                #     — they aren't stuck, just waiting; blocking goals over pending CI
+                #     causes unnecessary starvation.
+                def _is_blocking(pr: dict) -> bool:
+                    ref = (pr.get("head") or {}).get("ref", "")
+                    if ref.startswith("spec-author/"):
+                        return False
+                    # Mergeable UNKNOWN means GitHub hasn't computed it yet (new PR / CI
+                    # still running).  Don't block on those — they'll show CONFLICTING or
+                    # merge cleanly once CI settles.
+                    if pr.get("mergeable") == "UNKNOWN":
+                        return False
+                    return True
+                _blocking_prs = [pr for pr in _open_prs if _is_blocking(pr)]
                 if _blocking_prs:
                     _pr_nums = [pr.get("number") for pr in _blocking_prs[:5]]
                     logger.info(

@@ -2038,3 +2038,12 @@ ci_fix phase (phase 0) handles ruff failures before self-review.
 ## 2026-05-30 — Fix ci_fix check name matching
 
 get_failed_checks returns 'Lint (ruff): failure' format; strip colon suffix before matching.
+
+---
+
+## 2026-05-30 — Four systemic fixes to prevent review/gate failures recurring
+
+1. _run_pipeline: log exec subprocess stderr so no-verdict failures are diagnosable
+2. OPEN_PR_GATE: skip PRs with mergeable=UNKNOWN (CI in-flight) to reduce goal starvation
+3. pyproject.toml: pin custodian to SHA instead of @main to stop flaky CI audit failures
+4. controller: detect git HEAD changes each iteration, pull + SIGTERM watchers to pick up new code
