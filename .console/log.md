@@ -1581,3 +1581,11 @@ Added 0005-work-order-p5.md to docs/README.md to fix DC7 orphan finding. Custodi
 
 Added `boundary_artifact_file: ../PrivateManifest/dist/boundary_disclosure_artifact.json` to `.custodian/config.yaml`. This was a pre-existing B2 finding — not introduced by the loop session change.
 
+
+---
+
+## 2026-05-30 — Add ci_fix phase to review watcher
+
+PRs with failing ruff/lint CI were escalating to human_review instead of self-healing.
+Added phase 0 (ci_fix): checks out PR branch locally, runs ruff --fix, pushes, waits for CI.
+Falls through to self_review after 3 attempts or non-fixable failures.

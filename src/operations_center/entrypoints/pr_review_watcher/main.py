@@ -1,6 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-"""PR Review Watcher — two-phase state machine for PRs created by the goal lane.
+"""PR Review Watcher — three-phase state machine for PRs created by the goal lane.
+
+Phase 0 (ci_fix): when CI is failing on an autonomy PR, auto-fix the branch.
+  - Runs ruff --fix + format on the local checkout and pushes.
+  - Retries up to max_ci_fix_attempts; then falls through to self_review.
 
 Phase 1 (self-review): executor reviews the diff and emits LGTM or CONCERNS.
   - LGTM → merge PR, mark Plane task Done.
@@ -70,7 +74,9 @@ def _new_state(repo_key: str, pr_number: int) -> dict:
         "state_key":            _state_key(repo_key, pr_number),
         "pr_number":            pr_number,
         "repo_key":             repo_key,
-        "phase":                "self_review",
+        "phase":                "ci_fix",
+        "ci_fix_attempts":      0,
+        "ci_fix_last_push_at":  None,
         "self_review_loops":    0,
         "human_review_loops":   0,
         "processed_comment_ids": [],
@@ -340,6 +346,180 @@ def _custodian_findings(oc_root: Path, repo_key: str, settings) -> str:
     except Exception as exc:
         logger.debug("pr_review_watcher: custodian check failed — %s", exc)
     return ""
+
+
+# ── Phase 0: ci_fix ──────────────────────────────────────────────────────────
+
+_MAX_CI_FIX_ATTEMPTS = 3
+_CI_FIX_WAIT_SECONDS = 120  # wait after pushing before re-checking CI
+
+# Checks whose failure we know how to auto-fix locally.
+_AUTOFIX_CHECK_NAMES = {"lint (ruff)", "ruff", "lint"}
+
+
+def _ci_checks_failing(gh_client, owner: str, repo: str, pr_number: int,
+                        ignored: list[str]) -> list[str]:
+    """Return names of currently failing (non-ignored) checks, or [] if all green."""
+    try:
+        return gh_client.get_failed_checks(owner, repo, pr_number,
+                                            ignored_checks=ignored) or []
+    except Exception:
+        return []
+
+
+def _phase0_ci_fix(
+    state: dict,
+    state_path: Path,
+    pr_data: dict,
+    gh_client,
+    owner: str,
+    repo: str,
+    oc_root: Path,
+    settings,
+) -> None:
+    """Phase 0: if CI is failing on an autonomy PR, push an auto-fix and wait.
+
+    Transitions to self_review when CI is green or when attempts are exhausted.
+    """
+    pr_number = int(state["pr_number"])
+    repo_key  = state["repo_key"]
+    repo_cfg  = settings.repos.get(repo_key)
+    if not repo_cfg:
+        state["phase"] = "self_review"
+        _save_state(state_path, state)
+        return
+
+    ignored  = list(getattr(repo_cfg, "ci_ignored_checks", []) or [])
+    failed   = _ci_checks_failing(gh_client, owner, repo, pr_number, ignored)
+
+    if not failed:
+        # CI is green — move straight to self_review
+        logger.info("pr_review_watcher: PR #%d CI green, advancing to self_review", pr_number)
+        state["phase"] = "self_review"
+        _save_state(state_path, state)
+        return
+
+    # If we pushed a fix recently, wait for CI to re-run before acting again.
+    last_push = state.get("ci_fix_last_push_at")
+    if last_push:
+        elapsed = (datetime.now(UTC) - datetime.fromisoformat(last_push)).total_seconds()
+        if elapsed < _CI_FIX_WAIT_SECONDS:
+            logger.debug(
+                "pr_review_watcher: PR #%d CI fix pushed %.0fs ago — waiting for CI rerun",
+                pr_number, elapsed,
+            )
+            return
+
+    attempts = state.get("ci_fix_attempts", 0)
+    if attempts >= _MAX_CI_FIX_ATTEMPTS:
+        logger.info(
+            "pr_review_watcher: PR #%d exhausted %d CI fix attempts (%s still failing) "
+            "— advancing to self_review",
+            pr_number, attempts, failed,
+        )
+        state["phase"] = "self_review"
+        _save_state(state_path, state)
+        return
+
+    # Only auto-fix checks we know how to handle; skip if unknown failures dominate.
+    fixable_failing = [c for c in failed if c.lower() in _AUTOFIX_CHECK_NAMES]
+    unfixable = [c for c in failed if c.lower() not in _AUTOFIX_CHECK_NAMES]
+    if unfixable and not fixable_failing:
+        logger.info(
+            "pr_review_watcher: PR #%d CI failing on non-auto-fixable checks %s "
+            "— advancing to self_review",
+            pr_number, unfixable,
+        )
+        state["phase"] = "self_review"
+        _save_state(state_path, state)
+        return
+
+    # --- Attempt auto-fix on the local repo checkout ---
+    local_path = getattr(repo_cfg, "local_path", None)
+    head_ref   = ((pr_data.get("head") or {}).get("ref") or "").strip()
+    if not local_path or not head_ref:
+        state["phase"] = "self_review"
+        _save_state(state_path, state)
+        return
+
+    local_path = Path(local_path)
+    venv_bin   = local_path / (getattr(repo_cfg, "venv_dir", ".venv") or ".venv") / "bin"
+    ruff_bin   = venv_bin / "ruff"
+    if not ruff_bin.exists():
+        ruff_bin = Path(shutil.which("ruff") or "ruff")
+
+    git_env = dict(os.environ)
+    git_token = settings.git_token()
+    author_name  = getattr(settings.git, "author_name",  "Operations Center Bot")
+    author_email = getattr(settings.git, "author_email", "operations-center-bot@example.com")
+    git_env["GIT_AUTHOR_NAME"]     = author_name
+    git_env["GIT_AUTHOR_EMAIL"]    = author_email
+    git_env["GIT_COMMITTER_NAME"]  = author_name
+    git_env["GIT_COMMITTER_EMAIL"] = author_email
+    if git_token:
+        git_env["GH_TOKEN"] = git_token
+
+    def _git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", *args], cwd=local_path, env=git_env,
+                              capture_output=True, text=True)
+
+    try:
+        # Stash any in-progress work, checkout the PR branch, pull latest.
+        _git("stash", "--include-untracked")
+        checkout = _git("checkout", head_ref)
+        if checkout.returncode != 0:
+            _git("fetch", "origin", head_ref)
+            _git("checkout", "-B", head_ref, f"origin/{head_ref}")
+        _git("pull", "--ff-only", "origin", head_ref)
+
+        # Run ruff auto-fix.
+        subprocess.run([str(ruff_bin), "check", "--fix", "."],
+                       cwd=local_path, capture_output=True, text=True)
+        subprocess.run([str(ruff_bin), "format", "."],
+                       cwd=local_path, capture_output=True, text=True)
+
+        # Check if anything changed.
+        status = _git("status", "--porcelain")
+        if not status.stdout.strip():
+            logger.info(
+                "pr_review_watcher: PR #%d ruff fix produced no changes — "
+                "advancing to self_review",
+                pr_number,
+            )
+            state["phase"] = "self_review"
+            _save_state(state_path, state)
+            return
+
+        _git("add", "-A")
+        _git("commit", "-m",
+             f"fix(ci): auto-fix ruff lint violations on {head_ref}")
+        push = _git("push", "origin", head_ref)
+        if push.returncode != 0:
+            logger.warning(
+                "pr_review_watcher: PR #%d ci-fix push failed — %s",
+                pr_number, push.stderr.strip(),
+            )
+            state["phase"] = "self_review"
+            _save_state(state_path, state)
+            return
+
+        state["ci_fix_attempts"]     = attempts + 1
+        state["ci_fix_last_push_at"] = datetime.now(UTC).isoformat()
+        logger.info(
+            "pr_review_watcher: PR #%d ci-fix attempt %d pushed to %s — waiting for CI",
+            pr_number, attempts + 1, head_ref,
+        )
+        _save_state(state_path, state)
+
+    except Exception as exc:
+        logger.warning("pr_review_watcher: PR #%d ci_fix error — %s", pr_number, exc)
+        state["phase"] = "self_review"
+        _save_state(state_path, state)
+    finally:
+        # Return local repo to main so other watchers aren't disrupted.
+        default = getattr(repo_cfg, "default_branch", "main")
+        _git("checkout", default)
+        _git("stash", "pop")
 
 
 # ── Phase 1: self-review ──────────────────────────────────────────────────────
@@ -815,9 +995,11 @@ def _poll_once(oc_root: Path, config_path: Path, settings) -> None:
             if not state:
                 continue
 
-            phase = state.get("phase", "self_review")
+            phase = state.get("phase", "ci_fix")
 
-            if phase == "self_review":
+            if phase == "ci_fix":
+                _phase0_ci_fix(state, sp, pr_data, gh_client, owner, repo, oc_root, settings)
+            elif phase == "self_review":
                 _phase1(state, sp, pr_data, gh_client, owner, repo, oc_root, config_path, settings)
             elif phase == "human_review":
                 _phase2(state, sp, pr_data, gh_client, owner, repo, oc_root, config_path, settings)
