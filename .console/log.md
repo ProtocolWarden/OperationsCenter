@@ -1,3 +1,7 @@
+## 2026-05-30 — Stage 3: fixed CI regressions from PR #211 merge (duplicate conftest fixtures, unused vars/imports, linearity test noise guard)
+
+---
+
 ## 2026-05-30 — Stage 2 Complete: Performance Regression Tests Implementation — READY FOR VALIDATION
 
 Completed Stage 2 of "Add performance regression tests for large dependency reports" work order.

@@ -256,7 +256,7 @@ class TestTimingUtilities:
         """Verify MemoryTracker context manager captures peak memory."""
         with MemoryTracker() as tracker:
             # Allocate some memory
-            large_list = [i for i in range(1000000)]
+            _ = [i for i in range(1000000)]
 
         peak_mb = tracker.peak_memory_mb
         # Should capture some memory usage
@@ -266,10 +266,10 @@ class TestTimingUtilities:
     def test_memory_tracker_peak_memory(self) -> None:
         """Verify MemoryTracker accurately tracks peak memory."""
         with MemoryTracker() as tracker:
-            # Create lists of different sizes
-            small = [1] * 1000
-            medium = [2] * 100000
-            large = [3] * 1000000
+            # Create lists of different sizes to exercise memory tracking
+            _ = [1] * 1000
+            _ = [2] * 100000
+            _ = [3] * 1000000
 
         peak_mb = tracker.peak_memory_mb
         # Peak should be captured (larger list allocation)

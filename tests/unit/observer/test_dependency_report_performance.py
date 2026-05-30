@@ -18,13 +18,9 @@ from pathlib import Path
 from unittest.mock import MagicMock
 from typing import Any
 
-import pytest
-
 from operations_center.observer.collectors.dependency_drift import DependencyDriftCollector
-from operations_center.observer.models import DependencyDriftSignal
 from operations_center.observer.service import ObserverContext
 from tests.fixtures.timing import Timing, MemoryTracker
-from tests.fixtures.dependency_reports.generators import DependencyReportGenerator
 
 
 def _make_observer_context(report_root: Path) -> ObserverContext:
@@ -86,7 +82,6 @@ class TestDependencyReportPerformanceRegression:
         assert str(report_path) in signal.source
 
         # Verify signal summary reflects correct dependency counts
-        expected_dep_count = len(data["statuses"])
         expected_actionable = len(
             [s for s in data["statuses"] if s.get("notes")]
         )
@@ -362,13 +357,15 @@ class TestDependencyReportPerformanceRegression:
             assert signal.status == "available"
             times.append((name, len(data["statuses"]), timer.elapsed()))
 
-        # Verify times aren't dramatically non-linear
-        # (allowing 2x variance for I/O jitter)
+        # Verify times aren't dramatically non-linear when base is measurable.
+        # Sub-5ms operations are noise-dominated; ratio checks only apply when
+        # the baseline scenario takes long enough to produce reliable timings.
+        _MIN_RATIO_BASE_S = 0.005
         for i in range(1, len(times)):
             prev_deps, prev_time = times[i - 1][1], times[i - 1][2]
             curr_deps, curr_time = times[i][1], times[i][2]
 
-            if prev_time > 0 and curr_deps > prev_deps:
+            if prev_time > _MIN_RATIO_BASE_S and curr_deps > prev_deps:
                 ratio = curr_time / prev_time
                 expected_ratio = curr_deps / prev_deps
                 # Allow 2x variance for system I/O jitter
