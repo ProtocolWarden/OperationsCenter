@@ -221,10 +221,9 @@ class TestRecommendationSeparation:
         assert report.proposed_changes_status == "review_required"
         assert report.policy_guardrails_applied
 
-    def test_report_does_not_import_routing_policy_module(self):
+    def test_report_does_not_import_routing_policy_module(self, require_module):
         """The analysis layer never touches SwitchBoard lane policy directly."""
-        import importlib
-        analyze_mod = importlib.import_module("operations_center.tuning.analyze")
+        analyze_mod = require_module("operations_center.tuning.analyze")
         _source = getattr(analyze_mod, "__file__", "")
         # just verify the module loads cleanly without error
         assert analyze_mod is not None

@@ -175,13 +175,6 @@ def test_derive_lineage_id_preserves_lineage_prefix() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _try_import_coordinator():
-    try:
-        return importlib.import_module(
-            "operations_center.execution.coordinator"
-        )
-    except ImportError as exc:
-        pytest.skip(f"coordinator import unavailable in this env: {exc}")
 
 
 def _build_bundle():
@@ -226,8 +219,9 @@ def _success_result(bundle):
     )
 
 
-def test_coordinator_dispatch_drives_hydrate_and_capture(fake_cl) -> None:
-    coord_mod = _try_import_coordinator()
+def test_coordinator_dispatch_drives_hydrate_and_capture(fake_cl, optional_import) -> None:
+    optional_import("operations_center.execution.coordinator")
+    from operations_center.execution.coordinator import ExecutionCoordinator
     from operations_center.execution.handoff import ExecutionRuntimeContext
     from operations_center.policy.models import PolicyDecision, PolicyStatus
 
@@ -253,7 +247,7 @@ def test_coordinator_dispatch_drives_hydrate_and_capture(fake_cl) -> None:
 
     bundle = _build_bundle()
     adapter = _Adapter(_success_result(bundle))
-    coordinator = coord_mod.ExecutionCoordinator(
+    coordinator = ExecutionCoordinator(
         adapter_registry=_Registry(adapter),
         policy_engine=_Policy(),
     )

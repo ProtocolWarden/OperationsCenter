@@ -33,14 +33,11 @@ def test_sb_adapter_outcome_query():
     assert sb_cat.backends_by_outcome(outcome="upstream_patch_pending") == []
 
 
-def test_sb_adapter_satisfies_protocol():
+def test_sb_adapter_satisfies_protocol(optional_import):
     """isinstance check via SB's runtime-checkable Protocol — proves the
     OC adapter implements every method SB depends on."""
-    try:
-        from switchboard.ports.executor_catalog import ExecutorCatalog as SbCatalog
-    except ImportError:
-        import pytest
-        pytest.skip("SwitchBoard not installed in OC's venv")
+    optional_import("switchboard.ports.executor_catalog")
+    from switchboard.ports.executor_catalog import ExecutorCatalog as SbCatalog
     cat = load_catalog(_REAL_DIR)
     sb_cat = SwitchboardCatalogAdapter(cat)
     assert isinstance(sb_cat, SbCatalog)
