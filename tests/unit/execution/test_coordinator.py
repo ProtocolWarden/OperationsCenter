@@ -302,3 +302,57 @@ def test_capture_capable_adapter_persists_runtime_duration_metadata() -> None:
 
     assert outcome.record.metadata["duration_ms"] == 1234
 
+
+def test_execute_returns_execution_result_instance_on_allowed_execution() -> None:
+    """Verify that execute returns an ExecutionRunOutcome containing an ExecutionResult instance."""
+    bundle = _bundle()
+    adapter = _RecordingAdapter(_success_result(bundle))
+    coordinator = ExecutionCoordinator(
+        adapter_registry=_Registry(adapter),
+        policy_engine=_StubPolicyEngine(PolicyDecision(status=PolicyStatus.ALLOW)),
+    )
+
+    outcome = coordinator.execute(bundle, _runtime())
+
+    assert isinstance(outcome.result, ExecutionResult)
+    assert outcome.result.run_id == "run-1"
+    assert outcome.result.success is True
+    assert outcome.result.status == ExecutionStatus.SUCCEEDED
+
+
+def test_execute_returns_execution_result_instance_on_policy_block() -> None:
+    """Verify ExecutionResult instance is returned even when policy blocks execution."""
+    bundle = _bundle()
+    adapter = _RecordingAdapter(_success_result(bundle))
+    coordinator = ExecutionCoordinator(
+        adapter_registry=_Registry(adapter),
+        policy_engine=_StubPolicyEngine(
+            PolicyDecision(status=PolicyStatus.BLOCK, notes="blocked by policy")
+        ),
+    )
+
+    outcome = coordinator.execute(bundle, _runtime())
+
+    assert isinstance(outcome.result, ExecutionResult)
+    assert outcome.result.success is False
+    assert outcome.result.failure_category == FailureReasonCategory.POLICY_BLOCKED
+    assert outcome.executed is False
+
+
+def test_execute_returns_execution_result_instance_on_review_required() -> None:
+    """Verify ExecutionResult instance is returned when review is required."""
+    bundle = _bundle()
+    adapter = _RecordingAdapter(_success_result(bundle))
+    coordinator = ExecutionCoordinator(
+        adapter_registry=_Registry(adapter),
+        policy_engine=_StubPolicyEngine(
+            PolicyDecision(status=PolicyStatus.REQUIRE_REVIEW, notes="human review needed")
+        ),
+    )
+
+    outcome = coordinator.execute(bundle, _runtime())
+
+    assert isinstance(outcome.result, ExecutionResult)
+    assert outcome.result.status == ExecutionStatus.SKIPPED
+    assert outcome.executed is False
+
