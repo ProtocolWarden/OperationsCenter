@@ -5,7 +5,6 @@ the catalog validator into the audit CLI's app callback.
 """
 from __future__ import annotations
 
-import sys
 
 import pytest
 

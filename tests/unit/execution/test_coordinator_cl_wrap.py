@@ -17,7 +17,6 @@ Two layers:
 
 from __future__ import annotations
 
-import importlib
 import sys
 import types
 from pathlib import Path
