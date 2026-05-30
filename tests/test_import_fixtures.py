@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Tests for import error fixtures."""
-import sys
-
 import pytest
+
+from operations_center.config import Settings
 
 
 class TestOptionalImport:
@@ -21,17 +21,19 @@ class TestOptionalImport:
         with pytest.raises(pytest.skip.Exception):
             optional_import('nonexistent.fake.module.that.does.not.exist')
 
-    @pytest.mark.parametrize('optional_import', ['json'], indirect=True)
+    @pytest.mark.parametrize('optional_import', ['json', 'os'], indirect=True)
     def test_parametrize_with_indirect(self, optional_import):
         """Should work with parametrize + indirect=True."""
         assert optional_import is not None
-        assert hasattr(optional_import, 'dumps')
 
-    @pytest.mark.parametrize('optional_import', ['nonexistent_module_xyz'], indirect=True)
+    @pytest.mark.parametrize(
+        'optional_import',
+        ['nonexistent_module_xyz', 'also_fake_module_abc'],
+        indirect=True,
+    )
     def test_parametrize_indirect_missing_module(self, optional_import):
         """Should skip when parametrized module doesn't exist."""
-        # pytest will skip this test due to the skip in optional_import fixture
-        pass
+        assert False, "optional_import fixture should have triggered pytest.skip"
 
 
 class TestRequireModule:
@@ -48,11 +50,10 @@ class TestRequireModule:
         with pytest.raises(AssertionError, match="Required module.*could not be imported"):
             require_module('nonexistent.fake.module.that.does.not.exist')
 
-    @pytest.mark.parametrize('require_module', ['json'], indirect=True)
+    @pytest.mark.parametrize('require_module', ['json', 'os'], indirect=True)
     def test_parametrize_with_indirect(self, require_module):
         """Should work with parametrize + indirect=True."""
         assert require_module is not None
-        assert hasattr(require_module, 'dumps')
 
 
 class TestModuleWithEnv:
@@ -100,6 +101,16 @@ class TestModuleWithEnv:
 
         # With clear_cache=False, test_marker_2 should still exist
         assert hasattr(json_module, 'test_marker_2')
+
+
+class TestOCModuleImport:
+    """Verify fixtures work with real OC source modules."""
+
+    def test_oc_settings_importable(self, require_module):
+        """Settings class must be importable via require_module fixture."""
+        mod = require_module('operations_center.config')
+        assert hasattr(mod, 'Settings')
+        assert mod.Settings is Settings
 
 
 class TestAssertModuleUnavailable:

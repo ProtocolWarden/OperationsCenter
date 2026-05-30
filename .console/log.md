@@ -1,3 +1,7 @@
+## 2026-05-30 — fix: resolve custodian T2/T5/T8 violations in test_import_fixtures.py (PR #206 merged with findings; blocking push)
+
+---
+
 ## 2026-05-30 — Stage 4 Complete: Import-Error Test Refactoring Validation
 
 Completed Stage 4 of "Refactor import-error tests to use shared pytest fixture" work order.
