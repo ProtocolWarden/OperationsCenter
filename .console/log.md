@@ -1,3 +1,9 @@
+## 2026-05-30 — fix(pr203): B1/B2 CI audit + SlowTestTracker correctness bugs
+
+`boundary_artifact_file` path in custodian config was resolved from CWD (not repo root) — breaks CI where CWD != parent of OperationsCenter. Removed config path; CI uses REPOGRAPH_BOUNDARY_ARTIFACT_FILE env var. Fixed `slow_count` to include marked tests; added xdist worker guard in `pytest_sessionfinish`.
+
+---
+
 ## 2026-05-30 — fix(custodian): add T8 exclusions + DC7 link for PR #203 slow-test tracker tests
 
 PR #203 CI custodian audit failing: T8 for two new test files (conftest hook tests via subprocess, no src imports) and DC7 for docs/operator/slow_test_reporting.md (orphan). Added T8 exclusions to .custodian/config.yaml; linked doc from docs/README.md.

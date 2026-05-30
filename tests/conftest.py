@@ -63,7 +63,7 @@ class SlowTestTracker:
             return {"total": 0, "slow_count": 0, "avg_duration": 0.0, "max_duration": 0.0}
 
         durations = [d for _, d, _ in self.test_durations]
-        slow_count = sum(1 for _, d, _ in self.test_durations if d >= self.threshold)
+        slow_count = sum(1 for _, d, marked in self.test_durations if d >= self.threshold or marked)
         return {
             "total": len(self.test_durations),
             "slow_count": slow_count,
@@ -168,6 +168,10 @@ def pytest_runtest_logreport(report: Any) -> None:
 def pytest_sessionfinish(session: Any, exitstatus: int) -> None:
     """Emit slow test warnings and summary at session end."""
     if _slow_test_tracker is None:
+        return
+    # Skip reporting on xdist worker processes — they each call this hook;
+    # only the master (or non-xdist) session should emit the report.
+    if os.environ.get("PYTEST_XDIST_WORKER"):
         return
 
     slow_tests = _slow_test_tracker.get_slow_tests()
