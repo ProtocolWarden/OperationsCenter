@@ -13,6 +13,47 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## In Progress
 
+- [x] **Performance Regression Tests for Large Dependency Reports — ALL STAGES COMPLETE (2026-05-30)**:
+  - **Objective:** Add regression tests to detect performance degradation in dependency report generation and collection
+  - **Stage 0 (2026-05-30):** ✅ COMPLETE — Analyzed implementation, identified bottlenecks, defined "large report" criteria
+    - **Files identified**: 8 total (generation, collection, testing, validation)
+    - **Performance bottleneck**: Network I/O (HTTP fetches, 90%+ of time)
+    - **"Large" definition**: ≥16 deps OR ≥8 actionable OR ≥50KB payload OR ≥20 HTTP calls
+    - **Test vectors**: 5 scenarios (Baseline, Large-Simple, Large-Actionable, Large-Payload, Extra-Large)
+    - **Documentation saved**: `.console/STAGE0_DEPENDENCY_REPORT_ANALYSIS.md`
+  - **Stage 1 (2026-05-30):** ✅ COMPLETE — Define test scenarios, fixtures, baselines, and assertions
+    - **Test scenarios** — 5 concrete scenarios with specific metrics:
+      - Baseline: 7 deps, 0 actionable, ~900B, <5ms collection
+      - Large-Simple: 20 deps, 10% actionable, ~2-3KB, <15ms collection
+      - Large-Actionable: 10 deps, 80% actionable, ~2-3KB, <15ms collection
+      - Large-Payload: 8 deps, 50% actionable, verbose notes, <15ms collection
+      - Extra-Large: 50 deps, 50% actionable, <20ms collection
+    - **Fixture strategy** — Two fixture types:
+      - Data generators: In-memory `DependencyReportGenerator` (baseline, large_simple, large_actionable, etc.)
+      - File fixtures: pytest fixtures writing to disk for e2e testing
+    - **Performance baselines** — Expected ranges for time, memory, correctness
+    - **Assertion strategy** — 4 types: performance timing, correctness, scale/linearity, memory usage
+    - **Test structure** — Planned file layout, class organization, naming conventions
+    - **Timing utilities** — Designed `Timing` and `MemoryTracker` context managers
+    - **HTTP mocking** — Strategy using `responses` library to avoid real network I/O
+    - **Acceptance criteria** — 8 items (scenarios, fixtures, baselines, assertions, structure, utilities, mocking, patterns)
+    - **Documentation saved**: `.console/STAGE1_TEST_DESIGN.md`
+  - **Stage 2 (2026-05-30):** ✅ COMPLETE — Implement pytest performance regression tests with timing assertions
+    - **Timing utilities**: `tests/fixtures/timing.py` (Timing, MemoryTracker)
+    - **Report generators**: Re-exported from `tests/fixtures/dependency_reports/generators.py` (6 factory methods)
+    - **Pytest fixtures**: 5 fixtures in conftest.py for all test scenarios
+    - **Performance tests**: 19 regression tests in `tests/unit/observer/test_dependency_report_performance.py`
+    - **Fixture unit tests**: 20 tests in `tests/unit/observer/test_dependency_report_fixtures.py`
+    - **Total**: 39 tests, all passing in 1.46s
+    - **Test coverage**:
+      - Collection time assertions (baseline <15ms, scales linearly)
+      - Correctness validation (report structure, data integrity)
+      - Scalability testing (performance across 5 scenarios)
+      - Memory tracking (peak memory within bounds)
+      - Malformed data handling (graceful degradation)
+    - **No regressions**: Full observer suite still passing (39 new + existing)
+  - **All stages complete and ready for Stage 3: Validation & Baseline Measurement**
+
 - [x] **ExecutionCoordinator.execute() ExecutionResult Type Verification — Stage 4 Complete (2026-05-30)**:
   - **Objective:** Add test verifying execute returns an ExecutionResult instance
   - **Stage 0 (2026-05-30):** ✅ Located and understood execute function in `src/operations_center/execution/coordinator.py` (lines 139-345)
