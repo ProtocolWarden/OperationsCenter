@@ -16,3 +16,5 @@ Cross-repo decisions live in `PlatformDeployment/docs/architecture/adr/`.
 | [0006](0006-corerunner-subprocess-consolidation.md) | CoreRunner subprocess consolidation |
 | [0007](0007-spec-director-refactor.md) | Fold spec_director into the backend executor pipeline |
 | [0008](0008-executor-tiering-policy-phases.md) | Executor tiering policy phases |
+| [0009](0009-work-order-execution-hygiene.md) | Work order — execution hygiene |
+| [0010](0010-work-order-architecture-hardening.md) | Work order — architecture hardening |

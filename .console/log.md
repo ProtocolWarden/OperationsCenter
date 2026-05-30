@@ -2174,3 +2174,9 @@ from 60ms). Add dedicated `performance` CI job to ci.yml. Add design doc.
 ## 2026-05-30 — ADR 0010 drafted + Plane tasks #165-168 created
 
 Arch audit work order: Issue 2 (state locking) is P1 autonomous, Issue 3 (subprocess security) is P2, Issue 1 (board_worker refactor) is P3 partial-autonomous.
+
+---
+
+## 2026-05-30 — ADR 0010 custodian clean
+
+Fixed K1/OC8/DC7 findings on ADR 0010 (linked in README, renamed proposed field, added common_word).

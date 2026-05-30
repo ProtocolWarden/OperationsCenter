@@ -196,9 +196,9 @@ def _validate_command(cmd: str) -> None:
 
 Call this in `load_settings()` during config validation.
 
-**Tier 3 (long-term, optional)** — For repos with `untrusted: true` flag in
+**Tier 3 (long-term, optional)** — For repos with `repo_untrusted: true` flag in
 config, use `shell=False` with `shlex.split()` instead of `shell=True`.
-This constrains untrusted repos to simple commands without shell features.
+This constrains high-risk repos to simple commands without shell features.
 
 ### Definition of Done
 
@@ -207,7 +207,7 @@ This constrains untrusted repos to simple commands without shell features.
 - [ ] `_validate_command()` with blocked pattern list added to settings validation
 - [ ] `load_settings()` calls validator on all `validation_commands`
 - [ ] Unit tests for blocked pattern detection
-- [ ] `untrusted` repo flag added to `RepoSettings` (optional, default False)
+- [ ] `repo_untrusted` flag added to `RepoSettings` in `config/settings.py` (optional, default False)
 
 ---
 

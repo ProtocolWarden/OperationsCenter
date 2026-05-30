@@ -634,6 +634,7 @@ audit:
     - spec_hygiene
     # Autonomy-gap design doc references internal helper symbols that were
     # renamed/removed; the doc is a design retrospective, not an API spec.
+    - repo_untrusted
     - _is_quota_exhausted_result
     - _run_subprocess
     - _run_with_claude_fallback
