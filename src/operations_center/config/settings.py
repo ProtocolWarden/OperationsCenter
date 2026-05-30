@@ -275,11 +275,10 @@ class ReviewerSettings(BaseModel):
     bot_logins: list[str] = Field(default_factory=list)
     # If non-empty, only comments from these logins trigger human revisions
     allowed_reviewer_logins: list[str] = Field(default_factory=list)
-    # Max self-review+revision cycles before escalating to human
-    max_self_review_loops: int = 2
-    # Max revision passes driven by human comments before auto-merging
+    # Max self-review+revision cycles before auto-merging (no human escalation)
+    max_self_review_loops: int = 3
+    # Unused — human_review phase removed. Kept for config-file compatibility.
     max_human_review_loops: int = 3
-    # Seconds from phase-2 entry before auto-merging (default: 1 day)
     human_review_timeout_seconds: int = 86400
     # HTML marker appended to every bot-posted comment — belt-and-suspenders filter
     bot_comment_marker: str = "<!-- operations-center:bot -->"

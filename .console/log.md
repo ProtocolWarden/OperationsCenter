@@ -1589,3 +1589,11 @@ Added `boundary_artifact_file: ../PrivateManifest/dist/boundary_disclosure_artif
 PRs with failing ruff/lint CI were escalating to human_review instead of self-healing.
 Added phase 0 (ci_fix): checks out PR branch locally, runs ruff --fix, pushes, waits for CI.
 Falls through to self_review after 3 attempts or non-fixable failures.
+
+---
+
+## 2026-05-30 — Remove human escalation from review watcher
+
+human_review phase deleted entirely. CONCERNS and no-verdict loops now auto-merge
+after max_self_review_loops (3). Single CONCERNS comment on pass 1 only — no spam.
+ci_fix phase (phase 0) handles ruff failures before self-review.

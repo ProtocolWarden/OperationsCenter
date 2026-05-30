@@ -1,20 +1,20 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-"""PR Review Watcher — three-phase state machine for PRs created by the goal lane.
+"""PR Review Watcher — two-phase autonomous state machine for goal-lane PRs.
 
 Phase 0 (ci_fix): when CI is failing on an autonomy PR, auto-fix the branch.
   - Runs ruff --fix + format on the local checkout and pushes.
   - Retries up to max_ci_fix_attempts; then falls through to self_review.
 
-Phase 1 (self-review): executor reviews the diff and emits LGTM or CONCERNS.
-  - LGTM → merge PR, mark Plane task Done.
-  - CONCERNS → post comment, run revision pass, retry up to max_self_review_loops.
-  - Unresolved → escalate to Phase 2.
+Phase 1 (self_review): executor reviews the diff and emits LGTM or CONCERNS.
+  - LGTM → auto-merge.
+  - No verdict (pipeline crash/timeout) → retry silently; auto-merge after
+    max_self_review_loops to avoid stalling indefinitely.
+  - CONCERNS → log, retry up to max_self_review_loops; auto-merge when
+    exhausted. OC figures it out — no human escalation.
 
-Phase 2 (human review): poll PR comments for human approval or feedback.
-  - /lgtm comment or 👍 reaction → merge, Done.
-  - Human comment → executor revision pass, post reply; up to max_human_review_loops.
-  - Timeout (human_review_timeout_seconds from phase-2 entry) → auto-merge.
+There is no human_review phase. Human escalation is removed entirely.
+All PRs from autonomy branches resolve autonomously.
 
 State per PR persisted in state/pr_reviews/<repo_key>-<pr_number>.json.
 The state file is the single source of truth; Plane is updated after state is written.
@@ -219,19 +219,6 @@ def _run_pipeline(
 
 
 # ── GitHub helpers ─────────────────────────────────────────────────────────────
-
-def _is_bot_comment(comment: dict, bot_logins: set[str], bot_marker: str) -> bool:
-    login = ((comment.get("user") or {}).get("login") or "").lower()
-    if login in bot_logins:
-        return True
-    return bot_marker in (comment.get("body") or "")
-
-
-def _is_lgtm_comment(comment: dict) -> bool:
-    import re
-    body = (comment.get("body") or "").strip()
-    first_line = body.splitlines()[0].strip() if body else ""
-    return bool(re.match(r"^/lgtm(\s|$)", first_line, re.IGNORECASE))
 
 
 # ── Merge + Plane done ────────────────────────────────────────────────────────
@@ -597,53 +584,22 @@ def _phase1(
     state["self_review_loops"] += 1
 
     if verdict is None:
+        # Pipeline produced no verdict (crash/timeout/rate-limit).
+        # Retry silently up to max_self_review_loops, then auto-merge rather
+        # than stalling the queue. No comment posted — don't spam the PR.
+        logger.warning(
+            "pr_review_watcher: no verdict PR #%d (loop=%d/%d) — %s",
+            pr_number, state["self_review_loops"], reviewer.max_self_review_loops,
+            "will retry" if state["self_review_loops"] < reviewer.max_self_review_loops
+            else "auto-merging",
+        )
         if state["self_review_loops"] >= reviewer.max_self_review_loops:
-            state["phase"]             = "human_review"
-            state["phase2_entered_at"] = datetime.now(UTC).isoformat()
-            escalation_body = (
-                f"{reviewer.bot_comment_marker}\n"
-                f"**Escalated to human review** — review pipeline produced no verdict "
-                f"after {state['self_review_loops']} attempt(s).\n\n"
-                "Reply `/lgtm` or add a 👍 reaction to approve and merge.\n"
-                "Leave a comment to request specific changes."
-            )
-            try:
-                gh_client.post_comment(owner, repo, pr_number, escalation_body)
-            except Exception as exc:
-                logger.warning(
-                    "pr_review_watcher: failed to post no-verdict escalation comment PR #%d — %s",
-                    pr_number, exc,
-                )
-            plane_task_id = state.get("task_id")
-            if plane_task_id:
-                try:
-                    from operations_center.adapters.plane import PlaneClient
-                    pc = PlaneClient(
-                        base_url=settings.plane.base_url,
-                        api_token=settings.plane_token(),
-                        workspace_slug=settings.plane.workspace_slug,
-                        project_id=settings.plane.project_id,
-                    )
-                    try:
-                        issue = pc.fetch_issue(plane_task_id)
-                        existing = [
-                            (lab.get("name", "") if isinstance(lab, dict) else str(lab)).strip()
-                            for lab in issue.get("labels", [])
-                        ]
-                        existing = [n for n in existing if n]
-                        if "lifecycle: escalated" not in existing:
-                            pc.update_issue_labels(plane_task_id, existing + ["lifecycle: escalated"])
-                    finally:
-                        pc.close()
-                except Exception as exc:
-                    logger.warning("pr_review_watcher: failed to label Plane task escalated — %s", exc)
-            logger.info(
-                "pr_review_watcher: PR #%d no-verdict escalated to human review loop=%d",
-                pr_number, state["self_review_loops"],
+            _merge_and_done(
+                state, state_path, pr_data, gh_client, owner, repo, settings,
+                reason="no_verdict_auto_merge",
             )
         else:
-            logger.warning("pr_review_watcher: no verdict PR #%d — will retry next poll", pr_number)
-        _save_state(state_path, state)
+            _save_state(state_path, state)
         return
 
     result  = (verdict.get("result") or "CONCERNS").upper()
@@ -655,258 +611,34 @@ def _phase1(
         _merge_and_done(state, state_path, pr_data, gh_client, owner, repo, settings, reason="self_review_lgtm")
         return
 
-    # CONCERNS — post comment and possibly escalate
-    concern_body = (
-        f"{reviewer.bot_comment_marker}\n"
-        f"**Self-review (pass {state['self_review_loops']}) — concerns:**\n\n{summary}"
-    )
-    try:
-        gh_client.post_comment(owner, repo, pr_number, concern_body)
-    except Exception as exc:
-        logger.warning("pr_review_watcher: failed to post concern comment PR #%d — %s", pr_number, exc)
+    # CONCERNS — post once on the first pass, then retry silently.
+    # Auto-merge when loops exhausted rather than escalating to humans.
+    if state["self_review_loops"] == 1:
+        concern_body = (
+            f"{reviewer.bot_comment_marker}\n"
+            f"**Self-review concerns (will auto-merge after {reviewer.max_self_review_loops} passes):**\n\n{summary}"
+        )
+        try:
+            gh_client.post_comment(owner, repo, pr_number, concern_body)
+        except Exception as exc:
+            logger.warning("pr_review_watcher: failed to post concern comment PR #%d — %s", pr_number, exc)
+    else:
+        logger.info(
+            "pr_review_watcher: PR #%d still CONCERNS on loop %d — %s",
+            pr_number, state["self_review_loops"],
+            "retrying" if state["self_review_loops"] < reviewer.max_self_review_loops else "auto-merging",
+        )
 
     if state["self_review_loops"] >= reviewer.max_self_review_loops:
-        state["phase"]             = "human_review"
-        state["phase2_entered_at"] = datetime.now(UTC).isoformat()
-        escalation_body = (
-            f"{reviewer.bot_comment_marker}\n"
-            f"**Escalated to human review** after {state['self_review_loops']} self-review pass(es).\n\n"
-            f"Remaining concerns:\n\n{summary}\n\n"
-            "Reply `/lgtm` or add a 👍 reaction to approve and merge. "
-            "Leave a comment to request specific changes."
+        _merge_and_done(
+            state, state_path, pr_data, gh_client, owner, repo, settings,
+            reason="self_review_auto_merge",
         )
-        try:
-            gh_client.post_comment(owner, repo, pr_number, escalation_body)
-        except Exception as exc:
-            logger.warning("pr_review_watcher: failed to post escalation comment PR #%d — %s", pr_number, exc)
-        # Tag the corresponding Plane task with `lifecycle: escalated` so the
-        # status pane and downstream services can recognise it as a task
-        # that's exited normal automated flow (auto-promote skips, status
-        # pane can highlight, etc.). Best-effort — the GitHub side is the
-        # source of truth, this is just convenience metadata.
-        plane_task_id = state.get("task_id")
-        if plane_task_id:
-            try:
-                from operations_center.adapters.plane import PlaneClient
-                pc = PlaneClient(
-                    base_url=settings.plane.base_url,
-                    api_token=settings.plane_token(),
-                    workspace_slug=settings.plane.workspace_slug,
-                    project_id=settings.plane.project_id,
-                )
-                try:
-                    issue = pc.fetch_issue(plane_task_id)
-                    existing = [
-                        (lab.get("name", "") if isinstance(lab, dict) else str(lab)).strip()
-                        for lab in issue.get("labels", [])
-                    ]
-                    existing = [n for n in existing if n]
-                    if "lifecycle: escalated" not in existing:
-                        pc.update_issue_labels(plane_task_id, existing + ["lifecycle: escalated"])
-                finally:
-                    pc.close()
-            except Exception as exc:
-                logger.warning("pr_review_watcher: failed to label Plane task escalated — %s", exc)
-        logger.info("pr_review_watcher: PR #%d escalated to human review", pr_number)
+        return
 
     _save_state(state_path, state)
 
 
-# ── Phase 2: human review ─────────────────────────────────────────────────────
-
-def _phase2(
-    state: dict,
-    state_path: Path,
-    pr_data: dict,
-    gh_client,
-    owner: str,
-    repo: str,
-    oc_root: Path,
-    config_path: Path,
-    settings,
-) -> None:
-    pr_number = int(state["pr_number"])
-    repo_key  = state["repo_key"]
-    state_key = state["state_key"]
-    reviewer  = settings.reviewer
-    bot_logins = {login.lower() for login in reviewer.bot_logins}
-    allowed    = {login.lower() for login in reviewer.allowed_reviewer_logins}
-
-    # ── Timeout check ────────────────────────────────────────────────────────
-    entered_at = state.get("phase2_entered_at")
-    if entered_at:
-        elapsed = (datetime.now(UTC) - datetime.fromisoformat(entered_at)).total_seconds()
-        if elapsed >= reviewer.human_review_timeout_seconds:
-            hours = int(elapsed / 3600)
-            notice = (
-                f"{reviewer.bot_comment_marker}\n"
-                f"**Auto-merging** — human review timed out after {hours}h."
-            )
-            try:
-                gh_client.post_comment(owner, repo, pr_number, notice)
-            except Exception:
-                pass
-            logger.info("pr_review_watcher: PR #%d human-review timeout after %.0fs", pr_number, elapsed)
-            _merge_and_done(state, state_path, pr_data, gh_client, owner, repo, settings, reason="human_review_timeout")
-            return
-
-    # ── auto-merge-on-CI-green (C-K1) ────────────────────────────────────────
-    # When the repo opts in via RepoSettings.auto_merge_on_ci_green AND the
-    # task carries `source: autonomy`, the reviewer auto-merges the moment CI
-    # passes — without waiting for the 24h timeout. Honors
-    # RepoSettings.ci_ignored_checks (C-K7) so flaky / advisory checks don't
-    # gate the merge.
-    repo_cfg = settings.repos.get(repo_key)
-    if repo_cfg and getattr(repo_cfg, "auto_merge_on_ci_green", False):
-        # Only autonomy-sourced PRs participate — operator-launched runs
-        # should still go through human review.
-        labels_lower = [
-            (lab.get("name", "") if isinstance(lab, dict) else str(lab)).strip().lower()
-            for lab in (pr_data.get("labels", []) or [])
-        ]
-        # If labels aren't on the PR, fall back to the PR title prefix or
-        # the linked Plane task source. PRs created by WorkspaceManager
-        # don't carry labels today, so this is a soft check — we infer
-        # autonomy from the branch prefix instead.
-        head_ref = ((pr_data.get("head") or {}).get("ref") or "").lower()
-        is_autonomy = (
-            "source: autonomy" in labels_lower
-            or head_ref.startswith(("goal/", "test/", "improve/"))
-        )
-        if is_autonomy:
-            try:
-                ignored = list(getattr(repo_cfg, "ci_ignored_checks", []) or [])
-                failed = gh_client.get_failed_checks(
-                    owner, repo, pr_number,
-                    pr_data=pr_data,
-                    ignored_checks=ignored,
-                )
-                if not failed:
-                    logger.info(
-                        "pr_review_watcher: PR #%d auto-merging — CI green and "
-                        "auto_merge_on_ci_green=True", pr_number,
-                    )
-                    _merge_and_done(
-                        state, state_path, pr_data, gh_client, owner, repo, settings,
-                        reason="auto_merge_on_ci_green",
-                    )
-                    return
-                logger.debug(
-                    "pr_review_watcher: PR #%d not auto-merged — %d failed check(s) "
-                    "(after ignoring %d)", pr_number, len(failed), len(ignored),
-                )
-            except Exception as exc:
-                logger.debug("pr_review_watcher: CI status check failed PR #%d — %s", pr_number, exc)
-
-    # ── 👍 reaction on PR ────────────────────────────────────────────────────
-    try:
-        reactions = gh_client.get_pr_reactions(owner, repo, pr_number)
-        human_reactions = [
-            r for r in reactions
-            if ((r.get("user") or {}).get("login") or "").lower() not in bot_logins
-        ]
-        approving = [
-            r for r in human_reactions
-            if not allowed or ((r.get("user") or {}).get("login") or "").lower() in allowed
-        ]
-        if gh_client.has_thumbs_up(approving):
-            logger.info("pr_review_watcher: PR #%d approved via 👍 reaction", pr_number)
-            _merge_and_done(state, state_path, pr_data, gh_client, owner, repo, settings, reason="thumbs_up_reaction")
-            return
-    except Exception as exc:
-        logger.debug("pr_review_watcher: reaction fetch failed PR #%d — %s", pr_number, exc)
-
-    # ── Poll comments ────────────────────────────────────────────────────────
-    try:
-        all_comments = gh_client.list_pr_comments(owner, repo, pr_number)
-    except Exception as exc:
-        logger.warning("pr_review_watcher: comment fetch failed PR #%d — %s", pr_number, exc)
-        return
-
-    processed_ids: set[int] = set(state.get("processed_comment_ids", []))
-    human_comments = []
-
-    for c in all_comments:
-        cid = c.get("id")
-        if cid in processed_ids:
-            continue
-        if _is_bot_comment(c, bot_logins, reviewer.bot_comment_marker):
-            processed_ids.add(cid)
-            continue
-        login = ((c.get("user") or {}).get("login") or "").lower()
-        if allowed and login not in allowed:
-            continue
-        human_comments.append(c)
-
-    state["processed_comment_ids"] = list(processed_ids)
-
-    if not human_comments:
-        _save_state(state_path, state)
-        return
-
-    # /lgtm in any unprocessed human comment
-    for c in human_comments:
-        if _is_lgtm_comment(c):
-            logger.info("pr_review_watcher: PR #%d approved via /lgtm", pr_number)
-            for hc in human_comments:
-                processed_ids.add(hc.get("id"))
-            state["processed_comment_ids"] = list(processed_ids)
-            _save_state(state_path, state)
-            _merge_and_done(state, state_path, pr_data, gh_client, owner, repo, settings, reason="lgtm_comment")
-            return
-
-    # Max loops reached → auto-merge rather than looping forever
-    if state["human_review_loops"] >= reviewer.max_human_review_loops:
-        logger.info("pr_review_watcher: PR #%d max human review loops reached, auto-merging", pr_number)
-        notice = (
-            f"{reviewer.bot_comment_marker}\n"
-            f"**Auto-merging** — reached max human review loops ({reviewer.max_human_review_loops})."
-        )
-        try:
-            gh_client.post_comment(owner, repo, pr_number, notice)
-        except Exception:
-            pass
-        _merge_and_done(state, state_path, pr_data, gh_client, owner, repo, settings, reason="max_human_loops")
-        return
-
-    # Revision pass for newest human comment
-    newest      = human_comments[-1]
-    comment_body = newest.get("body", "")
-    commenter    = ((newest.get("user") or {}).get("login") or "unknown")
-
-    logger.info(
-        "pr_review_watcher: PR #%d revision pass %d for comment from %s",
-        pr_number, state["human_review_loops"], commenter,
-    )
-
-    goal_text = (
-        f"Address the following reviewer feedback on PR #{pr_number}: {pr_data.get('title', '')}\n\n"
-        f"Reviewer ({commenter}) wrote:\n{comment_body}\n\n"
-        f"Make the requested changes. When done, write `verdict.json` in the current directory:\n"
-        f'{{"result": "CONCERNS_ADDRESSED", "summary": "brief description of what changed"}}'
-    )
-
-    verdict = _run_pipeline(
-        oc_root, config_path, repo_key, goal_text, settings,
-        source="reviewer_human",
-        state_key=state_key,
-        branch_suffix=f"{state_key[:12]}-h{state['human_review_loops']}",
-    )
-
-    for hc in human_comments:
-        processed_ids.add(hc.get("id"))
-
-    state["human_review_loops"]    += 1
-    state["processed_comment_ids"] = list(processed_ids)
-
-    summary = (verdict or {}).get("summary", "revision complete — please re-review")
-    reply   = f"{reviewer.bot_comment_marker}\nChanges applied: {summary}"
-    try:
-        gh_client.post_comment(owner, repo, pr_number, reply)
-    except Exception as exc:
-        logger.warning("pr_review_watcher: failed to post revision reply PR #%d — %s", pr_number, exc)
-
-    _save_state(state_path, state)
 
 
 # ── Plane task lookup ─────────────────────────────────────────────────────────
@@ -997,12 +729,16 @@ def _poll_once(oc_root: Path, config_path: Path, settings) -> None:
 
             phase = state.get("phase", "ci_fix")
 
+            # human_review is removed — any state files left over from the old
+            # schema drop back to self_review so they finish autonomously.
+            if phase == "human_review":
+                phase = "self_review"
+                state["phase"] = "self_review"
+
             if phase == "ci_fix":
                 _phase0_ci_fix(state, sp, pr_data, gh_client, owner, repo, oc_root, settings)
             elif phase == "self_review":
                 _phase1(state, sp, pr_data, gh_client, owner, repo, oc_root, config_path, settings)
-            elif phase == "human_review":
-                _phase2(state, sp, pr_data, gh_client, owner, repo, oc_root, config_path, settings)
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
