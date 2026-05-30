@@ -2205,3 +2205,9 @@ Normal round-robin: sonnet ↔ codex. When sonnet per-model limit hit but weekly
 ## 2026-05-30 — Opus only when sonnet-specific limit, not global claude limit
 
 Global claude limits (5h session, weekly) also put opus on cooldown — go straight to codex.
+
+---
+
+## 2026-05-30 — Clean up controller opus fallback implementation
+
+parse_rate_limit_reset returns (dt, text) tuple. _handle_backend_limit single read. Tighter global-limit regex.

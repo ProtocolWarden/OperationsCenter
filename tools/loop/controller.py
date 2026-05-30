@@ -506,18 +506,19 @@ _LIMIT_SIGNAL_RE = re.compile(
     r"rate limit|usage limit|weekly limit|quota|too many requests|429",
     re.IGNORECASE,
 )
-# Patterns that indicate a global Claude limit (5-hour session cap or overall
-# weekly budget) — these apply to ALL Claude models, so opus won't help either.
+# Signals a global Claude session/account limit — applies to all claude models,
+# so opus won't help. Opus is only useful for sonnet-specific model rate limits.
 _GLOBAL_CLAUDE_LIMIT_RE = re.compile(
-    r"5.hour|five.hour|session.limit|session.usage|overall.limit|"
-    r"account.limit|plan.limit|daily.limit|organization.limit",
+    r"5.hour|five.hour|session.limit|session.usage|account.limit|organization.limit",
     re.IGNORECASE,
 )
 _RATE_LIMIT_BUFFER = 120  # seconds to wait after the stated reset time
 
 
-def parse_rate_limit_reset(session_log: Path, backend: str = "claude") -> datetime | None:
-    """Return UTC datetime when a backend becomes runnable again after a limit hit."""
+def parse_rate_limit_reset(
+    session_log: Path, backend: str = "claude"
+) -> tuple[datetime | None, str | None]:
+    """Return (reset_utc, log_text) when a rate limit is detected, else (None, None)."""
     try:
         text = session_log.read_text(errors="replace")
         m = _TIMEZONE_RESET_RE.search(text)
@@ -526,70 +527,57 @@ def parse_rate_limit_reset(session_log: Path, backend: str = "claude") -> dateti
             try:
                 tz = ZoneInfo(tz_name)
             except ZoneInfoNotFoundError:
-                _log(
-                    f"Unknown timezone '{tz_name}' in {backend} limit message — cannot parse reset time."
-                )
-                return None
+                _log(f"Unknown timezone '{tz_name}' in {backend} limit message.")
+                return None, text
             now_local = datetime.now(tz)
             time_format = "%I:%M%p" if ":" in time_str else "%I%p"
-            parsed = datetime.strptime(time_str, time_format)  # noqa: DTZ007 — naive; immediately reused for h/m only
+            parsed = datetime.strptime(time_str, time_format)  # noqa: DTZ007
             reset_local = now_local.replace(
                 hour=parsed.hour, minute=parsed.minute, second=0, microsecond=0
             )
             if reset_local <= now_local:
                 reset_local += timedelta(days=1)
-            return reset_local.astimezone(timezone.utc)
+            return reset_local.astimezone(timezone.utc), text
 
         m = _ISO_RESET_RE.search(text)
         if m:
-            iso_text = m.group(1)
-            return datetime.fromisoformat(iso_text.replace("Z", "+00:00")).astimezone(
-                timezone.utc
+            return (
+                datetime.fromisoformat(m.group(1).replace("Z", "+00:00")).astimezone(timezone.utc),
+                text,
             )
 
         m = _RELATIVE_RESET_RE.search(text)
         if m:
-            hours = int(m.group("hours") or 0)
-            minutes = int(m.group("minutes") or 0)
-            seconds = int(m.group("seconds") or 0)
-            delta = timedelta(hours=hours, minutes=minutes, seconds=seconds)
+            delta = timedelta(
+                hours=int(m.group("hours") or 0),
+                minutes=int(m.group("minutes") or 0),
+                seconds=int(m.group("seconds") or 0),
+            )
             if delta.total_seconds() > 0:
-                return datetime.now(timezone.utc) + delta
+                return datetime.now(timezone.utc) + delta, text
 
         if _LIMIT_SIGNAL_RE.search(text):
-            _log(
-                f"{backend.capitalize()} limit detected but no reset time was parseable from {session_log.name}."
-            )
-        return None
+            _log(f"{backend.capitalize()} limit detected — no reset time parseable from {session_log.name}.")
+        return None, None
     except Exception as e:
         _log(f"Failed to parse {backend} rate-limit reset time: {e}")
-        return None
+        return None, None
 
 
 def _handle_backend_limit(
     backend: str, session_log: Path, cooldowns: dict[str, datetime | None]
 ) -> bool:
-    reset_dt = parse_rate_limit_reset(session_log, backend)
+    reset_dt, log_text = parse_rate_limit_reset(session_log, backend)
     if reset_dt is None:
         return False
     cooldowns[backend] = reset_dt
-
-    # If this is a global Claude limit (5-hour session cap or overall weekly budget),
-    # opus won't help either — put it on the same cooldown so we skip straight to codex.
-    if backend == "claude":
-        try:
-            text = session_log.read_text(errors="replace")
-            if _GLOBAL_CLAUDE_LIMIT_RE.search(text):
-                cooldowns["opus"] = reset_dt
-                _log(
-                    f"Global Claude limit detected (session/weekly) — opus also cooling "
-                    f"down until {reset_dt.strftime('%Y-%m-%dT%H:%M:%SZ')} UTC."
-                )
-        except Exception:
-            pass
-
+    # Global claude limits (5h session cap, account limit) apply to all claude
+    # models — put opus on the same cooldown so we skip straight to codex.
+    if backend == "claude" and log_text and _GLOBAL_CLAUDE_LIMIT_RE.search(log_text):
+        cooldowns["opus"] = reset_dt
+        _log("Global Claude limit (session/account) — opus also on cooldown, using codex.")
     _log(
-        f"{backend.capitalize()} limit detected — backend cooling down until "
+        f"{backend.capitalize()} limit — cooling down until "
         f"{reset_dt.strftime('%Y-%m-%dT%H:%M:%SZ')} UTC."
     )
     return True
