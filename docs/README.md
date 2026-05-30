@@ -28,6 +28,7 @@ This directory holds OC-specific material.
 - [operator/weekly_audits.md](operator/weekly_audits.md) — Weekly audit cadence.
 - [operator/manifest_authoring.md](operator/manifest_authoring.md) — How to author a `topology/project_manifest.yaml` for a project repo.
 - [operator/manifest_wiring.md](operator/manifest_wiring.md) — How OC picks up project + local manifests at runtime; the `platform_manifest:` settings block.
+- [operator/slow_test_reporting.md](operator/slow_test_reporting.md) — Per-test duration reporting and slow-test threshold warning: usage, configuration, and CI integration.
 - [operator/propagation/post-merge-hook.md](operator/propagation/post-merge-hook.md) — Post-merge propagation hook setup.
 - [operator/archon_workflow_registration.md](operator/archon_workflow_registration.md) — Historical: Archon workflow registration handshake (Archon removed; kept for historical reference).
 

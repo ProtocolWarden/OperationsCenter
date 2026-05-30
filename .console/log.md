@@ -1,3 +1,9 @@
+## 2026-05-30 — fix(custodian): add T8 exclusions + DC7 link for PR #203 slow-test tracker tests
+
+PR #203 CI custodian audit failing: T8 for two new test files (conftest hook tests via subprocess, no src imports) and DC7 for docs/operator/slow_test_reporting.md (orphan). Added T8 exclusions to .custodian/config.yaml; linked doc from docs/README.md.
+
+---
+
 ## 2026-05-29 — fix(custodian): add DC7 exclusions for error handling runbook suite (PR #201)
 
 7 new `docs/operator/` files from PR #201 (error handling runbooks) flagged as DC7 orphan
