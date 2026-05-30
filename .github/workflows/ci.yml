@@ -77,10 +77,28 @@ jobs:
         # Unit suite only — integration tests under tests/integration/ need
         # live external services (SwitchBoard, Plane, Archon) and run on
         # demand, not in CI. PRs exclude slow tests for quick validation.
-        run: pytest -q tests/unit -m "not slow"
+        run: pytest -q tests/unit -m "not slow" --cov=src --cov-report=html --cov-report=xml --cov-report=term-missing
       - name: Run full unit test suite including slow (main/merge)
         if: github.event_name == 'push'
         # Unit suite only — integration tests under tests/integration/ need
         # live external services (SwitchBoard, Plane, Archon) and run on
         # demand, not in CI. Pushes run full suite including slow tests.
-        run: pytest -q tests/unit
+        run: pytest -q tests/unit --cov=src --cov-report=html --cov-report=xml --cov-report=term-missing
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload coverage reports as artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports-${{ github.event_name }}
+          path: |
+            coverage_html_report/
+            coverage.xml
+          retention-days: 30

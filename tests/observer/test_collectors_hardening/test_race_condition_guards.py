@@ -500,7 +500,7 @@ class TestEdgeCases:
         original_stat = Path.stat
 
         def stat_fail_symlinks(self):
-            if "link" in str(self):
+            if self.name == "link.log":
                 raise FileNotFoundError(f"Symlink deleted: {self}")
             return original_stat(self)
 
