@@ -19,11 +19,9 @@ def test_legacy_execution_removed_from_source_tree() -> None:
     assert not (REPO_ROOT / "src" / "operations_center" / "legacy_execution").exists()
 
 
-def test_removed_modules_cannot_be_imported() -> None:
-    with pytest.raises(ModuleNotFoundError):
-        importlib.import_module("operations_center.adapters.executor.factory")
-    with pytest.raises(ModuleNotFoundError):
-        importlib.import_module("operations_center.legacy_execution")
+def test_removed_modules_cannot_be_imported(assert_module_unavailable) -> None:
+    assert_module_unavailable("operations_center.adapters.executor.factory")
+    assert_module_unavailable("operations_center.legacy_execution")
 
 
 def test_routing_client_no_longer_supports_in_process_bypass() -> None:

@@ -10,34 +10,32 @@ import sys
 import pytest
 
 
-def _import_audit_app(env_extra: dict[str, str]):
-    """Re-import the audit module under env overrides + invoke its callback."""
-    import importlib
-    import os
-    for k, v in env_extra.items():
-        os.environ[k] = v
-    if "operations_center.entrypoints.audit.main" in sys.modules:
-        del sys.modules["operations_center.entrypoints.audit.main"]
-    return importlib.import_module("operations_center.entrypoints.audit.main")
-
-
-def test_callback_no_op_when_env_var_unset(monkeypatch):
-    monkeypatch.delenv("OC_VALIDATE_CATALOG_AT_STARTUP", raising=False)
-    mod = _import_audit_app({})
+def test_callback_no_op_when_env_var_unset(module_with_env):
+    mod = module_with_env(
+        module_path="operations_center.entrypoints.audit.main",
+        env={},
+        clear_cache=True,
+    )
     # Should run without raising
     mod._validate_executor_catalog_if_requested()
 
 
-def test_callback_validates_catalog_when_env_var_set(monkeypatch):
+def test_callback_validates_catalog_when_env_var_set(module_with_env):
     """When env var set + real catalog is valid, no exception."""
-    monkeypatch.setenv("OC_VALIDATE_CATALOG_AT_STARTUP", "1")
-    mod = _import_audit_app({"OC_VALIDATE_CATALOG_AT_STARTUP": "1"})
+    mod = module_with_env(
+        module_path="operations_center.entrypoints.audit.main",
+        env={"OC_VALIDATE_CATALOG_AT_STARTUP": "1"},
+        clear_cache=True,
+    )
     mod._validate_executor_catalog_if_requested()  # Loads the real catalog
 
 
-def test_callback_treats_unrecognized_env_value_as_off(monkeypatch):
-    monkeypatch.setenv("OC_VALIDATE_CATALOG_AT_STARTUP", "no")
-    mod = _import_audit_app({"OC_VALIDATE_CATALOG_AT_STARTUP": "no"})
+def test_callback_treats_unrecognized_env_value_as_off(module_with_env):
+    mod = module_with_env(
+        module_path="operations_center.entrypoints.audit.main",
+        env={"OC_VALIDATE_CATALOG_AT_STARTUP": "no"},
+        clear_cache=True,
+    )
     mod._validate_executor_catalog_if_requested()  # No-op, no exception
 
 

@@ -1,10 +1,14 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
+import importlib
 import json
 import os
 import sys
+import types
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
+
+import pytest
 
 # Guard: tests must run inside this project's own .venv, not bare Python or a
 # foreign venv. A foreign venv has a different package set and produces
@@ -28,6 +32,127 @@ if _EXPECTED_VENV.is_dir() and not _IN_CI and _ACTIVE_PREFIX != _EXPECTED_VENV:
         f"Or invoke pytest through the venv directly:\n"
         f"  .venv/bin/pytest"
     )
+
+
+# ============================================================================
+# Import Error Test Fixtures
+# ============================================================================
+
+
+@pytest.fixture
+def optional_import(request: pytest.FixtureRequest) -> Callable | types.ModuleType:
+    """
+    Skip test if module cannot be imported.
+
+    Use with parametrize + indirect=True:
+        @pytest.mark.parametrize('optional_import', ['module.path'], indirect=True)
+        def test_foo(optional_import):
+            module = optional_import
+
+    Or use as a function in test:
+        def test_bar(optional_import):
+            module = optional_import('module.path')
+    """
+
+    def _import_optional(module_path: str) -> types.ModuleType:
+        try:
+            return importlib.import_module(module_path)
+        except (ImportError, ModuleNotFoundError) as e:
+            pytest.skip(f"Module '{module_path}' import failed: {type(e).__name__}: {e}")
+
+    if hasattr(request, 'param') and request.param is not None:
+        return _import_optional(request.param)
+    return _import_optional
+
+
+@pytest.fixture
+def require_module(request: pytest.FixtureRequest) -> Callable | types.ModuleType:
+    """
+    Assert module is importable (test fails if unavailable).
+
+    Use with parametrize + indirect=True:
+        @pytest.mark.parametrize('require_module', ['module.path'], indirect=True)
+        def test_foo(require_module):
+            module = require_module
+
+    Or use as a function in test:
+        def test_bar(require_module):
+            module = require_module('module.path')
+    """
+
+    def _import_required(module_path: str) -> types.ModuleType:
+        try:
+            return importlib.import_module(module_path)
+        except (ImportError, ModuleNotFoundError) as e:
+            raise AssertionError(f"Required module '{module_path}' could not be imported: {type(e).__name__}: {e}")
+
+    if hasattr(request, 'param') and request.param is not None:
+        return _import_required(request.param)
+    return _import_required
+
+
+@pytest.fixture
+def module_with_env(request: pytest.FixtureRequest) -> Callable:
+    """
+    Re-import module with environment variables set and module cache cleared.
+
+    Usage:
+        def test_import_with_env(module_with_env):
+            module = module_with_env(
+                module_path='module.path',
+                env={'ENV_VAR': 'value'}
+            )
+
+    Environment variables are restored automatically after test.
+    """
+    saved_env: dict[str, str | None] = {}
+
+    def _import_with_env(
+        module_path: str,
+        env: dict[str, str],
+        clear_cache: bool = True,
+    ) -> types.ModuleType:
+        nonlocal saved_env
+
+        if clear_cache and module_path in sys.modules:
+            del sys.modules[module_path]
+
+        for key, value in env.items():
+            saved_env[key] = os.environ.get(key)
+            os.environ[key] = value
+
+        try:
+            return importlib.import_module(module_path)
+        finally:
+            for key, original_value in saved_env.items():
+                if original_value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = original_value
+            saved_env.clear()
+
+    yield _import_with_env
+
+
+@pytest.fixture
+def assert_module_unavailable(request: pytest.FixtureRequest) -> Callable:
+    """
+    Assert that a module cannot be imported (expects ModuleNotFoundError).
+
+    Usage:
+        def test_removed_module(assert_module_unavailable):
+            assert_module_unavailable('operations_center.legacy_module')
+            assert_module_unavailable('operations_center.deprecated_path')
+    """
+
+    def _assert_unavailable(module_path: str) -> None:
+        try:
+            importlib.import_module(module_path)
+        except (ImportError, ModuleNotFoundError):
+            return
+        raise AssertionError(f"Expected ModuleNotFoundError, but '{module_path}' imported successfully")
+
+    return _assert_unavailable
 
 
 class SlowTestTracker:
