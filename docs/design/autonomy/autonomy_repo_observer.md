@@ -108,3 +108,7 @@ The JSON snapshot is the primary machine-consumable contract for later passes.
 - bounded signal collection
 - all network-dependent collectors (CIHistoryCollector) fall back to `unavailable` on failure
 - partial collector failures are recorded in `collector_errors` without aborting the snapshot
+
+## Related
+
+- [Dependency report performance tests](../dependency-report-performance-tests.md) — CI regression bounds for `DependencyDriftCollector`
