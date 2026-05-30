@@ -88,7 +88,7 @@ def _mock_settings(tmp_path: Path):
 
 class TestRunCiLoop:
     def _call(self, tmp_path, ci_result, settings=None):
-        from operations_center.entrypoints.board_worker.main import _run_ci_loop
+        from operations_center.entrypoints.board_worker.outcomes import run_ci_loop as _run_ci_loop
 
         client = MagicMock()
         issue = {"id": "task-001", "labels": [{"name": "repo: svc"}]}
@@ -136,7 +136,7 @@ class TestRunCiLoop:
             last_score=None,
         )
         with patch(
-            "operations_center.entrypoints.board_worker.main._handle_success"
+            "operations_center.entrypoints.board_worker.outcomes.handle_success"
         ) as mock_success:
             result, client = self._call(tmp_path, ci_result)
 
@@ -153,7 +153,7 @@ class TestRunCiLoop:
             last_score=None,
         )
         with patch(
-            "operations_center.entrypoints.board_worker.main._handle_failure"
+            "operations_center.entrypoints.board_worker.outcomes.handle_failure"
         ) as mock_failure:
             result, client = self._call(tmp_path, ci_result)
 
@@ -169,7 +169,7 @@ class TestRunCiLoop:
             last_decision=None,
             last_score=None,
         )
-        with patch("operations_center.entrypoints.board_worker.main._handle_failure"):
+        with patch("operations_center.entrypoints.board_worker.outcomes.handle_failure"):
             result, _ = self._call(tmp_path, ci_result)
         assert result is False
 
@@ -183,7 +183,7 @@ class TestRunCiLoop:
             last_score=None,
         )
         with patch(
-            "operations_center.entrypoints.board_worker.main._fail_task"
+            "operations_center.entrypoints.board_worker.outcomes.fail_task"
         ) as mock_fail:
             result, _ = self._call(tmp_path, ci_result)
 
@@ -201,9 +201,9 @@ class TestRunCiLoop:
             last_decision=None,
             last_score=None,
         )
-        with patch("operations_center.entrypoints.board_worker.main._handle_success"):
+        with patch("operations_center.entrypoints.board_worker.outcomes.handle_success"):
             with patch(
-                "operations_center.entrypoints.board_worker.main._add_label"
+                "operations_center.entrypoints.board_worker.outcomes.add_label"
             ) as mock_add_label:
                 result, _ = self._call(tmp_path, ci_result)
 
@@ -212,7 +212,7 @@ class TestRunCiLoop:
         assert any("ci-attempts" in lbl for lbl in labels_added)
 
     def test_invalid_ci_spec_calls_fail_task(self, tmp_path):
-        from operations_center.entrypoints.board_worker.main import _run_ci_loop
+        from operations_center.entrypoints.board_worker.outcomes import run_ci_loop as _run_ci_loop
 
         client = MagicMock()
         issue = {"id": "task-bad", "labels": []}
@@ -223,7 +223,7 @@ class TestRunCiLoop:
         config_file.write_text("{}", encoding="utf-8")
 
         with patch(
-            "operations_center.entrypoints.board_worker.main._fail_task"
+            "operations_center.entrypoints.board_worker.outcomes.fail_task"
         ) as mock_fail:
             result = _run_ci_loop(
                 ci_spec_raw={"not": "a valid spec"},

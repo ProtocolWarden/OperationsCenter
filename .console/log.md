@@ -2180,3 +2180,10 @@ Arch audit work order: Issue 2 (state locking) is P1 autonomous, Issue 3 (subpro
 ## 2026-05-30 — ADR 0010 custodian clean
 
 Fixed K1/OC8/DC7 findings on ADR 0010 (linked in README, renamed proposed field, added common_word).
+
+---
+
+## 2026-05-30 — ADR 0010 P3: board_worker refactor complete
+
+2186-line monolith split into 8 cohesive modules. main.py: 145 lines.
+All 3866 tests pass. No behaviour changes — pure extraction with renames.

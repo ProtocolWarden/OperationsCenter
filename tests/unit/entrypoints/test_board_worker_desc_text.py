@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 
-from operations_center.entrypoints.board_worker.main import _desc_text, _extract_goal
+from operations_center.entrypoints.board_worker._text import desc_text as _desc_text, extract_goal as _extract_goal
 
 
 # ── _desc_text ────────────────────────────────────────────────────────────────

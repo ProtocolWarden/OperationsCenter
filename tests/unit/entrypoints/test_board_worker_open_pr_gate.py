@@ -48,7 +48,7 @@ def _make_settings(clone_url: str = "git@github.com:owner/my-repo.git") -> Magic
 
 
 def _call_claim_next(open_prs: list[dict]) -> dict | None:
-    from operations_center.entrypoints.board_worker.main import _claim_next
+    from operations_center.entrypoints.board_worker.claim import claim_next as _claim_next
 
     client = MagicMock()
     client.list_issues.return_value = [_make_issue()]
