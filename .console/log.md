@@ -2135,3 +2135,14 @@ get_failed_checks returns 'Lint (ruff): failure' format; strip colon suffix befo
 ## 2026-05-30 — Add 30min timeout to exec pipeline subprocess
 
 Prevents hung executor from blocking the review watcher indefinitely.
+
+---
+
+## 2026-05-30 — Architecture audit fixes
+
+From audit across all 19 managed repos:
+- Pin custodian SHA in TeamExecutor, DAGExecutor, CritiqueExecutor (was @main)
+- Upgrade TeamExecutor stop.sh to Gen 2 (was Gen 1)
+- Add CI workflows to ContextLifecycle and SyncMechanism (had none)
+- Add pytest+ruff validation_commands to executor repos (had empty [])
+- Remove operations-center-testing-branch from all allowed_base_branches in config
