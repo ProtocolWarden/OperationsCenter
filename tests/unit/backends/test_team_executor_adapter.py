@@ -195,3 +195,33 @@ def test_adapter_execute_and_capture_reports_selected_worker_backend(monkeypatch
     assert capture.observed_runtime["preferred_worker_backend"] == "claude_code"
     assert capture.observed_runtime["selected_worker_backend"] == "claude_code"
     assert capture.observed_runtime["fallback_used"] is False
+
+
+def test_adapter_execute_forwards_goal_text_to_runner(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeRunner:
+        def __init__(self, team_name: str, working_dir: str, worker_backend: str) -> None:
+            pass
+
+        def run(self, goal_text: str, invocation_id: str | None = None):
+            captured["goal_text"] = goal_text
+            captured["invocation_id"] = invocation_id
+            return SimpleNamespace(status="succeeded", error_summary=None)
+
+    fake_module = SimpleNamespace(TeamExecutorRunner=FakeRunner)
+    monkeypatch.setitem(sys.modules, "team_executor.executor", fake_module)
+
+    adapter = TeamExecutorBackendAdapter(
+        TeamExecutorSettings(team_name="standard"),
+        usage_store=_usage_store(remaining=10),
+    )
+
+    request = _request().model_copy(
+        update={"goal_text": "Fix the authentication bug"}
+    )
+    result = adapter.execute(request)
+
+    assert result.success is True
+    assert captured["goal_text"] == "Fix the authentication bug"
+    assert captured["invocation_id"] == "run-1"
