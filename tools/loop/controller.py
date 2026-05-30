@@ -506,6 +506,13 @@ _LIMIT_SIGNAL_RE = re.compile(
     r"rate limit|usage limit|weekly limit|quota|too many requests|429",
     re.IGNORECASE,
 )
+# Patterns that indicate a global Claude limit (5-hour session cap or overall
+# weekly budget) — these apply to ALL Claude models, so opus won't help either.
+_GLOBAL_CLAUDE_LIMIT_RE = re.compile(
+    r"5.hour|five.hour|session.limit|session.usage|overall.limit|"
+    r"account.limit|plan.limit|daily.limit|organization.limit",
+    re.IGNORECASE,
+)
 _RATE_LIMIT_BUFFER = 120  # seconds to wait after the stated reset time
 
 
@@ -566,6 +573,21 @@ def _handle_backend_limit(
     if reset_dt is None:
         return False
     cooldowns[backend] = reset_dt
+
+    # If this is a global Claude limit (5-hour session cap or overall weekly budget),
+    # opus won't help either — put it on the same cooldown so we skip straight to codex.
+    if backend == "claude":
+        try:
+            text = session_log.read_text(errors="replace")
+            if _GLOBAL_CLAUDE_LIMIT_RE.search(text):
+                cooldowns["opus"] = reset_dt
+                _log(
+                    f"Global Claude limit detected (session/weekly) — opus also cooling "
+                    f"down until {reset_dt.strftime('%Y-%m-%dT%H:%M:%SZ')} UTC."
+                )
+        except Exception:
+            pass
+
     _log(
         f"{backend.capitalize()} limit detected — backend cooling down until "
         f"{reset_dt.strftime('%Y-%m-%dT%H:%M:%SZ')} UTC."

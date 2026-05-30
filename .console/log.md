@@ -2199,3 +2199,9 @@ C29 exemption for outcomes.py, old private names added to common_words.
 ## 2026-05-30 — Add opus as sonnet fallback in controller
 
 Normal round-robin: sonnet ↔ codex. When sonnet per-model limit hit but weekly budget remains, fall back to opus (same claude CLI). Priority: [claude, opus, codex].
+
+---
+
+## 2026-05-30 — Opus only when sonnet-specific limit, not global claude limit
+
+Global claude limits (5h session, weekly) also put opus on cooldown — go straight to codex.
