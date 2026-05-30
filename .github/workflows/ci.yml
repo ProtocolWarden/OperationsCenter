@@ -102,3 +102,19 @@ jobs:
             coverage_html_report/
             coverage.xml
           retention-days: 30
+
+  performance:
+    name: Performance regression tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -e .[dev]
+      - name: Run performance regression tests
+        # Dedicated job surfaces timing-bound failures as a labelled CI check.
+        # All bounds are <50ms per scenario; actual measurements are ~0.1–0.2ms.
+        # A failure here means collection time regressed by >250x vs baseline.
+        run: pytest -q tests/unit -m "performance" --no-header -rN

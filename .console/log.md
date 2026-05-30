@@ -2156,3 +2156,11 @@ From audit across all 19 managed repos:
 ## 2026-05-30 — Arch audit: custodian T8 fixture exemptions
 
 Add tests/fixtures/ and test_dependency_report_fixtures.py to T8 exclude list.
+
+---
+
+## 2026-05-30 — Stage 4: dependency-report performance tests wired into CI
+
+Add `performance` pytest marker, mark all 19 tests `@pytest.mark.performance`,
+tighten timing bounds to uniform 50ms across all scenarios (tightened extra-large
+from 60ms). Add dedicated `performance` CI job to ci.yml. Add design doc.

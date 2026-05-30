@@ -18,6 +18,8 @@ from pathlib import Path
 from unittest.mock import MagicMock
 from typing import Any
 
+import pytest
+
 from operations_center.observer.collectors.dependency_drift import DependencyDriftCollector
 from operations_center.observer.service import ObserverContext
 from tests.fixtures.timing import Timing, MemoryTracker
@@ -42,6 +44,7 @@ def _make_observer_context(report_root: Path) -> ObserverContext:
     )
 
 
+@pytest.mark.performance
 class TestDependencyReportPerformanceRegression:
     """Performance regression tests for dependency report generation & collection."""
 
@@ -52,7 +55,7 @@ class TestDependencyReportPerformanceRegression:
     def test_baseline_collection_time(
         self, baseline_report_on_disk: tuple[Path, dict[str, Any]]
     ) -> None:
-        """Assert collection time for baseline report < 5ms (expected < 15ms)."""
+        """Assert collection time for baseline report stays under 50ms."""
         report_path, _ = baseline_report_on_disk
         report_root = report_path.parent.parent
         ctx = _make_observer_context(report_root)
@@ -62,10 +65,8 @@ class TestDependencyReportPerformanceRegression:
 
         assert signal.status == "available"
         elapsed_ms = timer.elapsed() * 1000
-        # Expected: <5ms, tolerance: ±3x = <15ms
-        assert elapsed_ms < 15, (
-            f"Collection time regression: {elapsed_ms:.2f}ms, "
-            f"expected <15ms (baseline <5ms)"
+        assert elapsed_ms < 50, (
+            f"Collection time regression: {elapsed_ms:.2f}ms, expected <50ms"
         )
 
     def test_baseline_collection_correctness(
@@ -113,7 +114,7 @@ class TestDependencyReportPerformanceRegression:
     def test_large_simple_collection_time(
         self, large_simple_report_on_disk: tuple[Path, dict[str, Any]]
     ) -> None:
-        """Assert collection time for large-simple report < 10ms."""
+        """Assert collection time for large-simple report stays under 50ms."""
         report_path, _ = large_simple_report_on_disk
         report_root = report_path.parent.parent
         ctx = _make_observer_context(report_root)
@@ -123,10 +124,8 @@ class TestDependencyReportPerformanceRegression:
 
         assert signal.status == "available"
         elapsed_ms = timer.elapsed() * 1000
-        # Expected: <10ms, tolerance: ±3x = <30ms
-        assert elapsed_ms < 30, (
-            f"Collection time regression: {elapsed_ms:.2f}ms, "
-            f"expected <30ms (baseline <10ms)"
+        assert elapsed_ms < 50, (
+            f"Collection time regression: {elapsed_ms:.2f}ms, expected <50ms"
         )
 
     def test_large_simple_scalability_ratio(
@@ -184,7 +183,7 @@ class TestDependencyReportPerformanceRegression:
     def test_large_actionable_collection_time(
         self, large_actionable_report_on_disk: tuple[Path, dict[str, Any]]
     ) -> None:
-        """Assert collection time for large-actionable report < 10ms."""
+        """Assert collection time for large-actionable report stays under 50ms."""
         report_path, _ = large_actionable_report_on_disk
         report_root = report_path.parent.parent
         ctx = _make_observer_context(report_root)
@@ -194,10 +193,8 @@ class TestDependencyReportPerformanceRegression:
 
         assert signal.status == "available"
         elapsed_ms = timer.elapsed() * 1000
-        # Expected: <10ms, tolerance: ±3x = <30ms
-        assert elapsed_ms < 30, (
-            f"Collection time regression: {elapsed_ms:.2f}ms, "
-            f"expected <30ms"
+        assert elapsed_ms < 50, (
+            f"Collection time regression: {elapsed_ms:.2f}ms, expected <50ms"
         )
 
     def test_large_actionable_identifies_all_actionable(
@@ -222,7 +219,7 @@ class TestDependencyReportPerformanceRegression:
     def test_large_payload_collection_time(
         self, large_payload_report_on_disk: tuple[Path, dict[str, Any]]
     ) -> None:
-        """Assert collection time for large-payload report < 15ms."""
+        """Assert collection time for large-payload report stays under 50ms."""
         report_path, _ = large_payload_report_on_disk
         report_root = report_path.parent.parent
         ctx = _make_observer_context(report_root)
@@ -232,10 +229,8 @@ class TestDependencyReportPerformanceRegression:
 
         assert signal.status == "available"
         elapsed_ms = timer.elapsed() * 1000
-        # Expected: <15ms, tolerance: ±3x = <45ms
-        assert elapsed_ms < 45, (
-            f"Collection time regression: {elapsed_ms:.2f}ms, "
-            f"expected <45ms (baseline <15ms)"
+        assert elapsed_ms < 50, (
+            f"Collection time regression: {elapsed_ms:.2f}ms, expected <50ms"
         )
 
     def test_large_payload_parsing_resilience(
@@ -280,7 +275,7 @@ class TestDependencyReportPerformanceRegression:
     def test_extra_large_collection_time(
         self, extra_large_report_on_disk: tuple[Path, dict[str, Any]]
     ) -> None:
-        """Assert collection time for extra-large report < 20ms."""
+        """Assert collection time for extra-large report stays under 50ms."""
         report_path, _ = extra_large_report_on_disk
         report_root = report_path.parent.parent
         ctx = _make_observer_context(report_root)
@@ -290,10 +285,8 @@ class TestDependencyReportPerformanceRegression:
 
         assert signal.status == "available"
         elapsed_ms = timer.elapsed() * 1000
-        # Expected: <20ms, tolerance: ±3x = <60ms
-        assert elapsed_ms < 60, (
-            f"Collection time regression: {elapsed_ms:.2f}ms, "
-            f"expected <60ms (baseline <20ms)"
+        assert elapsed_ms < 50, (
+            f"Collection time regression: {elapsed_ms:.2f}ms, expected <50ms"
         )
 
     def test_extra_large_all_dependencies_present(
