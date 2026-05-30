@@ -542,6 +542,37 @@ def _phase1(
     state_key   = state["state_key"]
     reviewer    = settings.reviewer
 
+    # ── auto-merge-on-CI-green (fast path) ───────────────────────────────────
+    # For autonomy PRs on repos that opt in, skip the self-review pipeline
+    # entirely and merge the moment CI is green.  Self-review is expensive and
+    # fragile; CI + ci_fix phase is the primary quality gate.
+    repo_cfg = settings.repos.get(repo_key)
+    if repo_cfg and getattr(repo_cfg, "auto_merge_on_ci_green", False):
+        head_ref = ((pr_data.get("head") or {}).get("ref") or "").lower()
+        is_autonomy = head_ref.startswith(("goal/", "test/", "improve/", "spec-author/"))
+        if is_autonomy:
+            try:
+                ignored = list(getattr(repo_cfg, "ci_ignored_checks", []) or [])
+                failed  = gh_client.get_failed_checks(
+                    owner, repo, pr_number, pr_data=pr_data, ignored_checks=ignored,
+                )
+                if not failed:
+                    logger.info(
+                        "pr_review_watcher: PR #%d auto-merging — CI green, "
+                        "auto_merge_on_ci_green=True", pr_number,
+                    )
+                    _merge_and_done(
+                        state, state_path, pr_data, gh_client, owner, repo, settings,
+                        reason="auto_merge_on_ci_green",
+                    )
+                    return
+                logger.debug(
+                    "pr_review_watcher: PR #%d CI not green (%d failed) — proceeding to self-review",
+                    pr_number, len(failed),
+                )
+            except Exception as exc:
+                logger.debug("pr_review_watcher: CI check failed PR #%d — %s", pr_number, exc)
+
     diff = gh_client.get_pr_diff(owner, repo, pr_number)
     if not diff:
         logger.warning("pr_review_watcher: empty diff PR #%d, skipping", pr_number)

@@ -2047,3 +2047,11 @@ get_failed_checks returns 'Lint (ruff): failure' format; strip colon suffix befo
 2. OPEN_PR_GATE: skip PRs with mergeable=UNKNOWN (CI in-flight) to reduce goal starvation
 3. pyproject.toml: pin custodian to SHA instead of @main to stop flaky CI audit failures
 4. controller: detect git HEAD changes each iteration, pull + SIGTERM watchers to pick up new code
+
+---
+
+## 2026-05-30 — Three more systemic fixes
+
+1. Restore auto_merge_on_ci_green fast-path in _phase1 (was in deleted _phase2)
+2. Add custodian-doctor to OC validation_commands — catch CI audit failures pre-PR
+3. Review watcher relaunched via operations-center.sh for auto-restart on crash/SIGTERM
