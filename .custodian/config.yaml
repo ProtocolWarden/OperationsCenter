@@ -309,6 +309,12 @@ audit:
       # Slow-test tracker tests exercise conftest.py hooks via subprocess — no src imports.
       - tests/test_slow_test_hooks_integration.py
       - tests/test_slow_test_tracker.py
+      # Fixture helpers and generators — standalone test infrastructure,
+      # not consumers of src packages.
+      - tests/fixtures/dependency_reports/generators.py
+      - tests/fixtures/timing.py
+      # Fixture-coverage test probes fixture module structure, not src.
+      - tests/unit/observer/test_dependency_report_fixtures.py
     C1:
       - src/operations_center/observer/collectors/todo_signal.py
       - src/operations_center/observer/artifact_writer.py

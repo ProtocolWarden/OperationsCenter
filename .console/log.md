@@ -2146,3 +2146,9 @@ From audit across all 19 managed repos:
 - Add CI workflows to ContextLifecycle and SyncMechanism (had none)
 - Add pytest+ruff validation_commands to executor repos (had empty [])
 - Remove operations-center-testing-branch from all allowed_base_branches in config
+
+---
+
+## 2026-05-30 — Arch audit: custodian T8 fixture exemptions
+
+Add tests/fixtures/ and test_dependency_report_fixtures.py to T8 exclude list.
