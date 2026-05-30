@@ -27,6 +27,91 @@ session.
 
 ---
 
+## Error Handling Guide
+
+The watchdog loop encounters 15 distinct error scenarios across 4 system layers (Execution Boundary,
+Watchdog Controller, Recovery Policies, Policy & Budget Enforcement). This section provides a
+structured navigation guide to error handling resources and integrates error diagnosis/recovery
+into the main loop workflow.
+
+### Error Handling Document Navigation
+
+**For Quick Diagnosis & Recovery (< 5 minutes):**
+- [`error_handling_quick_reference.md`](error_handling_quick_reference.md) — On-call cheat sheet with
+  TL;DR table (8 common symptoms → diagnosis command → fix) and quick health checks. **Start here
+  when the platform is stuck.**
+
+**For Step-by-Step Recovery Procedures:**
+- [`error_handling_recipes.md`](error_handling_recipes.md) — 8 decision trees covering critical/medium
+  error scenarios: watchdog stop, backend rate limits, workspace failures, policy rejections, queue
+  deadlock, budget exhaustion, diff oversizing, and serialization. Each recipe includes symptom,
+  diagnosis steps, recovery procedure, and escalation criteria.
+
+**For Error Message Diagnosis:**
+- [`error_message_diagnostics.md`](error_message_diagnostics.md) — Maps 23+ specific error messages
+  to root causes and remedies, organized by category (Backend, Workspace/Git, Policy, Recovery,
+  Execution Size, Serialization, Watchdog, State/Stagnation, ContextLifecycle). Use when a specific
+  error message appears in logs.
+
+**For All Identified Error Scenarios:**
+- [`error_scenarios.md`](error_scenarios.md) — Complete catalog of all 15 operational error scenarios
+  by severity level (5 Critical, 5 Medium, 5 Low). Includes code location, current handling,
+  and detection guidance for each scenario.
+
+**For Backend-Specific Error Codes:**
+- [`backend_error_catalog.md`](backend_error_catalog.md) — Reference catalog of 30+ error codes across
+  5 backends (Claude, Codex, team_executor, dag_executor, demo_stub), mapped to root causes, monitoring
+  metrics, health checks, and alert thresholds.
+
+**For Executor Failure Contracts:**
+- [`executor_failure_contracts.md`](executor_failure_contracts.md) — Failure contracts for 6 executor
+  types (Goal, Test, Improve, Propose, Review, Spec), documenting idempotency guarantees, failure
+  classes, and recovery procedures. **Essential for understanding whether a failed execution can be safely retried.**
+
+**For Detailed Troubleshooting & Recovery:**
+- [`error_handling_recovery.md`](error_handling_recovery.md) — Comprehensive troubleshooting guide with:
+  - Quick diagnosis tree for initial classification
+  - Step-by-step procedures for critical/medium/low-priority errors
+  - Diagnostic commands reference (health checks, monitoring, investigation)
+  - Escalation path when procedures don't resolve
+
+### Error Handling Workflow Integration
+
+**In STEP 1 (INVESTIGATE) — Executor Failure Investigation:**
+Use the "Executor Failure Investigation" section of `error_handling_quick_reference.md` when triage
+output shows executor_exit_code/executor_signal. Run diagnostics BEFORE creating a Plane task.
+Root cause indicators (OOM, signal kills, crashes) determine whether re-queueing is safe.
+
+**In STEP 3 (BLOCKED/STALLED WORK INVESTIGATION) — Error Classification:**
+When classifying blocked items (temporarily-blocked, infra-blocked, validation-blocked, etc.), consult:
+- `error_handling_recovery.md` — Quick diagnosis tree for initial classification
+- `error_message_diagnostics.md` — If specific error messages appeared
+- `backend_error_catalog.md` — If error involves a specific backend
+
+**In STEP 5 (EXECUTION GATE) — Idempotency & Retry Safety:**
+Before deciding whether a task can be safely re-queued, consult `executor_failure_contracts.md` to
+understand idempotency guarantees. Example: "Goal PRs are non-retryable after creation" — if a
+Goal executor failed after creating a PR, the task cannot be safely retried.
+
+**Recovery Ownership:**
+- **Loop-owned recovery** — Errors classified as `temporarily-blocked`, `validation-blocked`, or
+  `infra-blocked` with known safe retry paths can be fixed by the watchdog loop (STEP 6).
+- **Operator-escalated** — Errors classified as `structurally-blocked`, `operator-blocked`, or
+  `dead-remediation` create Plane escalation tasks. Do not retry equivalent failing paths.
+
+### Common Error Patterns
+
+| Pattern | Diagnosis | Recovery | See Also |
+|---------|-----------|----------|----------|
+| Watchdog loop stopped (no activity 1h+) | `ps aux \| grep controller` | Restart watchdog; check .console/log.md | Recipe 1, Quick Ref |
+| Both backends rate-limited | `grep -i "rate.*limit\|429" .console/log.md` | Wait for reset; monitor clock skew | Recipe 2, Backend Catalog |
+| Workspace prep failed (git timeout, clone error) | `operations-center-run-show <id> --json \| jq '.workspace_error'` | Increase timeout; check network; try force-push | Recipe 3, Scenarios |
+| Policy rejection (budget/concurrency) | `operations-center-run-show <id> --json \| jq '.policy_status'` | Reduce batch size; wait for budget reset | Recipe 4, Policy Docs |
+| Queue deadlocked (Ready=0, Blocked>0, duplicates in Blocked) | `grep -c "duplicate.*skip" .console/log.md` | Resolve dedup source; promote from Blocked → Backlog | Recipe 5, Recovery Policy |
+| Executor SIGKILL (memory/resource exhaustion) | `dmesg \| grep "oom\|killed"` + `journalctl -k --since "2h ago"` | Reduce task size; check system resources; investigate executor memory | Executor Contracts, Quick Ref |
+
+---
+
 ## Quick Start
 
 > Tell a fresh Claude Code session: **"Read `LOOP_START.md` and start the training loop."**
@@ -64,7 +149,7 @@ scripts/operations-center.sh watch-all-status   # expect: 8 running
 scripts/reset-training-branches.sh
 ```
 
-**Step 3 — Paste the `/loop` block** (see [Starting the Loop](#starting-the-loop) below, or copy from `LOOP_START.md`).
+**Step 3 — Paste the `/loop` block** (see [Starting the Loop](#starting-the-loop) below).
 
 ---
 
