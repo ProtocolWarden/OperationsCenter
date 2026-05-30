@@ -1,5 +1,8 @@
 # Operations Center
 
+[![codecov](https://codecov.io/gh/ProtocolWarden/OperationsCenter/branch/main/graph/badge.svg?token=CODECOV_TOKEN)](https://codecov.io/gh/ProtocolWarden/OperationsCenter)
+[![CI](https://github.com/ProtocolWarden/OperationsCenter/workflows/CI/badge.svg)](https://github.com/ProtocolWarden/OperationsCenter/actions/workflows/ci.yml)
+
 Local planning, execution, policy, and evidence service for the coding platform. CxRP owns the wire contracts. OperationsCenter turns work context into internal orchestration proposals, maps them through SwitchBoard via CxRP, executes routed work through bounded adapters, and retains evidence around what happened later.
 
 ## What this repo is

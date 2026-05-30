@@ -532,29 +532,34 @@ class LintItemValidator(ArtifactValidator):
                 f"got {type(loc).__name__}"
             )
 
-        if "start" not in loc:
+        if "row" not in loc:
             return False, (
-                f"[{item_idx}].location: missing required field 'start'"
+                f"[{item_idx}].location: missing required field 'row'"
             )
 
-        start = loc["start"]
-        if not isinstance(start, dict):
+        row = loc["row"]
+        if not isinstance(row, int):
             return False, (
-                f"[{item_idx}].location.start: expected dict, "
-                f"got {type(start).__name__}"
+                f"[{item_idx}].location.row: expected int, "
+                f"got {type(row).__name__}"
+            )
+        if not (1 <= row <= 1000000):
+            return False, (
+                f"[{item_idx}].location.row {row} "
+                f"out of range [1, 1000000]"
             )
 
-        if "line" in start:
-            line = start["line"]
-            if not isinstance(line, int):
+        if "column" in loc:
+            column = loc["column"]
+            if not isinstance(column, int):
                 return False, (
-                    f"[{item_idx}].location.start.line: expected int, "
-                    f"got {type(line).__name__}"
+                    f"[{item_idx}].location.column: expected int, "
+                    f"got {type(column).__name__}"
                 )
-            if not (1 <= line <= 1000000):
+            if not (0 <= column <= 1000000):
                 return False, (
-                    f"[{item_idx}].location.start.line {line} "
-                    f"out of range [1, 1000000]"
+                    f"[{item_idx}].location.column {column} "
+                    f"out of range [0, 1000000]"
                 )
 
         return True, ""

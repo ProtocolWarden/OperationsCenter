@@ -35,6 +35,8 @@ tools/loop/loop_schedule.json
 .operations_center/
 .codex
 .coverage
+coverage.xml
+coverage_html_report/
 uv.lock
 scripts/audit_*.py
 scripts/debug_*.py
