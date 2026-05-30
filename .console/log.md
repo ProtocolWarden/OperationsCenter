@@ -1,3 +1,7 @@
+## 2026-05-30 — Stage 4: performance tests wired into CI (dedicated `performance` job in ci.yml, 50ms bounds, docs/design/dependency-report-performance-tests.md)
+
+---
+
 ## 2026-05-30 — Stage 3: fixed CI regressions from PR #211 merge (duplicate conftest fixtures, unused vars/imports, linearity test noise guard)
 
 ---
