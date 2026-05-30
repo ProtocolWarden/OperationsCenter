@@ -155,6 +155,86 @@ def assert_module_unavailable(request: pytest.FixtureRequest) -> Callable:
     return _assert_unavailable
 
 
+# ============================================================================
+# Dependency Report Fixtures
+# ============================================================================
+
+
+@pytest.fixture
+def report_fixture_dir(tmp_path: Path) -> Path:
+    """Temporary directory for synthetic dependency report fixtures."""
+    report_dir = tmp_path / "dependency_reports"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    return report_dir
+
+
+def _write_report_to_disk(report_root: Path, data: "DependencyReportData") -> Path:  # noqa: F821
+    """Write DependencyReportData to disk as JSON in OC's expected structure."""
+    from uuid import uuid4
+
+    run_dir = report_root / f"run_{uuid4().hex[:8]}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    report_file = run_dir / "dependency_report.json"
+    report_file.write_text(
+        json.dumps(data.to_dict(), indent=2),
+        encoding="utf-8",
+    )
+    return report_file
+
+
+@pytest.fixture
+def baseline_report_on_disk(report_fixture_dir: Path) -> tuple[Path, "DependencyReportData"]:  # noqa: F821
+    """Generate and write baseline report (7 deps, 0 actionable) to disk."""
+    from tests.fixtures.dependency_reports.generators import DependencyReportGenerator
+
+    data = DependencyReportGenerator.baseline()
+    report_path = _write_report_to_disk(report_fixture_dir, data)
+    return report_path, data
+
+
+@pytest.fixture
+def large_simple_report_on_disk(report_fixture_dir: Path) -> tuple[Path, "DependencyReportData"]:  # noqa: F821
+    """Generate and write large-simple report (20 deps, 10% actionable) to disk."""
+    from tests.fixtures.dependency_reports.generators import DependencyReportGenerator
+
+    data = DependencyReportGenerator.large_simple()
+    report_path = _write_report_to_disk(report_fixture_dir, data)
+    return report_path, data
+
+
+@pytest.fixture
+def large_actionable_report_on_disk(
+    report_fixture_dir: Path,
+) -> tuple[Path, "DependencyReportData"]:  # noqa: F821
+    """Generate and write large-actionable report (10 deps, 80% actionable) to disk."""
+    from tests.fixtures.dependency_reports.generators import DependencyReportGenerator
+
+    data = DependencyReportGenerator.large_actionable()
+    report_path = _write_report_to_disk(report_fixture_dir, data)
+    return report_path, data
+
+
+@pytest.fixture
+def large_payload_report_on_disk(report_fixture_dir: Path) -> tuple[Path, "DependencyReportData"]:  # noqa: F821
+    """Generate and write large-payload report (8 deps, ~80KB verbose notes) to disk."""
+    from tests.fixtures.dependency_reports.generators import DependencyReportGenerator
+
+    data = DependencyReportGenerator.large_payload()
+    report_path = _write_report_to_disk(report_fixture_dir, data)
+    return report_path, data
+
+
+@pytest.fixture
+def extra_large_report_on_disk(report_fixture_dir: Path) -> tuple[Path, "DependencyReportData"]:  # noqa: F821
+    """Generate and write extra-large report (50 deps, 50% actionable, stress test) to disk."""
+    from tests.fixtures.dependency_reports.generators import DependencyReportGenerator
+
+    data = DependencyReportGenerator.extra_large()
+    report_path = _write_report_to_disk(report_fixture_dir, data)
+    return report_path, data
+
+
 class SlowTestTracker:
     """Track test durations and identify slow tests exceeding a threshold."""
 
@@ -334,3 +414,95 @@ def pytest_sessionfinish(session: Any, exitstatus: int) -> None:
     # Write JSON report if requested
     if _slow_test_tracker.write_json_report():
         print(f"Slow test report written to: {_slow_test_tracker.json_report_path}\n")
+
+
+# ============================================================================
+# Dependency Report Fixtures (Performance Regression Testing)
+# ============================================================================
+
+
+@pytest.fixture
+def report_fixture_dir(tmp_path: Path) -> Path:
+    """Temporary directory for synthetic dependency report files."""
+    report_dir = tmp_path / "dependency_reports"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    return report_dir
+
+
+def _write_report_to_disk(
+    report_root: Path, data: dict[str, Any]
+) -> Path:
+    """Write dependency report data to disk as JSON."""
+    from uuid import uuid4
+
+    run_dir = report_root / f"run_{uuid4().hex[:8]}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    report_file = run_dir / "dependency_report.json"
+    report_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    return report_file
+
+
+@pytest.fixture
+def baseline_report_on_disk(
+    report_fixture_dir: Path,
+) -> tuple[Path, dict[str, Any]]:
+    """Generate and write baseline report (7 deps, 0 actionable) to disk."""
+    from tests.fixtures.dependency_reports.generators import DependencyReportGenerator
+
+    gen = DependencyReportGenerator.baseline()
+    data = gen.to_dict()
+    report_path = _write_report_to_disk(report_fixture_dir, data)
+    return report_path, data
+
+
+@pytest.fixture
+def large_simple_report_on_disk(
+    report_fixture_dir: Path,
+) -> tuple[Path, dict[str, Any]]:
+    """Generate and write large-simple report (20 deps, 10% actionable) to disk."""
+    from tests.fixtures.dependency_reports.generators import DependencyReportGenerator
+
+    gen = DependencyReportGenerator.large_simple()
+    data = gen.to_dict()
+    report_path = _write_report_to_disk(report_fixture_dir, data)
+    return report_path, data
+
+
+@pytest.fixture
+def large_actionable_report_on_disk(
+    report_fixture_dir: Path,
+) -> tuple[Path, dict[str, Any]]:
+    """Generate and write large-actionable report (10 deps, 80% actionable) to disk."""
+    from tests.fixtures.dependency_reports.generators import DependencyReportGenerator
+
+    gen = DependencyReportGenerator.large_actionable()
+    data = gen.to_dict()
+    report_path = _write_report_to_disk(report_fixture_dir, data)
+    return report_path, data
+
+
+@pytest.fixture
+def large_payload_report_on_disk(
+    report_fixture_dir: Path,
+) -> tuple[Path, dict[str, Any]]:
+    """Generate and write large-payload report (8 deps with verbose notes) to disk."""
+    from tests.fixtures.dependency_reports.generators import DependencyReportGenerator
+
+    gen = DependencyReportGenerator.large_payload()
+    data = gen.to_dict()
+    report_path = _write_report_to_disk(report_fixture_dir, data)
+    return report_path, data
+
+
+@pytest.fixture
+def extra_large_report_on_disk(
+    report_fixture_dir: Path,
+) -> tuple[Path, dict[str, Any]]:
+    """Generate and write extra-large report (50 deps, stress test) to disk."""
+    from tests.fixtures.dependency_reports.generators import DependencyReportGenerator
+
+    gen = DependencyReportGenerator.extra_large()
+    data = gen.to_dict()
+    report_path = _write_report_to_disk(report_fixture_dir, data)
+    return report_path, data
