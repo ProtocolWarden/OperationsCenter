@@ -156,7 +156,7 @@ def fake_critique_modules(monkeypatch):
 # ============================================================================
 
 
-def assert_protocol_invariants(
+def _assert_protocol_invariants(
     result: ExecutionResult,
     request: ExecutionRequest,
     check_validation_status: bool = True,
@@ -210,7 +210,7 @@ def assert_protocol_invariants(
         assert result.failure_reason is None, "I4: failure_reason must be None on success"
 
 
-def assert_no_side_effects(request_before: ExecutionRequest, request_after: ExecutionRequest) -> None:
+def _assert_no_side_effects(request_before: ExecutionRequest, request_after: ExecutionRequest) -> None:
     """Assert adapter introduced no mutations to the request."""
     assert request_before.run_id == request_after.run_id
     assert request_before.proposal_id == request_after.proposal_id
@@ -247,7 +247,7 @@ def test_protocol_happy_path_success(_request, _usage_store, fake_critique_modul
     result = adapter.execute(request)
 
     # Protocol invariants
-    assert_protocol_invariants(result, request)
+    _assert_protocol_invariants(result, request)
 
     # Path-specific assertions
     assert result.success is True, "P1: Expected success=True"
@@ -277,7 +277,7 @@ def test_protocol_happy_path_executor_failure(_request, _usage_store, fake_criti
     result = adapter.execute(request)
 
     # Protocol invariants
-    assert_protocol_invariants(result, request)
+    _assert_protocol_invariants(result, request)
 
     # Path-specific assertions
     assert result.success is False, "P1: Expected success=False"
@@ -303,7 +303,7 @@ def test_protocol_import_error_graceful_degradation(_request, _usage_store, fake
     result = adapter.execute(request)
 
     # Protocol invariants
-    assert_protocol_invariants(result, request)
+    _assert_protocol_invariants(result, request)
 
     # Path-specific assertions
     assert result.success is False, "P2: Expected success=False"
@@ -332,7 +332,7 @@ def test_protocol_executor_exception_caught(_request, _usage_store, fake_critiqu
     result = adapter.execute(request)
 
     # Protocol invariants
-    assert_protocol_invariants(result, request)
+    _assert_protocol_invariants(result, request)
 
     # Path-specific assertions
     assert result.success is False, "P3: Expected success=False"
@@ -374,7 +374,7 @@ def test_protocol_worker_backend_unavailable(_request, _usage_store, fake_critiq
     result = adapter.execute(request)
 
     # Protocol invariants
-    assert_protocol_invariants(result, request)
+    _assert_protocol_invariants(result, request)
 
     # Path-specific assertions
     assert result.success is False, "P4: Expected success=False"
@@ -407,7 +407,7 @@ def test_protocol_rxp_failure_payload_extraction(_request, _usage_store, fake_cr
     result = adapter.execute(request)
 
     # Protocol invariants
-    assert_protocol_invariants(result, request)
+    _assert_protocol_invariants(result, request)
 
     # Path-specific assertions
     assert result.success is False, "P5: Expected success=False"
@@ -449,7 +449,7 @@ def test_protocol_quota_event_recording_on_rate_limit(_request, _usage_store, fa
     result = adapter.execute(request)
 
     # Protocol invariants
-    assert_protocol_invariants(result, request)
+    _assert_protocol_invariants(result, request)
 
     # Path-specific assertions
     assert result.success is False, "P6: Expected success=False"
@@ -518,7 +518,7 @@ def test_protocol_request_id_propagation(_request, _usage_store, fake_critique_m
     result = adapter.execute(request)
 
     # Protocol invariants (including ID propagation)
-    assert_protocol_invariants(result, request)
+    _assert_protocol_invariants(result, request)
 
     # Explicit ID checks with no truncation/coercion
     assert result.run_id == request.run_id, f"ID propagation ({description}): run_id mismatch"
@@ -653,7 +653,7 @@ def test_protocol_minimal_request(_request, _usage_store, fake_critique_modules)
     result = adapter.execute(request)
 
     # Protocol invariants
-    assert_protocol_invariants(result, request)
+    _assert_protocol_invariants(result, request)
 
     # Verify minimal fields are preserved correctly
     assert result.run_id == "run_minimal"
@@ -696,7 +696,7 @@ def test_protocol_large_request_payload(_request, _usage_store, fake_critique_mo
     result = adapter.execute(request)
 
     # Protocol invariants
-    assert_protocol_invariants(result, request)
+    _assert_protocol_invariants(result, request)
 
     # Verify no truncation of large IDs
     assert result.run_id == large_id, "Edge: run_id should not be truncated"
@@ -728,7 +728,7 @@ def test_protocol_execute_and_capture_returns_observability(_request, _usage_sto
     result, capture = adapter.execute_and_capture(request)
 
     # Verify result
-    assert_protocol_invariants(result, request)
+    _assert_protocol_invariants(result, request)
 
     # Verify capture
     assert capture is not None, "Capture: capture object should not be None"
