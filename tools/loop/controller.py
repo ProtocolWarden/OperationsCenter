@@ -44,8 +44,13 @@ SESSION_LOG_DIR = REPO_ROOT / "logs/local/sessions"
 SESSION_PROMPT_FILE = REPO_ROOT / "tools/loop/oc_session_prompt.txt"
 CLAUDE_MODEL = "claude-sonnet-4-6"
 CLAUDE_EFFORT = "medium"
+OPUS_MODEL = "claude-opus-4-8"
+OPUS_EFFORT = "medium"
 CODEX_MODEL = "gpt-5.4"
 CODEX_EFFORT = "medium"
+
+# Backend priority: sonnet first, opus when sonnet is rate-limited, codex last.
+_BACKEND_PRIORITY = ["claude", "opus", "codex"]
 
 # Hard ceiling on a single session. A normal cycle runs 10-20 min.
 # If the session hasn't exited after this many seconds it is hung
@@ -195,7 +200,7 @@ def _cl_session_boundary(backend: str, env: dict[str, str]) -> bool:
     boundary hydrate/capture path. codex (PostToolUse-only, no live PreToolUse)
     and aider (no hooks) DO. Gated on an active anchor.
     """
-    return backend != "claude" and bool(env.get("CL_ANCHOR"))
+    return backend not in ("claude", "opus") and bool(env.get("CL_ANCHOR"))
 
 
 def _cl_hydrate(backend: str, env: dict[str, str], iteration: int, prompt: str) -> str:
@@ -246,7 +251,9 @@ def _session_env(backend: str, anchor_vars: dict[str, str] | None = None) -> dic
         env.update(anchor_vars)
     else:
         _anchor_via_cl(env)
-    executable = _resolve_command(backend)
+    # opus uses the claude CLI binary
+    cli = "claude" if backend == "opus" else backend
+    executable = _resolve_command(cli)
     if executable is None:
         return env
     executable_path = Path(executable)
@@ -277,6 +284,20 @@ def _session_command(backend: str, prompt: str) -> list[str]:
             CLAUDE_MODEL,
             "--effort",
             CLAUDE_EFFORT,
+            "--dangerously-skip-permissions",
+            "--output-format",
+            "text",
+        ]
+    if backend == "opus":
+        executable = _resolve_command("claude") or "claude"
+        return [
+            executable,
+            "-p",
+            prompt,
+            "--model",
+            OPUS_MODEL,
+            "--effort",
+            OPUS_EFFORT,
             "--dangerously-skip-permissions",
             "--output-format",
             "text",
@@ -319,10 +340,11 @@ def _clear_expired_cooldowns(cooldowns: dict[str, datetime | None]) -> None:
 
 
 def _select_backend(cooldowns: dict[str, datetime | None]) -> str | None:
-    if _backend_available("claude", cooldowns):
-        return "claude"
-    if _backend_available("codex", cooldowns):
-        return "codex"
+    # Priority: sonnet → opus → codex. Opus uses the same claude CLI binary.
+    for backend in _BACKEND_PRIORITY:
+        cli = "claude" if backend in ("claude", "opus") else backend
+        if _backend_available(backend, cooldowns) and _command_available(cli):
+            return backend
     if not _command_available("claude") and not _command_available("codex"):
         raise SystemExit("Neither claude nor codex CLI is available on PATH.")
     return None
@@ -354,7 +376,12 @@ def _sleep_until_backend_reset(cooldowns: dict[str, datetime | None]) -> bool:
 
 
 def _alternate_backend(backend: str) -> str:
-    return "codex" if backend == "claude" else "claude"
+    """Return the next backend in priority order after the given one."""
+    try:
+        idx = _BACKEND_PRIORITY.index(backend)
+        return _BACKEND_PRIORITY[idx + 1]
+    except (ValueError, IndexError):
+        return _BACKEND_PRIORITY[0]
 
 
 def handle_signal(signum, frame) -> None:
@@ -638,7 +665,7 @@ def cmd_status() -> None:
             print(f"Preferred backend: {s.get('preferred_backend')}")
             print(f"Current runnable backend: {s.get('runnable_backend')}")
             cooldowns = s.get("backend_cooldowns", {})
-            for backend in ("claude", "codex"):
+            for backend in _BACKEND_PRIORITY:
                 print(f"{backend} cooldown until: {cooldowns.get(backend)}")
         except Exception as e:
             print(f"ERROR reading runtime state: {e}")
@@ -699,7 +726,7 @@ def main() -> None:
         _log("Running unanchored (cl unavailable or manifest not registered)")
 
     iteration = 0
-    cooldowns: dict[str, datetime | None] = {"claude": None, "codex": None}
+    cooldowns: dict[str, datetime | None] = {"claude": None, "opus": None, "codex": None}
     _last_known_sha: str = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, capture_output=True, text=True,
     ).stdout.strip()
