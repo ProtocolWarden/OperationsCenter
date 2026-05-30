@@ -58,5 +58,7 @@ STAGE_*.md
 STAGE[0-9]*.md
 DERIVER_AUDIT*.md
 LOOP_START.md
+*_COVERAGE_ANALYSIS.md
+*_ANALYSIS.md
 =*.*/
 test_output.log
