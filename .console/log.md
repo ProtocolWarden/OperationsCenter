@@ -119,6 +119,15 @@ Implemented all 4 shared pytest fixtures in `tests/conftest.py` with comprehensi
 **Next steps (Stage 3):** Refactor actual import-error test files to use the new fixtures.
 
 
+## 2026-05-30 — test(review-watcher): update tests for three-phase autonomous state machine
+
+ci_fix commit (2f92852) removed _phase2/human_review and changed initial phase to ci_fix.
+Tests were not updated in that commit. Updated test file: removed 29 obsolete tests, added
+ci_fix phase assertions, fixed phase1 tests to set phase=self_review explicitly, added
+auto-merge tests at max loops.
+
+---
+
 ## 2026-05-30 — fix(pr203): B1/B2 CI audit + SlowTestTracker correctness bugs
 
 `boundary_artifact_file` path in custodian config was resolved from CWD (not repo root) — breaks CI where CWD != parent of OperationsCenter. Removed config path; CI uses REPOGRAPH_BOUNDARY_ARTIFACT_FILE env var. Fixed `slow_count` to include marked tests; added xdist worker guard in `pytest_sessionfinish`.
