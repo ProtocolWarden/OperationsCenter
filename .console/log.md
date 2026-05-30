@@ -1597,3 +1597,9 @@ Falls through to self_review after 3 attempts or non-fixable failures.
 human_review phase deleted entirely. CONCERNS and no-verdict loops now auto-merge
 after max_self_review_loops (3). Single CONCERNS comment on pass 1 only — no spam.
 ci_fix phase (phase 0) handles ruff failures before self-review.
+
+---
+
+## 2026-05-30 — Fix ci_fix check name matching
+
+get_failed_checks returns 'Lint (ruff): failure' format; strip colon suffix before matching.

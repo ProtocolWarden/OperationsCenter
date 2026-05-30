@@ -409,8 +409,12 @@ def _phase0_ci_fix(
         return
 
     # Only auto-fix checks we know how to handle; skip if unknown failures dominate.
-    fixable_failing = [c for c in failed if c.lower() in _AUTOFIX_CHECK_NAMES]
-    unfixable = [c for c in failed if c.lower() not in _AUTOFIX_CHECK_NAMES]
+    # get_failed_checks may return names like "Lint (ruff): failure" — match by prefix.
+    def _is_fixable(check_name: str) -> bool:
+        cn = check_name.lower().split(":")[0].strip()
+        return cn in _AUTOFIX_CHECK_NAMES or any(cn.startswith(k) for k in _AUTOFIX_CHECK_NAMES)
+    fixable_failing = [c for c in failed if _is_fixable(c)]
+    unfixable = [c for c in failed if not _is_fixable(c)]
     if unfixable and not fixable_failing:
         logger.info(
             "pr_review_watcher: PR #%d CI failing on non-auto-fixable checks %s "
