@@ -691,6 +691,14 @@ doc_conventions:
     # Pre-existing orphan operator docs — spec/design references, not user guide entries
     - docs/operator/platformdeployment_compose_smoke.md
     - docs/operator/watchdog_loop.md
+    # Error handling operator runbook suite (PR #201) — supplementary references, not nav-linked by design
+    - docs/operator/backend_error_catalog.md
+    - docs/operator/error_handling_quick_reference.md
+    - docs/operator/error_handling_recipes.md
+    - docs/operator/error_handling_recovery.md
+    - docs/operator/error_message_diagnostics.md
+    - docs/operator/error_scenarios.md
+    - docs/operator/executor_failure_contracts.md
     - docs/specs/cxrp-backend-card-vocabulary.md
     - docs/specs/ci-coordinator-decision-tests.md
     - docs/specs/decision-rules-test-coverage.md

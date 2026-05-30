@@ -1,3 +1,12 @@
+## 2026-05-29 — fix(custodian): add DC7 exclusions for error handling runbook suite (PR #201)
+
+7 new `docs/operator/` files from PR #201 (error handling runbooks) flagged as DC7 orphan
+docs in CI. These are supplementary operator references, not nav-linked by design — same
+pattern as watchdog_loop.md which was already excluded. Added all 7 to the exclusion list
+so PR #201's custodian-audit CI check passes on next run.
+
+---
+
 ## 2026-05-29 — fix(tests): timing-dependent cooldown test failure at hour 23
 
 `now.replace(hour=now.hour + 1)` raises ValueError when `now.hour == 23`. Changed to
