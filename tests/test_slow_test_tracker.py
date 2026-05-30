@@ -176,7 +176,6 @@ class TestMarkerDetection:
         tracker.record_test("test_unknown", 0.5)
 
         # When test not in markers dict, default to False
-        durations = tracker.get_slow_tests()
         # Note: slow_tests includes tests >= threshold regardless of marker status
         # So we need to check the underlying list instead
         assert tracker.test_durations[0][2] is False

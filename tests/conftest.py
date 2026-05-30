@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
+import json
 import os
 import sys
 from pathlib import Path
@@ -16,8 +17,6 @@ _REPO_ROOT = Path(__file__).parent.parent.resolve()
 _EXPECTED_VENV = (_REPO_ROOT / ".venv").resolve()
 _ACTIVE_PREFIX = Path(sys.prefix).resolve()
 _IN_CI = os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS")
-
-import json
 
 if _EXPECTED_VENV.is_dir() and not _IN_CI and _ACTIVE_PREFIX != _EXPECTED_VENV:
     raise SystemExit(

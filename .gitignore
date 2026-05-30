@@ -7,8 +7,6 @@
 !.console/validation/**
 # P3: OC-local operational config and runtime state (migrated from .context/)
 !.console/workers.yaml
-# Stage completion reports (final production deliverables)
-!.console/STAGE*_COMPLETION.md
 CLAUDE.md
 .custodian/tmp*.yaml
 __pycache__/

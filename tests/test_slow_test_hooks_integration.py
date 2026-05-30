@@ -2,7 +2,6 @@
 # Copyright (C) 2026 ProtocolWarden
 """Integration tests for slow test hooks with pytest."""
 import json
-import os
 import subprocess
 import sys
 import tempfile
@@ -34,7 +33,6 @@ def test_slow_by_threshold():
 '''
         # Get the tests directory to ensure conftest.py is discovered
         tests_dir = Path(__file__).parent
-        repo_root = tests_dir.parent
 
         with tempfile.TemporaryDirectory() as tmpdir:
             test_file = Path(tmpdir) / "test_demo.py"
@@ -85,14 +83,14 @@ def test_slow():
                 conftest_dst.write_text(conftest_src.read_text())
 
             # Run pytest with JSON output
-            result = subprocess.run(
+            subprocess.run(
                 [
                     sys.executable,
                     "-m",
                     "pytest",
                     "test_demo.py",
                     "--slow-threshold=0.1",
-                    f"--slow-report=slow_tests.json",
+                    "--slow-report=slow_tests.json",
                     "-v",
                 ],
                 capture_output=True,
@@ -168,14 +166,14 @@ def test_unmarked_fast():
             if conftest_src.exists():
                 conftest_dst.write_text(conftest_src.read_text())
 
-            result = subprocess.run(
+            subprocess.run(
                 [
                     sys.executable,
                     "-m",
                     "pytest",
                     "test_demo.py",
                     "--slow-threshold=0.1",
-                    f"--slow-report=slow_tests.json",
+                    "--slow-report=slow_tests.json",
                     "-v",
                 ],
                 capture_output=True,
