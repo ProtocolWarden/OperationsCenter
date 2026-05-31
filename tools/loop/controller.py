@@ -495,6 +495,14 @@ def write_watchdog_loop_lock() -> None:
 _TIMEZONE_RESET_RE = re.compile(
     r"resets\s+(\d{1,2}(?::\d{2})?(?:am|pm))\s+\(([^)]+)\)", re.IGNORECASE
 )
+# Per-model weekly limit form: "resets Jun 3, 9am (America/New_York)" — a month +
+# day precede the clock time. The claude CLI emits this for Sonnet/Opus model
+# limits (distinct from the plain "resets 9am (tz)" weekly form above).
+_DATE_TIMEZONE_RESET_RE = re.compile(
+    r"resets\s+([A-Za-z]{3,9})\s+(\d{1,2}),?\s+"
+    r"(\d{1,2}(?::\d{2})?(?:am|pm))\s+\(([^)]+)\)",
+    re.IGNORECASE,
+)
 _ISO_RESET_RE = re.compile(
     r"resets?(?:\s+at)?\s+(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?Z)",
     re.IGNORECASE,
@@ -507,7 +515,8 @@ _RELATIVE_RESET_RE = re.compile(
     re.IGNORECASE,
 )
 _LIMIT_SIGNAL_RE = re.compile(
-    r"rate limit|usage limit|weekly limit|quota|too many requests|429",
+    r"rate limit|usage limit|weekly limit|quota|too many requests|429"
+    r"|hit your[^\n]{0,40}limit|sonnet limit|opus limit|claude limit",
     re.IGNORECASE,
 )
 # Signals a global Claude session/account limit — applies to all claude models,
@@ -525,6 +534,37 @@ def parse_rate_limit_reset(
     """Return (reset_utc, log_text) when a rate limit is detected, else (None, None)."""
     try:
         text = session_log.read_text(errors="replace")
+        m = _DATE_TIMEZONE_RESET_RE.search(text)
+        if m:
+            month_str, day_str = m.group(1), m.group(2)
+            time_str, tz_name = m.group(3).lower(), m.group(4)
+            try:
+                tz = ZoneInfo(tz_name)
+            except ZoneInfoNotFoundError:
+                _log(f"Unknown timezone '{tz_name}' in {backend} limit message.")
+                return None, text
+            try:
+                month = datetime.strptime(month_str[:3], "%b").month  # noqa: DTZ007
+            except ValueError:
+                _log(f"Unparseable month '{month_str}' in {backend} limit message.")
+                return None, text
+            now_local = datetime.now(tz)
+            time_format = "%I:%M%p" if ":" in time_str else "%I%p"
+            parsed = datetime.strptime(time_str, time_format)  # noqa: DTZ007
+            reset_local = now_local.replace(
+                month=month,
+                day=int(day_str),
+                hour=parsed.hour,
+                minute=parsed.minute,
+                second=0,
+                microsecond=0,
+            )
+            # No year in the message — if the date already passed this year, the
+            # reset is next year.
+            if reset_local <= now_local:
+                reset_local = reset_local.replace(year=reset_local.year + 1)
+            return reset_local.astimezone(timezone.utc), text
+
         m = _TIMEZONE_RESET_RE.search(text)
         if m:
             time_str, tz_name = m.group(1).lower(), m.group(2)

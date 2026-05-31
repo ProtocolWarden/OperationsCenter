@@ -1,3 +1,9 @@
+## 2026-05-30 — controller: parse real per-model rate-limit message
+
+The live claude CLI emits "You've hit your Sonnet limit · resets Jun 3, 9am (America/New_York)" on a per-model weekly limit; no reset/limit regex matched the date form, so parse_rate_limit_reset returned (None, None) and the opus fallback never engaged (loop would spin on sonnet rc=1). Added _DATE_TIMEZONE_RESET_RE (month-name + day + time + tz, year rollover) and extended _LIMIT_SIGNAL_RE with hit-your/<model>-limit patterns. Per-model Sonnet limit cools claude only → falls back to opus. Tests: 18 passed.
+
+---
+
 ## 2026-05-30 — controller: make opus fallback reachable
 
 _backend_available checked _command_available(backend) with the raw name, so _command_available("opus") always failed (opus has no binary; it uses the claude CLI). The sonnet→opus→codex fallback was therefore dead code — opus could never be selected. Resolve the cli ("claude" for opus) so opus is reachable. Also repaired 3 parse_rate_limit_reset tests left broken by the earlier (reset, log_text) tuple-return change and added opus/priority/global-limit selection tests. 15 passed.

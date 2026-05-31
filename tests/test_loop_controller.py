@@ -160,6 +160,83 @@ def test_parse_rate_limit_reset_timezone_message(monkeypatch, tmp_path: Path) ->
     assert reset_dt == datetime(2026, 5, 25, 17, 15, tzinfo=timezone.utc)
 
 
+def test_parse_rate_limit_reset_model_limit_with_date(monkeypatch, tmp_path: Path) -> None:
+    """Real claude CLI per-model limit: 'You've hit your Sonnet limit · resets
+    Jun 3, 9am (America/New_York)'. The month+day form must parse."""
+    frozen_now = datetime(2026, 5, 30, 16, 0, tzinfo=timezone.utc)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):  # type: ignore[override]
+            if tz is None:
+                return frozen_now.replace(tzinfo=None)
+            return frozen_now.astimezone(tz)
+
+    monkeypatch.setattr(controller, "datetime", FrozenDateTime)
+
+    log_path = tmp_path / "session.log"
+    log_path.write_text(
+        "You've hit your Sonnet limit · resets Jun 3, 9am (America/New_York)\n"
+    )
+
+    reset_dt, _ = controller.parse_rate_limit_reset(log_path, "claude")
+
+    # Jun 3 09:00 EDT (UTC-4) → 13:00 UTC
+    assert reset_dt == datetime(2026, 6, 3, 13, 0, tzinfo=timezone.utc)
+
+
+def test_parse_rate_limit_reset_model_limit_with_date_and_minutes(
+    monkeypatch, tmp_path: Path
+) -> None:
+    frozen_now = datetime(2026, 5, 30, 16, 0, tzinfo=timezone.utc)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):  # type: ignore[override]
+            if tz is None:
+                return frozen_now.replace(tzinfo=None)
+            return frozen_now.astimezone(tz)
+
+    monkeypatch.setattr(controller, "datetime", FrozenDateTime)
+
+    log_path = tmp_path / "session.log"
+    log_path.write_text(
+        "You've hit your Opus limit · resets Jun 3, 9:30am (America/New_York)\n"
+    )
+
+    reset_dt, _ = controller.parse_rate_limit_reset(log_path, "opus")
+
+    assert reset_dt == datetime(2026, 6, 3, 13, 30, tzinfo=timezone.utc)
+
+
+def test_handle_backend_limit_real_sonnet_message_cools_claude_leaves_opus(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """The real 'Sonnet limit · resets Jun 3' message must cool claude and leave
+    opus runnable so the fallback engages instead of spinning on sonnet."""
+    frozen_now = datetime(2026, 5, 30, 16, 0, tzinfo=timezone.utc)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):  # type: ignore[override]
+            if tz is None:
+                return frozen_now.replace(tzinfo=None)
+            return frozen_now.astimezone(tz)
+
+    monkeypatch.setattr(controller, "datetime", FrozenDateTime)
+    monkeypatch.setattr(controller, "_log", lambda *a, **k: None)
+
+    log_path = tmp_path / "session.log"
+    log_path.write_text(
+        "You've hit your Sonnet limit · resets Jun 3, 9am (America/New_York)\n"
+    )
+    cooldowns: dict = {"claude": None, "opus": None, "codex": None}
+
+    assert controller._handle_backend_limit("claude", log_path, cooldowns) is True
+    assert cooldowns["claude"] == datetime(2026, 6, 3, 13, 0, tzinfo=timezone.utc)
+    assert cooldowns["opus"] is None  # per-model limit → opus still runnable
+
+
 def test_parse_rate_limit_reset_timezone_message_without_minutes(
     monkeypatch, tmp_path: Path
 ) -> None:
