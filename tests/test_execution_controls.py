@@ -394,6 +394,61 @@ def test_current_worker_backend_cooldowns_reports_live_snapshot(
     assert snapshot["codex_cli"]["cooling_down"] is False
 
 
+def test_lone_model_weekly_cooldown_does_not_block_backend(
+    monkeypatch, tmp_path: Path
+) -> None:
+    # A burnt sonnet weekly leaves haiku/opus runnable, so the backend must NOT
+    # read as blocked — otherwise dispatch parks even though execution runs on
+    # another model. Regression for the false-park observed on the live loop.
+    monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
+    store = UsageStore()
+    now = datetime(2026, 5, 31, 8, tzinfo=UTC)
+    store.record_worker_backend_cooldown(
+        worker_backend="claude_code",
+        reset_at=now + timedelta(days=3),
+        now=now,
+        limit_kind="model_weekly",
+        model="sonnet",
+    )
+
+    assert store.worker_backend_blocked_until("claude_code", now=now) is None
+    snapshot = store.current_worker_backend_cooldowns(now=now)
+    assert snapshot["claude_code"]["cooling_down"] is False
+    # The per-model breakdown still surfaces the sonnet cooldown for visibility.
+    models = {c["model"] for c in snapshot["claude_code"]["cooldowns"]}
+    assert "sonnet" in models
+
+
+def test_all_models_weekly_blocks_until_soonest(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
+    store = UsageStore()
+    now = datetime(2026, 5, 31, 8, tzinfo=UTC)
+    soonest = now + timedelta(hours=2)
+    for model, reset in (("sonnet", now + timedelta(days=3)), ("opus", soonest), ("haiku", now + timedelta(days=1))):
+        store.record_worker_backend_cooldown(
+            worker_backend="claude_code", reset_at=reset, now=now,
+            limit_kind="model_weekly", model=model,
+        )
+
+    # Backend frees as soon as the first model's quota resets.
+    assert store.worker_backend_blocked_until("claude_code", now=now) == soonest
+
+
+def test_account_wide_limit_blocks_backend(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
+    store = UsageStore()
+    now = datetime(2026, 5, 31, 8, tzinfo=UTC)
+    reset_at = now + timedelta(hours=5)
+    store.record_worker_backend_cooldown(
+        worker_backend="claude_code", reset_at=reset_at, now=now,
+        limit_kind="session_5h", model=None,
+    )
+
+    # A session/account-wide limit stops every model → backend blocked.
+    assert store.worker_backend_blocked_until("claude_code", now=now) == reset_at
+    assert store.current_worker_backend_cooldowns(now=now)["claude_code"]["cooling_down"] is True
+
+
 def test_circuit_breaker_uses_backend_version_only(monkeypatch, tmp_path: Path) -> None:
     """Mixed-version window blocks the breaker; single-version triggers it.
 

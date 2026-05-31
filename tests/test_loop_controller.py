@@ -415,3 +415,23 @@ def test_write_runtime_state_emits_limit_kinds(tmp_path, monkeypatch) -> None:
     assert kinds["claude"]["limit_kind"] == "model_weekly"
     assert kinds["claude"]["model"] == "sonnet"
     assert "opus" not in kinds
+
+
+def test_write_runtime_state_reports_running_backend_during_sleep(tmp_path, monkeypatch) -> None:
+    # When the loop sleeps after running the opus fallback, the state must report
+    # the live selection — not null, which previously read as "no runnable backend"
+    # even though the loop was healthily running on opus.
+    state_path = tmp_path / "state.json"
+    monkeypatch.setattr(controller, "STATE_PATH", state_path)
+    reset = datetime(2026, 6, 3, 13, 0, tzinfo=timezone.utc)
+    cooldowns = {"claude": reset, "opus": None, "codex": None}
+
+    controller.write_runtime_state(
+        cooldowns, "opus", sleep_until="2026-05-31T08:19:39Z"
+    )
+
+    import json
+
+    state = json.loads(state_path.read_text())
+    assert state["runnable_backend"] == "opus"
+    assert state["sleeping_until_utc"] == "2026-05-31T08:19:39Z"

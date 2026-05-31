@@ -103,7 +103,13 @@ def _read_worker_backend_cooldown(
     *,
     now: datetime,
 ) -> datetime | None:
-    getter = getattr(usage_store, "worker_backend_cooldown_until", None)
+    # Prefer the model-aware "blocked until" signal: a single model's weekly
+    # quota (e.g. a burnt sonnet) must not retire the whole backend while its
+    # other models remain runnable. Fall back to the coarse cooldown for
+    # duck-typed/legacy usage stores that predate the model-aware method.
+    getter = getattr(usage_store, "worker_backend_blocked_until", None)
+    if not callable(getter):
+        getter = getattr(usage_store, "worker_backend_cooldown_until", None)
     if not callable(getter):
         return None
     try:

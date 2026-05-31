@@ -40,6 +40,33 @@ def test_select_worker_backend_prefers_alternate_when_preferred_cooling_down() -
     assert selection.selected_backend == "codex_cli"
 
 
+def test_select_worker_backend_not_blocked_by_lone_model_weekly(monkeypatch, tmp_path) -> None:
+    # End-to-end with a real UsageStore: a burnt sonnet weekly must leave the
+    # claude_code backend selectable (haiku/opus still runnable) rather than
+    # falling through to codex or no backend.
+    from operations_center.execution.usage_store import UsageStore
+
+    monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
+    now = datetime(2026, 5, 31, 8, 0, tzinfo=UTC)
+    store = UsageStore()
+    store.record_worker_backend_cooldown(
+        worker_backend="claude_code",
+        reset_at=datetime(2026, 6, 3, 13, 0, tzinfo=UTC),
+        now=now,
+        limit_kind="model_weekly",
+        model="sonnet",
+    )
+
+    selection = select_worker_backend(
+        preferred_backend="claude_code",
+        usage_store=store,
+        dynamic_enabled=True,
+        now=now,
+    )
+
+    assert selection.selected_backend == "claude_code"
+
+
 def test_parse_worker_backend_reset_handles_relative_message() -> None:
     now = datetime(2026, 5, 25, 16, 0, tzinfo=UTC)
 

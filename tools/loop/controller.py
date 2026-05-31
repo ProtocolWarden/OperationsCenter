@@ -939,8 +939,12 @@ def main() -> None:
             delay = get_delay()
             _log(f"Sleeping {delay}s ...")
             wake_dt = datetime.now(timezone.utc) + timedelta(seconds=delay)
+            # Report the backend that just ran (and will run again on wake) so the
+            # status surface shows the live selection during sleep instead of null.
+            # Passing None here made the state read as "no runnable backend" even
+            # when the loop was healthily running on the opus fallback.
             write_runtime_state(
-                cooldowns, None,
+                cooldowns, backend,
                 sleep_until=wake_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 limit_meta=cooldown_meta,
             )

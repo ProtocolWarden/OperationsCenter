@@ -12,6 +12,10 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Generator, cast
 
+from operations_center.backends.limit_classifier import (
+    MODEL_WEEKLY,
+    WORKER_BACKEND_MODELS,
+)
 from operations_center.execution.models import BudgetDecision, ExecutionControlSettings, NoOpDecision, RetryDecision
 
 # ---------------------------------------------------------------------------
@@ -524,6 +528,64 @@ class UsageStore:
         details.sort(key=lambda d: d["reset_at"])
         return details
 
+    def worker_backend_blocked_until(
+        self,
+        worker_backend: str,
+        *,
+        now: datetime,
+    ) -> datetime | None:
+        """Return when *every* model of ``worker_backend`` is unavailable, else None.
+
+        Model-aware successor to ``worker_backend_cooldown_until``. A single
+        model's weekly quota being exhausted (``model_weekly``) does NOT block the
+        backend — its other models (e.g. haiku, opus) remain runnable, matching
+        the per-model quota reality the limit classifier documents. The backend
+        is blocked only when:
+
+          * an account-wide limit is active — ``session_5h`` / ``global_weekly``,
+            or a limit we couldn't attribute to a specific model — which stops
+            every model at once (blocked until the latest such reset); or
+          * every model the backend runs has an active ``model_weekly`` cooldown
+            (blocked until the soonest model frees up).
+
+        Otherwise at least one model is runnable and the backend is NOT blocked.
+        """
+        data = self.load()
+        events = self._prune_events(list(data.get("events", [])), now=now)
+        account_wide: list[datetime] = []
+        per_model: dict[str, datetime] = {}
+        for event in events:
+            if event.get("kind") != "worker_backend_cooldown":
+                continue
+            if event.get("worker_backend") != worker_backend:
+                continue
+            reset_raw = event.get("reset_at")
+            if not isinstance(reset_raw, str):
+                continue
+            try:
+                reset_at = datetime.fromisoformat(reset_raw)
+            except ValueError:
+                continue
+            if reset_at <= now:
+                continue
+            limit_kind = event.get("limit_kind")
+            model = event.get("model")
+            if limit_kind == MODEL_WEEKLY and model is not None:
+                if model not in per_model or reset_at > per_model[model]:
+                    per_model[model] = reset_at
+            else:
+                # session_5h / global_weekly stop every model; an unattributed
+                # cooldown (no model, or a kind we can't isolate to one model) is
+                # treated as account-wide so we never wrongly assume a model is
+                # free. account-wide limits clear only at the latest reset.
+                account_wide.append(reset_at)
+        if account_wide:
+            return max(account_wide)
+        models = WORKER_BACKEND_MODELS.get(worker_backend)
+        if models and all(model in per_model for model in models):
+            return min(per_model[model] for model in models)
+        return None
+
     def current_worker_backend_cooldowns(
         self,
         *,
@@ -538,7 +600,11 @@ class UsageStore:
         """
         snapshot: dict[str, dict[str, object]] = {}
         for worker_backend in ("claude_code", "codex_cli"):
-            reset_at = self.worker_backend_cooldown_until(worker_backend, now=now)
+            # Model-aware: a lone model_weekly cooldown (e.g. burnt sonnet) leaves
+            # the backend runnable on its other models, so it must not read as
+            # cooling_down. The per-(kind, model) breakdown below still surfaces
+            # the individual sonnet cooldown for status displays.
+            reset_at = self.worker_backend_blocked_until(worker_backend, now=now)
             seconds_remaining: int | None = None
             if reset_at is not None:
                 seconds_remaining = max(0, int((reset_at - now).total_seconds()))
