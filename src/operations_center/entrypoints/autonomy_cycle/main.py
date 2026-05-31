@@ -58,6 +58,7 @@ from operations_center.observer.collectors.recent_commits import RecentCommitsCo
 from operations_center.observer.collectors.type_check import TypeSignalCollector
 from operations_center.observer.collectors.check_signal import CheckSignalCollector
 from operations_center.observer.collectors.todo_signal import TodoSignalCollector
+from operations_center.observer.exporters import ValidationMetricsExporter
 from operations_center.observer.service import RepoObserverService, new_observer_context
 from operations_center.observer.snapshot_builder import SnapshotBuilder
 from operations_center.proposer import CandidateProposerIntegrationService
@@ -70,6 +71,8 @@ __all__ = ["run_pipeline"]
 
 
 def build_observer_service() -> RepoObserverService:
+    metrics_export_dir = Path(".operations_center/metrics")
+    metrics_exporter = ValidationMetricsExporter(export_dir=metrics_export_dir)
     return RepoObserverService(
         repo_collector=GitContextCollector(),
         recent_commits_collector=RecentCommitsCollector(),
@@ -88,6 +91,7 @@ def build_observer_service() -> RepoObserverService:
         coverage_signal_collector=CoverageSignalCollector(),
         snapshot_builder=SnapshotBuilder(),
         artifact_writer=ObserverArtifactWriter(),
+        metrics_exporter=metrics_exporter,
     )
 
 

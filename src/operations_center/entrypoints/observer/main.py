@@ -15,6 +15,7 @@ from operations_center.observer.collectors.git_context import GitContextCollecto
 from operations_center.observer.collectors.recent_commits import RecentCommitsCollector
 from operations_center.observer.collectors.check_signal import CheckSignalCollector
 from operations_center.observer.collectors.todo_signal import TodoSignalCollector
+from operations_center.observer.exporters import ValidationMetricsExporter
 from operations_center.observer.service import RepoObserverService, new_observer_context
 from operations_center.observer.snapshot_builder import SnapshotBuilder
 
@@ -72,6 +73,9 @@ def main() -> None:
     configured_key, configured_base_branch = configured_repo_match(settings, repo_path)
     base_branch = args.base_branch or configured_base_branch
 
+    metrics_export_dir = Path(".operations_center/metrics")
+    metrics_exporter = ValidationMetricsExporter(export_dir=metrics_export_dir)
+
     service = RepoObserverService(
         repo_collector=GitContextCollector(),
         recent_commits_collector=RecentCommitsCollector(),
@@ -83,6 +87,7 @@ def main() -> None:
         backlog_collector=BacklogCollector(),
         snapshot_builder=SnapshotBuilder(),
         artifact_writer=ObserverArtifactWriter(),
+        metrics_exporter=metrics_exporter,
     )
     context = new_observer_context(
         repo_path=repo_path,
@@ -94,6 +99,7 @@ def main() -> None:
         hotspot_window=args.hotspot_window,
         todo_limit=args.todo_limit,
         logs_root=Path("logs/local"),
+        metrics_exporter=metrics_exporter,
     )
     snapshot, artifacts = service.observe(context)
     print(f"Observer snapshot written: {artifacts[0]}")
