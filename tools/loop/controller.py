@@ -52,6 +52,17 @@ CODEX_EFFORT = "medium"
 # Backend priority: sonnet first, opus when sonnet is rate-limited, codex last.
 _BACKEND_PRIORITY = ["claude", "opus", "codex"]
 
+# Controller backend → (worker_backend, model) for the status surfaces. The
+# controller's "claude"/"opus" both run on the claude_code worker backend but
+# name different models; "codex" is the codex_cli backend. Used to bridge the
+# controller's detected cooldowns into the executor usage store so the OC CLI
+# and OperatorConsole pane show per-model limit state.
+_WORKER_BACKEND_FOR: dict[str, tuple[str, str]] = {
+    "claude": ("claude_code", "sonnet"),
+    "opus": ("claude_code", "opus"),
+    "codex": ("codex_cli", "codex"),
+}
+
 # Hard ceiling on a single session. A normal cycle runs 10-20 min.
 # If the session hasn't exited after this many seconds it is hung
 # (e.g. self-referential pgrep loop) and must be killed.
@@ -413,7 +424,16 @@ def write_runtime_state(
     *,
     preferred_backend: str = "claude",
     sleep_until: str | None = None,
+    limit_meta: dict[str, dict[str, object]] | None = None,
 ) -> None:
+    # Drop limit metadata for backends no longer cooling down so the state
+    # never advertises a stale limit_kind after a cooldown clears.
+    backend_limit_kinds: dict[str, dict[str, object]] = {}
+    if limit_meta:
+        for backend, dt in cooldowns.items():
+            meta = limit_meta.get(backend)
+            if dt is not None and meta is not None:
+                backend_limit_kinds[backend] = meta
     state = {
         "updated": _ts(),
         "preferred_backend": preferred_backend,
@@ -423,6 +443,7 @@ def write_runtime_state(
             backend: dt.strftime("%Y-%m-%dT%H:%M:%SZ") if dt is not None else None
             for backend, dt in cooldowns.items()
         },
+        "backend_limit_kinds": backend_limit_kinds,
     }
     STATE_PATH.write_text(json.dumps(state, indent=2))
 
@@ -525,6 +546,55 @@ _GLOBAL_CLAUDE_LIMIT_RE = re.compile(
     r"5.hour|five.hour|session.limit|session.usage|account.limit|organization.limit",
     re.IGNORECASE,
 )
+# Split the global signal into the two operator-meaningful kinds for display.
+_SESSION_LIMIT_RE = re.compile(r"5.hour|five.hour|session.limit|session.usage", re.IGNORECASE)
+_ACCOUNT_LIMIT_RE = re.compile(r"account.limit|organi[sz]ation.limit", re.IGNORECASE)
+
+
+def _classify_limit_kind(backend: str, log_text: str | None) -> tuple[str, str | None]:
+    """Return (limit_kind, model) for a controller backend limit.
+
+    Kinds mirror ``backends.limit_classifier``: ``session_5h`` and
+    ``global_weekly`` are account-wide (no model); ``model_weekly`` names the
+    backend's model. Kept stdlib-only so the controller stays import-light.
+    """
+    _, model = _WORKER_BACKEND_FOR.get(backend, ("claude_code", None))
+    if log_text:
+        if _SESSION_LIMIT_RE.search(log_text):
+            return ("session_5h", None)
+        if _ACCOUNT_LIMIT_RE.search(log_text):
+            return ("global_weekly", None)
+    return ("model_weekly", model)
+
+
+def _bridge_cooldown_to_usage_store(
+    backend: str, reset_dt: datetime, limit_kind: str, model: str | None
+) -> None:
+    """Best-effort: mirror a controller cooldown into the executor usage store.
+
+    The OperatorConsole pane reads controller state directly, but the
+    ``operations-center worker-backend-status`` CLI reads only the usage store —
+    this keeps both accurate. Silently no-ops if operations_center can't be
+    imported (controller may run under a bare interpreter without the venv).
+    """
+    worker_backend, _ = _WORKER_BACKEND_FOR.get(backend, (None, None))
+    if worker_backend is None:
+        return
+    try:
+        src = str(REPO_ROOT / "src")
+        if src not in sys.path:
+            sys.path.insert(0, src)
+        from operations_center.execution.usage_store import UsageStore  # type: ignore
+
+        UsageStore().record_worker_backend_cooldown(
+            worker_backend=worker_backend,
+            reset_at=reset_dt,
+            now=datetime.now(timezone.utc),
+            limit_kind=limit_kind,
+            model=model,
+        )
+    except Exception as exc:  # pragma: no cover - best-effort bridge
+        _log(f"usage-store cooldown bridge skipped: {exc}")
 _RATE_LIMIT_BUFFER = 120  # seconds to wait after the stated reset time
 
 
@@ -609,19 +679,38 @@ def parse_rate_limit_reset(
 
 
 def _handle_backend_limit(
-    backend: str, session_log: Path, cooldowns: dict[str, datetime | None]
+    backend: str,
+    session_log: Path,
+    cooldowns: dict[str, datetime | None],
+    limit_meta: dict[str, dict[str, object]] | None = None,
 ) -> bool:
     reset_dt, log_text = parse_rate_limit_reset(session_log, backend)
     if reset_dt is None:
         return False
     cooldowns[backend] = reset_dt
+    limit_kind, model = _classify_limit_kind(backend, log_text)
+    if limit_meta is not None:
+        limit_meta[backend] = {
+            "limit_kind": limit_kind,
+            "model": model,
+            "reset_at": reset_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+    _bridge_cooldown_to_usage_store(backend, reset_dt, limit_kind, model)
     # Global claude limits (5h session cap, account limit) apply to all claude
     # models — put opus on the same cooldown so we skip straight to codex.
     if backend == "claude" and log_text and _GLOBAL_CLAUDE_LIMIT_RE.search(log_text):
         cooldowns["opus"] = reset_dt
+        if limit_meta is not None:
+            limit_meta["opus"] = {
+                "limit_kind": limit_kind,
+                "model": "opus",
+                "reset_at": reset_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            }
+        _bridge_cooldown_to_usage_store("opus", reset_dt, limit_kind, "opus")
         _log("Global Claude limit (session/account) — opus also on cooldown, using codex.")
     _log(
-        f"{backend.capitalize()} limit — cooling down until "
+        f"{backend.capitalize()} limit ({limit_kind}"
+        f"{f'/{model}' if model else ''}) — cooling down until "
         f"{reset_dt.strftime('%Y-%m-%dT%H:%M:%SZ')} UTC."
     )
     return True
@@ -781,6 +870,7 @@ def main() -> None:
 
     iteration = 0
     cooldowns: dict[str, datetime | None] = {"claude": None, "opus": None, "codex": None}
+    cooldown_meta: dict[str, dict[str, object]] = {}
     _last_known_sha: str = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, capture_output=True, text=True,
     ).stdout.strip()
@@ -809,13 +899,13 @@ def main() -> None:
 
             _clear_expired_cooldowns(cooldowns)
             backend = _select_backend(cooldowns)
-            write_runtime_state(cooldowns, backend)
+            write_runtime_state(cooldowns, backend, limit_meta=cooldown_meta)
             if backend is None:
                 if _sleep_until_backend_reset(cooldowns):
-                    write_runtime_state(cooldowns, None)
+                    write_runtime_state(cooldowns, None, limit_meta=cooldown_meta)
                     continue
                 _log("No runnable backend is currently available.")
-                write_runtime_state(cooldowns, None)
+                write_runtime_state(cooldowns, None, limit_meta=cooldown_meta)
                 break
             rc, session_log = run_session(iteration, backend, anchor_vars)
             _log(f"{backend.capitalize()} session exited rc={rc}")
@@ -824,22 +914,22 @@ def main() -> None:
                 break
 
             if rc != 0:
-                if _handle_backend_limit(backend, session_log, cooldowns):
-                    write_runtime_state(cooldowns, None)
+                if _handle_backend_limit(backend, session_log, cooldowns, cooldown_meta):
+                    write_runtime_state(cooldowns, None, limit_meta=cooldown_meta)
                     alternate = _alternate_backend(backend)
                     if _backend_available(alternate, cooldowns):
                         _log(
                             f"{backend.capitalize()} is cooling down; "
                             f"running immediate {alternate.capitalize()} fallback."
                         )
-                        write_runtime_state(cooldowns, alternate)
+                        write_runtime_state(cooldowns, alternate, limit_meta=cooldown_meta)
                         rc, session_log = run_session(iteration, alternate, anchor_vars)
                         backend = alternate
                         _log(f"{alternate.capitalize()} fallback session exited rc={rc}")
                         if _stop or STOP_FLAG.exists():
                             break
-                        if rc != 0 and _handle_backend_limit(backend, session_log, cooldowns):
-                            write_runtime_state(cooldowns, None)
+                        if rc != 0 and _handle_backend_limit(backend, session_log, cooldowns, cooldown_meta):
+                            write_runtime_state(cooldowns, None, limit_meta=cooldown_meta)
                             if _sleep_until_backend_reset(cooldowns):
                                 continue
                     else:
@@ -849,7 +939,11 @@ def main() -> None:
             delay = get_delay()
             _log(f"Sleeping {delay}s ...")
             wake_dt = datetime.now(timezone.utc) + timedelta(seconds=delay)
-            write_runtime_state(cooldowns, None, sleep_until=wake_dt.strftime("%Y-%m-%dT%H:%M:%SZ"))
+            write_runtime_state(
+                cooldowns, None,
+                sleep_until=wake_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                limit_meta=cooldown_meta,
+            )
             interruptible_sleep(delay)
     finally:
         _end_cl_session(anchor_vars)

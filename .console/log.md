@@ -1,3 +1,9 @@
+## 2026-05-30 — per-model worker-backend cooldowns (limit_kind + model)
+
+Backend Limits status showed claude_code as a single cooldown flag, collapsing sonnet-weekly / 5h-session / account-weekly into one — inaccurate, since a burnt Sonnet weekly leaves opus/haiku runnable. Added backends/limit_classifier.py (classify_limit → limit_kind+model), threaded limit_kind/model through usage_store (record + worker_backend_cooldown_details + enriched current_worker_backend_cooldowns), worker_backend_selector, and the controller (backend_limit_kinds in runtime state + best-effort usage-store bridge). worker-backend-status CLI now renders per-model/kind rows. OperatorConsole pane consumes backend_limit_kinds for per-model rows. 436 passed; custodian OK. Restart controller to load new code.
+
+---
+
 ## 2026-05-30 — controller: parse real per-model rate-limit message
 
 The live claude CLI emits "You've hit your Sonnet limit · resets Jun 3, 9am (America/New_York)" on a per-model weekly limit; no reset/limit regex matched the date form, so parse_rate_limit_reset returned (None, None) and the opus fallback never engaged (loop would spin on sonnet rc=1). Added _DATE_TIMEZONE_RESET_RE (month-name + day + time + tz, year rollover) and extended _LIMIT_SIGNAL_RE with hit-your/<model>-limit patterns. Per-model Sonnet limit cools claude only → falls back to opus. Tests: 18 passed.

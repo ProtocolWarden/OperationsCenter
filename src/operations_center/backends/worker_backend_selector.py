@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from operations_center.backends._capacity_classifier import (
     classify_capacity_exhaustion,
 )
+from operations_center.backends.limit_classifier import GENERIC, classify_limit
 
 _T = TypeVar("_T")
 
@@ -218,12 +219,27 @@ def maybe_record_worker_backend_cooldown(
     )
     if reset_at is None:
         return None
+    limit_kind, model = classify_limit(combined_output)
+    if limit_kind is None:
+        limit_kind = GENERIC
     recorder = getattr(usage_store, "record_worker_backend_cooldown", None)
     if callable(recorder):
-        recorder(worker_backend=worker_backend, reset_at=reset_at, now=current)
+        try:
+            recorder(
+                worker_backend=worker_backend,
+                reset_at=reset_at,
+                now=current,
+                limit_kind=limit_kind,
+                model=model,
+            )
+        except TypeError:
+            # Back-compat: recorders that predate limit_kind/model.
+            recorder(worker_backend=worker_backend, reset_at=reset_at, now=current)
     if logger is not None:
+        _suffix = f" ({limit_kind}{f'/{model}' if model else ''})"
         logger(
-            f"worker backend {worker_backend} cooling down until {reset_at.isoformat()}"
+            f"worker backend {worker_backend} cooling down until "
+            f"{reset_at.isoformat()}{_suffix}"
         )
     return reset_at
 

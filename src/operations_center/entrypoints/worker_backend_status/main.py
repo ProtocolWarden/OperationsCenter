@@ -52,16 +52,33 @@ def _command(
     _console.print(f"  usage_path : {payload['usage_path']}")
     table = Table(show_header=True, header_style="bold")
     table.add_column("worker_backend")
+    table.add_column("limit_kind")
+    table.add_column("model")
     table.add_column("cooling_down")
     table.add_column("reset_at")
     table.add_column("seconds_remaining")
     for worker_backend, details in snapshot.items():
-        table.add_row(
-            worker_backend,
-            "yes" if details["cooling_down"] else "no",
-            str(details["reset_at"] or "—"),
-            str(details["seconds_remaining"] or "—"),
-        )
+        cooldowns = details.get("cooldowns") or []
+        if not cooldowns:
+            # No per-kind detail (e.g. legacy events) — one summary row.
+            table.add_row(
+                worker_backend,
+                "—",
+                "—",
+                "yes" if details["cooling_down"] else "no",
+                str(details["reset_at"] or "—"),
+                str(details["seconds_remaining"] or "—"),
+            )
+            continue
+        for idx, cd in enumerate(cooldowns):
+            table.add_row(
+                worker_backend if idx == 0 else "",
+                str(cd.get("limit_kind") or "—"),
+                str(cd.get("model") or "all"),
+                "yes",
+                str(cd.get("reset_at") or "—"),
+                str(cd.get("seconds_remaining") or "—"),
+            )
     _console.print(table)
 
 

@@ -369,3 +369,49 @@ def test_handle_backend_limit_global_claude_limit_cools_opus_too(
     reset = datetime(2026, 5, 25, 17, 15, tzinfo=timezone.utc)
     assert cooldowns["claude"] == reset
     assert cooldowns["opus"] == reset
+
+
+def test_classify_limit_kind_model_weekly_for_sonnet() -> None:
+    kind, model = controller._classify_limit_kind(
+        "claude", "You've hit your Sonnet limit · resets Jun 3, 9am (America/New_York)"
+    )
+    assert kind == "model_weekly"
+    assert model == "sonnet"
+
+
+def test_classify_limit_kind_session_is_account_wide() -> None:
+    kind, model = controller._classify_limit_kind("claude", "5-hour session limit reached")
+    assert kind == "session_5h"
+    assert model is None
+
+
+def test_classify_limit_kind_opus_backend_maps_to_opus_model() -> None:
+    kind, model = controller._classify_limit_kind("opus", "weekly limit, resets soon")
+    # No session/account signal → model-weekly scoped to the backend's model.
+    assert kind == "model_weekly"
+    assert model == "opus"
+
+
+def test_write_runtime_state_emits_limit_kinds(tmp_path, monkeypatch) -> None:
+    state_path = tmp_path / "state.json"
+    monkeypatch.setattr(controller, "STATE_PATH", state_path)
+    reset = datetime(2026, 6, 3, 13, 0, tzinfo=timezone.utc)
+    cooldowns = {"claude": reset, "opus": None, "codex": None}
+    meta = {
+        "claude": {
+            "limit_kind": "model_weekly",
+            "model": "sonnet",
+            "reset_at": "2026-06-03T13:00:00Z",
+        },
+        # Stale entry for a backend no longer cooling — must be dropped.
+        "opus": {"limit_kind": "model_weekly", "model": "opus", "reset_at": "x"},
+    }
+    controller.write_runtime_state(cooldowns, None, limit_meta=meta)
+
+    import json
+
+    state = json.loads(state_path.read_text())
+    kinds = state["backend_limit_kinds"]
+    assert kinds["claude"]["limit_kind"] == "model_weekly"
+    assert kinds["claude"]["model"] == "sonnet"
+    assert "opus" not in kinds

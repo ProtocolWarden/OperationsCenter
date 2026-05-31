@@ -423,25 +423,33 @@ class UsageStore:
         worker_backend: str,
         reset_at: datetime,
         now: datetime,
+        limit_kind: str | None = None,
+        model: str | None = None,
     ) -> None:
         """Record a worker-backend cooldown horizon after a limit event.
 
         This is distinct from executor-backend quota events: the executor family
         (team/dag/critique) may stay healthy while one worker backend
         (``claude_code`` or ``codex_cli``) needs a timed cooldown.
+
+        ``limit_kind`` and ``model`` (see ``backends.limit_classifier``) capture
+        *why* the backend is limited and *which* model it names, so status
+        surfaces can distinguish a single burnt model-weekly quota (others still
+        runnable) from an account-wide session/weekly cap.
         """
         with self._exclusive():
             data = self.load()
-            self._append_event(
-                data,
-                {
-                    "kind": "worker_backend_cooldown",
-                    "worker_backend": worker_backend,
-                    "reset_at": reset_at.isoformat(),
-                    "timestamp": now.isoformat(),
-                },
-                now=now,
-            )
+            event = {
+                "kind": "worker_backend_cooldown",
+                "worker_backend": worker_backend,
+                "reset_at": reset_at.isoformat(),
+                "timestamp": now.isoformat(),
+            }
+            if limit_kind is not None:
+                event["limit_kind"] = limit_kind
+            if model is not None:
+                event["model"] = model
+            self._append_event(data, event, now=now)
 
     def worker_backend_cooldown_until(
         self,
@@ -471,12 +479,63 @@ class UsageStore:
                 latest = reset_at
         return latest
 
+    def worker_backend_cooldown_details(
+        self,
+        worker_backend: str,
+        *,
+        now: datetime,
+    ) -> list[dict[str, object]]:
+        """Return active cooldowns for ``worker_backend``, one per (kind, model).
+
+        Each entry is ``{limit_kind, model, reset_at, seconds_remaining}`` for
+        the latest future reset of that (limit_kind, model) pair. Expired
+        cooldowns and stale duplicates are dropped. Sorted soonest-reset first.
+        """
+        data = self.load()
+        events = self._prune_events(list(data.get("events", [])), now=now)
+        latest: dict[tuple[str | None, str | None], datetime] = {}
+        for event in events:
+            if event.get("kind") != "worker_backend_cooldown":
+                continue
+            if event.get("worker_backend") != worker_backend:
+                continue
+            reset_raw = event.get("reset_at")
+            if not isinstance(reset_raw, str):
+                continue
+            try:
+                reset_at = datetime.fromisoformat(reset_raw)
+            except ValueError:
+                continue
+            if reset_at <= now:
+                continue
+            key = (event.get("limit_kind"), event.get("model"))
+            if key not in latest or reset_at > latest[key]:
+                latest[key] = reset_at
+        details: list[dict[str, object]] = []
+        for (limit_kind, model), reset_at in latest.items():
+            details.append(
+                {
+                    "limit_kind": limit_kind,
+                    "model": model,
+                    "reset_at": reset_at.isoformat(),
+                    "seconds_remaining": max(0, int((reset_at - now).total_seconds())),
+                }
+            )
+        details.sort(key=lambda d: d["reset_at"])
+        return details
+
     def current_worker_backend_cooldowns(
         self,
         *,
         now: datetime,
     ) -> dict[str, dict[str, object]]:
-        """Return current cooldown status for each supported worker backend."""
+        """Return current cooldown status for each supported worker backend.
+
+        Each backend carries the flat back-compat fields
+        (``cooling_down``/``reset_at``/``seconds_remaining`` — keyed to the
+        *latest* active reset) plus a ``cooldowns`` list of per-(kind, model)
+        detail entries for callers that render the per-model breakdown.
+        """
         snapshot: dict[str, dict[str, object]] = {}
         for worker_backend in ("claude_code", "codex_cli"):
             reset_at = self.worker_backend_cooldown_until(worker_backend, now=now)
@@ -487,6 +546,9 @@ class UsageStore:
                 "cooling_down": reset_at is not None,
                 "reset_at": reset_at.isoformat() if reset_at is not None else None,
                 "seconds_remaining": seconds_remaining,
+                "cooldowns": self.worker_backend_cooldown_details(
+                    worker_backend, now=now
+                ),
             }
         return snapshot
 
