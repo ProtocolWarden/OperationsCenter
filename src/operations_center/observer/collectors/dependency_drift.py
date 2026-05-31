@@ -29,7 +29,8 @@ class DependencyDriftCollector:
             text = candidate.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as e:
             ArtifactValidator.log_io_error(
-                candidate, e, context={"collector": "DependencyDriftCollector"}
+                candidate, e, context={"collector": "DependencyDriftCollector"},
+                metrics_exporter=context.metrics_exporter,
             )
             return DependencyDriftSignal(status="not_available")
 
@@ -37,7 +38,8 @@ class DependencyDriftCollector:
             payload = json.loads(text)
         except json.JSONDecodeError as e:
             ArtifactValidator.log_parse_error(
-                candidate, e, context={"collector": "DependencyDriftCollector"}
+                candidate, e, context={"collector": "DependencyDriftCollector"},
+                metrics_exporter=context.metrics_exporter,
             )
             return DependencyDriftSignal(status="not_available")
 
@@ -48,6 +50,7 @@ class DependencyDriftCollector:
                 error_msg,
                 expected_schema="dependency_report.json",
                 context={"collector": "DependencyDriftCollector"},
+                metrics_exporter=context.metrics_exporter,
             )
             return DependencyDriftSignal(status="not_available")
 

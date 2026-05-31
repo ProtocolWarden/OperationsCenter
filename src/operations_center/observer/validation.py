@@ -181,24 +181,29 @@ class ArtifactValidator:
         artifact_path: Path | str,
         error: Exception,
         context: dict[str, Any] | None = None,
+        metrics_exporter: Any = None,
     ) -> None:
-        """Log malformed payload with security context.
+        """Log malformed payload with security context and export metrics.
 
         Args:
             artifact_path: Path to the malformed artifact
             error: Exception that occurred during parsing
             context: Additional context dict
+            metrics_exporter: Optional ValidationMetricsExporter to record the failure
         """
         if context is None:
             context = {}
 
         error_class = error.__class__.__name__
+        severity = "HIGH" if isinstance(error, json.JSONDecodeError) else "MEDIUM"
+        error_message = "%s: %s" % (error_class, error)
+
         log_data = {
             "event": "artifact_parse_error",
             "artifact": str(artifact_path),
             "error_type": "parse_error",
-            "error_msg": "%s: %s" % (error_class, error),
-            "severity": "MEDIUM",
+            "error_msg": error_message,
+            "severity": severity,
             "component": "observer_collector",
             **context,
         }
@@ -208,7 +213,6 @@ class ArtifactValidator:
                 {
                     "line": error.lineno,
                     "col": error.colno,
-                    "severity": "HIGH",
                 }
             )
 
@@ -218,20 +222,36 @@ class ArtifactValidator:
             extra=log_data,
         )
 
+        if metrics_exporter is not None:
+            try:
+                metrics_exporter.export_failure(
+                    collector_name=context.get("collector", "unknown"),
+                    artifact_type="json",
+                    failure_type="parse_error",
+                    severity=severity,
+                    error_message=error_message,
+                    artifact_path=str(artifact_path),
+                    context={"error_class": error_class, **{k: v for k, v in context.items() if k != "collector"}},
+                )
+            except Exception as export_err:
+                logger.debug("Failed to export parse error metric: %s", export_err)
+
     @staticmethod
     def log_structure_error(
         artifact_path: Path | str,
         error_msg: str,
         expected_schema: str | None = None,
         context: dict[str, Any] | None = None,
+        metrics_exporter: Any = None,
     ) -> None:
-        """Log structure validation failure with security context.
+        """Log structure validation failure with security context and export metrics.
 
         Args:
             artifact_path: Path to the artifact with invalid structure
             error_msg: Description of the validation error
             expected_schema: Name of expected schema
             context: Additional context dict
+            metrics_exporter: Optional ValidationMetricsExporter to record the failure
         """
         if context is None:
             context = {}
@@ -254,31 +274,49 @@ class ArtifactValidator:
             extra=log_data,
         )
 
+        if metrics_exporter is not None:
+            try:
+                metrics_exporter.export_failure(
+                    collector_name=context.get("collector", "unknown"),
+                    artifact_type=expected_schema or "unknown",
+                    failure_type="structure_error",
+                    severity="HIGH",
+                    error_message=error_msg,
+                    artifact_path=str(artifact_path),
+                    context={"expected_schema": expected_schema, **{k: v for k, v in context.items() if k != "collector"}},
+                )
+            except Exception as export_err:
+                logger.debug("Failed to export structure error metric: %s", export_err)
+
     @staticmethod
     def log_io_error(
         artifact_path: Path | str,
         error: Exception,
         context: dict[str, Any] | None = None,
+        metrics_exporter: Any = None,
     ) -> None:
-        """Log file I/O errors with security context.
+        """Log file I/O errors with security context and export metrics.
 
         Args:
             artifact_path: Path to the artifact
             error: Exception that occurred during file read
             context: Additional context dict
+            metrics_exporter: Optional ValidationMetricsExporter to record the failure
         """
         if context is None:
             context = {}
 
         error_class = error.__class__.__name__
         log_level = logging.WARNING if isinstance(error, PermissionError) else logging.DEBUG
+        severity = "MEDIUM" if isinstance(error, PermissionError) else "LOW"
+        error_message = "%s: %s" % (error_class, error)
 
         log_data = {
             "event": "artifact_io_error",
             "artifact": str(artifact_path),
             "error_type": "io_error",
-            "error_msg": "%s: %s" % (error_class, error),
-            "severity": "MEDIUM" if isinstance(error, PermissionError) else "LOW",
+            "error_msg": error_message,
+            "severity": severity,
             "component": "observer_collector",
             **context,
         }
@@ -289,6 +327,20 @@ class ArtifactValidator:
             log_data,
             extra=log_data,
         )
+
+        if metrics_exporter is not None:
+            try:
+                metrics_exporter.export_failure(
+                    collector_name=context.get("collector", "unknown"),
+                    artifact_type="file",
+                    failure_type="io_error",
+                    severity=severity,
+                    error_message=error_message,
+                    artifact_path=str(artifact_path),
+                    context={"error_class": error_class, **{k: v for k, v in context.items() if k != "collector"}},
+                )
+            except Exception as export_err:
+                logger.debug("Failed to export IO error metric: %s", export_err)
 
 
 class ExecutionOutcomeValidator(ArtifactValidator):

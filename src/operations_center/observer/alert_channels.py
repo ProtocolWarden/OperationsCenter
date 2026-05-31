@@ -1,0 +1,361 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 ProtocolWarden
+"""Alert notification channels for validation failure alerting.
+
+Defines:
+- AlertChannel base class and protocol
+- OperatorLogChannel — log alerts to operator logs
+- PlaneTaskChannel — create Plane improve tasks
+- SlackChannel stub — for future Slack integration
+- PagerDutyChannel stub — for future PagerDuty integration
+- AlertChannelFactory — instantiate channels from configuration
+"""
+from __future__ import annotations
+
+import logging
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class AlertChannelResult:
+    """Result of alert notification attempt."""
+
+    channel: str
+    success: bool
+    message: str = ""
+    error: Optional[str] = None
+
+
+class AlertChannel(ABC):
+    """Base class for alert notification channels."""
+
+    @abstractmethod
+    async def notify(self, context: dict[str, Any]) -> AlertChannelResult:
+        """Send alert notification through this channel.
+
+        Args:
+            context: Alert context with condition, metrics, severity, etc.
+
+        Returns:
+            AlertChannelResult with success status and message
+        """
+        ...
+
+    @abstractmethod
+    def validate_configuration(self) -> bool:
+        """Validate that the channel is properly configured.
+
+        Returns:
+            True if channel is ready to use, False otherwise
+        """
+        ...
+
+
+class OperatorLogChannel(AlertChannel):
+    """Send alerts to operator logs."""
+
+    def __init__(self, logger_name: str = "operations_center.alerts") -> None:
+        self.logger = logging.getLogger(logger_name)
+        self.name = "operator_log"
+
+    async def notify(self, context: dict[str, Any]) -> AlertChannelResult:
+        """Log alert to operator logger.
+
+        Args:
+            context: Alert context
+
+        Returns:
+            AlertChannelResult with success status
+        """
+        try:
+            severity = context.get("severity", "MEDIUM")
+            condition = context.get("condition_name", "unknown")
+            error_count = context.get("error_count", 0)
+            threshold = context.get("threshold", 0)
+            collector = context.get("collector_name", "system")
+
+            # Build alert message
+            message = (
+                f"ALERT [{condition}] — {error_count}/{threshold} errors "
+                f"in {context.get('time_window_minutes', 5)}min "
+                f"(collector={collector}, severity={severity})"
+            )
+
+            # Log at appropriate level
+            if severity == "HIGH":
+                self.logger.critical(message, extra={"alert_context": context})
+            elif severity == "MEDIUM":
+                self.logger.warning(message, extra={"alert_context": context})
+            else:
+                self.logger.info(message, extra={"alert_context": context})
+
+            return AlertChannelResult(
+                channel=self.name,
+                success=True,
+                message=f"Logged to {self.logger.name}",
+            )
+        except Exception as e:
+            return AlertChannelResult(
+                channel=self.name,
+                success=False,
+                error=f"Failed to log alert: {str(e)}",
+            )
+
+    def validate_configuration(self) -> bool:
+        """Operator log channel is always available."""
+        return self.logger is not None
+
+
+class PlaneTaskChannel(AlertChannel):
+    """Create Plane improve tasks for alerts.
+
+    NOTE: This is a stub implementation for Stage 2.
+    Full implementation requires PlaneClient integration in Stage 3+.
+    """
+
+    def __init__(self, plane_client: Any = None) -> None:
+        self.plane_client = plane_client
+        self.name = "plane"
+        self.enabled = plane_client is not None
+
+    async def notify(self, context: dict[str, Any]) -> AlertChannelResult:
+        """Create Plane improve task for alert.
+
+        Args:
+            context: Alert context
+
+        Returns:
+            AlertChannelResult with success status
+        """
+        if not self.enabled:
+            return AlertChannelResult(
+                channel=self.name,
+                success=False,
+                error="PlaneClient not configured",
+            )
+
+        try:
+            condition = context.get("condition_name", "unknown")
+            collector = context.get("collector_name", "system")
+            error_count = context.get("error_count", 0)
+            threshold = context.get("threshold", 0)
+            severity = context.get("severity", "MEDIUM")
+
+            # Build task description
+            description = self._build_task_description(context)
+
+            # TODO: Call plane_client.create_issue(
+            #     project_id=self.project_id,
+            #     title=f"[Alert] {condition}",
+            #     description=description,
+            #     priority=self._severity_to_priority(severity),
+            #     labels=self._build_labels(context),
+            # )
+
+            logger.info(
+                f"Plane task creation stub: {condition} "
+                f"({error_count}/{threshold} errors)",
+                extra={"alert_context": context},
+            )
+
+            return AlertChannelResult(
+                channel=self.name,
+                success=True,
+                message=f"Would create Plane task for {condition}",
+            )
+        except Exception as e:
+            return AlertChannelResult(
+                channel=self.name,
+                success=False,
+                error=f"Failed to create Plane task: {str(e)}",
+            )
+
+    def validate_configuration(self) -> bool:
+        """Check if Plane client is configured."""
+        return self.enabled
+
+    @staticmethod
+    def _build_task_description(context: dict[str, Any]) -> str:
+        """Build task description from alert context."""
+        lines = [
+            f"**Alert Condition**: {context.get('condition_name')}",
+            f"**Severity**: {context.get('severity')}",
+            f"**Collector**: {context.get('collector_name', 'N/A')}",
+            f"**Error Count**: {context.get('error_count')} / {context.get('threshold')}",
+            f"**Time Window**: {context.get('time_window_minutes')}m",
+        ]
+
+        if context.get("artifact_type"):
+            lines.append(f"**Artifact Type**: {context.get('artifact_type')}")
+
+        if context.get("sample_errors"):
+            lines.append("\n**Sample Errors**:\n")
+            for error in context.get("sample_errors", [])[:3]:
+                lines.append(f"- {error}")
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _severity_to_priority(severity: str) -> str:
+        """Map severity to Plane priority."""
+        severity_map = {
+            "HIGH": "urgent",
+            "MEDIUM": "high",
+            "LOW": "medium",
+        }
+        return severity_map.get(severity, "medium")
+
+    @staticmethod
+    def _build_labels(context: dict[str, Any]) -> list[str]:
+        """Build labels for Plane task from alert context."""
+        labels = ["validation", "alert"]
+        if context.get("condition_name"):
+            labels.append(context.get("condition_name").replace("_", "-"))
+        if context.get("severity"):
+            labels.append(f"severity-{context.get('severity').lower()}")
+        return labels
+
+
+class SlackChannel(AlertChannel):
+    """Send alerts to Slack.
+
+    NOTE: This is a stub implementation for Stage 2.
+    Full implementation planned for Stage 3+.
+    """
+
+    def __init__(self, webhook_url: str | None = None) -> None:
+        self.webhook_url = webhook_url
+        self.name = "slack"
+        self.enabled = webhook_url is not None
+
+    async def notify(self, context: dict[str, Any]) -> AlertChannelResult:
+        """Send alert to Slack (stub).
+
+        Args:
+            context: Alert context
+
+        Returns:
+            AlertChannelResult indicating stub status
+        """
+        if not self.enabled:
+            return AlertChannelResult(
+                channel=self.name,
+                success=False,
+                error="Slack webhook not configured",
+            )
+
+        # Stub implementation — would call webhook_url with formatted message
+        logger.debug(f"Slack notification stub: {context.get('condition_name')}")
+        return AlertChannelResult(
+            channel=self.name,
+            success=True,
+            message="Slack notification would be sent (stub)",
+        )
+
+    def validate_configuration(self) -> bool:
+        """Check if Slack is properly configured."""
+        return self.enabled
+
+
+class PagerDutyChannel(AlertChannel):
+    """Page on-call engineer via PagerDuty.
+
+    NOTE: This is a stub implementation for Stage 2.
+    Full implementation planned for Stage 3+.
+    """
+
+    def __init__(self, api_key: str | None = None) -> None:
+        self.api_key = api_key
+        self.name = "pagerduty"
+        self.enabled = api_key is not None
+
+    async def notify(self, context: dict[str, Any]) -> AlertChannelResult:
+        """Page on-call engineer (stub).
+
+        Args:
+            context: Alert context
+
+        Returns:
+            AlertChannelResult indicating stub status
+        """
+        if not self.enabled:
+            return AlertChannelResult(
+                channel=self.name,
+                success=False,
+                error="PagerDuty API key not configured",
+            )
+
+        # Stub implementation — would call PagerDuty API
+        logger.debug(f"PagerDuty notification stub: {context.get('condition_name')}")
+        return AlertChannelResult(
+            channel=self.name,
+            success=True,
+            message="PagerDuty incident would be created (stub)",
+        )
+
+    def validate_configuration(self) -> bool:
+        """Check if PagerDuty is properly configured."""
+        return self.enabled
+
+
+class AlertChannelFactory:
+    """Factory for instantiating alert notification channels."""
+
+    @staticmethod
+    def create_channel(
+        channel_name: str,
+        config: dict[str, Any] | None = None,
+    ) -> AlertChannel | None:
+        """Create a notification channel by name.
+
+        Args:
+            channel_name: Name of channel ("operator_log", "plane", "slack", "pagerduty")
+            config: Configuration dictionary for the channel
+
+        Returns:
+            AlertChannel instance or None if channel not found
+        """
+        config = config or {}
+
+        if channel_name == "operator_log":
+            return OperatorLogChannel(logger_name=config.get("logger_name"))
+        elif channel_name == "plane":
+            return PlaneTaskChannel(plane_client=config.get("plane_client"))
+        elif channel_name == "slack":
+            return SlackChannel(webhook_url=config.get("webhook_url"))
+        elif channel_name == "pagerduty":
+            return PagerDutyChannel(api_key=config.get("api_key"))
+        else:
+            logger.warning(f"Unknown alert channel: {channel_name}")
+            return None
+
+    @staticmethod
+    def create_channels_from_config(
+        channel_names: list[str],
+        config: dict[str, dict[str, Any]] | None = None,
+    ) -> dict[str, AlertChannel]:
+        """Create multiple channels from configuration.
+
+        Args:
+            channel_names: List of channel names to create
+            config: Configuration dict mapping channel name to channel config
+
+        Returns:
+            Dictionary mapping channel names to AlertChannel instances
+        """
+        config = config or {}
+        channels = {}
+
+        for name in channel_names:
+            channel = AlertChannelFactory.create_channel(
+                name,
+                config.get(name, {}),
+            )
+            if channel:
+                channels[name] = channel
+
+        return channels

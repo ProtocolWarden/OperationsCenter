@@ -78,6 +78,7 @@ class ValidationHistoryCollector:
                     outcome_file,
                     e,
                     context={"collector": "ValidationHistoryCollector"},
+                    metrics_exporter=context.metrics_exporter,
                 )
                 continue
             except json.JSONDecodeError as e:
@@ -85,6 +86,7 @@ class ValidationHistoryCollector:
                     outcome_file,
                     e,
                     context={"collector": "ValidationHistoryCollector"},
+                    metrics_exporter=context.metrics_exporter,
                 )
                 continue
 
@@ -95,6 +97,7 @@ class ValidationHistoryCollector:
                     error_msg,
                     expected_schema="control_outcome.json",
                     context={"collector": "ValidationHistoryCollector"},
+                    metrics_exporter=context.metrics_exporter,
                 )
                 continue
 
@@ -106,6 +109,7 @@ class ValidationHistoryCollector:
                     request_file,
                     e,
                     context={"collector": "ValidationHistoryCollector"},
+                    metrics_exporter=context.metrics_exporter,
                 )
                 continue
             except json.JSONDecodeError as e:
@@ -113,6 +117,7 @@ class ValidationHistoryCollector:
                     request_file,
                     e,
                     context={"collector": "ValidationHistoryCollector"},
+                    metrics_exporter=context.metrics_exporter,
                 )
                 continue
 
@@ -123,6 +128,7 @@ class ValidationHistoryCollector:
                     error_msg,
                     expected_schema="request.json",
                     context={"collector": "ValidationHistoryCollector"},
+                    metrics_exporter=context.metrics_exporter,
                 )
                 continue
 
@@ -154,12 +160,14 @@ class ValidationHistoryCollector:
                         validation_file,
                         e,
                         context={"collector": "ValidationHistoryCollector"},
+                        metrics_exporter=context.metrics_exporter,
                     )
                 except json.JSONDecodeError as e:
                     ArtifactValidator.log_parse_error(
                         validation_file,
                         e,
                         context={"collector": "ValidationHistoryCollector"},
+                        metrics_exporter=context.metrics_exporter,
                     )
                 else:
                     is_valid, error_msg = ValidationHistoryValidator.validate(v)
@@ -173,6 +181,7 @@ class ValidationHistoryCollector:
                             error_msg,
                             expected_schema="validation.json",
                             context={"collector": "ValidationHistoryCollector"},
+                            metrics_exporter=context.metrics_exporter,
                         )
 
         if total_runs == 0:

@@ -10,6 +10,7 @@ from typing import Any, Protocol
 
 from operations_center.config import Settings
 from operations_center.observer.artifact_writer import ObserverArtifactWriter
+from operations_center.observer.exporters import ValidationMetricsExporter
 from operations_center.observer.models import (
     ArchitectureSignal,
     BacklogSignal,
@@ -46,6 +47,7 @@ class ObserverContext:
     hotspot_window: int
     todo_limit: int
     logs_root: Path
+    metrics_exporter: ValidationMetricsExporter | None = None
 
 
 class RepoSignalCollector(Protocol):
@@ -75,6 +77,7 @@ class RepoObserverService:
         coverage_signal_collector: RepoSignalCollector | None = None,
         snapshot_builder: SnapshotBuilder | None = None,
         artifact_writer: ObserverArtifactWriter | None = None,
+        metrics_exporter: ValidationMetricsExporter | None = None,
     ) -> None:
         self.repo_collector = repo_collector
         self.recent_commits_collector = recent_commits_collector
@@ -94,6 +97,7 @@ class RepoObserverService:
         self.coverage_signal_collector = coverage_signal_collector
         self.snapshot_builder = snapshot_builder or SnapshotBuilder()
         self.artifact_writer = artifact_writer or ObserverArtifactWriter()
+        self.metrics_exporter = metrics_exporter
 
     def observe(self, context: ObserverContext) -> tuple[RepoStateSnapshot, list[str]]:
         collector_errors: dict[str, str] = {}
