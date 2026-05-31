@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from operations_center.entrypoints.maintenance.board_unblock import _apply_rules
+from operations_center.entrypoints.maintenance.board_unblock import (
+    _allowed_worker_backends,
+    _apply_rules,
+    _dispatch_cooldown_reason,
+)
 
 
 def _issue(
@@ -168,6 +172,129 @@ def test_rule8_thin_goal_label_prevents_retry():
     actions = _apply_rules([issue], **_RULES_KWARGS)
     retry_actions = [a for a in actions if a["rule"] == "CLEAN_BLOCKED_RETRY"]
     assert len(retry_actions) == 0
+
+
+# --- Worker-backend cooldown gate (Rules 4, 6, 7, 9 defer R4AI promotion) ---
+
+_COOLDOWN_REASON = "all allowed worker backends cooling down (claude_code until 2026-06-03T13:00:00+00:00)"
+
+
+def test_rule9_promote_deferred_during_cooldown():
+    """Rule 9 must NOT promote spec-author Backlog→R4AI while the backend is cooling down."""
+    issue = _issue(
+        "t_cd9",
+        state="Backlog",
+        labels=["task-kind: spec-author", "source: spec-director"],
+    )
+    actions = _apply_rules([issue], **_RULES_KWARGS, cooldown_skip_reason=_COOLDOWN_REASON)
+    promote = [a for a in actions if a["rule"] == "SPEC_AUTHOR_BACKLOG_PROMOTE"]
+    assert len(promote) == 1
+    assert promote[0].get("skipped") is True
+    assert "cooling down" in promote[0]["reason"]
+
+
+def test_rule7_promote_deferred_during_cooldown():
+    """Rule 7 must defer goal Backlog→R4AI promotion while the backend is cooling down."""
+    parent = _issue("p_cd7", state="Done", labels=["task-kind: improve"])
+    child = _issue(
+        "t_cd7",
+        state="Backlog",
+        labels=[
+            "task-kind: goal",
+            "source: autonomy",
+            "source: improve-suggestion",
+            "original-task-id: p_cd7",
+        ],
+    )
+    actions = _apply_rules([parent, child], **_RULES_KWARGS, cooldown_skip_reason=_COOLDOWN_REASON)
+    promote = [a for a in actions if a["rule"] == "GOAL_BACKLOG_PROMOTE"]
+    assert len(promote) == 1
+    assert promote[0].get("skipped") is True
+
+
+def test_rule4_self_modify_requeue_deferred_during_cooldown():
+    """Rule 4 must defer self-modify:approved Blocked→R4AI while the backend is cooling down."""
+    issue = _issue(
+        "t_cd4",
+        state="Blocked",
+        labels=["self-modify: approved"],
+    )
+    actions = _apply_rules([issue], **_RULES_KWARGS, cooldown_skip_reason=_COOLDOWN_REASON)
+    requeue = [a for a in actions if a["rule"] == "SELF_MODIFY_REQUEUE"]
+    assert len(requeue) == 1
+    assert requeue[0].get("skipped") is True
+
+
+def test_rule8_park_still_fires_during_cooldown():
+    """Rule 8 (Blocked→Backlog parking) is NOT gated — it must still fire during a cooldown."""
+    issue = _issue(
+        "t_cd8",
+        state="Blocked",
+        labels=["task-kind: goal"],
+        updated_at="2026-05-28T10:00:00+00:00",
+    )
+    actions = _apply_rules([issue], **_RULES_KWARGS, cooldown_skip_reason=_COOLDOWN_REASON)
+    retry = [a for a in actions if a["rule"] == "CLEAN_BLOCKED_RETRY"]
+    assert len(retry) == 1
+    assert retry[0]["to_state"] == "Backlog"
+    assert not retry[0].get("skipped")
+
+
+def test_no_cooldown_reason_promotes_normally():
+    """With no cooldown reason, promotion rules apply as before (regression guard)."""
+    issue = _issue("t_nocd", state="Backlog", labels=["task-kind: spec-author"])
+    actions = _apply_rules([issue], **_RULES_KWARGS)
+    promote = [a for a in actions if a["rule"] == "SPEC_AUTHOR_BACKLOG_PROMOTE"]
+    assert len(promote) == 1
+    assert not promote[0].get("skipped")
+    assert promote[0]["to_state"] == "Ready for AI"
+
+
+def test_allowed_worker_backends_defaults_to_claude_code(monkeypatch):
+    monkeypatch.delenv("OPERATIONS_CENTER_ALLOWED_PROVIDERS", raising=False)
+    assert _allowed_worker_backends() == {"claude_code"}
+
+
+def test_allowed_worker_backends_maps_providers(monkeypatch):
+    monkeypatch.setenv("OPERATIONS_CENTER_ALLOWED_PROVIDERS", "claude,codex")
+    assert _allowed_worker_backends() == {"claude_code", "codex_cli"}
+
+
+class _FakeUsageStore:
+    def __init__(self, snapshot):
+        self._snapshot = snapshot
+
+    def current_worker_backend_cooldowns(self, *, now):
+        return self._snapshot
+
+
+def test_dispatch_cooldown_reason_blocks_when_only_backend_cooling(monkeypatch):
+    monkeypatch.setenv("OPERATIONS_CENTER_ALLOWED_PROVIDERS", "claude")
+    store = _FakeUsageStore({
+        "claude_code": {"cooling_down": True, "reset_at": "2026-06-03T13:00:00+00:00"},
+        "codex_cli": {"cooling_down": False, "reset_at": None},
+    })
+    reason = _dispatch_cooldown_reason(store, now=_NOW)
+    assert reason is not None
+    assert "claude_code" in reason
+
+
+def test_dispatch_cooldown_reason_none_when_alternate_free(monkeypatch):
+    monkeypatch.setenv("OPERATIONS_CENTER_ALLOWED_PROVIDERS", "claude,codex")
+    store = _FakeUsageStore({
+        "claude_code": {"cooling_down": True, "reset_at": "2026-06-03T13:00:00+00:00"},
+        "codex_cli": {"cooling_down": False, "reset_at": None},
+    })
+    assert _dispatch_cooldown_reason(store, now=_NOW) is None
+
+
+def test_dispatch_cooldown_reason_none_when_nothing_cooling(monkeypatch):
+    monkeypatch.setenv("OPERATIONS_CENTER_ALLOWED_PROVIDERS", "claude")
+    store = _FakeUsageStore({
+        "claude_code": {"cooling_down": False, "reset_at": None},
+        "codex_cli": {"cooling_down": False, "reset_at": None},
+    })
+    assert _dispatch_cooldown_reason(store, now=_NOW) is None
 
 
 def test_rule7_goal_backlog_promote_skips_thin_goal():

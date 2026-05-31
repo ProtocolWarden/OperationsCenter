@@ -80,6 +80,19 @@ Applies nine rules on every run:
     Skipped when memory is below the executor dispatch threshold or when any active retry
     blocker is present (budget_exhausted, session_limit, global_rate_exceeded, etc.).
 
+Worker-backend cooldown gate:
+    The four rules that promote a task INTO "Ready for AI" (Rule 4 SELF_MODIFY_REQUEUE,
+    Rule 6 STALE_RUNNING_REQUEUE, Rule 7 GOAL_BACKLOG_PROMOTE, Rule 9 SPEC_AUTHOR_BACKLOG_PROMOTE)
+    are deferred when EVERY worker backend the executor is allowed to dispatch to
+    (per OPERATIONS_CENTER_ALLOWED_PROVIDERS) is in a known cooldown window.  Promoting to
+    R4AI while the only usable backend is rate-limited causes the board_worker to re-claim,
+    re-dispatch into a session-limited backend, fail the planner with a non-JSON "session
+    limit" error, and bounce the task back to Blocked — a closed loop that churns the board
+    and burns the capped execution budget every cycle until the cooldown resets.  Deferring
+    lets tasks settle in Backlog; the next run after the reset promotes them normally
+    (self-healing).  Demotions (Rule 2, Rule 5) and Blocked→Backlog parking (Rule 8) are NOT
+    gated — they reduce queue pressure and are safe during a cooldown.
+
 Usage:
     python -m operations_center.entrypoints.maintenance.board_unblock \\
         --config config/operations_center.local.yaml [--apply] [--stale-blocked-hours 4]
@@ -88,12 +101,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from operations_center.adapters.plane import PlaneClient
 from operations_center.config import load_settings
+from operations_center.execution.usage_store import UsageStore
 
 _MEM_SKIP_THRESHOLD_GB = 1.7   # skip all rules below this
 _MEM_R4AI_THRESHOLD_GB = 8.0   # skip Rule 4 (requeue to R4AI) below this
@@ -109,6 +124,70 @@ def _mem_available_gb() -> float:
     except Exception:
         pass
     return float("inf")
+
+
+# Provider (OPERATIONS_CENTER_ALLOWED_PROVIDERS) → worker backend the executor
+# would dispatch to.  Used to decide whether a recorded worker-backend cooldown
+# actually blocks dispatch: a claude_code cooldown only blocks when claude is the
+# *only* allowed provider (codex_cli would otherwise absorb the work).
+_PROVIDER_TO_WORKER_BACKEND = {
+    "claude": "claude_code",
+    "anthropic": "claude_code",
+    "codex": "codex_cli",
+    "openai": "codex_cli",
+}
+
+
+def _allowed_worker_backends() -> set[str]:
+    """Return the worker backends the executor is permitted to dispatch to.
+
+    Derived from OPERATIONS_CENTER_ALLOWED_PROVIDERS.  Defaults to the configured
+    worker_backend default (``claude_code``) when the env var is unset, matching
+    ExecutionControlSettings' default.
+    """
+    raw = os.environ.get("OPERATIONS_CENTER_ALLOWED_PROVIDERS", "")
+    backends = {
+        _PROVIDER_TO_WORKER_BACKEND[p.strip().lower()]
+        for p in raw.split(",")
+        if p.strip().lower() in _PROVIDER_TO_WORKER_BACKEND
+    }
+    return backends or {"claude_code"}
+
+
+def _dispatch_cooldown_reason(usage_store: UsageStore, *, now: datetime) -> str | None:
+    """Return a skip reason when every *allowed* worker backend is cooling down.
+
+    When the only worker backend(s) the executor may use are all in a known
+    cooldown window, promoting tasks to Ready for AI is counter-productive: the
+    board_worker will re-claim them, re-dispatch into a session-limited backend,
+    and the planner will fail with a non-JSON "session limit" error — bouncing the
+    task back to Blocked.  That closed loop wastes the capped execution budget and
+    churns the board across cycles.  Returning a reason here lets the promotion
+    rules defer until the cooldown resets, at which point the board self-heals.
+
+    Returns ``None`` (no gating) when at least one allowed backend is free, or on
+    any error reading cooldown state — board-unblock must never harden into a
+    deadlock because the usage store was momentarily unreadable.
+    """
+    try:
+        allowed = _allowed_worker_backends()
+        snapshot = usage_store.current_worker_backend_cooldowns(now=now)
+    except Exception:
+        return None
+    cooling: list[str] = []
+    for backend in sorted(allowed):
+        status = snapshot.get(backend, {})
+        if not status.get("cooling_down"):
+            return None  # an allowed backend is free → dispatch is viable
+        reset_at = status.get("reset_at")
+        cooling.append(f"{backend}{f' until {reset_at}' if reset_at else ''}")
+    if not cooling:
+        return None
+    return (
+        "all allowed worker backends cooling down (" + ", ".join(cooling) + "); "
+        "Ready-for-AI promotion deferred to avoid re-dispatch into a session-limited "
+        "backend (self-heals on cooldown reset)"
+    )
 _DEAD_REMEDIATION_LABEL = "dead-remediation"
 _INVESTIGATE_LABEL = "task-kind: investigate"
 _IMPROVE_LABEL = "task-kind: improve"
@@ -201,6 +280,7 @@ def _apply_rules(
     stale_running_hours: int,
     clean_blocked_min_minutes: int,
     mem_available_gb: float,
+    cooldown_skip_reason: str | None = None,
 ) -> list[dict[str, Any]]:
     id_state = _build_id_state_map(issues)
     actions = []
@@ -320,6 +400,16 @@ def _apply_rules(
                     "reason": f"SKIPPED — mem {mem_available_gb:.2f}GB < {_MEM_R4AI_THRESHOLD_GB}GB threshold",
                     "skipped": True,
                 })
+            elif cooldown_skip_reason:
+                actions.append({
+                    "task_id": task_id,
+                    "title": title,
+                    "rule": "SELF_MODIFY_REQUEUE",
+                    "from_state": state,
+                    "to_state": "Ready for AI",
+                    "reason": f"SKIPPED — {cooldown_skip_reason}",
+                    "skipped": True,
+                })
             else:
                 blocker_id = _blocker_task_id(labels)
                 if blocker_id is None or _is_terminal(id_state.get(blocker_id, "")):
@@ -358,17 +448,28 @@ def _apply_rules(
         if state_lower == "running":
             updated_at = _parse_updated_at(issue)
             if updated_at and (now - updated_at) > timedelta(hours=stale_running_hours):
-                actions.append({
-                    "task_id": task_id,
-                    "title": title,
-                    "rule": "STALE_RUNNING_REQUEUE",
-                    "from_state": state,
-                    "to_state": "Ready for AI",
-                    "reason": (
-                        f"stale in Running >{stale_running_hours}h — executor likely died "
-                        f"(OOM/SIGKILL/watcher restart) without updating Plane state"
-                    ),
-                })
+                if cooldown_skip_reason:
+                    actions.append({
+                        "task_id": task_id,
+                        "title": title,
+                        "rule": "STALE_RUNNING_REQUEUE",
+                        "from_state": state,
+                        "to_state": "Ready for AI",
+                        "reason": f"SKIPPED — {cooldown_skip_reason}",
+                        "skipped": True,
+                    })
+                else:
+                    actions.append({
+                        "task_id": task_id,
+                        "title": title,
+                        "rule": "STALE_RUNNING_REQUEUE",
+                        "from_state": state,
+                        "to_state": "Ready for AI",
+                        "reason": (
+                            f"stale in Running >{stale_running_hours}h — executor likely died "
+                            f"(OOM/SIGKILL/watcher restart) without updating Plane state"
+                        ),
+                    })
 
         # Rule 7 — goal tasks whose parent task is terminal (patterns A and B).
         _is_improve_suggestion = (
@@ -390,7 +491,17 @@ def _apply_rules(
             parent_id = _label_value(labels, _ORIGINAL_TASK_PREFIX)
             if parent_id:
                 parent_state = id_state.get(parent_id, "")
-                if _is_terminal(parent_state):
+                if _is_terminal(parent_state) and cooldown_skip_reason:
+                    actions.append({
+                        "task_id": task_id,
+                        "title": title,
+                        "rule": "GOAL_BACKLOG_PROMOTE",
+                        "from_state": state,
+                        "to_state": "Ready for AI",
+                        "reason": f"SKIPPED — {cooldown_skip_reason}",
+                        "skipped": True,
+                    })
+                elif _is_terminal(parent_state):
                     actions.append({
                         "task_id": task_id,
                         "title": title,
@@ -445,14 +556,25 @@ def _apply_rules(
             and _has_label(labels, _SPEC_AUTHOR_LABEL)
             and mem_available_gb >= _MEM_R4AI_THRESHOLD_GB
         ):
-            actions.append({
-                "task_id": task_id,
-                "title": title,
-                "rule": "SPEC_AUTHOR_BACKLOG_PROMOTE",
-                "from_state": state,
-                "to_state": "Ready for AI",
-                "reason": "spec-author task in Backlog; promoting for board_worker dispatch",
-            })
+            if cooldown_skip_reason:
+                actions.append({
+                    "task_id": task_id,
+                    "title": title,
+                    "rule": "SPEC_AUTHOR_BACKLOG_PROMOTE",
+                    "from_state": state,
+                    "to_state": "Ready for AI",
+                    "reason": f"SKIPPED — {cooldown_skip_reason}",
+                    "skipped": True,
+                })
+            else:
+                actions.append({
+                    "task_id": task_id,
+                    "title": title,
+                    "rule": "SPEC_AUTHOR_BACKLOG_PROMOTE",
+                    "from_state": state,
+                    "to_state": "Ready for AI",
+                    "reason": "spec-author task in Backlog; promoting for board_worker dispatch",
+                })
 
     return actions
 
@@ -495,11 +617,16 @@ def main() -> int:
         return 1
 
     now = datetime.now(UTC)
+    try:
+        cooldown_skip_reason = _dispatch_cooldown_reason(UsageStore(), now=now)
+    except Exception:
+        cooldown_skip_reason = None
     actions = _apply_rules(
         issues, now=now, stale_blocked_hours=args.stale_blocked_hours,
         stale_running_hours=args.stale_running_hours,
         clean_blocked_min_minutes=args.clean_blocked_min_minutes,
         mem_available_gb=mem_gb,
+        cooldown_skip_reason=cooldown_skip_reason,
     )
 
     results = []
@@ -530,6 +657,7 @@ def main() -> int:
         "scanned_at": now.isoformat(),
         "mem_available_gb": round(mem_gb, 2),
         "apply": args.apply,
+        "cooldown_skip_reason": cooldown_skip_reason,
         "actions": results,
     }, indent=2, ensure_ascii=False))
     return 0
