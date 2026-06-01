@@ -144,14 +144,8 @@ class PlaneTaskChannel(AlertChannel):
             error_count = context.get("error_count", 0)
             threshold = context.get("threshold", 0)
 
-            # TODO: Call plane_client.create_issue(
-            #     project_id=self.project_id,
-            #     title=f"[Alert] {condition}",
-            #     description=self._build_task_description(context),
-            #     priority=self._severity_to_priority(context.get("severity", "MEDIUM")),
-            #     labels=self._build_labels(context),
-            # )
-
+            # Stub: full Plane integration planned for Stage 3+.
+            # Will call plane_client.create_issue() with condition/description/labels.
             logger.info(
                 "Plane task creation stub: %s (%s/%s errors)",
                 condition,
@@ -212,9 +206,9 @@ class PlaneTaskChannel(AlertChannel):
         """Build labels for Plane task from alert context."""
         labels = ["validation", "alert"]
         if context.get("condition_name"):
-            labels.append(context.get("condition_name").replace("_", "-"))
+            labels.append((context.get("condition_name") or "").replace("_", "-"))
         if context.get("severity"):
-            labels.append(f"severity-{context.get('severity').lower()}")
+            labels.append(f"severity-{(context.get('severity') or '').lower()}")
         return labels
 
 
@@ -320,7 +314,9 @@ class AlertChannelFactory:
         config = config or {}
 
         if channel_name == "operator_log":
-            return OperatorLogChannel(logger_name=config.get("logger_name"))
+            return OperatorLogChannel(
+                logger_name=config.get("logger_name") or "operations_center.alerts"
+            )
         elif channel_name == "plane":
             return PlaneTaskChannel(plane_client=config.get("plane_client"))
         elif channel_name == "slack":

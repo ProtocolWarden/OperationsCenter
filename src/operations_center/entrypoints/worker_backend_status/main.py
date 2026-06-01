@@ -74,7 +74,7 @@ def _command(
         )
         # Per-model rows are informational: a model_weekly cooldown on one model
         # does not block dispatch unless every model for the backend is cooling.
-        for cd in details.get("cooldowns") or []:
+        for cd in details.get("cooldowns") or []:  # ty: ignore[not-iterable]
             table.add_row(
                 "",
                 "model",

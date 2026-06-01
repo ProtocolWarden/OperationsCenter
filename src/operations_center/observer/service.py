@@ -311,6 +311,7 @@ def new_observer_context(
     hotspot_window: int,
     todo_limit: int,
     logs_root: Path,
+    metrics_exporter: ValidationMetricsExporter | None = None,
 ) -> ObserverContext:
     observed_at = datetime.now(UTC)
     run_id = f"obs_{observed_at.strftime('%Y%m%dT%H%M%SZ')}_{observed_at.microsecond:06x}"[-31:]
@@ -326,4 +327,5 @@ def new_observer_context(
         hotspot_window=hotspot_window,
         todo_limit=todo_limit,
         logs_root=logs_root,
+        metrics_exporter=metrics_exporter,
     )

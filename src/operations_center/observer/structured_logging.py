@@ -34,7 +34,7 @@ class StructuredLogEntry:
     latency_ms: Optional[float] = None
     artifacts_processed: Optional[int] = None
     error_count: Optional[int] = None
-    context: dict = None
+    context: Optional[dict] = None
 
     def __post_init__(self) -> None:
         if self.context is None:
@@ -58,7 +58,9 @@ class StructuredLogEntry:
             "context": self.context,
         }
         # Remove None values
-        return json.dumps({k: v for k, v in entry_dict.items() if v is not None})
+        return json.dumps(
+            {k: v for k, v in entry_dict.items() if v is not None}, ensure_ascii=False
+        )
 
 
 class StructuredLogWriter:
@@ -81,7 +83,7 @@ class StructuredLogWriter:
         """Write a structured log entry."""
         self._rotate_if_needed()
 
-        with open(self.log_path, "a") as f:
+        with open(self.log_path, "a", encoding="utf-8") as f:
             f.write(entry.to_json() + "\n")
 
     def _rotate_if_needed(self) -> None:
@@ -136,7 +138,7 @@ class StructuredLogReader:
 
         # Read from most recent file first
         for log_file in reversed(files):
-            with open(log_file, "r") as f:
+            with open(log_file, encoding="utf-8") as f:
                 for line in f:
                     if not line.strip():
                         continue

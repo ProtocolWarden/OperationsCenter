@@ -222,8 +222,8 @@ def _resolve_local_manifest_path(pm, repo_root, logger):
     if not pm.project_slug:
         return None
     try:
-        from platform_deployment_cli.local_manifest import (
-            discover_local_manifest,  # ty:ignore[unresolved-import]
+        from platform_deployment_cli.local_manifest import (  # ty: ignore[unresolved-import]
+            discover_local_manifest,
         )
     except ImportError:
         logger.debug(

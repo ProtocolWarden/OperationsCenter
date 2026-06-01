@@ -326,8 +326,8 @@ class AlertValidator:
             output_path: Path to write JSON file
         """
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_path, "w") as f:
-            json.dump(report.to_dict(), f, indent=2)
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(report.to_dict(), f, indent=2, ensure_ascii=False)
         logger.info("Saved validation report to %s", output_path)
 
 

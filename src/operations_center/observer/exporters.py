@@ -119,7 +119,7 @@ class ValidationMetricsExporter:
         metrics_file = self._get_metrics_file_path()
 
         # Write metric as single JSON line
-        json_line = json.dumps(metric.to_dict())
+        json_line = json.dumps(metric.to_dict(), ensure_ascii=False)
         try:
             metrics_file.parent.mkdir(parents=True, exist_ok=True)
             with open(metrics_file, "a", encoding="utf-8") as f:

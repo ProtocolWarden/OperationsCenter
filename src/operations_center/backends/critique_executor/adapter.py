@@ -53,8 +53,8 @@ class CritiqueExecutorBackendAdapter:
         self, request: ExecutionRequest
     ) -> tuple[ExecutionResult, object | None]:
         try:
-            from critique_executor.executor import (
-                CritiqueExecutorRunner,  # type: ignore  # noqa: PGH003
+            from critique_executor.executor import (  # type: ignore  # noqa: PGH003
+                CritiqueExecutorRunner,
             )
             from critique_executor.models import (  # type: ignore  # noqa: PGH003
                 CritiqueConfig,

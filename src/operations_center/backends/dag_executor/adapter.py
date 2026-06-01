@@ -54,11 +54,11 @@ class DAGExecutorBackendAdapter:
         self, request: ExecutionRequest
     ) -> tuple[ExecutionResult, object | None]:
         try:
-            from dag_executor.executor import (
-                DAGExecutorRunner,  # ty: ignore[unresolved-import]  # noqa: PGH003
+            from dag_executor.executor import (  # ty: ignore[unresolved-import]  # noqa: PGH003
+                DAGExecutorRunner,
             )
-            from dag_executor.loader import (
-                load_graph_file,  # ty: ignore[unresolved-import]  # noqa: PGH003
+            from dag_executor.loader import (  # ty: ignore[unresolved-import]  # noqa: PGH003
+                load_graph_file,
             )
             from dag_executor.models import (  # ty: ignore[unresolved-import]  # noqa: PGH003
                 GraphSpec,
@@ -95,7 +95,7 @@ class DAGExecutorBackendAdapter:
                 artifacts_dir=artifacts_dir,
                 working_directory=str(workspace),
                 timeout_seconds=self._settings.timeout_seconds or None,
-                worker_backend=worker_backend,  # ty: ignore[invalid-argument-type]  # noqa: PGH003
+                worker_backend=worker_backend,  # ty: ignore[invalid-argument-type]
             )
             if workflow_path.exists():
                 spec = load_graph_file(str(workflow_path), goal_text=request.goal_text)

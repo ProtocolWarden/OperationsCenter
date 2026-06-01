@@ -186,7 +186,9 @@ class TestAlertValidator:
         )
 
         is_valid, issues = validator.validate_configuration()
-        # Should be valid but have a warning logged
+        # Missing route logs a warning but doesn't add to issues — is_valid reflects threshold checks only
+        assert isinstance(is_valid, bool)
+        assert isinstance(issues, list)
 
     def test_evaluate_condition_dry_run(
         self,

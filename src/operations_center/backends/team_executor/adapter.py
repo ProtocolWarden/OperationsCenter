@@ -48,8 +48,8 @@ class TeamExecutorBackendAdapter:
         self, request: ExecutionRequest
     ) -> tuple[ExecutionResult, object | None]:
         try:
-            from team_executor.executor import (
-                TeamExecutorRunner,  # ty: ignore[unresolved-import]  # noqa: PGH003
+            from team_executor.executor import (  # ty: ignore[unresolved-import]  # noqa: PGH003
+                TeamExecutorRunner,
             )
         except ImportError as exc:
             return _error_result(request, f"team_executor not installed: {exc}"), None
@@ -73,7 +73,7 @@ class TeamExecutorBackendAdapter:
             runner = TeamExecutorRunner(
                 team_name=team_name,
                 working_dir=working_dir,
-                worker_backend=worker_backend,  # ty: ignore[invalid-argument-type]  # noqa: PGH003
+                worker_backend=worker_backend,  # ty: ignore[invalid-argument-type]
             )
             return runner.run(
                 goal_text=request.goal_text,
