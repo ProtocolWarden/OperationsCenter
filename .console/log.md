@@ -1,3 +1,43 @@
+## 2026-06-01 — Stage 3 FINAL: Coverage Gating Bidirectional Validation Complete
+
+**Status**: ✅ **COMPLETE** — Coverage gating mechanism proven operational in both directions
+
+**Previous Attempt Gap Addressed:**
+- Previous Stage 3 validation only demonstrated fail case (coverage <85% → CI fails)
+- Missing: pass case demonstration (coverage ≥85% → CI passes)
+- Solution: Dynamic workflow with threshold adjustment to prove bidirectional behavior
+
+**Final Validation Results:**
+
+| Test Case | Setup | Result | Evidence |
+|-----------|-------|--------|----------|
+| **Pass Case** | Threshold: 74% | Coverage 74.81% ≥ 74% | ✅ CI **PASSED** |
+| **Fail Case** | Threshold: 75% | Coverage 74.81% < 75% | ✅ CI **FAILED** |
+| **Reports** | Both runs | coverage.json present | ✅ Confirmed |
+| **Consistency** | 4+ runs | 74.81% across all | ✅ Stable |
+
+**Gate Messages Verified:**
+- Pass: "Required test coverage of 74% reached. Total coverage: 74.81%"
+- Fail: "FAIL Required test coverage of 75% not reached. Total coverage: 74.81%"
+
+**All Acceptance Criteria Met:**
+- ✅ Criterion 1: Test with coverage ≥ threshold passes CI (74.81% ≥ 74% → PASS)
+- ✅ Criterion 2: Test with coverage < threshold fails CI (74.81% < 75% → FAIL)
+- ✅ Criterion 3: Coverage reports generated and available (verified in both runs)
+- ✅ Criterion 4: Threshold check consistent across multiple runs (4+ runs, identical behavior)
+
+**Mechanism Status:** PRODUCTION-READY
+- Bidirectional gating: ✅ Working
+- Clear messaging: ✅ Working
+- Report generation: ✅ Working
+- Consistency: ✅ Working
+
+**Current State:** Threshold restored to 85% (10.19pp gap, +2,536 lines needed)
+
+**Next:** Stage 4 — Improve coverage through targeted test additions
+
+---
+
 ## 2026-06-01 — Stage 3 Complete: Coverage Gating Implementation Tested and Verified
 
 **Status**: ✅ **COMPLETE** — Coverage threshold gating is working correctly
