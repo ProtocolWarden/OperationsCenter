@@ -25,6 +25,8 @@ from typing import Optional
 from core_runner import CoreRunner
 from rxp.contracts import RuntimeInvocation
 
+from operations_center.backends._capacity_classifier import classify_capacity_exhaustion
+from operations_center.backends._runtime_ref import runtime_invocation_ref
 from operations_center.config.settings import AiderSettings
 from operations_center.contracts.common import ChangedFileRef, ValidationSummary
 from operations_center.contracts.enums import (
@@ -33,9 +35,11 @@ from operations_center.contracts.enums import (
     FailureReasonCategory,
     ValidationStatus,
 )
-from operations_center.contracts.execution import ExecutionArtifact, ExecutionRequest, ExecutionResult
-from operations_center.backends._capacity_classifier import classify_capacity_exhaustion
-from operations_center.backends._runtime_ref import runtime_invocation_ref
+from operations_center.contracts.execution import (
+    ExecutionArtifact,
+    ExecutionRequest,
+    ExecutionResult,
+)
 
 
 class DirectLocalBackendAdapter:
@@ -67,9 +71,13 @@ class DirectLocalBackendAdapter:
                 result.metadata["capacity_exhausted"] = True
                 result.output = capacity_excerpt
 
-        changed_files, changed_files_source, changed_files_confidence = _discover_changed_files(repo_path)
+        changed_files, changed_files_source, changed_files_confidence = _discover_changed_files(
+            repo_path
+        )
         failure_category = _failure_category(result)
-        failure_reason = None if result.success else (result.output or "direct_local execution failed")
+        failure_reason = (
+            None if result.success else (result.output or "direct_local execution failed")
+        )
 
         artifacts: list[ExecutionArtifact] = []
         if result.output:
@@ -131,7 +139,9 @@ class DirectLocalBackendAdapter:
             env["OPENAI_API_KEY"] = "sk-local-direct"
         return command, env
 
-    def _run(self, *, command: list[str], repo_path: Path, env: dict[str, str]) -> "_DirectLocalRunResult":
+    def _run(
+        self, *, command: list[str], repo_path: Path, env: dict[str, str]
+    ) -> "_DirectLocalRunResult":
         # Per-call artifact dir so ER's stdout/stderr capture doesn't
         # pollute the workspace.
         artifact_dir = tempfile.mkdtemp(prefix="direct-local-")
@@ -220,6 +230,7 @@ def _read_capture(path: str | None) -> str:
 def _short_id() -> str:
     """Cheap unique-enough invocation id for direct_local runs."""
     import uuid
+
     return f"direct-local-{uuid.uuid4().hex[:8]}"
 
 

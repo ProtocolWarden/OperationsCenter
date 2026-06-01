@@ -23,6 +23,7 @@ Exit codes:
 
 Designed to be safe to run repeatedly. Idempotency via the dedup store.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -82,7 +83,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--dry-run",
         action="store_true",
         help="Skip Plane API calls; record what would be created. Forces a "
-             "fake task creator that returns synthetic IDs.",
+        "fake task creator that returns synthetic IDs.",
     )
     p.add_argument(
         "--json",
@@ -107,26 +108,26 @@ def main(argv: list[str] | None = None) -> int:
 
     pcfg: ContractChangePropagationSettings = settings.contract_change_propagation
     if args.require_enabled and not pcfg.enabled:
-        print("✗ propagate: contract_change_propagation.enabled is False; aborting "
-              "(--require-enabled was set)", file=sys.stderr)
+        print(
+            "✗ propagate: contract_change_propagation.enabled is False; aborting "
+            "(--require-enabled was set)",
+            file=sys.stderr,
+        )
         return 1
 
-    graph = build_effective_repo_graph_from_settings(
-        settings, repo_root=Path.cwd()
-    )
+    graph = build_effective_repo_graph_from_settings(settings, repo_root=Path.cwd())
     if graph is None:
-        print("✗ propagate: EffectiveRepoGraph build returned None — see warnings",
-              file=sys.stderr)
+        print("✗ propagate: EffectiveRepoGraph build returned None — see warnings", file=sys.stderr)
         return 1
 
     policy = _build_policy(pcfg)
     registry = PropagationRegistry.from_mapping()
 
-    record_dir = pcfg.record_dir if pcfg.record_dir.is_absolute() else (
-        Path.cwd() / pcfg.record_dir
+    record_dir = (
+        pcfg.record_dir if pcfg.record_dir.is_absolute() else (Path.cwd() / pcfg.record_dir)
     )
-    dedup_path = pcfg.dedup_path if pcfg.dedup_path.is_absolute() else (
-        Path.cwd() / pcfg.dedup_path
+    dedup_path = (
+        pcfg.dedup_path if pcfg.dedup_path.is_absolute() else (Path.cwd() / pcfg.dedup_path)
     )
     dedup = PropagationDedupStore(path=dedup_path)
 
@@ -171,14 +172,18 @@ def _build_policy(pcfg: ContractChangePropagationSettings) -> PropagationPolicy:
         except ValueError:
             logger.warning(
                 "ignoring pair_override with invalid action=%r (target=%s consumer=%s)",
-                ov.action, ov.target_repo_id, ov.consumer_repo_id,
+                ov.action,
+                ov.target_repo_id,
+                ov.consumer_repo_id,
             )
             continue
-        overrides.append((
-            ov.target_repo_id,
-            ov.consumer_repo_id,
-            _PairOverride(action=action, reason=ov.reason),
-        ))
+        overrides.append(
+            (
+                ov.target_repo_id,
+                ov.consumer_repo_id,
+                _PairOverride(action=action, reason=ov.reason),
+            )
+        )
     settings = PropagationSettings(
         enabled=pcfg.enabled,
         auto_trigger_edge_types=frozenset(pcfg.auto_trigger_edge_types),
@@ -211,12 +216,16 @@ def _print_human(record) -> None:  # type: ignore[no-untyped-def]
     print(f"  target:           {record.target_canonical} ({record.target_repo_id})")
     print(f"  target_version:   {record.target_version}")
     print(f"  triggered_at:     {record.triggered_at}")
-    print(f"  policy:           enabled={record.policy_summary.get('enabled')} "
-          f"edge_types={record.policy_summary.get('auto_trigger_edge_types')}")
+    print(
+        f"  policy:           enabled={record.policy_summary.get('enabled')} "
+        f"edge_types={record.policy_summary.get('auto_trigger_edge_types')}"
+    )
     impact = record.impact_summary
-    print(f"  impact:           {impact.get('affected_count', 0)} consumer(s) "
-          f"[public={len(impact.get('public_affected', []))} "
-          f"private={len(impact.get('private_affected', []))}]")
+    print(
+        f"  impact:           {impact.get('affected_count', 0)} consumer(s) "
+        f"[public={len(impact.get('public_affected', []))} "
+        f"private={len(impact.get('private_affected', []))}]"
+    )
     for o in record.outcomes:
         suffix = f" → issue={o.issue_id}" if o.issue_id else ""
         if o.error:

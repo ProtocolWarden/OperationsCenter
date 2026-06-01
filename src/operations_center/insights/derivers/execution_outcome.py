@@ -12,6 +12,7 @@ Emits insights:
   - execution_outcome/test_regression   — test-failure pattern (not lint/type)
   - execution_outcome/validation_loop   — task blocked repeatedly on same validator
 """
+
 from __future__ import annotations
 
 from collections import Counter
@@ -24,7 +25,9 @@ from operations_center.observer.models import RepoStateSnapshot
 
 _ARTIFACT_SCAN_LIMIT = 50
 _TIMEOUT_TOKENS = frozenset({"timed out", "timeout", "deadline exceeded", "operation timed out"})
-_TEST_REGRESSION_TOKENS = frozenset({"test failed", "assertion error", "assertionerror", "failed test"})
+_TEST_REGRESSION_TOKENS = frozenset(
+    {"test failed", "assertion error", "assertionerror", "failed test"}
+)
 _VALIDATION_LOOP_MIN_REPEATS = 3
 
 
@@ -67,6 +70,7 @@ class ExecutionOutcomeDeriver:
                 continue
             try:
                 import json
+
                 outcome = json.loads(outcome_file.read_text(encoding="utf-8"))
                 request = json.loads(request_file.read_text(encoding="utf-8"))
             except Exception:
@@ -133,8 +137,11 @@ class ExecutionOutcomeDeriver:
                 )
             )
 
-        looping_tasks = [tid for tid, cnt in validation_fail_by_task.items()
-                         if cnt >= _VALIDATION_LOOP_MIN_REPEATS]
+        looping_tasks = [
+            tid
+            for tid, cnt in validation_fail_by_task.items()
+            if cnt >= _VALIDATION_LOOP_MIN_REPEATS
+        ]
         if looping_tasks:
             insights.append(
                 self.normalizer.normalize(

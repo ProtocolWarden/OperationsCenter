@@ -31,7 +31,7 @@ from core_runner import CoreRunner
 from core_runner.runners import ManualRunner
 from rxp.contracts import RuntimeInvocation, RuntimeResult
 
-from .models import OpenClawArtifactCapture, OpenClawRunCapture, OpenClawPreparedRun
+from .models import OpenClawArtifactCapture, OpenClawPreparedRun, OpenClawRunCapture
 
 
 @dataclass
@@ -84,20 +84,26 @@ class OpenClawBackendInvoker:
             raw_holder.append(raw)
             timeout = _detect_timeout(raw)
             return _build_runtime_result(
-                invocation=inv, raw=raw, timeout_hit=timeout,
-                started_at=started_at, finished_at=_now(),
+                invocation=inv,
+                raw=raw,
+                timeout_hit=timeout,
+                started_at=started_at,
+                finished_at=_now(),
             )
 
         self._runtime.register("manual", ManualRunner(_dispatcher))
         rxp_result = self._runtime.run(invocation)
 
         from operations_center.backends._runtime_ref import runtime_invocation_ref
+
         ref = runtime_invocation_ref(invocation, rxp_result)
 
         if not raw_holder:
             cap = _capture_from_rejection(
-                prepared=prepared, rxp_result=rxp_result,
-                started_at=started_at, finished_at=_now(),
+                prepared=prepared,
+                rxp_result=rxp_result,
+                started_at=started_at,
+                finished_at=_now(),
             )
             cap.invocation_ref = ref
             return cap
@@ -140,8 +146,10 @@ def _build_invocation(prepared: OpenClawPreparedRun) -> RuntimeInvocation:
         working_directory=str(prepared.repo_path),
         command=[
             "openclaw-run",
-            "--run-mode", metadata["run_mode"],
-            "--run-id", prepared.run_id,
+            "--run-mode",
+            metadata["run_mode"],
+            "--run-id",
+            prepared.run_id,
         ],
         environment={},
         timeout_seconds=getattr(prepared, "timeout_seconds", 300) or None,

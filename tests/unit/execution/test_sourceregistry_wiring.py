@@ -22,7 +22,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 from operations_center.contracts.enums import BackendName, LaneName
 from operations_center.contracts.execution import BoundExecutionTargetMirror
 from operations_center.contracts.routing import LaneDecision
@@ -38,13 +37,14 @@ from operations_center.planning.models import (
 )
 from operations_center.planning.proposal_builder import build_proposal
 
-
 # ---------------------------------------------------------------------------
 # (a) End-to-end load against the real registry/source_registry.yaml
 # ---------------------------------------------------------------------------
 
 
-def test_provenance_from_registry_resolves_real_team_executor_entry(monkeypatch, tmp_path: Path) -> None:
+def test_provenance_from_registry_resolves_real_team_executor_entry(
+    monkeypatch, tmp_path: Path
+) -> None:
     """The shipped registry/source_registry.yaml must resolve `team_executor` to
     its ProtocolWarden fork.
 
@@ -101,7 +101,9 @@ def test_bound_target_carries_registry_provenance_when_resolvable(monkeypatch) -
     # (graceful degradation per binding contract)
 
 
-def test_bound_target_provenance_none_when_registry_has_no_entry(tmp_path: Path, monkeypatch) -> None:
+def test_bound_target_provenance_none_when_registry_has_no_entry(
+    tmp_path: Path, monkeypatch
+) -> None:
     """A backend the registry doesn't list (e.g. demo_stub) yields a
     bound target whose provenance is None. The mirror is still
     populated — bound_target itself is not None — but provenance is
@@ -139,13 +141,15 @@ def test_request_builder_attaches_bound_target_with_provenance(monkeypatch, tmp_
 
 
 def test_request_builder_bound_target_provenance_none_for_unregistered_backend(
-    monkeypatch, tmp_path: Path,
+    monkeypatch,
+    tmp_path: Path,
 ) -> None:
     monkeypatch.chdir(tmp_path)  # no registry visible
 
     bundle = _bundle(BackendName.DEMO_STUB)
     runtime = ExecutionRuntimeContext(
-        workspace_path=tmp_path, task_branch="auto/test",
+        workspace_path=tmp_path,
+        task_branch="auto/test",
     )
     request = ExecutionRequestBuilder().build(bundle, runtime)
 
@@ -178,8 +182,8 @@ def test_provenance_appears_on_execution_record_metadata_and_trace(monkeypatch) 
     from tests.unit.execution.test_coordinator import (
         _RecordingAdapter,
         _Registry,
-        _StubPolicyEngine,
         _runtime,
+        _StubPolicyEngine,
     )
 
     bundle = _bundle(BackendName.DEMO_STUB)
@@ -228,14 +232,16 @@ def test_provenance_returns_none_when_yaml_malformed(tmp_path: Path, monkeypatch
     registry_dir = tmp_path / "registry"
     registry_dir.mkdir()
     (registry_dir / "source_registry.yaml").write_text(
-        "this: is: not: valid: yaml: at: all\n", encoding="utf-8",
+        "this: is: not: valid: yaml: at: all\n",
+        encoding="utf-8",
     )
     monkeypatch.chdir(tmp_path)
     assert _provenance_from_registry("team_executor") is None
 
 
 def test_bound_target_from_decision_does_not_crash_on_registry_failure(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     """Even with no registry on disk, the request builder produces a
     bound_target — provenance is None but the lane/backend mirror

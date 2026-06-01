@@ -33,23 +33,29 @@ class TestEvidenceStrength:
 class TestLatencyClass:
     def test_four_values(self):
         assert set(LatencyClass) == {
-            LatencyClass.FAST, LatencyClass.MEDIUM,
-            LatencyClass.SLOW, LatencyClass.UNKNOWN,
+            LatencyClass.FAST,
+            LatencyClass.MEDIUM,
+            LatencyClass.SLOW,
+            LatencyClass.UNKNOWN,
         }
 
 
 class TestReliabilityClass:
     def test_three_values(self):
         assert set(ReliabilityClass) == {
-            ReliabilityClass.LOW, ReliabilityClass.MEDIUM, ReliabilityClass.HIGH,
+            ReliabilityClass.LOW,
+            ReliabilityClass.MEDIUM,
+            ReliabilityClass.HIGH,
         }
 
 
 class TestChangeEvidenceClass:
     def test_four_values(self):
         assert set(ChangeEvidenceClass) == {
-            ChangeEvidenceClass.POOR, ChangeEvidenceClass.PARTIAL,
-            ChangeEvidenceClass.STRONG, ChangeEvidenceClass.UNKNOWN,
+            ChangeEvidenceClass.POOR,
+            ChangeEvidenceClass.PARTIAL,
+            ChangeEvidenceClass.STRONG,
+            ChangeEvidenceClass.UNKNOWN,
         }
 
 
@@ -108,9 +114,7 @@ class TestStrategyFinding:
         assert f.finding_id
 
     def test_defaults(self):
-        f = StrategyFinding(
-            category="x", summary="y", evidence_strength=EvidenceStrength.WEAK
-        )
+        f = StrategyFinding(category="x", summary="y", evidence_strength=EvidenceStrength.WEAK)
         assert f.affected_lanes == []
         assert f.affected_backends == []
         assert f.task_scope == []
@@ -118,9 +122,7 @@ class TestStrategyFinding:
         assert f.notes == ""
 
     def test_is_frozen(self):
-        f = StrategyFinding(
-            category="x", summary="y", evidence_strength=EvidenceStrength.WEAK
-        )
+        f = StrategyFinding(category="x", summary="y", evidence_strength=EvidenceStrength.WEAK)
         with pytest.raises(ValidationError):
             f.summary = "changed"
 

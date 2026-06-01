@@ -15,7 +15,6 @@ from operations_center.observability.recorder import ExecutionRecorder
 from operations_center.observability.trace import ExecutionTrace, RunReportBuilder
 
 
-
 @pytest.fixture
 def recorder() -> ExecutionRecorder:
     return ExecutionRecorder()
@@ -210,6 +209,7 @@ def test_no_changed_file_warning_for_not_applicable(recorder, builder, policy_bl
 
 def test_backend_detail_refs_in_trace(recorder, builder, successful_rich_result):
     from operations_center.observability.models import BackendDetailRef
+
     ref = BackendDetailRef(detail_type="stderr_log", path="/tmp/stderr.txt")
     record = recorder.record(successful_rich_result, raw_detail_refs=[ref])
     trace = builder.build_report(record)

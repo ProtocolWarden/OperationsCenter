@@ -84,30 +84,39 @@ def test_recurring_high_impact_strong_evidence_can_produce_patch_proposal() -> N
 
 def test_weak_evidence_leads_to_conservative_output() -> None:
     evaluator = UpstreamPatchEvaluator.default()
-    report = evaluator.analyze([
-        _evidence(upstream_target="generic_backend", issue_key="provider_surface_gap", sample_size=1, occurrence_count=1)
-    ])
+    report = evaluator.analyze(
+        [
+            _evidence(
+                upstream_target="generic_backend",
+                issue_key="provider_surface_gap",
+                sample_size=1,
+                occurrence_count=1,
+            )
+        ]
+    )
     assert report.friction_findings[0].evidence_strength == EvidenceStrength.WEAK
     assert report.recommendations == []
 
 
 def test_workaround_complexity_and_divergence_risk_are_reflected_in_proposal() -> None:
     evaluator = UpstreamPatchEvaluator.default()
-    report = evaluator.analyze([
-        _evidence(
-            upstream_target="openclaw",
-            divergence_risk_hint=DivergenceRiskClass.HIGH,
-            sample_size=8,
-            occurrence_count=4,
-        ),
-        _evidence(
-            upstream_target="openclaw",
-            source_type="operator_pain",
-            divergence_risk_hint=DivergenceRiskClass.HIGH,
-            sample_size=8,
-            occurrence_count=4,
-        ),
-    ])
+    report = evaluator.analyze(
+        [
+            _evidence(
+                upstream_target="openclaw",
+                divergence_risk_hint=DivergenceRiskClass.HIGH,
+                sample_size=8,
+                occurrence_count=4,
+            ),
+            _evidence(
+                upstream_target="openclaw",
+                source_type="operator_pain",
+                divergence_risk_hint=DivergenceRiskClass.HIGH,
+                sample_size=8,
+                occurrence_count=4,
+            ),
+        ]
+    )
     proposal = report.recommendations[0]
     assert proposal.divergence_risk == DivergenceRiskClass.HIGH
     assert any("Divergence risk is high" in risk for risk in proposal.risks)

@@ -10,19 +10,20 @@ does not regress in performance over time. Tests measure:
 - Scalability across dependency counts
 - Parser resilience with large payloads
 """
+
 from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import MagicMock
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
 from operations_center.observer.collectors.dependency_drift import DependencyDriftCollector
 from operations_center.observer.service import ObserverContext
-from tests.fixtures.timing import Timing, MemoryTracker
+from tests.fixtures.timing import MemoryTracker, Timing
 
 
 def _make_observer_context(report_root: Path) -> ObserverContext:
@@ -65,9 +66,7 @@ class TestDependencyReportPerformanceRegression:
 
         assert signal.status == "available"
         elapsed_ms = timer.elapsed() * 1000
-        assert elapsed_ms < 50, (
-            f"Collection time regression: {elapsed_ms:.2f}ms, expected <50ms"
-        )
+        assert elapsed_ms < 50, f"Collection time regression: {elapsed_ms:.2f}ms, expected <50ms"
 
     def test_baseline_collection_correctness(
         self, baseline_report_on_disk: tuple[Path, dict[str, Any]]
@@ -83,9 +82,7 @@ class TestDependencyReportPerformanceRegression:
         assert str(report_path) in signal.source
 
         # Verify signal summary reflects correct dependency counts
-        expected_actionable = len(
-            [s for s in data["statuses"] if s.get("notes")]
-        )
+        expected_actionable = len([s for s in data["statuses"] if s.get("notes")])
         assert f"actionable_statuses={expected_actionable}" in signal.summary
 
     def test_baseline_memory_usage(
@@ -103,8 +100,7 @@ class TestDependencyReportPerformanceRegression:
         peak_mb = tracker.peak_memory_mb
         max_allowed = 60  # 50MB baseline + 10MB tolerance
         assert peak_mb < max_allowed, (
-            f"Memory regression: {peak_mb:.1f}MB, "
-            f"expected <{max_allowed}MB (baseline <50MB)"
+            f"Memory regression: {peak_mb:.1f}MB, expected <{max_allowed}MB (baseline <50MB)"
         )
 
     # ========================================================================
@@ -124,12 +120,11 @@ class TestDependencyReportPerformanceRegression:
 
         assert signal.status == "available"
         elapsed_ms = timer.elapsed() * 1000
-        assert elapsed_ms < 50, (
-            f"Collection time regression: {elapsed_ms:.2f}ms, expected <50ms"
-        )
+        assert elapsed_ms < 50, f"Collection time regression: {elapsed_ms:.2f}ms, expected <50ms"
 
     def test_large_simple_scalability_ratio(
-        self, baseline_report_on_disk: tuple[Path, dict[str, Any]],
+        self,
+        baseline_report_on_disk: tuple[Path, dict[str, Any]],
         large_simple_report_on_disk: tuple[Path, dict[str, Any]],
     ) -> None:
         """Assert linear scalability: 20 deps ≈ 2.9x baseline (7 deps)."""
@@ -193,9 +188,7 @@ class TestDependencyReportPerformanceRegression:
 
         assert signal.status == "available"
         elapsed_ms = timer.elapsed() * 1000
-        assert elapsed_ms < 50, (
-            f"Collection time regression: {elapsed_ms:.2f}ms, expected <50ms"
-        )
+        assert elapsed_ms < 50, f"Collection time regression: {elapsed_ms:.2f}ms, expected <50ms"
 
     def test_large_actionable_identifies_all_actionable(
         self, large_actionable_report_on_disk: tuple[Path, dict[str, Any]]
@@ -229,9 +222,7 @@ class TestDependencyReportPerformanceRegression:
 
         assert signal.status == "available"
         elapsed_ms = timer.elapsed() * 1000
-        assert elapsed_ms < 50, (
-            f"Collection time regression: {elapsed_ms:.2f}ms, expected <50ms"
-        )
+        assert elapsed_ms < 50, f"Collection time regression: {elapsed_ms:.2f}ms, expected <50ms"
 
     def test_large_payload_parsing_resilience(
         self, large_payload_report_on_disk: tuple[Path, dict[str, Any]]
@@ -264,8 +255,7 @@ class TestDependencyReportPerformanceRegression:
         peak_mb = tracker.peak_memory_mb
         max_allowed = 180  # 150MB baseline + 30MB tolerance
         assert peak_mb < max_allowed, (
-            f"Memory regression: {peak_mb:.1f}MB, "
-            f"expected <{max_allowed}MB"
+            f"Memory regression: {peak_mb:.1f}MB, expected <{max_allowed}MB"
         )
 
     # ========================================================================
@@ -285,9 +275,7 @@ class TestDependencyReportPerformanceRegression:
 
         assert signal.status == "available"
         elapsed_ms = timer.elapsed() * 1000
-        assert elapsed_ms < 50, (
-            f"Collection time regression: {elapsed_ms:.2f}ms, expected <50ms"
-        )
+        assert elapsed_ms < 50, f"Collection time regression: {elapsed_ms:.2f}ms, expected <50ms"
 
     def test_extra_large_all_dependencies_present(
         self, extra_large_report_on_disk: tuple[Path, dict[str, Any]]
@@ -316,8 +304,7 @@ class TestDependencyReportPerformanceRegression:
         peak_mb = tracker.peak_memory_mb
         max_allowed = 250  # 200MB baseline + 50MB tolerance
         assert peak_mb < max_allowed, (
-            f"Memory regression: {peak_mb:.1f}MB, "
-            f"expected <{max_allowed}MB"
+            f"Memory regression: {peak_mb:.1f}MB, expected <{max_allowed}MB"
         )
 
     # ========================================================================
@@ -367,9 +354,7 @@ class TestDependencyReportPerformanceRegression:
                     f"of {times[i - 1][0]} (expected ~{expected_ratio:.2f}x)"
                 )
 
-    def test_malformed_json_handled_gracefully(
-        self, report_fixture_dir: Path
-    ) -> None:
+    def test_malformed_json_handled_gracefully(self, report_fixture_dir: Path) -> None:
         """Assert malformed JSON returns not_available status."""
         from uuid import uuid4
 
@@ -390,9 +375,7 @@ class TestDependencyReportPerformanceRegression:
         # Should not take excessive time on error
         assert timer.elapsed() < 1.0
 
-    def test_invalid_structure_handled_gracefully(
-        self, report_fixture_dir: Path
-    ) -> None:
+    def test_invalid_structure_handled_gracefully(self, report_fixture_dir: Path) -> None:
         """Assert invalid structure (missing statuses) returns not_available."""
         from uuid import uuid4
 
@@ -401,9 +384,7 @@ class TestDependencyReportPerformanceRegression:
 
         # Write valid JSON but missing required 'statuses' field
         report_file = run_dir / "dependency_report.json"
-        report_file.write_text(
-            json.dumps({"some_field": "value"}), encoding="utf-8"
-        )
+        report_file.write_text(json.dumps({"some_field": "value"}), encoding="utf-8")
 
         report_root = report_file.parent.parent
         ctx = _make_observer_context(report_root)
@@ -431,9 +412,7 @@ class TestDependencyReportPerformanceRegression:
         assert signal.status == "available"
         assert "no statuses" in signal.summary
 
-    def test_multiple_reports_picks_latest(
-        self, report_fixture_dir: Path
-    ) -> None:
+    def test_multiple_reports_picks_latest(self, report_fixture_dir: Path) -> None:
         """Assert latest report by mtime is selected from multiple."""
         import os
         from uuid import uuid4

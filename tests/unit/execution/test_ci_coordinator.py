@@ -27,10 +27,10 @@ from operations_center.execution.ci_coordinator import CiCoordinator, CiRunConte
 from operations_center.execution.ci_evaluator import CiEvaluator
 from operations_center.execution.ci_store import CiStore
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _strategy(variation_hint: Optional[str] = None) -> ImprovementStrategy:
     return ImprovementStrategy(
@@ -99,6 +99,7 @@ def _make_execute(outcomes: list[tuple[EvaluationOutcome, Optional[float]]]):
 # ---------------------------------------------------------------------------
 # Decision logic tests
 # ---------------------------------------------------------------------------
+
 
 class TestCiCoordinatorDecideLogic:
     """Unit tests for the _decide method in isolation."""
@@ -171,6 +172,7 @@ class TestCiCoordinatorDecideLogic:
 # ---------------------------------------------------------------------------
 # Integration: full 3-attempt cycle
 # ---------------------------------------------------------------------------
+
 
 class TestCiCoordinator3AttemptCycle:
     """Integration tests driving the full loop with mocked evaluator."""
@@ -264,6 +266,7 @@ class TestCiCoordinator3AttemptCycle:
 # Lineage persistence tests
 # ---------------------------------------------------------------------------
 
+
 class TestCiCoordinatorLineagePersistence:
     def test_lineage_written_to_clp_path(self, tmp_path):
         scores = [_mock_score(EvaluationOutcome.IMPROVED, primary_delta=-0.06)]
@@ -277,9 +280,7 @@ class TestCiCoordinatorLineagePersistence:
         execute, _ = _make_execute([])
         coord.run(ctx, execute)
 
-        lineage_path = (
-            tmp_path / ".context" / "capsules" / "lin-test-001" / "lineage.json"
-        )
+        lineage_path = tmp_path / ".context" / "capsules" / "lin-test-001" / "lineage.json"
         assert lineage_path.exists()
         data = json.loads(lineage_path.read_text())
         assert data["lineage_id"] == "lin-test-001"

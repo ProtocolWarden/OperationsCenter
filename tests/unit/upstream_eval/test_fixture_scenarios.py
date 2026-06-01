@@ -34,8 +34,12 @@ def _build_evidence(payload: dict) -> list[IntegrationFrictionEvidence]:
             summary=record["summary"],
             severity_hint=SeverityClass(record["severity_hint"]),
             architectural_impact_hint=ArchitecturalImpactClass(record["architectural_impact_hint"]),
-            workaround_complexity_hint=WorkaroundComplexityClass(record["workaround_complexity_hint"]),
-            workaround_reliability_hint=WorkaroundReliabilityClass(record["workaround_reliability_hint"]),
+            workaround_complexity_hint=WorkaroundComplexityClass(
+                record["workaround_complexity_hint"]
+            ),
+            workaround_reliability_hint=WorkaroundReliabilityClass(
+                record["workaround_reliability_hint"]
+            ),
             divergence_risk_hint=DivergenceRiskClass(record["divergence_risk_hint"]),
             sample_size=record["sample_size"],
             occurrence_count=record["occurrence_count"],

@@ -31,6 +31,7 @@ _DISPATCH_TARGET = "operations_center.entrypoints.audit.main.dispatch_managed_au
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_dispatch_result(succeeded: bool = True) -> ManagedAuditDispatchResult:
     now = datetime.now(UTC)
     return ManagedAuditDispatchResult(
@@ -49,7 +50,11 @@ def _make_dispatch_result(succeeded: bool = True) -> ManagedAuditDispatchResult:
     )
 
 
-def _make_run_status(tmp_path: Path, run_id: str = "run_001", artifact_manifest_path: str | None = "artifacts/manifest.json") -> Path:
+def _make_run_status(
+    tmp_path: Path,
+    run_id: str = "run_001",
+    artifact_manifest_path: str | None = "artifacts/manifest.json",
+) -> Path:
     data = {
         "schema_version": "1.0",
         "contract_name": "managed-repo-audit",
@@ -69,18 +74,23 @@ def _make_run_status(tmp_path: Path, run_id: str = "run_001", artifact_manifest_
 # cmd_run
 # ---------------------------------------------------------------------------
 
+
 class TestCmdRun:
     def test_run_success_table_output(self):
         result = _make_dispatch_result(succeeded=True)
         with patch(_DISPATCH_TARGET, return_value=result):
-            out = _runner.invoke(app, ["run", "--repo", "example_managed_repo", "--type", "audit_type_1"])
+            out = _runner.invoke(
+                app, ["run", "--repo", "example_managed_repo", "--type", "audit_type_1"]
+            )
         assert out.exit_code == 0
         assert "run_001" in out.output
 
     def test_run_success_json_output(self):
         result = _make_dispatch_result(succeeded=True)
         with patch(_DISPATCH_TARGET, return_value=result):
-            out = _runner.invoke(app, ["run", "--repo", "example_managed_repo", "--type", "audit_type_1", "--json"])
+            out = _runner.invoke(
+                app, ["run", "--repo", "example_managed_repo", "--type", "audit_type_1", "--json"]
+            )
         assert out.exit_code == 0
         data = json.loads(out.output)
         assert data["run_id"] == "run_001"
@@ -89,20 +99,28 @@ class TestCmdRun:
     def test_run_failure_exits_code_1(self):
         result = _make_dispatch_result(succeeded=False)
         with patch(_DISPATCH_TARGET, return_value=result):
-            out = _runner.invoke(app, ["run", "--repo", "example_managed_repo", "--type", "audit_type_1"])
+            out = _runner.invoke(
+                app, ["run", "--repo", "example_managed_repo", "--type", "audit_type_1"]
+            )
         assert out.exit_code == 1
 
     def test_run_lock_conflict_exits_code_2(self):
         from operations_center.audit_dispatch import RepoLockAlreadyHeldError
+
         with patch(_DISPATCH_TARGET, side_effect=RepoLockAlreadyHeldError("locked")):
-            out = _runner.invoke(app, ["run", "--repo", "example_managed_repo", "--type", "audit_type_1"])
+            out = _runner.invoke(
+                app, ["run", "--repo", "example_managed_repo", "--type", "audit_type_1"]
+            )
         assert out.exit_code == 2
         assert "Lock conflict" in out.output
 
     def test_run_config_error_exits_code_3(self):
         from operations_center.audit_dispatch import AuditDispatchConfigError
+
         with patch(_DISPATCH_TARGET, side_effect=AuditDispatchConfigError("bad config")):
-            out = _runner.invoke(app, ["run", "--repo", "example_managed_repo", "--type", "audit_type_1"])
+            out = _runner.invoke(
+                app, ["run", "--repo", "example_managed_repo", "--type", "audit_type_1"]
+            )
         assert out.exit_code == 3
         assert "Configuration error" in out.output
 
@@ -110,6 +128,7 @@ class TestCmdRun:
 # ---------------------------------------------------------------------------
 # cmd_status
 # ---------------------------------------------------------------------------
+
 
 class TestCmdStatus:
     def test_status_table_output(self, tmp_path: Path):
@@ -134,6 +153,7 @@ class TestCmdStatus:
 # ---------------------------------------------------------------------------
 # cmd_resolve_manifest
 # ---------------------------------------------------------------------------
+
 
 class TestCmdResolveManifest:
     def test_resolve_manifest_prints_path(self, tmp_path: Path):

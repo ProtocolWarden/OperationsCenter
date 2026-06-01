@@ -23,8 +23,7 @@ class TypeImprovementRule:
     def evaluate(self, insights: Sequence[DerivedInsight]) -> list[CandidateSpec]:
         # Cross-signal: check once for type↔hotspot overlap across all insights.
         has_hotspot_overlap = any(
-            i.kind == "cross_signal" and i.subject == "type_hotspot_overlap"
-            for i in insights
+            i.kind == "cross_signal" and i.subject == "type_hotspot_overlap" for i in insights
         )
 
         candidates: list[CandidateSpec] = []
@@ -43,8 +42,13 @@ class TypeImprovementRule:
                 confidence = "high" if (count >= 10 or has_hotspot_overlap) else "medium"
                 ev_lines = [f"{source} reports {count} type error(s). Top codes: {codes_str}."]
                 if has_hotspot_overlap:
-                    ev_lines.append("Type errors overlap with active git hotspot files (cross-signal corroboration).")
-                matched = ["type_errors_present_min_threshold", "candidate_not_seen_in_cooldown_window"]
+                    ev_lines.append(
+                        "Type errors overlap with active git hotspot files (cross-signal corroboration)."
+                    )
+                matched = [
+                    "type_errors_present_min_threshold",
+                    "candidate_not_seen_in_cooldown_window",
+                ]
                 if has_hotspot_overlap:
                     matched.append("cross_signal_type_hotspot_overlap")
                 candidates.append(
@@ -58,7 +62,9 @@ class TypeImprovementRule:
                         evidence_lines=ev_lines,
                         risk_class="logic",
                         expires_after_runs=4,
-                        estimated_affected_files=int(distinct_files) if distinct_files is not None else None,
+                        estimated_affected_files=int(distinct_files)
+                        if distinct_files is not None
+                        else None,
                         proposal_outline=ProposalOutline(
                             title_hint=f"Fix {count} type error(s) ({codes_str})",
                             summary_hint=(
@@ -94,7 +100,9 @@ class TypeImprovementRule:
                         ],
                         risk_class="logic",
                         expires_after_runs=4,
-                        estimated_affected_files=int(distinct_files) if distinct_files is not None else None,
+                        estimated_affected_files=int(distinct_files)
+                        if distinct_files is not None
+                        else None,
                         proposal_outline=ProposalOutline(
                             title_hint=f"Fix type regression: +{delta} new type error(s)",
                             summary_hint=(

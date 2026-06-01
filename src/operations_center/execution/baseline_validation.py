@@ -24,6 +24,7 @@ Invariants:
   • Returns a ValidationSummary; doesn't decide to abort the run
   • Caller (coordinator) decides whether to proceed based on the summary
 """
+
 from __future__ import annotations
 
 import logging
@@ -64,6 +65,7 @@ def run_baseline_validation(
 
     timeout = int(getattr(repo_cfg, "validation_timeout_seconds", 300) or 300)
     import time
+
     start = time.monotonic()
     passed = 0
 
@@ -72,13 +74,19 @@ def run_baseline_validation(
             continue
         try:
             proc = subprocess.run(
-                cmd, shell=True, cwd=workspace_path,
-                capture_output=True, text=True, timeout=timeout,
+                cmd,
+                shell=True,
+                cwd=workspace_path,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
             )
         except subprocess.TimeoutExpired:
             logger.warning(
                 "baseline_validation: %r timed out after %ds in %s",
-                cmd, timeout, workspace_path,
+                cmd,
+                timeout,
+                workspace_path,
             )
             return ValidationSummary(
                 status=ValidationStatus.ERROR,
@@ -92,7 +100,9 @@ def run_baseline_validation(
             excerpt = (proc.stderr or proc.stdout or "")[:1000]
             logger.warning(
                 "baseline_validation: %r failed (exit=%d) in %s",
-                cmd, proc.returncode, workspace_path,
+                cmd,
+                proc.returncode,
+                workspace_path,
             )
             return ValidationSummary(
                 status=ValidationStatus.FAILED,

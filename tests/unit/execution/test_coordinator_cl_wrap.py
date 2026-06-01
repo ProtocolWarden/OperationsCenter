@@ -25,7 +25,6 @@ import pytest
 
 from operations_center.execution import cl_wrap as cl_wrap_module
 
-
 # ---------------------------------------------------------------------------
 # Fake context_lifecycle module
 # ---------------------------------------------------------------------------
@@ -129,6 +128,7 @@ def test_wrap_captures_no_result_when_setter_not_called(fake_cl) -> None:
 
 def test_wrap_capture_failure_does_not_break_dispatch(fake_cl, monkeypatch) -> None:
     """A buggy CL capture must not propagate out of the wrap."""
+
     def _boom(_lineage, _result):
         raise RuntimeError("capture write failed")
 
@@ -172,8 +172,6 @@ def test_derive_lineage_id_preserves_lineage_prefix() -> None:
 # require the full operations_center.backends import graph to load —
 # skipped cleanly when transitive deps are unavailable in this env.
 # ---------------------------------------------------------------------------
-
-
 
 
 def _build_bundle():

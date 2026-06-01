@@ -33,6 +33,7 @@ Usage:
     # Show feedback for a specific task
     python -m operations_center.entrypoints.feedback.main show --task-id <uuid>
 """
+
 from __future__ import annotations
 
 import argparse
@@ -81,9 +82,12 @@ def cmd_record(args: argparse.Namespace) -> None:
     if args.confidence and args.family:
         try:
             from operations_center.tuning.calibration import ConfidenceCalibrationStore
+
             cal = ConfidenceCalibrationStore()
             cal.record(args.family, args.confidence, outcome)
-            print(f"  Calibration updated: family={args.family}  confidence={args.confidence}  outcome={outcome}")
+            print(
+                f"  Calibration updated: family={args.family}  confidence={args.confidence}  outcome={outcome}"
+            )
         except Exception:
             pass  # calibration is best-effort
 
@@ -111,7 +115,7 @@ def cmd_list(args: argparse.Namespace) -> None:
     limit = getattr(args, "limit", 20)
     print(f"  Feedback records ({len(records)} total, showing {min(limit, len(records))}):")
     print(f"  {'task_id':<38} {'outcome':<12} {'source':<10} recorded_at")
-    print(f"  {'-'*38} {'-'*12} {'-'*10} {'-'*24}")
+    print(f"  {'-' * 38} {'-' * 12} {'-' * 10} {'-' * 24}")
     for r in records[:limit]:
         print(
             f"  {r.get('task_id', ''):<38} {r.get('outcome', ''):<12} "
@@ -164,12 +168,19 @@ def main() -> None:
         "--force", action="store_true", help="Overwrite an existing feedback record"
     )
     # S8-10: Optional confidence calibration fields
-    record_p.add_argument("--family", help="Proposal family (e.g. lint_fix) for calibration tracking")
-    record_p.add_argument("--confidence", choices=["high", "medium", "low"],
-                          help="Confidence label assigned at proposal time, for calibration")
+    record_p.add_argument(
+        "--family", help="Proposal family (e.g. lint_fix) for calibration tracking"
+    )
+    record_p.add_argument(
+        "--confidence",
+        choices=["high", "medium", "low"],
+        help="Confidence label assigned at proposal time, for calibration",
+    )
 
     list_p = subparsers.add_parser("list", help="List all feedback records")
-    list_p.add_argument("--limit", type=int, default=20, help="Max records to display (default: 20)")
+    list_p.add_argument(
+        "--limit", type=int, default=20, help="Max records to display (default: 20)"
+    )
 
     show_p = subparsers.add_parser("show", help="Show feedback record for a specific task")
     show_p.add_argument("--task-id", required=True, help="Plane task UUID")

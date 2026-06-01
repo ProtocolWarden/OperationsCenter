@@ -30,6 +30,7 @@ from operations_center.audit_contracts.vocabulary import (
     RunStatus,
     ValidFor,
 )
+
 pytestmark = pytest.mark.smoke
 
 _EXAMPLES = Path(__file__).parent.parent.parent.parent / "examples" / "audit_contracts"
@@ -114,7 +115,9 @@ class TestCompletedManifest:
         locs = {a.location for a in completed_manifest.artifacts}
         assert Location.RUN_ROOT in locs
 
-    def test_has_artifacts_subdir_artifact(self, completed_manifest: ManagedArtifactManifest) -> None:
+    def test_has_artifacts_subdir_artifact(
+        self, completed_manifest: ManagedArtifactManifest
+    ) -> None:
         locs = {a.location for a in completed_manifest.artifacts}
         assert Location.ARTIFACTS_SUBDIR in locs
 
@@ -122,25 +125,33 @@ class TestCompletedManifest:
         locs = {a.location for a in completed_manifest.artifacts}
         assert Location.AUDIT_SUBDIR in locs
 
-    def test_has_text_overlay_subdir_artifact(self, completed_manifest: ManagedArtifactManifest) -> None:
+    def test_has_text_overlay_subdir_artifact(
+        self, completed_manifest: ManagedArtifactManifest
+    ) -> None:
         locs = {a.location for a in completed_manifest.artifacts}
         assert Location.TEXT_OVERLAY_SUBDIR in locs
 
     def test_has_repo_singleton_artifact(self, completed_manifest: ManagedArtifactManifest) -> None:
         assert len(completed_manifest.singleton_artifacts) >= 1
 
-    def test_repo_singleton_has_latest_snapshot(self, completed_manifest: ManagedArtifactManifest) -> None:
+    def test_repo_singleton_has_latest_snapshot(
+        self, completed_manifest: ManagedArtifactManifest
+    ) -> None:
         for sa in completed_manifest.singleton_artifacts:
             assert ValidFor.LATEST_SNAPSHOT in sa.valid_for
 
-    def test_repo_singleton_has_overwritten_limitation(self, completed_manifest: ManagedArtifactManifest) -> None:
+    def test_repo_singleton_has_overwritten_limitation(
+        self, completed_manifest: ManagedArtifactManifest
+    ) -> None:
         for sa in completed_manifest.singleton_artifacts:
             assert Limitation.REPO_SINGLETON_OVERWRITTEN in sa.limitations
 
     def test_excluded_paths_present(self, completed_manifest: ManagedArtifactManifest) -> None:
         assert len(completed_manifest.excluded_paths) >= 1
 
-    def test_excluded_paths_not_in_artifacts(self, completed_manifest: ManagedArtifactManifest) -> None:
+    def test_excluded_paths_not_in_artifacts(
+        self, completed_manifest: ManagedArtifactManifest
+    ) -> None:
         artifact_paths = {a.path for a in completed_manifest.artifacts}
         for ep in completed_manifest.excluded_paths:
             assert ep.path not in artifact_paths, (
@@ -168,11 +179,14 @@ class TestFailedManifest:
     def test_has_partial_run_limitation(self, failed_manifest: ManagedArtifactManifest) -> None:
         assert Limitation.PARTIAL_RUN in failed_manifest.limitations
 
-    def test_has_missing_downstream_limitation(self, failed_manifest: ManagedArtifactManifest) -> None:
+    def test_has_missing_downstream_limitation(
+        self, failed_manifest: ManagedArtifactManifest
+    ) -> None:
         assert Limitation.MISSING_DOWNSTREAM_ARTIFACTS in failed_manifest.limitations
 
     def test_some_artifacts_missing(self, failed_manifest: ManagedArtifactManifest) -> None:
         from operations_center.audit_contracts.vocabulary import ArtifactStatus
+
         missing = [a for a in failed_manifest.artifacts if a.status == ArtifactStatus.MISSING]
         assert len(missing) >= 1, "Failed manifest should have at least one missing artifact"
 

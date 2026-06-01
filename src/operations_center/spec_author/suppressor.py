@@ -54,13 +54,15 @@ def _load_area_keywords(campaign: "CampaignRecord", specs_dir: Path | None) -> l
             spec_path = candidate  # best guess; will fail gracefully below
     try:
         from operations_center.spec_author.models import SpecFrontMatter
+
         text = spec_path.read_text(encoding="utf-8")
         fm = SpecFrontMatter.from_spec_text(text)
         return fm.area_keywords
     except Exception as exc:
         logger.debug(
             '{"event": "spec_keywords_load_failed", "spec_file": "%s", "error": "%s"}',
-            str(campaign.spec_file), str(exc),
+            str(campaign.spec_file),
+            str(exc),
         )
         return []
 

@@ -11,7 +11,11 @@ from __future__ import annotations
 
 import pytest
 
-from operations_center.contracts.enums import ExecutionStatus, FailureReasonCategory, ValidationStatus
+from operations_center.contracts.enums import (
+    ExecutionStatus,
+    FailureReasonCategory,
+    ValidationStatus,
+)
 from operations_center.tuning.compare import compare_backends, compare_by_task_type
 from operations_center.tuning.routing_models import (
     ChangeEvidenceClass,
@@ -48,20 +52,18 @@ class TestGrouping:
         assert summaries[0].lane == "claude_cli"
 
     def test_two_backends_two_groups(self):
-        records = (
-            make_n_successes(5, backend="team_executor", lane="claude_cli")
-            + make_n_successes(5, backend="dag_executor", lane="claude_cli")
-        )
+        records = make_n_successes(
+            5, backend="team_executor", lane="claude_cli"
+        ) + make_n_successes(5, backend="dag_executor", lane="claude_cli")
         summaries = compare_backends(records)
         assert len(summaries) == 2
         backends = {s.backend for s in summaries}
         assert backends == {"team_executor", "dag_executor"}
 
     def test_two_lanes_two_groups(self):
-        records = (
-            make_n_successes(5, backend="team_executor", lane="claude_cli")
-            + make_n_successes(5, backend="team_executor", lane="aider_local")
-        )
+        records = make_n_successes(
+            5, backend="team_executor", lane="claude_cli"
+        ) + make_n_successes(5, backend="team_executor", lane="aider_local")
         summaries = compare_backends(records)
         assert len(summaries) == 2
         lanes = {s.lane for s in summaries}
@@ -196,10 +198,9 @@ class TestChangeEvidenceClass:
 
     def test_mixed_known_unknown_partial(self):
         # 5 known, 5 unknown → 50% → PARTIAL (< 80%)
-        records = (
-            make_n_successes(5)
-            + [make_unknown_changed_files(run_id=f"run-u-{i:04d}") for i in range(5)]
-        )
+        records = make_n_successes(5) + [
+            make_unknown_changed_files(run_id=f"run-u-{i:04d}") for i in range(5)
+        ]
         s = compare_backends(records)[0]
         assert s.change_evidence_class == ChangeEvidenceClass.PARTIAL
 
@@ -252,26 +253,26 @@ class TestLatencyClass:
 
 class TestFilterByTaskType:
     def test_filter_by_task_type_scope(self):
-        records = (
-            make_n_successes(5, task_type="bug_fix")
-            + [make_success(task_type="feature", run_id=f"feat-{i:04d}") for i in range(3)]
-        )
+        records = make_n_successes(5, task_type="bug_fix") + [
+            make_success(task_type="feature", run_id=f"feat-{i:04d}") for i in range(3)
+        ]
         # This relies on task_type being in metadata; filter in compare_backends
         summaries = compare_backends(records, task_type_scope=["bug_fix"])
         assert len(summaries) == 1
         assert summaries[0].sample_size == 5
 
     def test_no_filter_returns_all(self):
-        records = make_n_successes(5, task_type="bug_fix") + make_n_successes(3, task_type="feature")
+        records = make_n_successes(5, task_type="bug_fix") + make_n_successes(
+            3, task_type="feature"
+        )
         summaries = compare_backends(records)
         assert summaries[0].sample_size == 8
 
 
 class TestCompareByTaskType:
     def test_splits_by_task_type(self):
-        records = (
-            make_n_successes(5, task_type="bug_fix")
-            + make_n_successes(3, task_type="feature")
+        records = make_n_successes(5, task_type="bug_fix") + make_n_successes(
+            3, task_type="feature"
         )
         summaries = compare_by_task_type(records)
         task_scopes = [s.task_type_scope for s in summaries]

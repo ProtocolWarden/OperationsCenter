@@ -12,7 +12,12 @@ from operations_center.decision.policy import DecisionPolicy, DecisionPolicyConf
 from operations_center.decision.service import DecisionEngineService, new_decision_context
 from operations_center.execution import UsageStore
 from operations_center.insights.artifact_writer import InsightArtifactWriter
-from operations_center.insights.models import DerivedInsight, InsightRepoRef, RepoInsightsArtifact, SourceSnapshotRef
+from operations_center.insights.models import (
+    DerivedInsight,
+    InsightRepoRef,
+    RepoInsightsArtifact,
+    SourceSnapshotRef,
+)
 
 
 def _make_insight_artifact(
@@ -27,7 +32,9 @@ def _make_insight_artifact(
         generated_at=generated_at,
         source_command="operations-center generate-insights",
         repo=InsightRepoRef(name="operations-center", path=repo_path),
-        source_snapshots=[SourceSnapshotRef(run_id="obs_1", observed_at=generated_at - timedelta(hours=1))],
+        source_snapshots=[
+            SourceSnapshotRef(run_id="obs_1", observed_at=generated_at - timedelta(hours=1))
+        ],
         insights=insights,
     )
 
@@ -115,7 +122,12 @@ def test_policy_suppresses_on_cooldown_and_quota() -> None:
                 "status": "emit",
                 "evidence": {},
                 "rationale": {"matched_rules": [], "suppressed_by": []},
-                "proposal_outline": {"title_hint": "t", "summary_hint": "s", "labels_hint": [], "source_family": None},
+                "proposal_outline": {
+                    "title_hint": "t",
+                    "summary_hint": "s",
+                    "labels_hint": [],
+                    "source_family": None,
+                },
             }
         ],
         suppressed=[],
@@ -149,8 +161,14 @@ def test_policy_suppresses_on_cooldown_and_quota() -> None:
             priority=(2, 0, "c"),
         ),
     ]
-    policy = DecisionPolicy(config=DecisionPolicyConfig(max_candidates=1, max_candidates_per_family=1, cooldown_minutes=120))
-    emitted, suppressed = policy.apply(candidate_specs=specs, prior_artifacts=[prior], generated_at=now)
+    policy = DecisionPolicy(
+        config=DecisionPolicyConfig(
+            max_candidates=1, max_candidates_per_family=1, cooldown_minutes=120
+        )
+    )
+    emitted, suppressed = policy.apply(
+        candidate_specs=specs, prior_artifacts=[prior], generated_at=now
+    )
 
     assert [candidate.family for candidate in emitted] == ["dependency_drift_followup"]
     assert {item.reason for item in suppressed} == {"cooldown_active", "quota_exceeded"}
@@ -193,7 +211,10 @@ def test_service_emits_and_suppresses_candidates(tmp_path: Path) -> None:
     insights_root = tmp_path / "insights"
     InsightArtifactWriter(insights_root).write(insight)
 
-    service = DecisionEngineService(loader=DecisionLoader(insights_root=insights_root, decision_root=tmp_path / "decision"), usage_store=UsageStore(tmp_path / "usage.json"))
+    service = DecisionEngineService(
+        loader=DecisionLoader(insights_root=insights_root, decision_root=tmp_path / "decision"),
+        usage_store=UsageStore(tmp_path / "usage.json"),
+    )
     artifact, artifacts = service.decide(
         new_decision_context(
             repo_filter=None,
@@ -228,7 +249,10 @@ def test_zero_candidate_run_is_valid(tmp_path: Path) -> None:
     )
     insights_root = tmp_path / "insights"
     InsightArtifactWriter(insights_root).write(insight)
-    service = DecisionEngineService(loader=DecisionLoader(insights_root=insights_root, decision_root=tmp_path / "decision"), usage_store=UsageStore(tmp_path / "usage.json"))
+    service = DecisionEngineService(
+        loader=DecisionLoader(insights_root=insights_root, decision_root=tmp_path / "decision"),
+        usage_store=UsageStore(tmp_path / "usage.json"),
+    )
 
     artifact, _ = service.decide(
         new_decision_context(

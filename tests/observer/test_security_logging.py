@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Tests for security logging and malformed payload detection."""
+
 from __future__ import annotations
 
 import json
@@ -28,6 +29,7 @@ from operations_center.observer.service import ObserverContext
 from operations_center.observer.validation import (
     ArtifactValidator,
 )
+
 pytestmark = pytest.mark.slow
 
 
@@ -332,9 +334,7 @@ class TestDependencyDriftSecurityLogging:
 class TestExecutionHealthSecurityLogging:
     """Test ExecutionArtifactCollector security logging."""
 
-    def test_execution_health_malformed_outcome(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_execution_health_malformed_outcome(self, caplog: pytest.LogCaptureFixture) -> None:
         """Malformed outcome.json is logged and skipped."""
         with tempfile.TemporaryDirectory() as tmpdir:
             report_root = Path(tmpdir)
@@ -360,9 +360,7 @@ class TestExecutionHealthSecurityLogging:
             # Should have logged parse error
             assert any("parse" in r.message.lower() for r in caplog.records)
 
-    def test_execution_health_invalid_status_type(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_execution_health_invalid_status_type(self, caplog: pytest.LogCaptureFixture) -> None:
         """Invalid status type is logged as structure error."""
         with tempfile.TemporaryDirectory() as tmpdir:
             report_root = Path(tmpdir)

@@ -17,7 +17,11 @@ from operations_center.decision.models import (
 )
 from operations_center.entrypoints.proposer import main as proposer_main
 from operations_center.insights.artifact_writer import InsightArtifactWriter
-from operations_center.insights.models import InsightRepoRef, RepoInsightsArtifact, SourceSnapshotRef
+from operations_center.insights.models import (
+    InsightRepoRef,
+    RepoInsightsArtifact,
+    SourceSnapshotRef,
+)
 
 
 def _write_config(tmp_path: Path) -> Path:
@@ -49,7 +53,9 @@ def _write_decision_inputs(tmp_path: Path) -> None:
         generated_at=generated_at,
         source_command="operations-center generate-insights",
         repo=InsightRepoRef(name="operations-center", path=tmp_path / "repo"),
-        source_snapshots=[SourceSnapshotRef(run_id="obs_1", observed_at=datetime(2026, 3, 31, 12, tzinfo=UTC))],
+        source_snapshots=[
+            SourceSnapshotRef(run_id="obs_1", observed_at=datetime(2026, 3, 31, 12, tzinfo=UTC))
+        ],
         insights=[],
     )
     decision = ProposalCandidatesArtifact(
@@ -75,8 +81,12 @@ def _write_decision_inputs(tmp_path: Path) -> None:
         ],
         suppressed=[],
     )
-    InsightArtifactWriter(tmp_path / "tools" / "report" / "operations_center" / "insights").write(insight)
-    DecisionArtifactWriter(tmp_path / "tools" / "report" / "operations_center" / "decision").write(decision)
+    InsightArtifactWriter(tmp_path / "tools" / "report" / "operations_center" / "insights").write(
+        insight
+    )
+    DecisionArtifactWriter(tmp_path / "tools" / "report" / "operations_center" / "decision").write(
+        decision
+    )
 
 
 def test_propose_from_candidates_cli_writes_artifact_in_dry_run(

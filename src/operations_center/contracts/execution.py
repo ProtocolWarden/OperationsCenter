@@ -25,8 +25,8 @@ from typing import Optional
 from cxrp.contracts.runtime_binding import RuntimeBinding as CxrpRuntimeBinding
 from pydantic import BaseModel, Field
 
-from .enums import ArtifactType, ExecutionStatus, FailureReasonCategory, ValidationStatus
 from .common import ChangedFileRef, ValidationSummary
+from .enums import ArtifactType, ExecutionStatus, FailureReasonCategory, ValidationStatus
 
 
 def _utcnow() -> datetime:
@@ -40,6 +40,7 @@ def _new_id() -> str:
 # ---------------------------------------------------------------------------
 # OcExecutionRequest
 # ---------------------------------------------------------------------------
+
 
 class OcExecutionRequest(BaseModel):
     """
@@ -108,6 +109,7 @@ class OcExecutionRequest(BaseModel):
 # ExecutionArtifact
 # ---------------------------------------------------------------------------
 
+
 class ExecutionArtifact(BaseModel):
     """
     A discrete artifact produced during execution — diff, report, log excerpt, etc.
@@ -136,6 +138,7 @@ class ExecutionArtifact(BaseModel):
 # ---------------------------------------------------------------------------
 # RunTelemetry
 # ---------------------------------------------------------------------------
+
 
 class RunTelemetry(BaseModel):
     """
@@ -170,6 +173,7 @@ class RunTelemetry(BaseModel):
 # ---------------------------------------------------------------------------
 # OcExecutionResult
 # ---------------------------------------------------------------------------
+
 
 class OcExecutionResult(BaseModel):
     """
@@ -344,11 +348,21 @@ class RuntimeInvocationRef(BaseModel):
     the underlying RxP RuntimeResult artifacts from the OC result alone.
     """
 
-    invocation_id: str = Field(description="RuntimeInvocation.invocation_id (matches RuntimeResult.invocation_id)")
-    runtime_name: str = Field(description="Logical runtime name passed to CoreRunner, e.g. 'direct_local', 'team_executor'")
-    runtime_kind: str = Field(description="RxP runtime kind, e.g. 'subprocess', 'http_async', 'manual'")
-    stdout_path: Optional[str] = Field(default=None, description="RuntimeResult.stdout_path, if the runner captured it")
-    stderr_path: Optional[str] = Field(default=None, description="RuntimeResult.stderr_path, if the runner captured it")
+    invocation_id: str = Field(
+        description="RuntimeInvocation.invocation_id (matches RuntimeResult.invocation_id)"
+    )
+    runtime_name: str = Field(
+        description="Logical runtime name passed to CoreRunner, e.g. 'direct_local', 'team_executor'"
+    )
+    runtime_kind: str = Field(
+        description="RxP runtime kind, e.g. 'subprocess', 'http_async', 'manual'"
+    )
+    stdout_path: Optional[str] = Field(
+        default=None, description="RuntimeResult.stdout_path, if the runner captured it"
+    )
+    stderr_path: Optional[str] = Field(
+        default=None, description="RuntimeResult.stderr_path, if the runner captured it"
+    )
     artifact_directory: Optional[str] = Field(
         default=None,
         description="RuntimeInvocation.artifact_directory used for this call, when set by the adapter",

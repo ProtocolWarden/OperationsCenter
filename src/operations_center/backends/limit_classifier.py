@@ -94,7 +94,9 @@ def classify_limit(
     return (None, model)
 
 
-def models_affected(worker_backend: str, limit_kind: str | None, model: str | None) -> tuple[str, ...]:
+def models_affected(
+    worker_backend: str, limit_kind: str | None, model: str | None
+) -> tuple[str, ...]:
     """Which of ``worker_backend``'s models a limit takes down.
 
     A ``model_weekly`` limit affects only the named model; account-wide kinds

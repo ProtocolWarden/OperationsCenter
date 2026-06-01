@@ -177,9 +177,7 @@ def test_post_escalation_swallows_connect_error(monkeypatch: pytest.MonkeyPatch)
     class _ErrorClient(_original_client):  # type: ignore[misc]
         def __init__(self, **kwargs: Any) -> None:
             kwargs["transport"] = httpx.MockTransport(
-                lambda req: (_ for _ in ()).throw(
-                    httpx.ConnectError("connection refused")
-                )
+                lambda req: (_ for _ in ()).throw(httpx.ConnectError("connection refused"))
             )
             super().__init__(**kwargs)
 
@@ -203,9 +201,7 @@ def test_post_escalation_swallows_timeout_error(monkeypatch: pytest.MonkeyPatch)
     class _TimeoutClient(_original_client):  # type: ignore[misc]
         def __init__(self, **kwargs: Any) -> None:
             kwargs["transport"] = httpx.MockTransport(
-                lambda req: (_ for _ in ()).throw(
-                    httpx.TimeoutException("read timed out")
-                )
+                lambda req: (_ for _ in ()).throw(httpx.TimeoutException("read timed out"))
             )
             super().__init__(**kwargs)
 
@@ -228,9 +224,7 @@ def test_post_escalation_swallows_arbitrary_exception(monkeypatch: pytest.Monkey
     class _BoomClient(_original_client):  # type: ignore[misc]
         def __init__(self, **kwargs: Any) -> None:
             kwargs["transport"] = httpx.MockTransport(
-                lambda req: (_ for _ in ()).throw(
-                    RuntimeError("unexpected kaboom")
-                )
+                lambda req: (_ for _ in ()).throw(RuntimeError("unexpected kaboom"))
             )
             super().__init__(**kwargs)
 

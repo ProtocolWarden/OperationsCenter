@@ -63,7 +63,10 @@ class BenchmarkSignalCollector:
             except json.JSONDecodeError as e:
                 logger.debug(
                     "Failed to parse benchmark %s: %s at line %d, col %d",
-                    fpath, e.msg, e.lineno, e.colno
+                    fpath,
+                    e.msg,
+                    e.lineno,
+                    e.colno,
                 )
                 continue
             except OSError as e:

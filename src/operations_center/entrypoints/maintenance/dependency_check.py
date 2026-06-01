@@ -18,7 +18,10 @@ from operations_center.adapters.plane import PlaneClient
 from operations_center.adapters.reporting import Reporter
 from operations_center.config import Settings, load_settings
 from operations_center.entrypoints.setup.main import load_env_exports
-from operations_center.entrypoints.setup.providers import PROVIDER_SPECS, detect_all_provider_statuses
+from operations_center.entrypoints.setup.providers import (
+    PROVIDER_SPECS,
+    detect_all_provider_statuses,
+)
 
 GITHUB_ACCEPT = "application/vnd.github+json"
 
@@ -95,7 +98,9 @@ def collect_dependency_statuses(settings: Settings, env: dict[str, str]) -> list
     if not plane_healthy:
         plane_notes.append("Plane base URL is not reachable.")
     if plane_pinned and plane_latest and plane_pinned != plane_latest:
-        plane_notes.append(f"Pinned release {plane_pinned} differs from upstream latest {plane_latest}.")
+        plane_notes.append(
+            f"Pinned release {plane_pinned} differs from upstream latest {plane_latest}."
+        )
     statuses.append(
         DependencyStatus(
             key="plane",
@@ -110,7 +115,9 @@ def collect_dependency_statuses(settings: Settings, env: dict[str, str]) -> list
     )
 
     try:
-        proc = subprocess.run(["team-executor", "--version"], check=False, capture_output=True, text=True, timeout=10)
+        proc = subprocess.run(
+            ["team-executor", "--version"], check=False, capture_output=True, text=True, timeout=10
+        )
         executor_version_raw = (proc.stdout or proc.stderr).strip() if proc.returncode == 0 else ""
     except Exception:
         executor_version_raw = ""
@@ -121,10 +128,18 @@ def collect_dependency_statuses(settings: Settings, env: dict[str, str]) -> list
     executor_notes: list[str] = []
     if not executor_installed:
         executor_notes.append("team-executor is not installed or not on PATH.")
-    if executor_pinned and executor_installed_version and executor_pinned != executor_installed_version:
-        executor_notes.append(f"Installed version {executor_installed_version} does not match pinned ref {executor_pinned}.")
+    if (
+        executor_pinned
+        and executor_installed_version
+        and executor_pinned != executor_installed_version
+    ):
+        executor_notes.append(
+            f"Installed version {executor_installed_version} does not match pinned ref {executor_pinned}."
+        )
     if executor_pinned and executor_latest and executor_pinned != executor_latest:
-        executor_notes.append(f"Pinned ref {executor_pinned} differs from upstream latest {executor_latest}.")
+        executor_notes.append(
+            f"Pinned ref {executor_pinned} differs from upstream latest {executor_latest}."
+        )
     statuses.append(
         DependencyStatus(
             key="team_executor",
@@ -156,7 +171,9 @@ def collect_dependency_statuses(settings: Settings, env: dict[str, str]) -> list
             notes.append("Provider CLI is installed but not logged in.")
         installed_version = normalize_version(provider.version)
         if pinned and installed_version and pinned != installed_version:
-            notes.append(f"Installed version {installed_version} does not match pinned version {pinned}.")
+            notes.append(
+                f"Installed version {installed_version} does not match pinned version {pinned}."
+            )
         if pinned and latest and pinned != latest:
             notes.append(f"Pinned version {pinned} differs from upstream latest {latest}.")
         statuses.append(
@@ -201,10 +218,15 @@ def dependency_task_description(settings: Settings, status: DependencyStatus) ->
     return "\n".join(lines)
 
 
-def ensure_follow_up_task(client: PlaneClient, settings: Settings, status: DependencyStatus) -> str | None:
+def ensure_follow_up_task(
+    client: PlaneClient, settings: Settings, status: DependencyStatus
+) -> str | None:
     title = f"Dependency maintenance: {status.label}"
     for issue in client.list_issues():
-        if str(issue.get("name", "")).strip() == title and issue_status_name(issue) not in {"Done", "Cancelled"}:
+        if str(issue.get("name", "")).strip() == title and issue_status_name(issue) not in {
+            "Done",
+            "Cancelled",
+        }:
             return None
     created = client.create_issue(
         name=title,
@@ -222,7 +244,9 @@ def issue_status_name(issue: dict[str, Any]) -> str:
     return str(state or "")
 
 
-def write_dependency_report(run_dir: Path, statuses: list[DependencyStatus], created_task_ids: list[str]) -> list[str]:
+def write_dependency_report(
+    run_dir: Path, statuses: list[DependencyStatus], created_task_ids: list[str]
+) -> list[str]:
     json_path = run_dir / "dependency_report.json"
     md_path = run_dir / "dependency_summary.md"
     json_path.write_text(
@@ -232,12 +256,15 @@ def write_dependency_report(run_dir: Path, statuses: list[DependencyStatus], cre
                 "created_task_ids": created_task_ids,
             },
             indent=2,
-        ensure_ascii=False,
-        )
-    , encoding="utf-8")
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
     lines = ["# Dependency Check", "", "## Statuses"]
     for status in statuses:
-        lines.append(f"- {status.label}: healthy={status.healthy} pinned={status.pinned_version or 'none'} installed={status.installed_version or 'none'} upstream={status.upstream_latest or 'unknown'}")
+        lines.append(
+            f"- {status.label}: healthy={status.healthy} pinned={status.pinned_version or 'none'} installed={status.installed_version or 'none'} upstream={status.upstream_latest or 'unknown'}"
+        )
         for note in status.notes:
             lines.append(f"  - {note}")
     lines.extend(["", "## Created Tasks"])
@@ -247,7 +274,9 @@ def write_dependency_report(run_dir: Path, statuses: list[DependencyStatus], cre
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Check pinned tool versions against installed state and upstream latest versions")
+    parser = argparse.ArgumentParser(
+        description="Check pinned tool versions against installed state and upstream latest versions"
+    )
     parser.add_argument("--config", required=True)
     parser.add_argument("--create-plane-tasks", action="store_true")
     args = parser.parse_args()
@@ -288,7 +317,7 @@ def main() -> None:
                 "created_task_ids": created_task_ids,
             },
             indent=2,
-        ensure_ascii=False,
+            ensure_ascii=False,
         )
     )
 

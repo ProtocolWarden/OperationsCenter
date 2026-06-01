@@ -59,7 +59,7 @@ def _extract_exit_code(reason: str) -> int | None:
         idx = reason.find(token)
         if idx == -1:
             continue
-        rest = reason[idx + len(token):]
+        rest = reason[idx + len(token) :]
         digits = ""
         for ch in rest:
             if ch.isdigit() or (ch == "-" and not digits):

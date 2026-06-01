@@ -4,12 +4,12 @@ from __future__ import annotations
 
 __all__ = ["https_remote_to_ssh"]
 
-from dataclasses import dataclass
 import os
-from pathlib import Path
-import shutil
 import shlex
+import shutil
 import subprocess
+from dataclasses import dataclass
+from pathlib import Path
 
 import typer
 from rich.console import Console
@@ -103,11 +103,15 @@ def _run(args: list[str]) -> subprocess.CompletedProcess[str]:
 def _provider_logged_in(spec: ProviderSpec) -> tuple[bool, str | None]:
     if spec.key == "codex":
         proc = _run(["codex", "login", "status"])
-        output = "\n".join(part for part in [proc.stdout.strip(), proc.stderr.strip()] if part).strip()
+        output = "\n".join(
+            part for part in [proc.stdout.strip(), proc.stderr.strip()] if part
+        ).strip()
         return proc.returncode == 0 and "logged in" in output.lower(), output or None
     if spec.key == "claude":
         proc = _run(["claude", "auth", "status"])
-        output = "\n".join(part for part in [proc.stdout.strip(), proc.stderr.strip()] if part).strip()
+        output = "\n".join(
+            part for part in [proc.stdout.strip(), proc.stderr.strip()] if part
+        ).strip()
         return '"loggedIn": true' in output or '"loggedIn":true' in output, output or None
     return False, None
 
@@ -119,7 +123,9 @@ def detect_provider_status(spec: ProviderSpec) -> ProviderStatus:
     detail = ""
     if installed:
         proc = _run([spec.binary, *spec.version_args])
-        output = "\n".join(part for part in [proc.stdout.strip(), proc.stderr.strip()] if part).strip()
+        output = "\n".join(
+            part for part in [proc.stdout.strip(), proc.stderr.strip()] if part
+        ).strip()
         version = output.splitlines()[0] if output else "installed"
         detail = output or "installed"
     else:
@@ -204,7 +210,9 @@ def install_provider(spec: ProviderSpec, version: str | None = None) -> None:
             install_command = f"npm install -g {spec.npm_package}@{version}"
             install_method = "npm (pinned)"
         else:
-            raise typer.BadParameter(f"{spec.label} does not support version pinning with the configured install method")
+            raise typer.BadParameter(
+                f"{spec.label} does not support version pinning with the configured install method"
+            )
     if install_method.startswith("npm"):
         ensure_command_available("npm")
     elif spec.key == "claude":
@@ -218,12 +226,16 @@ def install_provider(spec: ProviderSpec, version: str | None = None) -> None:
 
 def run_interactive_provider_login(spec: ProviderSpec, cwd: Path | None = None) -> bool:
     if not spec.interactive_login_command:
-        raise typer.BadParameter(f"{spec.label} does not support automated interactive login guidance here")
+        raise typer.BadParameter(
+            f"{spec.label} does not support automated interactive login guidance here"
+        )
     proc = subprocess.run(shlex.split(spec.interactive_login_command), cwd=cwd, check=False)
     return proc.returncode == 0
 
 
-def choose_preferred_provider(statuses: list[ProviderStatus], prompt_label: str, default: str | None = None) -> str | None:
+def choose_preferred_provider(
+    statuses: list[ProviderStatus], prompt_label: str, default: str | None = None
+) -> str | None:
     usable = [status for status in statuses if status.interactive_ready]
     if not usable:
         return None
@@ -231,7 +243,9 @@ def choose_preferred_provider(statuses: list[ProviderStatus], prompt_label: str,
     selected_default = default if default in allowed else usable[0].key
     selection = typer.prompt(f"{prompt_label} [{', '.join(allowed)}]", default=selected_default)
     if selection not in allowed:
-        raise typer.BadParameter(f"Provider '{selection}' is not in usable set: {', '.join(allowed)}")
+        raise typer.BadParameter(
+            f"Provider '{selection}' is not in usable set: {', '.join(allowed)}"
+        )
     return selection
 
 
@@ -257,5 +271,5 @@ def https_remote_to_ssh(url: str) -> str | None:
     prefixes = ["https://github.com/", "http://github.com/"]
     for prefix in prefixes:
         if url.startswith(prefix):
-            return f"git@github.com:{url[len(prefix):]}"
+            return f"git@github.com:{url[len(prefix) :]}"
     return None

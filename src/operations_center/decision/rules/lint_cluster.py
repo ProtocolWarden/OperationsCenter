@@ -6,6 +6,7 @@ Fires on theme/lint_cluster and theme/type_cluster insights from ThemeAggregatio
 Rather than proposing N individual lint_fix tasks for the same file, proposes a single
 targeted refactor/cleanup task with the full file context.
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence

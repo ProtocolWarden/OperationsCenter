@@ -192,10 +192,14 @@ class OpenClawBackendAdapter:
             events_path = detail_dir / "openclaw-events.json"
             events_path.write_text(
                 json.dumps(
-                    [{"event_type": r.event_type, "index": r.index, "summary": r.summary} for r in event_refs],
+                    [
+                        {"event_type": r.event_type, "index": r.index, "summary": r.summary}
+                        for r in event_refs
+                    ],
                     indent=2,
-                ensure_ascii=False,
-                ) + "\n",
+                    ensure_ascii=False,
+                )
+                + "\n",
                 encoding="utf-8",
             )
             refs.append(
@@ -219,13 +223,16 @@ class OpenClawBackendAdapter:
             "output_text": capture.output_text,
             "error_text": capture.error_text,
         }
-        capture_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        capture_path.write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
         refs.append(
             BackendDetailRef(
                 detail_type="structured_result",
                 path=str(capture_path),
                 description="Structured OpenClaw capture retained by reference.",
-                is_required_for_debug=(not capture.succeeded) or capture.changed_files_source != "git_diff",
+                is_required_for_debug=(not capture.succeeded)
+                or capture.changed_files_source != "git_diff",
             )
         )
         return refs
@@ -262,6 +269,7 @@ class OpenClawBackendAdapter:
 # ---------------------------------------------------------------------------
 # Error result builders
 # ---------------------------------------------------------------------------
+
 
 def _unsupported_result(request: ExecutionRequest, check: SupportCheck) -> ExecutionResult:
     return ExecutionResult(

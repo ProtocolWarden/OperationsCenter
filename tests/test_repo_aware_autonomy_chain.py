@@ -10,23 +10,26 @@ from operations_center.config import load_settings
 from operations_center.decision.artifact_writer import DecisionArtifactWriter
 from operations_center.decision.loader import DecisionLoader
 from operations_center.decision.service import DecisionEngineService, new_decision_context
+from operations_center.execution import UsageStore
 from operations_center.insights.artifact_writer import InsightArtifactWriter
 from operations_center.insights.derivers.commit_activity import CommitActivityDeriver
 from operations_center.insights.derivers.dependency_drift import DependencyDriftDeriver
 from operations_center.insights.derivers.dirty_tree import DirtyTreeDeriver
 from operations_center.insights.derivers.file_hotspots import FileHotspotsDeriver
 from operations_center.insights.derivers.observation_coverage import ObservationCoverageDeriver
-from operations_center.insights.derivers.test_continuity import TestContinuityDeriver as ContinuityDeriver
+from operations_center.insights.derivers.test_continuity import (
+    TestContinuityDeriver as ContinuityDeriver,
+)
 from operations_center.insights.derivers.todo_concentration import TodoConcentrationDeriver
 from operations_center.insights.loader import SnapshotLoader
 from operations_center.insights.normalizer import InsightNormalizer
 from operations_center.insights.service import InsightEngineService, new_generation_context
 from operations_center.observer.artifact_writer import ObserverArtifactWriter
+from operations_center.observer.collectors.check_signal import CheckSignalCollector
 from operations_center.observer.collectors.dependency_drift import DependencyDriftCollector
 from operations_center.observer.collectors.file_hotspots import FileHotspotsCollector
 from operations_center.observer.collectors.git_context import GitContextCollector
 from operations_center.observer.collectors.recent_commits import RecentCommitsCollector
-from operations_center.observer.collectors.check_signal import CheckSignalCollector
 from operations_center.observer.collectors.todo_signal import TodoSignalCollector
 from operations_center.observer.service import RepoObserverService, new_observer_context
 from operations_center.observer.snapshot_builder import SnapshotBuilder
@@ -36,7 +39,6 @@ from operations_center.proposer.candidate_integration import (
     new_proposer_integration_context,
 )
 from operations_center.proposer.candidate_loader import ProposalCandidateLoader
-from operations_center.execution import UsageStore
 from operations_center.proposer.guardrail_adapter import ProposerGuardrailAdapter
 
 
@@ -95,7 +97,9 @@ def _write_config(tmp_path: Path) -> Path:
 
 
 def _init_git_repo(path: Path) -> None:
-    subprocess.run(["git", "init", "-b", "main"], cwd=path, check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "init", "-b", "main"], cwd=path, check=True, capture_output=True, text=True
+    )
     subprocess.run(["git", "config", "user.name", "Test User"], cwd=path, check=True)
     subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=path, check=True)
 
@@ -118,7 +122,12 @@ def test_repo_aware_autonomy_chain_creates_provenance_rich_task(tmp_path: Path) 
     repo = tmp_path / "repo"
     repo.mkdir()
     _init_git_repo(repo)
-    _commit_file(repo, "src/watcher.py", "# TODO: tighten observer coverage\nprint('watcher')\n", "Add watcher file")
+    _commit_file(
+        repo,
+        "src/watcher.py",
+        "# TODO: tighten observer coverage\nprint('watcher')\n",
+        "Add watcher file",
+    )
 
     settings = load_settings(_write_config(tmp_path))
     logs_root = tmp_path / "logs" / "local"
@@ -151,7 +160,13 @@ def test_repo_aware_autonomy_chain_creates_provenance_rich_task(tmp_path: Path) 
             todo_limit=5,
             logs_root=logs_root,
         )
-        context = context.__class__(**{**context.__dict__, "observed_at": observed_at, "run_id": f"obs_{observed_at.strftime('%H%M%S')}"})
+        context = context.__class__(
+            **{
+                **context.__dict__,
+                "observed_at": observed_at,
+                "run_id": f"obs_{observed_at.strftime('%H%M%S')}",
+            }
+        )
         observer_service.observe(context)
 
     normalizer = InsightNormalizer()
@@ -159,13 +174,13 @@ def test_repo_aware_autonomy_chain_creates_provenance_rich_task(tmp_path: Path) 
     insight_service = InsightEngineService(
         loader=SnapshotLoader(observer_root),
         derivers=[
-                DirtyTreeDeriver(normalizer),
-                CommitActivityDeriver(normalizer),
-                FileHotspotsDeriver(normalizer),
-                ContinuityDeriver(normalizer),
-                DependencyDriftDeriver(normalizer),
-                TodoConcentrationDeriver(normalizer),
-                ObservationCoverageDeriver(normalizer),
+            DirtyTreeDeriver(normalizer),
+            CommitActivityDeriver(normalizer),
+            FileHotspotsDeriver(normalizer),
+            ContinuityDeriver(normalizer),
+            DependencyDriftDeriver(normalizer),
+            TodoConcentrationDeriver(normalizer),
+            ObservationCoverageDeriver(normalizer),
         ],
         artifact_writer=InsightArtifactWriter(insights_root),
     )
@@ -201,7 +216,9 @@ def test_repo_aware_autonomy_chain_creates_provenance_rich_task(tmp_path: Path) 
         settings=settings,
         client=plane_client,  # type: ignore[arg-type]
         loader=ProposalCandidateLoader(decision_root=decision_root, insights_root=insights_root),
-        guardrails=ProposerGuardrailAdapter(proposer_root=proposer_root, usage_store=UsageStore(tmp_path / "usage.json")),
+        guardrails=ProposerGuardrailAdapter(
+            proposer_root=proposer_root, usage_store=UsageStore(tmp_path / "usage.json")
+        ),
         artifact_writer=ProposerArtifactWriter(proposer_root),
     )
     proposal_artifact, proposal_paths = proposer_service.run(
@@ -217,7 +234,9 @@ def test_repo_aware_autonomy_chain_creates_provenance_rich_task(tmp_path: Path) 
     assert Path(insight_paths[0]).exists()
     assert Path(decision_paths[0]).exists()
     assert Path(proposal_paths[0]).exists()
-    assert any(candidate.family == "observation_coverage" for candidate in decision_artifact.candidates)
+    assert any(
+        candidate.family == "observation_coverage" for candidate in decision_artifact.candidates
+    )
     assert len(proposal_artifact.created) >= 1
     assert any(item.family == "observation_coverage" for item in proposal_artifact.created)
     matching_issues = [

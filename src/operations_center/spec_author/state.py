@@ -35,7 +35,8 @@ class CampaignStateManager:
                 pass
             logger.error(
                 '{"event": "spec_campaign_state_corrupt", "error": "%s", "renamed_to": "%s"}',
-                str(exc), str(corrupt_path),
+                str(exc),
+                str(corrupt_path),
             )
             return ActiveCampaigns()
 
@@ -73,22 +74,26 @@ class CampaignStateManager:
     def rebuild_from_specs(self, specs_dir: Path) -> ActiveCampaigns:
         """Rebuild active campaigns list by scanning spec front matter."""
         from operations_center.spec_author.models import SpecFrontMatter
+
         campaigns = []
         for spec_file in sorted(specs_dir.glob("*.md")):
             try:
                 fm = SpecFrontMatter.from_spec_text(spec_file.read_text(encoding="utf-8"))
                 if fm.status == "active":
-                    campaigns.append(CampaignRecord(
-                        campaign_id=fm.campaign_id,
-                        slug=fm.slug,
-                        spec_file=str(spec_file),
-                        status="active",
-                        created_at=fm.created_at,
-                    ))
+                    campaigns.append(
+                        CampaignRecord(
+                            campaign_id=fm.campaign_id,
+                            slug=fm.slug,
+                            spec_file=str(spec_file),
+                            status="active",
+                            created_at=fm.created_at,
+                        )
+                    )
             except Exception as exc:
                 logger.warning(
                     '{"event": "spec_rebuild_skip", "file": "%s", "error": "%s"}',
-                    str(spec_file), str(exc),
+                    str(spec_file),
+                    str(exc),
                 )
                 continue
         rebuilt = ActiveCampaigns(campaigns=campaigns)

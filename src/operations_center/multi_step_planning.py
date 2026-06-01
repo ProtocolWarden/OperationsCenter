@@ -20,6 +20,7 @@ Invariants:
   • No mutation of frozen contracts
   • No routing decisions (caller decides who claims what)
 """
+
 from __future__ import annotations
 
 import logging
@@ -29,8 +30,14 @@ logger = logging.getLogger(__name__)
 
 
 _MULTI_STEP_TITLE_KEYWORDS = (
-    "refactor", "migrate", "redesign", "modernize", "audit",
-    "overhaul", "restructure", "rewrite",
+    "refactor",
+    "migrate",
+    "redesign",
+    "modernize",
+    "audit",
+    "overhaul",
+    "restructure",
+    "rewrite",
 )
 _MULTI_STEP_LABEL = "plan: multi-step"
 
@@ -38,6 +45,7 @@ _MULTI_STEP_LABEL = "plan: multi-step"
 @dataclass(frozen=True)
 class MultiStepPlan:
     """A 3-task chain derived from a complex parent goal."""
+
     parent_id: str
     parent_title: str
     steps: tuple[dict, ...]  # each: {step, title, goal, kind, depends_on}
@@ -52,7 +60,13 @@ def _is_multi_step_task(title: str | None, labels: list[str] | None) -> bool:
     """
     if labels:
         normalized = [
-            (lbl if isinstance(lbl, str) else (lbl.get("name", "") if isinstance(lbl, dict) else "")).strip().lower()
+            (
+                lbl
+                if isinstance(lbl, str)
+                else (lbl.get("name", "") if isinstance(lbl, dict) else "")
+            )
+            .strip()
+            .lower()
             for lbl in labels
         ]
         if _MULTI_STEP_LABEL in normalized:

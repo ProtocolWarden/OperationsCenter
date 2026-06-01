@@ -12,6 +12,7 @@ This watcher MUST NOT invoke any LLM. The entire point of the Phase
 B extraction is to push spec-author execution through the normal
 backend executor pipeline via Plane — see ADR 0007 for the contract.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -29,7 +30,11 @@ from operations_center.config import load_settings
 from operations_center.spec_author.models import TriggerSource
 from operations_center.spec_author.spec_author_task import (
     LABEL_SOURCE as _LABEL_SOURCE,
+)
+from operations_center.spec_author.spec_author_task import (
     LABEL_TASK_KIND as _LABEL_TASK_KIND,
+)
+from operations_center.spec_author.spec_author_task import (
     SpecAuthorPayload,
     create_spec_author_task,
 )
@@ -48,11 +53,7 @@ _GIT_LOG_COMMITS = 10
 def _count_state(issues: list[dict[str, Any]], state_name: str) -> int:
     """Count issues whose Plane state matches *state_name* (case-insensitive)."""
     target = state_name.lower()
-    return sum(
-        1
-        for i in issues
-        if str((i.get("state") or {}).get("name", "")).lower() == target
-    )
+    return sum(1 for i in issues if str((i.get("state") or {}).get("name", "")).lower() == target)
 
 
 def _has_active_campaign(state_path: Path = _ACTIVE_CAMPAIGNS_PATH) -> bool:
@@ -162,9 +163,7 @@ def _collect_existing_specs(specs_dir: Path) -> list[str]:
     if not specs_dir.exists():
         return []
     return sorted(
-        p.stem
-        for p in specs_dir.glob("*.md")
-        if p.is_file() and p.parent.name != "archive"
+        p.stem for p in specs_dir.glob("*.md") if p.is_file() and p.parent.name != "archive"
     )
 
 
@@ -206,19 +205,23 @@ def run_once(settings: Any, client: PlaneClient) -> None:
     try:
         all_issues = client.list_issues()
     except Exception as exc:  # noqa: BLE001 — log and skip cycle
-        logger.error(json.dumps(
-            {"event": "spec_trigger_board_fetch_failed", "error": str(exc)},
-            ensure_ascii=False,
-        ))
+        logger.error(
+            json.dumps(
+                {"event": "spec_trigger_board_fetch_failed", "error": str(exc)},
+                ensure_ascii=False,
+            )
+        )
         return
 
     # Dedupe: one in-flight spec-author task at a time.
     existing = _existing_spec_author_in_flight(all_issues)
     if existing is not None:
-        logger.info(json.dumps(
-            {"event": "spec_trigger_skip_in_flight", "issue_id": existing},
-            ensure_ascii=False,
-        ))
+        logger.info(
+            json.dumps(
+                {"event": "spec_trigger_skip_in_flight", "issue_id": existing},
+                ensure_ascii=False,
+            )
+        )
         return
 
     ready_count = _count_state(all_issues, "ready for ai")
@@ -234,15 +237,17 @@ def run_once(settings: Any, client: PlaneClient) -> None:
         has_active_campaign=has_active,
     )
     if trigger is None:
-        logger.info(json.dumps(
-            {
-                "event": "spec_trigger_no_fire",
-                "ready_count": ready_count,
-                "running_count": running_count,
-                "has_active": has_active,
-            },
-            ensure_ascii=False,
-        ))
+        logger.info(
+            json.dumps(
+                {
+                    "event": "spec_trigger_no_fire",
+                    "ready_count": ready_count,
+                    "running_count": running_count,
+                    "has_active": has_active,
+                },
+                ensure_ascii=False,
+            )
+        )
         return
 
     # For queue_drain triggers: also suppress when rate-gated tasks have already
@@ -250,37 +255,43 @@ def run_once(settings: Any, client: PlaneClient) -> None:
     if trigger.source == TriggerSource.QUEUE_DRAIN:
         queued = _any_queued_spec_author(all_issues)
         if queued is not None:
-            logger.info(json.dumps(
-                {"event": "spec_trigger_skip_queued", "issue_id": queued},
-                ensure_ascii=False,
-            ))
+            logger.info(
+                json.dumps(
+                    {"event": "spec_trigger_skip_queued", "issue_id": queued},
+                    ensure_ascii=False,
+                )
+            )
             return
 
     payload = _build_payload(trigger, settings, ready_count, running_count)
     try:
         issue_id = create_spec_author_task(client, payload)
     except Exception as exc:  # noqa: BLE001 — log and skip; drop-file stays so we can retry
-        logger.error(json.dumps(
-            {
-                "event": "spec_trigger_create_failed",
-                "trigger_source": payload.trigger_source,
-                "spec_slug": payload.spec_slug,
-                "error": str(exc),
-            },
-            ensure_ascii=False,
-        ))
+        logger.error(
+            json.dumps(
+                {
+                    "event": "spec_trigger_create_failed",
+                    "trigger_source": payload.trigger_source,
+                    "spec_slug": payload.spec_slug,
+                    "error": str(exc),
+                },
+                ensure_ascii=False,
+            )
+        )
         return
 
-    logger.info(json.dumps(
-        {
-            "event": "spec_trigger_task_created",
-            "issue_id": issue_id,
-            "trigger_source": payload.trigger_source,
-            "spec_slug": payload.spec_slug,
-            "target_path": payload.target_path,
-        },
-        ensure_ascii=False,
-    ))
+    logger.info(
+        json.dumps(
+            {
+                "event": "spec_trigger_task_created",
+                "issue_id": issue_id,
+                "trigger_source": payload.trigger_source,
+                "spec_slug": payload.spec_slug,
+                "target_path": payload.target_path,
+            },
+            ensure_ascii=False,
+        )
+    )
 
     # Archive the drop-file only after the Plane task is safely on the board,
     # so a creation failure leaves the operator's seed in place for the next cycle.
@@ -288,10 +299,12 @@ def run_once(settings: Any, client: PlaneClient) -> None:
         try:
             detector.archive_drop_file()
         except OSError as exc:
-            logger.error(json.dumps(
-                {"event": "spec_trigger_archive_failed", "error": str(exc)},
-                ensure_ascii=False,
-            ))
+            logger.error(
+                json.dumps(
+                    {"event": "spec_trigger_archive_failed", "error": str(exc)},
+                    ensure_ascii=False,
+                )
+            )
 
 
 def _write_heartbeat(status_dir: Path | None) -> None:
@@ -317,7 +330,7 @@ def _write_heartbeat(status_dir: Path | None) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Spec trigger watcher — detect drop-file / queue-drain and "
-                    "emit a single spec-author Plane task per cycle (ADR 0007 Phase B).",
+        "emit a single spec-author Plane task per cycle (ADR 0007 Phase B).",
     )
     parser.add_argument("--config", required=True)
     parser.add_argument("--once", action="store_true", help="Run one cycle and exit")
@@ -348,14 +361,16 @@ def main() -> None:
             try:
                 run_once(settings, client)
             except Exception as exc:  # noqa: BLE001 — watcher must not die on cycle errors
-                logger.error(json.dumps(
-                    {
-                        "event": "spec_trigger_cycle_error",
-                        "cycle": cycle,
-                        "error": str(exc),
-                    },
-                    ensure_ascii=False,
-                ))
+                logger.error(
+                    json.dumps(
+                        {
+                            "event": "spec_trigger_cycle_error",
+                            "cycle": cycle,
+                            "error": str(exc),
+                        },
+                        ensure_ascii=False,
+                    )
+                )
             cycle += 1
             time.sleep(sd.poll_interval_seconds)
     finally:

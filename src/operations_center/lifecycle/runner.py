@@ -25,7 +25,6 @@ from .models import (
     VerifyOutput,
 )
 
-
 # ---------------------------------------------------------------------------
 # Handler protocols
 # ---------------------------------------------------------------------------
@@ -86,7 +85,10 @@ class LifecycleRunner:
         already_failed = False
 
         for stage in metadata.requested_stages:
-            if already_failed and metadata.stage_policy == LifecycleStagePolicy.STOP_ON_FIRST_FAILURE:
+            if (
+                already_failed
+                and metadata.stage_policy == LifecycleStagePolicy.STOP_ON_FIRST_FAILURE
+            ):
                 skipped.append(stage)
                 reports.append(StageReport(stage=stage, status=StageStatus.SKIPPED))
                 continue
@@ -98,15 +100,11 @@ class LifecycleRunner:
                     )
                 elif stage == TaskLifecycleStage.EXECUTE:
                     if plan_out is None:
-                        raise RuntimeError(
-                            "execute stage requires plan stage to have run"
-                        )
+                        raise RuntimeError("execute stage requires plan stage to have run")
                     execute_out = self._handlers.execute(request=request, plan=plan_out)
                 elif stage == TaskLifecycleStage.VERIFY:
                     if plan_out is None or execute_out is None:
-                        raise RuntimeError(
-                            "verify stage requires both plan and execute stages"
-                        )
+                        raise RuntimeError("verify stage requires both plan and execute stages")
                     check_results = self._handlers.verify(
                         request=request, plan=plan_out, execution=execute_out
                     )
@@ -119,15 +117,11 @@ class LifecycleRunner:
                 reports.append(StageReport(stage=stage, status=StageStatus.SUCCEEDED))
             except _StageFailure as exc:
                 failed.append(stage)
-                reports.append(
-                    StageReport(stage=stage, status=StageStatus.FAILED, error=str(exc))
-                )
+                reports.append(StageReport(stage=stage, status=StageStatus.FAILED, error=str(exc)))
                 already_failed = True
             except Exception as exc:
                 failed.append(stage)
-                reports.append(
-                    StageReport(stage=stage, status=StageStatus.FAILED, error=str(exc))
-                )
+                reports.append(StageReport(stage=stage, status=StageStatus.FAILED, error=str(exc)))
                 already_failed = True
 
         outcome = LifecycleOutcome(
@@ -145,9 +139,7 @@ class _StageFailure(Exception):  # noqa: N818
     """Internal signal — a stage's typed failure (vs. unexpected exception)."""
 
 
-def _build_verify_output(
-    declared: list[Check], results: list[CheckResult]
-) -> VerifyOutput:
+def _build_verify_output(declared: list[Check], results: list[CheckResult]) -> VerifyOutput:
     """Validate that verify reports cover the plan's declared checks.
 
     Plan declares the check_ids; verify must produce a CheckResult per

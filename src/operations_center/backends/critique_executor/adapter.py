@@ -6,10 +6,11 @@ backends/critique_executor/adapter.py — CritiqueExecutorBackendAdapter.
 Wraps CritiqueExecutorRunner behind the canonical ExecutionRequest → ExecutionResult
 contract. Reads topology, max_rounds, worker_backend from CritiqueExecutorSettings.
 """
+
 from __future__ import annotations
 
-from datetime import UTC, datetime
 import logging
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 from operations_center.backends.tiering import select_tier, tier_profile
@@ -19,7 +20,11 @@ from operations_center.backends.worker_backend_selector import (
 )
 from operations_center.config.settings import CritiqueExecutorSettings
 from operations_center.contracts.common import ValidationSummary
-from operations_center.contracts.enums import ExecutionStatus, FailureReasonCategory, ValidationStatus
+from operations_center.contracts.enums import (
+    ExecutionStatus,
+    FailureReasonCategory,
+    ValidationStatus,
+)
 from operations_center.contracts.execution import ExecutionRequest, ExecutionResult
 from operations_center.execution.usage_store import UsageStore
 
@@ -34,7 +39,9 @@ class CritiqueExecutorBackendAdapter:
     separate board-facing proposer subsystem.
     """
 
-    def __init__(self, settings: CritiqueExecutorSettings, usage_store: UsageStore | None = None) -> None:
+    def __init__(
+        self, settings: CritiqueExecutorSettings, usage_store: UsageStore | None = None
+    ) -> None:
         self._settings = settings
         self._usage_store = usage_store
 
@@ -46,8 +53,13 @@ class CritiqueExecutorBackendAdapter:
         self, request: ExecutionRequest
     ) -> tuple[ExecutionResult, object | None]:
         try:
-            from critique_executor.executor import CritiqueExecutorRunner  # type: ignore  # noqa: PGH003
-            from critique_executor.models import CritiqueConfig, CritiqueTopology  # type: ignore  # noqa: PGH003
+            from critique_executor.executor import (
+                CritiqueExecutorRunner,  # type: ignore  # noqa: PGH003
+            )
+            from critique_executor.models import (  # type: ignore  # noqa: PGH003
+                CritiqueConfig,
+                CritiqueTopology,
+            )
         except ImportError as exc:
             return _error_result(request, f"critique_executor not installed: {exc}"), None
 
@@ -161,7 +173,9 @@ def _rxp_to_result(request: ExecutionRequest, rxp_result) -> ExecutionResult:
         branch_pushed=False,
         branch_name=request.task_branch,
         failure_category=None if success else FailureReasonCategory.BACKEND_ERROR,
-        failure_reason=None if success else (rxp_result.error_summary or "critique_executor run failed"),
+        failure_reason=None
+        if success
+        else (rxp_result.error_summary or "critique_executor run failed"),
     )
 
 

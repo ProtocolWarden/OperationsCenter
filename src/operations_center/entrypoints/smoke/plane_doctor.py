@@ -36,7 +36,9 @@ def request_summary(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Diagnose Plane API access for current local config")
+    parser = argparse.ArgumentParser(
+        description="Diagnose Plane API access for current local config"
+    )
     parser.add_argument("--config", required=True)
     parser.add_argument("--task-id")
     args = parser.parse_args()
@@ -104,7 +106,7 @@ def main() -> None:
                     "checks": checks,
                 },
                 indent=2,
-            ensure_ascii=False,
+                ensure_ascii=False,
             )
         )
     finally:

@@ -13,6 +13,7 @@ Public surface:
     * ``MaintenanceRegistry`` — registers tasks, runs the ones whose
       advisory interval has elapsed, persists last-run state
 """
+
 from __future__ import annotations
 
 from .contracts import (

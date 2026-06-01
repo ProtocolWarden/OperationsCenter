@@ -61,13 +61,18 @@ class CampaignBuilder:
             if child_count >= self._max_tasks:
                 logger.warning(
                     '{"event": "campaign_task_limit_reached", "campaign_id": "%s", "omitted_goals": %d}',
-                    fm.campaign_id, len(goals) - idx,
+                    fm.campaign_id,
+                    len(goals) - idx,
                 )
                 break
             for phase in fm.phases:
                 if child_count >= self._max_tasks:
                     break
-                phase_prefix = {"implement": "Impl", "test_campaign": "Test", "improve_campaign": "Improve"}.get(phase, phase)
+                phase_prefix = {
+                    "implement": "Impl",
+                    "test_campaign": "Test",
+                    "improve_campaign": "Improve",
+                }.get(phase, phase)
                 title = f"[{phase_prefix}] {goal_text[:60].strip()}"
                 spec_coverage_hint = f"Goal {idx + 1}"
                 spec = ChildTaskSpec(
@@ -88,7 +93,8 @@ class CampaignBuilder:
 
         logger.info(
             '{"event": "campaign_created", "campaign_id": "%s", "tasks_created": %d}',
-            fm.campaign_id, len(created_ids),
+            fm.campaign_id,
+            len(created_ids),
         )
         return created_ids
 

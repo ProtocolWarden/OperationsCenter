@@ -23,8 +23,7 @@ class LintFixRule:
     def evaluate(self, insights: Sequence[DerivedInsight]) -> list[CandidateSpec]:
         # Cross-signal: check once for lint↔hotspot overlap across all insights.
         has_hotspot_overlap = any(
-            i.kind == "cross_signal" and i.subject == "lint_hotspot_overlap"
-            for i in insights
+            i.kind == "cross_signal" and i.subject == "lint_hotspot_overlap" for i in insights
         )
 
         candidates: list[CandidateSpec] = []
@@ -32,10 +31,7 @@ class LintFixRule:
             if insight.kind != "lint_drift":
                 continue
 
-            if (
-                insight.dedup_key.endswith("present")
-                and insight.status == "present"
-            ):
+            if insight.dedup_key.endswith("present") and insight.status == "present":
                 count = int(insight.evidence.get("violation_count", 0))
                 if count < self.min_violations:
                     continue
@@ -47,8 +43,13 @@ class LintFixRule:
                 confidence = "high" if (count >= 20 or has_hotspot_overlap) else "medium"
                 ev_lines = [f"ruff reports {count} lint violation(s). Top codes: {codes_str}."]
                 if has_hotspot_overlap:
-                    ev_lines.append("Lint violations overlap with active git hotspot files (cross-signal corroboration).")
-                matched = ["lint_violations_present_min_threshold", "candidate_not_seen_in_cooldown_window"]
+                    ev_lines.append(
+                        "Lint violations overlap with active git hotspot files (cross-signal corroboration)."
+                    )
+                matched = [
+                    "lint_violations_present_min_threshold",
+                    "candidate_not_seen_in_cooldown_window",
+                ]
                 if has_hotspot_overlap:
                     matched.append("cross_signal_lint_hotspot_overlap")
                 candidates.append(
@@ -62,7 +63,9 @@ class LintFixRule:
                         evidence_lines=ev_lines,
                         risk_class="style",
                         expires_after_runs=3,
-                        estimated_affected_files=int(distinct_files) if distinct_files is not None else None,
+                        estimated_affected_files=int(distinct_files)
+                        if distinct_files is not None
+                        else None,
                         proposal_outline=ProposalOutline(
                             title_hint=f"Fix {count} ruff lint violation(s) ({codes_str})",
                             summary_hint=(
@@ -98,7 +101,9 @@ class LintFixRule:
                         ],
                         risk_class="style",
                         expires_after_runs=3,
-                        estimated_affected_files=int(distinct_files) if distinct_files is not None else None,
+                        estimated_affected_files=int(distinct_files)
+                        if distinct_files is not None
+                        else None,
                         proposal_outline=ProposalOutline(
                             title_hint=f"Fix lint regression: +{delta} new ruff violations",
                             summary_hint=(

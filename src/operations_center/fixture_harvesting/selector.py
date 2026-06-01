@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 # Profile selection rules
 # ---------------------------------------------------------------------------
 
+
 def _select_minimal_failure(
     index: "ManagedArtifactIndex",
     _request: HarvestRequest,
@@ -51,7 +52,9 @@ def _select_minimal_failure(
     if not result:
         for artifact in index.artifacts:
             if artifact.status.value == "present":
-                result.append(SelectedArtifact(artifact=artifact, rationale="only present artifact (context)"))
+                result.append(
+                    SelectedArtifact(artifact=artifact, rationale="only present artifact (context)")
+                )
                 break
     return result
 
@@ -133,8 +136,7 @@ def _select_full_manifest_snapshot(
 ) -> list[SelectedArtifact]:
     """All manifest artifacts."""
     return [
-        SelectedArtifact(artifact=a, rationale="full manifest snapshot")
-        for a in index.artifacts
+        SelectedArtifact(artifact=a, rationale="full manifest snapshot") for a in index.artifacts
     ]
 
 
@@ -176,6 +178,7 @@ _PROFILE_SELECTORS = {
 # ---------------------------------------------------------------------------
 # Post-selection filters
 # ---------------------------------------------------------------------------
+
 
 def _apply_finding_filter(
     selected: list[SelectedArtifact],
@@ -223,6 +226,7 @@ def _apply_max_artifacts(
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def select_fixture_artifacts(
     index: "ManagedArtifactIndex",
     request: HarvestRequest,
@@ -258,11 +262,7 @@ def select_fixture_artifacts(
     selected = selector_fn(index, request)
 
     # Post-selection filters (deterministic, applied in fixed order)
-    if (
-        request.finding_ids
-        and profile != HarvestProfile.MANUAL_SELECTION
-        and request.findings
-    ):
+    if request.finding_ids and profile != HarvestProfile.MANUAL_SELECTION and request.findings:
         selected = _apply_finding_filter(selected, request.finding_ids, request.findings)
 
     if request.artifact_kind and profile != HarvestProfile.MANUAL_SELECTION:

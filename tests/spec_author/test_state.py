@@ -2,11 +2,13 @@
 # Copyright (C) 2026 ProtocolWarden
 # tests/spec_director/test_state.py
 from __future__ import annotations
-from operations_center.spec_author.models import CampaignRecord, ActiveCampaigns
+
+from operations_center.spec_author.models import ActiveCampaigns, CampaignRecord
 
 
 def test_load_returns_empty_when_missing(tmp_path):
     from operations_center.spec_author.state import CampaignStateManager
+
     mgr = CampaignStateManager(state_path=tmp_path / "active.json")
     ac = mgr.load()
     assert ac.campaigns == []
@@ -14,10 +16,14 @@ def test_load_returns_empty_when_missing(tmp_path):
 
 def test_save_and_load_roundtrip(tmp_path):
     from operations_center.spec_author.state import CampaignStateManager
+
     mgr = CampaignStateManager(state_path=tmp_path / "active.json")
     record = CampaignRecord(
-        campaign_id="abc", slug="test", spec_file="docs/specs/test.md",
-        status="active", created_at="2026-04-15T00:00:00+00:00",
+        campaign_id="abc",
+        slug="test",
+        spec_file="docs/specs/test.md",
+        status="active",
+        created_at="2026-04-15T00:00:00+00:00",
     )
     mgr.save(ActiveCampaigns(campaigns=[record]))
     loaded = mgr.load()
@@ -26,6 +32,7 @@ def test_save_and_load_roundtrip(tmp_path):
 
 def test_corrupt_file_returns_empty_and_renames(tmp_path):
     from operations_center.spec_author.state import CampaignStateManager
+
     p = tmp_path / "active.json"
     p.write_text("not json {{{")
     mgr = CampaignStateManager(state_path=p)
@@ -37,10 +44,14 @@ def test_corrupt_file_returns_empty_and_renames(tmp_path):
 
 def test_mark_complete(tmp_path):
     from operations_center.spec_author.state import CampaignStateManager
+
     mgr = CampaignStateManager(state_path=tmp_path / "active.json")
     record = CampaignRecord(
-        campaign_id="abc", slug="test", spec_file="docs/specs/test.md",
-        status="active", created_at="2026-04-15T00:00:00+00:00",
+        campaign_id="abc",
+        slug="test",
+        spec_file="docs/specs/test.md",
+        status="active",
+        created_at="2026-04-15T00:00:00+00:00",
     )
     mgr.save(ActiveCampaigns(campaigns=[record]))
     mgr.mark_complete("abc")

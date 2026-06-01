@@ -18,11 +18,11 @@ The defaults are deliberately operational, not LLM-prompty: operators
 expand them later. The registry's role is "what task should we file?",
 not "what prompt drives the agent?".
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from typing import Mapping
-
 
 _DEFAULT_TITLE = "Re-validate {consumer} after {target} change"
 _DEFAULT_BODY_PRELUDE = (

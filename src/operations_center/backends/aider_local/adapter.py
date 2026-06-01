@@ -20,6 +20,8 @@ from typing import Optional
 from core_runner import CoreRunner
 from rxp.contracts import RuntimeInvocation
 
+from operations_center.backends._capacity_classifier import classify_capacity_exhaustion
+from operations_center.backends._runtime_ref import runtime_invocation_ref
 from operations_center.config.settings import AiderLocalSettings
 from operations_center.contracts.common import ChangedFileRef, ValidationSummary
 from operations_center.contracts.enums import (
@@ -28,9 +30,11 @@ from operations_center.contracts.enums import (
     FailureReasonCategory,
     ValidationStatus,
 )
-from operations_center.contracts.execution import ExecutionArtifact, ExecutionRequest, ExecutionResult
-from operations_center.backends._capacity_classifier import classify_capacity_exhaustion
-from operations_center.backends._runtime_ref import runtime_invocation_ref
+from operations_center.contracts.execution import (
+    ExecutionArtifact,
+    ExecutionRequest,
+    ExecutionResult,
+)
 
 
 class AiderLocalBackendAdapter:
@@ -84,9 +88,13 @@ class AiderLocalBackendAdapter:
                 run_result.metadata["capacity_exhausted"] = True
                 run_result.output = capacity_excerpt
 
-        changed_files, changed_files_source, changed_files_confidence = _discover_changed_files(repo_path)
+        changed_files, changed_files_source, changed_files_confidence = _discover_changed_files(
+            repo_path
+        )
         failure_category = _failure_category(run_result)
-        failure_reason = None if run_result.success else (run_result.output or "aider_local execution failed")
+        failure_reason = (
+            None if run_result.success else (run_result.output or "aider_local execution failed")
+        )
 
         artifacts: list[ExecutionArtifact] = []
         if run_result.output:
@@ -120,10 +128,13 @@ class AiderLocalBackendAdapter:
     def _build_command(self, message_file: str) -> list[str]:
         command = [
             self._settings.binary,
-            "--model", self._settings.model,
-            "--api-base", self._settings.ollama_base_url,
+            "--model",
+            self._settings.model,
+            "--api-base",
+            self._settings.ollama_base_url,
             "--yes-always",
-            "--message-file", message_file,
+            "--message-file",
+            message_file,
         ]
         command += self._settings.extra_args
         return command
@@ -220,6 +231,7 @@ def _read_capture(path: str | None) -> str:
 def _short_id() -> str:
     """Cheap unique-enough invocation id for aider_local runs."""
     import uuid
+
     return f"aider-local-{uuid.uuid4().hex[:8]}"
 
 

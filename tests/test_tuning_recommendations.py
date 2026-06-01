@@ -41,7 +41,9 @@ engine = RecommendationEngine()
 
 
 def test_no_data_when_sample_below_minimum() -> None:
-    rec = engine._evaluate_one(_metrics(sample_runs=MIN_SAMPLE_FOR_RECOMMENDATION - 1, emitted=3, suppressed=0))
+    rec = engine._evaluate_one(
+        _metrics(sample_runs=MIN_SAMPLE_FOR_RECOMMENDATION - 1, emitted=3, suppressed=0)
+    )
     assert rec.action == "no_data"
     assert rec.confidence == "low"
 

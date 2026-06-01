@@ -23,9 +23,7 @@ _IGNORED_KEYS = {
     "run_id",
 }
 
-_TIMESTAMP_RE = re.compile(
-    r"\b\d{4}-\d{2}-\d{2}[T ][0-9:.+-]+Z?\b|\b[0-9]{10,}\b"
-)
+_TIMESTAMP_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}[T ][0-9:.+-]+Z?\b|\b[0-9]{10,}\b")
 
 
 def canonicalize_evidence(value: Any) -> Any:
@@ -38,7 +36,9 @@ def canonicalize_evidence(value: Any) -> Any:
         }
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
         normalized = [canonicalize_evidence(item) for item in value]
-        return sorted(normalized, key=lambda item: json.dumps(item, sort_keys=True, ensure_ascii=False))
+        return sorted(
+            normalized, key=lambda item: json.dumps(item, sort_keys=True, ensure_ascii=False)
+        )
     if isinstance(value, str):
         return _TIMESTAMP_RE.sub("<time>", value.strip())
     return value

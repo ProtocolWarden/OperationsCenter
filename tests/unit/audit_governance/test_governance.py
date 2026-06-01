@@ -18,6 +18,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from operations_center.audit_dispatch.models import DispatchStatus, ManagedAuditDispatchResult
 from operations_center.audit_governance import (
     AuditBudgetState,
     AuditCooldownState,
@@ -39,12 +40,11 @@ from operations_center.audit_governance import (
     update_cooldown_after_dispatch,
     validate_manual_approval,
 )
-from operations_center.audit_dispatch.models import DispatchStatus, ManagedAuditDispatchResult
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_request(**kwargs) -> AuditGovernanceRequest:
     defaults = dict(
@@ -83,6 +83,7 @@ def _make_dispatch_result(*, succeeded: bool = True) -> ManagedAuditDispatchResu
 # ---------------------------------------------------------------------------
 # Contract 1 — Governance request validation
 # ---------------------------------------------------------------------------
+
 
 class TestGovernanceRequest:
     def test_valid_request_creates_successfully(self):
@@ -134,6 +135,7 @@ class TestGovernanceRequest:
 # Contract 2 — Governance decision model
 # ---------------------------------------------------------------------------
 
+
 class TestGovernanceDecision:
     def test_decision_records_explicit_decision(self):
         req = _make_request()
@@ -184,6 +186,7 @@ class TestGovernanceDecision:
 # ---------------------------------------------------------------------------
 # Contract 3 — Policy checks
 # ---------------------------------------------------------------------------
+
 
 class TestPolicyChecks:
     def test_known_repo_passes(self):
@@ -349,6 +352,7 @@ class TestPolicyChecks:
 # Contract 4 — Mini regression first rule
 # ---------------------------------------------------------------------------
 
+
 class TestMiniRegressionFirstRule:
     def test_suite_report_present_passes(self):
         req = _make_request(
@@ -389,6 +393,7 @@ class TestMiniRegressionFirstRule:
 # Contract 5 — Budget state tracking
 # ---------------------------------------------------------------------------
 
+
 class TestBudgetState:
     def test_fresh_budget_created_when_no_state(self, tmp_path: Path):
         cfg = BudgetConfig(max_runs=5, period_days=7)
@@ -408,7 +413,9 @@ class TestBudgetState:
     def test_budget_exhaustion_detected(self, tmp_path: Path):
         cfg = BudgetConfig(max_runs=2, period_days=7)
         increment_budget_after_dispatch(tmp_path, "example_managed_repo", "audit_type_1", cfg)
-        state = increment_budget_after_dispatch(tmp_path, "example_managed_repo", "audit_type_1", cfg)
+        state = increment_budget_after_dispatch(
+            tmp_path, "example_managed_repo", "audit_type_1", cfg
+        )
         assert state.is_exhausted
         assert state.runs_remaining == 0
 
@@ -437,6 +444,7 @@ class TestBudgetState:
 # Contract 6 — Cooldown state tracking
 # ---------------------------------------------------------------------------
 
+
 class TestCooldownState:
     def test_fresh_cooldown_no_restriction(self, tmp_path: Path):
         cfg = CooldownConfig(cooldown_seconds=3600)
@@ -445,7 +453,9 @@ class TestCooldownState:
 
     def test_cooldown_active_after_dispatch(self, tmp_path: Path):
         cfg = CooldownConfig(cooldown_seconds=3600)
-        state = update_cooldown_after_dispatch(tmp_path, "example_managed_repo", "audit_type_1", cfg)
+        state = update_cooldown_after_dispatch(
+            tmp_path, "example_managed_repo", "audit_type_1", cfg
+        )
         assert state.is_in_cooldown()
         assert state.seconds_remaining() > 0
 
@@ -471,11 +481,13 @@ class TestCooldownState:
 # Contract 7 — Manual approval
 # ---------------------------------------------------------------------------
 
+
 class TestManualApproval:
     def test_valid_approval_references_decision_and_request(self):
         req = _make_request(urgency="urgent", related_suite_report_path="/suite.json")
         results = evaluate_governance_policies(
-            req, known_repos=["example_managed_repo"],
+            req,
+            known_repos=["example_managed_repo"],
             known_audit_types={"example_managed_repo": ["audit_type_1"]},
         )
         decision = make_governance_decision(req, results)
@@ -487,7 +499,8 @@ class TestManualApproval:
     def test_mismatched_decision_id_raises(self):
         req = _make_request(urgency="urgent", related_suite_report_path="/suite.json")
         results = evaluate_governance_policies(
-            req, known_repos=["example_managed_repo"],
+            req,
+            known_repos=["example_managed_repo"],
             known_audit_types={"example_managed_repo": ["audit_type_1"]},
         )
         decision = make_governance_decision(req, results)
@@ -502,7 +515,8 @@ class TestManualApproval:
     def test_mismatched_request_id_raises(self):
         req = _make_request(urgency="urgent", related_suite_report_path="/suite.json")
         results = evaluate_governance_policies(
-            req, known_repos=["example_managed_repo"],
+            req,
+            known_repos=["example_managed_repo"],
             known_audit_types={"example_managed_repo": ["audit_type_1"]},
         )
         decision = make_governance_decision(req, results)
@@ -517,7 +531,8 @@ class TestManualApproval:
     def test_cannot_approve_denied_decision(self):
         req = _make_request(repo_id="unknown_repo")
         results = evaluate_governance_policies(
-            req, known_repos=["example_managed_repo"],
+            req,
+            known_repos=["example_managed_repo"],
             known_audit_types={"example_managed_repo": ["audit_type_1"]},
         )
         decision = make_governance_decision(req, results)
@@ -647,6 +662,7 @@ class TestGovernedRunner:
 # Contract 9 — Budget/cooldown updates only after dispatch
 # ---------------------------------------------------------------------------
 
+
 class TestStateUpdatesAfterDispatch:
     def test_budget_updated_only_after_dispatch(self, tmp_path: Path):
         req = _make_request(urgency="normal", related_suite_report_path="/suite.json")
@@ -655,13 +671,17 @@ class TestStateUpdatesAfterDispatch:
 
         # No state before dispatch
         budget_cfg = BudgetConfig()
-        state_before = load_budget_state(tmp_path / "state", "example_managed_repo", "audit_type_1", budget_cfg)
+        state_before = load_budget_state(
+            tmp_path / "state", "example_managed_repo", "audit_type_1", budget_cfg
+        )
         assert state_before.runs_used == 0
 
         with patch(_DISPATCH_TARGET, dispatch_mock):
             run_governed_audit(req, governance_config=cfg, output_dir=tmp_path / "out")
 
-        state_after = load_budget_state(tmp_path / "state", "example_managed_repo", "audit_type_1", budget_cfg)
+        state_after = load_budget_state(
+            tmp_path / "state", "example_managed_repo", "audit_type_1", budget_cfg
+        )
         assert state_after.runs_used == 1
 
     def test_budget_not_updated_when_denied(self, tmp_path: Path):
@@ -679,6 +699,7 @@ class TestStateUpdatesAfterDispatch:
 # ---------------------------------------------------------------------------
 # Contract 10 — Governance report persistence
 # ---------------------------------------------------------------------------
+
 
 class TestReportPersistence:
     def test_report_written_for_approved_run(self, tmp_path: Path):
@@ -728,13 +749,9 @@ class TestReportPersistence:
 # Contract 11 — Import boundary
 # ---------------------------------------------------------------------------
 
+
 class TestImportBoundary:
-    _PACKAGE_ROOT = (
-        Path(__file__).parents[3]
-        / "src"
-        / "operations_center"
-        / "audit_governance"
-    )
+    _PACKAGE_ROOT = Path(__file__).parents[3] / "src" / "operations_center" / "audit_governance"
 
     _FORBIDDEN_PREFIXES = (
         "example_managed_repo",
@@ -801,6 +818,7 @@ class TestImportBoundary:
 # Contract 12 — Empty known_repos denies all (gap_006)
 # ---------------------------------------------------------------------------
 
+
 class TestEmptyKnownReposDeniesAll:
     def test_empty_known_repos_returns_failed_policy(self):
         req = _make_request()
@@ -838,13 +856,16 @@ class TestEmptyKnownReposDeniesAll:
         req = _make_request()
         results = evaluate_governance_policies(req, known_repos=[], known_audit_types={})
         by_name = {p.policy_name: p for p in results}
-        assert "denied" in by_name["known_repo_required"].reason.lower() or \
-               "known_repos" in by_name["known_repo_required"].reason
+        assert (
+            "denied" in by_name["known_repo_required"].reason.lower()
+            or "known_repos" in by_name["known_repo_required"].reason
+        )
 
 
 # ---------------------------------------------------------------------------
 # Contract 13 — File locking prevents concurrent write races (gap_001)
 # ---------------------------------------------------------------------------
+
 
 class TestFileLocking:
     def test_budget_concurrent_increments_no_loss(self, tmp_path: Path):
@@ -854,7 +875,9 @@ class TestFileLocking:
 
         def do_increment():
             try:
-                increment_budget_after_dispatch(tmp_path, "example_managed_repo", "audit_type_1", cfg)
+                increment_budget_after_dispatch(
+                    tmp_path, "example_managed_repo", "audit_type_1", cfg
+                )
             except Exception as exc:
                 errors.append(exc)
 
@@ -875,7 +898,9 @@ class TestFileLocking:
 
         def do_update():
             try:
-                update_cooldown_after_dispatch(tmp_path, "example_managed_repo", "audit_type_1", cfg)
+                update_cooldown_after_dispatch(
+                    tmp_path, "example_managed_repo", "audit_type_1", cfg
+                )
             except Exception as exc:
                 errors.append(exc)
 
@@ -893,6 +918,7 @@ class TestFileLocking:
     def test_lock_released_after_success(self, tmp_path: Path):
         """Lock file must not remain locked after normal operation."""
         from operations_center.audit_governance.file_locks import locked_state_file
+
         lock_target = tmp_path / "test.json"
         with locked_state_file(lock_target):
             pass
@@ -905,6 +931,7 @@ class TestFileLocking:
     def test_lock_released_after_exception(self, tmp_path: Path):
         """Lock must be released even when the guarded block raises."""
         from operations_center.audit_governance.file_locks import locked_state_file
+
         lock_target = tmp_path / "test.json"
         try:
             with locked_state_file(lock_target):
@@ -921,6 +948,7 @@ class TestFileLocking:
 # ---------------------------------------------------------------------------
 # Contract 14 — AuditGovernanceReport.dispatched_run_id property (gap_007)
 # ---------------------------------------------------------------------------
+
 
 class TestDispatchedRunId:
     def test_dispatched_run_id_none_when_not_dispatched(self, tmp_path: Path):
@@ -943,6 +971,7 @@ class TestDispatchedRunId:
 # ---------------------------------------------------------------------------
 # Contract 15 — Negative / failure-path tests (gap_007)
 # ---------------------------------------------------------------------------
+
 
 class TestNegativePaths:
     def test_empty_requested_by_is_denied(self, tmp_path: Path):
@@ -981,6 +1010,7 @@ class TestNegativePaths:
         corrupt_path = tmp_path / "example_managed_repo__audit_type_1__budget.json"
         corrupt_path.write_text("NOT JSON {{{", encoding="utf-8")
         from operations_center.audit_governance.errors import BudgetStateError
+
         cfg = BudgetConfig(max_runs=5, period_days=7)
         with pytest.raises(BudgetStateError, match="Cannot load budget state"):
             load_budget_state(tmp_path, "example_managed_repo", "audit_type_1", cfg)
@@ -989,6 +1019,7 @@ class TestNegativePaths:
         corrupt_path = tmp_path / "example_managed_repo__audit_type_1__cooldown.json"
         corrupt_path.write_text("NOT JSON {{{", encoding="utf-8")
         from operations_center.audit_governance.errors import CooldownStateError
+
         cfg = CooldownConfig(cooldown_seconds=3600)
         with pytest.raises(CooldownStateError, match="Cannot load cooldown state"):
             load_cooldown_state(tmp_path, "example_managed_repo", "audit_type_1", cfg)
@@ -996,11 +1027,16 @@ class TestNegativePaths:
     def test_budget_exhausted_blocks_dispatch(self, tmp_path: Path):
         cfg = _make_config(
             state_dir=tmp_path / "state",
-            budget_config={"example_managed_repo": {"audit_type_1": BudgetConfig(max_runs=1, period_days=7)}},
+            budget_config={
+                "example_managed_repo": {"audit_type_1": BudgetConfig(max_runs=1, period_days=7)}
+            },
         )
         # Exhaust budget
         increment_budget_after_dispatch(
-            tmp_path / "state", "example_managed_repo", "audit_type_1", BudgetConfig(max_runs=1, period_days=7)
+            tmp_path / "state",
+            "example_managed_repo",
+            "audit_type_1",
+            BudgetConfig(max_runs=1, period_days=7),
         )
         req = _make_request(urgency="normal", related_suite_report_path="/suite.json")
         dispatch_mock = MagicMock()

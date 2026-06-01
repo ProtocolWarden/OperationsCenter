@@ -92,8 +92,10 @@ def test_show_rejects_ambiguous_prefix(tmp_path: Path) -> None:
 
     result = CliRunner().invoke(app, ["abcd1234", "--root", str(runs_root)])
     assert result.exit_code != 0
-    assert "ambiguous" in (result.output + (result.stderr or "")).lower() or \
-           "ambiguous" in (result.output + str(result.exception or "")).lower()
+    assert (
+        "ambiguous" in (result.output + (result.stderr or "")).lower()
+        or "ambiguous" in (result.output + str(result.exception or "")).lower()
+    )
 
 
 def test_show_with_explicit_trace_path(tmp_path: Path) -> None:
@@ -131,14 +133,20 @@ def test_show_handles_trace_without_ref_or_routing(tmp_path: Path) -> None:
     rd = runs_root / "demo-run-1"
     rd.mkdir(parents=True)
     (rd / "execution_trace.json").write_text(
-        json.dumps({
-            "trace_id": "t", "record_id": "r",
-            "headline": "SUCCEEDED | demo_stub @ x | run=demo",
-            "status": "succeeded", "summary": "ok",
-            "key_artifacts": [], "changed_files_summary": "",
-            "validation_summary": {"status": "skipped"},
-            "warnings": [], "backend_detail_refs": [],
-        }),
+        json.dumps(
+            {
+                "trace_id": "t",
+                "record_id": "r",
+                "headline": "SUCCEEDED | demo_stub @ x | run=demo",
+                "status": "succeeded",
+                "summary": "ok",
+                "key_artifacts": [],
+                "changed_files_summary": "",
+                "validation_summary": {"status": "skipped"},
+                "warnings": [],
+                "backend_detail_refs": [],
+            }
+        ),
         encoding="utf-8",
     )
     result = CliRunner().invoke(app, ["demo-run-1", "--root", str(runs_root)])

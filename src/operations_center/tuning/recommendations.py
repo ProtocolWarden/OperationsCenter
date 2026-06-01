@@ -8,9 +8,11 @@ from operations_center.tuning.models import FamilyMetrics, TuningRecommendation
 MIN_SAMPLE_FOR_RECOMMENDATION = 5
 
 # Acceptance-rate thresholds (proposals_merged / (merged + escalated))
-LOW_ACCEPTANCE_RATE = 0.3   # below this with enough feedback → consider tightening or tier demotion
+LOW_ACCEPTANCE_RATE = 0.3  # below this with enough feedback → consider tightening or tier demotion
 HIGH_ACCEPTANCE_RATE = 0.8  # above this with enough feedback → consider tier promotion
-MIN_FEEDBACK_FOR_ACCEPTANCE = 5  # minimum merged+escalated records before acceptance-rate rules fire
+MIN_FEEDBACK_FOR_ACCEPTANCE = (
+    5  # minimum merged+escalated records before acceptance-rate rules fire
+)
 
 # A family suppressed at this rate or above is flagged as over-suppressed.
 OVER_SUPPRESSED_RATE = 0.90
@@ -101,10 +103,7 @@ class RecommendationEngine:
             )
 
         # Noisy/low-value — emitting candidates but rarely creating useful tasks
-        if (
-            m.candidates_emitted >= NOISY_MIN_EMITTED
-            and m.create_rate <= NOISY_CREATE_RATE_CEILING
-        ):
+        if m.candidates_emitted >= NOISY_MIN_EMITTED and m.create_rate <= NOISY_CREATE_RATE_CEILING:
             return TuningRecommendation(
                 family=family,
                 action="tighten_threshold",
@@ -120,7 +119,10 @@ class RecommendationEngine:
             )
 
         # Healthy — emitting and creating at a reasonable rate
-        if m.candidates_emitted >= HEALTHY_MIN_EMITTED and m.create_rate >= HEALTHY_CREATE_RATE_FLOOR:
+        if (
+            m.candidates_emitted >= HEALTHY_MIN_EMITTED
+            and m.create_rate >= HEALTHY_CREATE_RATE_FLOOR
+        ):
             return TuningRecommendation(
                 family=family,
                 action="keep",
@@ -135,7 +137,10 @@ class RecommendationEngine:
 
         # Low acceptance rate — proposals are being escalated rather than merged
         feedback_total = m.proposals_merged + m.proposals_escalated
-        if feedback_total >= MIN_FEEDBACK_FOR_ACCEPTANCE and m.acceptance_rate < LOW_ACCEPTANCE_RATE:
+        if (
+            feedback_total >= MIN_FEEDBACK_FOR_ACCEPTANCE
+            and m.acceptance_rate < LOW_ACCEPTANCE_RATE
+        ):
             return TuningRecommendation(
                 family=family,
                 action="tighten_threshold",
@@ -151,7 +156,10 @@ class RecommendationEngine:
             )
 
         # High acceptance rate — proposals consistently merged; consider auto-promoting tier
-        if feedback_total >= MIN_FEEDBACK_FOR_ACCEPTANCE and m.acceptance_rate >= HIGH_ACCEPTANCE_RATE:
+        if (
+            feedback_total >= MIN_FEEDBACK_FOR_ACCEPTANCE
+            and m.acceptance_rate >= HIGH_ACCEPTANCE_RATE
+        ):
             return TuningRecommendation(
                 family=family,
                 action="keep",

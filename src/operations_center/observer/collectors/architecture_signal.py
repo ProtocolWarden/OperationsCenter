@@ -58,10 +58,10 @@ class ArchitectureSignalCollector:
 
         # Coupling score: ratio of cross-module import edges to total modules
         total_modules = len(module_set)
-        cross_module_imports = sum(
-            len(targets & module_set) for targets in import_graph.values()
+        cross_module_imports = sum(len(targets & module_set) for targets in import_graph.values())
+        coupling_score = (
+            round(cross_module_imports / total_modules, 3) if total_modules > 0 else 0.0
         )
-        coupling_score = round(cross_module_imports / total_modules, 3) if total_modules > 0 else 0.0
 
         has_warnings = bool(cycles) or coupling_score > 5.0 or max_depth > 8
         status = "warnings" if has_warnings else "healthy"
@@ -115,9 +115,7 @@ class ArchitectureSignalCollector:
         return imports
 
     @staticmethod
-    def _compute_max_import_depth(
-        graph: dict[str, set[str]], module_set: set[str]
-    ) -> int:
+    def _compute_max_import_depth(graph: dict[str, set[str]], module_set: set[str]) -> int:
         """BFS from each module to find the longest chain within known modules."""
         max_depth = 0
         for start in module_set:

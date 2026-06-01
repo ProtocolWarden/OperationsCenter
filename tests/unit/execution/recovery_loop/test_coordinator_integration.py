@@ -19,6 +19,7 @@ from operations_center.contracts.routing import LaneDecision
 from operations_center.execution.coordinator import ExecutionCoordinator
 from operations_center.execution.handoff import ExecutionRuntimeContext
 from operations_center.execution.recovery_loop import (
+    DefaultFailureClassifier,
     ExecutionFailureKind,
     NoPaidRetryBudgetChecker,
     RecoveryDecision,
@@ -26,12 +27,10 @@ from operations_center.execution.recovery_loop import (
     RecoveryPolicy,
     RejectUnrecoverableHandler,
     RetrySameRequestHandler,
-    DefaultFailureClassifier,
 )
 from operations_center.planning.models import PlanningContext, ProposalDecisionBundle
 from operations_center.planning.proposal_builder import build_proposal
 from operations_center.policy.models import PolicyDecision, PolicyStatus
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -215,10 +214,12 @@ class TestSuccessOnFirstAttempt:
 class TestIdempotentTransientThenSuccess:
     def test_idempotent_timeout_then_success_retries(self):
         bundle = _bundle()
-        adapter = _ScriptedAdapter([
-            _timeout_result(bundle),
-            _success_result(bundle),
-        ])
+        adapter = _ScriptedAdapter(
+            [
+                _timeout_result(bundle),
+                _success_result(bundle),
+            ]
+        )
 
         # Need to thread idempotent=True through the request. Since the
         # default builder does not set this, we use a stub builder that
@@ -262,7 +263,10 @@ class TestNonIdempotentTransientNoRetry:
         outcome = coord.execute(bundle, _runtime())
         # Default request is non-idempotent → STOP_IDEMPOTENCY_REQUIRED on first failure.
         assert adapter.calls == 1
-        assert outcome.result.recovery.final_decision == RecoveryDecision.STOP_IDEMPOTENCY_REQUIRED.value
+        assert (
+            outcome.result.recovery.final_decision
+            == RecoveryDecision.STOP_IDEMPOTENCY_REQUIRED.value
+        )
 
 
 class TestRepeatedTimeoutExhaustsBudget:
@@ -276,8 +280,10 @@ class TestRepeatedTimeoutExhaustsBudget:
                     proposal_id=bundle.proposal.proposal_id,
                     decision_id=bundle.decision.decision_id,
                     goal_text=bundle.proposal.goal_text,
-                    repo_key="svc", clone_url="https://x/y.git",
-                    base_branch="main", task_branch="auto/x",
+                    repo_key="svc",
+                    clone_url="https://x/y.git",
+                    base_branch="main",
+                    task_branch="auto/x",
                     workspace_path=Path("/tmp/ws"),
                     idempotent=True,
                 )
@@ -291,7 +297,10 @@ class TestRepeatedTimeoutExhaustsBudget:
         outcome = coord.execute(bundle, _runtime())
         assert adapter.calls == 3
         assert outcome.result.recovery.attempts == 3
-        assert outcome.result.recovery.final_decision == RecoveryDecision.STOP_ATTEMPT_BUDGET_EXHAUSTED.value
+        assert (
+            outcome.result.recovery.final_decision
+            == RecoveryDecision.STOP_ATTEMPT_BUDGET_EXHAUSTED.value
+        )
 
 
 class TestContractViolationRejects:
@@ -315,12 +324,14 @@ class TestRateLimitWithoutBackoff:
         # Need RATE_LIMIT in retryable kinds for the engine to even consider it.
         policy = RecoveryPolicy(
             max_attempts=3,
-            retryable_kinds=frozenset({
-                ExecutionFailureKind.TRANSIENT,
-                ExecutionFailureKind.TIMEOUT,
-                ExecutionFailureKind.BACKEND_UNAVAILABLE,
-                ExecutionFailureKind.RATE_LIMIT,
-            }),
+            retryable_kinds=frozenset(
+                {
+                    ExecutionFailureKind.TRANSIENT,
+                    ExecutionFailureKind.TIMEOUT,
+                    ExecutionFailureKind.BACKEND_UNAVAILABLE,
+                    ExecutionFailureKind.RATE_LIMIT,
+                }
+            ),
         )
 
         class _IdempotentBuilder:
@@ -329,8 +340,10 @@ class TestRateLimitWithoutBackoff:
                     proposal_id=bundle.proposal.proposal_id,
                     decision_id=bundle.decision.decision_id,
                     goal_text=bundle.proposal.goal_text,
-                    repo_key="svc", clone_url="https://x/y.git",
-                    base_branch="main", task_branch="auto/x",
+                    repo_key="svc",
+                    clone_url="https://x/y.git",
+                    base_branch="main",
+                    task_branch="auto/x",
                     workspace_path=Path("/tmp/ws"),
                     idempotent=True,
                 )
@@ -343,7 +356,9 @@ class TestRateLimitWithoutBackoff:
         )
         outcome = coord.execute(bundle, _runtime())
         assert adapter.calls == 1
-        assert outcome.result.recovery.final_decision == RecoveryDecision.STOP_BACKOFF_REQUIRED.value
+        assert (
+            outcome.result.recovery.final_decision == RecoveryDecision.STOP_BACKOFF_REQUIRED.value
+        )
 
 
 class TestCostBudgetExhausted:
@@ -357,8 +372,10 @@ class TestCostBudgetExhausted:
                     proposal_id=bundle.proposal.proposal_id,
                     decision_id=bundle.decision.decision_id,
                     goal_text=bundle.proposal.goal_text,
-                    repo_key="svc", clone_url="https://x/y.git",
-                    base_branch="main", task_branch="auto/x",
+                    repo_key="svc",
+                    clone_url="https://x/y.git",
+                    base_branch="main",
+                    task_branch="auto/x",
                     workspace_path=Path("/tmp/ws"),
                     idempotent=True,
                 )
@@ -380,7 +397,10 @@ class TestCostBudgetExhausted:
         )
         outcome = coord.execute(bundle, _runtime())
         assert adapter.calls == 1
-        assert outcome.result.recovery.final_decision == RecoveryDecision.STOP_COST_BUDGET_EXHAUSTED.value
+        assert (
+            outcome.result.recovery.final_decision
+            == RecoveryDecision.STOP_COST_BUDGET_EXHAUSTED.value
+        )
 
 
 class TestDefensivePolicyEngineCrash:
@@ -433,7 +453,10 @@ class TestDefensivePolicyEngineCrash:
         engine = RecoveryEngine(
             classifier=DefaultFailureClassifier(),
             policy=policy_def,
-            handlers=[_ModifyingHandler(), RejectUnrecoverableHandler(policy_def.non_retryable_kinds)],
+            handlers=[
+                _ModifyingHandler(),
+                RejectUnrecoverableHandler(policy_def.non_retryable_kinds),
+            ],
         )
 
         coord = ExecutionCoordinator(
@@ -479,10 +502,12 @@ class TestDefensiveRecoveryEngineCrash:
 class TestBackendUnavailableAllowsNonIdempotentRetry:
     def test_pre_send_failure_kind_allows_non_idempotent_retry(self):
         bundle = _bundle()
-        adapter = _ScriptedAdapter([
-            _backend_unavailable_result(bundle),
-            _success_result(bundle),
-        ])
+        adapter = _ScriptedAdapter(
+            [
+                _backend_unavailable_result(bundle),
+                _success_result(bundle),
+            ]
+        )
         # Default RecoveryPolicy already has BACKEND_UNAVAILABLE in
         # retryable_kinds AND in pre_send_failure_kinds, so a non-idempotent
         # request can retry.

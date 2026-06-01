@@ -34,8 +34,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Build an OC planning proposal and route it through SwitchBoard via CxRP."
     )
-    parser.add_argument("--input", type=Path, help="Path to a JSON file describing a PlanningContext.")
-    parser.add_argument("--output", type=Path, help="Optional output path for the proposal/decision bundle JSON.")
+    parser.add_argument(
+        "--input", type=Path, help="Path to a JSON file describing a PlanningContext."
+    )
+    parser.add_argument(
+        "--output", type=Path, help="Optional output path for the proposal/decision bundle JSON."
+    )
     parser.add_argument("--goal", help="Goal text when not using --input.")
     parser.add_argument("--task-type", default="unknown")
     parser.add_argument("--execution-mode", default="goal")
@@ -48,15 +52,21 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--project-id", default="")
     parser.add_argument("--label", action="append", dest="labels", default=[])
     parser.add_argument("--allowed-path", action="append", dest="allowed_paths", default=[])
-    parser.add_argument("--validation-command", action="append", dest="validation_commands", default=[])
     parser.add_argument(
-        "--timeout-seconds", type=int, default=None,
+        "--validation-command", action="append", dest="validation_commands", default=[]
+    )
+    parser.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=None,
         help="Wall-clock timeout for the execution run (overrides PlanningContext default of 300).",
     )
     parser.add_argument(
-        "--max-changed-files", type=int, default=None,
+        "--max-changed-files",
+        type=int,
+        default=None,
         help="Maximum number of files this proposal may change (caps WorkspaceManager scope). "
-             "ADR 0007 Phase C uses this to constrain spec-author runs to one file.",
+        "ADR 0007 Phase C uses this to constrain spec-author runs to one file.",
     )
     return parser
 
@@ -126,6 +136,7 @@ def main(service: PlanningService | None = None) -> int:
         partial_run_id = f"partial-{uuid.uuid4().hex[:8]}"
         try:
             from operations_center.execution.artifact_writer import RunArtifactWriter
+
             RunArtifactWriter().write_partial(
                 run_id=partial_run_id,
                 proposal=proposal,

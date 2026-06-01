@@ -96,7 +96,9 @@ def resolve_invocation_request(
             f"Managed repo {repo_id!r} does not advertise 'audit' capability"
         )
 
-    if config.audit is None:  # guaranteed by has_capability check above, but guard for type narrowing
+    if (
+        config.audit is None
+    ):  # guaranteed by has_capability check above, but guard for type narrowing
         raise RuntimeError(f"config.audit unexpectedly None for repo {repo_id!r}")
     at = config.audit.get_audit_type(audit_type)
     if at is None:

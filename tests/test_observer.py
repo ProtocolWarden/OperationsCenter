@@ -9,11 +9,11 @@ from pathlib import Path
 
 from operations_center.config import load_settings
 from operations_center.observer.artifact_writer import ObserverArtifactWriter
+from operations_center.observer.collectors.check_signal import CheckSignalCollector
 from operations_center.observer.collectors.dependency_drift import DependencyDriftCollector
 from operations_center.observer.collectors.file_hotspots import FileHotspotsCollector
 from operations_center.observer.collectors.git_context import GitContextCollector
 from operations_center.observer.collectors.recent_commits import RecentCommitsCollector
-from operations_center.observer.collectors.check_signal import CheckSignalCollector
 from operations_center.observer.collectors.todo_signal import TodoSignalCollector
 from operations_center.observer.models import (
     ArchitectureSignal,
@@ -23,8 +23,10 @@ from operations_center.observer.models import (
     RepoSignalsSnapshot,
     RepoStateSnapshot,
     SecuritySignal,
-    CheckSignal as ObserverCheckSignal,
     TodoSignal,
+)
+from operations_center.observer.models import (
+    CheckSignal as ObserverCheckSignal,
 )
 from operations_center.observer.service import RepoObserverService, new_observer_context
 from operations_center.observer.snapshot_builder import SnapshotBuilder
@@ -53,7 +55,9 @@ def _write_config(tmp_path: Path) -> Path:
 
 
 def _init_git_repo(path: Path) -> None:
-    subprocess.run(["git", "init", "-b", "main"], cwd=path, check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "init", "-b", "main"], cwd=path, check=True, capture_output=True, text=True
+    )
     subprocess.run(["git", "config", "user.name", "Test User"], cwd=path, check=True)
     subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=path, check=True)
 
@@ -280,7 +284,9 @@ def test_repo_signals_snapshot_new_fields_default_to_unavailable() -> None:
     assert snapshot.security_signal.status == "unavailable"
 
 
-def _make_service(tmp_path: Path, **extra_collectors) -> tuple[RepoObserverService, "ObserverContext"]:  # type: ignore[name-defined]  # noqa: F821
+def _make_service(
+    tmp_path: Path, **extra_collectors
+) -> tuple[RepoObserverService, "ObserverContext"]:  # type: ignore[name-defined]  # noqa: F821
     """Helper: build a minimal service + context for unit-level service tests."""
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -376,7 +382,9 @@ def test_observer_service_with_new_collectors_provided(tmp_path: Path) -> None:
     assert snapshot.signals.security_signal.high_count == 2
 
 
-def test_observer_service_failing_collector_records_error_and_returns_unavailable(tmp_path: Path) -> None:
+def test_observer_service_failing_collector_records_error_and_returns_unavailable(
+    tmp_path: Path,
+) -> None:
     """When a new collector raises, the signal is 'unavailable' and the error is recorded."""
     service, context = _make_service(
         tmp_path,

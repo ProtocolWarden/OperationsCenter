@@ -20,6 +20,7 @@ Run:
     python -m operations_center.entrypoints.custodian_sweep \\
         --config config/operations_center.local.yaml [--emit] [--dry-run]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -108,7 +109,10 @@ def _run_custodian_audit(target: _RepoTarget) -> _RepoSweep:
     try:
         proc = subprocess.run(
             [audit_bin, "--repo", str(target.local_path), "--json"],
-            capture_output=True, text=True, check=False, timeout=300,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=300,
         )
     except subprocess.TimeoutExpired:
         return _RepoSweep(target.repo_key, error="custodian-audit timed out (>300s)")
@@ -137,12 +141,8 @@ def _delta(current: dict[str, Any], previous: dict[str, Any] | None) -> dict[str
 def _render_body(sweep: _RepoSweep, deltas: dict[str, int]) -> str:
     """Markdown body: header + per-detector table + drill-down hint."""
     if sweep.error:
-        return (
-            f"**Custodian sweep error for {sweep.repo_key}**\n\n"
-            f"```\n{sweep.error}\n```\n"
-        )
-    rows = ["| Detector | Status | Count | Δ since last sweep |",
-            "|---|---|---:|---:|"]
+        return f"**Custodian sweep error for {sweep.repo_key}**\n\n```\n{sweep.error}\n```\n"
+    rows = ["| Detector | Status | Count | Δ since last sweep |", "|---|---|---:|---:|"]
     for det_id, body in sorted(sweep.patterns().items()):
         count = int(body.get("count", 0))
         status = str(body.get("status", "?"))
@@ -197,15 +197,24 @@ def _emit(sweep: _RepoSweep, deltas: dict[str, int], plane, *, dry_run: bool) ->
 def main() -> int:
     parser = argparse.ArgumentParser(description="Custodian cross-repo audit sweep")
     parser.add_argument("--config", required=True, type=Path)
-    parser.add_argument("--history", type=Path, default=_DEFAULT_HISTORY_PATH,
-                        help="Where to read/write per-repo last-sweep snapshots")
-    parser.add_argument("--emit", action="store_true",
-                        help="Create or comment Plane tasks; default is print-only")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="With --emit, log what would happen without calling Plane")
+    parser.add_argument(
+        "--history",
+        type=Path,
+        default=_DEFAULT_HISTORY_PATH,
+        help="Where to read/write per-repo last-sweep snapshots",
+    )
+    parser.add_argument(
+        "--emit", action="store_true", help="Create or comment Plane tasks; default is print-only"
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="With --emit, log what would happen without calling Plane",
+    )
     args = parser.parse_args()
 
     from operations_center.config import load_settings
+
     settings = load_settings(args.config)
 
     targets = _discover_targets(settings)
@@ -221,6 +230,7 @@ def main() -> int:
     plane = None
     if args.emit:
         from operations_center.adapters.plane import PlaneClient
+
         plane = PlaneClient(
             base_url=settings.plane.base_url,
             api_token=settings.plane_token(),
@@ -238,8 +248,8 @@ def main() -> int:
             deltas = _delta(sweep.envelope, previous_all.get(sweep.repo_key))
             entry: dict[str, Any] = {
                 "total_findings": sweep.total,
-                "deltas":         deltas,
-                "error":          sweep.error,
+                "deltas": deltas,
+                "error": sweep.error,
             }
             if args.emit:
                 entry["plane"] = _emit(sweep, deltas, plane, dry_run=args.dry_run)
@@ -249,11 +259,14 @@ def main() -> int:
             plane.close()
 
     args.history.parent.mkdir(parents=True, exist_ok=True)
-    args.history.write_text(json.dumps(
-        {s.repo_key: s.envelope for s in sweeps if not s.error},
-        indent=2,
-    ensure_ascii=False,
-    ), encoding="utf-8")
+    args.history.write_text(
+        json.dumps(
+            {s.repo_key: s.envelope for s in sweeps if not s.error},
+            indent=2,
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
     print(json.dumps(summary, indent=2, ensure_ascii=False))
     return 0
 

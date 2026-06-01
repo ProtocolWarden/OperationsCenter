@@ -14,6 +14,7 @@ NOT produced by the stale-autonomy-scan (i.e. a human did it).
 Records are checked by ``ProposerGuardrailAdapter.evaluate()`` before any other
 guardrail so that a once-rejected proposal is blocked immediately.
 """
+
 from __future__ import annotations
 
 import json

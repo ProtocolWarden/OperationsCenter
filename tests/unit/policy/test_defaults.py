@@ -11,7 +11,6 @@ Verifies that DEFAULT_REPO_POLICY and DEFAULT_POLICY_CONFIG are:
 
 from __future__ import annotations
 
-
 from operations_center.policy.defaults import DEFAULT_POLICY_CONFIG, DEFAULT_REPO_POLICY
 from operations_center.policy.validate import validate_config
 

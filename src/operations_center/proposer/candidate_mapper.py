@@ -5,7 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from operations_center.autonomy_tiers.config import AutonomyTiersConfig, get_family_tier, load_tiers_config
+from operations_center.autonomy_tiers.config import (
+    AutonomyTiersConfig,
+    get_family_tier,
+    load_tiers_config,
+)
 from operations_center.config.settings import Settings
 from operations_center.decision.models import ProposalCandidate
 from operations_center.proposer.provenance import ProposalProvenance
@@ -58,13 +62,13 @@ class ProposalCandidateMapper:
         lines.extend(["", "## Goal", candidate.proposal_outline.summary_hint])
         lines.extend(["", "## Constraints"])
         lines.extend(self._constraints_for_candidate(candidate))
-        expires_at = (datetime.now(UTC) + timedelta(days=candidate.expires_after_runs * 2)).strftime("%Y-%m-%d")
+        expires_at = (
+            datetime.now(UTC) + timedelta(days=candidate.expires_after_runs * 2)
+        ).strftime("%Y-%m-%d")
         lines.extend(["", "## Provenance"])
         requires_human_approval = state == "Backlog"
         evidence_schema_version = (
-            candidate.evidence_bundle.schema_version
-            if candidate.evidence_bundle is not None
-            else 1
+            candidate.evidence_bundle.schema_version if candidate.evidence_bundle is not None else 1
         )
         lines.extend(
             [
@@ -104,8 +108,7 @@ class ProposalCandidateMapper:
                 lines.append(f"- {ev_line}")
         self_repo_key = getattr(settings, "self_repo_key", None)
         is_self = (
-            self_repo_key is not None
-            and repo_key.strip().lower() == self_repo_key.strip().lower()
+            self_repo_key is not None and repo_key.strip().lower() == self_repo_key.strip().lower()
         )
         label_names = [
             f"task-kind: {task_kind}",

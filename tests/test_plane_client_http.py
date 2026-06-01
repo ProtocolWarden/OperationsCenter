@@ -120,14 +120,18 @@ def test_plane_list_issues_supports_paginated_results() -> None:
         client.close()
 
     assert [issue["id"] for issue in issues] == ["TASK-1", "TASK-2"]
-    assert calls == [("GET", "http://plane.local/api/v1/workspaces/ws/projects/proj/work-items/?expand=state")]
+    assert calls == [
+        ("GET", "http://plane.local/api/v1/workspaces/ws/projects/proj/work-items/?expand=state")
+    ]
 
 
 def test_plane_fetch_issue_hydrates_label_ids_to_label_objects() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         url = str(request.url)
         if url.endswith("/labels/"):
-            return httpx.Response(200, json={"results": [{"id": "LABEL-1", "name": "task-kind: improve"}]})
+            return httpx.Response(
+                200, json={"results": [{"id": "LABEL-1", "name": "task-kind: improve"}]}
+            )
         return httpx.Response(
             200,
             json={
@@ -171,8 +175,12 @@ def test_plane_fetch_issue_refreshes_label_cache_for_unknown_label_ids() -> None
         if url.endswith("/labels/"):
             label_calls["count"] += 1
             if label_calls["count"] == 1:
-                return httpx.Response(200, json={"results": [{"id": "LABEL-OLD", "name": "task-kind: goal"}]})
-            return httpx.Response(200, json={"results": [{"id": "LABEL-NEW", "name": "task-kind: test"}]})
+                return httpx.Response(
+                    200, json={"results": [{"id": "LABEL-OLD", "name": "task-kind: goal"}]}
+                )
+            return httpx.Response(
+                200, json={"results": [{"id": "LABEL-NEW", "name": "task-kind: test"}]}
+            )
         return httpx.Response(
             200,
             json={
@@ -210,12 +218,21 @@ def test_plane_create_issue_ensures_labels_and_state() -> None:
         calls.append((request.method, str(request.url), payload))
         url = str(request.url)
         if request.method == "GET" and "/states/" in url:
-            return httpx.Response(200, json={"results": [{"id": "STATE-1", "name": "Ready for AI"}]})
+            return httpx.Response(
+                200, json={"results": [{"id": "STATE-1", "name": "Ready for AI"}]}
+            )
         if request.method == "GET" and "/labels/" in url:
             return httpx.Response(200, json={"results": []})
         if request.method == "POST" and url.endswith("/labels/"):
-            assert payload == {"name": "task-kind: goal"} or payload == {"name": "source: improve-worker"}
-            return httpx.Response(201, json={"id": f"LABEL-{len([c for c in calls if c[1].endswith('/labels/') and c[0] == 'POST'])}"})
+            assert payload == {"name": "task-kind: goal"} or payload == {
+                "name": "source: improve-worker"
+            }
+            return httpx.Response(
+                201,
+                json={
+                    "id": f"LABEL-{len([c for c in calls if c[1].endswith('/labels/') and c[0] == 'POST'])}"
+                },
+            )
         if request.method == "POST" and url.endswith("/work-items/"):
             return httpx.Response(201, json={"id": "TASK-NEW", "name": payload["name"]})
         raise AssertionError(f"Unexpected call: {request.method} {url}")
@@ -239,7 +256,11 @@ def test_plane_create_issue_ensures_labels_and_state() -> None:
         client.close()
 
     assert created["id"] == "TASK-NEW"
-    work_item_payload = next(payload for method, url, payload in calls if method == "POST" and url.endswith("/work-items/"))
+    work_item_payload = next(
+        payload
+        for method, url, payload in calls
+        if method == "POST" and url.endswith("/work-items/")
+    )
     assert work_item_payload["state"] == "STATE-1"
     assert work_item_payload["labels"] == ["LABEL-1", "LABEL-2"]
     assert "description_html" in work_item_payload
@@ -247,7 +268,9 @@ def test_plane_create_issue_ensures_labels_and_state() -> None:
 
 def test_plane_list_comments_supports_paginated_results() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"results": [{"id": "C-1", "comment_html": "<p>Hello</p>"}]})
+        return httpx.Response(
+            200, json={"results": [{"id": "C-1", "comment_html": "<p>Hello</p>"}]}
+        )
 
     transport = httpx.MockTransport(handler)
     client = PlaneClient("http://plane.local", "token", "ws", "proj")

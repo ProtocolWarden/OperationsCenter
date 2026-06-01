@@ -96,7 +96,10 @@ def test_execute_with_worker_backend_round_robin_retries_on_capacity_limit() -> 
     def _run_once(worker_backend: str):
         calls.append(worker_backend)
         if worker_backend == "claude_code":
-            return {"status": "failed", "error_summary": "usage limit hit, please try again in 5h 0m"}
+            return {
+                "status": "failed",
+                "error_summary": "usage limit hit, please try again in 5h 0m",
+            }
         return {"status": "succeeded", "error_summary": None}
 
     executed = execute_with_worker_backend_round_robin(

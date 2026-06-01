@@ -98,7 +98,9 @@ def _analyze_evidence(
                 upstream_target=upstream_target,
                 issue_summary=finding.summary,
                 workaround_complexity=_max_enum(item.workaround_complexity_hint for item in items),
-                workaround_reliability=_max_enum(item.workaround_reliability_hint for item in items),
+                workaround_reliability=_max_enum(
+                    item.workaround_reliability_hint for item in items
+                ),
                 ongoing_maintenance_cost=_max_enum(item.maintenance_burden_hint for item in items),
                 divergence_risk=_max_enum(item.divergence_risk_hint for item in items),
                 prefer_adapter_first=not _patch_maybe_justified(finding, items),
@@ -112,7 +114,9 @@ def _analyze_evidence(
 def _identify_limitations(evidence: list[IntegrationFrictionEvidence]) -> list[str]:
     limitations: list[str] = []
     if not evidence:
-        return ["No retained integration-friction evidence available; no upstream patch evaluation can be made."]
+        return [
+            "No retained integration-friction evidence available; no upstream patch evaluation can be made."
+        ]
 
     if len(evidence) < 4:
         limitations.append(

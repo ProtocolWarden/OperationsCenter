@@ -73,11 +73,13 @@ def test_checks_failed_propagated():
 
 
 def test_all_counts_propagated():
-    ev = normalize_validation(_summary(
-        commands_run=5,
-        commands_passed=4,
-        commands_failed=1,
-    ))
+    ev = normalize_validation(
+        _summary(
+            commands_run=5,
+            commands_passed=4,
+            commands_failed=1,
+        )
+    )
     assert ev.checks_run == 5
     assert ev.checks_passed == 4
     assert ev.checks_failed == 1
@@ -89,10 +91,12 @@ def test_all_counts_propagated():
 
 
 def test_failure_excerpt_maps_to_summary():
-    ev = normalize_validation(_summary(
-        status=ValidationStatus.FAILED,
-        failure_excerpt="ruff: 3 errors found in src/",
-    ))
+    ev = normalize_validation(
+        _summary(
+            status=ValidationStatus.FAILED,
+            failure_excerpt="ruff: 3 errors found in src/",
+        )
+    )
     assert ev.summary == "ruff: 3 errors found in src/"
 
 

@@ -17,6 +17,7 @@ Emits:
   - quality_trend/type_degrading     — type errors growing consistently
   - quality_trend/stagnant           — no signal in any tracked metric (≥3 snapshots)
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -25,7 +26,7 @@ from operations_center.insights.models import DerivedInsight
 from operations_center.insights.normalizer import InsightNormalizer
 from operations_center.observer.models import RepoStateSnapshot
 
-_MIN_SNAPSHOTS = 3   # need at least this many to detect a trend
+_MIN_SNAPSHOTS = 3  # need at least this many to detect a trend
 
 
 def _int_or_none(val: int | None) -> int | None:
@@ -55,10 +56,7 @@ class QualityTrendDeriver:
             for s in ordered
             if s.signals.type_signal.status in ("clean", "errors")
         ]
-        todo_counts = [
-            s.signals.todo_signal.todo_count
-            for s in ordered
-        ]
+        todo_counts = [s.signals.todo_signal.todo_count for s in ordered]
 
         first_seen = snapshots[-1].observed_at
         last_seen = snapshots[0].observed_at
@@ -117,7 +115,11 @@ class QualityTrendDeriver:
             )
 
         # Stagnant: all metrics available but none showing a trend
-        if not insights and len(lint_counts) >= _MIN_SNAPSHOTS and len(type_counts) >= _MIN_SNAPSHOTS:
+        if (
+            not insights
+            and len(lint_counts) >= _MIN_SNAPSHOTS
+            and len(type_counts) >= _MIN_SNAPSHOTS
+        ):
             if lint_trend is None and type_trend is None:
                 insights.append(
                     self.normalizer.normalize(

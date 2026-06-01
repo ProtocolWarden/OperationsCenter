@@ -19,7 +19,7 @@ from operations_center.observer.validation import (
 logger = logging.getLogger(__name__)
 
 _ARTIFACT_SCAN_LIMIT = 60
-_MIN_RUNS_FOR_PATTERN = 2   # task must have at least this many runs to be flagged
+_MIN_RUNS_FOR_PATTERN = 2  # task must have at least this many runs to be flagged
 _MIN_FAILURES_FOR_PATTERN = 2  # task must have at least this many validation failures to appear
 
 # TODO (Phase 4 — per-profile failure tracking) [deferred, reviewed 2026-04-07]

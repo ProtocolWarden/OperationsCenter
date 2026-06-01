@@ -141,10 +141,7 @@ def test_harvest_replay_regression_chain_passes(tmp_path: Path):
 
     # Report must have been written to disk
     report_path = (
-        tmp_path / "suite_out"
-        / suite.suite_id
-        / suite_report.suite_run_id
-        / "suite_report.json"
+        tmp_path / "suite_out" / suite.suite_id / suite_report.suite_run_id / "suite_report.json"
     )
     assert report_path.exists(), f"Suite report not written to {report_path}"
 

@@ -15,6 +15,7 @@ from operations_center.observer.models import (
     ArchitectureSignal,
     BacklogSignal,
     BenchmarkSignal,
+    CheckSignal,
     CIHistorySignal,
     CoverageSignal,
     DependencyDriftSignal,
@@ -24,7 +25,6 @@ from operations_center.observer.models import (
     RepoSignalsSnapshot,
     RepoStateSnapshot,
     SecuritySignal,
-    CheckSignal,
     TodoSignal,
     TypeSignal,
     ValidationHistorySignal,
@@ -51,8 +51,7 @@ class ObserverContext:
 
 
 class RepoSignalCollector(Protocol):
-    def collect(self, context: ObserverContext) -> Any:
-        ...
+    def collect(self, context: ObserverContext) -> Any: ...
 
 
 class RepoObserverService:
@@ -101,9 +100,15 @@ class RepoObserverService:
 
     def observe(self, context: ObserverContext) -> tuple[RepoStateSnapshot, list[str]]:
         collector_errors: dict[str, str] = {}
-        repo_snapshot = self._collect_required(self.repo_collector, context, "repo_context", collector_errors)
-        recent_commits = self._collect_optional(self.recent_commits_collector, context, "recent_commits", collector_errors, default=[])
-        file_hotspots = self._collect_optional(self.file_hotspots_collector, context, "file_hotspots", collector_errors, default=[])
+        repo_snapshot = self._collect_required(
+            self.repo_collector, context, "repo_context", collector_errors
+        )
+        recent_commits = self._collect_optional(
+            self.recent_commits_collector, context, "recent_commits", collector_errors, default=[]
+        )
+        file_hotspots = self._collect_optional(
+            self.file_hotspots_collector, context, "file_hotspots", collector_errors, default=[]
+        )
         test_signal = self._collect_optional(
             self.test_signal_collector,
             context,

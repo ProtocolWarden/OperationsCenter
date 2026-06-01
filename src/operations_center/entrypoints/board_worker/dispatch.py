@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Task dispatch — drive a claimed Plane issue through plan → execute → outcome."""
+
 from __future__ import annotations
 
 import json
@@ -26,26 +27,35 @@ logger = logging.getLogger(__name__)
 
 
 def dispatch_issue(
-    issue: dict, role: str, config_path: Path, settings, client,
+    issue: dict,
+    role: str,
+    config_path: Path,
+    settings,
+    client,
 ) -> bool:
     """Drive one claimed Plane issue through planning → execution.
 
     Transitions board state and creates follow-ups on completion.
     Returns True on success.
     """
-    task_id   = str(issue["id"])
-    labels    = issue.get("labels", [])
-    repo_key  = label_value(labels, "repo")
+    task_id = str(issue["id"])
+    labels = issue.get("labels", [])
+    repo_key = label_value(labels, "repo")
     task_kind = label_value(labels, "task-kind")
-    title     = issue.get("name", "Untitled")
+    title = issue.get("name", "Untitled")
 
     description = desc_text(issue)
 
     # ── Spec-author short-circuit ─────────────────────────────────────────────
     if task_kind == "spec-author":
         return _dispatch_spec_author(
-            issue=issue, role=role, settings=settings, client=client,
-            config_path=config_path, description=description, labels=labels,
+            issue=issue,
+            role=role,
+            settings=settings,
+            client=client,
+            config_path=config_path,
+            description=description,
+            labels=labels,
             task_id=task_id,
         )
 
@@ -55,14 +65,14 @@ def dispatch_issue(
     # Rejection-pattern hint: prepend patterns the backend should avoid.
     try:
         from operations_center.quality_alerts import _load_rejection_patterns_for_proposal
+
         patterns = _load_rejection_patterns_for_proposal(repo_key=repo_key)
         if patterns:
             goal_text = (
                 f"{goal_text}\n\n"
                 f"## Rejection patterns to avoid\n"
                 "Recent proposals in this repo were rejected for these reasons; "
-                "do not repeat them:\n"
-                + "\n".join(f"- {p}" for p in patterns[:5])
+                "do not repeat them:\n" + "\n".join(f"- {p}" for p in patterns[:5])
             )
     except Exception:
         pass
@@ -70,25 +80,30 @@ def dispatch_issue(
     if role == "improve":
         goal_text = _append_improve_output_prompt(goal_text)
 
-    execution_mode = task_kind if task_kind in {"goal", "test_campaign", "improve_campaign"} else task_kind
+    execution_mode = (
+        task_kind if task_kind in {"goal", "test_campaign", "improve_campaign"} else task_kind
+    )
 
-    repo_cfg   = settings.repos.get(repo_key)
-    repo_path  = _repo_local_path(settings, repo_key)
-    clone_url  = repo_cfg.clone_url if repo_cfg else f"file://{repo_path}"
+    repo_cfg = settings.repos.get(repo_key)
+    repo_path = _repo_local_path(settings, repo_key)
+    clone_url = repo_cfg.clone_url if repo_cfg else f"file://{repo_path}"
     base_branch = (
         label_value(labels, "base-branch")
         or (repo_cfg.sandbox_base_branch if repo_cfg and repo_cfg.sandbox_base_branch else None)
         or (repo_cfg.default_branch if repo_cfg else "main")
     )
 
-    oc_root  = Path(__file__).resolve().parents[4]
-    python   = venv_python(oc_root)
-    env      = build_env(oc_root)
+    oc_root = Path(__file__).resolve().parents[4]
+    python = venv_python(oc_root)
+    env = build_env(oc_root)
     short_id = task_id[:8]
 
     logger.info(
         "board_worker[%s]: processing task_id=%s repo=%s kind=%s",
-        role, task_id, repo_key, task_kind,
+        role,
+        task_id,
+        repo_key,
+        task_kind,
     )
 
     with tempfile.TemporaryDirectory(prefix=f"oc-{role}-") as tmpdir:
@@ -97,22 +112,37 @@ def dispatch_issue(
         # ── Step 1: Planning ──────────────────────────────────────────────────
         forwarded_labels = _build_forwarded_labels(labels, repo_cfg)
         plan_cmd = [
-            python, "-m", "operations_center.entrypoints.worker.main",
-            "--goal",             goal_text,
-            "--task-type",        task_type_from_kind(task_kind),
-            "--execution-mode",   execution_mode,
-            "--repo-key",         repo_key,
-            "--clone-url",        clone_url,
-            "--base-branch",      base_branch,
-            "--project-id",       settings.plane.project_id,
-            "--task-id",          task_id,
-            "--timeout-seconds",  str(settings.team_executor.timeout_seconds),
+            python,
+            "-m",
+            "operations_center.entrypoints.worker.main",
+            "--goal",
+            goal_text,
+            "--task-type",
+            task_type_from_kind(task_kind),
+            "--execution-mode",
+            execution_mode,
+            "--repo-key",
+            repo_key,
+            "--clone-url",
+            clone_url,
+            "--base-branch",
+            base_branch,
+            "--project-id",
+            settings.plane.project_id,
+            "--task-id",
+            task_id,
+            "--timeout-seconds",
+            str(settings.team_executor.timeout_seconds),
         ]
         for lbl in forwarded_labels:
             plan_cmd.extend(["--label", lbl])
 
         plan_proc = subprocess.run(
-            plan_cmd, cwd=oc_root, env=env, capture_output=True, text=True,
+            plan_cmd,
+            cwd=oc_root,
+            env=env,
+            capture_output=True,
+            text=True,
         )
 
         try:
@@ -120,7 +150,9 @@ def dispatch_issue(
         except Exception:
             logger.error(
                 "board_worker[%s]: planning produced no JSON for task_id=%s\n%s",
-                role, task_id, plan_proc.stderr.strip() or plan_proc.stdout.strip(),
+                role,
+                task_id,
+                plan_proc.stderr.strip() or plan_proc.stdout.strip(),
             )
             fail_task(client, task_id, role, "planning produced no JSON output")
             return False
@@ -128,7 +160,10 @@ def dispatch_issue(
         if plan_proc.returncode != 0:
             msg = bundle.get("message", "unknown planning error")
             logger.error(
-                "board_worker[%s]: planning failed for task_id=%s — %s", role, task_id, msg,
+                "board_worker[%s]: planning failed for task_id=%s — %s",
+                role,
+                task_id,
+                msg,
             )
             fail_task(client, task_id, role, f"planning failed: {msg}")
             return False
@@ -143,32 +178,52 @@ def dispatch_issue(
         ci_spec_raw = bundle.get("proposal", {}).get("continuous_improvement")
         if ci_spec_raw and execution_mode == "improve_campaign":
             return run_ci_loop(
-                ci_spec_raw=ci_spec_raw, client=client, issue=issue,
-                role=role, task_kind=task_kind, task_id=task_id,
-                repo_key=repo_key, settings=settings, python=python,
-                oc_root=oc_root, env=env, bundle_file=bundle_file,
-                config_file=config_file, tmp=tmp, short_id=short_id,
+                ci_spec_raw=ci_spec_raw,
+                client=client,
+                issue=issue,
+                role=role,
+                task_kind=task_kind,
+                task_id=task_id,
+                repo_key=repo_key,
+                settings=settings,
+                python=python,
+                oc_root=oc_root,
+                env=env,
+                bundle_file=bundle_file,
+                config_file=config_file,
+                tmp=tmp,
+                short_id=short_id,
             )
 
-        workspace   = tmp / "workspace"
+        workspace = tmp / "workspace"
         workspace.mkdir()
         result_file = tmp / "result.json"
 
         exec_cmd = [
-            python, "-m", "operations_center.entrypoints.execute.main",
-            "--config",         str(config_file),
-            "--bundle",         str(bundle_file),
-            "--workspace-path", str(workspace),
-            "--task-branch",    f"{role}/{short_id}",
-            "--output",         str(result_file),
-            "--source",         f"board_worker_{role}",
+            python,
+            "-m",
+            "operations_center.entrypoints.execute.main",
+            "--config",
+            str(config_file),
+            "--bundle",
+            str(bundle_file),
+            "--workspace-path",
+            str(workspace),
+            "--task-branch",
+            f"{role}/{short_id}",
+            "--output",
+            str(result_file),
+            "--source",
+            f"board_worker_{role}",
         ]
 
         proc = subprocess.run(exec_cmd, cwd=oc_root, env=env, capture_output=True, text=True)
 
         if not result_file.exists():
             logger.error(
-                "board_worker[%s]: execute produced no result for task_id=%s", role, task_id,
+                "board_worker[%s]: execute produced no result for task_id=%s",
+                role,
+                task_id,
             )
             fail_task(client, task_id, role, "execute produced no result file")
             return False
@@ -179,46 +234,54 @@ def dispatch_issue(
             logger.error(
                 "board_worker[%s]: empty result.json for task_id=%s (returncode=%s) "
                 "— treating as executor kill",
-                role, task_id, rc,
+                role,
+                task_id,
+                rc,
             )
             add_label(client, issue, f"executor-exit-code: {rc}")
             add_label(client, issue, "executor-signal: SIGKILL")
             from .labels import increment_retry_count
+
             increment_retry_count(client, issue)
             fail_task(
-                client, task_id, role,
+                client,
+                task_id,
+                role,
                 f"execute wrote empty result.json (returncode={rc}) — treated as executor kill",
             )
             return False
 
         outcome = json.loads(result_text)
-        result  = outcome.get("result", {})
+        result = outcome.get("result", {})
         success = result.get("success", False)
-        status  = result.get("status", "unknown")
+        status = result.get("status", "unknown")
         needs_verification = result.get("needs_verification", False)
 
         # D1: transient retry — one attempt on network blips.
         if not success and is_transient_failure(result) and not outcome.get("retried"):
             logger.info(
                 "board_worker[%s]: task_id=%s transient failure (%s) — retrying once",
-                role, task_id, result.get("failure_reason", "")[:80],
+                role,
+                task_id,
+                result.get("failure_reason", "")[:80],
             )
             shutil.rmtree(workspace, ignore_errors=True)
             workspace.mkdir()
             retry_result_file = tmp / "result.retry.json"
             retry_cmd = list(exec_cmd)
-            retry_cmd[retry_cmd.index("--output") + 1]  = str(retry_result_file)
-            retry_cmd[retry_cmd.index("--source")  + 1] = f"board_worker_{role}_retry"
+            retry_cmd[retry_cmd.index("--output") + 1] = str(retry_result_file)
+            retry_cmd[retry_cmd.index("--source") + 1] = f"board_worker_{role}_retry"
             subprocess.run(retry_cmd, cwd=oc_root, env=env, capture_output=True, text=True)
             if retry_result_file.exists():
                 outcome = json.loads(retry_result_file.read_text(encoding="utf-8"))
                 outcome["retried"] = True
-                result  = outcome.get("result", {})
+                result = outcome.get("result", {})
                 success = result.get("success", False)
-                status  = result.get("status", "unknown")
+                status = result.get("status", "unknown")
                 needs_verification = result.get("needs_verification", False)
                 result_file.write_text(
-                    json.dumps(outcome, ensure_ascii=False), encoding="utf-8",
+                    json.dumps(outcome, ensure_ascii=False),
+                    encoding="utf-8",
                 )
 
         improve_suggestions: list[dict] = []
@@ -241,20 +304,36 @@ def dispatch_issue(
 
         if success and not scope_too_wide:
             logger.info(
-                "board_worker[%s]: task_id=%s completed status=%s", role, task_id, status,
+                "board_worker[%s]: task_id=%s completed status=%s",
+                role,
+                task_id,
+                status,
             )
             handle_success(
-                client, issue, role, task_kind, needs_verification, settings,
+                client,
+                issue,
+                role,
+                task_kind,
+                needs_verification,
+                settings,
                 improve_suggestions=improve_suggestions,
                 pr_url=result.get("pull_request_url") or None,
             )
         else:
             log_reason = "scope_too_wide" if scope_too_wide else status
             logger.warning(
-                "board_worker[%s]: task_id=%s failed status=%s", role, task_id, log_reason,
+                "board_worker[%s]: task_id=%s failed status=%s",
+                role,
+                task_id,
+                log_reason,
             )
             handle_failure(
-                client, issue, role, task_kind, result, settings,
+                client,
+                issue,
+                role,
+                task_kind,
+                result,
+                settings,
                 scope_files=scope_files if scope_too_wide else [],
             )
 
@@ -262,6 +341,7 @@ def dispatch_issue(
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
+
 
 def _repo_local_path(settings, repo_key: str) -> str:
     repo = settings.repos.get(repo_key)
@@ -301,13 +381,15 @@ def _build_forwarded_labels(labels: list, repo_cfg) -> list[str]:
     forwarded: list[str] = []
     for label in labels:
         name = (label.get("name", "") if isinstance(label, dict) else str(label)).strip()
-        low  = name.lower()
+        low = name.lower()
         if low == "review_required":
             forwarded.append(name)
             continue
         if low.startswith("source:"):
             if explicit_required and low in {
-                "source: autonomy", "source: spec-campaign", "source: board_worker",
+                "source: autonomy",
+                "source: spec-campaign",
+                "source: board_worker",
             }:
                 continue
             forwarded.append(name)
@@ -333,40 +415,56 @@ def _dispatch_spec_author(
     if spec_payload is None:
         logger.error(
             "board_worker[%s]: spec-author task_id=%s has no parseable YAML payload",
-            role, task_id,
+            role,
+            task_id,
         )
         fail_task(client, task_id, role, "spec-author payload missing or malformed YAML block")
         return False
 
-    repo_key    = SPEC_AUTHOR_REPO_KEY
+    repo_key = SPEC_AUTHOR_REPO_KEY
     run_id_placeholder = "{{RUN_ID}}"
-    goal_text   = build_spec_author_goal_text(spec_payload, run_id_placeholder)
+    goal_text = build_spec_author_goal_text(spec_payload, run_id_placeholder)
     target_path = str(spec_payload.get("target_path", "")).strip()
-    spec_slug   = str(spec_payload.get("spec_slug", "")).strip()
+    spec_slug = str(spec_payload.get("spec_slug", "")).strip()
     trigger_source = str(spec_payload.get("trigger_source", "")).strip()
 
-    repo_cfg    = settings.repos.get(repo_key)
-    clone_url   = repo_cfg.clone_url if repo_cfg else f"file://{_repo_local_path(settings, repo_key)}"
+    repo_cfg = settings.repos.get(repo_key)
+    clone_url = repo_cfg.clone_url if repo_cfg else f"file://{_repo_local_path(settings, repo_key)}"
     base_branch = (
         label_value(labels, "base-branch")
         or (repo_cfg.sandbox_base_branch if repo_cfg and repo_cfg.sandbox_base_branch else None)
         or (repo_cfg.default_branch if repo_cfg else "main")
     )
-    oc_root  = Path(__file__).resolve().parents[4]
-    python   = venv_python(oc_root)
-    env      = build_env(oc_root)
+    oc_root = Path(__file__).resolve().parents[4]
+    python = venv_python(oc_root)
+    env = build_env(oc_root)
     short_id = task_id[:8]
 
     logger.info(
         "board_worker[%s]: processing spec-author task_id=%s spec_slug=%s target=%s trigger=%s",
-        role, task_id, spec_slug, target_path, trigger_source,
+        role,
+        task_id,
+        spec_slug,
+        target_path,
+        trigger_source,
     )
 
     return process_spec_author(
-        issue=issue, role=role, settings=settings, client=client,
-        config_path=config_path, goal_text=goal_text, repo_key=repo_key,
-        clone_url=clone_url, base_branch=base_branch, spec_slug=spec_slug,
-        target_path=target_path, trigger_source=trigger_source,
+        issue=issue,
+        role=role,
+        settings=settings,
+        client=client,
+        config_path=config_path,
+        goal_text=goal_text,
+        repo_key=repo_key,
+        clone_url=clone_url,
+        base_branch=base_branch,
+        spec_slug=spec_slug,
+        target_path=target_path,
+        trigger_source=trigger_source,
         task_phase=str(spec_payload.get("task_phase", "")).strip(),
-        python=python, oc_root=oc_root, env=env, short_id=short_id,
+        python=python,
+        oc_root=oc_root,
+        env=env,
+        short_id=short_id,
     )

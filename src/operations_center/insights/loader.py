@@ -33,8 +33,13 @@ class SnapshotLoader:
             if not matching:
                 raise ValueError(f"Snapshot run id not found: {snapshot_run_id}")
             current = matching[0]
-            snapshots = [snapshot for snapshot in snapshots if snapshot.repo.path == current.repo.path]
-            snapshots = [current, *[snapshot for snapshot in snapshots if snapshot.run_id != current.run_id]]
+            snapshots = [
+                snapshot for snapshot in snapshots if snapshot.repo.path == current.repo.path
+            ]
+            snapshots = [
+                current,
+                *[snapshot for snapshot in snapshots if snapshot.run_id != current.run_id],
+            ]
         if not snapshots:
             raise ValueError("No observer snapshots found for the requested repo/context")
         return snapshots[: history_limit + 1]
@@ -57,7 +62,10 @@ class SnapshotLoader:
             for path in paths:
                 try:
                     snap = RepoStateSnapshot.model_validate_json(path.read_text(encoding="utf-8"))
-                    if snap.repo.name.strip().lower() == repo_norm or str(snap.repo.path).strip().lower() == repo_norm:
+                    if (
+                        snap.repo.name.strip().lower() == repo_norm
+                        or str(snap.repo.path).strip().lower() == repo_norm
+                    ):
                         mtime = path.stat().st_mtime
                         age = (datetime.now(timezone.utc).timestamp() - mtime) / 3600
                         return round(age, 2)
@@ -77,5 +85,7 @@ class SnapshotLoader:
         )
         snapshots: list[RepoStateSnapshot] = []
         for path in snapshot_paths:
-            snapshots.append(RepoStateSnapshot.model_validate_json(path.read_text(encoding="utf-8")))
+            snapshots.append(
+                RepoStateSnapshot.model_validate_json(path.read_text(encoding="utf-8"))
+            )
         return snapshots

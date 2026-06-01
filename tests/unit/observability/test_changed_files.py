@@ -14,7 +14,6 @@ from operations_center.observability.changed_files import (
 
 from .conftest import make_changed_file, make_result
 
-
 # ---------------------------------------------------------------------------
 # KNOWN: files with authoritative provenance
 # ---------------------------------------------------------------------------
@@ -40,7 +39,9 @@ def test_known_preserves_files():
 
 
 def test_known_source_is_explicit_provenance():
-    result = make_result(changed_files=[make_changed_file()], changed_files_source="backend_manifest")
+    result = make_result(
+        changed_files=[make_changed_file()], changed_files_source="backend_manifest"
+    )
     ev = normalize_changed_files(result)
     assert ev.source == "backend_manifest"
 

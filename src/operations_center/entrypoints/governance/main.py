@@ -22,12 +22,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import cast
 
 import typer
 from rich.console import Console
 from rich.table import Table
-
-from typing import cast
 
 from operations_center.audit_governance import (
     AuditGovernanceRequest,
@@ -64,12 +63,16 @@ def _status_color(decision: str) -> str:
 
 @app.command("request")
 def cmd_request(
-    repo: str = typer.Option(..., "--repo", "-r", help="Managed repo ID (e.g. 'example_managed_repo')."),
+    repo: str = typer.Option(
+        ..., "--repo", "-r", help="Managed repo ID (e.g. 'example_managed_repo')."
+    ),
     audit_type: str = typer.Option(..., "--type", "-t", help="Audit type."),
     reason: str = typer.Option(..., "--reason", help="Why the full audit is needed."),
     requested_by: str = typer.Option(..., "--requested-by", help="Operator identity."),
     urgency: str = typer.Option("normal", "--urgency", help="low|normal|high|urgent"),
-    suite_report: str | None = typer.Option(None, "--suite-report", help="Related mini regression report path."),
+    suite_report: str | None = typer.Option(
+        None, "--suite-report", help="Related mini regression report path."
+    ),
     output: str | None = typer.Option(None, "--output", "-o", help="Write request JSON to file."),
 ) -> None:
     """Create a governance request JSON."""
@@ -98,7 +101,9 @@ def cmd_request(
 def cmd_evaluate(
     request_file: str = typer.Option(..., "--request", help="Path to governance request JSON."),
     known_repos: str = typer.Option("", "--known-repos", help="Comma-separated known repo IDs."),
-    known_types: str = typer.Option("", "--known-types", help="Comma-separated audit types (applied to all repos)."),
+    known_types: str = typer.Option(
+        "", "--known-types", help="Comma-separated audit types (applied to all repos)."
+    ),
 ) -> None:
     """Evaluate a governance request against policy checks."""
     try:
@@ -157,6 +162,7 @@ def cmd_approve(
         request = AuditGovernanceRequest.model_validate(req_data)
         dec_data = json.loads(Path(decision_file).read_text(encoding="utf-8"))
         from operations_center.audit_governance import AuditGovernanceDecision
+
         decision = AuditGovernanceDecision.model_validate(dec_data)
     except FileNotFoundError as exc:
         console.print(f"[red]Not found:[/red] {exc}")
@@ -166,7 +172,9 @@ def cmd_approve(
         raise typer.Exit(code=2)
 
     try:
-        approval = make_manual_approval(decision, request, approved_by=approved_by, approval_notes=notes)
+        approval = make_manual_approval(
+            decision, request, approved_by=approved_by, approval_notes=notes
+        )
     except Exception as exc:
         console.print(f"[red]Approval validation failed:[/red] {exc}")
         raise typer.Exit(code=3)
@@ -174,7 +182,9 @@ def cmd_approve(
     payload = approval.model_dump_json(indent=2)
     if output:
         Path(output).write_text(payload, encoding="utf-8")
-        console.print(f"Approval written to [bold]{output}[/bold]  (approval_id={approval.approval_id})")
+        console.print(
+            f"Approval written to [bold]{output}[/bold]  (approval_id={approval.approval_id})"
+        )
     else:
         console.print(payload)
 
@@ -182,9 +192,13 @@ def cmd_approve(
 @app.command("run")
 def cmd_run(
     request_file: str = typer.Option(..., "--request", help="Path to governance request JSON."),
-    approval_file: str | None = typer.Option(None, "--approval", help="Path to manual approval JSON (if required)."),
+    approval_file: str | None = typer.Option(
+        None, "--approval", help="Path to manual approval JSON (if required)."
+    ),
     output_dir: str = typer.Option(_DEFAULT_OUTPUT_DIR, "--output-dir", "-o"),
-    state_dir: str | None = typer.Option(None, "--state-dir", help="Override budget/cooldown state directory."),
+    state_dir: str | None = typer.Option(
+        None, "--state-dir", help="Override budget/cooldown state directory."
+    ),
     known_repos: str = typer.Option("", "--known-repos", help="Comma-separated known repo IDs."),
     known_types: str = typer.Option("", "--known-types", help="Comma-separated audit types."),
     timeout: float | None = typer.Option(None, "--timeout", help="Dispatch timeout in seconds."),
@@ -291,9 +305,13 @@ def cmd_inspect(
 
     if rep.budget_state_summary:
         b = rep.budget_state_summary
-        console.print(f"\n[bold]Budget[/bold]  {b.runs_used}/{b.max_runs} used ({b.runs_remaining} remaining)")
+        console.print(
+            f"\n[bold]Budget[/bold]  {b.runs_used}/{b.max_runs} used ({b.runs_remaining} remaining)"
+        )
 
     if rep.cooldown_state_summary:
         c = rep.cooldown_state_summary
         in_cd = "YES" if c.in_cooldown else "no"
-        console.print(f"[bold]Cooldown[/bold]  active={in_cd}  {c.seconds_remaining:.0f}s remaining")
+        console.print(
+            f"[bold]Cooldown[/bold]  active={in_cd}  {c.seconds_remaining:.0f}s remaining"
+        )

@@ -10,6 +10,7 @@ common token prefixes as a second line of defence.
 
 See docs/architecture/audit/backend_control_audit.md (Phase 1 — Sample Safety).
 """
+
 from __future__ import annotations
 
 import os
@@ -18,16 +19,16 @@ from typing import Any
 
 # Token prefixes that are nearly always credentials.
 _TOKEN_PREFIX_PATTERNS = (
-    r"sk-[A-Za-z0-9_\-]{16,}",                # OpenAI / Anthropic API keys
-    r"sk-ant-[A-Za-z0-9_\-]{16,}",            # Anthropic API keys
-    r"ghp_[A-Za-z0-9]{16,}",                  # GitHub personal access tokens
-    r"gho_[A-Za-z0-9]{16,}",                  # GitHub OAuth tokens
-    r"ghs_[A-Za-z0-9]{16,}",                  # GitHub server tokens
-    r"github_pat_[A-Za-z0-9_]{16,}",          # GitHub fine-grained PATs
-    r"xoxb-[A-Za-z0-9\-]{16,}",               # Slack bot tokens
-    r"AKIA[A-Z0-9]{16}",                      # AWS access keys
-    r"AIza[A-Za-z0-9_\-]{32,}",               # Google API keys
-    r"hf_[A-Za-z0-9]{16,}",                   # HuggingFace tokens
+    r"sk-[A-Za-z0-9_\-]{16,}",  # OpenAI / Anthropic API keys
+    r"sk-ant-[A-Za-z0-9_\-]{16,}",  # Anthropic API keys
+    r"ghp_[A-Za-z0-9]{16,}",  # GitHub personal access tokens
+    r"gho_[A-Za-z0-9]{16,}",  # GitHub OAuth tokens
+    r"ghs_[A-Za-z0-9]{16,}",  # GitHub server tokens
+    r"github_pat_[A-Za-z0-9_]{16,}",  # GitHub fine-grained PATs
+    r"xoxb-[A-Za-z0-9\-]{16,}",  # Slack bot tokens
+    r"AKIA[A-Z0-9]{16}",  # AWS access keys
+    r"AIza[A-Za-z0-9_\-]{32,}",  # Google API keys
+    r"hf_[A-Za-z0-9]{16,}",  # HuggingFace tokens
 )
 _TOKEN_RE = re.compile("|".join(_TOKEN_PREFIX_PATTERNS))
 

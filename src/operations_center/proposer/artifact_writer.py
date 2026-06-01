@@ -29,7 +29,10 @@ class ProposerArtifactWriter:
             "## Created",
         ]
         lines.extend(
-            [f"- {item.family} | {item.plane_title} | {item.status} | {item.dedup_key}" for item in artifact.created]
+            [
+                f"- {item.family} | {item.plane_title} | {item.status} | {item.dedup_key}"
+                for item in artifact.created
+            ]
             or ["- none"]
         )
         lines.extend(["", "## Skipped"])

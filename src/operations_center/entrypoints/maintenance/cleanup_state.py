@@ -15,6 +15,7 @@ Cancelled). Files for live tasks are always preserved regardless of age.
         [--retention-days 90] \\
         [--dry-run]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -46,8 +47,9 @@ def _file_task_id(path: Path) -> str | None:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Delete stale per-task state files")
     parser.add_argument("--config", required=True, type=Path)
-    parser.add_argument("--retention-days", type=int, default=90,
-                        help="age threshold in days (default: 90)")
+    parser.add_argument(
+        "--retention-days", type=int, default=90, help="age threshold in days (default: 90)"
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--state-dir", type=Path, default=Path("state"))
     args = parser.parse_args()
@@ -98,7 +100,11 @@ def main() -> int:
             if mtime > cutoff:
                 continue  # too new
             task_id = _file_task_id(f)
-            entry = {"path": str(f), "task_id": task_id, "mtime_age_days": int((now - mtime) / 86400)}
+            entry = {
+                "path": str(f),
+                "task_id": task_id,
+                "mtime_age_days": int((now - mtime) / 86400),
+            }
             if not task_id:
                 # No recognisable task id — leave alone. Could be metadata file.
                 kept.append({**entry, "reason": "no_task_id"})
@@ -117,18 +123,18 @@ def main() -> int:
                     entry["action"] = "deleted"
                 except OSError as exc:
                     entry["action"] = "error"
-                    entry["error"]  = str(exc)
+                    entry["error"] = str(exc)
             deleted.append(entry)
 
     out = {
-        "scanned_at":         datetime.now(UTC).isoformat(),
-        "retention_days":     args.retention_days,
-        "dry_run":            args.dry_run,
-        "deleted_count":      sum(1 for d in deleted if d.get("action") == "deleted"),
+        "scanned_at": datetime.now(UTC).isoformat(),
+        "retention_days": args.retention_days,
+        "dry_run": args.dry_run,
+        "deleted_count": sum(1 for d in deleted if d.get("action") == "deleted"),
         "would_delete_count": sum(1 for d in deleted if d.get("action") == "would_delete"),
-        "kept_count":         len(kept),
-        "deleted":            deleted[:50],
-        "kept_sample":        kept[:10],
+        "kept_count": len(kept),
+        "deleted": deleted[:50],
+        "kept_sample": kept[:10],
     }
     print(json.dumps(out, indent=2, ensure_ascii=False))
     return 0

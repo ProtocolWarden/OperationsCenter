@@ -221,7 +221,9 @@ def _record_from_result(
         status=status,
         summary=auto_summary,
         tags=tuple(tags),
-        created_at=datetime.now(tz=timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        created_at=datetime.now(tz=timezone.utc)
+        .isoformat(timespec="seconds")
+        .replace("+00:00", "Z"),
         source_type=SourceType.EXECUTION_RESULT,
     )
 

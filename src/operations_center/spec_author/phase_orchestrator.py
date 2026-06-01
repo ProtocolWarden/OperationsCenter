@@ -24,6 +24,7 @@ What this module no longer does (removed in Phase D):
       via LLM rewrite is retired with this refactor; if it returns it will be
       built on the same Plane → board_worker → backend pipeline.
 """
+
 from __future__ import annotations
 
 import logging
@@ -83,6 +84,7 @@ class PendingPhaseAdvance:
     Carries everything the spec rewrite prompt needs without forcing the caller
     to re-derive it from the issues list.
     """
+
     campaign_id: str
     spec_slug: str
     spec_file_path: str
@@ -112,8 +114,8 @@ class PhaseOrchestrationResult:
 # issues; values are the next-phase identifier emitted in the
 # ``task_phase`` field of the spec-author payload.
 _PHASE_ADVANCE_CHAIN: list[tuple[str, str]] = [
-    ("goal",            "test"),
-    ("test_campaign",   "improve"),
+    ("goal", "test"),
+    ("test_campaign", "improve"),
 ]
 
 
@@ -158,7 +160,8 @@ class PhaseOrchestrator:
             except Exception as exc:
                 logger.error(
                     '{"event": "phase_orchestrator_error", "campaign_id": "%s", "error": "%s"}',
-                    campaign.campaign_id, str(exc),
+                    campaign.campaign_id,
+                    str(exc),
                 )
                 result.errors.append(f"{campaign.campaign_id}: {exc}")
         return result
@@ -207,7 +210,9 @@ class PhaseOrchestrator:
                 )
                 logger.info(
                     '{"event": "phase_advanced", "campaign_id": "%s", "to": "%s", "count": %d}',
-                    campaign_id, next_kind, len(backlog_next),
+                    campaign_id,
+                    next_kind,
+                    len(backlog_next),
                 )
 
             # Emit a PendingPhaseAdvance describing the spec-rewrite the
@@ -218,9 +223,8 @@ class PhaseOrchestrator:
                 PendingPhaseAdvance(
                     campaign_id=campaign_id,
                     spec_slug=campaign.slug,
-                    spec_file_path=campaign.spec_file or str(
-                        self._specs_dir / f"{campaign.slug}.md"
-                    ),
+                    spec_file_path=campaign.spec_file
+                    or str(self._specs_dir / f"{campaign.slug}.md"),
                     current_phase=current_kind,
                     next_phase=next_phase_id,
                     task_summaries=_summarize_phase_tasks(by_phase),
@@ -247,18 +251,22 @@ class PhaseOrchestrator:
                     existing = [n for n in existing if n]
                     if "lifecycle: archived" not in existing:
                         self._client.update_issue_labels(
-                            parent_id, existing + ["lifecycle: archived"],
+                            parent_id,
+                            existing + ["lifecycle: archived"],
                         )
                 except Exception as exc:
                     logger.warning(
                         '{"event": "lifecycle_archive_failed", "task_id": "%s", "error": "%s"}',
-                        parent_id, str(exc),
+                        parent_id,
+                        str(exc),
                     )
             self._state.mark_complete(campaign_id)
             result.campaigns_completed += 1
             logger.info(
                 '{"event": "campaign_complete", "campaign_id": "%s", "done": %d, "cancelled": %d}',
-                campaign_id, done_n, cancelled_n,
+                campaign_id,
+                done_n,
+                cancelled_n,
             )
 
     def _all_terminal(self, issues: list[dict]) -> bool:
@@ -271,7 +279,8 @@ class PhaseOrchestrator:
             except Exception as exc:
                 logger.debug(
                     '{"event": "comment_parent_failed", "parent_id": "%s", "error": "%s"}',
-                    parent.get("id"), exc,
+                    parent.get("id"),
+                    exc,
                 )
 
 

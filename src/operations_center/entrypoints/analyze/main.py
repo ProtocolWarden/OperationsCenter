@@ -10,21 +10,26 @@ from pathlib import Path
 from operations_center.decision.models import ProposalCandidatesArtifact
 from operations_center.proposer.result_models import ProposalResultsArtifact
 
-
 _DECISION_ROOT = Path("tools/report/operations_center/decision")
 _PROPOSER_ROOT = Path("tools/report/operations_center/proposer")
 
-ALL_FAMILIES = frozenset([
-    "observation_coverage",
-    "test_visibility",
-    "dependency_drift",
-    "hotspot_concentration",
-    "todo_accumulation",
-])
+ALL_FAMILIES = frozenset(
+    [
+        "observation_coverage",
+        "test_visibility",
+        "dependency_drift",
+        "hotspot_concentration",
+        "todo_accumulation",
+    ]
+)
 
 
-def _load_decision_artifacts(root: Path, repo: str | None, limit: int) -> list[ProposalCandidatesArtifact]:
-    paths = sorted(root.glob("*/proposal_candidates.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+def _load_decision_artifacts(
+    root: Path, repo: str | None, limit: int
+) -> list[ProposalCandidatesArtifact]:
+    paths = sorted(
+        root.glob("*/proposal_candidates.json"), key=lambda p: p.stat().st_mtime, reverse=True
+    )
     artifacts = []
     for path in paths:
         try:
@@ -42,11 +47,15 @@ def _load_decision_artifacts(root: Path, repo: str | None, limit: int) -> list[P
 
 
 def _load_proposer_artifacts(root: Path, limit: int) -> list[ProposalResultsArtifact]:
-    paths = sorted(root.glob("*/proposal_results.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+    paths = sorted(
+        root.glob("*/proposal_results.json"), key=lambda p: p.stat().st_mtime, reverse=True
+    )
     artifacts = []
     for path in paths[:limit]:
         try:
-            artifacts.append(ProposalResultsArtifact.model_validate_json(path.read_text(encoding="utf-8")))
+            artifacts.append(
+                ProposalResultsArtifact.model_validate_json(path.read_text(encoding="utf-8"))
+            )
         except Exception:
             continue
     return artifacts
@@ -57,7 +66,9 @@ def main() -> None:
         description="Analyze decision + proposer artifacts to surface threshold tuning recommendations."
     )
     parser.add_argument("--repo", help="Filter by repo name or path key")
-    parser.add_argument("--limit", type=int, default=20, help="Max number of decision runs to analyze (default: 20)")
+    parser.add_argument(
+        "--limit", type=int, default=20, help="Max number of decision runs to analyze (default: 20)"
+    )
     parser.add_argument(
         "--decision-root",
         default=str(_DECISION_ROOT),
@@ -68,7 +79,9 @@ def main() -> None:
         default=str(_PROPOSER_ROOT),
         help=f"Path to proposer artifact directory (default: {_PROPOSER_ROOT})",
     )
-    parser.add_argument("--json", dest="output_json", action="store_true", help="Output raw stats as JSON")
+    parser.add_argument(
+        "--json", dest="output_json", action="store_true", help="Output raw stats as JSON"
+    )
     args = parser.parse_args()
 
     decision_root = Path(args.decision_root)
@@ -83,7 +96,9 @@ def main() -> None:
         print("No decision artifacts matched the filter.")
         return
 
-    proposer_artifacts = _load_proposer_artifacts(proposer_root, args.limit) if proposer_root.exists() else []
+    proposer_artifacts = (
+        _load_proposer_artifacts(proposer_root, args.limit) if proposer_root.exists() else []
+    )
     # Index proposer results by source_decision_run_id
     proposer_by_decision: dict[str, ProposalResultsArtifact] = {}
     for pa in proposer_artifacts:
@@ -121,13 +136,9 @@ def main() -> None:
             "runs_analyzed": len(decisions),
             "dry_run_count": dry_run_count,
             "live_run_count": live_run_count,
-            "families": {
-                family: dict(counts)
-                for family, counts in sorted(stats.items())
-            },
+            "families": {family: dict(counts) for family, counts in sorted(stats.items())},
             "suppression_reasons": {
-                family: dict(reasons)
-                for family, reasons in sorted(suppression_reasons.items())
+                family: dict(reasons) for family, reasons in sorted(suppression_reasons.items())
             },
         }
         print(json.dumps(output, indent=2, ensure_ascii=False))
@@ -199,7 +210,9 @@ def main() -> None:
                 "Check cooldown_minutes / max_create settings."
             )
         else:
-            recommendations.append(f"  {family}: healthy ({emitted} emitted, {suppressed} suppressed)")
+            recommendations.append(
+                f"  {family}: healthy ({emitted} emitted, {suppressed} suppressed)"
+            )
 
     for r in recommendations:
         print(r)

@@ -37,7 +37,9 @@ class ProposerGuardrailAdapter:
         self._usage_store = usage_store
         self._rejection_store = rejection_store or ProposalRejectionStore()
 
-    def evaluate(self, *, client: PlaneClient, dedup_key: str, title: str, now: datetime) -> GuardrailResult:
+    def evaluate(
+        self, *, client: PlaneClient, dedup_key: str, title: str, now: datetime
+    ) -> GuardrailResult:
         # Long-lived rejection check comes first — human "no" signals are permanent.
         if self._rejection_store.is_rejected(dedup_key):
             return GuardrailResult(
@@ -66,7 +68,9 @@ class ProposerGuardrailAdapter:
                 reason="existing_open_equivalent_task",
                 evidence={"plane_issue_id": open_match[0], "plane_title": open_match[1]},
             )
-        done_match = self._find_recently_done_match(client, dedup_key=dedup_key, title=title, now=now)
+        done_match = self._find_recently_done_match(
+            client, dedup_key=dedup_key, title=title, now=now
+        )
         if done_match is not None:
             return GuardrailResult(
                 allowed=False,
@@ -91,7 +95,9 @@ class ProposerGuardrailAdapter:
                 )
         return GuardrailResult(allowed=True)
 
-    def _find_open_task_match(self, client: PlaneClient, *, dedup_key: str, title: str) -> tuple[str, str] | None:
+    def _find_open_task_match(
+        self, client: PlaneClient, *, dedup_key: str, title: str
+    ) -> tuple[str, str] | None:
         title_normalized = title.strip().lower()
         key_normalized = dedup_key.strip().lower()
         for issue in client.list_issues():

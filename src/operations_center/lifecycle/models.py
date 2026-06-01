@@ -75,9 +75,7 @@ class ExecuteOutput(BaseModel):
 
 
 class VerifyOutput(BaseModel):
-    verification_status: str = Field(
-        description="'pass' if all checks passed, else 'fail'"
-    )
+    verification_status: str = Field(description="'pass' if all checks passed, else 'fail'")
     checks: list[CheckResult] = Field(default_factory=list)
 
     @property

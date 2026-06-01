@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Unit tests for the MaintenanceRegistry (ADR 0007 follow-up D)."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

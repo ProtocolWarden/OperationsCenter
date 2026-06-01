@@ -10,9 +10,9 @@ from pathlib import Path
 
 @dataclass
 class ContextBundle:
-    git_logs: dict[str, str]           # {repo_key: git_log_text}
+    git_logs: dict[str, str]  # {repo_key: git_log_text}
     specs_index: list[dict]
-    recent_done_tasks: list[dict]      # Done tasks from last 14 days
+    recent_done_tasks: list[dict]  # Done tasks from last 14 days
     recent_cancelled_tasks: list[dict]
     open_task_count: int
     seed_text: str
@@ -34,6 +34,7 @@ class ContextBundleBuilder:
         available_repos: list[str],
     ) -> ContextBundle:
         from datetime import UTC, datetime, timedelta
+
         cutoff = datetime.now(UTC) - timedelta(days=self._RECENT_DAYS)
 
         recent_done: list[dict] = []
@@ -84,6 +85,7 @@ class ContextBundleBuilder:
     def collect_specs_index(specs_dir: Path) -> list[dict]:
         """Return [{slug, status}] for each spec in specs_dir."""
         from operations_center.spec_author.models import SpecFrontMatter
+
         index = []
         for p in sorted(specs_dir.glob("*.md")):
             if p.parent.name == "archive":

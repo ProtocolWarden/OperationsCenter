@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Text extraction and prompt-building helpers for board_worker."""
+
 from __future__ import annotations
 
-_PROMPT_DIFF_OPEN  = "<!-- prompt_diff_edits -->"
+_PROMPT_DIFF_OPEN = "<!-- prompt_diff_edits -->"
 _PROMPT_DIFF_CLOSE = "<!-- /prompt_diff_edits -->"
 
 
@@ -20,6 +21,7 @@ def desc_text(issue: dict) -> str:
         if html_val:
             import html as _html
             import re as _re
+
             text = _re.sub(r"<br\s*/?>", "\n", html_val)
             text = _re.sub(r"<[^>]+>", "", text)
             text = _html.unescape(text)
@@ -29,6 +31,7 @@ def desc_text(issue: dict) -> str:
 def extract_goal(description: str, title: str) -> str:
     """Pull goal text from ## Goal section, fall back to title."""
     import re
+
     m = re.search(r"##\s+Goal\s*\n(.*?)(?=##|\Z)", description, re.DOTALL | re.IGNORECASE)
     if m:
         text = m.group(1).strip()
@@ -39,12 +42,12 @@ def extract_goal(description: str, title: str) -> str:
 
 def task_type_from_kind(task_kind: str) -> str:
     return {
-        "goal":             "feature",
-        "test":             "test",
-        "test_campaign":    "test",
-        "improve":          "refactor",
+        "goal": "feature",
+        "test": "test",
+        "test_campaign": "test",
+        "improve": "refactor",
         "improve_campaign": "refactor",
-        "spec-author":      "chore",
+        "spec-author": "chore",
     }.get(task_kind, "chore")
 
 
@@ -52,6 +55,7 @@ def parse_spec_author_payload(description: str) -> dict | None:
     """Extract the YAML payload spec_trigger embeds in the task description."""
     import html as _html
     import re as _re
+
     import yaml as _yaml
 
     if "<" in description:
@@ -70,9 +74,7 @@ def parse_spec_author_payload(description: str) -> dict | None:
     return data
 
 
-def summarize_prompt_diff_block(
-    *, workspace, target_path: str
-) -> tuple[int | None, str]:
+def summarize_prompt_diff_block(*, workspace, target_path: str) -> tuple[int | None, str]:
     """Soft-validate the prompt_diff_edits fence in a committed spec.
 
     Returns (edit_count, note):
@@ -81,6 +83,7 @@ def summarize_prompt_diff_block(
     - (None, "<reason>") — fence present but failed to parse (logged, not fatal).
     """
     from pathlib import Path
+
     try:
         spec_text = Path(workspace / target_path).read_text(encoding="utf-8")
     except OSError as exc:
@@ -96,7 +99,9 @@ def summarize_prompt_diff_block(
 
     try:
         import yaml
+
         from operations_center.prompt_diff import Edit
+
         doc = yaml.safe_load(body) or {}
         raw_edits = doc.get("edits") if isinstance(doc, dict) else None
         if not isinstance(raw_edits, list):
@@ -159,7 +164,7 @@ def build_phase_advance_goal_text(
         "occurs multiple times, anchor on a longer surrounding substring that is unique.\n"
         "- Anchors match by exact substring (whitespace- and case-sensitive).\n"
         "- Keep edits MINIMAL — touch only what must change for the new phase. "
-        "No stylistic cleanup, no \"while I'm here\" rewrites.\n"
+        'No stylistic cleanup, no "while I\'m here" rewrites.\n'
         "- Preserve the `<!-- generated_by_run: {{RUN_ID}} -->` provenance line "
         "on line 1 unchanged. Phase advances do not overwrite authorship provenance.\n"
         "- Preserve front-matter keys (campaign_id, slug, repos, area_keywords, "
@@ -173,14 +178,14 @@ def build_phase_advance_goal_text(
         f"```\n{_PROMPT_DIFF_OPEN}\n"
         "edits:\n"
         "  - op: replace\n"
-        "    anchor: \"## Goals\\n1. Implement the parser.\\n\"\n"
-        "    new_text: \"## Goals\\n1. Add unit coverage for the parser.\\n\"\n"
-        "    reason: \"advance from implement to test phase\"\n"
+        '    anchor: "## Goals\\n1. Implement the parser.\\n"\n'
+        '    new_text: "## Goals\\n1. Add unit coverage for the parser.\\n"\n'
+        '    reason: "advance from implement to test phase"\n'
         "    targets_criterion: null\n"
         "  - op: insert_after\n"
-        "    anchor: \"## Success Criteria\\n\"\n"
-        f"    new_text: \"- {task_phase} phase: coverage report attached to the campaign run.\\n\"\n"
-        "    reason: \"add phase-specific done criterion\"\n"
+        '    anchor: "## Success Criteria\\n"\n'
+        f'    new_text: "- {task_phase} phase: coverage report attached to the campaign run.\\n"\n'
+        '    reason: "add phase-specific done criterion"\n'
         "    targets_criterion: null\n"
         f"{_PROMPT_DIFF_CLOSE}\n```\n"
         "\n"
@@ -215,12 +220,12 @@ def build_phase_advance_goal_text(
 
 def build_spec_author_goal_text(payload: dict, run_id_placeholder: str) -> str:
     """Compose the spec-authoring prompt the backend will execute."""
-    spec_slug   = str(payload.get("spec_slug", "")).strip()
+    spec_slug = str(payload.get("spec_slug", "")).strip()
     target_path = str(payload.get("target_path", "")).strip()
-    trigger     = str(payload.get("trigger_source", "")).strip()
-    task_phase  = str(payload.get("task_phase", "")).strip()
-    seed_text   = str(payload.get("seed_text") or "").strip()
-    ctx         = payload.get("context_bundle") or {}
+    trigger = str(payload.get("trigger_source", "")).strip()
+    task_phase = str(payload.get("task_phase", "")).strip()
+    seed_text = str(payload.get("seed_text") or "").strip()
+    ctx = payload.get("context_bundle") or {}
 
     if task_phase:
         return build_phase_advance_goal_text(
@@ -279,8 +284,9 @@ def build_spec_author_goal_text(payload: dict, run_id_placeholder: str) -> str:
                 parts.append(f"## Recent Git Activity ({repo_key})\n```\n{log_text}\n```")
     existing = ctx.get("existing_specs") or []
     if existing:
-        parts.append("## Existing Specs (do not duplicate)\n"
-                     + "\n".join(f"- {s}" for s in existing))
+        parts.append(
+            "## Existing Specs (do not duplicate)\n" + "\n".join(f"- {s}" for s in existing)
+        )
     snap = ctx.get("board_snapshot") or {}
     if isinstance(snap, dict) and snap:
         parts.append(

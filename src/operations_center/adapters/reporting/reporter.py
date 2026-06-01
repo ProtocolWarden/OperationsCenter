@@ -29,14 +29,18 @@ class Reporter:
                     "timestamp": datetime.now(UTC).isoformat(),
                 },
                 indent=2,
-            ensure_ascii=False,
-            )
-        , encoding="utf-8")
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
         return str(path)
 
     def write_request(self, run_dir: Path, req: Any) -> str:
         path = run_dir / "request.json"
-        path.write_text(req.model_dump_json(indent=2, exclude={"workspace_path", "goal_file_path"}), encoding="utf-8")
+        path.write_text(
+            req.model_dump_json(indent=2, exclude={"workspace_path", "goal_file_path"}),
+            encoding="utf-8",
+        )
         return str(path)
 
     def write_plane_payload(self, run_dir: Path, payload: dict[str, object]) -> str:
@@ -44,7 +48,9 @@ class Reporter:
         path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
         return str(path)
 
-    def write_backend_run(self, run_dir: Path, command_json: str, stdout: str, stderr: str, *, prefix: str = "backend") -> list[str]:
+    def write_backend_run(
+        self, run_dir: Path, command_json: str, stdout: str, stderr: str, *, prefix: str = "backend"
+    ) -> list[str]:
         cmd = run_dir / f"{prefix}_command.json"
         out = run_dir / f"{prefix}_stdout.log"
         err = run_dir / f"{prefix}_stderr.log"
@@ -70,7 +76,9 @@ class Reporter:
 
     def write_policy_violation(self, run_dir: Path, violations: list[str]) -> str:
         path = run_dir / "policy_violation.json"
-        path.write_text(json.dumps({"violations": violations}, indent=2, ensure_ascii=False), encoding="utf-8")
+        path.write_text(
+            json.dumps({"violations": violations}, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
         return str(path)
 
     def write_diff(self, run_dir: Path, *, diff_stat: str, diff_patch: str) -> list[str]:
@@ -90,9 +98,10 @@ class Reporter:
                     "timestamp": datetime.now(UTC).isoformat(),
                 },
                 indent=2,
-            ensure_ascii=False,
-            )
-        , encoding="utf-8")
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
         return str(path)
 
     def write_smoke_result(
@@ -119,9 +128,10 @@ class Reporter:
                     "timestamp": datetime.now(UTC).isoformat(),
                 },
                 indent=2,
-            ensure_ascii=False,
-            )
-        , encoding="utf-8")
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
         return str(path)
 
     def write_summary(self, run_dir: Path, result: Any) -> str:
@@ -150,13 +160,17 @@ class Reporter:
         lines.extend([f"- {f}" for f in result.internal_changed_files] or ["- (none)"])
         if result.diff_stat_excerpt:
             lines.extend(["", "## Diff Stat"])
-            lines.extend([f"- {line}" for line in result.diff_stat_excerpt.splitlines()] or ["- (none)"])
+            lines.extend(
+                [f"- {line}" for line in result.diff_stat_excerpt.splitlines()] or ["- (none)"]
+            )
         lines.extend(["", "## Policy Violations"])
         lines.extend([f"- {f}" for f in result.policy_violations] or ["- (none)"])
         if result.validation_retried and result.initial_validation_results:
             lines.extend(["", "## Initial Validation (pre-retry)"])
             for vr in result.initial_validation_results:
-                lines.append(f"- `{vr.command}`: exit_code={vr.exit_code}, duration={vr.duration_ms}ms")
+                lines.append(
+                    f"- `{vr.command}`: exit_code={vr.exit_code}, duration={vr.duration_ms}ms"
+                )
                 if vr.stderr.strip():
                     lines.append(f"  stderr: {vr.stderr.strip()[:200]}")
         lines.extend(["", "## Summary", result.summary])

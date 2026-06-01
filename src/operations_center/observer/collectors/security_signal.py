@@ -62,7 +62,10 @@ class SecuritySignalCollector:
             except json.JSONDecodeError as e:
                 logger.debug(
                     "Failed to parse security audit %s: %s at line %s, col %s",
-                    fpath, e.msg, e.lineno, e.colno,
+                    fpath,
+                    e.msg,
+                    e.lineno,
+                    e.colno,
                 )
                 continue
             except OSError as e:

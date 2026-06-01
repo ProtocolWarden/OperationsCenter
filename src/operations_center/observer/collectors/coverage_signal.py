@@ -11,6 +11,7 @@ Supports:
 NEVER runs coverage tools.  Only reads files that already exist.
 Returns CoverageSignal(status="unavailable") when no report is found.
 """
+
 from __future__ import annotations
 
 import re
@@ -21,7 +22,7 @@ from pathlib import Path
 from operations_center.observer.models import CoverageSignal, UncoveredFile
 from operations_center.observer.service import ObserverContext
 
-_UNCOVERED_THRESHOLD_PCT = 80.0   # files below this are listed as under-covered
+_UNCOVERED_THRESHOLD_PCT = 80.0  # files below this are listed as under-covered
 _MAX_UNCOVERED_LISTED = 10
 _TEXT_TOTAL_RE = re.compile(r"TOTAL\s+\d+\s+\d+\s+(\d+)%")
 _HTML_PCT_RE = re.compile(r"(\d+(?:\.\d+)?)\s*%")

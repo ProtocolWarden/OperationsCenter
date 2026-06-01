@@ -85,13 +85,16 @@ def test_select_backend_prefers_codex_when_claude_cooling_down(monkeypatch) -> N
     )
 
     # Both claude and opus (same CLI) cooling down → fall through to codex.
-    assert controller._select_backend(
-        {
-            "claude": datetime(2026, 5, 25, 16, 0, tzinfo=timezone.utc),
-            "opus": datetime(2026, 5, 25, 16, 0, tzinfo=timezone.utc),
-            "codex": None,
-        }
-    ) == "codex"
+    assert (
+        controller._select_backend(
+            {
+                "claude": datetime(2026, 5, 25, 16, 0, tzinfo=timezone.utc),
+                "opus": datetime(2026, 5, 25, 16, 0, tzinfo=timezone.utc),
+                "codex": None,
+            }
+        )
+        == "codex"
+    )
 
 
 def test_select_backend_prefers_opus_when_only_sonnet_cooling_down(monkeypatch) -> None:
@@ -111,13 +114,16 @@ def test_select_backend_prefers_opus_when_only_sonnet_cooling_down(monkeypatch) 
         lambda command: command in {"claude", "codex"},
     )
 
-    assert controller._select_backend(
-        {
-            "claude": datetime(2026, 5, 25, 16, 0, tzinfo=timezone.utc),
-            "opus": None,
-            "codex": None,
-        }
-    ) == "opus"
+    assert (
+        controller._select_backend(
+            {
+                "claude": datetime(2026, 5, 25, 16, 0, tzinfo=timezone.utc),
+                "opus": None,
+                "codex": None,
+            }
+        )
+        == "opus"
+    )
 
 
 def test_select_backend_uses_claude_when_not_fallback(monkeypatch) -> None:
@@ -175,9 +181,7 @@ def test_parse_rate_limit_reset_model_limit_with_date(monkeypatch, tmp_path: Pat
     monkeypatch.setattr(controller, "datetime", FrozenDateTime)
 
     log_path = tmp_path / "session.log"
-    log_path.write_text(
-        "You've hit your Sonnet limit · resets Jun 3, 9am (America/New_York)\n"
-    )
+    log_path.write_text("You've hit your Sonnet limit · resets Jun 3, 9am (America/New_York)\n")
 
     reset_dt, _ = controller.parse_rate_limit_reset(log_path, "claude")
 
@@ -200,9 +204,7 @@ def test_parse_rate_limit_reset_model_limit_with_date_and_minutes(
     monkeypatch.setattr(controller, "datetime", FrozenDateTime)
 
     log_path = tmp_path / "session.log"
-    log_path.write_text(
-        "You've hit your Opus limit · resets Jun 3, 9:30am (America/New_York)\n"
-    )
+    log_path.write_text("You've hit your Opus limit · resets Jun 3, 9:30am (America/New_York)\n")
 
     reset_dt, _ = controller.parse_rate_limit_reset(log_path, "opus")
 
@@ -227,9 +229,7 @@ def test_handle_backend_limit_real_sonnet_message_cools_claude_leaves_opus(
     monkeypatch.setattr(controller, "_log", lambda *a, **k: None)
 
     log_path = tmp_path / "session.log"
-    log_path.write_text(
-        "You've hit your Sonnet limit · resets Jun 3, 9am (America/New_York)\n"
-    )
+    log_path.write_text("You've hit your Sonnet limit · resets Jun 3, 9am (America/New_York)\n")
     cooldowns: dict = {"claude": None, "opus": None, "codex": None}
 
     assert controller._handle_backend_limit("claude", log_path, cooldowns) is True
@@ -360,9 +360,7 @@ def test_handle_backend_limit_global_claude_limit_cools_opus_too(
     monkeypatch.setattr(controller, "_log", lambda *a, **k: None)
 
     log_path = tmp_path / "session.log"
-    log_path.write_text(
-        "You've reached your 5-hour session limit; resets 5:15pm (UTC)\n"
-    )
+    log_path.write_text("You've reached your 5-hour session limit; resets 5:15pm (UTC)\n")
     cooldowns: dict = {"claude": None, "opus": None, "codex": None}
 
     assert controller._handle_backend_limit("claude", log_path, cooldowns) is True
@@ -426,9 +424,7 @@ def test_write_runtime_state_reports_running_backend_during_sleep(tmp_path, monk
     reset = datetime(2026, 6, 3, 13, 0, tzinfo=timezone.utc)
     cooldowns = {"claude": reset, "opus": None, "codex": None}
 
-    controller.write_runtime_state(
-        cooldowns, "opus", sleep_until="2026-05-31T08:19:39Z"
-    )
+    controller.write_runtime_state(cooldowns, "opus", sleep_until="2026-05-31T08:19:39Z")
 
     import json
 

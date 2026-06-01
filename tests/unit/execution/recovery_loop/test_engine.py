@@ -4,9 +4,9 @@
 
 from __future__ import annotations
 
+from operations_center.backend_health import BackendHealthRegistry, BackendHealthState
 from operations_center.contracts.enums import ExecutionStatus, FailureReasonCategory
 from operations_center.contracts.execution import RuntimeBindingSummary
-from operations_center.backend_health import BackendHealthRegistry, BackendHealthState
 from operations_center.execution.recovery_loop import (
     DefaultFailureClassifier,
     ExecutionFailureKind,
@@ -60,7 +60,9 @@ class TestEngineRetry:
         assert out.decision == RecoveryDecision.RETRY_SAME_REQUEST
         assert out.next_request is req
 
-    def test_non_idempotent_timeout_stops_with_idempotency_required(self, make_request, make_result):
+    def test_non_idempotent_timeout_stops_with_idempotency_required(
+        self, make_request, make_result
+    ):
         eng = _engine(RecoveryPolicy(max_attempts=3))
         req = make_request(idempotent=False)
         res = make_result(request=req, status=ExecutionStatus.TIMED_OUT)
@@ -144,31 +146,34 @@ class TestEngineReject:
         assert out.decision == RecoveryDecision.REJECT_UNRECOVERABLE
 
     def test_unknown_can_retry_when_policy_opts_in(self, make_request, make_result):
-        eng = _engine(
-            RecoveryPolicy(max_attempts=3, retry_unknowns=True, unknown_retry_limit=2)
-        )
+        eng = _engine(RecoveryPolicy(max_attempts=3, retry_unknowns=True, unknown_retry_limit=2))
         req = make_request(idempotent=True)
         res = make_result(request=req, failure_category=FailureReasonCategory.BACKEND_ERROR)
         # Unknown is in non_retryable_kinds by default; if retry_unknowns True we
         # bypass the unknown short-circuit, but the non_retryable_kinds gate
         # still rejects. So the policy must also remove UNKNOWN from non_retryable.
         from operations_center.execution.recovery_loop import RecoveryPolicy as RP
+
         eng = _engine(
             RP(
                 max_attempts=3,
                 retry_unknowns=True,
                 unknown_retry_limit=2,
-                non_retryable_kinds=frozenset({
-                    ExecutionFailureKind.AUTH,
-                    ExecutionFailureKind.CONTRACT_VIOLATION,
-                    ExecutionFailureKind.CONFIGURATION,
-                }),
-                retryable_kinds=frozenset({
-                    ExecutionFailureKind.TRANSIENT,
-                    ExecutionFailureKind.TIMEOUT,
-                    ExecutionFailureKind.BACKEND_UNAVAILABLE,
-                    ExecutionFailureKind.UNKNOWN,
-                }),
+                non_retryable_kinds=frozenset(
+                    {
+                        ExecutionFailureKind.AUTH,
+                        ExecutionFailureKind.CONTRACT_VIOLATION,
+                        ExecutionFailureKind.CONFIGURATION,
+                    }
+                ),
+                retryable_kinds=frozenset(
+                    {
+                        ExecutionFailureKind.TRANSIENT,
+                        ExecutionFailureKind.TIMEOUT,
+                        ExecutionFailureKind.BACKEND_UNAVAILABLE,
+                        ExecutionFailureKind.UNKNOWN,
+                    }
+                ),
             )
         )
         out = eng.evaluate(res, _ctx(req))
@@ -188,15 +193,19 @@ class TestEngineRateLimit:
     def _allow_rate_limit_policy(self) -> RecoveryPolicy:
         return RecoveryPolicy(
             max_attempts=3,
-            retryable_kinds=frozenset({
-                ExecutionFailureKind.TRANSIENT,
-                ExecutionFailureKind.TIMEOUT,
-                ExecutionFailureKind.BACKEND_UNAVAILABLE,
-                ExecutionFailureKind.RATE_LIMIT,
-            }),
+            retryable_kinds=frozenset(
+                {
+                    ExecutionFailureKind.TRANSIENT,
+                    ExecutionFailureKind.TIMEOUT,
+                    ExecutionFailureKind.BACKEND_UNAVAILABLE,
+                    ExecutionFailureKind.RATE_LIMIT,
+                }
+            ),
         )
 
-    def test_rate_limit_without_retry_after_stops_with_backoff_required(self, make_request, make_result):
+    def test_rate_limit_without_retry_after_stops_with_backoff_required(
+        self, make_request, make_result
+    ):
         eng = _engine(self._allow_rate_limit_policy())
         req = make_request(idempotent=True)
         res = make_result(

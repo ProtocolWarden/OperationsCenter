@@ -130,7 +130,8 @@ class TestDirectLocalRuntimeInvocationRef:
     def test_success_populates_runtime_invocation_ref(self, tmp_path: Path) -> None:
         runtime = _CapturingFakeRuntime()
         adapter = DirectLocalBackendAdapter(
-            AiderSettings(binary="/bin/true", timeout_seconds=10), runtime=runtime,
+            AiderSettings(binary="/bin/true", timeout_seconds=10),
+            runtime=runtime,
         )
         result = adapter.execute(_request(tmp_path))
 
@@ -151,14 +152,14 @@ class TestDirectLocalRuntimeInvocationRef:
     def test_timeout_still_populates_runtime_invocation_ref(self, tmp_path: Path) -> None:
         runtime = _CapturingFakeRuntime(status="timed_out")
         adapter = DirectLocalBackendAdapter(
-            AiderSettings(binary="/bin/true", timeout_seconds=1), runtime=runtime,
+            AiderSettings(binary="/bin/true", timeout_seconds=1),
+            runtime=runtime,
         )
         result = adapter.execute(_request(tmp_path))
 
         assert result.runtime_invocation_ref is not None
         assert (
-            result.runtime_invocation_ref.invocation_id
-            == runtime.last_invocation.invocation_id  # type: ignore[union-attr]
+            result.runtime_invocation_ref.invocation_id == runtime.last_invocation.invocation_id  # type: ignore[union-attr]
         )
 
     def test_binary_missing_still_populates_runtime_invocation_ref(self, tmp_path: Path) -> None:
@@ -171,7 +172,8 @@ class TestDirectLocalRuntimeInvocationRef:
 
         runtime = _NotFoundRuntime()
         adapter = DirectLocalBackendAdapter(
-            AiderSettings(binary="/no/such/aider", timeout_seconds=10), runtime=runtime,
+            AiderSettings(binary="/no/such/aider", timeout_seconds=10),
+            runtime=runtime,
         )
         result = adapter.execute(_request(tmp_path))
 
@@ -179,8 +181,7 @@ class TestDirectLocalRuntimeInvocationRef:
         # No RuntimeResult was produced, but the ref still carries
         # invocation identity for audit.
         assert (
-            result.runtime_invocation_ref.invocation_id
-            == runtime.last_invocation.invocation_id  # type: ignore[union-attr]
+            result.runtime_invocation_ref.invocation_id == runtime.last_invocation.invocation_id  # type: ignore[union-attr]
         )
         assert result.runtime_invocation_ref.stdout_path is None
         assert result.runtime_invocation_ref.stderr_path is None

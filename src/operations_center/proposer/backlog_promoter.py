@@ -15,13 +15,13 @@ Promotion criteria (all must be true):
 
 Safe by default: dry_run=True prints what would happen without touching Plane.
 """
+
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Protocol
-
 
 _SOURCE_FAMILY_RE = re.compile(r"^source_family:\s*(\S+)", re.MULTILINE)
 _AUTONOMY_TIER_RE = re.compile(r"^autonomy_tier:\s*(\d+)", re.MULTILINE)
@@ -150,14 +150,18 @@ class BacklogPromoterService:
                 continue
 
             description = str(issue.get("description") or issue.get("description_stripped") or "")
-            family = _parse_source_family(description) or _family_from_labels(_issue_label_names(issue))
+            family = _parse_source_family(description) or _family_from_labels(
+                _issue_label_names(issue)
+            )
 
             if family is None:
-                result.skipped.append(SkippedTask(
-                    task_id=task_id,
-                    title=title,
-                    reason="no_source_family_in_provenance",
-                ))
+                result.skipped.append(
+                    SkippedTask(
+                        task_id=task_id,
+                        title=title,
+                        reason="no_source_family_in_provenance",
+                    )
+                )
                 continue
 
             if family_filter is not None and family != family_filter:
@@ -166,13 +170,15 @@ class BacklogPromoterService:
             current_tier = self._get_tier(family)
 
             if current_tier < 2:
-                result.skipped.append(SkippedTask(
-                    task_id=task_id,
-                    title=title,
-                    family=family,
-                    current_tier=current_tier,
-                    reason="tier_below_2",
-                ))
+                result.skipped.append(
+                    SkippedTask(
+                        task_id=task_id,
+                        title=title,
+                        family=family,
+                        current_tier=current_tier,
+                        reason="tier_below_2",
+                    )
+                )
                 continue
 
             recorded_tier = _parse_recorded_tier(description)
@@ -184,12 +190,14 @@ class BacklogPromoterService:
                     result.errors.append(f"Failed to promote {task_id} ({title}): {exc}")
                     continue
 
-            result.promoted.append(PromotedTask(
-                task_id=task_id,
-                title=title,
-                family=family,
-                current_tier=current_tier,
-                recorded_tier=recorded_tier,
-            ))
+            result.promoted.append(
+                PromotedTask(
+                    task_id=task_id,
+                    title=title,
+                    family=family,
+                    current_tier=current_tier,
+                    recorded_tier=recorded_tier,
+                )
+            )
 
         return result

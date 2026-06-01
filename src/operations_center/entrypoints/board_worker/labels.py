@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Plane label helpers and board-state constants for board_worker."""
+
 from __future__ import annotations
 
 import logging
@@ -9,11 +10,11 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # ── Plane states ──────────────────────────────────────────────────────────────
-STATE_READY   = "Ready for AI"
+STATE_READY = "Ready for AI"
 STATE_RUNNING = "Running"
-STATE_DONE    = "Done"
+STATE_DONE = "Done"
 STATE_BLOCKED = "Blocked"
-STATE_REVIEW  = "In Review"
+STATE_REVIEW = "In Review"
 
 # Lifecycle label applied to a meta-task whose real work is split into children.
 # Prevents rewrite loops from picking at completed parent tasks.
@@ -21,9 +22,9 @@ LIFECYCLE_EXPANDED = "lifecycle: expanded"
 
 # task-kind labels claimed per role
 ROLE_KINDS: dict[str, list[str]] = {
-    "goal":        ["goal"],
-    "test":        ["test", "test_campaign"],
-    "improve":     ["improve", "improve_campaign"],
+    "goal": ["goal"],
+    "test": ["test", "test_campaign"],
+    "improve": ["improve", "improve_campaign"],
     "spec-author": ["spec-author"],
 }
 
@@ -31,6 +32,7 @@ GITHUB_DIR = Path.home() / "Documents" / "GitHub"
 
 
 # ── Label helpers ─────────────────────────────────────────────────────────────
+
 
 def label_value(labels: list, prefix: str) -> str:
     """Extract value from a 'prefix: value' label, or ''."""
@@ -78,7 +80,9 @@ def add_label(client, issue: dict, new_label: str) -> None:
     except Exception as exc:
         logger.warning(
             "board_worker: failed to add label %r to task_id=%s — %s",
-            new_label, issue.get("id"), exc,
+            new_label,
+            issue.get("id"),
+            exc,
         )
 
 
@@ -109,5 +113,6 @@ def increment_retry_count(client, issue: dict) -> None:
     except Exception as exc:
         logger.warning(
             "board_worker: failed to increment retry-count for task_id=%s — %s",
-            issue.get("id"), exc,
+            issue.get("id"),
+            exc,
         )

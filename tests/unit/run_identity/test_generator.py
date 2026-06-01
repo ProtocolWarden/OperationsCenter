@@ -35,9 +35,7 @@ class TestGenerateManagedRunIdentity:
         assert "audit_type_1" in identity.run_id
 
     def test_run_id_uses_utc_timestamp(self) -> None:
-        identity = generate_managed_run_identity(
-            "example_managed_repo", "audit_type_1", _now=_NOW
-        )
+        identity = generate_managed_run_identity("example_managed_repo", "audit_type_1", _now=_NOW)
         assert "20260426T164233Z" in identity.run_id
 
     def test_run_id_is_path_safe(self) -> None:
@@ -50,6 +48,7 @@ class TestGenerateManagedRunIdentity:
 
     def test_run_id_is_json_safe(self) -> None:
         import json
+
         identity = generate_managed_run_identity("example_managed_repo", "audit_type_1")
         encoded = json.dumps({"run_id": identity.run_id})
         assert identity.run_id in encoded
@@ -70,9 +69,7 @@ class TestGenerateManagedRunIdentity:
         assert identity.created_at.tzinfo is not None
 
     def test_created_at_fixed_by_now(self) -> None:
-        identity = generate_managed_run_identity(
-            "example_managed_repo", "audit_type_1", _now=_NOW
-        )
+        identity = generate_managed_run_identity("example_managed_repo", "audit_type_1", _now=_NOW)
         assert identity.created_at == _NOW
 
     def test_env_var_default_is_audit_run_id(self) -> None:
@@ -108,8 +105,11 @@ class TestGenerateFromConfig:
 
 
 class TestApplyRunIdentityEnv:
-    def _make_identity(self, run_id: str = "example_managed_repo_audit_type_1_20260426T164233Z_a1b2c3d4"):
+    def _make_identity(
+        self, run_id: str = "example_managed_repo_audit_type_1_20260426T164233Z_a1b2c3d4"
+    ):
         from operations_center.run_identity.models import ManagedRunIdentity
+
         return ManagedRunIdentity(
             repo_id="example_managed_repo",
             audit_type="audit_type_1",
@@ -197,6 +197,7 @@ class TestPrepareManagedAuditInvocation:
 
     def test_does_not_execute_command(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import subprocess
+
         calls: list = []
         monkeypatch.setattr(subprocess, "run", lambda *a, **kw: calls.append((a, kw)))
         prepare_managed_audit_invocation(
@@ -205,7 +206,7 @@ class TestPrepareManagedAuditInvocation:
         assert calls == [], "prepare_managed_audit_invocation must not execute commands"
 
     def test_works_for_all_six_audit_types(self) -> None:
-        for at in ("audit_type_1",  "audit_type_2"):
+        for at in ("audit_type_1", "audit_type_2"):
             result = prepare_managed_audit_invocation(
                 "example_managed_repo", at, config_dir=_CONFIG_DIR
             )
@@ -232,7 +233,12 @@ class TestPrepareManagedAuditInvocation:
 
 class TestBoundaryEnforcement:
     def test_no_example_managed_repo_imports_in_run_identity_module(self) -> None:
-        src = Path(__file__).parent.parent.parent.parent / "src" / "operations_center" / "run_identity"
+        src = (
+            Path(__file__).parent.parent.parent.parent
+            / "src"
+            / "operations_center"
+            / "run_identity"
+        )
         for py_file in src.rglob("*.py"):
             tree = ast.parse(py_file.read_text(), filename=str(py_file))
             for node in ast.walk(tree):

@@ -15,6 +15,7 @@ Pure functions, no side effects, no settings mutation. Per the
 anti-collapse invariant: this is a read of config + clock; nothing
 about behavior_calibration or runtime feedback.
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime

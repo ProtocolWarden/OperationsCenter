@@ -17,9 +17,9 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from .enums import ExecutionMode, Priority, RiskLevel, TaskType
-from .common import BranchPolicy, ExecutionConstraints, TaskTarget, ValidationProfile
 from .ci import ContinuousImprovementSpec
+from .common import BranchPolicy, ExecutionConstraints, TaskTarget, ValidationProfile
+from .enums import ExecutionMode, Priority, RiskLevel, TaskType
 
 
 def _utcnow() -> datetime:

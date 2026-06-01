@@ -26,6 +26,7 @@ Diff-on-disk safety: the synthesizer writes to ``<card>.synthesized.yaml``
 and emits a CLI-friendly diff. Humans merge by hand. This avoids an
 auto-rewriter silently overwriting human curation.
 """
+
 from __future__ import annotations
 
 import json
@@ -35,8 +36,6 @@ from pathlib import Path
 from typing import Any, Optional
 
 import yaml
-
-
 
 _DEFAULT_FLUSH_EVERY_OBSERVATIONS = 10
 _DEFAULT_FLUSH_EVERY_SECONDS = 60.0
@@ -71,8 +70,7 @@ class SynthesizedFacts:
                 "max_observed_tests_run": self.max_tests_run,
                 "sample_count": self.sample_count,
                 "success_rate": (
-                    round(self.success_count / self.sample_count, 3)
-                    if self.sample_count else 0.0
+                    round(self.success_count / self.sample_count, 3) if self.sample_count else 0.0
                 ),
             },
             "known_capability_gaps": baseline.get("known_capability_gaps", []),

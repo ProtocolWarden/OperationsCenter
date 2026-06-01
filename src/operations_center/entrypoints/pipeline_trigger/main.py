@@ -23,6 +23,7 @@ Usage::
 
 The trigger writes its state to ``state/pipeline_trigger_state.json``.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -36,8 +37,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 _TRIGGER_STATE_PATH = Path("state/pipeline_trigger_state.json")
-_DEFAULT_MIN_INTERVAL = 300   # 5 minutes between triggered runs
-_DEFAULT_POLL_INTERVAL = 30   # check every 30 seconds
+_DEFAULT_MIN_INTERVAL = 300  # 5 minutes between triggered runs
+_DEFAULT_POLL_INTERVAL = 30  # check every 30 seconds
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,9 @@ def _load_state() -> dict:
 
 def _save_state(state: dict) -> None:
     _TRIGGER_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _TRIGGER_STATE_PATH.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
+    _TRIGGER_STATE_PATH.write_text(
+        json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
 
 
 def _get_trigger_sources(config_path: str) -> list[Path]:
@@ -67,6 +70,7 @@ def _get_trigger_sources(config_path: str) -> list[Path]:
     # Git repo FETCH_HEAD files
     try:
         from operations_center.config import load_settings
+
         settings = load_settings(config_path)
         for repo_cfg in settings.repos.values():
             lp = getattr(repo_cfg, "local_path", None)
@@ -108,32 +112,46 @@ def _has_changed(old: dict[str, float], new: dict[str, float]) -> list[str]:
 def _run_pipeline(config_path: str, *, execute: bool) -> bool:
     """Run autonomy-cycle. Returns True on success."""
     cmd = [
-        sys.executable, "-m",
+        sys.executable,
+        "-m",
         "operations_center.entrypoints.autonomy_cycle.main",
-        "--config", config_path,
+        "--config",
+        config_path,
     ]
     if execute:
         cmd.append("--execute")
 
-    logger.info(json.dumps({
-        "event": "pipeline_trigger_running",
-        "command": " ".join(cmd),
-        "triggered_at": datetime.now(UTC).isoformat(),
-    }, ensure_ascii=False))
+    logger.info(
+        json.dumps(
+            {
+                "event": "pipeline_trigger_running",
+                "command": " ".join(cmd),
+                "triggered_at": datetime.now(UTC).isoformat(),
+            },
+            ensure_ascii=False,
+        )
+    )
     try:
         result = subprocess.run(cmd, timeout=600, capture_output=False)
         success = result.returncode == 0
-        logger.info(json.dumps({
-            "event": "pipeline_trigger_complete",
-            "returncode": result.returncode,
-            "success": success,
-        }, ensure_ascii=False))
+        logger.info(
+            json.dumps(
+                {
+                    "event": "pipeline_trigger_complete",
+                    "returncode": result.returncode,
+                    "success": success,
+                },
+                ensure_ascii=False,
+            )
+        )
         return success
     except subprocess.TimeoutExpired:
         logger.warning(json.dumps({"event": "pipeline_trigger_timeout"}, ensure_ascii=False))
         return False
     except Exception as exc:
-        logger.warning(json.dumps({"event": "pipeline_trigger_error", "error": str(exc)}, ensure_ascii=False))
+        logger.warning(
+            json.dumps({"event": "pipeline_trigger_error", "error": str(exc)}, ensure_ascii=False)
+        )
         return False
 
 
@@ -153,12 +171,17 @@ def run_trigger_loop(
     last_run_at: float = float(state.get("last_run_at", 0))
     snapshot = _snapshot_mtimes(sources)
 
-    logger.info(json.dumps({
-        "event": "pipeline_trigger_started",
-        "sources_count": len(sources),
-        "min_interval_seconds": min_interval_seconds,
-        "execute": execute,
-    }, ensure_ascii=False))
+    logger.info(
+        json.dumps(
+            {
+                "event": "pipeline_trigger_started",
+                "sources_count": len(sources),
+                "min_interval_seconds": min_interval_seconds,
+                "execute": execute,
+            },
+            ensure_ascii=False,
+        )
+    )
 
     while True:
         time.sleep(poll_interval_seconds)
@@ -173,19 +196,29 @@ def run_trigger_loop(
         elapsed_since_last = now - last_run_at
 
         if elapsed_since_last < min_interval_seconds:
-            logger.info(json.dumps({
-                "event": "pipeline_trigger_debounced",
-                "changed": changed,
-                "next_run_in_seconds": round(min_interval_seconds - elapsed_since_last),
-            }, ensure_ascii=False))
+            logger.info(
+                json.dumps(
+                    {
+                        "event": "pipeline_trigger_debounced",
+                        "changed": changed,
+                        "next_run_in_seconds": round(min_interval_seconds - elapsed_since_last),
+                    },
+                    ensure_ascii=False,
+                )
+            )
             snapshot = new_snapshot
             continue
 
-        logger.info(json.dumps({
-            "event": "pipeline_trigger_fired",
-            "changed": changed,
-            "elapsed_since_last_run": round(elapsed_since_last),
-        }, ensure_ascii=False))
+        logger.info(
+            json.dumps(
+                {
+                    "event": "pipeline_trigger_fired",
+                    "changed": changed,
+                    "elapsed_since_last_run": round(elapsed_since_last),
+                },
+                ensure_ascii=False,
+            )
+        )
 
         _run_pipeline(config_path, execute=execute)
         last_run_at = time.time()

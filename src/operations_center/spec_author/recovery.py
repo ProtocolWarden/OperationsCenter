@@ -43,7 +43,8 @@ class RecoveryService:
         """Perform orderly campaign self-cancellation."""
         logger.info(
             '{"event": "campaign_self_cancel", "campaign_id": "%s", "reason": "%s"}',
-            campaign.campaign_id, reason,
+            campaign.campaign_id,
+            reason,
         )
         # Cancel all open Plane tasks for this campaign
         try:
@@ -55,15 +56,15 @@ class RecoveryService:
                     if state_name not in {"done", "cancelled"}:
                         self._client.transition_issue(str(issue["id"]), "Cancelled")
         except Exception as exc:
-            logger.warning(
-                '{"event": "campaign_cancel_issues_error", "error": "%s"}', str(exc)
-            )
+            logger.warning('{"event": "campaign_cancel_issues_error", "error": "%s"}', str(exc))
 
         # Update spec front matter
         spec_path = specs_dir / f"{campaign.slug}.md"
         if spec_path.exists():
             text = spec_path.read_text(encoding="utf-8")
-            spec_path.write_text(text.replace("status: active", "status: cancelled", 1), encoding="utf-8")
+            spec_path.write_text(
+                text.replace("status: active", "status: cancelled", 1), encoding="utf-8"
+            )
 
         # Mark campaign cancelled in state
         self._state.mark_cancelled(campaign.campaign_id)

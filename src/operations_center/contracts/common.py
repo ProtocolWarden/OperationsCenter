@@ -20,6 +20,7 @@ from .enums import ValidationStatus
 
 class TaskTarget(BaseModel):
     """Identifies the repository and branch context for a task."""
+
     repo_key: str = Field(description="Logical name for the repository (e.g. 'api-service')")
     clone_url: str = Field(description="Git clone URL")
     base_branch: str = Field(description="Branch from which the task branch is created")
@@ -33,6 +34,7 @@ class TaskTarget(BaseModel):
 
 class ExecutionConstraints(BaseModel):
     """Limits and guardrails applied to an execution run."""
+
     max_changed_files: Optional[int] = Field(
         default=None,
         description="Execution is aborted if more files than this are changed. None = unlimited.",
@@ -60,6 +62,7 @@ class ExecutionConstraints(BaseModel):
 
 class ValidationProfile(BaseModel):
     """Specifies which validation commands to run and how."""
+
     profile_name: str = Field(description="Logical name, e.g. 'strict', 'lint_only', 'off'")
     commands: list[str] = Field(
         default_factory=list,
@@ -76,6 +79,7 @@ class ValidationProfile(BaseModel):
 
 class BranchPolicy(BaseModel):
     """Governs how execution branches are named and pushed."""
+
     branch_prefix: str = Field(
         default="auto/",
         description="Prefix for generated task branches.",
@@ -98,6 +102,7 @@ class BranchPolicy(BaseModel):
 
 class ChangedFileRef(BaseModel):
     """A single file that was modified during execution."""
+
     path: str = Field(description="Repo-relative path to the changed file")
     change_type: str = Field(
         default="modified",
@@ -111,6 +116,7 @@ class ChangedFileRef(BaseModel):
 
 class ValidationSummary(BaseModel):
     """Aggregated result of one or more validation commands."""
+
     status: ValidationStatus
     commands_run: int = Field(default=0, ge=0)
     commands_passed: int = Field(default=0, ge=0)

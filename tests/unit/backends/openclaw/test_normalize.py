@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
-
 from operations_center.backends.openclaw.models import OpenClawArtifactCapture, OpenClawRunCapture
 from operations_center.backends.openclaw.normalize import normalize
 from operations_center.contracts.enums import (
@@ -84,10 +83,7 @@ def test_decision_id_preserved():
 
 
 def test_branch_name_preserved():
-    result = normalize(
-        _capture(), proposal_id="p1", decision_id="d1",
-        branch_name="auto/fix-abc"
-    )
+    result = normalize(_capture(), proposal_id="p1", decision_id="d1", branch_name="auto/fix-abc")
     assert result.branch_name == "auto/fix-abc"
 
 
@@ -104,7 +100,8 @@ def test_branch_pushed_always_false():
 def test_failure_outcome_gives_failed_status():
     result = normalize(
         _capture(outcome="failure", exit_code=1),
-        proposal_id="p1", decision_id="d1",
+        proposal_id="p1",
+        decision_id="d1",
     )
     assert result.status == ExecutionStatus.FAILED
     assert result.success is False
@@ -113,7 +110,8 @@ def test_failure_outcome_gives_failed_status():
 def test_timeout_gives_timeout_status():
     result = normalize(
         _capture(outcome="timeout", timeout_hit=True),
-        proposal_id="p1", decision_id="d1",
+        proposal_id="p1",
+        decision_id="d1",
     )
     assert result.status == ExecutionStatus.TIMED_OUT
     assert result.success is False
@@ -122,7 +120,8 @@ def test_timeout_gives_timeout_status():
 def test_timeout_hit_flag_also_gives_timeout():
     result = normalize(
         _capture(outcome="failure", timeout_hit=True),
-        proposal_id="p1", decision_id="d1",
+        proposal_id="p1",
+        decision_id="d1",
     )
     assert result.status == ExecutionStatus.TIMED_OUT
 
@@ -130,7 +129,8 @@ def test_timeout_hit_flag_also_gives_timeout():
 def test_failure_category_set():
     result = normalize(
         _capture(outcome="failure", error_text="tool call failed"),
-        proposal_id="p1", decision_id="d1",
+        proposal_id="p1",
+        decision_id="d1",
     )
     assert result.failure_category is not None
 
@@ -138,7 +138,8 @@ def test_failure_category_set():
 def test_failure_reason_set():
     result = normalize(
         _capture(outcome="failure", error_text="tool call failed"),
-        proposal_id="p1", decision_id="d1",
+        proposal_id="p1",
+        decision_id="d1",
     )
     assert result.failure_reason is not None
     assert len(result.failure_reason) > 0
@@ -147,7 +148,8 @@ def test_failure_reason_set():
 def test_no_changes_failure_category():
     result = normalize(
         _capture(outcome="failure", output_text="no changes detected"),
-        proposal_id="p1", decision_id="d1",
+        proposal_id="p1",
+        decision_id="d1",
     )
     assert result.failure_category == FailureReasonCategory.NO_CHANGES
 
@@ -155,7 +157,8 @@ def test_no_changes_failure_category():
 def test_timeout_failure_category():
     result = normalize(
         _capture(outcome="timeout", timeout_hit=True),
-        proposal_id="p1", decision_id="d1",
+        proposal_id="p1",
+        decision_id="d1",
     )
     assert result.failure_category == FailureReasonCategory.TIMEOUT
 
@@ -177,8 +180,9 @@ def test_changed_files_from_git_diff(tmp_path):
             ).ChangedFileRef(path="src/main.py", change_type="modified")
         ]
         capture = _capture()
-        result = normalize(capture, proposal_id="p1", decision_id="d1",
-                           workspace_path=tmp_path / "repo")
+        result = normalize(
+            capture, proposal_id="p1", decision_id="d1", workspace_path=tmp_path / "repo"
+        )
 
     assert len(result.changed_files) == 1
     assert result.changed_files[0].path == "src/main.py"
@@ -190,10 +194,10 @@ def test_changed_files_source_set_to_git_diff(tmp_path):
         "operations_center.backends.openclaw.normalize._discover_changed_files_via_git"
     ) as mock_git:
         from operations_center.contracts.common import ChangedFileRef
+
         mock_git.return_value = [ChangedFileRef(path="src/a.py", change_type="modified")]
         capture = _capture()
-        normalize(capture, proposal_id="p1", decision_id="d1",
-                  workspace_path=tmp_path / "repo")
+        normalize(capture, proposal_id="p1", decision_id="d1", workspace_path=tmp_path / "repo")
 
     assert capture.changed_files_source == "git_diff"
 
@@ -204,9 +208,12 @@ def test_result_preserves_git_diff_provenance(tmp_path):
         "operations_center.backends.openclaw.normalize._discover_changed_files_via_git"
     ) as mock_git:
         from operations_center.contracts.common import ChangedFileRef
+
         mock_git.return_value = [ChangedFileRef(path="src/a.py", change_type="modified")]
         capture = _capture()
-        result = normalize(capture, proposal_id="p1", decision_id="d1", workspace_path=tmp_path / "repo")
+        result = normalize(
+            capture, proposal_id="p1", decision_id="d1", workspace_path=tmp_path / "repo"
+        )
 
     assert result.changed_files_source == "git_diff"
     assert result.changed_files_confidence == 1.0
@@ -224,8 +231,12 @@ def test_changed_files_from_event_stream_when_git_unavailable():
         "operations_center.backends.openclaw.normalize._discover_changed_files_via_git",
         return_value=None,
     ):
-        result = normalize(capture, proposal_id="p1", decision_id="d1",
-                           workspace_path=Path("/nonexistent/workspace"))
+        result = normalize(
+            capture,
+            proposal_id="p1",
+            decision_id="d1",
+            workspace_path=Path("/nonexistent/workspace"),
+        )
 
     assert len(result.changed_files) == 1
     assert result.changed_files[0].path == "src/main.py"
@@ -238,8 +249,12 @@ def test_changed_files_source_event_stream_after_git_fallback():
         "operations_center.backends.openclaw.normalize._discover_changed_files_via_git",
         return_value=None,
     ):
-        normalize(capture, proposal_id="p1", decision_id="d1",
-                  workspace_path=Path("/nonexistent/workspace"))
+        normalize(
+            capture,
+            proposal_id="p1",
+            decision_id="d1",
+            workspace_path=Path("/nonexistent/workspace"),
+        )
 
     assert capture.changed_files_source == "event_stream"
 
@@ -251,8 +266,12 @@ def test_result_preserves_event_stream_provenance():
         "operations_center.backends.openclaw.normalize._discover_changed_files_via_git",
         return_value=None,
     ):
-        result = normalize(capture, proposal_id="p1", decision_id="d1",
-                           workspace_path=Path("/nonexistent/workspace"))
+        result = normalize(
+            capture,
+            proposal_id="p1",
+            decision_id="d1",
+            workspace_path=Path("/nonexistent/workspace"),
+        )
 
     assert result.changed_files_source == "event_stream"
     assert result.changed_files_confidence == 0.5
@@ -265,8 +284,12 @@ def test_event_stream_change_type_preserved():
         "operations_center.backends.openclaw.normalize._discover_changed_files_via_git",
         return_value=None,
     ):
-        result = normalize(capture, proposal_id="p1", decision_id="d1",
-                           workspace_path=Path("/nonexistent/workspace"))
+        result = normalize(
+            capture,
+            proposal_id="p1",
+            decision_id="d1",
+            workspace_path=Path("/nonexistent/workspace"),
+        )
 
     assert result.changed_files[0].change_type == "deleted"
 
@@ -278,8 +301,7 @@ def test_event_stream_change_type_preserved():
 
 def test_changed_files_empty_when_unknown():
     capture = _capture()  # no reported_changed_files, no workspace
-    result = normalize(capture, proposal_id="p1", decision_id="d1",
-                       workspace_path=None)
+    result = normalize(capture, proposal_id="p1", decision_id="d1", workspace_path=None)
     assert result.changed_files == []
 
 
@@ -291,8 +313,7 @@ def test_changed_files_source_unknown_when_no_workspace_no_events():
 
 def test_empty_workspace_path_sentinel_skips_git():
     capture = _capture()
-    result = normalize(capture, proposal_id="p1", decision_id="d1",
-                       workspace_path=Path(""))
+    result = normalize(capture, proposal_id="p1", decision_id="d1", workspace_path=Path(""))
     assert result.changed_files == []
     assert capture.changed_files_source == "unknown"
 
@@ -306,13 +327,15 @@ def test_git_diff_takes_priority_over_event_stream():
     files = [{"path": "src/main.py", "change_type": "modified"}]
     capture = _capture(reported_changed_files=files)
     from operations_center.contracts.common import ChangedFileRef
+
     git_files = [ChangedFileRef(path="src/other.py", change_type="added")]
     with patch(
         "operations_center.backends.openclaw.normalize._discover_changed_files_via_git",
         return_value=git_files,
     ):
-        result = normalize(capture, proposal_id="p1", decision_id="d1",
-                           workspace_path=Path("/some/workspace"))
+        result = normalize(
+            capture, proposal_id="p1", decision_id="d1", workspace_path=Path("/some/workspace")
+        )
 
     assert result.changed_files[0].path == "src/other.py"
     assert capture.changed_files_source == "git_diff"
@@ -330,8 +353,11 @@ def test_validation_skipped_by_default():
 
 def test_validation_passed():
     result = normalize(
-        _capture(), proposal_id="p1", decision_id="d1",
-        validation_ran=True, validation_passed=True,
+        _capture(),
+        proposal_id="p1",
+        decision_id="d1",
+        validation_ran=True,
+        validation_passed=True,
     )
     assert result.validation.status == ValidationStatus.PASSED
     assert result.validation.commands_run == 1
@@ -340,8 +366,11 @@ def test_validation_passed():
 
 def test_validation_failed():
     result = normalize(
-        _capture(), proposal_id="p1", decision_id="d1",
-        validation_ran=True, validation_passed=False,
+        _capture(),
+        proposal_id="p1",
+        decision_id="d1",
+        validation_ran=True,
+        validation_passed=False,
         validation_excerpt="ruff: 5 errors",
     )
     assert result.validation.status == ValidationStatus.FAILED

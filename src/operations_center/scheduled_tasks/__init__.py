@@ -24,6 +24,7 @@ Schema (config YAML):
         repo_key: "OperationsCenter"
         kind:     "goal"
 """
+
 from __future__ import annotations
 
 from .runner import ScheduledTaskRunner, due_tasks

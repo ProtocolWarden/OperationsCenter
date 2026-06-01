@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Tests for Phase 5 insight derivers: architecture_drift, benchmark_regression, security_vuln."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -8,19 +9,19 @@ from pathlib import Path
 
 from operations_center.insights.derivers.architecture_drift import ArchitectureDriftDeriver
 from operations_center.insights.derivers.benchmark_regression import BenchmarkRegressionDeriver
-from operations_center.insights.derivers.security_vuln import SecurityVulnDeriver
 from operations_center.insights.derivers.coverage_gap import CoverageGapDeriver
+from operations_center.insights.derivers.security_vuln import SecurityVulnDeriver
 from operations_center.insights.normalizer import InsightNormalizer
 from operations_center.observer.models import (
     ArchitectureSignal,
     BenchmarkSignal,
+    CheckSignal,
+    CoverageSignal,
     DependencyDriftSignal,
     RepoContextSnapshot,
     RepoSignalsSnapshot,
     RepoStateSnapshot,
     SecuritySignal,
-    CoverageSignal,
-    CheckSignal,
     TodoSignal,
 )
 
@@ -238,9 +239,7 @@ class TestBenchmarkRegressionDeriver:
         """status=regression but empty regressions list should not emit."""
         deriver = BenchmarkRegressionDeriver(_normalizer())
         snap = _make_snapshot(
-            benchmark_signal=BenchmarkSignal(
-                status="regression", benchmark_count=1, regressions=[]
-            )
+            benchmark_signal=BenchmarkSignal(status="regression", benchmark_count=1, regressions=[])
         )
         assert deriver.derive([snap]) == []
 
@@ -296,13 +295,12 @@ class TestSecurityVulnDeriver:
     def test_advisories_status_but_zero_count(self) -> None:
         """status=advisories but advisory_count=0 should not emit."""
         deriver = SecurityVulnDeriver(_normalizer())
-        snap = _make_snapshot(
-            security_signal=SecuritySignal(status="advisories", advisory_count=0)
-        )
+        snap = _make_snapshot(security_signal=SecuritySignal(status="advisories", advisory_count=0))
         assert deriver.derive([snap]) == []
 
 
 # ── Coverage Gap Deriver ────────────────────────────────────────────
+
 
 class TestCoverageGapDeriver:
     def test_empty_snapshots(self) -> None:
@@ -346,6 +344,7 @@ class TestCoverageGapDeriver:
 
 
 # ── Tests for None observed_at (Stage 3 coverage) ─────────────────────
+
 
 class TestArchitectureDriftWithNoneObservedAt:
     """Verify ArchitectureDriftDeriver handles signal.observed_at=None correctly."""
@@ -474,9 +473,7 @@ class TestCoverageGapWithNoneObservedAt:
         )
         insights = deriver.derive([snap])
         assert len(insights) >= 1
-        low_overall = next(
-            (i for i in insights if i.kind == "coverage_gap/low_overall"), None
-        )
+        low_overall = next((i for i in insights if i.kind == "coverage_gap/low_overall"), None)
         assert low_overall is not None
         # Should use snapshot.observed_at as fallback
         assert low_overall.first_seen_at == snap.observed_at

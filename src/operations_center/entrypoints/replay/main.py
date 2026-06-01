@@ -48,18 +48,24 @@ def cmd_run(
     ),
     profile: SliceReplayProfile = typer.Option(
         SliceReplayProfile.FIXTURE_INTEGRITY,
-        "--profile", "-p",
+        "--profile",
+        "-p",
         help="Replay profile.",
     ),
-    source_stage: str | None = typer.Option(None, "--stage", help="Filter by source_stage (STAGE_SLICE profile)."),
+    source_stage: str | None = typer.Option(
+        None, "--stage", help="Filter by source_stage (STAGE_SLICE profile)."
+    ),
     artifact_kind: str | None = typer.Option(None, "--kind", help="Filter by artifact_kind."),
     max_artifact_bytes: int = typer.Option(
-        10 * 1024 * 1024, "--max-artifact-bytes", help="Max bytes per artifact when reading content."
+        10 * 1024 * 1024,
+        "--max-artifact-bytes",
+        help="Max bytes per artifact when reading content.",
     ),
     fail_fast: bool = typer.Option(False, "--fail-fast", help="Stop after first required failure."),
     output_dir: str = typer.Option(
         "tools/audit/report/slice_replay",
-        "--output-dir", "-o",
+        "--output-dir",
+        "-o",
         help="Root directory for replay reports.",
     ),
 ) -> None:
@@ -86,8 +92,12 @@ def cmd_run(
         console.print(f"[yellow]Warning: could not write report:[/yellow] {exc}")
         report_path = None
 
-    status_color = "green" if report.status == "passed" else "red" if report.status == "failed" else "yellow"
-    console.print(f"[{status_color}]Replay {report.status.upper()}[/{status_color}]  {report.summary}")
+    status_color = (
+        "green" if report.status == "passed" else "red" if report.status == "failed" else "yellow"
+    )
+    console.print(
+        f"[{status_color}]Replay {report.status.upper()}[/{status_color}]  {report.summary}"
+    )
     console.print(f"  profile:    {report.replay_profile.value}")
     console.print(f"  fixture:    {report.fixture_pack_id}")
     if report_path:
@@ -111,7 +121,9 @@ def cmd_inspect(
         console.print(f"[red]Load error:[/red] {exc}")
         raise typer.Exit(code=2) from exc
 
-    status_color = "green" if rep.status == "passed" else "red" if rep.status == "failed" else "yellow"
+    status_color = (
+        "green" if rep.status == "passed" else "red" if rep.status == "failed" else "yellow"
+    )
     console.print("[bold]Slice Replay Report[/bold]")
     console.print(f"  replay_id:  {rep.replay_id}")
     console.print(f"  pack:       {rep.fixture_pack_id}")
@@ -127,7 +139,15 @@ def cmd_inspect(
 
     for result in rep.check_results:
         s = result.status
-        color = "green" if s == "passed" else "red" if s == "failed" else "yellow" if s == "error" else "dim"
+        color = (
+            "green"
+            if s == "passed"
+            else "red"
+            if s == "failed"
+            else "yellow"
+            if s == "error"
+            else "dim"
+        )
         artifact_id = result.fixture_artifact_ids[0] if result.fixture_artifact_ids else ""
         # Derive check_type from summary (best effort — check_id is uuid)
         table.add_row(

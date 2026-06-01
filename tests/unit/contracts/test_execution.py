@@ -10,12 +10,6 @@ from pathlib import Path
 
 import pytest
 
-from operations_center.contracts.execution import (
-    ExecutionArtifact,
-    ExecutionRequest,
-    ExecutionResult,
-    RunTelemetry,
-)
 from operations_center.contracts.common import ChangedFileRef, ValidationSummary
 from operations_center.contracts.enums import (
     ArtifactType,
@@ -23,11 +17,17 @@ from operations_center.contracts.enums import (
     FailureReasonCategory,
     ValidationStatus,
 )
-
+from operations_center.contracts.execution import (
+    ExecutionArtifact,
+    ExecutionRequest,
+    ExecutionResult,
+    RunTelemetry,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _minimal_request(**kw) -> ExecutionRequest:
     defaults = dict(
@@ -63,6 +63,7 @@ def _now() -> datetime:
 # ---------------------------------------------------------------------------
 # ExecutionRequest
 # ---------------------------------------------------------------------------
+
 
 class TestExecutionRequest:
     def test_minimal(self):
@@ -122,6 +123,7 @@ class TestExecutionRequest:
 # ExecutionArtifact
 # ---------------------------------------------------------------------------
 
+
 class TestExecutionArtifact:
     def test_minimal(self):
         a = ExecutionArtifact(artifact_type=ArtifactType.DIFF, label="final diff")
@@ -158,7 +160,9 @@ class TestExecutionArtifact:
             a.label = "other"  # type: ignore[misc]
 
     def test_json_round_trip(self):
-        a = ExecutionArtifact(artifact_type=ArtifactType.BRANCH_REF, label="branch", content="auto/fix")
+        a = ExecutionArtifact(
+            artifact_type=ArtifactType.BRANCH_REF, label="branch", content="auto/fix"
+        )
         restored = ExecutionArtifact.model_validate_json(a.model_dump_json())
         assert restored == a
 
@@ -166,6 +170,7 @@ class TestExecutionArtifact:
 # ---------------------------------------------------------------------------
 # RunTelemetry
 # ---------------------------------------------------------------------------
+
 
 class TestRunTelemetry:
     def test_minimal(self):
@@ -225,6 +230,7 @@ class TestRunTelemetry:
 # ExecutionResult
 # ---------------------------------------------------------------------------
 
+
 class TestExecutionResult:
     def test_minimal_success(self):
         r = _minimal_result()
@@ -273,7 +279,11 @@ class TestExecutionResult:
         r = _minimal_result(
             artifacts=[
                 ExecutionArtifact(artifact_type=ArtifactType.DIFF, label="diff"),
-                ExecutionArtifact(artifact_type=ArtifactType.PR_URL, label="pr", content="https://github.com/org/repo/pull/42"),
+                ExecutionArtifact(
+                    artifact_type=ArtifactType.PR_URL,
+                    label="pr",
+                    content="https://github.com/org/repo/pull/42",
+                ),
             ]
         )
         assert len(r.artifacts) == 2
@@ -316,6 +326,7 @@ class TestExecutionResult:
 # ---------------------------------------------------------------------------
 # Cross-model integration
 # ---------------------------------------------------------------------------
+
 
 class TestContractIntegration:
     """Verify that models that reference each other serialise cleanly end-to-end."""

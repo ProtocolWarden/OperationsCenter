@@ -20,6 +20,7 @@ import pytest
 
 from operations_center.artifact_index import build_artifact_index, load_artifact_manifest
 from operations_center.audit_toolset.discovery import load_run_status_entrypoint
+
 pytestmark = [pytest.mark.integration, pytest.mark.slow]
 
 
@@ -31,6 +32,7 @@ _RUN_ID = "FakeProducer_run001_2026042600000000"
 # ---------------------------------------------------------------------------
 # Fake producer helpers (simulate ExampleManagedRepo output)
 # ---------------------------------------------------------------------------
+
 
 def _write_run_status(run_dir: Path, manifest_path: Path) -> Path:
     """Write a run_status.json as ExampleManagedRepo would after a successful audit."""
@@ -107,6 +109,7 @@ def _write_artifact_manifest(run_dir: Path, artifact_file: Path) -> Path:
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 def test_fake_producer_run_status_is_valid(tmp_path: Path):
     """run_status.json written by the fake producer must validate against Phase 2 contract."""

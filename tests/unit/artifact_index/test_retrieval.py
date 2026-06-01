@@ -75,11 +75,10 @@ class TestResolveArtifactPath:
         with pytest.raises(ArtifactNotFoundError):
             resolve_artifact_path(index_with_real_files, "no-such-artifact")
 
-    def test_raises_for_unresolvable_path(
-        self, tmp_path: Path, completed_manifest_payload
-    ) -> None:
+    def test_raises_for_unresolvable_path(self, tmp_path: Path, completed_manifest_payload) -> None:
         # Make the artifact external_or_unknown so it can't be resolved
         import copy
+
         payload = copy.deepcopy(completed_manifest_payload)
         payload["artifacts"][0]["location"] = "external_or_unknown"
         payload["run_root"] = None  # also remove run_root to ensure no heuristic
@@ -101,7 +100,8 @@ class TestResolveArtifactPath:
 class TestReadTextArtifact:
     def test_reads_text_content(self, index_with_real_files) -> None:
         json_artifacts = [
-            a for a in index_with_real_files.run_scoped_artifacts
+            a
+            for a in index_with_real_files.run_scoped_artifacts
             if a.content_type == "application/json"
         ]
         assert json_artifacts, "need at least one JSON artifact"
@@ -111,22 +111,20 @@ class TestReadTextArtifact:
 
     def test_respects_max_bytes(self, index_with_real_files) -> None:
         json_artifacts = [
-            a for a in index_with_real_files.run_scoped_artifacts
+            a
+            for a in index_with_real_files.run_scoped_artifacts
             if a.content_type == "application/json"
         ]
-        text = read_text_artifact(
-            index_with_real_files, json_artifacts[0].artifact_id, max_bytes=5
-        )
+        text = read_text_artifact(index_with_real_files, json_artifacts[0].artifact_id, max_bytes=5)
         assert len(text) <= 5
 
     def test_raises_for_missing_artifact_id(self, index_with_real_files) -> None:
         with pytest.raises(ArtifactNotFoundError):
             read_text_artifact(index_with_real_files, "no-such-artifact")
 
-    def test_raises_for_unresolvable_path(
-        self, tmp_path: Path, completed_manifest_payload
-    ) -> None:
+    def test_raises_for_unresolvable_path(self, tmp_path: Path, completed_manifest_payload) -> None:
         import copy
+
         payload = copy.deepcopy(completed_manifest_payload)
         payload["artifacts"][0]["location"] = "external_or_unknown"
         payload["run_root"] = None
@@ -147,7 +145,8 @@ class TestReadTextArtifact:
 class TestReadJsonArtifact:
     def test_reads_valid_json(self, index_with_real_files) -> None:
         json_artifacts = [
-            a for a in index_with_real_files.run_scoped_artifacts
+            a
+            for a in index_with_real_files.run_scoped_artifacts
             if a.content_type == "application/json"
         ]
         result = read_json_artifact(index_with_real_files, json_artifacts[0].artifact_id)
@@ -189,20 +188,17 @@ class TestIndexDispatchResult:
     def test_raises_no_manifest_path_when_missing_attr(self) -> None:
         class FakeResult:
             pass
+
         with pytest.raises(NoManifestPathError):
             index_dispatch_result(FakeResult())
 
-    def test_loads_manifest_from_result_path(
-        self, completed_manifest_file: Path
-    ) -> None:
+    def test_loads_manifest_from_result_path(self, completed_manifest_file: Path) -> None:
         result = MagicMock()
         result.artifact_manifest_path = str(completed_manifest_file)
         index = index_dispatch_result(result)
         assert index.source.repo_id == "example_managed_repo"
 
-    def test_does_not_scan_directories(
-        self, completed_manifest_file: Path, tmp_path: Path
-    ) -> None:
+    def test_does_not_scan_directories(self, completed_manifest_file: Path, tmp_path: Path) -> None:
         result = MagicMock()
         result.artifact_manifest_path = str(completed_manifest_file)
         # Create extra files that should not be picked up
@@ -216,6 +212,7 @@ class TestIndexDispatchResult:
         result = MagicMock()
         result.artifact_manifest_path = "/nonexistent/path/artifact_manifest.json"
         from operations_center.artifact_index import ManifestNotFoundError
+
         with pytest.raises(ManifestNotFoundError):
             index_dispatch_result(result)
 
@@ -225,7 +222,9 @@ class TestNoBoundaryViolation:
         import ast
         from pathlib import Path
 
-        pkg_root = Path(__file__).resolve().parents[3] / "src" / "operations_center" / "artifact_index"
+        pkg_root = (
+            Path(__file__).resolve().parents[3] / "src" / "operations_center" / "artifact_index"
+        )
         for py_file in pkg_root.glob("*.py"):
             source = py_file.read_text(encoding="utf-8")
             tree = ast.parse(source, filename=str(py_file))
@@ -251,7 +250,9 @@ class TestNoBoundaryViolation:
         """
         from pathlib import Path
 
-        pkg_root = Path(__file__).resolve().parents[3] / "src" / "operations_center" / "artifact_index"
+        pkg_root = (
+            Path(__file__).resolve().parents[3] / "src" / "operations_center" / "artifact_index"
+        )
         exempt = {"multi_run.py", "cli.py"}
         for py_file in pkg_root.glob("*.py"):
             if py_file.name in exempt:

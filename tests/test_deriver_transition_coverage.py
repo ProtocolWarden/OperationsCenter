@@ -8,6 +8,7 @@ Covers forward and reverse transitions across three derivers:
   - LintDriftDeriver: clean ↔ violations, violation count increase ↔ decrease
   - TypeHealthDeriver: clean ↔ errors, error count increase ↔ decrease
 """
+
 from __future__ import annotations
 
 import pytest
@@ -177,9 +178,7 @@ class TestLintDriftTransitions:
 
     def test_violations_count_increase_worsened(self) -> None:
         """Forward transition: violation count increase generates worsened insight."""
-        curr, prev = TransitionFixture.lint_signal_pair(
-            "violations", "violations", 3, 7
-        )
+        curr, prev = TransitionFixture.lint_signal_pair("violations", "violations", 3, 7)
         deriver = LintDriftDeriver(self._normalizer())
         insights = deriver.derive([curr, prev])
 
@@ -190,9 +189,7 @@ class TestLintDriftTransitions:
 
     def test_violations_count_decrease_improved(self) -> None:
         """Reverse transition: violation count decrease generates improved insight."""
-        curr, prev = TransitionFixture.lint_signal_pair(
-            "violations", "violations", 7, 3
-        )
+        curr, prev = TransitionFixture.lint_signal_pair("violations", "violations", 7, 3)
         deriver = LintDriftDeriver(self._normalizer())
         insights = deriver.derive([curr, prev])
 

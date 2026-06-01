@@ -10,8 +10,8 @@ those primitives accidentally collapse into SwitchBoard.
 """
 
 from .switchboard_denylist import (
-    BoundaryFinding,
     DEFAULT_SWITCHBOARD_DENYLIST,
+    BoundaryFinding,
     check_switchboard_denylist,
 )
 

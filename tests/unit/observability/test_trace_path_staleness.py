@@ -22,7 +22,8 @@ from operations_center.observability.trace import RunReportBuilder
 def _result_with_paths(*, stdout: str, stderr: str, artifact_dir: str) -> ExecutionResult:
     return ExecutionResult(
         run_id="run-stale-1",
-        proposal_id="prop", decision_id="dec",
+        proposal_id="prop",
+        decision_id="dec",
         status=ExecutionStatus.SUCCEEDED,
         success=True,
         validation=ValidationSummary(status=ValidationStatus.SKIPPED),
@@ -44,7 +45,9 @@ def test_warning_emitted_when_stdout_path_missing(tmp_path: Path) -> None:
     stdout.write_text("ok", encoding="utf-8")
     stderr = artifact_dir / "stderr.txt"  # never created
     result = _result_with_paths(
-        stdout=str(stdout), stderr=str(stderr), artifact_dir=str(artifact_dir),
+        stdout=str(stdout),
+        stderr=str(stderr),
+        artifact_dir=str(artifact_dir),
     )
     record = ExecutionRecorder().record(result, backend="direct_local", lane="aider_local")
     trace = RunReportBuilder().build_report(record)
@@ -79,7 +82,9 @@ def test_no_staleness_warning_when_paths_resolve(tmp_path: Path) -> None:
     stderr = artifact_dir / "stderr.txt"
     stderr.write_text("", encoding="utf-8")
     result = _result_with_paths(
-        stdout=str(stdout), stderr=str(stderr), artifact_dir=str(artifact_dir),
+        stdout=str(stdout),
+        stderr=str(stderr),
+        artifact_dir=str(artifact_dir),
     )
     record = ExecutionRecorder().record(result, backend="direct_local", lane="aider_local")
     trace = RunReportBuilder().build_report(record)
@@ -90,8 +95,11 @@ def test_no_staleness_warning_when_paths_resolve(tmp_path: Path) -> None:
 def test_no_staleness_check_when_ref_absent(tmp_path: Path) -> None:
     """demo_stub-style results (no runtime_invocation_ref) must not warn."""
     result = ExecutionResult(
-        run_id="r", proposal_id="p", decision_id="d",
-        status=ExecutionStatus.SUCCEEDED, success=True,
+        run_id="r",
+        proposal_id="p",
+        decision_id="d",
+        status=ExecutionStatus.SUCCEEDED,
+        success=True,
         validation=ValidationSummary(status=ValidationStatus.SKIPPED),
     )
     record = ExecutionRecorder().record(result, backend="demo_stub", lane="aider_local")

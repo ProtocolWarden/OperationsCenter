@@ -31,10 +31,10 @@ from operations_center.contracts.proposal import OcPlanningProposal
 
 from .models import PlanningContext, ProposalBuildResult
 
-
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def build_proposal(context: PlanningContext) -> OcPlanningProposal:
     """Map a PlanningContext into an OC planning proposal.
@@ -105,6 +105,7 @@ def build_proposal_with_result(context: PlanningContext) -> ProposalBuildResult:
 # Validation
 # ---------------------------------------------------------------------------
 
+
 def _validate(context: PlanningContext) -> None:
     errors: list[str] = []
     if not context.goal_text.strip():
@@ -120,6 +121,7 @@ def _validate(context: PlanningContext) -> None:
 # ---------------------------------------------------------------------------
 # Enum mapping
 # ---------------------------------------------------------------------------
+
 
 def _task_type(value: str) -> TaskType:
     try:
@@ -153,5 +155,6 @@ def _derive_task_id(context: PlanningContext) -> str:
     """Derive a stable task ID when none is provided."""
     slug = context.task_type.replace("_", "-")[:20]
     import hashlib
+
     h = hashlib.sha1(context.goal_text.encode(), usedforsecurity=False).hexdigest()[:8]
     return f"auto-{slug}-{h}"

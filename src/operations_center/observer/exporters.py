@@ -8,20 +8,15 @@ Provides:
 - Alert condition evaluation on exported metrics
 - 30-day retention and file rotation
 """
+
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
-
-from operations_center.observer.security_logging import (
-    ErrorCategory,
-    ErrorSeverity,
-    MalformedPayloadMetrics,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -164,8 +159,7 @@ class ValidationMetricsExporter:
                 try:
                     # Extract date from filename: metrics-YYYY-MM-DD.jsonl
                     date_str = metrics_file.stem.replace("metrics-", "")
-                    file_date = datetime.strptime(date_str, "%Y-%m-%d")
-                    file_date = file_date.replace(tzinfo=UTC)
+                    file_date = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=UTC)  # noqa: DTZ007
 
                     if file_date < cutoff_date:
                         metrics_file.unlink()
@@ -210,8 +204,7 @@ class ValidationMetricsExporter:
                 # Extract date from filename
                 try:
                     date_str = metrics_file.stem.replace("metrics-", "")
-                    file_date = datetime.strptime(date_str, "%Y-%m-%d")
-                    file_date = file_date.replace(tzinfo=UTC)
+                    file_date = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=UTC)  # noqa: DTZ007
 
                     # Check date range if specified
                     if from_date and file_date < from_date.replace(tzinfo=UTC):

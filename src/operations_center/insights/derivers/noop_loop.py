@@ -11,6 +11,7 @@ Emits:
   noop_loop/family_cycling  — a family has been proposed ≥3 times in 30 days
                               with 0 merged outcomes in that period
 """
+
 from __future__ import annotations
 
 import json
@@ -26,7 +27,7 @@ from operations_center.observer.models import RepoStateSnapshot
 _PROPOSAL_ROOT = Path("tools/report/operations_center/proposer")
 _FEEDBACK_ROOT = Path("state/proposal_feedback")
 _LOOK_BACK_DAYS = 30
-_MIN_PROPOSALS_TO_FLAG = 3    # family must have been proposed at least this many times
+_MIN_PROPOSALS_TO_FLAG = 3  # family must have been proposed at least this many times
 
 
 class NoOpLoopDeriver:

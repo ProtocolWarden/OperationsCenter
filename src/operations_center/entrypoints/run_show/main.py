@@ -99,9 +99,14 @@ def _print_trace(trace: dict) -> None:
         table.add_column("field")
         table.add_column("value")
         for field in (
-            "decision_id", "selected_lane", "selected_backend",
-            "policy_rule_matched", "rationale", "switchboard_version",
-            "confidence", "alternatives_considered",
+            "decision_id",
+            "selected_lane",
+            "selected_backend",
+            "policy_rule_matched",
+            "rationale",
+            "switchboard_version",
+            "confidence",
+            "alternatives_considered",
         ):
             if field in routing:
                 value = routing[field]
@@ -145,13 +150,21 @@ def _print_trace(trace: dict) -> None:
         table = Table(title="RxP runtime invocation", show_header=True, header_style="bold")
         table.add_column("field")
         table.add_column("value")
-        for field in ("invocation_id", "runtime_name", "runtime_kind",
-                      "stdout_path", "stderr_path", "artifact_directory"):
+        for field in (
+            "invocation_id",
+            "runtime_name",
+            "runtime_kind",
+            "stdout_path",
+            "stderr_path",
+            "artifact_directory",
+        ):
             if field in ref:
                 value = ref[field]
                 rendered = _render(value)
                 # Annotate stdout/stderr/artifact paths with on-disk presence.
-                if field in {"stdout_path", "stderr_path", "artifact_directory"} and isinstance(value, str):
+                if field in {"stdout_path", "stderr_path", "artifact_directory"} and isinstance(
+                    value, str
+                ):
                     rendered = f"{value}  {_presence_tag(value)}"
                 table.add_row(field, rendered)
         _console.print(table)
@@ -186,12 +199,18 @@ def _presence_tag(path: str) -> str:
 def show(
     run_id: Optional[str] = typer.Argument(None, help="Run ID (or unambiguous prefix)."),
     root: Optional[Path] = typer.Option(
-        None, "--root", help="Search root directory containing per-run subdirs.",
+        None,
+        "--root",
+        help="Search root directory containing per-run subdirs.",
     ),
     trace: Optional[Path] = typer.Option(
-        None, "--trace", help="Direct path to execution_trace.json (skips run_id resolution).",
+        None,
+        "--trace",
+        help="Direct path to execution_trace.json (skips run_id resolution).",
     ),
-    as_json: bool = typer.Option(False, "--json", help="Print the full trace JSON instead of the formatted view."),
+    as_json: bool = typer.Option(
+        False, "--json", help="Print the full trace JSON instead of the formatted view."
+    ),
 ) -> None:
     """Print one run's provenance chain from execution_trace.json alone."""
     roots = [root] if root is not None else _default_search_roots()

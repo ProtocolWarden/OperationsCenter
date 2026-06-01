@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Tests for ExecutionArtifactCollector with hardening."""
+
 import json
 from unittest.mock import MagicMock
 
@@ -9,15 +10,14 @@ import pytest
 from operations_center.observer.collectors.execution_health import (
     ExecutionArtifactCollector,
 )
+
 pytestmark = pytest.mark.slow
 
 
 class TestExecutionHealthHardening:
     """Tests for collector hardening and validation."""
 
-    def test_valid_artifacts_processed(
-        self, tmp_artifact_dir, valid_outcome, valid_request
-    ):
+    def test_valid_artifacts_processed(self, tmp_artifact_dir, valid_outcome, valid_request):
         """Valid artifacts are processed normally."""
         run_dir = tmp_artifact_dir / "run-001"
         run_dir.mkdir()
@@ -142,9 +142,7 @@ class TestExecutionHealthHardening:
 
         assert signal.total_runs == 0
 
-    def test_validation_file_parse_error(
-        self, tmp_artifact_dir, valid_outcome, valid_request
-    ):
+    def test_validation_file_parse_error(self, tmp_artifact_dir, valid_outcome, valid_request):
         """Malformed validation.json doesn't crash collection."""
         run_dir = tmp_artifact_dir / "run-001"
         run_dir.mkdir()
@@ -169,9 +167,7 @@ class TestExecutionHealthHardening:
         assert signal.total_runs == 1
         assert signal.recent_runs[0].validation_passed is None
 
-    def test_validation_structure_error(
-        self, tmp_artifact_dir, valid_outcome, valid_request
-    ):
+    def test_validation_structure_error(self, tmp_artifact_dir, valid_outcome, valid_request):
         """Validation.json with invalid structure is skipped."""
         run_dir = tmp_artifact_dir / "run-001"
         run_dir.mkdir()
@@ -241,9 +237,7 @@ class TestExecutionHealthHardening:
         assert signal.total_runs == 3
         assert signal.executed_count == 3
 
-    def test_mixed_valid_invalid_runs(
-        self, tmp_artifact_dir, valid_outcome, valid_request
-    ):
+    def test_mixed_valid_invalid_runs(self, tmp_artifact_dir, valid_outcome, valid_request):
         """Valid and invalid runs are processed correctly."""
         # Valid run
         run_dir_1 = tmp_artifact_dir / "run-001"

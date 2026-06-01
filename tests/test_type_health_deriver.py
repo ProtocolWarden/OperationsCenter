@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Tests for TypeHealthDeriver."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -13,13 +14,13 @@ from operations_center.observer.models import (
     BenchmarkSignal,
     CheckSignal,
     DependencyDriftSignal,
-    TypeError,
-    TypeSignal,
     RepoContextSnapshot,
     RepoSignalsSnapshot,
     RepoStateSnapshot,
     SecuritySignal,
     TodoSignal,
+    TypeError,
+    TypeSignal,
 )
 
 
@@ -104,13 +105,19 @@ class TestTypeHealthDeriver:
         snap_recent = _make_snapshot(
             type_status="errors",
             error_count=5,
-            top_errors=[TypeError(code="error", path="f.py", line=1, col=0, message="Type error") for _ in range(5)],
+            top_errors=[
+                TypeError(code="error", path="f.py", line=1, col=0, message="Type error")
+                for _ in range(5)
+            ],
             observed_at=newer,
         )
         snap_older = _make_snapshot(
             type_status="errors",
             error_count=2,
-            top_errors=[TypeError(code="error", path="f.py", line=1, col=0, message="Type error") for _ in range(2)],
+            top_errors=[
+                TypeError(code="error", path="f.py", line=1, col=0, message="Type error")
+                for _ in range(2)
+            ],
             observed_at=older,
         )
         insights = deriver.derive([snap_recent, snap_older])
@@ -128,13 +135,19 @@ class TestTypeHealthDeriver:
         snap_recent = _make_snapshot(
             type_status="errors",
             error_count=2,
-            top_errors=[TypeError(code="error", path="f.py", line=1, col=0, message="Type error") for _ in range(2)],
+            top_errors=[
+                TypeError(code="error", path="f.py", line=1, col=0, message="Type error")
+                for _ in range(2)
+            ],
             observed_at=newer,
         )
         snap_older = _make_snapshot(
             type_status="errors",
             error_count=5,
-            top_errors=[TypeError(code="error", path="f.py", line=1, col=0, message="Type error") for _ in range(5)],
+            top_errors=[
+                TypeError(code="error", path="f.py", line=1, col=0, message="Type error")
+                for _ in range(5)
+            ],
             observed_at=older,
         )
         insights = deriver.derive([snap_recent, snap_older])
@@ -156,7 +169,10 @@ class TestTypeHealthDeriver:
         snap_older = _make_snapshot(
             type_status="errors",
             error_count=5,
-            top_errors=[TypeError(code="error", path="f.py", line=1, col=0, message="Type error") for _ in range(5)],
+            top_errors=[
+                TypeError(code="error", path="f.py", line=1, col=0, message="Type error")
+                for _ in range(5)
+            ],
             observed_at=older,
         )
         insights = deriver.derive([snap_recent, snap_older])
@@ -172,7 +188,10 @@ class TestTypeHealthDeriver:
         snap_recent = _make_snapshot(
             type_status="errors",
             error_count=3,
-            top_errors=[TypeError(code="error", path="f.py", line=1, col=0, message="Type error") for _ in range(3)],
+            top_errors=[
+                TypeError(code="error", path="f.py", line=1, col=0, message="Type error")
+                for _ in range(3)
+            ],
             observed_at=newer,
         )
         snap_older = _make_snapshot(

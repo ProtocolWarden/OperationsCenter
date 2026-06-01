@@ -15,10 +15,10 @@ from __future__ import annotations
 
 from enum import Enum
 
-
 # ---------------------------------------------------------------------------
 # Generic managed-repo audit vocabulary
 # ---------------------------------------------------------------------------
+
 
 class RunStatus(str, Enum):
     """Lifecycle status of a managed audit run.
@@ -31,6 +31,7 @@ class RunStatus(str, Enum):
     during the transition period by readers but must not be emitted
     by compliant producers.
     """
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -48,6 +49,7 @@ class ManifestStatus(str, Enum):
     Distinct from RunStatus — the manifest can be partial even when
     the run has completed (e.g. some artifact writes failed).
     """
+
     INITIALIZING = "initializing"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -65,28 +67,31 @@ class Location(str, Enum):
     Do not collapse REPO_SINGLETON into per-run locations —
     architecture-invariant outputs have no per-run scope.
     """
-    RUN_ROOT = "run_root"               # top-level inside the per-run bucket
-    ARTIFACTS_SUBDIR = "artifacts_subdir"     # under artifacts/ inside the bucket
-    AUDIT_SUBDIR = "audit_subdir"             # under audit/ inside the bucket
+
+    RUN_ROOT = "run_root"  # top-level inside the per-run bucket
+    ARTIFACTS_SUBDIR = "artifacts_subdir"  # under artifacts/ inside the bucket
+    AUDIT_SUBDIR = "audit_subdir"  # under audit/ inside the bucket
     TEXT_OVERLAY_SUBDIR = "text_overlay_subdir"  # under text_overlay/ inside the bucket
-    REPO_SINGLETON = "repo_singleton"         # fixed path outside any per-run bucket
+    REPO_SINGLETON = "repo_singleton"  # fixed path outside any per-run bucket
     EXTERNAL_OR_UNKNOWN = "external_or_unknown"  # path not classifiable above
 
 
 class PathRole(str, Enum):
     """Semantic role of an artifact path."""
-    PRIMARY = "primary"       # main machine-readable output for a stage
-    SUMMARY = "summary"       # aggregate/summary view
-    DETAIL = "detail"         # per-item detail record
-    GATE = "gate"             # pass/fail gate verdict
-    TRACE = "trace"           # execution trace or log
-    METADATA = "metadata"     # run or system metadata
-    NOISE = "noise"           # infrastructure file that should be excluded
+
+    PRIMARY = "primary"  # main machine-readable output for a stage
+    SUMMARY = "summary"  # aggregate/summary view
+    DETAIL = "detail"  # per-item detail record
+    GATE = "gate"  # pass/fail gate verdict
+    TRACE = "trace"  # execution trace or log
+    METADATA = "metadata"  # run or system metadata
+    NOISE = "noise"  # infrastructure file that should be excluded
     UNKNOWN = "unknown"
 
 
 class ContentType(str, Enum):
     """MIME-like content type for an artifact."""
+
     JSON = "application/json"
     JSONL = "application/x-ndjson"
     TEXT = "text/plain"
@@ -97,13 +102,15 @@ class ContentType(str, Enum):
 
 class ArtifactStatus(str, Enum):
     """Whether an expected artifact is present or missing."""
+
     PRESENT = "present"
     MISSING = "missing"
-    EXPECTED = "expected"   # declared but not yet produced (run still in progress)
+    EXPECTED = "expected"  # declared but not yet produced (run still in progress)
 
 
 class ConsumerType(str, Enum):
     """Who or what may consume an artifact."""
+
     HUMAN_REVIEW = "human_review"
     AUTOMATED_ANALYSIS = "automated_analysis"
     FIXTURE_HARVESTING = "fixture_harvesting"
@@ -116,6 +123,7 @@ class ConsumerType(str, Enum):
 
 class ValidFor(str, Enum):
     """Temporal/contextual scope for which an artifact is meaningful."""
+
     CURRENT_RUN_ONLY = "current_run_only"
     CROSS_RUN_COMPARISON = "cross_run_comparison"
     LATEST_SNAPSHOT = "latest_snapshot"
@@ -126,6 +134,7 @@ class ValidFor(str, Enum):
 
 class Limitation(str, Enum):
     """Known limitations or caveats on an artifact or manifest."""
+
     PARTIAL_RUN = "partial_run"
     MISSING_DOWNSTREAM_ARTIFACTS = "missing_downstream_artifacts"
     PRODUCER_NOT_FINALIZED = "producer_not_finalized"
@@ -144,6 +153,7 @@ class Limitation(str, Enum):
 # Future managed repos define their own profile vocabulary.
 # ---------------------------------------------------------------------------
 
+
 class ExampleManagedRepoAuditType(str, Enum):
     """Audit types declared by the example managed-repo template.
 
@@ -151,6 +161,7 @@ class ExampleManagedRepoAuditType(str, Enum):
     vocabulary in their private YAML config. The values here are
     placeholders that exercise the loader + dispatch contracts.
     """
+
     AUDIT_TYPE_1 = "audit_type_1"
     AUDIT_TYPE_2 = "audit_type_2"
 
@@ -161,6 +172,7 @@ class ExampleManagedRepoSourceStage(str, Enum):
     Placeholder vocabulary. Real managed repos declare their actual
     pipeline stage names in their private profile.
     """
+
     STAGE_1 = "Stage1"
     STAGE_2 = "Stage2"
     LIFECYCLE = "lifecycle"
@@ -176,6 +188,7 @@ class ExampleManagedRepoArtifactKind(str, Enum):
     managed repos extend this with their own artifact-kind enum in
     their private profile.
     """
+
     RUN_STATUS = "run_status"
     STAGE_REPORT = "stage_report"
     JSON_REPORT = "json_report"
@@ -191,12 +204,21 @@ class ExampleManagedRepoArtifactKind(str, Enum):
 # ---------------------------------------------------------------------------
 
 GENERIC_ENUMS = (
-    RunStatus, ManifestStatus, Location, PathRole, ContentType,
-    ArtifactStatus, ConsumerType, ValidFor, Limitation,
+    RunStatus,
+    ManifestStatus,
+    Location,
+    PathRole,
+    ContentType,
+    ArtifactStatus,
+    ConsumerType,
+    ValidFor,
+    Limitation,
 )
 
 EXAMPLE_MANAGED_REPO_PROFILE_ENUMS = (
-    ExampleManagedRepoAuditType, ExampleManagedRepoSourceStage, ExampleManagedRepoArtifactKind,
+    ExampleManagedRepoAuditType,
+    ExampleManagedRepoSourceStage,
+    ExampleManagedRepoArtifactKind,
 )
 
 __all__ = [

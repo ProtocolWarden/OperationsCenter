@@ -25,7 +25,9 @@ from operations_center.run_memory import (
 from operations_center.run_memory.cli import app
 
 
-def _make_result(*, run_id: str = "r1", status=ExecutionStatus.SUCCEEDED, success: bool = True) -> ExecutionResult:
+def _make_result(
+    *, run_id: str = "r1", status=ExecutionStatus.SUCCEEDED, success: bool = True
+) -> ExecutionResult:
     return ExecutionResult(
         run_id=run_id,
         proposal_id=f"p-{run_id}",
@@ -60,9 +62,7 @@ class TestDeterministicId:
 class TestRecordExecutionResult:
     def test_writes_jsonl_line(self, tmp_path: Path) -> None:
         result = _make_result(run_id="r-success")
-        rec = record_execution_result(
-            result, tmp_path, repo_id="velascat/foo", tags=("nightly",)
-        )
+        rec = record_execution_result(result, tmp_path, repo_id="velascat/foo", tags=("nightly",))
         path = tmp_path / "records.jsonl"
         assert path.exists()
         lines = [ln for ln in path.read_text().splitlines() if ln.strip()]
@@ -269,7 +269,9 @@ class TestRebuild:
         artifacts = tmp_path / "artifacts"
         artifacts.mkdir()
         (artifacts / "unrelated.json").write_text('{"foo": 1}', encoding="utf-8")
-        (artifacts / "execution_request_x.json").write_text('{"foo": 1}', encoding="utf-8")  # wrong prefix
+        (artifacts / "execution_request_x.json").write_text(
+            '{"foo": 1}', encoding="utf-8"
+        )  # wrong prefix
         self._write_artifact(artifacts, "r1")
         index = tmp_path / "index"
         n = rebuild_index_from_artifacts(artifacts, index)
@@ -286,9 +288,7 @@ class TestCLI:
         self.runner = CliRunner()
 
     def test_query_json_empty(self, tmp_path: Path) -> None:
-        result = self.runner.invoke(
-            app, ["query", "--index-dir", str(tmp_path), "--json"]
-        )
+        result = self.runner.invoke(app, ["query", "--index-dir", str(tmp_path), "--json"])
         assert result.exit_code == 0, result.output
         assert json.loads(result.output) == []
 

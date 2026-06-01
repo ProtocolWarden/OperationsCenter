@@ -13,6 +13,7 @@ Usage::
     operations-center-reaudit-check --dir <path>     # alternate executors dir
     operations-center-reaudit-check --json           # machine-readable
 """
+
 from __future__ import annotations
 
 import argparse
@@ -51,6 +52,7 @@ def _detect_current_cxrp_version() -> str:
     """Read the installed CxRP version. Falls back to 0.2 (current minor)."""
     try:
         from importlib.metadata import version
+
         return version("cxrp")
     except Exception:
         return "0.2"
@@ -64,15 +66,18 @@ def main() -> int:
     parser.add_argument("--dir", type=Path, default=None, help="Executors directory")
     parser.add_argument("--json", action="store_true", help="Emit JSON report")
     parser.add_argument(
-        "--current-backend-version", default="unknown",
+        "--current-backend-version",
+        default="unknown",
         help="Current backend version to compare against (default: 'unknown' = no version trigger)",
     )
     parser.add_argument(
-        "--runtimebinding-changed", action="store_true",
+        "--runtimebinding-changed",
+        action="store_true",
         help="Mark CxRP RuntimeBinding schema as changed",
     )
     parser.add_argument(
-        "--capabilityset-changed", action="store_true",
+        "--capabilityset-changed",
+        action="store_true",
         help="Mark CxRP CapabilitySet schema as changed",
     )
     args = parser.parse_args()

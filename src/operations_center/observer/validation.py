@@ -9,11 +9,13 @@ Provides:
 - Common enum/range validators
 - Security logging for malformed payloads
 """
+
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field as dataclass_field
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from pathlib import Path
 from typing import Any, Optional
 
@@ -31,10 +33,7 @@ class ParseError:
 
     def __str__(self) -> str:
         if self.expected_type and self.actual_type:
-            return (
-                f"{self.field}: expected {self.expected_type}, "
-                f"got {self.actual_type}"
-            )
+            return f"{self.field}: expected {self.expected_type}, got {self.actual_type}"
         return f"{self.field}: {self.error}"
 
 
@@ -52,9 +51,7 @@ class ArtifactValidator:
     """Base validator class for artifact-specific validators."""
 
     @staticmethod
-    def type_check(
-        value: Any, expected_type: type, field: str
-    ) -> tuple[bool, str]:
+    def type_check(value: Any, expected_type: type, field: str) -> tuple[bool, str]:
         """Type validation with detailed error message.
 
         Args:
@@ -67,15 +64,12 @@ class ArtifactValidator:
         """
         if not isinstance(value, expected_type):
             return False, (
-                f"{field}: expected {expected_type.__name__}, "
-                f"got {type(value).__name__}"
+                f"{field}: expected {expected_type.__name__}, got {type(value).__name__}"
             )
         return True, ""
 
     @staticmethod
-    def enum_check(
-        value: str, allowed: set[str], field: str
-    ) -> tuple[bool, str]:
+    def enum_check(value: str, allowed: set[str], field: str) -> tuple[bool, str]:
         """Enum validation.
 
         Args:
@@ -87,16 +81,11 @@ class ArtifactValidator:
             (is_valid, error_message)
         """
         if value not in allowed:
-            return False, (
-                f"{field}: '{value}' not in allowed values: "
-                f"{sorted(allowed)}"
-            )
+            return False, (f"{field}: '{value}' not in allowed values: {sorted(allowed)}")
         return True, ""
 
     @staticmethod
-    def range_check(
-        value: int, min_val: int, max_val: int, field: str
-    ) -> tuple[bool, str]:
+    def range_check(value: int, min_val: int, max_val: int, field: str) -> tuple[bool, str]:
         """Range validation for integers.
 
         Args:
@@ -109,9 +98,7 @@ class ArtifactValidator:
             (is_valid, error_message)
         """
         if not (min_val <= value <= max_val):
-            return False, (
-                f"{field}: {value} out of range [{min_val}, {max_val}]"
-            )
+            return False, (f"{field}: {value} out of range [{min_val}, {max_val}]")
         return True, ""
 
     @staticmethod
@@ -158,8 +145,7 @@ class ArtifactValidator:
         if expected_type is not None:
             if not isinstance(value, expected_type):
                 return False, (
-                    f"{field}: expected {expected_type.__name__}, "
-                    f"got {type(value).__name__}"
+                    f"{field}: expected {expected_type.__name__}, got {type(value).__name__}"
                 )
 
         return True, ""
@@ -231,7 +217,10 @@ class ArtifactValidator:
                     severity=severity,
                     error_message=error_message,
                     artifact_path=str(artifact_path),
-                    context={"error_class": error_class, **{k: v for k, v in context.items() if k != "collector"}},
+                    context={
+                        "error_class": error_class,
+                        **{k: v for k, v in context.items() if k != "collector"},
+                    },
                 )
             except Exception as export_err:
                 logger.debug("Failed to export parse error metric: %s", export_err)
@@ -283,7 +272,10 @@ class ArtifactValidator:
                     severity="HIGH",
                     error_message=error_msg,
                     artifact_path=str(artifact_path),
-                    context={"expected_schema": expected_schema, **{k: v for k, v in context.items() if k != "collector"}},
+                    context={
+                        "expected_schema": expected_schema,
+                        **{k: v for k, v in context.items() if k != "collector"},
+                    },
                 )
             except Exception as export_err:
                 logger.debug("Failed to export structure error metric: %s", export_err)
@@ -337,7 +329,10 @@ class ArtifactValidator:
                     severity=severity,
                     error_message=error_message,
                     artifact_path=str(artifact_path),
-                    context={"error_class": error_class, **{k: v for k, v in context.items() if k != "collector"}},
+                    context={
+                        "error_class": error_class,
+                        **{k: v for k, v in context.items() if k != "collector"},
+                    },
                 )
             except Exception as export_err:
                 logger.debug("Failed to export IO error metric: %s", export_err)
@@ -357,22 +352,16 @@ class ExecutionOutcomeValidator(ArtifactValidator):
             (is_valid, error_message)
         """
         if not isinstance(outcome, dict):
-            return False, (
-                f"Root must be dict, got {type(outcome).__name__}"
-            )
+            return False, (f"Root must be dict, got {type(outcome).__name__}")
 
-        is_valid, msg = ArtifactValidator.required_field(
-            outcome, "task_id", str
-        )
+        is_valid, msg = ArtifactValidator.required_field(outcome, "task_id", str)
         if not is_valid:
             return False, msg
 
         if not ArtifactValidator.is_nonempty_string(outcome["task_id"]):
             return False, "task_id must be non-empty string"
 
-        is_valid, msg = ArtifactValidator.required_field(
-            outcome, "status", str
-        )
+        is_valid, msg = ArtifactValidator.required_field(outcome, "status", str)
         if not is_valid:
             return False, msg
 
@@ -386,16 +375,11 @@ class ExecutionOutcomeValidator(ArtifactValidator):
             "error",
         }
         if status not in valid_statuses:
-            return False, (
-                f"status '{status}' not in allowed values: "
-                f"{sorted(valid_statuses)}"
-            )
+            return False, (f"status '{status}' not in allowed values: {sorted(valid_statuses)}")
 
         if "attempt" in outcome:
             if not isinstance(outcome["attempt"], int):
-                return False, (
-                    f"attempt: expected int, got {type(outcome['attempt']).__name__}"
-                )
+                return False, (f"attempt: expected int, got {type(outcome['attempt']).__name__}")
             if not (1 <= outcome["attempt"] <= 1000):
                 return False, f"attempt {outcome['attempt']} out of range [1, 1000]"
 
@@ -416,20 +400,14 @@ class RequestValidator(ArtifactValidator):
             (is_valid, error_message)
         """
         if not isinstance(request, dict):
-            return False, (
-                f"Root must be dict, got {type(request).__name__}"
-            )
+            return False, (f"Root must be dict, got {type(request).__name__}")
 
-        is_valid, msg = ArtifactValidator.required_field(
-            request, "task", dict
-        )
+        is_valid, msg = ArtifactValidator.required_field(request, "task", dict)
         if not is_valid:
             return False, msg
 
         if not isinstance(request["task"], dict):
-            return False, (
-                f"task: expected dict, got {type(request['task']).__name__}"
-            )
+            return False, (f"task: expected dict, got {type(request['task']).__name__}")
 
         return True, ""
 
@@ -448,42 +426,28 @@ class ValidationHistoryValidator(ArtifactValidator):
             (is_valid, error_message)
         """
         if not isinstance(validation, dict):
-            return False, (
-                f"Root must be dict, got {type(validation).__name__}"
-            )
+            return False, (f"Root must be dict, got {type(validation).__name__}")
 
-        is_valid, msg = ArtifactValidator.required_field(
-            validation, "passed", bool
-        )
+        is_valid, msg = ArtifactValidator.required_field(validation, "passed", bool)
         if not is_valid:
             return False, msg
 
         if "errors" in validation:
             errors = validation["errors"]
             if not isinstance(errors, list):
-                return False, (
-                    f"errors: expected list, got {type(errors).__name__}"
-                )
+                return False, (f"errors: expected list, got {type(errors).__name__}")
             for idx, err in enumerate(errors):
                 if not isinstance(err, dict):
-                    return False, (
-                        f"errors[{idx}]: expected dict, "
-                        f"got {type(err).__name__}"
-                    )
+                    return False, (f"errors[{idx}]: expected dict, got {type(err).__name__}")
                 if "code" in err:
                     code = err["code"]  # ty: ignore[invalid-argument-type]
                     if not ArtifactValidator.is_nonempty_string(code):
-                        return False, (
-                            f"errors[{idx}].code: must be non-empty string"
-                        )
+                        return False, (f"errors[{idx}].code: must be non-empty string")
 
         if "warnings" in validation:
             warnings = validation["warnings"]
             if not isinstance(warnings, list):
-                return False, (
-                    f"warnings: expected list, "
-                    f"got {type(warnings).__name__}"
-                )
+                return False, (f"warnings: expected list, got {type(warnings).__name__}")
 
         return True, ""
 
@@ -502,35 +466,25 @@ class DependencyReportValidator(ArtifactValidator):
             (is_valid, error_message)
         """
         if not isinstance(payload, dict):
-            return False, (
-                f"Root must be dict, got {type(payload).__name__}"
-            )
+            return False, (f"Root must be dict, got {type(payload).__name__}")
 
-        is_valid, msg = ArtifactValidator.required_field(
-            payload, "statuses", list
-        )
+        is_valid, msg = ArtifactValidator.required_field(payload, "statuses", list)
         if not is_valid:
             return False, msg
 
         statuses = payload["statuses"]
         if not isinstance(statuses, list):
-            return False, (
-                f"statuses: expected list, got {type(statuses).__name__}"
-            )
+            return False, (f"statuses: expected list, got {type(statuses).__name__}")
 
         for idx, status in enumerate(statuses):
             if not isinstance(status, dict):
-                return False, (
-                    f"statuses[{idx}]: expected dict, "
-                    f"got {type(status).__name__}"
-                )
+                return False, (f"statuses[{idx}]: expected dict, got {type(status).__name__}")
 
             if "severity" in status:
                 severity = status["severity"]  # ty: ignore[invalid-argument-type]
                 if not isinstance(severity, str):
                     return False, (
-                        f"statuses[{idx}].severity: expected str, "
-                        f"got {type(severity).__name__}"
+                        f"statuses[{idx}].severity: expected str, got {type(severity).__name__}"
                     )
                 valid_severities = {"info", "warning", "error"}
                 if severity not in valid_severities:
@@ -557,61 +511,38 @@ class LintItemValidator(ArtifactValidator):
             (is_valid, error_message)
         """
         if not isinstance(item, dict):
-            return False, (
-                f"[{item_idx}]: expected dict, got {type(item).__name__}"
-            )
+            return False, (f"[{item_idx}]: expected dict, got {type(item).__name__}")
 
         if "filename" not in item:
-            return False, (
-                f"[{item_idx}]: missing required field 'filename'"
-            )
+            return False, (f"[{item_idx}]: missing required field 'filename'")
 
         filename = item["filename"]
         if not ArtifactValidator.is_nonempty_string(filename):
-            return False, (
-                f"[{item_idx}].filename: must be non-empty string"
-            )
+            return False, (f"[{item_idx}].filename: must be non-empty string")
 
         if "location" not in item:
-            return False, (
-                f"[{item_idx}]: missing required field 'location'"
-            )
+            return False, (f"[{item_idx}]: missing required field 'location'")
 
         loc = item["location"]
         if not isinstance(loc, dict):
-            return False, (
-                f"[{item_idx}].location: expected dict, "
-                f"got {type(loc).__name__}"
-            )
+            return False, (f"[{item_idx}].location: expected dict, got {type(loc).__name__}")
 
         if "row" not in loc:
-            return False, (
-                f"[{item_idx}].location: missing required field 'row'"
-            )
+            return False, (f"[{item_idx}].location: missing required field 'row'")
 
         row = loc["row"]
         if not isinstance(row, int):
-            return False, (
-                f"[{item_idx}].location.row: expected int, "
-                f"got {type(row).__name__}"
-            )
+            return False, (f"[{item_idx}].location.row: expected int, got {type(row).__name__}")
         if not (1 <= row <= 1000000):
-            return False, (
-                f"[{item_idx}].location.row {row} "
-                f"out of range [1, 1000000]"
-            )
+            return False, (f"[{item_idx}].location.row {row} out of range [1, 1000000]")
 
         if "column" in loc:
             column = loc["column"]
             if not isinstance(column, int):
                 return False, (
-                    f"[{item_idx}].location.column: expected int, "
-                    f"got {type(column).__name__}"
+                    f"[{item_idx}].location.column: expected int, got {type(column).__name__}"
                 )
             if not (0 <= column <= 1000000):
-                return False, (
-                    f"[{item_idx}].location.column {column} "
-                    f"out of range [0, 1000000]"
-                )
+                return False, (f"[{item_idx}].location.column {column} out of range [0, 1000000]")
 
         return True, ""

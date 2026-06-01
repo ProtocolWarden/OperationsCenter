@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import json
 
-
 from operations_center.contracts.enums import (
     BackendName,
     ExecutionStatus,
@@ -50,7 +49,6 @@ class TestBackendName:
         assert BackendName("critique_executor") is BackendName.CRITIQUE_EXECUTOR
         assert BackendName("direct_local") is BackendName.DIRECT_LOCAL
         assert BackendName("openclaw") is BackendName.OPENCLAW
-
 
 
 class TestExecutionStatus:

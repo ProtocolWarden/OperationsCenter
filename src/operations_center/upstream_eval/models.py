@@ -100,7 +100,9 @@ class IntegrationFrictionEvidence(BaseModel):
     """
 
     evidence_id: str = Field(default_factory=_new_id)
-    upstream_target: str = Field(description="External system, e.g. 'openclaw', 'dag_executor', 'team_executor'")
+    upstream_target: str = Field(
+        description="External system, e.g. 'openclaw', 'dag_executor', 'team_executor'"
+    )
     issue_key: str = Field(
         description="Stable clustering key for one recurring issue, e.g. 'changed_file_uncertainty'."
     )

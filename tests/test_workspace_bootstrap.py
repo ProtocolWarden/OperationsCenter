@@ -42,7 +42,10 @@ def test_prepare_uses_default_repo_relative_install_command(tmp_path: Path) -> N
     )
 
     assert calls[0] == ("exec", ["python3", "-m", "venv", ".venv"])
-    assert calls[1] == ("exec", [str(repo_path / ".venv" / "bin" / "python"), "-m", "pip", "install", "--upgrade", "pip"])
+    assert calls[1] == (
+        "exec",
+        [str(repo_path / ".venv" / "bin" / "python"), "-m", "pip", "install", "--upgrade", "pip"],
+    )
     assert calls[2] == ("shell", f"{repo_path / '.venv' / 'bin' / 'pip'} install -e .[dev]")
 
 

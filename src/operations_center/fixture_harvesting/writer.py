@@ -14,6 +14,8 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from operations_center.behavior_calibration.analyzer import _build_index_summary
+
 from .errors import FixturePackWriteError, UnsafePathError
 from .models import (
     CopyPolicy,
@@ -24,20 +26,21 @@ from .models import (
     HarvestRequest,
     make_fixture_pack_id,
 )
-from operations_center.behavior_calibration.analyzer import _build_index_summary
 
 if TYPE_CHECKING:
     from operations_center.artifact_index.models import IndexedArtifact, ManagedArtifactIndex
 
 _SAFE_FILENAME_RE = re.compile(r"[^a-zA-Z0-9_\-\.]")
-_DEFAULT_TEXT_TYPES = frozenset({
-    "application/json",
-    "application/x-ndjson",
-    "text/plain",
-    "text/csv",
-    "text/yaml",
-    "application/yaml",
-})
+_DEFAULT_TEXT_TYPES = frozenset(
+    {
+        "application/json",
+        "application/x-ndjson",
+        "text/plain",
+        "text/csv",
+        "text/yaml",
+        "application/yaml",
+    }
+)
 
 
 def _safe_filename(name: str) -> str:
@@ -176,13 +179,17 @@ def _build_finding_references(
         fid = getattr(f, "finding_id", None)
         if target_ids is not None and fid not in target_ids:
             continue
-        refs.append(FixtureFindingReference(
-            source_finding_id=str(fid) if fid else "",
-            severity=getattr(getattr(f, "severity", None), "value", None) or str(getattr(f, "severity", "")),
-            category=getattr(getattr(f, "category", None), "value", None) or str(getattr(f, "category", "")),
-            artifact_ids=list(getattr(f, "artifact_ids", [])),
-            summary=str(getattr(f, "summary", "")),
-        ))
+        refs.append(
+            FixtureFindingReference(
+                source_finding_id=str(fid) if fid else "",
+                severity=getattr(getattr(f, "severity", None), "value", None)
+                or str(getattr(f, "severity", "")),
+                category=getattr(getattr(f, "category", None), "value", None)
+                or str(getattr(f, "category", "")),
+                artifact_ids=list(getattr(f, "artifact_ids", [])),
+                summary=str(getattr(f, "summary", "")),
+            )
+        )
     return refs
 
 

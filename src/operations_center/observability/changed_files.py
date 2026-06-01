@@ -44,7 +44,7 @@ class ChangedFilesEvidence(BaseModel):
     source: str = Field(
         default="",
         description="How changed-file data was obtained: backend_manifest, git_diff, "
-                    "backend_confirmed_empty, policy_blocked, adapter_unsupported, or none.",
+        "backend_confirmed_empty, policy_blocked, adapter_unsupported, or none.",
     )
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     notes: Optional[str] = None

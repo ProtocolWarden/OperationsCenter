@@ -2,14 +2,13 @@
 # Copyright (C) 2026 ProtocolWarden
 from __future__ import annotations
 
-import os
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 from operations_center.routing.client import HttpLaneRoutingClient
-
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -24,7 +23,9 @@ def test_default_planning_client_is_http_boundary() -> None:
 
 
 def test_domain_no_longer_exports_competing_execution_contracts() -> None:
-    domain_init = (REPO_ROOT / "src" / "operations_center" / "domain" / "__init__.py").read_text(encoding="utf-8")
+    domain_init = (REPO_ROOT / "src" / "operations_center" / "domain" / "__init__.py").read_text(
+        encoding="utf-8"
+    )
     assert '"BoardTask"' not in domain_init
     assert '"ExecutionRequest"' not in domain_init
     assert '"ExecutionResult"' not in domain_init

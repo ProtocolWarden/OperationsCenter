@@ -158,28 +158,24 @@ class TestSummaryProfile:
 
 class TestFailureDiagnosisProfile:
     def test_detects_failed_run_metadata(self, failed_index) -> None:
-        report = analyze_artifacts(
-            _make_input(failed_index, AnalysisProfile.FAILURE_DIAGNOSIS)
-        )
+        report = analyze_artifacts(_make_input(failed_index, AnalysisProfile.FAILURE_DIAGNOSIS))
         categories = {f.category for f in report.findings}
         assert FindingCategory.PARTIAL_RUN in categories or FindingCategory.FAILED_RUN in categories
 
     def test_detects_partial_artifacts(self, failed_index) -> None:
-        report = analyze_artifacts(
-            _make_input(failed_index, AnalysisProfile.FAILURE_DIAGNOSIS)
-        )
+        report = analyze_artifacts(_make_input(failed_index, AnalysisProfile.FAILURE_DIAGNOSIS))
         missing_findings = [
-            f for f in report.findings
+            f
+            for f in report.findings
             if f.category in (FindingCategory.MISSING_ARTIFACT, FindingCategory.PARTIAL_RUN)
         ]
         assert len(missing_findings) >= 1
 
     def test_detects_errors_in_manifest(self, failed_index) -> None:
-        report = analyze_artifacts(
-            _make_input(failed_index, AnalysisProfile.FAILURE_DIAGNOSIS)
-        )
+        report = analyze_artifacts(_make_input(failed_index, AnalysisProfile.FAILURE_DIAGNOSIS))
         runtime_or_failed = [
-            f for f in report.findings
+            f
+            for f in report.findings
             if f.severity in (FindingSeverity.ERROR, FindingSeverity.WARNING)
         ]
         assert len(runtime_or_failed) >= 1
@@ -187,16 +183,15 @@ class TestFailureDiagnosisProfile:
 
 class TestCoverageGapsProfile:
     def test_detects_missing_artifact_categories(self, failed_index) -> None:
-        report = analyze_artifacts(
-            _make_input(failed_index, AnalysisProfile.COVERAGE_GAPS)
-        )
+        report = analyze_artifacts(_make_input(failed_index, AnalysisProfile.COVERAGE_GAPS))
         categories = {f.category for f in report.findings}
-        assert FindingCategory.MISSING_ARTIFACT in categories or FindingCategory.COVERAGE_GAP in categories
+        assert (
+            FindingCategory.MISSING_ARTIFACT in categories
+            or FindingCategory.COVERAGE_GAP in categories
+        )
 
     def test_reports_coverage_gap_when_no_artifacts(self, empty_index) -> None:
-        report = analyze_artifacts(
-            _make_input(empty_index, AnalysisProfile.COVERAGE_GAPS)
-        )
+        report = analyze_artifacts(_make_input(empty_index, AnalysisProfile.COVERAGE_GAPS))
         categories = {f.category for f in report.findings}
         assert FindingCategory.COVERAGE_GAP in categories
 
@@ -208,9 +203,7 @@ class TestArtifactHealthProfile:
         )
         assert isinstance(report, BehaviorCalibrationReport)
 
-    def test_reports_missing_files_when_exists_on_disk_false(
-        self, tmp_path: Path
-    ) -> None:
+    def test_reports_missing_files_when_exists_on_disk_false(self, tmp_path: Path) -> None:
         payload = _make_manifest_payload(artifacts=[_base_entry()])
         manifest_path = _write_manifest(tmp_path, payload)
         manifest = load_artifact_manifest(manifest_path)
@@ -238,7 +231,8 @@ class TestProducerComplianceProfile:
             "path_role": "unknown",
             "source_stage": None,
             "status": "present",
-            "created_at": None, "updated_at": None,
+            "created_at": None,
+            "updated_at": None,
             "size_bytes": None,
             "content_type": "unknown",
             "checksum": None,
@@ -262,8 +256,7 @@ class TestSingletonHandling:
     def test_singleton_limitations_preserved_in_findings(self, completed_index) -> None:
         report = analyze_artifacts(_make_input(completed_index, AnalysisProfile.SUMMARY))
         singleton_findings = [
-            f for f in report.findings
-            if f.category == FindingCategory.REPO_SINGLETON_WARNING
+            f for f in report.findings if f.category == FindingCategory.REPO_SINGLETON_WARNING
         ]
         assert len(singleton_findings) >= 1
 
@@ -274,46 +267,34 @@ class TestSingletonHandling:
 
 class TestExcludedPathsHandling:
     def test_excluded_paths_summarized_as_findings(self, index_with_excluded_paths) -> None:
-        report = analyze_artifacts(
-            _make_input(index_with_excluded_paths, AnalysisProfile.SUMMARY)
-        )
+        report = analyze_artifacts(_make_input(index_with_excluded_paths, AnalysisProfile.SUMMARY))
         noise = [f for f in report.findings if f.category == FindingCategory.NOISE_EXCLUSION]
         assert len(noise) >= 1
 
     def test_excluded_paths_count_in_summary(self, index_with_excluded_paths) -> None:
-        report = analyze_artifacts(
-            _make_input(index_with_excluded_paths, AnalysisProfile.SUMMARY)
-        )
+        report = analyze_artifacts(_make_input(index_with_excluded_paths, AnalysisProfile.SUMMARY))
         assert report.artifact_index_summary.excluded_path_count == 2
 
 
 class TestRecommendationProfile:
     def test_recommendations_separate_from_findings(self, failed_index) -> None:
-        report = analyze_artifacts(
-            _make_input(failed_index, AnalysisProfile.RECOMMENDATION)
-        )
+        report = analyze_artifacts(_make_input(failed_index, AnalysisProfile.RECOMMENDATION))
         assert isinstance(report.findings, list)
         assert isinstance(report.recommendations, list)
 
     def test_recommendations_advisory_only(self, failed_index) -> None:
-        report = analyze_artifacts(
-            _make_input(failed_index, AnalysisProfile.RECOMMENDATION)
-        )
+        report = analyze_artifacts(_make_input(failed_index, AnalysisProfile.RECOMMENDATION))
         for rec in report.recommendations:
             assert rec.requires_human_review is True
 
     def test_recommendations_produced_from_findings(self, failed_index) -> None:
-        report = analyze_artifacts(
-            _make_input(failed_index, AnalysisProfile.RECOMMENDATION)
-        )
+        report = analyze_artifacts(_make_input(failed_index, AnalysisProfile.RECOMMENDATION))
         if report.recommendations:
             for rec in report.recommendations:
                 assert len(rec.supporting_finding_ids) >= 1
 
     def test_no_recommendations_without_supporting_findings(self, empty_index) -> None:
-        report = analyze_artifacts(
-            _make_input(empty_index, AnalysisProfile.RECOMMENDATION)
-        )
+        report = analyze_artifacts(_make_input(empty_index, AnalysisProfile.RECOMMENDATION))
         finding_ids = {f.finding_id for f in report.findings}
         for rec in report.recommendations:
             assert any(sid in finding_ids for sid in rec.supporting_finding_ids)
@@ -336,7 +317,13 @@ class TestAnalyzerNonMutation:
 
     def test_no_managed_repo_imports(self) -> None:
         import ast
-        pkg_root = Path(__file__).resolve().parents[3] / "src" / "operations_center" / "behavior_calibration"
+
+        pkg_root = (
+            Path(__file__).resolve().parents[3]
+            / "src"
+            / "operations_center"
+            / "behavior_calibration"
+        )
         for py_file in pkg_root.glob("*.py"):
             source = py_file.read_text(encoding="utf-8")
             tree = ast.parse(source, filename=str(py_file))
@@ -364,7 +351,8 @@ class TestContentAnalysis:
         index = build_artifact_index(manifest, manifest_path, repo_root=tmp_path)
 
         inp = _make_input(
-            index, AnalysisProfile.ARTIFACT_HEALTH,
+            index,
+            AnalysisProfile.ARTIFACT_HEALTH,
             include_artifact_content=True,
         )
         assert inp.include_artifact_content is True
@@ -383,7 +371,8 @@ class TestContentAnalysis:
         index = build_artifact_index(manifest, manifest_path, repo_root=tmp_path)
 
         inp = _make_input(
-            index, AnalysisProfile.ARTIFACT_HEALTH,
+            index,
+            AnalysisProfile.ARTIFACT_HEALTH,
             include_artifact_content=True,
         )
         report = analyze_artifacts(inp)
@@ -403,7 +392,8 @@ class TestContentAnalysis:
         index = build_artifact_index(manifest, manifest_path, repo_root=tmp_path)
 
         inp = _make_input(
-            index, AnalysisProfile.ARTIFACT_HEALTH,
+            index,
+            AnalysisProfile.ARTIFACT_HEALTH,
             include_artifact_content=True,
             max_artifact_bytes=5,
         )

@@ -14,58 +14,65 @@ from operations_center.config import load_settings
 from operations_center.config.settings import Settings
 from operations_center.decision.artifact_writer import DecisionArtifactWriter
 from operations_center.decision.loader import DecisionLoader
-from operations_center.decision.service import ALL_FAMILIES, DecisionEngineService, _DEFAULT_ALLOWED_FAMILIES, new_decision_context
+from operations_center.decision.service import (
+    _DEFAULT_ALLOWED_FAMILIES,
+    ALL_FAMILIES,
+    DecisionEngineService,
+    new_decision_context,
+)
+from operations_center.entrypoints.observer.main import (
+    configured_repo_match,
+    ensure_git_repo,
+    resolve_repo_path,
+)
 from operations_center.insights.artifact_writer import InsightArtifactWriter
 from operations_center.insights.derivers.architecture_drift import ArchitectureDriftDeriver
 from operations_center.insights.derivers.benchmark_regression import BenchmarkRegressionDeriver
-from operations_center.insights.derivers.coverage_gap import CoverageGapDeriver
-from operations_center.insights.derivers.execution_outcome import ExecutionOutcomeDeriver
-from operations_center.insights.derivers.noop_loop import NoOpLoopDeriver
-from operations_center.insights.derivers.quality_trend import QualityTrendDeriver
-from operations_center.insights.derivers.theme_aggregation import ThemeAggregationDeriver
+from operations_center.insights.derivers.ci_pattern import CIPatternDeriver
 from operations_center.insights.derivers.commit_activity import CommitActivityDeriver
+from operations_center.insights.derivers.coverage_gap import CoverageGapDeriver
+from operations_center.insights.derivers.cross_repo_synthesis import CrossRepoSynthesisDeriver
 from operations_center.insights.derivers.cross_signal import CrossSignalDeriver
 from operations_center.insights.derivers.dependency_drift import DependencyDriftDeriver
 from operations_center.insights.derivers.dirty_tree import DirtyTreeDeriver
 from operations_center.insights.derivers.execution_health import ExecutionHealthDeriver
+from operations_center.insights.derivers.execution_outcome import ExecutionOutcomeDeriver
 from operations_center.insights.derivers.file_hotspots import FileHotspotsDeriver
-from operations_center.insights.derivers.ci_pattern import CIPatternDeriver
 from operations_center.insights.derivers.lint_drift import LintDriftDeriver
-from operations_center.insights.derivers.security_vuln import SecurityVulnDeriver
-from operations_center.insights.derivers.validation_pattern import ValidationPatternDeriver
+from operations_center.insights.derivers.noop_loop import NoOpLoopDeriver
 from operations_center.insights.derivers.observation_coverage import ObservationCoverageDeriver
 from operations_center.insights.derivers.proposal_outcome import ProposalOutcomeDeriver
-from operations_center.insights.derivers.type_health import TypeHealthDeriver
+from operations_center.insights.derivers.quality_trend import QualityTrendDeriver
+from operations_center.insights.derivers.security_vuln import SecurityVulnDeriver
 from operations_center.insights.derivers.test_continuity import TestContinuityDeriver
+from operations_center.insights.derivers.theme_aggregation import ThemeAggregationDeriver
 from operations_center.insights.derivers.todo_concentration import TodoConcentrationDeriver
-from operations_center.insights.derivers.cross_repo_synthesis import CrossRepoSynthesisDeriver
+from operations_center.insights.derivers.type_health import TypeHealthDeriver
+from operations_center.insights.derivers.validation_pattern import ValidationPatternDeriver
 from operations_center.insights.loader import SnapshotLoader
 from operations_center.insights.normalizer import InsightNormalizer
 from operations_center.insights.service import InsightEngineService, new_generation_context
 from operations_center.observer.artifact_writer import ObserverArtifactWriter
 from operations_center.observer.collectors.architecture_signal import ArchitectureSignalCollector
 from operations_center.observer.collectors.benchmark_signal import BenchmarkSignalCollector
+from operations_center.observer.collectors.check_signal import CheckSignalCollector
+from operations_center.observer.collectors.ci_history import CIHistoryCollector
 from operations_center.observer.collectors.coverage_signal import CoverageSignalCollector
 from operations_center.observer.collectors.dependency_drift import DependencyDriftCollector
 from operations_center.observer.collectors.execution_health import ExecutionArtifactCollector
 from operations_center.observer.collectors.file_hotspots import FileHotspotsCollector
-from operations_center.observer.collectors.git_context import GitContextCollector
-from operations_center.observer.collectors.ci_history import CIHistoryCollector
+from operations_center.observer.collectors.git_context import GitContextCollector, run_git
 from operations_center.observer.collectors.lint_signal import LintSignalCollector
-from operations_center.observer.collectors.security_signal import SecuritySignalCollector
-from operations_center.observer.collectors.validation_history import ValidationHistoryCollector
 from operations_center.observer.collectors.recent_commits import RecentCommitsCollector
-from operations_center.observer.collectors.type_check import TypeSignalCollector
-from operations_center.observer.collectors.check_signal import CheckSignalCollector
+from operations_center.observer.collectors.security_signal import SecuritySignalCollector
 from operations_center.observer.collectors.todo_signal import TodoSignalCollector
+from operations_center.observer.collectors.type_check import TypeSignalCollector
+from operations_center.observer.collectors.validation_history import ValidationHistoryCollector
 from operations_center.observer.exporters import ValidationMetricsExporter
 from operations_center.observer.service import RepoObserverService, new_observer_context
 from operations_center.observer.snapshot_builder import SnapshotBuilder
 from operations_center.proposer import CandidateProposerIntegrationService
 from operations_center.proposer.candidate_integration import new_proposer_integration_context
-
-from operations_center.entrypoints.observer.main import configured_repo_match, ensure_git_repo, resolve_repo_path
-from operations_center.observer.collectors.git_context import run_git
 
 __all__ = ["run_pipeline"]
 
@@ -147,6 +154,7 @@ def build_insight_service() -> InsightEngineService:
 
 def build_decision_service() -> DecisionEngineService:
     from operations_center.tuning.applier import load_tuning_config
+
     tuning_config = load_tuning_config()
     return DecisionEngineService(
         loader=DecisionLoader(),
@@ -183,7 +191,11 @@ def _write_quiet_diagnosis(
         return  # Not enough history yet
 
     all_zero = all(
-        json.loads(p.read_text(encoding="utf-8")).get("stages", {}).get("decide", {}).get("candidates_emitted", -1) == 0
+        json.loads(p.read_text(encoding="utf-8"))
+        .get("stages", {})
+        .get("decide", {})
+        .get("candidates_emitted", -1)
+        == 0
         for p in cycle_reports
     )
     if not all_zero:
@@ -229,6 +241,7 @@ def _write_quiet_diagnosis(
         try:
             from operations_center.adapters.escalation import post_escalation
             from operations_center.execution.usage_store import UsageStore
+
             _now = datetime.now(UTC)
             _store = UsageStore()
             _should, _ids = _store.should_escalate(
@@ -257,7 +270,7 @@ def _write_quiet_diagnosis(
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Run the full observe→insights→decide→propose pipeline in one command. "
-                    "Defaults to dry-run: shows what would be proposed without creating Plane tasks."
+        "Defaults to dry-run: shows what would be proposed without creating Plane tasks."
     )
     parser.add_argument("--config", required=True)
     parser.add_argument("--repo", help="Repo path or key (defaults to current directory)")
@@ -279,7 +292,7 @@ def main() -> None:
         "--all-families",
         action="store_true",
         help="Enable all candidate families including hotspot_concentration and todo_accumulation "
-             "(normally deferred until threshold analysis confirms value).",
+        "(normally deferred until threshold analysis confirms value).",
     )
     args = parser.parse_args()
 
@@ -293,12 +306,10 @@ def main() -> None:
     # Logic extracted to operations_center.maintenance_windows so other
     # components (escalation, status pane) can ask the same question.
     from operations_center.maintenance_windows import _in_maintenance_window
+
     _now_mw = datetime.now(UTC)
     if _in_maintenance_window(settings, _now_mw):
-        print(
-            f"[skip] Maintenance window active (hour={_now_mw.hour}). "
-            "Proposal cycle suppressed."
-        )
+        print(f"[skip] Maintenance window active (hour={_now_mw.hour}). Proposal cycle suppressed.")
         return
 
     # --- Stage 1: Observe ---
@@ -349,7 +360,8 @@ def main() -> None:
         history_limit=5,
         max_candidates=args.max_candidates,
         cooldown_minutes=args.cooldown_minutes,
-        source_command="operations-center autonomy-cycle (decide)" + (" --dry-run" if dry_run else ""),
+        source_command="operations-center autonomy-cycle (decide)"
+        + (" --dry-run" if dry_run else ""),
         dry_run=dry_run,
         allowed_families=allowed_families,
     )
@@ -412,6 +424,7 @@ def main() -> None:
         # See operations_center.scheduled_tasks for schema and runtime.
         try:
             from operations_center.scheduled_tasks import ScheduledTaskRunner
+
             _sched_runner = ScheduledTaskRunner(client, settings)
             _sched_created = _sched_runner.tick()
             if _sched_created:
@@ -427,11 +440,19 @@ def main() -> None:
         try:
             _all_issues = client.list_issues()
             _autonomy_queued = sum(
-                1 for _iss in _all_issues
-                if str(_iss.get("state", {}).get("name", "") if isinstance(_iss.get("state"), dict) else "").strip()
-                   in ("Ready for AI", "Backlog")
+                1
+                for _iss in _all_issues
+                if str(
+                    _iss.get("state", {}).get("name", "")
+                    if isinstance(_iss.get("state"), dict)
+                    else ""
+                ).strip()
+                in ("Ready for AI", "Backlog")
                 and any(
-                    "source: autonomy" == (str(lbl.get("name", "")) if isinstance(lbl, dict) else str(lbl)).strip().lower()
+                    "source: autonomy"
+                    == (str(lbl.get("name", "")) if isinstance(lbl, dict) else str(lbl))
+                    .strip()
+                    .lower()
                     for lbl in _iss.get("labels", [])
                 )
             )
@@ -497,6 +518,7 @@ def _write_cycle_report(
     escalation_cooldown_seconds: int = 3600,
 ) -> None:
     from collections import Counter
+
     from operations_center.execution import UsageStore
 
     report_dir = Path("logs/autonomy_cycle")
@@ -507,6 +529,7 @@ def _write_cycle_report(
     # Disk space guardrail: skip writing if critically low to avoid partial files.
     try:
         from operations_center.execution.usage_store import _check_disk_space
+
         _check_disk_space(report_dir)
     except OSError as _disk_err:
         print(f"\n  [error] {_disk_err}")
@@ -544,12 +567,14 @@ def _write_cycle_report(
     created_tasks = []
     if prop_artifact is not None:
         for r in prop_artifact.created:
-            created_tasks.append({
-                "id": r.plane_issue_id,
-                "title": r.plane_title,
-                "family": r.family,
-                "dedup_key": r.dedup_key,
-            })
+            created_tasks.append(
+                {
+                    "id": r.plane_issue_id,
+                    "title": r.plane_title,
+                    "family": r.family,
+                    "dedup_key": r.dedup_key,
+                }
+            )
 
     # Guard rail summary
     usage_store = UsageStore()
@@ -558,6 +583,7 @@ def _write_cycle_report(
     except Exception:
         budget_remaining = None
     from operations_center.decision.service import _DEFAULT_ALLOWED_FAMILIES, ALL_FAMILIES
+
     gated_families = sorted(ALL_FAMILIES - _DEFAULT_ALLOWED_FAMILIES)
 
     report = {
@@ -619,7 +645,9 @@ def _write_cycle_report(
             "validation_history": {
                 "status": signals.validation_history.status,
                 "tasks_analyzed": signals.validation_history.tasks_analyzed,
-                "tasks_with_repeated_failures": len(signals.validation_history.tasks_with_repeated_failures),
+                "tasks_with_repeated_failures": len(
+                    signals.validation_history.tasks_with_repeated_failures
+                ),
                 "overall_failure_rate": signals.validation_history.overall_failure_rate,
             },
             "execution_health": {

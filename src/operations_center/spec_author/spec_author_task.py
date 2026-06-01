@@ -8,12 +8,12 @@ Phase D so ``spec_hygiene`` can emit phase-advance spec-author tasks with the
 same body shape — ``board_worker._parse_spec_author_payload`` works against a
 single canonical layout regardless of which watcher created the task.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
 from operations_center.adapters.plane import PlaneClient
-
 
 # Labels that mark in-flight spec-author work. Dedupe key for watchers:
 # if any non-Done issue carries BOTH labels, skip creating a new task.
@@ -56,13 +56,9 @@ def render_task_body(p: SpecAuthorPayload) -> str:
         else "    {}"
     )
     specs_block = (
-        "\n".join(f"    - {slug}" for slug in p.existing_specs)
-        if p.existing_specs
-        else "    []"
+        "\n".join(f"    - {slug}" for slug in p.existing_specs) if p.existing_specs else "    []"
     )
-    seed_block = (
-        "  " + p.seed_text.replace("\n", "\n  ") if p.seed_text else "  ''"
-    )
+    seed_block = "  " + p.seed_text.replace("\n", "\n  ") if p.seed_text else "  ''"
     task_phase_line = f"task_phase: {p.task_phase}\n" if p.task_phase else ""
     return f"""## Spec Authoring
 
@@ -111,7 +107,9 @@ def create_spec_author_task(client: PlaneClient, payload: SpecAuthorPayload) -> 
 
 
 def find_in_flight_phase_advance(
-    issues: list[dict], spec_slug: str, task_phase: str,
+    issues: list[dict],
+    spec_slug: str,
+    task_phase: str,
 ) -> str | None:
     """Dedupe key for spec_hygiene's phase-advance emit: return the id of any
     non-Done spec-author task with the same ``spec_slug`` and ``task_phase``,
@@ -130,11 +128,6 @@ def find_in_flight_phase_advance(
                 names.append(str(label.get("name", "")).lower())
             else:
                 names.append(str(label).lower())
-        if (
-            src in names
-            and kind in names
-            and slug_label in names
-            and phase_label in names
-        ):
+        if src in names and kind in names and slug_label in names and phase_label in names:
             return str(issue.get("id", ""))
     return None

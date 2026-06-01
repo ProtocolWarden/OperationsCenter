@@ -8,15 +8,14 @@ Exposes:
 - Per-collector performance baselines
 - Real-time metric snapshots for dashboards
 """
+
 from __future__ import annotations
 
-import time
-from dataclasses import dataclass, field as dataclass_field
-from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
-
-from .security_logging import ErrorCategory, ErrorSeverity, SecurityLogEntry
 
 
 class MetricUnit(str, Enum):
@@ -110,18 +109,10 @@ class CollectorMetrics:
         if self.total_artifacts_processed > 0:
             elapsed_seconds = self.total_latency_ms / 1000.0
             if elapsed_seconds > 0:
-                self.throughput_artifacts_per_sec = (
-                    self.total_artifacts_processed / elapsed_seconds
-                )
+                self.throughput_artifacts_per_sec = self.total_artifacts_processed / elapsed_seconds
 
-        total_errors = (
-            self.total_parse_errors
-            + self.total_structure_errors
-            + self.total_io_errors
-        )
-        total_attempted = (
-            self.total_artifacts_processed + self.total_artifacts_skipped
-        )
+        total_errors = self.total_parse_errors + self.total_structure_errors + self.total_io_errors
+        total_attempted = self.total_artifacts_processed + self.total_artifacts_skipped
         if total_attempted > 0:
             self.error_rate_percent = (total_errors / total_attempted) * 100
 
@@ -163,14 +154,10 @@ class CollectorMetrics:
             "error_rate_percent": self.error_rate_percent,
             "health_status": self.health_status,
             "last_run_timestamp": (
-                self.last_run_timestamp.isoformat()
-                if self.last_run_timestamp
-                else None
+                self.last_run_timestamp.isoformat() if self.last_run_timestamp else None
             ),
             "last_error_timestamp": (
-                self.last_error_timestamp.isoformat()
-                if self.last_error_timestamp
-                else None
+                self.last_error_timestamp.isoformat() if self.last_error_timestamp else None
             ),
         }
 
@@ -191,42 +178,24 @@ class SystemMetrics:
     overall_error_rate_percent: float = 0.0
     system_health_status: str = "UNKNOWN"
     time_window_minutes: int = 5
-    collector_metrics: dict[str, CollectorMetrics] = dataclass_field(
-        default_factory=dict
-    )
+    collector_metrics: dict[str, CollectorMetrics] = dataclass_field(default_factory=dict)
 
-    def update_from_collectors(
-        self, collector_metrics: dict[str, CollectorMetrics]
-    ) -> None:
+    def update_from_collectors(self, collector_metrics: dict[str, CollectorMetrics]) -> None:
         """Update system metrics from individual collector metrics."""
         self.collector_metrics = collector_metrics
         self.total_collectors = len(collector_metrics)
         self.timestamp = datetime.now(timezone.utc)
 
-        healthy = sum(
-            1
-            for m in collector_metrics.values()
-            if m.health_status == "HEALTHY"
-        )
-        degraded = sum(
-            1
-            for m in collector_metrics.values()
-            if m.health_status == "DEGRADED"
-        )
-        critical = sum(
-            1
-            for m in collector_metrics.values()
-            if m.health_status == "CRITICAL"
-        )
+        healthy = sum(1 for m in collector_metrics.values() if m.health_status == "HEALTHY")
+        degraded = sum(1 for m in collector_metrics.values() if m.health_status == "DEGRADED")
+        critical = sum(1 for m in collector_metrics.values() if m.health_status == "CRITICAL")
 
         self.healthy_collectors = healthy
         self.degraded_collectors = degraded
         self.critical_collectors = critical
 
         total_errors = sum(
-            m.total_parse_errors
-            + m.total_structure_errors
-            + m.total_io_errors
+            m.total_parse_errors + m.total_structure_errors + m.total_io_errors
             for m in collector_metrics.values()
         )
         self.total_validation_failures = total_errors
@@ -236,9 +205,7 @@ class SystemMetrics:
             for m in collector_metrics.values()
         )
         if total_processed > 0:
-            self.overall_error_rate_percent = (
-                total_errors / total_processed
-            ) * 100
+            self.overall_error_rate_percent = (total_errors / total_processed) * 100
 
         if self.critical_collectors > 0:
             self.system_health_status = "CRITICAL"
@@ -264,8 +231,7 @@ class SystemMetrics:
             "system_health_status": self.system_health_status,
             "time_window_minutes": self.time_window_minutes,
             "collector_metrics": {
-                name: metrics.to_dict()
-                for name, metrics in self.collector_metrics.items()
+                name: metrics.to_dict() for name, metrics in self.collector_metrics.items()
             },
         }
 
@@ -292,9 +258,7 @@ class MetricsCollector:
     ) -> None:
         """Record a collector run with performance metrics."""
         if collector_name not in self.collector_metrics:
-            self.collector_metrics[collector_name] = CollectorMetrics(
-                collector_name=collector_name
-            )
+            self.collector_metrics[collector_name] = CollectorMetrics(collector_name=collector_name)
 
         metrics = self.collector_metrics[collector_name]
         metrics.update_from_run(
@@ -346,9 +310,7 @@ class MetricsCollector:
         """Get metrics for all collectors."""
         return self.collector_metrics.copy()
 
-    def get_recent_performance_metrics(
-        self, limit: int = 100
-    ) -> list[PerformanceMetric]:
+    def get_recent_performance_metrics(self, limit: int = 100) -> list[PerformanceMetric]:
         """Get recent performance metrics."""
         return self.performance_metrics[-limit:] if self.performance_metrics else []
 
@@ -358,10 +320,7 @@ class MetricsCollector:
             "snapshot_time": datetime.now(timezone.utc).isoformat(),
             "system_metrics": self.system_metrics.to_dict(),
             "collector_metrics": {
-                name: metrics.to_dict()
-                for name, metrics in self.collector_metrics.items()
+                name: metrics.to_dict() for name, metrics in self.collector_metrics.items()
             },
-            "performance_metrics": [
-                m.to_dict() for m in self.get_recent_performance_metrics(50)
-            ],
+            "performance_metrics": [m.to_dict() for m in self.get_recent_performance_metrics(50)],
         }

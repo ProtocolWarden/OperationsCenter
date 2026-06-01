@@ -34,8 +34,7 @@ class RecoveryHandler(Protocol):
         failure_kind: ExecutionFailureKind,
         result: ExecutionResult,
         context: RecoveryContext,
-    ) -> RecoveryOutcome | None:
-        ...
+    ) -> RecoveryOutcome | None: ...
 
 
 class RetrySameRequestHandler:

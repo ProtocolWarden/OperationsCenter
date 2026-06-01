@@ -11,7 +11,7 @@ from operations_center.observer.service import ObserverContext
 
 _COMMIT_LOOKBACK = 5
 _MAX_RUN_RECORDS = 50
-_FLAKY_THRESHOLD = 0.2   # check is flaky if failure rate is between this and FAILING threshold
+_FLAKY_THRESHOLD = 0.2  # check is flaky if failure rate is between this and FAILING threshold
 _FAILING_THRESHOLD = 0.7  # check is "consistently failing" above this rate
 
 

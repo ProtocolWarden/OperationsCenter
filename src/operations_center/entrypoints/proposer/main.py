@@ -11,7 +11,9 @@ from operations_center.proposer.candidate_integration import new_proposer_integr
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Create Plane tasks from retained proposal candidates")
+    parser = argparse.ArgumentParser(
+        description="Create Plane tasks from retained proposal candidates"
+    )
     parser.add_argument("--config", required=True)
     parser.add_argument("--decision-run-id")
     parser.add_argument("--max-create", type=int, default=2)

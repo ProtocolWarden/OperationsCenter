@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import pytest
 from pydantic import ValidationError
 
@@ -16,15 +18,15 @@ from operations_center.contracts.ci import (
     RefinementPolicy,
     ScoringMetric,
 )
+from operations_center.contracts.common import TaskTarget
 from operations_center.contracts.enums import (
     EnforcedGuardrail,
     EvaluationCommandSource,
+    ExecutionMode,
     RefinementStatus,
+    TaskType,
 )
 from operations_center.contracts.proposal import OcPlanningProposal
-from operations_center.contracts.common import TaskTarget
-from operations_center.contracts.enums import ExecutionMode, TaskType
-from datetime import datetime, timezone
 
 
 def _utcnow() -> datetime:
@@ -32,7 +34,9 @@ def _utcnow() -> datetime:
 
 
 def _target() -> TaskTarget:
-    return TaskTarget(repo_key="svc", clone_url="https://git.example.com/svc.git", base_branch="main")
+    return TaskTarget(
+        repo_key="svc", clone_url="https://git.example.com/svc.git", base_branch="main"
+    )
 
 
 def _strategy() -> ImprovementStrategy:
@@ -183,7 +187,10 @@ class TestOcPlanningProposalCiField:
         serialized = p.model_dump_json()
         restored = OcPlanningProposal.model_validate_json(serialized)
         assert restored.continuous_improvement is not None
-        assert restored.continuous_improvement.strategy.principle == p.continuous_improvement.strategy.principle
+        assert (
+            restored.continuous_improvement.strategy.principle
+            == p.continuous_improvement.strategy.principle
+        )
 
 
 class TestOcLineageIndexEntry:

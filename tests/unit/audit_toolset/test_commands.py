@@ -54,9 +54,7 @@ class TestCapabilityVerification:
             "capabilities: []\n"
         )
         with pytest.raises(ManagedRepoCapabilityError):
-            resolve_invocation_request(
-                "no_audit", "audit_type_1", _RUN_ID, config_dir=tmp_path
-            )
+            resolve_invocation_request("no_audit", "audit_type_1", _RUN_ID, config_dir=tmp_path)
 
 
 class TestAuditTypeVerification:
@@ -129,9 +127,7 @@ class TestCommandStatusPolicy:
             "      run_status_finalization: false\n"
         )
         with pytest.raises(ManagedAuditCommandUnavailableError, match="unknown"):
-            resolve_invocation_request(
-                "repo_unknown", "experimental", _RUN_ID, config_dir=tmp_path
-            )
+            resolve_invocation_request("repo_unknown", "experimental", _RUN_ID, config_dir=tmp_path)
 
     def test_needs_confirmation_blocked(self, tmp_path: Path) -> None:
         cfg = tmp_path / "repo_confirm.yaml"
@@ -156,9 +152,7 @@ class TestCommandStatusPolicy:
             "      run_status_finalization: false\n"
         )
         with pytest.raises(ManagedAuditCommandUnavailableError, match="needs_confirmation"):
-            resolve_invocation_request(
-                "repo_confirm", "draft", _RUN_ID, config_dir=tmp_path
-            )
+            resolve_invocation_request("repo_confirm", "draft", _RUN_ID, config_dir=tmp_path)
 
 
 class TestRunIdInjection:
@@ -198,7 +192,12 @@ class TestOutputDir:
 
 class TestBoundaryEnforcement:
     def test_no_managed_repo_imports_in_commands_module(self) -> None:
-        src = Path(__file__).parent.parent.parent.parent / "src" / "operations_center" / "audit_toolset"
+        src = (
+            Path(__file__).parent.parent.parent.parent
+            / "src"
+            / "operations_center"
+            / "audit_toolset"
+        )
         for py_file in src.rglob("*.py"):
             tree = ast.parse(py_file.read_text(), filename=str(py_file))
             for node in ast.walk(tree):

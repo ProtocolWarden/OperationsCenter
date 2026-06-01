@@ -39,6 +39,7 @@ _RULES_KWARGS = dict(
 
 # --- Rule 8: CLEAN_BLOCKED_RETRY covers spec-author ---
 
+
 def test_rule8_clean_blocked_retry_spec_author():
     """Rule 8 should re-queue spec-author tasks stuck in Blocked with no executor labels."""
     issue = _issue(
@@ -81,6 +82,7 @@ def test_rule8_skip_spec_author_too_young():
 
 # --- Rule 9: SPEC_AUTHOR_BACKLOG_PROMOTE ---
 
+
 def test_rule9_spec_author_backlog_promote():
     """Rule 9 should promote spec-author tasks from Backlog to R4AI."""
     issue = _issue(
@@ -120,6 +122,7 @@ def test_rule9_skip_when_low_memory():
 
 
 # --- Rule 5: STALE_IN_REVIEW ---
+
 
 def test_rule5_stale_in_review_fires_without_pr_url():
     """Rule 5 should demote stale In Review tasks with no pr-url label."""
@@ -176,7 +179,9 @@ def test_rule8_thin_goal_label_prevents_retry():
 
 # --- Worker-backend cooldown gate (Rules 4, 6, 7, 9 defer R4AI promotion) ---
 
-_COOLDOWN_REASON = "all allowed worker backends cooling down (claude_code until 2026-06-03T13:00:00+00:00)"
+_COOLDOWN_REASON = (
+    "all allowed worker backends cooling down (claude_code until 2026-06-03T13:00:00+00:00)"
+)
 
 
 def test_rule9_promote_deferred_during_cooldown():
@@ -270,10 +275,12 @@ class _FakeUsageStore:
 
 def test_dispatch_cooldown_reason_blocks_when_only_backend_cooling(monkeypatch):
     monkeypatch.setenv("OPERATIONS_CENTER_ALLOWED_PROVIDERS", "claude")
-    store = _FakeUsageStore({
-        "claude_code": {"cooling_down": True, "reset_at": "2026-06-03T13:00:00+00:00"},
-        "codex_cli": {"cooling_down": False, "reset_at": None},
-    })
+    store = _FakeUsageStore(
+        {
+            "claude_code": {"cooling_down": True, "reset_at": "2026-06-03T13:00:00+00:00"},
+            "codex_cli": {"cooling_down": False, "reset_at": None},
+        }
+    )
     reason = _dispatch_cooldown_reason(store, now=_NOW)
     assert reason is not None
     assert "claude_code" in reason
@@ -281,19 +288,23 @@ def test_dispatch_cooldown_reason_blocks_when_only_backend_cooling(monkeypatch):
 
 def test_dispatch_cooldown_reason_none_when_alternate_free(monkeypatch):
     monkeypatch.setenv("OPERATIONS_CENTER_ALLOWED_PROVIDERS", "claude,codex")
-    store = _FakeUsageStore({
-        "claude_code": {"cooling_down": True, "reset_at": "2026-06-03T13:00:00+00:00"},
-        "codex_cli": {"cooling_down": False, "reset_at": None},
-    })
+    store = _FakeUsageStore(
+        {
+            "claude_code": {"cooling_down": True, "reset_at": "2026-06-03T13:00:00+00:00"},
+            "codex_cli": {"cooling_down": False, "reset_at": None},
+        }
+    )
     assert _dispatch_cooldown_reason(store, now=_NOW) is None
 
 
 def test_dispatch_cooldown_reason_none_when_nothing_cooling(monkeypatch):
     monkeypatch.setenv("OPERATIONS_CENTER_ALLOWED_PROVIDERS", "claude")
-    store = _FakeUsageStore({
-        "claude_code": {"cooling_down": False, "reset_at": None},
-        "codex_cli": {"cooling_down": False, "reset_at": None},
-    })
+    store = _FakeUsageStore(
+        {
+            "claude_code": {"cooling_down": False, "reset_at": None},
+            "codex_cli": {"cooling_down": False, "reset_at": None},
+        }
+    )
     assert _dispatch_cooldown_reason(store, now=_NOW) is None
 
 

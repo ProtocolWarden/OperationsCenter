@@ -57,6 +57,7 @@ class ExcludedPath(BaseModel):
 
     Examples: coverage.ini, .coverage.*, sitecustomize.py, __pycache__/
     """
+
     path: str = Field(description="Path as it appears in the bucket.")
     reason: str = Field(description="Why this path is excluded.")
     pattern: str | None = Field(

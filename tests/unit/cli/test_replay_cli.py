@@ -27,6 +27,7 @@ _LOAD_REPORT_TARGET = "operations_center.entrypoints.replay.main.load_replay_rep
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_mock_report(status: str = "passed") -> MagicMock:
     report = MagicMock()
     report.replay_id = "replay_001"
@@ -47,6 +48,7 @@ def _make_fixture_pack_file(tmp_path: Path) -> Path:
 # ---------------------------------------------------------------------------
 # cmd_run
 # ---------------------------------------------------------------------------
+
 
 class TestCmdRun:
     def test_run_passed(self, tmp_path: Path):
@@ -92,6 +94,7 @@ class TestCmdRun:
 
     def test_run_replay_input_error_exits_code_3(self, tmp_path: Path):
         from operations_center.slice_replay import ReplayInputError
+
         fp = _make_fixture_pack_file(tmp_path)
         with patch(_RUN_REPLAY_TARGET, side_effect=ReplayInputError("bad input")):
             out = _runner.invoke(
@@ -120,6 +123,7 @@ class TestCmdRun:
 # cmd_inspect
 # ---------------------------------------------------------------------------
 
+
 class TestCmdInspect:
     def test_inspect_passed_report(self, tmp_path: Path):
         report_file = tmp_path / "replay_report.json"
@@ -139,6 +143,7 @@ class TestCmdInspect:
 
     def test_inspect_load_error_exits_code_2(self, tmp_path: Path):
         from operations_center.slice_replay import ReplayReportLoadError
+
         report_file = tmp_path / "replay_report.json"
         report_file.write_text("{}", encoding="utf-8")
         with patch(_LOAD_REPORT_TARGET, side_effect=ReplayReportLoadError("corrupted")):

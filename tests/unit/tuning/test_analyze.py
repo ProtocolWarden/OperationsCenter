@@ -48,6 +48,7 @@ class TestAnalyzeEmptyInput:
 
     def test_empty_report_is_frozen(self):
         from pydantic import ValidationError
+
         service = StrategyTuningService.default()
         report = service.analyze([])
         with pytest.raises(ValidationError):
@@ -78,10 +79,9 @@ class TestAnalyzeOutputShape:
         assert report.generated_at is not None
 
     def test_multiple_backends_multiple_comparisons(self):
-        records = (
-            make_n_successes(10, backend="team_executor", lane="claude_cli")
-            + make_n_successes(10, backend="dag_executor", lane="claude_cli")
-        )
+        records = make_n_successes(
+            10, backend="team_executor", lane="claude_cli"
+        ) + make_n_successes(10, backend="dag_executor", lane="claude_cli")
         service = StrategyTuningService.default()
         report = service.analyze(records)
         assert len(report.comparison_summaries) == 2
@@ -123,8 +123,7 @@ class TestAnalyzeIntegration:
         cats = [f.category for f in report.findings]
         assert "change_evidence" in cats
         evidence_proposals = [
-            p for p in report.recommendations
-            if p.affected_policy_area == "backend_preference"
+            p for p in report.recommendations if p.affected_policy_area == "backend_preference"
         ]
         assert evidence_proposals
 
@@ -166,10 +165,7 @@ class TestLimitationsHonesty:
 
     def test_missing_backend_metadata_triggers_limitation(self):
         # Records with no backend set
-        records = [
-            make_record(backend=None, lane="claude_cli", run_id=f"r-{i}")
-            for i in range(5)
-        ]
+        records = [make_record(backend=None, lane="claude_cli", run_id=f"r-{i}") for i in range(5)]
         service = StrategyTuningService.default()
         report = service.analyze(records)
         limitation_text = " ".join(report.limitations)
@@ -182,7 +178,9 @@ class TestLimitationsHonesty:
         assert any("task_type" in lim for lim in report.limitations)
 
     def test_contradictory_evidence_is_called_out_in_limitations(self):
-        records = [make_unknown_changed_files(run_id=f"u-{i}") for i in range(8)] + make_n_failures(2)
+        records = [make_unknown_changed_files(run_id=f"u-{i}") for i in range(8)] + make_n_failures(
+            2
+        )
         service = StrategyTuningService.default()
         report = service.analyze(records)
         assert any("contradictory" in lim.lower() for lim in report.limitations)
@@ -192,13 +190,16 @@ class TestLimitationsHonesty:
         service = StrategyTuningService.default()
         report = service.analyze(records)
         # Should not have the "only N records" limitation
-        assert not any("only" in lim.lower() and "record" in lim.lower() for lim in report.limitations)
+        assert not any(
+            "only" in lim.lower() and "record" in lim.lower() for lim in report.limitations
+        )
 
 
 class TestRecommendationSeparation:
     def test_recommendations_do_not_modify_active_policy(self):
         """Recommendations are frozen Pydantic objects — they cannot mutate anything."""
         from pydantic import ValidationError
+
         records = make_n_successes(20)
         service = StrategyTuningService.default()
         report = service.analyze(records)
@@ -208,6 +209,7 @@ class TestRecommendationSeparation:
 
     def test_report_is_frozen(self):
         from pydantic import ValidationError
+
         service = StrategyTuningService.default()
         report = service.analyze(make_n_successes(5))
         with pytest.raises(ValidationError):
@@ -254,10 +256,9 @@ class TestRecommendationSeparation:
 
 class TestFilteringOptions:
     def test_task_type_scope_filters_records(self):
-        records = (
-            [make_success(task_type="bug_fix", run_id=f"bf-{i}") for i in range(10)]
-            + [make_success(task_type="feature", run_id=f"ft-{i}") for i in range(5)]
-        )
+        records = [make_success(task_type="bug_fix", run_id=f"bf-{i}") for i in range(10)] + [
+            make_success(task_type="feature", run_id=f"ft-{i}") for i in range(5)
+        ]
         service = StrategyTuningService.default()
         report = service.analyze(records, task_type_scope=["bug_fix"])
         assert report.record_count == 15  # total records, filtering happens in comparisons
@@ -266,7 +267,12 @@ class TestFilteringOptions:
 
     def test_dependency_injection_for_compare_fn(self):
         """Test that compare_fn injection works for test isolation."""
-        from operations_center.tuning.routing_models import BackendComparisonSummary, EvidenceStrength, ReliabilityClass, ChangeEvidenceClass
+        from operations_center.tuning.routing_models import (
+            BackendComparisonSummary,
+            ChangeEvidenceClass,
+            EvidenceStrength,
+            ReliabilityClass,
+        )
 
         stub_summary = BackendComparisonSummary(
             backend="stub",

@@ -12,9 +12,7 @@ from operations_center.entrypoints.worker_backend_status.main import app
 from operations_center.execution.usage_store import UsageStore
 
 
-def test_worker_backend_status_json_reports_cooldowns(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_worker_backend_status_json_reports_cooldowns(monkeypatch, tmp_path: Path) -> None:
     usage_path = tmp_path / "usage.json"
     monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(usage_path))
     store = UsageStore()
@@ -33,9 +31,7 @@ def test_worker_backend_status_json_reports_cooldowns(
     assert payload["worker_backends"]["codex_cli"]["cooling_down"] is False
 
 
-def test_worker_backend_status_reports_per_model_kind(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_worker_backend_status_reports_per_model_kind(monkeypatch, tmp_path: Path) -> None:
     usage_path = tmp_path / "usage.json"
     monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(usage_path))
     store = UsageStore()
@@ -57,5 +53,9 @@ def test_worker_backend_status_reports_per_model_kind(
     assert len(cooldowns) == 1
     assert cooldowns[0]["limit_kind"] == "model_weekly"
     assert cooldowns[0]["model"] == "sonnet"
-    # Human (non-JSON) render must not error.
-    assert CliRunner().invoke(app, []).exit_code == 0
+    # Human (non-JSON) render must not error, and must NOT report the backend as
+    # blocked just because one model is cooling — the backend stays runnable.
+    human = CliRunner().invoke(app, [])
+    assert human.exit_code == 0
+    assert "runnable" in human.output
+    assert "BLOCKED" not in human.output

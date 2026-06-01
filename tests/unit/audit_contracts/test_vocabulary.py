@@ -16,17 +16,17 @@ import json
 import pytest
 
 from operations_center.audit_contracts.vocabulary import (
-    ConsumerType,
+    EXAMPLE_MANAGED_REPO_PROFILE_ENUMS,
     GENERIC_ENUMS,
+    ConsumerType,
+    ExampleManagedRepoArtifactKind,
+    ExampleManagedRepoAuditType,
+    ExampleManagedRepoSourceStage,
     Limitation,
     Location,
     ManifestStatus,
     RunStatus,
     ValidFor,
-    ExampleManagedRepoArtifactKind,
-    ExampleManagedRepoAuditType,
-    ExampleManagedRepoSourceStage,
-    EXAMPLE_MANAGED_REPO_PROFILE_ENUMS,
 )
 
 pytestmark = pytest.mark.smoke
@@ -92,7 +92,12 @@ class TestLocation:
         assert required <= values
 
     def test_repo_singleton_distinct_from_run_locations(self) -> None:
-        run_locs = {Location.RUN_ROOT, Location.ARTIFACTS_SUBDIR, Location.AUDIT_SUBDIR, Location.TEXT_OVERLAY_SUBDIR}
+        run_locs = {
+            Location.RUN_ROOT,
+            Location.ARTIFACTS_SUBDIR,
+            Location.AUDIT_SUBDIR,
+            Location.TEXT_OVERLAY_SUBDIR,
+        }
         assert Location.REPO_SINGLETON not in run_locs
 
 

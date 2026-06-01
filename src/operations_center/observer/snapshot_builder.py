@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from operations_center.observer.models import RepoContextSnapshot, RepoSignalsSnapshot, RepoStateSnapshot
+from operations_center.observer.models import (
+    RepoContextSnapshot,
+    RepoSignalsSnapshot,
+    RepoStateSnapshot,
+)
 
 
 class SnapshotBuilder:

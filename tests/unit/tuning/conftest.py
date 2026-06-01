@@ -9,7 +9,6 @@ controlled characteristics for routing strategy analysis tests.
 
 from __future__ import annotations
 
-
 from operations_center.contracts.common import ChangedFileRef, ValidationSummary
 from operations_center.contracts.enums import (
     ExecutionStatus,
@@ -17,8 +16,8 @@ from operations_center.contracts.enums import (
     ValidationStatus,
 )
 from operations_center.contracts.execution import ExecutionResult
-from operations_center.observability.recorder import ExecutionRecorder
 from operations_center.observability.models import ExecutionRecord
+from operations_center.observability.recorder import ExecutionRecorder
 
 
 def make_result(
@@ -72,7 +71,8 @@ def make_record(
         failure_category=failure_category,
         validation_status=validation_status,
         changed_files_source=changed_files_source,
-        changed_files=changed_files or (
+        changed_files=changed_files
+        or (
             [ChangedFileRef(path="src/main.py", change_type="modified")]
             if success and changed_files is None
             else []
@@ -129,7 +129,9 @@ def make_timeout(backend: str = "team_executor", lane: str = "claude_cli", **kw)
     )
 
 
-def make_no_changes(backend: str = "team_executor", lane: str = "claude_cli", **kw) -> ExecutionRecord:
+def make_no_changes(
+    backend: str = "team_executor", lane: str = "claude_cli", **kw
+) -> ExecutionRecord:
     return make_record(
         backend=backend,
         lane=lane,
@@ -164,7 +166,9 @@ def make_n_successes(
     lane: str = "claude_cli",
     **kw,
 ) -> list[ExecutionRecord]:
-    return [make_success(backend=backend, lane=lane, run_id=f"run-s-{i:04d}", **kw) for i in range(n)]
+    return [
+        make_success(backend=backend, lane=lane, run_id=f"run-s-{i:04d}", **kw) for i in range(n)
+    ]
 
 
 def make_n_failures(
@@ -173,4 +177,6 @@ def make_n_failures(
     lane: str = "claude_cli",
     **kw,
 ) -> list[ExecutionRecord]:
-    return [make_failure(backend=backend, lane=lane, run_id=f"run-f-{i:04d}", **kw) for i in range(n)]
+    return [
+        make_failure(backend=backend, lane=lane, run_id=f"run-f-{i:04d}", **kw) for i in range(n)
+    ]

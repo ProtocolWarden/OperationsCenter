@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Tests for the periodic Plane task seeder."""
+
 from __future__ import annotations
 
 import json
@@ -19,17 +20,20 @@ from operations_center.scheduled_tasks.runner import (
     due_tasks,
 )
 
-
 # ── parsing ──────────────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("raw, expected", [
-    ("30m",   30 * 60),
-    ("6h",    6 * 3600),
-    ("1d",    86400),
-    ("1w",    7 * 86400),
-    ("  2h ", 2 * 3600),
-    ("3W",    3 * 7 * 86400),
-])
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("30m", 30 * 60),
+        ("6h", 6 * 3600),
+        ("1d", 86400),
+        ("1w", 7 * 86400),
+        ("  2h ", 2 * 3600),
+        ("3W", 3 * 7 * 86400),
+    ],
+)
 def test_parse_every_valid(raw, expected):
     assert _parse_every(raw) == expected
 
@@ -54,10 +58,16 @@ def test_parse_at_invalid(raw):
 
 # ── due-check ────────────────────────────────────────────────────────────────
 
+
 def _task(every="1d", at=None, on_days=None):
     return ScheduledTask(
-        every=every, at=at, on_days=on_days,
-        title="test", goal="g", repo_key="r", kind="goal",
+        every=every,
+        at=at,
+        on_days=on_days,
+        title="test",
+        goal="g",
+        repo_key="r",
+        kind="goal",
     )
 
 
@@ -79,8 +89,8 @@ def test_is_due_interval_gate():
 def test_is_due_at_anchor_within_slack():
     """Anchor matches when current time is within slack of HH:MM."""
     t = _task(every="1h", at="09:00")
-    on_anchor   = datetime(2026, 1, 1, 9,  2,  tzinfo=UTC)   # 2 min late
-    way_off     = datetime(2026, 1, 1, 14, 0,  tzinfo=UTC)
+    on_anchor = datetime(2026, 1, 1, 9, 2, tzinfo=UTC)  # 2 min late
+    way_off = datetime(2026, 1, 1, 14, 0, tzinfo=UTC)
     assert _is_due(t, last_run=None, now=on_anchor)
     assert not _is_due(t, last_run=None, now=way_off)
 
@@ -88,8 +98,8 @@ def test_is_due_at_anchor_within_slack():
 def test_is_due_on_days_gate():
     """Weekday gate excludes off-days."""
     t = _task(every="1h", on_days=["mon"])
-    monday    = datetime(2026, 1, 5,  10, 0, tzinfo=UTC)   # Jan 5 2026 is Mon
-    tuesday   = datetime(2026, 1, 6,  10, 0, tzinfo=UTC)
+    monday = datetime(2026, 1, 5, 10, 0, tzinfo=UTC)  # Jan 5 2026 is Mon
+    tuesday = datetime(2026, 1, 6, 10, 0, tzinfo=UTC)
     assert _is_due(t, last_run=None, now=monday)
     assert not _is_due(t, last_run=None, now=tuesday)
 
@@ -97,9 +107,9 @@ def test_is_due_on_days_gate():
 def test_is_due_combined_all_three():
     t = _task(every="1w", at="09:00", on_days=["mon"])
     last_run = datetime(2025, 12, 29, 9, 0, tzinfo=UTC)
-    next_due = datetime(2026, 1, 5,  9, 1, tzinfo=UTC)  # next Mon, 1m after anchor
+    next_due = datetime(2026, 1, 5, 9, 1, tzinfo=UTC)  # next Mon, 1m after anchor
     assert _is_due(t, last_run=last_run, now=next_due)
-    too_soon = datetime(2026, 1, 1, 9, 0, tzinfo=UTC)   # < 1w later
+    too_soon = datetime(2026, 1, 1, 9, 0, tzinfo=UTC)  # < 1w later
     assert not _is_due(t, last_run=last_run, now=too_soon)
 
 
@@ -109,6 +119,7 @@ def test_is_due_malformed_every_skipped():
 
 
 # ── due_tasks (state file integration) ───────────────────────────────────────
+
 
 def _settings_with_tasks(tasks: list[ScheduledTask]) -> MagicMock:
     """Minimal Settings stub — only `.scheduled_tasks` is needed."""
@@ -144,6 +155,7 @@ def test_due_tasks_state_file_corruption_treated_as_empty(tmp_path):
 
 
 # ── runner ───────────────────────────────────────────────────────────────────
+
 
 def test_runner_creates_plane_task_and_persists_state(tmp_path):
     task = _task(every="1h")

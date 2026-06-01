@@ -55,7 +55,9 @@ Verify Plane access.
     original_client = plane.PlaneClient
 
     class TestPlaneClient(original_client):
-        def __init__(self, base_url: str, api_token: str, workspace_slug: str, project_id: str) -> None:
+        def __init__(
+            self, base_url: str, api_token: str, workspace_slug: str, project_id: str
+        ) -> None:
             super().__init__(base_url, api_token, workspace_slug, project_id)
             self._client = httpx.Client(
                 transport=httpx.MockTransport(handler),

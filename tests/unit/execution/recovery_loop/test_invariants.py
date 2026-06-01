@@ -12,7 +12,6 @@ import ast
 import re
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[4]
 SRC_ROOT = REPO_ROOT / "src" / "operations_center"
 RECOVERY_LOOP_DIR = SRC_ROOT / "execution" / "recovery_loop"

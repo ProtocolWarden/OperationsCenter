@@ -11,15 +11,15 @@ Coverage:
 - Boundary cases (request ID propagation, validation summary, success/status consistency)
 - Edge cases (minimal request, large payload)
 """
+
 from __future__ import annotations
 
+import sys
 from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
-import sys
 
 import pytest
-
 from cxrp.contracts.runtime_binding import RuntimeBinding
 from cxrp.vocabulary.runtime import RuntimeKind, SelectionMode
 
@@ -28,7 +28,6 @@ from operations_center.config.settings import CritiqueExecutorSettings
 from operations_center.contracts.common import ValidationSummary
 from operations_center.contracts.enums import ExecutionStatus, ValidationStatus
 from operations_center.contracts.execution import ExecutionRequest, ExecutionResult
-
 
 # ============================================================================
 # Test Fixtures
@@ -103,8 +102,12 @@ def fake_critique_modules(monkeypatch):
         runner_class: type | None = None,
     ):
         if fail_import:
-            monkeypatch.setitem(sys.modules, "critique_executor.executor", ImportError("Module not found"))
-            monkeypatch.setitem(sys.modules, "critique_executor.models", ImportError("Module not found"))
+            monkeypatch.setitem(
+                sys.modules, "critique_executor.executor", ImportError("Module not found")
+            )
+            monkeypatch.setitem(
+                sys.modules, "critique_executor.models", ImportError("Module not found")
+            )
             return
 
         # Default success payload
@@ -118,7 +121,9 @@ def fake_critique_modules(monkeypatch):
         else:
 
             class DefaultFakeRunner:
-                def __init__(self, topology: str, config, worker_backend: str, working_dir: str) -> None:
+                def __init__(
+                    self, topology: str, config, worker_backend: str, working_dir: str
+                ) -> None:
                     self.topology = topology
                     self.config = config
                     self.worker_backend = worker_backend
@@ -181,20 +186,32 @@ def _assert_protocol_invariants(
     assert hasattr(result, "validation"), "I4: Missing validation"
 
     # I7: Request ID preservation
-    assert result.run_id == request.run_id, f"I7: run_id mismatch: {result.run_id} != {request.run_id}"
-    assert result.proposal_id == request.proposal_id, f"I7: proposal_id mismatch: {result.proposal_id} != {request.proposal_id}"
-    assert result.decision_id == request.decision_id, f"I7: decision_id mismatch: {result.decision_id} != {request.decision_id}"
-    assert result.branch_name == request.task_branch, f"I7: branch_name mismatch: {result.branch_name} != {request.task_branch}"
+    assert result.run_id == request.run_id, (
+        f"I7: run_id mismatch: {result.run_id} != {request.run_id}"
+    )
+    assert result.proposal_id == request.proposal_id, (
+        f"I7: proposal_id mismatch: {result.proposal_id} != {request.proposal_id}"
+    )
+    assert result.decision_id == request.decision_id, (
+        f"I7: decision_id mismatch: {result.decision_id} != {request.decision_id}"
+    )
+    assert result.branch_name == request.task_branch, (
+        f"I7: branch_name mismatch: {result.branch_name} != {request.task_branch}"
+    )
 
     # I10: Immutable contract fields
     assert result.branch_pushed is False, "I10: branch_pushed must be False"
 
     # I9: Validation summary never None
     assert result.validation is not None, "I9: validation must not be None"
-    assert isinstance(result.validation, ValidationSummary), "I9: validation must be ValidationSummary"
+    assert isinstance(result.validation, ValidationSummary), (
+        "I9: validation must be ValidationSummary"
+    )
 
     if check_validation_status:
-        assert result.validation.status == ValidationStatus.SKIPPED, "I10: validation.status must be SKIPPED"
+        assert result.validation.status == ValidationStatus.SKIPPED, (
+            "I10: validation.status must be SKIPPED"
+        )
 
     # I8: Success invariant — success == (status == SUCCEEDED)
     expected_success = result.status == ExecutionStatus.SUCCEEDED
@@ -210,7 +227,9 @@ def _assert_protocol_invariants(
         assert result.failure_reason is None, "I4: failure_reason must be None on success"
 
 
-def _assert_no_side_effects(request_before: ExecutionRequest, request_after: ExecutionRequest) -> None:
+def _assert_no_side_effects(
+    request_before: ExecutionRequest, request_after: ExecutionRequest
+) -> None:
     """Assert adapter introduced no mutations to the request."""
     assert request_before.run_id == request_after.run_id
     assert request_before.proposal_id == request_after.proposal_id
@@ -255,7 +274,9 @@ def test_protocol_happy_path_success(_request, _usage_store, fake_critique_modul
     assert result.failure_reason is None, "P1: Expected failure_reason=None"
 
 
-def test_protocol_happy_path_executor_failure(_request, _usage_store, fake_critique_modules) -> None:
+def test_protocol_happy_path_executor_failure(
+    _request, _usage_store, fake_critique_modules
+) -> None:
     """P1: Happy path with executor failure — RxP failure payload → failure result."""
     fake_critique_modules(
         rxp_payload={
@@ -282,7 +303,9 @@ def test_protocol_happy_path_executor_failure(_request, _usage_store, fake_criti
     # Path-specific assertions
     assert result.success is False, "P1: Expected success=False"
     assert result.status == ExecutionStatus.FAILED, "P1: Expected status=FAILED"
-    assert "insufficient context" in result.failure_reason, "P1: Expected error summary in failure_reason"
+    assert "insufficient context" in result.failure_reason, (
+        "P1: Expected error summary in failure_reason"
+    )
 
 
 # ============================================================================
@@ -290,7 +313,9 @@ def test_protocol_happy_path_executor_failure(_request, _usage_store, fake_criti
 # ============================================================================
 
 
-def test_protocol_import_error_graceful_degradation(_request, _usage_store, fake_critique_modules) -> None:
+def test_protocol_import_error_graceful_degradation(
+    _request, _usage_store, fake_critique_modules
+) -> None:
     """P2: Import error — Missing CritiqueExecutor modules → failure result."""
     fake_critique_modules(fail_import=True)
 
@@ -308,9 +333,10 @@ def test_protocol_import_error_graceful_degradation(_request, _usage_store, fake
     # Path-specific assertions
     assert result.success is False, "P2: Expected success=False"
     assert result.status == ExecutionStatus.FAILED, "P2: Expected status=FAILED"
-    assert "import" in result.failure_reason.lower() or "not installed" in result.failure_reason.lower(), (
-        f"P2: Expected import error in failure_reason, got: {result.failure_reason}"
-    )
+    assert (
+        "import" in result.failure_reason.lower()
+        or "not installed" in result.failure_reason.lower()
+    ), f"P2: Expected import error in failure_reason, got: {result.failure_reason}"
 
 
 # ============================================================================
@@ -379,9 +405,9 @@ def test_protocol_worker_backend_unavailable(_request, _usage_store, fake_critiq
     # Path-specific assertions
     assert result.success is False, "P4: Expected success=False"
     assert result.status == ExecutionStatus.FAILED, "P4: Expected status=FAILED"
-    assert "backend" in result.failure_reason.lower() or "unavailable" in result.failure_reason.lower(), (
-        f"P4: Expected backend error in failure_reason, got: {result.failure_reason}"
-    )
+    assert (
+        "backend" in result.failure_reason.lower() or "unavailable" in result.failure_reason.lower()
+    ), f"P4: Expected backend error in failure_reason, got: {result.failure_reason}"
 
 
 # ============================================================================
@@ -389,7 +415,9 @@ def test_protocol_worker_backend_unavailable(_request, _usage_store, fake_critiq
 # ============================================================================
 
 
-def test_protocol_rxp_failure_payload_extraction(_request, _usage_store, fake_critique_modules) -> None:
+def test_protocol_rxp_failure_payload_extraction(
+    _request, _usage_store, fake_critique_modules
+) -> None:
     """P5: RxP failure payload — Executor failed with details → failure result."""
     fake_critique_modules(
         rxp_payload={
@@ -422,7 +450,9 @@ def test_protocol_rxp_failure_payload_extraction(_request, _usage_store, fake_cr
 # ============================================================================
 
 
-def test_protocol_quota_event_recording_on_rate_limit(_request, _usage_store, fake_critique_modules) -> None:
+def test_protocol_quota_event_recording_on_rate_limit(
+    _request, _usage_store, fake_critique_modules
+) -> None:
     """P6: Quota event — Rate-limit failure → quota event recorded."""
 
     quota_events_recorded = []
@@ -500,7 +530,9 @@ def test_protocol_quota_event_recording_on_rate_limit(_request, _usage_store, fa
     ],
     ids=["minimal", "full", "large"],
 )
-def test_protocol_request_id_propagation(_request, _usage_store, fake_critique_modules, request_fields, description) -> None:
+def test_protocol_request_id_propagation(
+    _request, _usage_store, fake_critique_modules, request_fields, description
+) -> None:
     """Boundary: Request IDs preserved exactly across different patterns."""
     fake_critique_modules(
         rxp_payload={
@@ -522,9 +554,15 @@ def test_protocol_request_id_propagation(_request, _usage_store, fake_critique_m
 
     # Explicit ID checks with no truncation/coercion
     assert result.run_id == request.run_id, f"ID propagation ({description}): run_id mismatch"
-    assert result.proposal_id == request.proposal_id, f"ID propagation ({description}): proposal_id mismatch"
-    assert result.decision_id == request.decision_id, f"ID propagation ({description}): decision_id mismatch"
-    assert result.branch_name == request.task_branch, f"ID propagation ({description}): branch_name mismatch"
+    assert result.proposal_id == request.proposal_id, (
+        f"ID propagation ({description}): proposal_id mismatch"
+    )
+    assert result.decision_id == request.decision_id, (
+        f"ID propagation ({description}): decision_id mismatch"
+    )
+    assert result.branch_name == request.task_branch, (
+        f"ID propagation ({description}): branch_name mismatch"
+    )
 
 
 # ============================================================================
@@ -565,7 +603,9 @@ def test_protocol_validation_summary_never_none(
 
     # Critical assertion: validation must never be None
     assert result.validation is not None, f"{scenario_name}: validation must not be None"
-    assert isinstance(result.validation, ValidationSummary), f"{scenario_name}: validation must be ValidationSummary"
+    assert isinstance(result.validation, ValidationSummary), (
+        f"{scenario_name}: validation must be ValidationSummary"
+    )
     assert result.validation.status == ValidationStatus.SKIPPED, (
         f"{scenario_name}: validation.status must always be SKIPPED for CritiqueExecutor"
     )
@@ -613,8 +653,7 @@ def test_protocol_success_status_invariant(
     # Critical invariant: success == (status == SUCCEEDED)
     expected_success = result.status == ExecutionStatus.SUCCEEDED
     assert result.success == expected_success, (
-        f"{scenario_name}: invariant violated: "
-        f"success={result.success} but status={result.status}"
+        f"{scenario_name}: invariant violated: success={result.success} but status={result.status}"
     )
 
     # Explicit validation
@@ -710,7 +749,9 @@ def test_protocol_large_request_payload(_request, _usage_store, fake_critique_mo
 # ============================================================================
 
 
-def test_protocol_execute_and_capture_returns_observability(_request, _usage_store, fake_critique_modules) -> None:
+def test_protocol_execute_and_capture_returns_observability(
+    _request, _usage_store, fake_critique_modules
+) -> None:
     """Capture: execute_and_capture returns result + observability snapshot."""
     fake_critique_modules(
         rxp_payload={
@@ -739,7 +780,9 @@ def test_protocol_execute_and_capture_returns_observability(_request, _usage_sto
     )
 
 
-def test_protocol_execute_and_capture_on_error_still_captures(_request, _usage_store, fake_critique_modules) -> None:
+def test_protocol_execute_and_capture_on_error_still_captures(
+    _request, _usage_store, fake_critique_modules
+) -> None:
     """Capture: execute_and_capture returns capture even on failure."""
     fake_critique_modules(
         rxp_payload={
@@ -761,4 +804,6 @@ def test_protocol_execute_and_capture_on_error_still_captures(_request, _usage_s
 
     # Verify capture is still present
     assert capture is not None, "Capture on error: capture object should not be None"
-    assert isinstance(capture.observed_runtime, dict), "Capture on error: observed_runtime should be dict"
+    assert isinstance(capture.observed_runtime, dict), (
+        "Capture on error: observed_runtime should be dict"
+    )

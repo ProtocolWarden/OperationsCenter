@@ -10,11 +10,16 @@ from operations_center.insights.derivers.dependency_drift import DependencyDrift
 from operations_center.insights.derivers.dirty_tree import DirtyTreeDeriver
 from operations_center.insights.derivers.file_hotspots import FileHotspotsDeriver
 from operations_center.insights.derivers.observation_coverage import ObservationCoverageDeriver
-from operations_center.insights.derivers.test_continuity import TestContinuityDeriver as ContinuityDeriver
+from operations_center.insights.derivers.test_continuity import (
+    TestContinuityDeriver as ContinuityDeriver,
+)
 from operations_center.insights.derivers.todo_concentration import TodoConcentrationDeriver
 from operations_center.insights.loader import SnapshotLoader
 from operations_center.insights.normalizer import InsightNormalizer
 from operations_center.observer.artifact_writer import ObserverArtifactWriter
+from operations_center.observer.models import (
+    CheckSignal as ObserverCheckSignal,
+)
 from operations_center.observer.models import (
     CommitMetadata,
     DependencyDriftSignal,
@@ -22,7 +27,6 @@ from operations_center.observer.models import (
     RepoContextSnapshot,
     RepoSignalsSnapshot,
     RepoStateSnapshot,
-    CheckSignal as ObserverCheckSignal,
     TodoFileCount,
     TodoSignal,
 )
@@ -69,7 +73,9 @@ def _make_snapshot(
             file_hotspots=hotspots,
             test_signal=ObserverCheckSignal(status=test_status),
             dependency_drift=DependencyDriftSignal(status=dependency_status),
-            todo_signal=TodoSignal(todo_count=todo_count, fixme_count=fixme_count, top_files=top_files),
+            todo_signal=TodoSignal(
+                todo_count=todo_count, fixme_count=fixme_count, top_files=top_files
+            ),
         ),
         collector_errors=collector_errors or {},
     )
@@ -82,7 +88,9 @@ def test_loader_reads_latest_snapshot_with_bounded_history(tmp_path: Path) -> No
     writer.write(oldest)
     writer.write(newest)
 
-    snapshots = SnapshotLoader(tmp_path / "observer").load(repo="operations-center", snapshot_run_id=None, history_limit=1)
+    snapshots = SnapshotLoader(tmp_path / "observer").load(
+        repo="operations-center", snapshot_run_id=None, history_limit=1
+    )
 
     assert [snapshot.run_id for snapshot in snapshots] == ["obs_new", "obs_old"]
 

@@ -7,7 +7,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-
 from operations_center.audit_dispatch.lifecycle import (
     PostExecutionDiscovery,
     _find_run_status_path,
@@ -47,9 +46,7 @@ def _write_run_status(bucket_dir: Path, run_id: str, *, manifest_rel_path: str |
         "artifact_manifest_path": manifest_rel_path,
         "metadata": {},
     }
-    (bucket_dir / "run_status.json").write_text(
-        json.dumps(payload), encoding="utf-8"
-    )
+    (bucket_dir / "run_status.json").write_text(json.dumps(payload), encoding="utf-8")
 
 
 def _write_manifest(path: Path) -> None:

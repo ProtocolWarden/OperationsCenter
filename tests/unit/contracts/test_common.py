@@ -101,7 +101,9 @@ class TestChangedFileRef:
         assert ref.lines_added is None
 
     def test_with_stats(self):
-        ref = ChangedFileRef(path="src/main.py", change_type="added", lines_added=50, lines_removed=0)
+        ref = ChangedFileRef(
+            path="src/main.py", change_type="added", lines_added=50, lines_removed=0
+        )
         assert ref.lines_added == 50
 
     def test_frozen(self):

@@ -18,6 +18,7 @@ Usage:
     # Limit to one family
     python -m operations_center.entrypoints.promote_backlog.main --config FILE --family lint_fix --execute
 """
+
 from __future__ import annotations
 
 import argparse
@@ -79,7 +80,11 @@ def main() -> None:
     if result.promoted:
         print(f"\n{tag}Promoted {result.promote_count} task(s) → Ready for AI:")
         for t in result.promoted:
-            tier_note = f"  tier {t.recorded_tier}→{t.current_tier}" if t.recorded_tier and t.recorded_tier != t.current_tier else f"  tier {t.current_tier}"
+            tier_note = (
+                f"  tier {t.recorded_tier}→{t.current_tier}"
+                if t.recorded_tier and t.recorded_tier != t.current_tier
+                else f"  tier {t.current_tier}"
+            )
             print(f"  {t.task_id}  [{t.family}]{tier_note}  {t.title}")
     else:
         print(f"\n{tag}No tasks to promote.")

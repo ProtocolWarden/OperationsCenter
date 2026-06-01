@@ -25,7 +25,7 @@ def main() -> None:
                 for status in statuses
             ],
             indent=2,
-        ensure_ascii=False,
+            ensure_ascii=False,
         )
     )
 

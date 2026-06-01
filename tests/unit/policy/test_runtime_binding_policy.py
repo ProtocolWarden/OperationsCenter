@@ -184,7 +184,8 @@ class TestYAMLLoading:
 
     def test_from_yaml_round_trip(self, tmp_path):
         p = tmp_path / "policy.yaml"
-        p.write_text(textwrap.dedent("""\
+        p.write_text(
+            textwrap.dedent("""\
             rules:
               - name: refactor_opus
                 when:
@@ -199,7 +200,9 @@ class TestYAMLLoading:
                 kind: cli_subscription
                 provider: anthropic
                 model: sonnet
-        """), encoding="utf-8")
+        """),
+            encoding="utf-8",
+        )
         policy = RuntimeBindingPolicy.from_yaml(p)
         assert len(policy.rules) == 1
         assert policy.rules[0].name == "refactor_opus"
@@ -210,13 +213,16 @@ class TestYAMLLoading:
     def test_from_yaml_invalid_kind_raises_at_load(self, tmp_path):
         """Invalid kind/selection_mode pair must fail at policy.select(), not at adapter time."""
         p = tmp_path / "policy.yaml"
-        p.write_text(textwrap.dedent("""\
+        p.write_text(
+            textwrap.dedent("""\
             rules:
               - name: bogus
                 when: {}
                 bind:
                   kind: not_a_real_kind
-        """), encoding="utf-8")
+        """),
+            encoding="utf-8",
+        )
         policy = RuntimeBindingPolicy.from_yaml(p)
         with pytest.raises(ValueError):
             policy.select(_proposal(), _decision())

@@ -60,7 +60,10 @@ def query_artifacts(
             continue
         if query.exists_on_disk is not None and artifact.exists_on_disk != query.exists_on_disk:
             continue
-        if query.is_repo_singleton is not None and artifact.is_repo_singleton != query.is_repo_singleton:
+        if (
+            query.is_repo_singleton is not None
+            and artifact.is_repo_singleton != query.is_repo_singleton
+        ):
             continue
         if query.is_partial is not None and artifact.is_partial != query.is_partial:
             continue

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import pytest
 
+from operations_center.contracts.enums import RiskLevel
 from operations_center.policy.engine import PolicyEngine
 from operations_center.policy.explain import explain
 from operations_center.policy.models import (
@@ -20,7 +21,6 @@ from operations_center.policy.models import (
     PolicyViolation,
     PolicyWarning,
 )
-from operations_center.contracts.enums import RiskLevel
 
 from .conftest import (
     make_policy_config,
@@ -28,7 +28,6 @@ from .conftest import (
     make_repo_policy,
     remote_decision,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -78,6 +77,7 @@ class TestExplainReturnsExplanation:
 
     def test_is_frozen(self):
         from pydantic import ValidationError
+
         decision = _make_decision(PolicyStatus.ALLOW)
         result = explain(decision)
         with pytest.raises(ValidationError):
@@ -240,9 +240,7 @@ class TestScopeReasoning:
         assert "no path restriction" in e.scope_reasoning.lower()
 
     def test_scope_listed(self):
-        decision = _make_decision(
-            PolicyStatus.ALLOW, effective_scope=["src/main.py", "tests/"]
-        )
+        decision = _make_decision(PolicyStatus.ALLOW, effective_scope=["src/main.py", "tests/"])
         e = explain(decision)
         assert "src/main.py" in e.scope_reasoning
 

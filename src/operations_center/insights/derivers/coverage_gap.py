@@ -6,6 +6,7 @@ Emits:
   coverage_gap/low_overall     — total coverage below 60%
   coverage_gap/uncovered_files — files below 80% coverage threshold
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -14,8 +15,8 @@ from operations_center.insights.models import DerivedInsight
 from operations_center.insights.normalizer import InsightNormalizer
 from operations_center.observer.models import RepoStateSnapshot
 
-_LOW_OVERALL_THRESHOLD = 60.0    # total coverage below this → low_overall insight
-_UNCOVERED_FILE_MIN = 3          # need at least this many uncovered files to emit
+_LOW_OVERALL_THRESHOLD = 60.0  # total coverage below this → low_overall insight
+_UNCOVERED_FILE_MIN = 3  # need at least this many uncovered files to emit
 
 
 class CoverageGapDeriver:

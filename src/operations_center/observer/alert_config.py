@@ -8,6 +8,7 @@ Defines:
 - Alert context for notification channels
 - Alert rule composition
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

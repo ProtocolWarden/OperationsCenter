@@ -54,6 +54,7 @@ class ProposalOutcomeDeriver:
         insights: list[DerivedInsight] = []
         observed_at = snapshots[0].observed_at if snapshots else None
         from datetime import UTC, datetime
+
         now = observed_at or datetime.now(UTC)
 
         for family, records in by_family.items():
@@ -106,7 +107,9 @@ class ProposalOutcomeDeriver:
             return family_map
         for path in _PROPOSER_ROOT.glob("*/proposal_results.json"):
             try:
-                artifact = ProposalResultsArtifact.model_validate_json(path.read_text(encoding="utf-8"))
+                artifact = ProposalResultsArtifact.model_validate_json(
+                    path.read_text(encoding="utf-8")
+                )
                 for item in artifact.created:
                     if item.plane_issue_id:
                         family_map[item.plane_issue_id] = item.family

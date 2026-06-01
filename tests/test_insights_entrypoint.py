@@ -10,11 +10,13 @@ import pytest
 from operations_center.entrypoints.insights import main as insights_main
 from operations_center.observer.artifact_writer import ObserverArtifactWriter
 from operations_center.observer.models import (
+    CheckSignal as ObserverCheckSignal,
+)
+from operations_center.observer.models import (
     DependencyDriftSignal,
     RepoContextSnapshot,
     RepoSignalsSnapshot,
     RepoStateSnapshot,
-    CheckSignal as ObserverCheckSignal,
     TodoSignal,
 )
 
@@ -41,7 +43,9 @@ def _make_snapshot(run_id: str, observed_at: datetime, *, repo_path: Path) -> Re
     )
 
 
-def test_generate_insights_cli_writes_artifact(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_generate_insights_cli_writes_artifact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     observer_root = tmp_path / "tools" / "report" / "operations_center" / "observer"
     ObserverArtifactWriter(observer_root).write(
         _make_snapshot("obs_1", datetime(2026, 3, 31, 12, tzinfo=UTC), repo_path=tmp_path / "repo")
@@ -58,7 +62,9 @@ def test_generate_insights_cli_writes_artifact(tmp_path: Path, monkeypatch: pyte
     assert artifact_path.exists()
 
 
-def test_generate_insights_cli_errors_without_snapshot(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_generate_insights_cli_errors_without_snapshot(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("sys.argv", ["generate-insights"])
     with pytest.raises(ValueError):

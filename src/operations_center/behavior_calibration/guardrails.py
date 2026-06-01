@@ -22,16 +22,18 @@ class GuardrailViolation(BehaviorCalibrationError):  # noqa: N818
 
 # Fields that must never appear in a CalibrationRecommendation — their presence
 # would indicate the recommendation has drifted toward executable policy.
-_FORBIDDEN_MUTATION_FIELDS = frozenset({
-    "auto_apply",
-    "apply_immediately",
-    "execute",
-    "mutate",
-    "config_patch",
-    "runtime_patch",
-    "manifest_patch",
-    "code_change",
-})
+_FORBIDDEN_MUTATION_FIELDS = frozenset(
+    {
+        "auto_apply",
+        "apply_immediately",
+        "execute",
+        "mutate",
+        "config_patch",
+        "runtime_patch",
+        "manifest_patch",
+        "code_change",
+    }
+)
 
 
 def validate_recommendation_structure(rec: CalibrationRecommendation) -> None:

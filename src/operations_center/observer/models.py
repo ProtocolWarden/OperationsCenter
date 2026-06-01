@@ -45,6 +45,7 @@ These 6 signals perform out-of-process analysis and have optional observed_at:
 All other signals (TodoSignal, ExecutionHealthSignal, etc.) are computed locally
 and use snapshot-level observed_at only.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -53,7 +54,6 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from operations_center.observer.validation import ParseErrorMetadata
-
 
 OBSERVER_VERSION = 1
 
@@ -100,6 +100,7 @@ class CheckSignal(BaseModel):
         # In derivers that access test_signal
         observed_at = signal.test_signal.observed_at or snapshots[0].observed_at
     """
+
     status: str
     test_count: int | None = None
     source: str | None = None
@@ -129,6 +130,7 @@ class DependencyDriftSignal(BaseModel):
         # In derivers that access dependency_drift
         observed_at = signal.dependency_drift.observed_at or snapshots[0].observed_at
     """
+
     status: str
     source: str | None = None
     observed_at: datetime | None = None
@@ -268,6 +270,7 @@ class ArchitectureSignal(BaseModel):
         # In derivers that access architecture_signal
         observed_at = signal.architecture_signal.observed_at or snapshots[0].observed_at
     """
+
     status: str  # "healthy", "warnings", "unavailable"
     source: str | None = None
     observed_at: datetime | None = None
@@ -300,6 +303,7 @@ class BenchmarkSignal(BaseModel):
         # In derivers that access benchmark_signal
         observed_at = signal.benchmark_signal.observed_at or snapshots[0].observed_at
     """
+
     status: str  # "nominal", "regression", "unavailable"
     source: str | None = None
     observed_at: datetime | None = None
@@ -332,6 +336,7 @@ class SecuritySignal(BaseModel):
         # In derivers that access security_signal
         observed_at = signal.security_signal.observed_at or snapshots[0].observed_at
     """
+
     status: str  # "clean", "advisories", "unavailable"
     source: str | None = None
     observed_at: datetime | None = None
@@ -371,6 +376,7 @@ class CoverageSignal(BaseModel):
         # In derivers that access coverage_signal
         observed_at = signal.coverage_signal.observed_at or snapshots[0].observed_at
     """
+
     status: str  # "measured", "partial", "unavailable"
     total_coverage_pct: float | None = None
     uncovered_file_count: int = 0
@@ -391,12 +397,24 @@ class RepoSignalsSnapshot(BaseModel):
     backlog: BacklogSignal = Field(default_factory=BacklogSignal)
     lint_signal: LintSignal = Field(default_factory=lambda: LintSignal(status="unavailable"))
     type_signal: TypeSignal = Field(default_factory=lambda: TypeSignal(status="unavailable"))
-    ci_history: CIHistorySignal = Field(default_factory=lambda: CIHistorySignal(status="unavailable"))
-    validation_history: ValidationHistorySignal = Field(default_factory=lambda: ValidationHistorySignal(status="unavailable"))
-    architecture_signal: ArchitectureSignal = Field(default_factory=lambda: ArchitectureSignal(status="unavailable"))
-    benchmark_signal: BenchmarkSignal = Field(default_factory=lambda: BenchmarkSignal(status="unavailable"))
-    security_signal: SecuritySignal = Field(default_factory=lambda: SecuritySignal(status="unavailable"))
-    coverage_signal: CoverageSignal = Field(default_factory=lambda: CoverageSignal(status="unavailable"))
+    ci_history: CIHistorySignal = Field(
+        default_factory=lambda: CIHistorySignal(status="unavailable")
+    )
+    validation_history: ValidationHistorySignal = Field(
+        default_factory=lambda: ValidationHistorySignal(status="unavailable")
+    )
+    architecture_signal: ArchitectureSignal = Field(
+        default_factory=lambda: ArchitectureSignal(status="unavailable")
+    )
+    benchmark_signal: BenchmarkSignal = Field(
+        default_factory=lambda: BenchmarkSignal(status="unavailable")
+    )
+    security_signal: SecuritySignal = Field(
+        default_factory=lambda: SecuritySignal(status="unavailable")
+    )
+    coverage_signal: CoverageSignal = Field(
+        default_factory=lambda: CoverageSignal(status="unavailable")
+    )
 
 
 class RepoStateSnapshot(BaseModel):
@@ -429,6 +447,7 @@ class RepoStateSnapshot(BaseModel):
         # Safe fallback pattern used by all derivers
         observed_at = signal.observed_at or snapshot.observed_at
     """
+
     run_id: str
     observed_at: datetime
     observer_version: int = OBSERVER_VERSION

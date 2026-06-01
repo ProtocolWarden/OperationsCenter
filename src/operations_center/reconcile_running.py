@@ -16,20 +16,20 @@ whether to actually transition them.
 Invariants: read-only of the issue list; mutations happen only when the
 caller explicitly invokes the returned action. No new contract types.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-
 # Conservative defaults — operators raise per-kind via a kwarg passed by
 # the maintenance CLI when they know their workload's shape.
 _DEFAULT_TTLS: dict[str, int] = {
     # task-kind label value → TTL in minutes
-    "goal":             4 * 60,    # 4h — refactors / migrations can take time
-    "test":             45,        # 45min — verification rarely needs more
-    "test_campaign":    60,
-    "improve":          90,        # 90min — analysis-only typically faster
+    "goal": 4 * 60,  # 4h — refactors / migrations can take time
+    "test": 45,  # 45min — verification rarely needs more
+    "test_campaign": 60,
+    "improve": 90,  # 90min — analysis-only typically faster
     "improve_campaign": 90,
 }
 
@@ -37,6 +37,7 @@ _DEFAULT_TTLS: dict[str, int] = {
 @dataclass(frozen=True)
 class StaleRunningCandidate:
     """A Running task whose TTL has expired for its kind."""
+
     task_id: str
     title: str
     task_kind: str
@@ -69,7 +70,7 @@ def reconcile_stale_running_issues(
     transitions explicitly. This keeps the destructive action under the
     caller's control and makes the helper trivial to test.
     """
-    moment = (now or datetime.now(UTC))
+    moment = now or datetime.now(UTC)
     ttl_map = {**_DEFAULT_TTLS, **(ttls or {})}
     out: list[StaleRunningCandidate] = []
     for issue in issues:
@@ -87,11 +88,13 @@ def reconcile_stale_running_issues(
         kind = _label_value(labels, "task-kind") or "goal"
         ttl = int(ttl_map.get(kind, fallback_minutes))
         if age_minutes >= ttl:
-            out.append(StaleRunningCandidate(
-                task_id=str(issue.get("id", "")),
-                title=(issue.get("name") or "")[:80],
-                task_kind=kind,
-                age_minutes=age_minutes,
-                ttl_minutes=ttl,
-            ))
+            out.append(
+                StaleRunningCandidate(
+                    task_id=str(issue.get("id", "")),
+                    title=(issue.get("name") or "")[:80],
+                    task_kind=kind,
+                    age_minutes=age_minutes,
+                    ttl_minutes=ttl,
+                )
+            )
     return out

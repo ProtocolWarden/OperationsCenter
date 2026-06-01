@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Spec-author task processing (ADR 0007 Phase C)."""
+
 from __future__ import annotations
 
 import json
@@ -66,31 +67,50 @@ def process_spec_author(
                 forwarded_labels.append(name)
 
         plan_cmd = [
-            python, "-m", "operations_center.entrypoints.worker.main",
-            "--goal",               goal_text,
-            "--task-type",          task_type_from_kind("spec-author"),
-            "--execution-mode",     "goal",
-            "--repo-key",           repo_key,
-            "--clone-url",          clone_url,
-            "--base-branch",        base_branch,
-            "--project-id",         settings.plane.project_id,
-            "--task-id",            task_id,
-            "--timeout-seconds",    str(SPEC_AUTHOR_TIMEOUT_SECONDS),
-            "--max-changed-files",  "1",
-            "--allowed-path",       "docs/specs/",
+            python,
+            "-m",
+            "operations_center.entrypoints.worker.main",
+            "--goal",
+            goal_text,
+            "--task-type",
+            task_type_from_kind("spec-author"),
+            "--execution-mode",
+            "goal",
+            "--repo-key",
+            repo_key,
+            "--clone-url",
+            clone_url,
+            "--base-branch",
+            base_branch,
+            "--project-id",
+            settings.plane.project_id,
+            "--task-id",
+            task_id,
+            "--timeout-seconds",
+            str(SPEC_AUTHOR_TIMEOUT_SECONDS),
+            "--max-changed-files",
+            "1",
+            "--allowed-path",
+            "docs/specs/",
         ]
         for lbl in forwarded_labels:
             plan_cmd.extend(["--label", lbl])
 
         plan_proc = subprocess.run(
-            plan_cmd, cwd=oc_root, env=env, capture_output=True, text=True,
+            plan_cmd,
+            cwd=oc_root,
+            env=env,
+            capture_output=True,
+            text=True,
         )
         try:
             bundle = json.loads(plan_proc.stdout)
         except Exception:
             logger.error(
                 "board_worker[%s]: spec-author planning produced no JSON for task_id=%s\n%s",
-                role, task_id, plan_proc.stderr.strip() or plan_proc.stdout.strip(),
+                role,
+                task_id,
+                plan_proc.stderr.strip() or plan_proc.stdout.strip(),
             )
             fail_task(client, task_id, role, "spec-author planning produced no JSON output")
             return False
@@ -99,7 +119,9 @@ def process_spec_author(
             msg = bundle.get("message", "unknown planning error")
             logger.error(
                 "board_worker[%s]: spec-author planning failed task_id=%s — %s",
-                role, task_id, msg,
+                role,
+                task_id,
+                msg,
             )
             fail_task(client, task_id, role, f"spec-author planning failed: {msg}")
             return False
@@ -114,20 +136,29 @@ def process_spec_author(
 
         source_tag = f"board_worker_spec_author|spec_slug={spec_slug}|trigger={trigger_source}"
         exec_cmd = [
-            python, "-m", "operations_center.entrypoints.execute.main",
-            "--config",         str(config_file),
-            "--bundle",         str(bundle_file),
-            "--workspace-path", str(workspace),
-            "--task-branch",    f"spec-author/{short_id}",
-            "--output",         str(result_file),
-            "--source",         source_tag,
+            python,
+            "-m",
+            "operations_center.entrypoints.execute.main",
+            "--config",
+            str(config_file),
+            "--bundle",
+            str(bundle_file),
+            "--workspace-path",
+            str(workspace),
+            "--task-branch",
+            f"spec-author/{short_id}",
+            "--output",
+            str(result_file),
+            "--source",
+            source_tag,
         ]
         subprocess.run(exec_cmd, cwd=oc_root, env=env, capture_output=True, text=True)
 
         if not result_file.exists():
             logger.error(
                 "board_worker[%s]: spec-author execute produced no result task_id=%s",
-                role, task_id,
+                role,
+                task_id,
             )
             fail_task(client, task_id, role, "spec-author execute produced no result file")
             return False
@@ -138,19 +169,26 @@ def process_spec_author(
             fail_task(client, task_id, role, f"spec-author result.json parse failed: {exc}")
             return False
 
-        result  = outcome.get("result", {})
+        result = outcome.get("result", {})
         success = result.get("success", False)
-        run_id  = result.get("run_id", "")
+        run_id = result.get("run_id", "")
 
         if success:
             logger.info(
                 "board_worker[spec-author]: task_id=%s succeeded run_id=%s spec_slug=%s",
-                task_id, run_id, spec_slug,
+                task_id,
+                run_id,
+                spec_slug,
             )
             handle_spec_author_success(
-                client=client, issue=issue, settings=settings,
-                workspace=workspace, target_path=target_path,
-                spec_slug=spec_slug, run_id=run_id, task_phase=task_phase,
+                client=client,
+                issue=issue,
+                settings=settings,
+                workspace=workspace,
+                target_path=target_path,
+                spec_slug=spec_slug,
+                run_id=run_id,
+                task_phase=task_phase,
             )
             return True
         else:
@@ -178,7 +216,8 @@ def handle_spec_author_success(
 
     if task_phase:
         edit_count, edit_parse_note = summarize_prompt_diff_block(
-            workspace=workspace, target_path=target_path,
+            workspace=workspace,
+            target_path=target_path,
         )
         try:
             client.transition_issue(task_id, STATE_DONE)
@@ -190,7 +229,8 @@ def handle_spec_author_success(
         except Exception as exc:
             logger.warning(
                 "board_worker[spec-author]: phase-advance Done transition failed task_id=%s — %s",
-                task_id, exc,
+                task_id,
+                exc,
             )
         logger.info(
             "board_worker[spec-author]: phase-advance task_id=%s edit_block=%s",
@@ -203,7 +243,8 @@ def handle_spec_author_success(
     if not spec_path.exists():
         logger.warning(
             "board_worker[spec-author]: spec file missing at %s after success run_id=%s",
-            spec_path, run_id,
+            spec_path,
+            run_id,
         )
         try:
             client.transition_issue(task_id, STATE_DONE)
@@ -215,7 +256,8 @@ def handle_spec_author_success(
         except Exception as exc:
             logger.warning(
                 "board_worker[spec-author]: Done transition failed task_id=%s — %s",
-                task_id, exc,
+                task_id,
+                exc,
             )
         return
 
@@ -229,21 +271,23 @@ def handle_spec_author_success(
     try:
         from operations_center.spec_author.campaign_builder import CampaignBuilder
         from operations_center.spec_author.models import SpecFrontMatter
+
         try:
-            fm       = SpecFrontMatter.from_spec_text(spec_text)
+            fm = SpecFrontMatter.from_spec_text(spec_text)
             repo_key = fm.repos[0] if fm.repos else SPEC_AUTHOR_REPO_KEY
         except Exception:
             repo_key = SPEC_AUTHOR_REPO_KEY
-        repo_cfg    = settings.repos.get(repo_key)
+        repo_cfg = settings.repos.get(repo_key)
         base_branch = (
-            (repo_cfg.sandbox_base_branch if repo_cfg and repo_cfg.sandbox_base_branch else None)
-            or (repo_cfg.default_branch if repo_cfg else "main")
-        )
-        builder     = CampaignBuilder(client=client, project_id=settings.plane.project_id)
+            repo_cfg.sandbox_base_branch if repo_cfg and repo_cfg.sandbox_base_branch else None
+        ) or (repo_cfg.default_branch if repo_cfg else "main")
+        builder = CampaignBuilder(client=client, project_id=settings.plane.project_id)
         created_ids = builder.build(spec_text=spec_text, repo_key=repo_key, base_branch=base_branch)
     except Exception as exc:
         logger.warning(
-            "board_worker[spec-author]: campaign build failed task_id=%s — %s", task_id, exc,
+            "board_worker[spec-author]: campaign build failed task_id=%s — %s",
+            task_id,
+            exc,
         )
 
     if run_id and created_ids:
@@ -256,7 +300,8 @@ def handle_spec_author_success(
                     add_label(client, iss, f"parent_run: {run_id}")
         except Exception as exc:
             logger.debug(
-                "board_worker[spec-author]: parent_run label tagging failed — %s", exc,
+                "board_worker[spec-author]: parent_run label tagging failed — %s",
+                exc,
             )
 
     try:
@@ -277,5 +322,6 @@ def handle_spec_author_success(
     except Exception as exc:
         logger.warning(
             "board_worker[spec-author]: post-success transition failed task_id=%s — %s",
-            task_id, exc,
+            task_id,
+            exc,
         )

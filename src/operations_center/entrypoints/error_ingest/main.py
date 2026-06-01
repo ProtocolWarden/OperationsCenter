@@ -32,6 +32,7 @@ Or one-shot (processes queued events and exits)::
     python -m operations_center.entrypoints.error_ingest.main \\
         --config config/operations_center.local.yaml
 """
+
 from __future__ import annotations
 
 import argparse
@@ -58,6 +59,7 @@ _DEDUP_LOCK = threading.RLock()
 # ---------------------------------------------------------------------------
 # Dedup helpers
 # ---------------------------------------------------------------------------
+
 
 def _dedup_key(repo_key: str, text: str) -> str:
     return f"{repo_key}:{hashlib.sha256(text.encode()).hexdigest()[:16]}"
@@ -92,12 +94,15 @@ def _mark_created(key: str) -> None:
                 pass
         state[key] = datetime.now(UTC).isoformat()
         _DEDUP_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _DEDUP_STATE_PATH.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
+        _DEDUP_STATE_PATH.write_text(
+            json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
 
 
 # ---------------------------------------------------------------------------
 # Task creation
 # ---------------------------------------------------------------------------
+
 
 def _create_error_task(
     plane_client: PlaneClient,
@@ -126,29 +131,45 @@ def _create_error_task(
             name=f"[Runtime] {title[:120]}",
             description=description,
             state="Ready for AI",
-            label_names=["task-kind: goal", f"priority: {priority}", f"repo: {repo_key}", "source: error-ingest"],
+            label_names=[
+                "task-kind: goal",
+                f"priority: {priority}",
+                f"repo: {repo_key}",
+                "source: error-ingest",
+            ],
         )
         task_id = str(issue.get("id", ""))
-        _logger.info(json.dumps({
-            "event": "error_ingest_task_created",
-            "task_id": task_id,
-            "source": source,
-            "severity": severity,
-            "repo_key": repo_key,
-        }, ensure_ascii=False))
+        _logger.info(
+            json.dumps(
+                {
+                    "event": "error_ingest_task_created",
+                    "task_id": task_id,
+                    "source": source,
+                    "severity": severity,
+                    "repo_key": repo_key,
+                },
+                ensure_ascii=False,
+            )
+        )
         return task_id
     except Exception as exc:
-        _logger.warning(json.dumps({
-            "event": "error_ingest_task_failed",
-            "error": str(exc),
-            "title": title,
-        }, ensure_ascii=False))
+        _logger.warning(
+            json.dumps(
+                {
+                    "event": "error_ingest_task_failed",
+                    "error": str(exc),
+                    "title": title,
+                },
+                ensure_ascii=False,
+            )
+        )
         return None
 
 
 # ---------------------------------------------------------------------------
 # Webhook receiver
 # ---------------------------------------------------------------------------
+
 
 def _make_webhook_handler(plane_client: PlaneClient, default_repo_key: str):
     class _Handler(http.server.BaseHTTPRequestHandler):
@@ -203,13 +224,16 @@ def _make_webhook_handler(plane_client: PlaneClient, default_repo_key: str):
 def run_webhook_server(plane_client: PlaneClient, *, port: int, default_repo_key: str) -> None:
     handler = _make_webhook_handler(plane_client, default_repo_key)
     server = http.server.ThreadingHTTPServer(("", port), handler)
-    _logger.info(json.dumps({"event": "error_ingest_webhook_started", "port": port}, ensure_ascii=False))
+    _logger.info(
+        json.dumps({"event": "error_ingest_webhook_started", "port": port}, ensure_ascii=False)
+    )
     server.serve_forever()
 
 
 # ---------------------------------------------------------------------------
 # Log file tail watcher
 # ---------------------------------------------------------------------------
+
 
 def _tail_log_file(
     plane_client: PlaneClient,
@@ -222,7 +246,12 @@ def _tail_log_file(
 ) -> None:
     log_path = Path(path)
     compiled = re.compile(pattern, re.IGNORECASE)
-    _logger.info(json.dumps({"event": "error_ingest_tail_start", "path": path, "repo_key": repo_key}, ensure_ascii=False))
+    _logger.info(
+        json.dumps(
+            {"event": "error_ingest_tail_start", "path": path, "repo_key": repo_key},
+            ensure_ascii=False,
+        )
+    )
 
     # Seek to end of file initially to avoid replaying historical errors
     try:
@@ -260,11 +289,16 @@ def _tail_log_file(
                     )
                     _mark_created(key)
         except Exception as exc:
-            _logger.warning(json.dumps({
-                "event": "error_ingest_tail_error",
-                "path": path,
-                "error": str(exc),
-            }, ensure_ascii=False))
+            _logger.warning(
+                json.dumps(
+                    {
+                        "event": "error_ingest_tail_error",
+                        "path": path,
+                        "error": str(exc),
+                    },
+                    ensure_ascii=False,
+                )
+            )
             time.sleep(10)
 
 
@@ -272,10 +306,13 @@ def _tail_log_file(
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Runtime error ingestion service")
     parser.add_argument("--config", required=True)
-    parser.add_argument("--watch", action="store_true", help="Run continuously (webhook + log tail)")
+    parser.add_argument(
+        "--watch", action="store_true", help="Run continuously (webhook + log tail)"
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -306,7 +343,10 @@ def main() -> None:
             t = threading.Thread(
                 target=run_webhook_server,
                 args=(client,),
-                kwargs={"port": ingest_cfg.webhook_port, "default_repo_key": ingest_cfg.default_repo_key},
+                kwargs={
+                    "port": ingest_cfg.webhook_port,
+                    "default_repo_key": ingest_cfg.default_repo_key,
+                },
                 daemon=True,
             )
             t.start()

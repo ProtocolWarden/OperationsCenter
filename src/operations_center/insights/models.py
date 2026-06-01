@@ -8,7 +8,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-
 INSIGHT_ENGINE_VERSION = 1
 
 

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Periodic Plane task seeder — implementation."""
+
 from __future__ import annotations
 
 import hashlib
@@ -20,11 +21,12 @@ logger = logging.getLogger(__name__)
 
 _STATE_FILE = Path("state/scheduled_tasks_last_run.json")
 _INTERVAL_RE = re.compile(r"^\s*(\d+)\s*([mhdw])\s*$", re.IGNORECASE)
-_AT_RE       = re.compile(r"^\s*(\d{1,2}):(\d{2})\s*$")
+_AT_RE = re.compile(r"^\s*(\d{1,2}):(\d{2})\s*$")
 _DAY_NAMES = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
 
 
 # ── parsing helpers ──────────────────────────────────────────────────────────
+
 
 def _parse_every(s: str) -> int:
     """Parse '1w' / '6h' / '30m' → seconds. Raises on malformed input."""
@@ -61,14 +63,16 @@ def _task_key(task: "ScheduledTask") -> str:
 
 # ── due-check ────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class _DueTask:
     key: str
     last_run: datetime | None
 
 
-def _is_due(task: "ScheduledTask", last_run: datetime | None, now: datetime,
-            *, slack_seconds: int = 300) -> bool:
+def _is_due(
+    task: "ScheduledTask", last_run: datetime | None, now: datetime, *, slack_seconds: int = 300
+) -> bool:
     """Return True when the task should fire on this cycle.
 
     `slack_seconds` allows the `at` anchor to match within a window — a
@@ -92,7 +96,9 @@ def _is_due(task: "ScheduledTask", last_run: datetime | None, now: datetime,
         normalized = {d.strip().lower()[:3] for d in task.on_days if d}
         unknown = normalized - _DAY_NAMES.keys()
         if unknown:
-            logger.warning("scheduled_tasks: unknown day name(s) %s in task %r", unknown, task.title)
+            logger.warning(
+                "scheduled_tasks: unknown day name(s) %s in task %r", unknown, task.title
+            )
         weekday = now.weekday()
         if weekday not in {_DAY_NAMES[d] for d in normalized & _DAY_NAMES.keys()}:
             return False
@@ -122,7 +128,7 @@ def due_tasks(
     """Return scheduled tasks that should fire on this cycle."""
     state_path = state_file or _STATE_FILE
     when = now or datetime.now(UTC)
-    raw = (settings.scheduled_tasks or [])
+    raw = settings.scheduled_tasks or []
     if not raw:
         return []
 
@@ -150,6 +156,7 @@ def due_tasks(
 
 # ── runner ───────────────────────────────────────────────────────────────────
 
+
 class ScheduledTaskRunner:
     """Drive scheduled-task evaluation against a Plane client.
 
@@ -158,7 +165,9 @@ class ScheduledTaskRunner:
         created_ids = runner.tick()
     """
 
-    def __init__(self, plane_client: "PlaneClient", settings: "Settings", *, state_file: Path | None = None) -> None:
+    def __init__(
+        self, plane_client: "PlaneClient", settings: "Settings", *, state_file: Path | None = None
+    ) -> None:
         self._client = plane_client
         self._settings = settings
         self._state_file = state_file or _STATE_FILE
@@ -215,19 +224,25 @@ class ScheduledTaskRunner:
                     logger.info(
                         '{"event": "scheduled_task_created", "task_id": "%s", "title": "%s", '
                         '"every": "%s", "key": "%s"}',
-                        new_id, task.title, task.every, _task_key(task),
+                        new_id,
+                        task.title,
+                        task.every,
+                        _task_key(task),
                     )
             except Exception as exc:
                 logger.warning(
                     "scheduled_tasks: failed to create %r — %s (will retry next cycle)",
-                    task.title, exc,
+                    task.title,
+                    exc,
                 )
 
         if created_ids:
             try:
                 self._state_file.parent.mkdir(parents=True, exist_ok=True)
                 tmp = self._state_file.with_suffix(".tmp")
-                tmp.write_text(json.dumps(last_run_map, indent=2, ensure_ascii=False), encoding="utf-8")
+                tmp.write_text(
+                    json.dumps(last_run_map, indent=2, ensure_ascii=False), encoding="utf-8"
+                )
                 tmp.rename(self._state_file)
             except OSError as exc:
                 logger.warning("scheduled_tasks: failed to persist last_run state — %s", exc)

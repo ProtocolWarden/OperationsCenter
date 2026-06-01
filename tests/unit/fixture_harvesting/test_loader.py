@@ -90,9 +90,7 @@ class TestLoadErrors:
         self, tmp_path: Path, completed_index
     ) -> None:
         # completed_index has no resolved paths → all metadata-only
-        pack, pack_dir = _harvest(
-            completed_index, HarvestProfile.FULL_MANIFEST_SNAPSHOT, tmp_path
-        )
+        pack, pack_dir = _harvest(completed_index, HarvestProfile.FULL_MANIFEST_SNAPSHOT, tmp_path)
         assert pack.metadata_only_count > 0
         # Loading should succeed — metadata-only artifacts don't require files
         loaded = load_fixture_pack(pack_dir)
@@ -102,7 +100,10 @@ class TestLoadErrors:
 class TestNoManagedRepoImports:
     def test_fixture_harvesting_does_not_import_managed_repo(self) -> None:
         import ast
-        pkg_root = Path(__file__).resolve().parents[3] / "src" / "operations_center" / "fixture_harvesting"
+
+        pkg_root = (
+            Path(__file__).resolve().parents[3] / "src" / "operations_center" / "fixture_harvesting"
+        )
         for py_file in pkg_root.glob("*.py"):
             source = py_file.read_text(encoding="utf-8")
             tree = ast.parse(source, filename=str(py_file))
@@ -114,7 +115,10 @@ class TestNoManagedRepoImports:
 
     def test_no_replay_test_functions_exist(self) -> None:
         import ast
-        pkg_root = Path(__file__).resolve().parents[3] / "src" / "operations_center" / "fixture_harvesting"
+
+        pkg_root = (
+            Path(__file__).resolve().parents[3] / "src" / "operations_center" / "fixture_harvesting"
+        )
         forbidden = frozenset({"run_replay", "execute_replay", "replay_test", "run_regression"})
         for py_file in pkg_root.glob("*.py"):
             source = py_file.read_text(encoding="utf-8")

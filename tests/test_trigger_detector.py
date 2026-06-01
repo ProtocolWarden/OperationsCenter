@@ -1,12 +1,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Tests for the TriggerDetector: queue drain primary, drop file secondary."""
+
 from __future__ import annotations
 
 from pathlib import Path
 
-from operations_center.spec_author.trigger import TriggerDetector
 from operations_center.spec_author.models import TriggerSource
+from operations_center.spec_author.trigger import TriggerDetector
 
 
 def _make_detector(tmp_path: Path) -> TriggerDetector:

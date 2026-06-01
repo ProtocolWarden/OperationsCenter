@@ -13,7 +13,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-
 from rxp.contracts import RuntimeInvocation, RuntimeResult
 
 from operations_center.backends._capacity_classifier import classify_capacity_exhaustion
@@ -21,7 +20,6 @@ from operations_center.backends.direct_local.adapter import DirectLocalBackendAd
 from operations_center.config.settings import AiderSettings
 from operations_center.contracts.enums import ExecutionStatus, FailureReasonCategory
 from operations_center.contracts.execution import ExecutionRequest
-
 
 # ---------------------------------------------------------------------------
 # Pure classifier
@@ -103,19 +101,22 @@ class _CapacityFakeRuntime:
 def _request(tmp_path: Path) -> ExecutionRequest:
     (tmp_path / "repo").mkdir(exist_ok=True)
     return ExecutionRequest(
-        proposal_id="prop", decision_id="dec", goal_text="x",
-        repo_key="r", clone_url="https://example.invalid/r.git",
-        base_branch="main", task_branch="auto/r",
+        proposal_id="prop",
+        decision_id="dec",
+        goal_text="x",
+        repo_key="r",
+        clone_url="https://example.invalid/r.git",
+        base_branch="main",
+        task_branch="auto/r",
         workspace_path=tmp_path / "repo",
     )
 
 
 def test_direct_local_flips_exit_zero_capacity_run_to_failed(tmp_path: Path) -> None:
-    runtime = _CapacityFakeRuntime(
-        stdout="working...\nYou're out of extra usage · resets 4:20am\n"
-    )
+    runtime = _CapacityFakeRuntime(stdout="working...\nYou're out of extra usage · resets 4:20am\n")
     adapter = DirectLocalBackendAdapter(
-        AiderSettings(binary="/bin/true", timeout_seconds=10), runtime=runtime,
+        AiderSettings(binary="/bin/true", timeout_seconds=10),
+        runtime=runtime,
     )
     result = adapter.execute(_request(tmp_path))
 
@@ -128,12 +129,11 @@ def test_direct_local_flips_exit_zero_capacity_run_to_failed(tmp_path: Path) -> 
 def test_direct_local_clean_success_unchanged(tmp_path: Path) -> None:
     runtime = _CapacityFakeRuntime(stdout="all good")
     adapter = DirectLocalBackendAdapter(
-        AiderSettings(binary="/bin/true", timeout_seconds=10), runtime=runtime,
+        AiderSettings(binary="/bin/true", timeout_seconds=10),
+        runtime=runtime,
     )
     result = adapter.execute(_request(tmp_path))
 
     assert result.success is True
     assert result.status == ExecutionStatus.SUCCEEDED
     assert result.failure_category is None
-
-

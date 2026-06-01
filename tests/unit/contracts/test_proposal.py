@@ -8,14 +8,19 @@ import json
 
 import pytest
 
-from operations_center.contracts.proposal import TaskProposal
-from operations_center.contracts.common import TaskTarget, ExecutionConstraints, BranchPolicy, ValidationProfile
+from operations_center.contracts.common import (
+    BranchPolicy,
+    ExecutionConstraints,
+    TaskTarget,
+    ValidationProfile,
+)
 from operations_center.contracts.enums import (
     ExecutionMode,
     Priority,
     RiskLevel,
     TaskType,
 )
+from operations_center.contracts.proposal import TaskProposal
 
 
 def _target(**kw) -> TaskTarget:

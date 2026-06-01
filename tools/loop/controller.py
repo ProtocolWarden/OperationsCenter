@@ -176,7 +176,7 @@ def _anchor_via_cl(env: dict[str, str]) -> None:
     for line in out.stdout.splitlines():
         line = line.strip()
         if line.startswith("export ") and "=" in line:
-            key, _, val = line[len("export "):].partition("=")
+            key, _, val = line[len("export ") :].partition("=")
             env[key.strip()] = val.strip().strip("'\"")
 
 
@@ -224,8 +224,20 @@ def _cl_hydrate(backend: str, env: dict[str, str], iteration: int, prompt: str) 
     work_item = json.dumps({"loop": "oc", "iteration": iteration, "backend": backend})
     try:
         out = subprocess.run(
-            [_resolve_command("cl") or "cl", "context", "hydrate", "--lineage", _CL_LINEAGE, "--work-item", work_item],
-            cwd=REPO_ROOT, env=env, capture_output=True, text=True, timeout=15,
+            [
+                _resolve_command("cl") or "cl",
+                "context",
+                "hydrate",
+                "--lineage",
+                _CL_LINEAGE,
+                "--work-item",
+                work_item,
+            ],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
     except (OSError, subprocess.SubprocessError):
         return prompt
@@ -239,18 +251,37 @@ def _cl_hydrate(backend: str, env: dict[str, str], iteration: int, prompt: str) 
     )
 
 
-def _cl_capture(backend: str, env: dict[str, str], iteration: int, exit_code: int, log_path: Path) -> None:
+def _cl_capture(
+    backend: str, env: dict[str, str], iteration: int, exit_code: int, log_path: Path
+) -> None:
     """Capture the session result into ContextLifecycle for non-hook backends. No-op otherwise."""
     if not _cl_session_boundary(backend, env):
         return
     result = json.dumps(
-        {"loop": "oc", "iteration": iteration, "backend": backend,
-         "exit_code": exit_code, "log": str(log_path)}
+        {
+            "loop": "oc",
+            "iteration": iteration,
+            "backend": backend,
+            "exit_code": exit_code,
+            "log": str(log_path),
+        }
     )
     try:
         subprocess.run(
-            [_resolve_command("cl") or "cl", "context", "capture", "--lineage", _CL_LINEAGE, "--result", result],
-            cwd=REPO_ROOT, env=env, capture_output=True, text=True, timeout=15,
+            [
+                _resolve_command("cl") or "cl",
+                "context",
+                "capture",
+                "--lineage",
+                _CL_LINEAGE,
+                "--result",
+                result,
+            ],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
     except (OSError, subprocess.SubprocessError):
         pass
@@ -277,9 +308,7 @@ def _session_env(backend: str, anchor_vars: dict[str, str] | None = None) -> dic
     prepend = [part for part in path_candidates if part not in path_parts]
     if prepend:
         env["PATH"] = (
-            os.pathsep.join([*prepend, *path_parts])
-            if path_parts
-            else os.pathsep.join(prepend)
+            os.pathsep.join([*prepend, *path_parts]) if path_parts else os.pathsep.join(prepend)
         )
     return env
 
@@ -341,9 +370,7 @@ def _backend_available(backend: str, cooldowns: dict[str, datetime | None]) -> b
     # the opus fallback unreachable.
     cli = "claude" if backend in ("claude", "opus") else backend
     until = cooldowns.get(backend)
-    return _command_available(cli) and (
-        until is None or datetime.now(timezone.utc) >= until
-    )
+    return _command_available(cli) and (until is None or datetime.now(timezone.utc) >= until)
 
 
 def _clear_expired_cooldowns(cooldowns: dict[str, datetime | None]) -> None:
@@ -379,8 +406,7 @@ def _sleep_until_backend_reset(cooldowns: dict[str, datetime | None]) -> bool:
         return False
     delay = max(
         60,
-        int((reset_dt - datetime.now(timezone.utc)).total_seconds())
-        + _RATE_LIMIT_BUFFER,
+        int((reset_dt - datetime.now(timezone.utc)).total_seconds()) + _RATE_LIMIT_BUFFER,
     )
     _log(
         f"All available backends are cooling down until "
@@ -475,6 +501,7 @@ def release_lock() -> None:
 
 WATCH_DIR = REPO_ROOT / "logs/local/watch-all"
 _WATCHER_ROLES = ["goal", "test", "improve", "propose", "review", "spec", "intake", "watchdog"]
+
 
 def _restart_watchers() -> None:
     """Send SIGTERM to every running watcher so the process supervisor relaunches
@@ -584,7 +611,7 @@ def _bridge_cooldown_to_usage_store(
         src = str(REPO_ROOT / "src")
         if src not in sys.path:
             sys.path.insert(0, src)
-        from operations_center.execution.usage_store import UsageStore  # type: ignore
+        from operations_center.execution.usage_store import UsageStore  # type: ignore[import-not-found]
 
         UsageStore().record_worker_backend_cooldown(
             worker_backend=worker_backend,
@@ -595,6 +622,8 @@ def _bridge_cooldown_to_usage_store(
         )
     except Exception as exc:  # pragma: no cover - best-effort bridge
         _log(f"usage-store cooldown bridge skipped: {exc}")
+
+
 _RATE_LIMIT_BUFFER = 120  # seconds to wait after the stated reset time
 
 
@@ -671,7 +700,9 @@ def parse_rate_limit_reset(
                 return datetime.now(timezone.utc) + delta, text
 
         if _LIMIT_SIGNAL_RE.search(text):
-            _log(f"{backend.capitalize()} limit detected — no reset time parseable from {session_log.name}.")
+            _log(
+                f"{backend.capitalize()} limit detected — no reset time parseable from {session_log.name}."
+            )
         return None, None
     except Exception as e:
         _log(f"Failed to parse {backend} rate-limit reset time: {e}")
@@ -734,7 +765,9 @@ def get_delay() -> int:
     return DEFAULT_DELAY
 
 
-def run_session(iteration: int, backend: str = "claude", anchor_vars: dict[str, str] | None = None) -> tuple[int, Path]:
+def run_session(
+    iteration: int, backend: str = "claude", anchor_vars: dict[str, str] | None = None
+) -> tuple[int, Path]:
     """Spawn one bounded agent session. Returns (exit_code, session_log_path)."""
     prompt = load_session_prompt()
     env = _session_env(backend, anchor_vars)
@@ -872,7 +905,10 @@ def main() -> None:
     cooldowns: dict[str, datetime | None] = {"claude": None, "opus": None, "codex": None}
     cooldown_meta: dict[str, dict[str, object]] = {}
     _last_known_sha: str = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, capture_output=True, text=True,
+        ["git", "rev-parse", "HEAD"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
     try:
         while not _stop and not STOP_FLAG.exists():
@@ -883,11 +919,15 @@ def main() -> None:
             # watcher processes so fixes take effect without manual intervention.
             try:
                 _current_sha = subprocess.run(
-                    ["git", "rev-parse", "origin/main"], cwd=REPO_ROOT,
-                    capture_output=True, text=True,
+                    ["git", "rev-parse", "origin/main"],
+                    cwd=REPO_ROOT,
+                    capture_output=True,
+                    text=True,
                 ).stdout.strip()
                 if _current_sha and _current_sha != _last_known_sha:
-                    _log(f"Code updated {_last_known_sha[:8]}→{_current_sha[:8]} — pulling and restarting watchers")
+                    _log(
+                        f"Code updated {_last_known_sha[:8]}→{_current_sha[:8]} — pulling and restarting watchers"
+                    )
                     subprocess.run(["git", "pull", "--ff-only"], cwd=REPO_ROOT, capture_output=True)
                     _last_known_sha = _current_sha
                     _restart_watchers()
@@ -928,7 +968,9 @@ def main() -> None:
                         _log(f"{alternate.capitalize()} fallback session exited rc={rc}")
                         if _stop or STOP_FLAG.exists():
                             break
-                        if rc != 0 and _handle_backend_limit(backend, session_log, cooldowns, cooldown_meta):
+                        if rc != 0 and _handle_backend_limit(
+                            backend, session_log, cooldowns, cooldown_meta
+                        ):
                             write_runtime_state(cooldowns, None, limit_meta=cooldown_meta)
                             if _sleep_until_backend_reset(cooldowns):
                                 continue
@@ -944,7 +986,8 @@ def main() -> None:
             # Passing None here made the state read as "no runnable backend" even
             # when the loop was healthily running on the opus fallback.
             write_runtime_state(
-                cooldowns, backend,
+                cooldowns,
+                backend,
                 sleep_until=wake_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 limit_meta=cooldown_meta,
             )

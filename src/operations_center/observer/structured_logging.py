@@ -8,16 +8,14 @@ Provides:
 - Metrics aggregation from logs
 - Log queries and filtering
 """
+
 from __future__ import annotations
 
 import json
-import logging
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
-
-from .security_logging import ErrorCategory, ErrorSeverity, SecurityLogEntry
 
 
 @dataclass
@@ -60,9 +58,7 @@ class StructuredLogEntry:
             "context": self.context,
         }
         # Remove None values
-        return json.dumps(
-            {k: v for k, v in entry_dict.items() if v is not None}
-        )
+        return json.dumps({k: v for k, v in entry_dict.items() if v is not None})
 
 
 class StructuredLogWriter:
@@ -269,7 +265,13 @@ class StructuredLogger:
         context: Optional[dict] = None,
     ) -> None:
         """Log a health status update."""
-        level = "ERROR" if status == "CRITICAL" else "WARNING" if status in ("DEGRADED", "NOMINAL") else "INFO"
+        level = (
+            "ERROR"
+            if status == "CRITICAL"
+            else "WARNING"
+            if status in ("DEGRADED", "NOMINAL")
+            else "INFO"
+        )
         entry = StructuredLogEntry(
             timestamp=datetime.now(timezone.utc),
             level=level,

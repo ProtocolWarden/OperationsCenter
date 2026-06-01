@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Coordinator pre-dispatch contract-impact hook."""
+
 from __future__ import annotations
 
 import logging
@@ -91,9 +92,7 @@ def _allow() -> _StubPolicy:
 
 
 class TestNoGraphSilent:
-    def test_no_graph_no_log_no_metadata(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_no_graph_no_log_no_metadata(self, caplog: pytest.LogCaptureFixture) -> None:
         bundle = _bundle("CxRP")
         adapter = _RecordingAdapter(_success(bundle))
         coord = ExecutionCoordinator(
@@ -102,10 +101,7 @@ class TestNoGraphSilent:
         )
         with caplog.at_level(logging.INFO):
             outcome = coord.execute(bundle, _runtime())
-        assert all(
-            "contract change" not in rec.message
-            for rec in caplog.records
-        )
+        assert all("contract change" not in rec.message for rec in caplog.records)
         assert "contract_impact" not in (outcome.record.metadata or {})
 
 
@@ -143,9 +139,7 @@ class TestContractRepoImpactLogged:
             set(ci["public_affected"])
         )
 
-    def test_legacy_alias_resolves_in_repo_key(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_legacy_alias_resolves_in_repo_key(self, caplog: pytest.LogCaptureFixture) -> None:
         graph = build_effective_repo_graph()
         bundle = _bundle("ExecutionContractProtocol")
         adapter = _RecordingAdapter(_success(bundle))
@@ -156,16 +150,12 @@ class TestContractRepoImpactLogged:
         )
         with caplog.at_level(logging.INFO):
             outcome = coord.execute(bundle, _runtime())
-        assert any(
-            "contract change in CxRP" in rec.message for rec in caplog.records
-        )
+        assert any("contract change in CxRP" in rec.message for rec in caplog.records)
         assert outcome.record.metadata.get("contract_impact", {}).get("target") == "CxRP"
 
 
 class TestLeafRepoSilent:
-    def test_operator_console_is_silent(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_operator_console_is_silent(self, caplog: pytest.LogCaptureFixture) -> None:
         graph = build_effective_repo_graph()
         bundle = _bundle("OperatorConsole")
         adapter = _RecordingAdapter(_success(bundle))
@@ -176,14 +166,10 @@ class TestLeafRepoSilent:
         )
         with caplog.at_level(logging.INFO):
             outcome = coord.execute(bundle, _runtime())
-        assert all(
-            "contract change" not in rec.message for rec in caplog.records
-        )
+        assert all("contract change" not in rec.message for rec in caplog.records)
         assert "contract_impact" not in (outcome.record.metadata or {})
 
-    def test_unknown_repo_key_is_silent(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_unknown_repo_key_is_silent(self, caplog: pytest.LogCaptureFixture) -> None:
         graph = build_effective_repo_graph()
         bundle = _bundle("velascat/unknown-service")
         adapter = _RecordingAdapter(_success(bundle))
@@ -194,9 +180,7 @@ class TestLeafRepoSilent:
         )
         with caplog.at_level(logging.INFO):
             outcome = coord.execute(bundle, _runtime())
-        assert all(
-            "contract change" not in rec.message for rec in caplog.records
-        )
+        assert all("contract change" not in rec.message for rec in caplog.records)
         assert "contract_impact" not in (outcome.record.metadata or {})
 
 
@@ -206,14 +190,14 @@ class TestPublicPrivatePartition:
     ) -> None:
         proj = tmp_path / "project.yaml"
         proj.write_text(
-            'manifest_kind: project\n'
+            "manifest_kind: project\n"
             'manifest_version: "1.0.0"\n'
-            'repos:\n'
-            '  vfa_api:\n'
-            '    canonical_name: VFAApi\n'
-            '    visibility: private\n'
-            'edges:\n'
-            '  - {from: VFAApi, to: CxRP, type: depends_on_contracts_from}\n',
+            "repos:\n"
+            "  vfa_api:\n"
+            "    canonical_name: VFAApi\n"
+            "    visibility: private\n"
+            "edges:\n"
+            "  - {from: VFAApi, to: CxRP, type: depends_on_contracts_from}\n",
             encoding="utf-8",
         )
         graph = build_effective_repo_graph(project_manifest_path=proj)

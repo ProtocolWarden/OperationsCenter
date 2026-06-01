@@ -23,19 +23,27 @@ from operations_center.contracts.execution import (
 class TestExecutionRequestIdempotent:
     def test_default_idempotent_is_false(self):
         req = ExecutionRequest(
-            proposal_id="p", decision_id="d",
-            goal_text="g", repo_key="r",
-            clone_url="https://x/y.git", base_branch="main",
-            task_branch="auto/x", workspace_path=Path("/tmp/ws"),
+            proposal_id="p",
+            decision_id="d",
+            goal_text="g",
+            repo_key="r",
+            clone_url="https://x/y.git",
+            base_branch="main",
+            task_branch="auto/x",
+            workspace_path=Path("/tmp/ws"),
         )
         assert req.idempotent is False
 
     def test_idempotent_can_be_set(self):
         req = ExecutionRequest(
-            proposal_id="p", decision_id="d",
-            goal_text="g", repo_key="r",
-            clone_url="https://x/y.git", base_branch="main",
-            task_branch="auto/x", workspace_path=Path("/tmp/ws"),
+            proposal_id="p",
+            decision_id="d",
+            goal_text="g",
+            repo_key="r",
+            clone_url="https://x/y.git",
+            base_branch="main",
+            task_branch="auto/x",
+            workspace_path=Path("/tmp/ws"),
             idempotent=True,
         )
         assert req.idempotent is True
@@ -44,8 +52,11 @@ class TestExecutionRequestIdempotent:
 class TestExecutionResultRecoveryField:
     def test_default_recovery_is_none(self):
         res = ExecutionResult(
-            run_id="r1", proposal_id="p", decision_id="d",
-            status=ExecutionStatus.SUCCEEDED, success=True,
+            run_id="r1",
+            proposal_id="p",
+            decision_id="d",
+            status=ExecutionStatus.SUCCEEDED,
+            success=True,
         )
         assert res.recovery is None
 
@@ -83,8 +94,11 @@ class TestExecutionResultRecoveryField:
             final_decision="accept",
         )
         res = ExecutionResult(
-            run_id="r1", proposal_id="p", decision_id="d",
-            status=ExecutionStatus.SUCCEEDED, success=True,
+            run_id="r1",
+            proposal_id="p",
+            decision_id="d",
+            status=ExecutionStatus.SUCCEEDED,
+            success=True,
             recovery=meta,
         )
         as_json = res.model_dump_json()
@@ -95,9 +109,13 @@ class TestExecutionResultRecoveryField:
 
     def test_result_remains_frozen(self):
         import pytest
+
         res = ExecutionResult(
-            run_id="r1", proposal_id="p", decision_id="d",
-            status=ExecutionStatus.SUCCEEDED, success=True,
+            run_id="r1",
+            proposal_id="p",
+            decision_id="d",
+            status=ExecutionStatus.SUCCEEDED,
+            success=True,
         )
         with pytest.raises(Exception):  # noqa: BLE001 — Pydantic raises ValidationError on frozen
             res.run_id = "r2"
@@ -106,15 +124,19 @@ class TestExecutionResultRecoveryField:
 class TestRecoveryActionSummary:
     def test_modified_fields_default_empty(self):
         a = RecoveryActionSummary(
-            attempt=1, failure_kind="timeout",
-            decision="retry_same_request", reason="x",
+            attempt=1,
+            failure_kind="timeout",
+            decision="retry_same_request",
+            reason="x",
         )
         assert a.modified_fields == []
 
     def test_delay_seconds_optional(self):
         a = RecoveryActionSummary(
-            attempt=1, failure_kind="rate_limit",
-            decision="retry_same_request", reason="x",
+            attempt=1,
+            failure_kind="rate_limit",
+            decision="retry_same_request",
+            reason="x",
             delay_seconds=2.5,
         )
         assert a.delay_seconds == 2.5

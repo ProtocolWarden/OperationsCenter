@@ -19,9 +19,9 @@ from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
     from operations_center.contracts.execution import ExecutionResult
 
+from operations_center.observability.changed_files import normalize_changed_files
 from operations_center.observability.models import ExecutionRecord
 from operations_center.observability.trace import ExecutionTrace
-from operations_center.observability.changed_files import normalize_changed_files
 
 from .models import ShellInspectionResult, ShellStatusSummary
 
@@ -36,9 +36,8 @@ def status_from_record(
     the canonical status, identifiers, lane/backend, and artifact counts.
     """
     result = record.result
-    art_count = (
-        len(record.artifact_index.primary_artifacts)
-        + len(record.artifact_index.supplemental_artifacts)
+    art_count = len(record.artifact_index.primary_artifacts) + len(
+        record.artifact_index.supplemental_artifacts
     )
     return ShellStatusSummary(
         run_id=record.run_id,
@@ -98,9 +97,8 @@ def inspection_from_record(
     All fields derive from the observability layer.
     """
     result = record.result
-    art_count = (
-        len(record.artifact_index.primary_artifacts)
-        + len(record.artifact_index.supplemental_artifacts)
+    art_count = len(record.artifact_index.primary_artifacts) + len(
+        record.artifact_index.supplemental_artifacts
     )
     return ShellInspectionResult(
         run_id=record.run_id,
@@ -128,7 +126,9 @@ def inspection_from_record(
 # ---------------------------------------------------------------------------
 
 
-def _minimal_headline(result: "ExecutionResult", lane: Optional[str], backend: Optional[str]) -> str:
+def _minimal_headline(
+    result: "ExecutionResult", lane: Optional[str], backend: Optional[str]
+) -> str:
     status = result.status.value.upper()
     parts: list[str] = [status]
     if backend:

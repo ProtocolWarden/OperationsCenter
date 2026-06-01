@@ -14,7 +14,6 @@ from operations_center.openclaw_shell.models import (
     ShellStatusSummary,
 )
 
-
 # ---------------------------------------------------------------------------
 # OperatorContext
 # ---------------------------------------------------------------------------

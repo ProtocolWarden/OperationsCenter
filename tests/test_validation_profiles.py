@@ -10,6 +10,7 @@ Covers:
 - candidate_mapper includes validation_profile in the task body Provenance block.
 - candidate_mapper includes requires_human_approval based on tier + risk_class.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -32,7 +33,6 @@ from operations_center.decision.validation_profiles import (
 )
 from operations_center.proposer.candidate_mapper import ProposalCandidateMapper
 from operations_center.proposer.provenance import ProposalProvenance
-
 
 # ── profile_for_family ───────────────────────────────────────────────────────
 
@@ -152,20 +152,23 @@ def _provenance(repo_name: str = "OperationsCenter") -> ProposalProvenance:
 
 def _make_settings(tmp_path: Path) -> object:
     from operations_center.config.settings import load_settings
+
     cfg = tmp_path / "config.yaml"
     cfg.write_text(
-        "\n".join([
-            "plane:",
-            "  base_url: http://plane.local",
-            "  api_token_env: PLANE_API_TOKEN",
-            "  workspace_slug: ws",
-            "  project_id: proj",
-            "git: {}",
-            "repos:",
-            "  OperationsCenter:",
-            "    clone_url: git@github.com:test/repo.git",
-            "    default_branch: main",
-        ])
+        "\n".join(
+            [
+                "plane:",
+                "  base_url: http://plane.local",
+                "  api_token_env: PLANE_API_TOKEN",
+                "  workspace_slug: ws",
+                "  project_id: proj",
+                "git: {}",
+                "repos:",
+                "  OperationsCenter:",
+                "    clone_url: git@github.com:test/repo.git",
+                "    default_branch: main",
+            ]
+        )
     )
     return load_settings(cfg)
 
@@ -187,7 +190,9 @@ def test_task_body_includes_validation_profile(tmp_path: Path) -> None:
 
 
 def test_task_body_includes_ty_clean_for_type_fix(tmp_path: Path) -> None:
-    body = _map(_candidate(family="type_fix", risk_class="style", validation_profile=TY_CLEAN), tmp_path)
+    body = _map(
+        _candidate(family="type_fix", risk_class="style", validation_profile=TY_CLEAN), tmp_path
+    )
     assert "validation_profile: ty_clean" in body
 
 
@@ -213,7 +218,9 @@ def test_task_body_requires_human_approval_true_for_logic(tmp_path: Path) -> Non
 # ── EvidenceBundle synthesis ─────────────────────────────────────────────────
 
 
-def _lint_spec(pattern_key: str = "violations_present", **evidence_overrides: object) -> CandidateSpec:
+def _lint_spec(
+    pattern_key: str = "violations_present", **evidence_overrides: object
+) -> CandidateSpec:
     ev = {"violation_count": 47, "distinct_file_count": 5, "top_codes": ["E501"], "source": "ruff"}
     ev.update(evidence_overrides)
     return CandidateSpec(
@@ -231,7 +238,12 @@ def _lint_spec(pattern_key: str = "violations_present", **evidence_overrides: ob
 
 
 def _type_spec(pattern_key: str = "errors_present", **evidence_overrides: object) -> CandidateSpec:
-    ev = {"error_count": 12, "distinct_file_count": 3, "top_codes": ["attr-defined"], "source": "mypy"}
+    ev = {
+        "error_count": 12,
+        "distinct_file_count": 3,
+        "top_codes": ["attr-defined"],
+        "source": "mypy",
+    }
     ev.update(evidence_overrides)
     return CandidateSpec(
         family="type_fix",
@@ -337,7 +349,9 @@ def test_task_body_includes_evidence_schema_version(tmp_path: Path) -> None:
 def test_task_body_evidence_schema_version_default_when_no_bundle(tmp_path: Path) -> None:
     """Families with no EvidenceBundle still emit evidence_schema_version: 1."""
     body = _map(
-        _candidate(family="observation_coverage", risk_class="logic", validation_profile=TESTS_PASS),
+        _candidate(
+            family="observation_coverage", risk_class="logic", validation_profile=TESTS_PASS
+        ),
         tmp_path,
     )
     assert "evidence_schema_version: 1" in body

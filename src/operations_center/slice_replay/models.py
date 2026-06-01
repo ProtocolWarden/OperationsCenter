@@ -17,13 +17,14 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
 
+
 class SliceReplayProfile(str, Enum):
     """Explicit replay profile — determines which checks are executed."""
+
     FIXTURE_INTEGRITY = "fixture_integrity"
     MANIFEST_CONTRACT = "manifest_contract"
     ARTIFACT_READABILITY = "artifact_readability"
@@ -39,6 +40,7 @@ ReportStatus = Literal["passed", "failed", "error", "partial"]
 # ---------------------------------------------------------------------------
 # Serializable output models (Pydantic)
 # ---------------------------------------------------------------------------
+
 
 class SliceReplayCheck(BaseModel, frozen=True):
     """Descriptor of a single replay check to be executed.
@@ -127,6 +129,7 @@ class SliceReplayReport(BaseModel):
 # ---------------------------------------------------------------------------
 # Input types (dataclasses, not serialized)
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class SliceReplayRequest:

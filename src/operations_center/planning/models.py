@@ -34,8 +34,8 @@ class PlanningContext:
 
     # What
     goal_text: str
-    task_type: str                      # maps to contracts.enums.TaskType value
-    execution_mode: str = "goal"        # maps to contracts.enums.ExecutionMode value
+    task_type: str  # maps to contracts.enums.TaskType value
+    execution_mode: str = "goal"  # maps to contracts.enums.ExecutionMode value
 
     # Where
     repo_key: str = ""
@@ -44,8 +44,8 @@ class PlanningContext:
     allowed_paths: list[str] = field(default_factory=list)
 
     # Constraints and risk
-    risk_level: str = "low"             # low / medium / high
-    priority: str = "normal"            # low / normal / high / critical
+    risk_level: str = "low"  # low / medium / high
+    priority: str = "normal"  # low / normal / high / critical
     max_changed_files: Optional[int] = None
     timeout_seconds: int = 300
 

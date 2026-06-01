@@ -5,6 +5,7 @@
 Validates that synthetic data generators produce correct report structures
 for testing dependency report processing.
 """
+
 from __future__ import annotations
 
 import json
@@ -61,8 +62,8 @@ class TestDependencyReportGenerator:
     def test_large_simple_scales_with_parameters(self) -> None:
         """Verify large-simple scales correctly with custom parameters."""
         test_cases = [
-            (10, 0.1, 1),   # 10 deps, 10% actionable → 1
-            (20, 0.2, 4),   # 20 deps, 20% actionable → 4
+            (10, 0.1, 1),  # 10 deps, 10% actionable → 1
+            (20, 0.2, 4),  # 20 deps, 20% actionable → 4
             (50, 0.5, 25),  # 50 deps, 50% actionable → 25
         ]
 

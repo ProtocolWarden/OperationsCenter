@@ -25,13 +25,14 @@ Follow-up creation per lifecycle contract:
     test failure                       → creates task-kind: goal (Ready for AI)
     improve any outcome                → creates bounded follow-up or Blocked
 """
+
 from __future__ import annotations
 
 import argparse
 import json
 import logging
-import time
 import threading
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -44,13 +45,16 @@ logger = logging.getLogger(__name__)
 
 # ── Settings / client factories ───────────────────────────────────────────────
 
+
 def _load_settings(config_path: Path):
     from operations_center.config import load_settings
+
     return load_settings(config_path)
 
 
 def _plane_client(settings):
     from operations_center.adapters.plane import PlaneClient
+
     return PlaneClient(
         base_url=settings.plane.base_url,
         api_token=settings.plane_token(),
@@ -61,15 +65,22 @@ def _plane_client(settings):
 
 # ── Heartbeat ─────────────────────────────────────────────────────────────────
 
+
 def _write_heartbeat(status_dir: Path, role: str, status: str = "idle") -> None:
     try:
         status_dir.mkdir(parents=True, exist_ok=True)
         hb = status_dir / f"heartbeat_{role}.json"
-        hb.write_text(json.dumps({
-            "role":   role,
-            "at":     datetime.now(UTC).isoformat(),
-            "status": status,
-        }, ensure_ascii=False), encoding="utf-8")
+        hb.write_text(
+            json.dumps(
+                {
+                    "role": role,
+                    "at": datetime.now(UTC).isoformat(),
+                    "status": status,
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
     except Exception:
         pass
 
@@ -83,16 +94,17 @@ def _heartbeat_loop(status_dir: Path, role: str, stop_event: threading.Event) ->
 
 # ── Main poll loop ────────────────────────────────────────────────────────────
 
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="OperationsCenter board worker — polls Plane and executes tasks by role",
     )
-    parser.add_argument("--config",                 required=True, type=Path)
-    parser.add_argument("--role",                   required=True, choices=list(ROLE_KINDS))
-    parser.add_argument("--poll-interval-seconds",  type=int, default=30, dest="poll_interval")
-    parser.add_argument("--status-dir",             type=Path, default=None, dest="status_dir")
-    parser.add_argument("--once",                   action="store_true")
-    parser.add_argument("--log-level",              default="INFO")
+    parser.add_argument("--config", required=True, type=Path)
+    parser.add_argument("--role", required=True, choices=list(ROLE_KINDS))
+    parser.add_argument("--poll-interval-seconds", type=int, default=30, dest="poll_interval")
+    parser.add_argument("--status-dir", type=Path, default=None, dest="status_dir")
+    parser.add_argument("--once", action="store_true")
+    parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -101,7 +113,7 @@ def main() -> int:
         datefmt="%H:%M:%S",
     )
 
-    role       = args.role
+    role = args.role
     status_dir = args.status_dir or (
         Path(__file__).resolve().parents[4] / "logs" / "local" / "watch-all"
     )
@@ -111,12 +123,12 @@ def main() -> int:
     while True:
         try:
             settings = _load_settings(args.config)
-            client   = _plane_client(settings)
+            client = _plane_client(settings)
             try:
                 issue = claim_next(client, role, settings)
                 if issue:
                     stop_event = threading.Event()
-                    hb_thread  = threading.Thread(
+                    hb_thread = threading.Thread(
                         target=_heartbeat_loop,
                         args=(status_dir, role, stop_event),
                         daemon=True,

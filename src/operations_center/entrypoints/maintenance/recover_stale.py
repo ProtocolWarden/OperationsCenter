@@ -14,6 +14,7 @@ Run periodically (e.g. via cron or watchdog hook):
         [--max-age-seconds 14400]   # default: 4 hours
         [--dry-run]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -23,7 +24,6 @@ from pathlib import Path
 
 from operations_center.adapters.plane import PlaneClient
 from operations_center.config import load_settings
-
 
 _DEFAULT_MAX_AGE = 4 * 60 * 60  # 4 hours
 
@@ -40,15 +40,21 @@ def _parse_iso(s: str | None) -> datetime | None:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Reset stale Running tasks to Ready for AI")
     parser.add_argument("--config", required=True, type=Path)
-    parser.add_argument("--max-age-seconds", type=int, default=_DEFAULT_MAX_AGE,
-                        help=f"reset Running tasks older than this (default: {_DEFAULT_MAX_AGE}s = 4h)")
     parser.add_argument(
-        "--per-kind", action="store_true",
-        help="use per-task-kind TTLs (goal=4h, test=45min, improve=90min) "
-             "instead of a single threshold. Honors task-kind labels.",
+        "--max-age-seconds",
+        type=int,
+        default=_DEFAULT_MAX_AGE,
+        help=f"reset Running tasks older than this (default: {_DEFAULT_MAX_AGE}s = 4h)",
     )
-    parser.add_argument("--dry-run", action="store_true",
-                        help="report what would be reset without modifying Plane")
+    parser.add_argument(
+        "--per-kind",
+        action="store_true",
+        help="use per-task-kind TTLs (goal=4h, test=45min, improve=90min) "
+        "instead of a single threshold. Honors task-kind labels.",
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="report what would be reset without modifying Plane"
+    )
     args = parser.parse_args()
 
     settings = load_settings(args.config)
@@ -74,12 +80,13 @@ def main() -> int:
     # structured candidate list. We unify the output shape below.
     if args.per_kind:
         from operations_center.reconcile_running import reconcile_stale_running_issues
+
         candidates = reconcile_stale_running_issues(items, now=now)
         for cand in candidates:
             entry = {
-                "id":         cand.task_id,
-                "title":      cand.title,
-                "task_kind":  cand.task_kind,
+                "id": cand.task_id,
+                "title": cand.title,
+                "task_kind": cand.task_kind,
                 "age_minutes": cand.age_minutes,
                 "ttl_minutes": cand.ttl_minutes,
             }
@@ -103,21 +110,23 @@ def main() -> int:
                 skipped.append(entry)
         client.close()
         out = {
-            "scanned_at":      now.isoformat(),
-            "mode":            "per-kind",
-            "dry_run":         args.dry_run,
-            "reset_count":     sum(1 for r in reset if r.get("action") == "reset"),
+            "scanned_at": now.isoformat(),
+            "mode": "per-kind",
+            "dry_run": args.dry_run,
+            "reset_count": sum(1 for r in reset if r.get("action") == "reset"),
             "would_reset_count": sum(1 for r in reset if r.get("action") == "would_reset"),
-            "skipped_count":   len(skipped),
-            "reset":           reset,
-            "skipped":         skipped,
+            "skipped_count": len(skipped),
+            "reset": reset,
+            "skipped": skipped,
         }
         print(json.dumps(out, indent=2, ensure_ascii=False))
         return 0
 
     for issue in items:
         state = issue.get("state")
-        state_name = (state.get("name", "") if isinstance(state, dict) else str(state or "")).strip()
+        state_name = (
+            state.get("name", "") if isinstance(state, dict) else str(state or "")
+        ).strip()
         if state_name.lower() != "running":
             continue
         updated = _parse_iso(issue.get("updated_at")) or _parse_iso(issue.get("created_at"))
@@ -128,7 +137,7 @@ def main() -> int:
         if age < cutoff_seconds:
             continue
         entry = {
-            "id":    str(issue["id"]),
+            "id": str(issue["id"]),
             "title": (issue.get("name") or "")[:80],
             "age_seconds": int(age),
         }
@@ -141,7 +150,7 @@ def main() -> int:
             client.comment_issue(
                 entry["id"],
                 "Auto-recovered from stale Running state by maintenance.recover_stale "
-                f"(age {int(age/60)}m, threshold {int(cutoff_seconds/60)}m). "
+                f"(age {int(age / 60)}m, threshold {int(cutoff_seconds / 60)}m). "
                 "The previous run did not produce a result file — re-promoted to "
                 "Ready for AI for a fresh attempt.",
             )
@@ -149,19 +158,19 @@ def main() -> int:
             reset.append(entry)
         except Exception as exc:
             entry["action"] = "error"
-            entry["error"]  = str(exc)
+            entry["error"] = str(exc)
             skipped.append(entry)
 
     client.close()
     out = {
-        "scanned_at":     now.isoformat(),
+        "scanned_at": now.isoformat(),
         "max_age_seconds": cutoff_seconds,
-        "dry_run":         args.dry_run,
-        "reset_count":     sum(1 for r in reset if r.get("action") == "reset"),
+        "dry_run": args.dry_run,
+        "reset_count": sum(1 for r in reset if r.get("action") == "reset"),
         "would_reset_count": sum(1 for r in reset if r.get("action") == "would_reset"),
-        "skipped_count":   len(skipped),
-        "reset":           reset,
-        "skipped":         skipped,
+        "skipped_count": len(skipped),
+        "reset": reset,
+        "skipped": skipped,
     }
     print(json.dumps(out, indent=2, ensure_ascii=False))
     return 0

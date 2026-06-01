@@ -29,7 +29,10 @@ _LOAD_REPORT_TARGET = "operations_center.entrypoints.calibration.main.load_calib
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_mock_index(repo_id: str = "example_managed_repo", audit_type: str = "audit_type_1") -> MagicMock:
+
+def _make_mock_index(
+    repo_id: str = "example_managed_repo", audit_type: str = "audit_type_1"
+) -> MagicMock:
     index = MagicMock()
     index.source.repo_id = repo_id
     index.source.audit_type = audit_type
@@ -55,11 +58,15 @@ def _make_mock_report(has_errors: bool = False) -> MagicMock:
     summary.excluded_path_count = 0
     report.artifact_index_summary = summary
 
-    report.model_dump_json = MagicMock(return_value=json.dumps({
-        "repo_id": "example_managed_repo",
-        "audit_type": "audit_type_1",
-        "analysis_profile": "summary",
-    }))
+    report.model_dump_json = MagicMock(
+        return_value=json.dumps(
+            {
+                "repo_id": "example_managed_repo",
+                "audit_type": "audit_type_1",
+                "analysis_profile": "summary",
+            }
+        )
+    )
     return report
 
 
@@ -72,6 +79,7 @@ def _make_manifest_file(tmp_path: Path) -> Path:
 # ---------------------------------------------------------------------------
 # cmd_analyze
 # ---------------------------------------------------------------------------
+
 
 class TestCmdAnalyze:
     def test_analyze_summary_profile(self, tmp_path: Path):
@@ -128,11 +136,14 @@ class TestCmdAnalyze:
             patch(_ANALYZE_TARGET, return_value=report),
             patch(_WRITE_REPORT_TARGET, return_value=written_path) as mock_write,
         ):
-            _out = _runner.invoke(app, ["analyze", "--manifest", str(mf), "--output-dir", str(tmp_path)])
+            _out = _runner.invoke(
+                app, ["analyze", "--manifest", str(mf), "--output-dir", str(tmp_path)]
+            )
         assert mock_write.called
 
     def test_analyze_not_found_exits_code_1(self, tmp_path: Path):
         from operations_center.artifact_index import ManifestNotFoundError
+
         mf = _make_manifest_file(tmp_path)
         with patch(_LOAD_MANIFEST_TARGET, side_effect=ManifestNotFoundError("missing")):
             out = _runner.invoke(app, ["analyze", "--manifest", str(mf)])
@@ -142,6 +153,7 @@ class TestCmdAnalyze:
 # ---------------------------------------------------------------------------
 # cmd_tune_autonomy
 # ---------------------------------------------------------------------------
+
 
 class TestCmdTuneAutonomy:
     def test_tune_autonomy_no_recommendations(self, tmp_path: Path):
@@ -173,6 +185,7 @@ class TestCmdTuneAutonomy:
 # ---------------------------------------------------------------------------
 # cmd_report
 # ---------------------------------------------------------------------------
+
 
 class TestCmdReport:
     def test_report_displays_summary(self, tmp_path: Path):

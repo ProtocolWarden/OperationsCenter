@@ -10,7 +10,6 @@ from operations_center.observer.collectors.architecture_signal import (
     ArchitectureSignalCollector,
 )
 
-
 # ── _detect_cycles ──────────────────────────────────────────────────
 
 
@@ -252,10 +251,7 @@ class TestComputeMaxImportDepth:
         graph = {nodes[i]: {nodes[i + 1]} for i in range(len(nodes) - 1)}
         graph[nodes[-1]] = set()
         module_set = set(nodes)
-        assert (
-            ArchitectureSignalCollector._compute_max_import_depth(graph, module_set)
-            == 1999
-        )
+        assert ArchitectureSignalCollector._compute_max_import_depth(graph, module_set) == 1999
 
     def test_deep_chain_with_cycle_terminates(self):
         """A 2000-node chain with a back-edge terminates via visited tracking."""
@@ -275,10 +271,7 @@ class TestComputeMaxImportDepth:
         for leaf in leaves:
             graph[leaf] = set()
         module_set = {hub} | set(leaves)
-        assert (
-            ArchitectureSignalCollector._compute_max_import_depth(graph, module_set)
-            == 1
-        )
+        assert ArchitectureSignalCollector._compute_max_import_depth(graph, module_set) == 1
 
     def test_mixed_deep_wide(self):
         """Deep chain with wide branching at points. Verify correct max depth."""
@@ -294,19 +287,14 @@ class TestComputeMaxImportDepth:
             graph[wl] = set()
         module_set = set(chain) | set(wide_leaves)
         # Max depth is the full chain length: 99
-        assert (
-            ArchitectureSignalCollector._compute_max_import_depth(graph, module_set)
-            == 99
-        )
+        assert ArchitectureSignalCollector._compute_max_import_depth(graph, module_set) == 99
 
     def test_complete_graph_small(self):
         """Complete graph on 4 nodes. Should terminate and return reasonable depth."""
         nodes = ["A", "B", "C", "D"]
         graph = {n: {m for m in nodes if m != n} for n in nodes}
         module_set = set(nodes)
-        result = ArchitectureSignalCollector._compute_max_import_depth(
-            graph, module_set
-        )
+        result = ArchitectureSignalCollector._compute_max_import_depth(graph, module_set)
         # BFS with visited set: from any node, depth is 1 (all others reachable in 1 hop)
         assert result == 1
 

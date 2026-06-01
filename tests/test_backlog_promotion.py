@@ -1,22 +1,30 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Tests for the backlog_promotion pipeline: collector → deriver → rule."""
+
 from __future__ import annotations
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 
-
+from operations_center.decision.rules.backlog_promotion import BacklogPromotionRule
+from operations_center.insights.derivers.backlog_promotion import BacklogPromotionDeriver
+from operations_center.insights.normalizer import InsightNormalizer
 from operations_center.observer.collectors.backlog import (
     BacklogCollector,
     _parse_backlog,
     promotable_items,
 )
-from operations_center.observer.models import BacklogItem, BacklogSignal, RepoSignalsSnapshot, RepoStateSnapshot, RepoContextSnapshot, CheckSignal, DependencyDriftSignal, TodoSignal
-from operations_center.insights.derivers.backlog_promotion import BacklogPromotionDeriver
-from operations_center.insights.normalizer import InsightNormalizer
-from operations_center.decision.rules.backlog_promotion import BacklogPromotionRule
-
+from operations_center.observer.models import (
+    BacklogItem,
+    BacklogSignal,
+    CheckSignal,
+    DependencyDriftSignal,
+    RepoContextSnapshot,
+    RepoSignalsSnapshot,
+    RepoStateSnapshot,
+    TodoSignal,
+)
 
 # ---------------------------------------------------------------------------
 # Parser
@@ -79,7 +87,10 @@ def test_parse_types():
 def test_parse_description():
     signal = _parse_backlog(_SAMPLE_BACKLOG)
     by_title = {item.title: item for item in signal.items}
-    assert "promote hotspot families" in by_title["autonomy — Promote hotspot families"].description.lower()
+    assert (
+        "promote hotspot families"
+        in by_title["autonomy — Promote hotspot families"].description.lower()
+    )
 
 
 def test_promotable_items_excludes_arch_and_redesign():
@@ -118,10 +129,13 @@ def test_default_type_is_feature_when_untagged():
 # Collector (filesystem)
 # ---------------------------------------------------------------------------
 
+
 def test_collector_reads_backlog_file(tmp_path: Path):
     backlog = tmp_path / "docs" / "backlog.md"
     backlog.parent.mkdir()
-    backlog.write_text("## Next\n\n### ci — Add CI check\n**Type**: maintenance\nRun checks in CI.\n")
+    backlog.write_text(
+        "## Next\n\n### ci — Add CI check\n**Type**: maintenance\nRun checks in CI.\n"
+    )
     signal = BacklogCollector().collect(_fake_context(tmp_path))
     assert len(signal.items) == 1
     assert signal.items[0].item_type == "maintenance"
@@ -135,6 +149,7 @@ def test_collector_returns_empty_when_no_backlog(tmp_path: Path):
 # ---------------------------------------------------------------------------
 # Deriver
 # ---------------------------------------------------------------------------
+
 
 def _make_snapshot(items: list[BacklogItem], repo_name: str = "myrepo") -> RepoStateSnapshot:
     signals = RepoSignalsSnapshot(
@@ -187,6 +202,7 @@ def test_deriver_insight_kind_is_backlog_item():
 # Decision rule
 # ---------------------------------------------------------------------------
 
+
 def test_rule_emits_candidate_per_backlog_insight():
     items = [
         BacklogItem(title="Add CI artifact", item_type="maintenance"),
@@ -202,6 +218,7 @@ def test_rule_emits_candidate_per_backlog_insight():
 
 def test_rule_skips_non_backlog_insights():
     from operations_center.insights.models import DerivedInsight
+
     other = DerivedInsight(
         insight_id="test-id",
         kind="observation_coverage",
@@ -226,6 +243,7 @@ def test_rule_title_hint_matches_backlog_title():
 
 def test_backlog_promotion_not_in_default_families():
     from operations_center.decision.service import _DEFAULT_ALLOWED_FAMILIES, ALL_FAMILIES
+
     assert "backlog_promotion" not in _DEFAULT_ALLOWED_FAMILIES
     assert "backlog_promotion" in ALL_FAMILIES
 
@@ -233,6 +251,7 @@ def test_backlog_promotion_not_in_default_families():
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 class _FakeContext:
     def __init__(self, repo_path: Path) -> None:

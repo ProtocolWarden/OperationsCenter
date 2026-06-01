@@ -5,7 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, cast
 
-from operations_center.decision.models import CandidateRationale, EvidenceBundle, ProposalCandidate, ProposalOutline
+from operations_center.decision.models import (
+    CandidateRationale,
+    EvidenceBundle,
+    ProposalCandidate,
+    ProposalOutline,
+)
 from operations_center.decision.validation_profiles import profile_for_family
 
 
@@ -26,9 +31,7 @@ class CandidateSpec:
     validation_profile: str = ""
 
 
-def _synthesize_evidence_bundle(
-    family: str, evidence: dict[str, object]
-) -> EvidenceBundle | None:
+def _synthesize_evidence_bundle(family: str, evidence: dict[str, object]) -> EvidenceBundle | None:
     """Build a structured EvidenceBundle from a raw evidence dict.
 
     Only families with a stable, well-known evidence schema are handled here.
@@ -42,9 +45,13 @@ def _synthesize_evidence_bundle(
         return EvidenceBundle(
             kind="lint_count",
             count=int(count_raw) if count_raw is not None else None,
-            distinct_file_count=int(ev["distinct_file_count"]) if "distinct_file_count" in ev else None,
+            distinct_file_count=int(ev["distinct_file_count"])
+            if "distinct_file_count" in ev
+            else None,
             delta=int(ev["delta"]) if "delta" in ev else None,
-            trend="worsening" if ev.get("delta", 0) > 0 else ("improving" if ev.get("delta", 0) < 0 else "present"),
+            trend="worsening"
+            if ev.get("delta", 0) > 0
+            else ("improving" if ev.get("delta", 0) < 0 else "present"),
             top_codes=[str(c) for c in ev.get("top_codes", [])],
             source=str(ev.get("source", "ruff")),
         )
@@ -55,9 +62,13 @@ def _synthesize_evidence_bundle(
         return EvidenceBundle(
             kind="type_count",
             count=int(count_raw) if count_raw is not None else None,
-            distinct_file_count=int(ev["distinct_file_count"]) if "distinct_file_count" in ev else None,
+            distinct_file_count=int(ev["distinct_file_count"])
+            if "distinct_file_count" in ev
+            else None,
             delta=int(ev["delta"]) if "delta" in ev else None,
-            trend="worsening" if ev.get("delta", 0) > 0 else ("improving" if ev.get("delta", 0) < 0 else "present"),
+            trend="worsening"
+            if ev.get("delta", 0) > 0
+            else ("improving" if ev.get("delta", 0) < 0 else "present"),
             top_codes=[str(c) for c in ev.get("top_codes", [])],
             source=str(ev.get("source", "type_checker")),
         )

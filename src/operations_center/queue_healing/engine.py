@@ -52,11 +52,7 @@ class QueueHealingEngine:
                 retry_lineage_id=task.retry_lineage_id,
                 escalate=True,
             )
-        if (
-            task.duplicate_exists_in_blocked
-            and no_consumer_can_execute
-            and task.retry_safe
-        ):
+        if task.duplicate_exists_in_blocked and no_consumer_can_execute and task.retry_safe:
             return QueueHealingDecision(
                 task_id=task.task_id,
                 transition=QueueTransition.BLOCKED_TO_READY_FOR_AI,

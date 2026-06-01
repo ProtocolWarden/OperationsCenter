@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Fixture builders for transition testing across derivers."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -50,13 +51,17 @@ class TransitionFixture:
                 status=lint_status,
                 violation_count=lint_count,
                 top_violations=lint_violations or [],
-                distinct_file_count=len({v.path for v in (lint_violations or [])}) if lint_violations else 0,
+                distinct_file_count=len({v.path for v in (lint_violations or [])})
+                if lint_violations
+                else 0,
             ),
             type_signal=TypeSignal(
                 status=type_status,
                 error_count=type_count,
                 top_errors=type_errors or [],
-                distinct_file_count=len({e.path for e in (type_errors or [])}) if type_errors else 0,
+                distinct_file_count=len({e.path for e in (type_errors or [])})
+                if type_errors
+                else 0,
             ),
         )
         return RepoStateSnapshot(

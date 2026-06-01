@@ -120,6 +120,7 @@ def _make_manifest_payload(
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def completed_manifest_payload() -> dict[str, Any]:
     return _make_manifest_payload(

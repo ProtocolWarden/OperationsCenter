@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from operations_center.contracts.enums import FailureReasonCategory
 
-
 _TIMEOUT_SIGNALS = (
     "[timeout:",
     "timeout expired",
@@ -50,6 +49,7 @@ _VALIDATION_FAILED_SIGNALS = (
     "tests failed",
     "type errors found",
 )
+
 
 def categorize_failure(
     outcome: str,

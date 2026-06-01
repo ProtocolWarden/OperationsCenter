@@ -17,6 +17,7 @@ Invariants: pure function. No Plane calls, no notifications. Caller
 decides what to do with the result (post a comment, file a ticket,
 publish an alert).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -27,9 +28,10 @@ from typing import Any
 @dataclass(frozen=True)
 class CrossRepoImpact:
     """A repo whose declared shared paths intersect the changed file set."""
+
     repo_key: str
-    matched_paths: tuple[str, ...]   # the path-prefix(es) that matched
-    changed_files: tuple[str, ...]   # files that fell under those prefixes
+    matched_paths: tuple[str, ...]  # the path-prefix(es) that matched
+    changed_files: tuple[str, ...]  # files that fell under those prefixes
 
 
 def _normalize(path: str) -> str:
@@ -73,9 +75,11 @@ def _check_cross_repo_impact(
                 matched_prefixes.append(prefix)
                 matched_files.extend(files_in)
         if matched_prefixes:
-            out.append(CrossRepoImpact(
-                repo_key=rk,
-                matched_paths=tuple(sorted(set(matched_prefixes))),
-                changed_files=tuple(sorted(set(matched_files))),
-            ))
+            out.append(
+                CrossRepoImpact(
+                    repo_key=rk,
+                    matched_paths=tuple(sorted(set(matched_prefixes))),
+                    changed_files=tuple(sorted(set(matched_files))),
+                )
+            )
     return out

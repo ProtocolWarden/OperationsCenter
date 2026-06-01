@@ -6,6 +6,7 @@ All GitHub API calls are intercepted via monkeypatching GitHubPRClient methods.
 The pipeline (_run_pipeline) is stubbed to return controlled verdicts.
 State files use tmp_path so no real disk state is left behind.
 """
+
 from __future__ import annotations
 
 import json
@@ -17,12 +18,11 @@ import pytest
 
 from operations_center.entrypoints.pr_review_watcher import main as watcher
 
-
 # ── Shared fixtures ───────────────────────────────────────────────────────────
 
-REPO_KEY   = "MyRepo"
-PR_NUMBER  = 42
-STATE_KEY  = f"{REPO_KEY}-{PR_NUMBER}"
+REPO_KEY = "MyRepo"
+PR_NUMBER = 42
+STATE_KEY = f"{REPO_KEY}-{PR_NUMBER}"
 
 REVIEWER_CFG = MagicMock(
     bot_logins=[],
@@ -63,6 +63,7 @@ def _make_gh() -> MagicMock:
 
 # ── State helpers ─────────────────────────────────────────────────────────────
 
+
 def test_new_state_defaults(tmp_path: Path) -> None:
     state = watcher._new_state(REPO_KEY, PR_NUMBER)
     assert state["phase"] == "ci_fix"
@@ -96,18 +97,25 @@ def test_save_state_creates_parent_dirs(tmp_path: Path) -> None:
 
 # ── Phase 1: LGTM path ───────────────────────────────────────────────────────
 
+
 def test_phase1_lgtm_merges_and_removes_state(tmp_path: Path) -> None:
     state, sp = _make_state(tmp_path, phase="self_review")
     gh = _make_gh()
 
-    with patch.object(watcher, "_run_pipeline", return_value={"result": "LGTM", "summary": "all good"}), \
-         patch.object(watcher, "_plane_client") as mock_pc:
+    with (
+        patch.object(
+            watcher, "_run_pipeline", return_value={"result": "LGTM", "summary": "all good"}
+        ),
+        patch.object(watcher, "_plane_client") as mock_pc,
+    ):
         mock_plane = MagicMock()
         mock_pc.return_value.__enter__ = lambda s: mock_plane
         mock_pc.return_value = MagicMock()
         mock_pc.return_value.close = MagicMock()
 
-        watcher._phase1(state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS)
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
 
     gh.merge_pr.assert_called_once_with("owner", "repo", PR_NUMBER, merge_method="squash")
     assert not sp.exists()
@@ -117,9 +125,13 @@ def test_phase1_lgtm_increments_loop_count(tmp_path: Path) -> None:
     state, sp = _make_state(tmp_path, phase="self_review")
     gh = _make_gh()
 
-    with patch.object(watcher, "_run_pipeline", return_value={"result": "LGTM", "summary": "ok"}), \
-         patch.object(watcher, "_merge_and_done") as mock_merge:
-        watcher._phase1(state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS)
+    with (
+        patch.object(watcher, "_run_pipeline", return_value={"result": "LGTM", "summary": "ok"}),
+        patch.object(watcher, "_merge_and_done") as mock_merge,
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
 
     mock_merge.assert_called_once()
     # loop count was incremented before merge decision
@@ -129,12 +141,17 @@ def test_phase1_lgtm_increments_loop_count(tmp_path: Path) -> None:
 
 # ── Phase 1: CONCERNS path ───────────────────────────────────────────────────
 
+
 def test_phase1_concerns_posts_comment(tmp_path: Path) -> None:
     state, sp = _make_state(tmp_path, phase="self_review")
     gh = _make_gh()
 
-    with patch.object(watcher, "_run_pipeline", return_value={"result": "CONCERNS", "summary": "fix the bug"}):
-        watcher._phase1(state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS)
+    with patch.object(
+        watcher, "_run_pipeline", return_value={"result": "CONCERNS", "summary": "fix the bug"}
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
 
     gh.post_comment.assert_called_once()
     body = gh.post_comment.call_args[0][3]
@@ -146,8 +163,12 @@ def test_phase1_concerns_stays_in_phase1_below_max_loops(tmp_path: Path) -> None
     state, sp = _make_state(tmp_path, phase="self_review", self_review_loops=0)
     gh = _make_gh()
 
-    with patch.object(watcher, "_run_pipeline", return_value={"result": "CONCERNS", "summary": "issues"}):
-        watcher._phase1(state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS)
+    with patch.object(
+        watcher, "_run_pipeline", return_value={"result": "CONCERNS", "summary": "issues"}
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
 
     loaded = watcher._load_state(sp)
     assert loaded["phase"] == "self_review"
@@ -159,9 +180,15 @@ def test_phase1_concerns_auto_merges_at_max_loops(tmp_path: Path) -> None:
     state, sp = _make_state(tmp_path, phase="self_review", self_review_loops=1)
     gh = _make_gh()
 
-    with patch.object(watcher, "_run_pipeline", return_value={"result": "CONCERNS", "summary": "still broken"}), \
-         patch.object(watcher, "_merge_and_done") as mock_merge:
-        watcher._phase1(state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS)
+    with (
+        patch.object(
+            watcher, "_run_pipeline", return_value={"result": "CONCERNS", "summary": "still broken"}
+        ),
+        patch.object(watcher, "_merge_and_done") as mock_merge,
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
 
     mock_merge.assert_called_once()
     assert mock_merge.call_args[1]["reason"] == "self_review_auto_merge"
@@ -172,7 +199,9 @@ def test_phase1_no_verdict_retries_next_poll(tmp_path: Path) -> None:
     gh = _make_gh()
 
     with patch.object(watcher, "_run_pipeline", return_value=None):
-        watcher._phase1(state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS)
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
 
     loaded = watcher._load_state(sp)
     assert loaded["phase"] == "self_review"
@@ -186,9 +215,13 @@ def test_phase1_no_verdict_auto_merges_at_max_loops(tmp_path: Path) -> None:
     state, sp = _make_state(tmp_path, phase="self_review", self_review_loops=1)
     gh = _make_gh()
 
-    with patch.object(watcher, "_run_pipeline", return_value=None), \
-         patch.object(watcher, "_merge_and_done") as mock_merge:
-        watcher._phase1(state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS)
+    with (
+        patch.object(watcher, "_run_pipeline", return_value=None),
+        patch.object(watcher, "_merge_and_done") as mock_merge,
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
 
     mock_merge.assert_called_once()
     assert mock_merge.call_args[1]["reason"] == "no_verdict_auto_merge"
@@ -200,13 +233,16 @@ def test_phase1_skips_empty_diff(tmp_path: Path) -> None:
     gh.get_pr_diff.return_value = ""
 
     with patch.object(watcher, "_run_pipeline") as mock_pipeline:
-        watcher._phase1(state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS)
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
 
     mock_pipeline.assert_not_called()
     gh.merge_pr.assert_not_called()
 
 
 # ── merge_and_done ────────────────────────────────────────────────────────────
+
 
 def test_merge_and_done_removes_state_file(tmp_path: Path) -> None:
     state, sp = _make_state(tmp_path, plane_task_id=None)
@@ -224,7 +260,9 @@ def test_merge_and_done_transitions_plane_task(tmp_path: Path) -> None:
 
     mock_client = MagicMock()
     with patch.object(watcher, "_plane_client", return_value=mock_client):
-        watcher._merge_and_done(state, sp, _pr_data(), gh, "owner", "repo", SETTINGS, reason="lgtm_comment")
+        watcher._merge_and_done(
+            state, sp, _pr_data(), gh, "owner", "repo", SETTINGS, reason="lgtm_comment"
+        )
 
     mock_client.transition_issue.assert_called_once_with("task-abc", "Done")
     mock_client.comment_issue.assert_called_once()
@@ -245,7 +283,9 @@ def test_merge_and_done_skips_when_not_mergeable(tmp_path: Path) -> None:
     gh = _make_gh()
     gh.get_mergeable.return_value = False
 
-    watcher._merge_and_done(state, sp, _pr_data(), gh, "owner", "repo", SETTINGS, reason="auto_merge_on_ci_green")
+    watcher._merge_and_done(
+        state, sp, _pr_data(), gh, "owner", "repo", SETTINGS, reason="auto_merge_on_ci_green"
+    )
 
     gh.merge_pr.assert_not_called()
     assert sp.exists()  # state preserved — branch must be rebased
@@ -256,7 +296,9 @@ def test_merge_and_done_proceeds_when_mergeable_unknown(tmp_path: Path) -> None:
     gh = _make_gh()
     gh.get_mergeable.return_value = None  # GitHub still computing
 
-    watcher._merge_and_done(state, sp, _pr_data(), gh, "owner", "repo", SETTINGS, reason="auto_merge_on_ci_green")
+    watcher._merge_and_done(
+        state, sp, _pr_data(), gh, "owner", "repo", SETTINGS, reason="auto_merge_on_ci_green"
+    )
 
     gh.merge_pr.assert_called_once_with("owner", "repo", PR_NUMBER, merge_method="squash")
     assert not sp.exists()  # merged successfully, state cleaned up
@@ -264,18 +306,23 @@ def test_merge_and_done_proceeds_when_mergeable_unknown(tmp_path: Path) -> None:
 
 # ── draft PR skipped ─────────────────────────────────────────────────────────
 
+
 def test_poll_once_skips_draft_prs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     settings = MagicMock(
         reviewer=REVIEWER_CFG,
-        repos={REPO_KEY: MagicMock(await_review=True, clone_url=f"git@github.com:owner/{REPO_KEY}.git")},
+        repos={
+            REPO_KEY: MagicMock(await_review=True, clone_url=f"git@github.com:owner/{REPO_KEY}.git")
+        },
         plane=SETTINGS.plane,
     )
 
     gh = _make_gh()
     gh.list_open_prs.return_value = [{"number": 1, "title": "WIP", "draft": True}]
 
-    with patch.object(watcher, "_github_client", return_value=gh), \
-         patch.object(watcher, "_find_plane_task_id", return_value=None):
+    with (
+        patch.object(watcher, "_github_client", return_value=gh),
+        patch.object(watcher, "_find_plane_task_id", return_value=None),
+    ):
         watcher._poll_once(tmp_path, tmp_path / "cfg.yaml", settings)
 
     sp = watcher._state_path(tmp_path, REPO_KEY, 1)
@@ -284,19 +331,24 @@ def test_poll_once_skips_draft_prs(tmp_path: Path, monkeypatch: pytest.MonkeyPat
 
 # ── poll_once creates state for new PRs ──────────────────────────────────────
 
+
 def test_poll_once_creates_state_for_new_pr(tmp_path: Path) -> None:
     settings = MagicMock(
         reviewer=REVIEWER_CFG,
-        repos={REPO_KEY: MagicMock(await_review=True, clone_url=f"git@github.com:owner/{REPO_KEY}.git")},
+        repos={
+            REPO_KEY: MagicMock(await_review=True, clone_url=f"git@github.com:owner/{REPO_KEY}.git")
+        },
         plane=SETTINGS.plane,
     )
 
     gh = _make_gh()
     gh.list_open_prs.return_value = [_pr_data()]
 
-    with patch.object(watcher, "_github_client", return_value=gh), \
-         patch.object(watcher, "_find_plane_task_id", return_value=None), \
-         patch.object(watcher, "_phase0_ci_fix") as mock_phase0:
+    with (
+        patch.object(watcher, "_github_client", return_value=gh),
+        patch.object(watcher, "_find_plane_task_id", return_value=None),
+        patch.object(watcher, "_phase0_ci_fix") as mock_phase0,
+    ):
         watcher._poll_once(tmp_path, tmp_path / "cfg.yaml", settings)
 
     sp = watcher._state_path(tmp_path, REPO_KEY, PR_NUMBER)
@@ -310,7 +362,11 @@ def test_poll_once_creates_state_for_new_pr(tmp_path: Path) -> None:
 def test_poll_once_skips_repos_without_await_review(tmp_path: Path) -> None:
     settings = MagicMock(
         reviewer=REVIEWER_CFG,
-        repos={REPO_KEY: MagicMock(await_review=False, clone_url=f"git@github.com:owner/{REPO_KEY}.git")},
+        repos={
+            REPO_KEY: MagicMock(
+                await_review=False, clone_url=f"git@github.com:owner/{REPO_KEY}.git"
+            )
+        },
         plane=SETTINGS.plane,
     )
 
@@ -322,6 +378,7 @@ def test_poll_once_skips_repos_without_await_review(tmp_path: Path) -> None:
 
 
 # ── heartbeat ────────────────────────────────────────────────────────────────
+
 
 def test_write_heartbeat_creates_file(tmp_path: Path) -> None:
     watcher._write_heartbeat(tmp_path)
@@ -341,23 +398,30 @@ def test_write_heartbeat_idempotent(tmp_path: Path) -> None:
 
 # ── CLI contract ─────────────────────────────────────────────────────────────
 
+
 def test_cli_accepts_all_flags(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     config = tmp_path / "cfg.yaml"
-    config.write_text("plane:\n  base_url: http://x\n  api_token_env: X\n  workspace_slug: ws\n  project_id: p\ngit:\n  provider: github\nrepos: {}\n")
+    config.write_text(
+        "plane:\n  base_url: http://x\n  api_token_env: X\n  workspace_slug: ws\n  project_id: p\ngit:\n  provider: github\nrepos: {}\n"
+    )
 
     monkeypatch.setenv("X", "token")
 
-    with patch.object(watcher, "_load_settings") as mock_settings, \
-         patch.object(watcher, "_poll_once"):
+    with (
+        patch.object(watcher, "_load_settings") as mock_settings,
+        patch.object(watcher, "_poll_once"),
+    ):
         mock_settings.return_value = SETTINGS
         _result = watcher.main.__wrapped__() if hasattr(watcher.main, "__wrapped__") else None
 
     # Just verify --help doesn't crash and flags are accepted
     import subprocess
     import sys
+
     proc = subprocess.run(
         [sys.executable, "-m", "operations_center.entrypoints.pr_review_watcher.main", "--help"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     assert proc.returncode == 0
     assert "--config" in proc.stdout

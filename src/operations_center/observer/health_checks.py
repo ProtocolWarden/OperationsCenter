@@ -8,15 +8,17 @@ Provides:
 - Remediation recommendations
 - Health check endpoints
 """
+
 from __future__ import annotations
 
-from dataclasses import dataclass, field as dataclass_field
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Optional
 
-from .metrics import CollectorMetrics, MetricsCollector, SystemMetrics
-from .security_logging import AlertCondition, ErrorCategory, MalformedPayloadMetrics
+from .metrics import MetricsCollector
+from .security_logging import AlertCondition, MalformedPayloadMetrics
 
 
 class HealthStatus(str, Enum):
@@ -36,9 +38,7 @@ class HealthCheckResult:
     check_name: str
     status: HealthStatus
     message: str
-    timestamp: datetime = dataclass_field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    timestamp: datetime = dataclass_field(default_factory=lambda: datetime.now(timezone.utc))
     details: dict = dataclass_field(default_factory=dict)
     remediation: Optional[str] = None
 
@@ -57,9 +57,7 @@ class HealthCheckResult:
 class SystemHealthReport:
     """Complete system health assessment."""
 
-    timestamp: datetime = dataclass_field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    timestamp: datetime = dataclass_field(default_factory=lambda: datetime.now(timezone.utc))
     overall_status: HealthStatus = HealthStatus.UNKNOWN
     checks: list[HealthCheckResult] = dataclass_field(default_factory=list)
     summary: str = ""
@@ -90,9 +88,7 @@ class HealthChecker:
         self.malformed_metrics = malformed_metrics
         self.alert_conditions = alert_conditions
 
-    def check_collector_health(
-        self, collector_name: str
-    ) -> HealthCheckResult:
+    def check_collector_health(self, collector_name: str) -> HealthCheckResult:
         """Check health of a specific collector."""
         metrics = self.metrics_collector.get_collector_metrics(collector_name)
 
@@ -180,7 +176,9 @@ class HealthChecker:
                 "overall_error_rate_percent": rate,
                 "total_validation_failures": system_metrics.total_validation_failures,
             },
-            remediation=remediation if status in (HealthStatus.DEGRADED, HealthStatus.CRITICAL) else None,
+            remediation=remediation
+            if status in (HealthStatus.DEGRADED, HealthStatus.CRITICAL)
+            else None,
         )
 
     def check_latency(self) -> HealthCheckResult:
@@ -214,12 +212,15 @@ class HealthChecker:
                 },
             )
 
-        status = HealthStatus.DEGRADED if len(slow_collectors) < len(metrics_list) else HealthStatus.CRITICAL
+        status = (
+            HealthStatus.DEGRADED
+            if len(slow_collectors) < len(metrics_list)
+            else HealthStatus.CRITICAL
+        )
         message = f"{len(slow_collectors)} collector(s) exceeding latency threshold (1s)"
         details = {
             "slow_collectors": [
-                {"name": name, "mean_latency_ms": latency}
-                for name, latency in slow_collectors
+                {"name": name, "mean_latency_ms": latency} for name, latency in slow_collectors
             ]
         }
         remediation = (
@@ -269,8 +270,7 @@ class HealthChecker:
         message = f"{len(triggered)} alert condition(s) triggered"
         details = {"triggered_alerts": triggered}
         remediation = (
-            "Alert conditions triggered. "
-            "Review error logs and investigate root causes of failures."
+            "Alert conditions triggered. Review error logs and investigate root causes of failures."
         )
 
         return HealthCheckResult(

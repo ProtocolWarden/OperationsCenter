@@ -35,6 +35,7 @@ _DEFAULT_STATE_DIR = _OC_ROOT / "state" / "audit_dispatch" / "locks"
 
 def _now_iso() -> str:
     from datetime import UTC, datetime
+
     return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
@@ -174,6 +175,7 @@ class ManagedRepoAuditLockRegistry:
                 # Log so operators can investigate stuck/corrupt locks instead
                 # of silently leaking them.
                 import logging
+
                 logging.getLogger(__name__).warning(
                     "lock_release_failed", exc_info=True, extra={"repo_id": repo_id}
                 )
@@ -185,9 +187,7 @@ class ManagedRepoAuditLockRegistry:
         audit_pid: int | None = None,
         audit_pgid: int | None = None,
     ) -> PersistentLockPayload:
-        return self._store.update(
-            repo_id, audit_pid=audit_pid, audit_pgid=audit_pgid
-        )
+        return self._store.update(repo_id, audit_pid=audit_pid, audit_pgid=audit_pgid)
 
     def _sweep_once(self) -> None:
         """Reclaim stale locks once on first use of this registry."""

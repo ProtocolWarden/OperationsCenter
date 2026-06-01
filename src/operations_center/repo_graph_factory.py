@@ -11,6 +11,7 @@ OperationsCenter is a consumer of the EffectiveRepoGraph — it does not
 own the manifests. Owning ResponsibilityHere is purely "give me the
 merged runtime graph."
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -100,9 +101,7 @@ def _load_local_platform_manifest_impl():
         submodule_search_locations=[str(package_init.parent)],
     )
     if spec is None or spec.loader is None:
-        raise RuntimeError(
-            f"could not load sibling PlatformManifest source from {package_init}"
-        )
+        raise RuntimeError(f"could not load sibling PlatformManifest source from {package_init}")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
@@ -148,8 +147,7 @@ def build_effective_repo_graph_from_settings(
     # work-scope mode is not selected. The two are mutually exclusive
     # at the settings layer.
     project_path = (
-        None if work_scope_path is not None
-        else _resolve_project_manifest_path(pm, repo_root)
+        None if work_scope_path is not None else _resolve_project_manifest_path(pm, repo_root)
     )
     local_path = _resolve_local_manifest_path(pm, repo_root, _logger)
 
@@ -165,13 +163,16 @@ def build_effective_repo_graph_from_settings(
             "EffectiveRepoGraph construction failed "
             "(private=%s project=%s work_scope=%s local=%s): %s; "
             "continuing without graph context",
-            private_path, project_path, work_scope_path, local_path, exc,
+            private_path,
+            project_path,
+            work_scope_path,
+            local_path,
+            exc,
         )
         return None
     except Exception as exc:  # noqa: BLE001 — defensive: never block OC startup
         _logger.warning(
-            "Unexpected error building EffectiveRepoGraph: %s; "
-            "continuing without graph context",
+            "Unexpected error building EffectiveRepoGraph: %s; continuing without graph context",
             exc,
         )
         return None
@@ -221,7 +222,9 @@ def _resolve_local_manifest_path(pm, repo_root, logger):
     if not pm.project_slug:
         return None
     try:
-        from platform_deployment_cli.local_manifest import discover_local_manifest  # ty:ignore[unresolved-import]
+        from platform_deployment_cli.local_manifest import (
+            discover_local_manifest,  # ty:ignore[unresolved-import]
+        )
     except ImportError:
         logger.debug(
             "platform_manifest.project_slug=%r set but platform_deployment_cli "
@@ -235,7 +238,8 @@ def _resolve_local_manifest_path(pm, repo_root, logger):
         logger.debug(
             "PlatformDeployment LocalManifest discovery failed for slug=%r: %s; "
             "continuing without local layer",
-            pm.project_slug, exc,
+            pm.project_slug,
+            exc,
         )
         return None
 

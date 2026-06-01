@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Tests for operations_center.impact_analysis."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -11,7 +12,6 @@ from operations_center.impact_analysis import (
     compute_contract_impact,
 )
 from operations_center.repo_graph_factory import build_effective_repo_graph
-
 
 # ---------------------------------------------------------------------------
 # Default platform manifest
@@ -62,27 +62,25 @@ class TestPlatformContractImpact:
 class TestEffectiveGraphWithProject:
     def _project_yaml_with_private_contract(self) -> str:
         return (
-            'manifest_kind: project\n'
+            "manifest_kind: project\n"
             'manifest_version: "1.0.0"\n'
-            'repos:\n'
-            '  vfa_contracts:\n'
-            '    canonical_name: VFAContracts\n'
-            '    visibility: private\n'
-            '    runtime_role: contracts\n'
-            '  vfa_api:\n'
-            '    canonical_name: VFAApi\n'
-            '    visibility: private\n'
-            '  vfa_worker:\n'
-            '    canonical_name: VFAWorker\n'
-            '    visibility: private\n'
-            'edges:\n'
-            '  - {from: VFAApi, to: VFAContracts, type: depends_on_contracts_from}\n'
-            '  - {from: VFAWorker, to: VFAContracts, type: depends_on_contracts_from}\n'
+            "repos:\n"
+            "  vfa_contracts:\n"
+            "    canonical_name: VFAContracts\n"
+            "    visibility: private\n"
+            "    runtime_role: contracts\n"
+            "  vfa_api:\n"
+            "    canonical_name: VFAApi\n"
+            "    visibility: private\n"
+            "  vfa_worker:\n"
+            "    canonical_name: VFAWorker\n"
+            "    visibility: private\n"
+            "edges:\n"
+            "  - {from: VFAApi, to: VFAContracts, type: depends_on_contracts_from}\n"
+            "  - {from: VFAWorker, to: VFAContracts, type: depends_on_contracts_from}\n"
         )
 
-    def test_private_contract_change_affects_private_consumers(
-        self, tmp_path: Path
-    ) -> None:
+    def test_private_contract_change_affects_private_consumers(self, tmp_path: Path) -> None:
         proj = tmp_path / "project.yaml"
         proj.write_text(self._project_yaml_with_private_contract(), encoding="utf-8")
         g = build_effective_repo_graph(project_manifest_path=proj)
@@ -103,14 +101,14 @@ class TestEffectiveGraphWithProject:
         # surface that private consumer alongside the public ones.
         proj = tmp_path / "project.yaml"
         proj.write_text(
-            'manifest_kind: project\n'
+            "manifest_kind: project\n"
             'manifest_version: "1.0.0"\n'
-            'repos:\n'
-            '  vfa_api:\n'
-            '    canonical_name: VFAApi\n'
-            '    visibility: private\n'
-            'edges:\n'
-            '  - {from: VFAApi, to: CxRP, type: depends_on_contracts_from}\n',
+            "repos:\n"
+            "  vfa_api:\n"
+            "    canonical_name: VFAApi\n"
+            "    visibility: private\n"
+            "edges:\n"
+            "  - {from: VFAApi, to: CxRP, type: depends_on_contracts_from}\n",
             encoding="utf-8",
         )
         g = build_effective_repo_graph(project_manifest_path=proj)
@@ -178,35 +176,35 @@ class TestEffectiveGraphWithWorkScope:
         # surface BOTH consumers alongside the public platform consumers.
         proj_a = tmp_path / "a.yaml"
         proj_a.write_text(
-            'manifest_kind: project\n'
+            "manifest_kind: project\n"
             'manifest_version: "1.0.0"\n'
-            'repos:\n'
-            '  proj_a_api:\n'
-            '    canonical_name: ProjectAAPI\n'
-            '    visibility: private\n'
-            'edges:\n'
-            '  - {from: ProjectAAPI, to: CxRP, type: depends_on_contracts_from}\n',
+            "repos:\n"
+            "  proj_a_api:\n"
+            "    canonical_name: ProjectAAPI\n"
+            "    visibility: private\n"
+            "edges:\n"
+            "  - {from: ProjectAAPI, to: CxRP, type: depends_on_contracts_from}\n",
             encoding="utf-8",
         )
         proj_b = tmp_path / "b.yaml"
         proj_b.write_text(
-            'manifest_kind: project\n'
+            "manifest_kind: project\n"
             'manifest_version: "1.0.0"\n'
-            'repos:\n'
-            '  proj_b_api:\n'
-            '    canonical_name: ProjectBAPI\n'
-            '    visibility: private\n'
-            'edges:\n'
-            '  - {from: ProjectBAPI, to: CxRP, type: depends_on_contracts_from}\n',
+            "repos:\n"
+            "  proj_b_api:\n"
+            "    canonical_name: ProjectBAPI\n"
+            "    visibility: private\n"
+            "edges:\n"
+            "  - {from: ProjectBAPI, to: CxRP, type: depends_on_contracts_from}\n",
             encoding="utf-8",
         )
         ws = tmp_path / "work_scope.yaml"
         ws.write_text(
-            'manifest_kind: work_scope\n'
+            "manifest_kind: work_scope\n"
             'manifest_version: "1.0.0"\n'
-            'includes:\n'
-            f'  - {{name: A, project_manifest_path: {proj_a}}}\n'
-            f'  - {{name: B, project_manifest_path: {proj_b}}}\n',
+            "includes:\n"
+            f"  - {{name: A, project_manifest_path: {proj_a}}}\n"
+            f"  - {{name: B, project_manifest_path: {proj_b}}}\n",
             encoding="utf-8",
         )
         g = build_effective_repo_graph(work_scope_manifest_path=ws)
@@ -214,8 +212,13 @@ class TestEffectiveGraphWithWorkScope:
         assert summary is not None
         names = {n.canonical_name for n in summary.affected}
         # Public platform consumers PLUS both private include consumers
-        assert {"OperationsCenter", "SwitchBoard", "OperatorConsole",
-                "ProjectAAPI", "ProjectBAPI"} == names
+        assert {
+            "OperationsCenter",
+            "SwitchBoard",
+            "OperatorConsole",
+            "ProjectAAPI",
+            "ProjectBAPI",
+        } == names
         assert len(summary.public_affected) == 3
         assert len(summary.private_affected) == 2
         # Privates are both Visibility.PRIVATE

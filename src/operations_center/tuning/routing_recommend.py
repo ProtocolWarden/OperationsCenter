@@ -23,13 +23,13 @@ from __future__ import annotations
 from operations_center.observability.models import ExecutionRecord
 
 from .routing_models import (
+    BackendComparisonSummary,
     ChangeEvidenceClass,
     EvidenceStrength,
     LatencyClass,
     ReliabilityClass,
     RoutingTuningProposal,
     StrategyFinding,
-    BackendComparisonSummary,
 )
 
 # Timeout rate above which a finding is generated.
@@ -97,18 +97,20 @@ def _findings_for_summary(s: BackendComparisonSummary) -> list[StrategyFinding]:
 
     # Sparse data — always emit this before other findings for small samples
     if s.evidence_strength == EvidenceStrength.WEAK:
-        findings.append(StrategyFinding(
-            category="sparse_data",
-            summary=(
-                f"{s.backend} @ {s.lane} has only {s.sample_size} sample(s) — "
-                "too few for confident routing strategy conclusions."
-            ),
-            evidence_strength=EvidenceStrength.WEAK,
-            affected_lanes=[s.lane],
-            affected_backends=[s.backend],
-            task_scope=s.task_type_scope,
-            supporting_data={"sample_size": s.sample_size},
-        ))
+        findings.append(
+            StrategyFinding(
+                category="sparse_data",
+                summary=(
+                    f"{s.backend} @ {s.lane} has only {s.sample_size} sample(s) — "
+                    "too few for confident routing strategy conclusions."
+                ),
+                evidence_strength=EvidenceStrength.WEAK,
+                affected_lanes=[s.lane],
+                affected_backends=[s.backend],
+                task_scope=s.task_type_scope,
+                supporting_data={"sample_size": s.sample_size},
+            )
+        )
         return findings  # don't pile on with weak-evidence findings
 
     data: dict[str, object] = {
@@ -124,126 +126,142 @@ def _findings_for_summary(s: BackendComparisonSummary) -> list[StrategyFinding]:
 
     # Reliability finding
     if s.reliability_class == ReliabilityClass.HIGH:
-        findings.append(StrategyFinding(
-            category="reliability",
-            summary=(
-                f"{s.backend} @ {s.lane} shows high reliability: "
-                f"{s.success_rate:.0%} success rate across {s.sample_size} runs."
-            ),
-            evidence_strength=s.evidence_strength,
-            affected_lanes=[s.lane],
-            affected_backends=[s.backend],
-            task_scope=s.task_type_scope,
-            supporting_data=data,
-        ))
+        findings.append(
+            StrategyFinding(
+                category="reliability",
+                summary=(
+                    f"{s.backend} @ {s.lane} shows high reliability: "
+                    f"{s.success_rate:.0%} success rate across {s.sample_size} runs."
+                ),
+                evidence_strength=s.evidence_strength,
+                affected_lanes=[s.lane],
+                affected_backends=[s.backend],
+                task_scope=s.task_type_scope,
+                supporting_data=data,
+            )
+        )
     elif s.reliability_class == ReliabilityClass.LOW:
-        findings.append(StrategyFinding(
-            category="reliability",
-            summary=(
-                f"{s.backend} @ {s.lane} shows low reliability: "
-                f"{s.success_rate:.0%} success rate across {s.sample_size} runs."
-            ),
-            evidence_strength=s.evidence_strength,
-            affected_lanes=[s.lane],
-            affected_backends=[s.backend],
-            task_scope=s.task_type_scope,
-            supporting_data=data,
-        ))
+        findings.append(
+            StrategyFinding(
+                category="reliability",
+                summary=(
+                    f"{s.backend} @ {s.lane} shows low reliability: "
+                    f"{s.success_rate:.0%} success rate across {s.sample_size} runs."
+                ),
+                evidence_strength=s.evidence_strength,
+                affected_lanes=[s.lane],
+                affected_backends=[s.backend],
+                task_scope=s.task_type_scope,
+                supporting_data=data,
+            )
+        )
 
     # Timeout finding
     if s.timeout_rate > _HIGH_TIMEOUT_RATE:
-        findings.append(StrategyFinding(
-            category="reliability",
-            summary=(
-                f"{s.backend} @ {s.lane} has a high timeout rate of "
-                f"{s.timeout_rate:.0%} across {s.sample_size} runs."
-            ),
-            evidence_strength=s.evidence_strength,
-            affected_lanes=[s.lane],
-            affected_backends=[s.backend],
-            task_scope=s.task_type_scope,
-            supporting_data=data,
-        ))
+        findings.append(
+            StrategyFinding(
+                category="reliability",
+                summary=(
+                    f"{s.backend} @ {s.lane} has a high timeout rate of "
+                    f"{s.timeout_rate:.0%} across {s.sample_size} runs."
+                ),
+                evidence_strength=s.evidence_strength,
+                affected_lanes=[s.lane],
+                affected_backends=[s.backend],
+                task_scope=s.task_type_scope,
+                supporting_data=data,
+            )
+        )
 
     # Change evidence finding
     if s.change_evidence_class == ChangeEvidenceClass.POOR:
-        findings.append(StrategyFinding(
-            category="change_evidence",
-            summary=(
-                f"{s.backend} @ {s.lane} produces poor changed-file evidence: "
-                "most runs do not report which files changed."
-            ),
-            evidence_strength=s.evidence_strength,
-            affected_lanes=[s.lane],
-            affected_backends=[s.backend],
-            task_scope=s.task_type_scope,
-            supporting_data=data,
-        ))
+        findings.append(
+            StrategyFinding(
+                category="change_evidence",
+                summary=(
+                    f"{s.backend} @ {s.lane} produces poor changed-file evidence: "
+                    "most runs do not report which files changed."
+                ),
+                evidence_strength=s.evidence_strength,
+                affected_lanes=[s.lane],
+                affected_backends=[s.backend],
+                task_scope=s.task_type_scope,
+                supporting_data=data,
+            )
+        )
     elif s.change_evidence_class == ChangeEvidenceClass.PARTIAL:
-        findings.append(StrategyFinding(
-            category="change_evidence",
-            summary=(
-                f"{s.backend} @ {s.lane} produces partial changed-file evidence: "
-                "some runs do not report which files changed."
-            ),
-            evidence_strength=s.evidence_strength,
-            affected_lanes=[s.lane],
-            affected_backends=[s.backend],
-            task_scope=s.task_type_scope,
-            supporting_data=data,
-        ))
+        findings.append(
+            StrategyFinding(
+                category="change_evidence",
+                summary=(
+                    f"{s.backend} @ {s.lane} produces partial changed-file evidence: "
+                    "some runs do not report which files changed."
+                ),
+                evidence_strength=s.evidence_strength,
+                affected_lanes=[s.lane],
+                affected_backends=[s.backend],
+                task_scope=s.task_type_scope,
+                supporting_data=data,
+            )
+        )
 
     # Validation coverage finding
     if s.validation_skip_rate > _HIGH_VALIDATION_SKIP_RATE:
-        findings.append(StrategyFinding(
-            category="validation",
-            summary=(
-                f"{s.backend} @ {s.lane} skips validation in "
-                f"{s.validation_skip_rate:.0%} of runs, limiting quality signal."
-            ),
-            evidence_strength=s.evidence_strength,
-            affected_lanes=[s.lane],
-            affected_backends=[s.backend],
-            task_scope=s.task_type_scope,
-            supporting_data=data,
-        ))
+        findings.append(
+            StrategyFinding(
+                category="validation",
+                summary=(
+                    f"{s.backend} @ {s.lane} skips validation in "
+                    f"{s.validation_skip_rate:.0%} of runs, limiting quality signal."
+                ),
+                evidence_strength=s.evidence_strength,
+                affected_lanes=[s.lane],
+                affected_backends=[s.backend],
+                task_scope=s.task_type_scope,
+                supporting_data=data,
+            )
+        )
 
     # Latency finding
     if s.latency_class == LatencyClass.SLOW:
-        findings.append(StrategyFinding(
-            category="latency",
-            summary=(
-                f"{s.backend} @ {s.lane} is slow "
-                f"(median {s.median_duration_ms} ms) across {s.sample_size} runs."
-            ),
-            evidence_strength=s.evidence_strength,
-            affected_lanes=[s.lane],
-            affected_backends=[s.backend],
-            task_scope=s.task_type_scope,
-            supporting_data=data,
-        ))
+        findings.append(
+            StrategyFinding(
+                category="latency",
+                summary=(
+                    f"{s.backend} @ {s.lane} is slow "
+                    f"(median {s.median_duration_ms} ms) across {s.sample_size} runs."
+                ),
+                evidence_strength=s.evidence_strength,
+                affected_lanes=[s.lane],
+                affected_backends=[s.backend],
+                task_scope=s.task_type_scope,
+                supporting_data=data,
+            )
+        )
 
     # Contradictory signal: high reliability but poor change evidence
     if (
         s.success_rate >= _ACCEPTABLE_SUCCESS_WITH_POOR_CHANGE_EVIDENCE
         and s.change_evidence_class == ChangeEvidenceClass.POOR
     ):
-        findings.append(StrategyFinding(
-            category="contradictory",
-            summary=(
-                f"{s.backend} @ {s.lane} is reliable by success rate but produces "
-                "poor changed-file evidence — tasks succeed without reporting what changed."
-            ),
-            evidence_strength=s.evidence_strength,
-            affected_lanes=[s.lane],
-            affected_backends=[s.backend],
-            task_scope=s.task_type_scope,
-            supporting_data=data,
-            notes=(
-                "Consider restricting this backend to contexts where "
-                "change enumeration is not a hard requirement."
-            ),
-        ))
+        findings.append(
+            StrategyFinding(
+                category="contradictory",
+                summary=(
+                    f"{s.backend} @ {s.lane} is reliable by success rate but produces "
+                    "poor changed-file evidence — tasks succeed without reporting what changed."
+                ),
+                evidence_strength=s.evidence_strength,
+                affected_lanes=[s.lane],
+                affected_backends=[s.backend],
+                task_scope=s.task_type_scope,
+                supporting_data=data,
+                notes=(
+                    "Consider restricting this backend to contexts where "
+                    "change enumeration is not a hard requirement."
+                ),
+            )
+        )
 
     return findings
 
@@ -316,8 +334,7 @@ def _proposal_for_finding(
     if cat == "change_evidence" and "poor" in finding.summary:
         return RoutingTuningProposal(
             summary=(
-                f"Restrict {backend} @ {lane} to contexts where "
-                "change enumeration is not required."
+                f"Restrict {backend} @ {lane} to contexts where change enumeration is not required."
             ),
             proposed_change=(
                 f"Add routing policy note: {backend} @ {lane} should not be preferred "

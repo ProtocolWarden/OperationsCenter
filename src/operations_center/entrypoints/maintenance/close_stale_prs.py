@@ -16,6 +16,7 @@ Skips PRs that:
     python -m operations_center.entrypoints.maintenance.close_stale_prs \\
         --config config/operations_center.local.yaml [--dry-run]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -25,7 +26,6 @@ from pathlib import Path
 
 from operations_center.adapters.github_pr import GitHubPRClient
 from operations_center.config import load_settings
-
 
 _AUTONOMY_PREFIXES = ("goal/", "test/", "improve/", "plane/")
 _PROTECT_LABEL = "do-not-close"
@@ -80,10 +80,13 @@ def main() -> int:
                 for lab in (pr.get("labels") or [])
             ]
             if _PROTECT_LABEL in labels_lower:
-                skipped.append({
-                    "repo_key": repo_key, "pr": pr.get("number"),
-                    "reason": "do_not_close_label",
-                })
+                skipped.append(
+                    {
+                        "repo_key": repo_key,
+                        "pr": pr.get("number"),
+                        "reason": "do_not_close_label",
+                    }
+                )
                 continue
             ts = _parse_iso(pr.get("updated_at")) or _parse_iso(pr.get("created_at"))
             if ts is None:
@@ -92,12 +95,12 @@ def main() -> int:
             if age_days < threshold_days:
                 continue
             entry = {
-                "repo_key":  repo_key,
-                "pr":        pr.get("number"),
-                "branch":    head_ref,
-                "age_days":  round(age_days, 1),
+                "repo_key": repo_key,
+                "pr": pr.get("number"),
+                "branch": head_ref,
+                "age_days": round(age_days, 1),
                 "threshold": threshold_days,
-                "url":       pr.get("html_url"),
+                "url": pr.get("html_url"),
             }
             if args.dry_run:
                 entry["action"] = "would_close"
@@ -105,7 +108,9 @@ def main() -> int:
                 continue
             try:
                 gh.post_comment(
-                    owner, repo, pr["number"],
+                    owner,
+                    repo,
+                    pr["number"],
                     f"Auto-closing — PR has been open {round(age_days, 1)}d, "
                     f"threshold is {threshold_days}d (RepoSettings.stale_pr_days). "
                     f"Branch `{head_ref}` is preserved on origin if you want to re-open.",
@@ -115,17 +120,17 @@ def main() -> int:
                 closed.append(entry)
             except Exception as exc:
                 entry["action"] = "error"
-                entry["error"]  = str(exc)
+                entry["error"] = str(exc)
                 skipped.append(entry)
 
     out = {
-        "scanned_at":          now.isoformat(),
-        "dry_run":             args.dry_run,
-        "closed_count":        sum(1 for c in closed if c.get("action") == "closed"),
-        "would_close_count":   sum(1 for c in closed if c.get("action") == "would_close"),
-        "skipped_count":       len(skipped),
-        "closed":              closed,
-        "skipped":             skipped[:20],
+        "scanned_at": now.isoformat(),
+        "dry_run": args.dry_run,
+        "closed_count": sum(1 for c in closed if c.get("action") == "closed"),
+        "would_close_count": sum(1 for c in closed if c.get("action") == "would_close"),
+        "skipped_count": len(skipped),
+        "closed": closed,
+        "skipped": skipped[:20],
     }
     print(json.dumps(out, indent=2, ensure_ascii=False))
     return 0

@@ -4,10 +4,11 @@
 ExecutionRuntimeContext (not from LaneDecision). SwitchBoard stays
 untouched — OC's policy/binder layer attaches the binding.
 """
+
 from __future__ import annotations
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "execution"))
 import test_coordinator as tc  # noqa: E402
@@ -26,11 +27,14 @@ def test_runtime_context_default_no_binding():
 
 def test_runtime_context_carries_binding():
     binding = RuntimeBindingSummary(
-        kind="cli_subscription", selection_mode="explicit_request",
-        provider="anthropic", model="opus",
+        kind="cli_subscription",
+        selection_mode="explicit_request",
+        provider="anthropic",
+        model="opus",
     )
     ctx = ExecutionRuntimeContext(
-        workspace_path=Path("/tmp/ws"), task_branch="t",
+        workspace_path=Path("/tmp/ws"),
+        task_branch="t",
         runtime_binding=binding,
     )
     assert ctx.runtime_binding.model == "opus"
@@ -39,11 +43,14 @@ def test_runtime_context_carries_binding():
 def test_production_builder_propagates_binding_to_request():
     bundle = tc._bundle()
     binding = RuntimeBindingSummary(
-        kind="cli_subscription", selection_mode="explicit_request",
-        provider="anthropic", model="opus",
+        kind="cli_subscription",
+        selection_mode="explicit_request",
+        provider="anthropic",
+        model="opus",
     )
     ctx = ExecutionRuntimeContext(
-        workspace_path=Path("/tmp/ws"), task_branch="t",
+        workspace_path=Path("/tmp/ws"),
+        task_branch="t",
         runtime_binding=binding,
     )
     req = ExecutionRequestBuilder().build(bundle, ctx)

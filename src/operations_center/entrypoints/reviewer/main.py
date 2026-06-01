@@ -6,6 +6,7 @@ This shim exists so operations-center.sh can continue to address the review
 role as `reviewer.main` while the actual implementation lives in the
 pr_review_watcher package, which can be tested independently.
 """
+
 from __future__ import annotations
 
 import sys

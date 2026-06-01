@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Card synthesizer tests."""
+
 from __future__ import annotations
 
 import json
@@ -18,11 +19,15 @@ from operations_center.executors.synthesizer import (
 def _seed_sample(backend_dir: Path, name: str, raw: dict) -> None:
     raw_dir = backend_dir / "samples" / "raw_output"
     raw_dir.mkdir(parents=True, exist_ok=True)
-    (raw_dir / f"{name}.json").write_text(json.dumps({
-        "run_id": name,
-        "lane": "coding_agent",
-        "raw_output": raw,
-    }))
+    (raw_dir / f"{name}.json").write_text(
+        json.dumps(
+            {
+                "run_id": name,
+                "lane": "coding_agent",
+                "raw_output": raw,
+            }
+        )
+    )
 
 
 class TestBatchSynthesizer:
@@ -34,7 +39,9 @@ class TestBatchSynthesizer:
     def test_aggregates_across_samples(self, tmp_path):
         bd = tmp_path / "team_executor"
         _seed_sample(bd, "s1", {"exit_code": 0, "files_changed": ["a", "b"], "tests_run": ["t1"]})
-        _seed_sample(bd, "s2", {"exit_code": 0, "files_changed": ["a"], "commands_run": ["x", "y", "z"]})
+        _seed_sample(
+            bd, "s2", {"exit_code": 0, "files_changed": ["a"], "commands_run": ["x", "y", "z"]}
+        )
         _seed_sample(bd, "s3", {"exit_code": 1, "stderr": "boom"})
 
         facts = synthesize_from_samples(bd)
@@ -52,9 +59,11 @@ class TestBatchSynthesizer:
         bd = tmp_path / "team_executor"
         _seed_sample(bd, "s1", {"exit_code": 0, "files_changed": ["a"]})
         facts = synthesize_from_samples(bd)
-        diff = facts.to_capability_card_diff(baseline={
-            "advertised_capabilities": ["repo_read", "human_review"],
-        })
+        diff = facts.to_capability_card_diff(
+            baseline={
+                "advertised_capabilities": ["repo_read", "human_review"],
+            }
+        )
         # baseline preserved, new caps added
         assert "repo_read" in diff["advertised_capabilities"]
         assert "human_review" in diff["advertised_capabilities"]
@@ -89,7 +98,9 @@ class TestOngoingSynthesizer:
     def test_flush_on_observation_count(self, tmp_path):
         bd = tmp_path / "team_executor"
         bd.mkdir()
-        syn = OngoingSynthesizer(backend_dir=bd, flush_every_observations=2, flush_every_seconds=999)
+        syn = OngoingSynthesizer(
+            backend_dir=bd, flush_every_observations=2, flush_every_seconds=999
+        )
         assert syn.observe({"raw_output": {"exit_code": 0}}) is False
         flushed = syn.observe({"raw_output": {"exit_code": 0}})
         assert flushed is True

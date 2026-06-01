@@ -10,6 +10,7 @@ Settings-driven factory must:
 - attach a local layer when local_manifest_path is explicit
 - swallow malformed-manifest errors and return None (warning logged)
 """
+
 from __future__ import annotations
 
 import logging
@@ -26,7 +27,13 @@ from operations_center.repo_graph_factory import (
 
 # Private manifest fallback uses the sibling PlatformManifest source tree,
 # which is only available in local dev environments — not in CI checkouts.
-_SIBLING_PM = Path(__file__).resolve().parents[4] / "PlatformManifest" / "src" / "platform_manifest" / "__init__.py"
+_SIBLING_PM = (
+    Path(__file__).resolve().parents[4]
+    / "PlatformManifest"
+    / "src"
+    / "platform_manifest"
+    / "__init__.py"
+)
 _SIBLING_PM_AVAILABLE = _SIBLING_PM.is_file()
 _requires_sibling_pm = pytest.mark.skipif(
     not _SIBLING_PM_AVAILABLE,
@@ -45,6 +52,7 @@ class _PlatformManifestSettingsLike(BaseModel):
 
 class _SettingsLike(BaseModel):
     """Minimal Settings-shaped stub. The factory only reaches `.platform_manifest`."""
+
     platform_manifest: _PlatformManifestSettingsLike
 
 
@@ -53,33 +61,33 @@ def _settings(**pm: Any) -> _SettingsLike:
 
 
 _PROJECT_YAML = (
-    'manifest_kind: project\n'
+    "manifest_kind: project\n"
     'manifest_version: "1.0.0"\n'
-    'repos:\n'
-    '  myproj_api:\n'
-    '    canonical_name: MyProjAPI\n'
-    '    visibility: private\n'
-    '    runtime_role: project_service\n'
-    'edges:\n'
-    '  - {from: MyProjAPI, to: OperationsCenter, type: dispatches_to}\n'
+    "repos:\n"
+    "  myproj_api:\n"
+    "    canonical_name: MyProjAPI\n"
+    "    visibility: private\n"
+    "    runtime_role: project_service\n"
+    "edges:\n"
+    "  - {from: MyProjAPI, to: OperationsCenter, type: dispatches_to}\n"
 )
 
 _LOCAL_YAML = (
-    'manifest_kind: local\n'
+    "manifest_kind: local\n"
     'manifest_version: "1.0.0"\n'
-    'repos:\n'
-    '  operations_center:\n'
-    '    local_path: /opt/oc\n'
+    "repos:\n"
+    "  operations_center:\n"
+    "    local_path: /opt/oc\n"
 )
 
 _PRIVATE_YAML = (
-    'manifest_kind: private\n'
+    "manifest_kind: private\n"
     'manifest_version: "1.0.0"\n'
-    'repos:\n'
-    '  private_docs:\n'
-    '    canonical_name: PrivateDocs\n'
-    '    visibility: private\n'
-    '    projection_behavior: drop_from_public\n'
+    "repos:\n"
+    "  private_docs:\n"
+    "    canonical_name: PrivateDocs\n"
+    "    visibility: private\n"
+    "    projection_behavior: drop_from_public\n"
 )
 
 
@@ -132,7 +140,9 @@ class TestBaseOwnership:
         def _fake_default_config_path() -> Path:
             return tmp_path / "bundled-platform.yaml"
 
-        def _fake_load_effective_graph(base, *, private=None, project=None, work_scope=None, local=None):
+        def _fake_load_effective_graph(
+            base, *, private=None, project=None, work_scope=None, local=None
+        ):
             recorded["base"] = base
             recorded["private"] = private
             recorded["project"] = project
@@ -167,7 +177,9 @@ class TestBaseOwnership:
         def _fake_default_config_path() -> Path:
             return tmp_path / "bundled-platform.yaml"
 
-        def _fake_load_effective_graph(base, *, private=None, project=None, work_scope=None, local=None):
+        def _fake_load_effective_graph(
+            base, *, private=None, project=None, work_scope=None, local=None
+        ):
             recorded["base"] = base
             recorded["private"] = private
             recorded["project"] = project
@@ -191,9 +203,7 @@ class TestBaseOwnership:
 
 
 class TestProjectByRepoRootConvention:
-    def test_topology_project_manifest_yaml_used_when_present(
-        self, tmp_path: Path
-    ) -> None:
+    def test_topology_project_manifest_yaml_used_when_present(self, tmp_path: Path) -> None:
         topology = tmp_path / "topology"
         topology.mkdir()
         (topology / "project_manifest.yaml").write_text(_PROJECT_YAML, encoding="utf-8")
@@ -202,9 +212,7 @@ class TestProjectByRepoRootConvention:
         assert g is not None
         assert g.resolve("MyProjAPI") is not None
 
-    def test_topology_path_absent_falls_back_to_platform_only(
-        self, tmp_path: Path
-    ) -> None:
+    def test_topology_path_absent_falls_back_to_platform_only(self, tmp_path: Path) -> None:
         s = _settings()
         g = build_effective_repo_graph_from_settings(s, repo_root=tmp_path)  # type: ignore[arg-type]
         assert g is not None
@@ -248,10 +256,10 @@ class TestErrorSwallow:
     ) -> None:
         proj = tmp_path / "project.yaml"
         proj.write_text(
-            'manifest_kind: project\n'
+            "manifest_kind: project\n"
             'manifest_version: "1.0.0"\n'
-            'repos:\n'
-            '  bad: {visibility: private}\n',
+            "repos:\n"
+            "  bad: {visibility: private}\n",
             encoding="utf-8",
         )
         s = _settings(project_manifest_path=proj)
@@ -275,10 +283,10 @@ class TestErrorSwallow:
 
 
 _WORK_SCOPE_YAML_TEMPLATE = (
-    'manifest_kind: work_scope\n'
+    "manifest_kind: work_scope\n"
     'manifest_version: "1.0.0"\n'
-    'includes:\n'
-    '  - {{name: MyProj, project_manifest_path: {project_path}}}\n'
+    "includes:\n"
+    "  - {{name: MyProj, project_manifest_path: {project_path}}}\n"
 )
 
 
@@ -297,9 +305,7 @@ class TestWorkScopeMode:
         assert g.resolve("MyProjAPI") is not None
         assert g.resolve("OperationsCenter") is not None
 
-    def test_work_scope_takes_precedence_over_topology_convention(
-        self, tmp_path: Path
-    ) -> None:
+    def test_work_scope_takes_precedence_over_topology_convention(self, tmp_path: Path) -> None:
         # Even with a topology/project_manifest.yaml lying around,
         # explicit work_scope_manifest_path means the project topology
         # convention is not consulted.
@@ -309,12 +315,12 @@ class TestWorkScopeMode:
         # Different project, included by the work scope:
         other_proj = tmp_path / "other_project.yaml"
         other_proj.write_text(
-            'manifest_kind: project\n'
+            "manifest_kind: project\n"
             'manifest_version: "1.0.0"\n'
-            'repos:\n'
-            '  other_api:\n'
-            '    canonical_name: OtherAPI\n'
-            '    visibility: private\n',
+            "repos:\n"
+            "  other_api:\n"
+            "    canonical_name: OtherAPI\n"
+            "    visibility: private\n",
             encoding="utf-8",
         )
         ws = tmp_path / "work_scope.yaml"

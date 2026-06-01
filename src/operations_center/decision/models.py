@@ -8,7 +8,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-
 DECISION_ENGINE_VERSION = 1
 
 
@@ -41,12 +40,12 @@ class EvidenceBundle(BaseModel):
 
     schema_version: int = 1
     kind: str  # e.g. "lint_count", "type_count"
-    count: int | None = None          # total violations / errors
+    count: int | None = None  # total violations / errors
     distinct_file_count: int | None = None
-    delta: int | None = None          # change from prior snapshot (positive = worsened)
-    trend: str | None = None          # "present" | "worsening"
+    delta: int | None = None  # change from prior snapshot (positive = worsened)
+    trend: str | None = None  # "present" | "worsening"
     top_codes: list[str] = Field(default_factory=list)
-    source: str | None = None         # tool that produced the signal (ruff, ty, mypy)
+    source: str | None = None  # tool that produced the signal (ruff, ty, mypy)
 
 
 class ProposalCandidate(BaseModel):

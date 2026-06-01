@@ -7,22 +7,25 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from operations_center.contracts.common import ValidationSummary
-from operations_center.contracts.enums import ExecutionStatus, ValidationStatus
-from operations_center.contracts.execution import ExecutionRequest, ExecutionResult
-from operations_center.contracts.execution import RuntimeBindingSummary
 from operations_center.backend_health import (
     BackendHealthRegistry,
     BackendHealthState,
     RecoveryStrategy,
 )
+from operations_center.contracts.common import ValidationSummary
+from operations_center.contracts.enums import ExecutionStatus, ValidationStatus
+from operations_center.contracts.execution import (
+    ExecutionRequest,
+    ExecutionResult,
+    RuntimeBindingSummary,
+)
+from operations_center.entrypoints.maintenance.triage_scan import _queue_healing_actions
 from operations_center.evidence_fingerprints import evidence_fingerprint
 from operations_center.queue_healing import (
     QueueHealingEngine,
     QueueHealingTask,
     QueueTransition,
 )
-from operations_center.entrypoints.maintenance.triage_scan import _queue_healing_actions
 from operations_center.recovery import ParkedState, ParkedStateStore, should_unpark
 from operations_center.recovery_policies import RecoveryBudget, RecoveryBudgetTracker
 
@@ -42,7 +45,9 @@ def _make_request(**overrides) -> ExecutionRequest:
     return ExecutionRequest(**base)
 
 
-def _make_result(*, request: ExecutionRequest, failure_reason: str | None = None) -> ExecutionResult:
+def _make_result(
+    *, request: ExecutionRequest, failure_reason: str | None = None
+) -> ExecutionResult:
     return ExecutionResult(
         run_id=request.run_id,
         proposal_id=request.proposal_id,
@@ -57,7 +62,9 @@ def _make_result(*, request: ExecutionRequest, failure_reason: str | None = None
 def test_backend_sigkill_transitions_to_unstable_with_cooldown():
     registry = BackendHealthRegistry(cooldown_seconds=1800)
     request = _make_request(
-        runtime_binding=RuntimeBindingSummary(kind="cli_subscription", selection_mode="policy_selected")
+        runtime_binding=RuntimeBindingSummary(
+            kind="cli_subscription", selection_mode="policy_selected"
+        )
     )
     result = _make_result(request=request, failure_reason="executor failed signal=SIGKILL")
 

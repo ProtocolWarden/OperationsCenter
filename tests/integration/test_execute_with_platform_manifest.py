@@ -14,6 +14,7 @@ production entrypoint as a subprocess to confirm the wiring chain:
 
 Marks `integration` so it stays out of the default `tests/unit` suite.
 """
+
 from __future__ import annotations
 
 import json
@@ -23,7 +24,6 @@ import sys
 from pathlib import Path
 
 import pytest
-
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -128,10 +128,14 @@ def _run_execute(config: Path, bundle: Path, tmp_path: Path) -> subprocess.Compl
         sys.executable,
         "-m",
         "operations_center.entrypoints.execute.main",
-        "--config", str(config),
-        "--bundle", str(bundle),
-        "--workspace-path", str(workspace),
-        "--task-branch", "auto/r4-smoke",
+        "--config",
+        str(config),
+        "--bundle",
+        str(bundle),
+        "--workspace-path",
+        str(workspace),
+        "--task-branch",
+        "auto/r4-smoke",
         "--no-artifacts",
     ]
     env = dict(os.environ)
@@ -206,10 +210,7 @@ def test_execute_swallows_malformed_project_manifest(tmp_path: Path) -> None:
     proj = tmp_path / "project_manifest.yaml"
     # Project node missing canonical_name → loader error
     proj.write_text(
-        'manifest_kind: project\n'
-        'manifest_version: "1.0.0"\n'
-        'repos:\n'
-        '  bad: {visibility: private}\n',
+        'manifest_kind: project\nmanifest_version: "1.0.0"\nrepos:\n  bad: {visibility: private}\n',
         encoding="utf-8",
     )
     cfg = _write_config(tmp_path, proj)

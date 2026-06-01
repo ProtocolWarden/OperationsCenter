@@ -15,19 +15,23 @@ This module makes the live supported execution path explicit:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
 import logging
+from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from operations_center.policy.runtime_binding_policy import RuntimeBindingPolicy
 
+from datetime import UTC, datetime
+
 from operations_center.backends.factory import CanonicalBackendRegistry
 from operations_center.contracts.common import ValidationSummary
-from operations_center.contracts.enums import ExecutionStatus, FailureReasonCategory
-from operations_center.contracts.enums import ValidationStatus
+from operations_center.contracts.enums import (
+    ExecutionStatus,
+    FailureReasonCategory,
+    ValidationStatus,
+)
 from operations_center.contracts.execution import ExecutionRequest, ExecutionResult
 from operations_center.observability.models import BackendDetailRef, ExecutionRecord
 from operations_center.observability.service import ExecutionObservabilityService
@@ -35,8 +39,6 @@ from operations_center.observability.trace import ExecutionTrace
 from operations_center.planning.models import ProposalDecisionBundle
 from operations_center.policy.engine import PolicyEngine
 from operations_center.policy.models import PolicyDecision, PolicyStatus
-
-from datetime import UTC, datetime
 
 from .cl_wrap import cl_dispatch_wrap
 from .handoff import ExecutionRequestBuilder, ExecutionRuntimeContext
@@ -65,14 +67,12 @@ logger = logging.getLogger(__name__)
 
 @runtime_checkable
 class _CaptureCapableAdapter(Protocol):
-    def execute_and_capture(self, request) -> tuple[ExecutionResult, object | None]:
-        ...
+    def execute_and_capture(self, request) -> tuple[ExecutionResult, object | None]: ...
 
 
 @runtime_checkable
 class _DetailRefBuilder(Protocol):
-    def build_backend_detail_refs(self, request, capture) -> list[BackendDetailRef]:
-        ...
+    def build_backend_detail_refs(self, request, capture) -> list[BackendDetailRef]: ...
 
 
 @dataclass(frozen=True)
@@ -173,7 +173,9 @@ class ExecutionCoordinator:
                 self._workspace.prepare(request)
             except Exception as exc:
                 logger.error(
-                    "Workspace prep failed for run %s: %s", request.run_id, exc,
+                    "Workspace prep failed for run %s: %s",
+                    request.run_id,
+                    exc,
                 )
                 result = _workspace_prep_failed_result(request, exc)
                 record, trace = self._observe(bundle, result, policy_decision)
@@ -230,7 +232,8 @@ class ExecutionCoordinator:
         # can't deadlock the per-backend max_concurrent cap.
         if self._usage_store is not None:
             self._usage_store.record_execution_started(
-                task_id=request.run_id, backend=backend_name,
+                task_id=request.run_id,
+                backend=backend_name,
                 now=datetime.now(UTC),
             )
         try:
@@ -252,7 +255,8 @@ class ExecutionCoordinator:
         finally:
             if self._usage_store is not None:
                 self._usage_store.record_execution_finished(
-                    task_id=request.run_id, backend=backend_name,
+                    task_id=request.run_id,
+                    backend=backend_name,
                     now=datetime.now(UTC),
                 )
         if recovery_actions:
@@ -282,8 +286,14 @@ class ExecutionCoordinator:
                 and result.failure_reason is not None
                 and any(
                     kw in result.failure_reason.lower()
-                    for kw in ("capacity exhaustion", "you've hit your limit", "hit your limit",
-                               "quota exceeded", "rate limit", "billing")
+                    for kw in (
+                        "capacity exhaustion",
+                        "you've hit your limit",
+                        "hit your limit",
+                        "quota exceeded",
+                        "rate limit",
+                        "billing",
+                    )
                 )
             )
             if _is_capacity_exhaustion:
@@ -310,7 +320,9 @@ class ExecutionCoordinator:
                 result = self._workspace.finalize(request, result)
             except Exception as exc:
                 logger.warning(
-                    "Workspace finalize failed for run %s: %s", request.run_id, exc,
+                    "Workspace finalize failed for run %s: %s",
+                    request.run_id,
+                    exc,
                 )
 
         # ER-003 — if the request carried lifecycle metadata, drive
@@ -367,12 +379,14 @@ class ExecutionCoordinator:
 
         try:
             cxrp_binding = self._runtime_binding_policy.select(
-                bundle.proposal, bundle.decision,
+                bundle.proposal,
+                bundle.decision,
             )
         except Exception as exc:
             logger.warning(
                 "RuntimeBindingPolicy.select failed for proposal=%s — falling back to backend default: %s",
-                bundle.proposal.proposal_id, exc,
+                bundle.proposal.proposal_id,
+                exc,
             )
             return runtime
 
@@ -397,7 +411,9 @@ class ExecutionCoordinator:
         logger.info(
             "RuntimeBindingPolicy: bound runtime for proposal=%s to kind=%s model=%s provider=%s",
             bundle.proposal.proposal_id,
-            summary.kind, summary.model, summary.provider,
+            summary.kind,
+            summary.model,
+            summary.provider,
         )
         return replace(runtime, runtime_binding=summary)
 
@@ -425,7 +441,9 @@ class ExecutionCoordinator:
             )
         except Exception as exc:
             logger.warning(
-                "Run memory indexing failed for run %s: %s", request.run_id, exc,
+                "Run memory indexing failed for run %s: %s",
+                request.run_id,
+                exc,
             )
 
     def _evaluate_resource_gate(self) -> "BudgetDecision | None":
@@ -446,7 +464,8 @@ class ExecutionCoordinator:
         now = datetime.now(UTC)
         if gate.max_concurrent is not None:
             d = self._usage_store.global_concurrency_decision(
-                max_concurrent=gate.max_concurrent, now=now,
+                max_concurrent=gate.max_concurrent,
+                now=now,
             )
             if not d.allowed:
                 return d
@@ -541,7 +560,8 @@ class ExecutionCoordinator:
         except Exception as exc:  # noqa: BLE001 — defensive
             logger.warning(
                 "Contract impact analysis failed for repo_key=%r: %s",
-                request.repo_key, exc,
+                request.repo_key,
+                exc,
             )
             return {}
 
@@ -607,7 +627,11 @@ class ExecutionCoordinator:
         # SourceRegistry, source name and SHA are visible." When the
         # request carries no bound_target (legacy path or registry
         # unavailable), this block is omitted rather than fabricated.
-        if request is not None and request.bound_target is not None and request.bound_target.provenance is not None:
+        if (
+            request is not None
+            and request.bound_target is not None
+            and request.bound_target.provenance is not None
+        ):
             prov = request.bound_target.provenance
             metadata["provenance"] = {
                 "source": prov.source,
@@ -636,7 +660,9 @@ class ExecutionCoordinator:
             metadata=metadata,
         )
 
-    def _execute_adapter(self, adapter, request) -> tuple[ExecutionResult, list[BackendDetailRef], dict[str, Any]]:
+    def _execute_adapter(
+        self, adapter, request
+    ) -> tuple[ExecutionResult, list[BackendDetailRef], dict[str, Any]]:
         try:
             if isinstance(adapter, _CaptureCapableAdapter):
                 result, capture = adapter.execute_and_capture(request)
@@ -692,7 +718,8 @@ class ExecutionCoordinator:
             except Exception as exc:
                 logger.exception(
                     "RecoveryEngine.evaluate raised for run %s: %s",
-                    request.run_id, exc,
+                    request.run_id,
+                    exc,
                 )
                 synthetic = RecoveryAction(
                     attempt=attempt,
@@ -743,12 +770,15 @@ class ExecutionCoordinator:
                 # a synthetic crash result rather than propagating.
                 try:
                     current_policy = self._policy.evaluate(
-                        bundle.proposal, bundle.decision, current_request,
+                        bundle.proposal,
+                        bundle.decision,
+                        current_request,
                     )
                 except Exception as exc:
                     logger.exception(
                         "PolicyEngine.evaluate raised for run %s: %s",
-                        request.run_id, exc,
+                        request.run_id,
+                        exc,
                     )
                     last_result = _policy_engine_crash_result(current_request, exc)
                     break
@@ -765,7 +795,9 @@ class ExecutionCoordinator:
             try:
                 return adapter.build_backend_detail_refs(request, capture)
             except Exception as exc:
-                logger.warning("Failed to retain backend detail refs for run %s: %s", request.run_id, exc)
+                logger.warning(
+                    "Failed to retain backend detail refs for run %s: %s", request.run_id, exc
+                )
         return []
 
 
@@ -785,6 +817,7 @@ def _workspace_prep_failed_result(request, exc: Exception) -> ExecutionResult:
 def _adapter_crash_result(request, exc: Exception) -> ExecutionResult:
     from operations_center.contracts.common import ValidationSummary
     from operations_center.contracts.enums import ValidationStatus
+
     return ExecutionResult(
         run_id=request.run_id,
         proposal_id=request.proposal_id,
@@ -1008,7 +1041,9 @@ def _attach_lifecycle_outcome(
         )
     except Exception as exc:
         logger.warning(
-            "Lifecycle runner raised for run %s: %s", request.run_id, exc,
+            "Lifecycle runner raised for run %s: %s",
+            request.run_id,
+            exc,
         )
         return result
     return result.model_copy(update={"lifecycle_outcome": lc_result.outcome})

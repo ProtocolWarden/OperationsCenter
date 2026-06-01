@@ -72,9 +72,7 @@ def discover_manifest_files(
             dirnames.clear()
 
         # Filter children in-place.
-        dirnames[:] = [
-            d for d in dirnames if not d.startswith(".") and d not in _SKIP_DIRS
-        ]
+        dirnames[:] = [d for d in dirnames if not d.startswith(".") and d not in _SKIP_DIRS]
 
         if _MANIFEST_FILENAME in filenames:
             out.append(Path(dirpath) / _MANIFEST_FILENAME)
@@ -216,9 +214,7 @@ class MultiRunArtifactIndex:
                 f"no run with run_id {run_id!r} in index (search_root={self.search_root})"
             )
         if run.index is None:
-            raise ArtifactPathUnresolvableError(
-                f"run {run_id!r} failed to load: {run.load_error}"
-            )
+            raise ArtifactPathUnresolvableError(f"run {run_id!r} failed to load: {run.load_error}")
         path = resolve_artifact_path(run.index, artifact_id)
         if recheck_exists and not path.exists():
             raise ArtifactPathUnresolvableError(

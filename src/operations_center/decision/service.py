@@ -8,37 +8,67 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Protocol
 
-from operations_center.decision.candidate_builder import CandidateBuilder
 from operations_center.decision.artifact_writer import DecisionArtifactWriter
-from operations_center.decision.models import DecisionRepoRef, ProposalCandidatesArtifact, SuppressedCandidate
+from operations_center.decision.candidate_builder import CandidateBuilder
+from operations_center.decision.chain_policy import ChainPolicy
+from operations_center.decision.models import (
+    DecisionRepoRef,
+    ProposalCandidatesArtifact,
+    SuppressedCandidate,
+)
 from operations_center.decision.policy import DecisionPolicy, DecisionPolicyConfig
 from operations_center.decision.rules.arch_promotion import ArchPromotionRule
-from operations_center.decision.rules.coverage_gap import CoverageGapRule
-from operations_center.decision.rules.lint_cluster import LintClusterRule
 from operations_center.decision.rules.backlog_promotion import BacklogPromotionRule
+from operations_center.decision.rules.ci_pattern import CIPatternRule
+from operations_center.decision.rules.coverage_gap import CoverageGapRule
 from operations_center.decision.rules.dependency_drift import DependencyDriftRule
 from operations_center.decision.rules.execution_health import ExecutionHealthRule
 from operations_center.decision.rules.hotspot_concentration import HotspotConcentrationRule
-from operations_center.decision.rules.ci_pattern import CIPatternRule
+from operations_center.decision.rules.lint_cluster import LintClusterRule
 from operations_center.decision.rules.lint_fix import LintFixRule
-from operations_center.decision.rules.validation_pattern import ValidationPatternRule
 from operations_center.decision.rules.observation_coverage import ObservationCoverageRule
-from operations_center.decision.rules.type_improvement import TypeImprovementRule
 from operations_center.decision.rules.test_visibility import TestVisibilityRule
 from operations_center.decision.rules.todo_accumulation import TodoAccumulationRule
-from operations_center.decision.chain_policy import ChainPolicy
+from operations_center.decision.rules.type_improvement import TypeImprovementRule
+from operations_center.decision.rules.validation_pattern import ValidationPatternRule
 from operations_center.decision.suppression import suppressed_candidate
 from operations_center.execution import UsageStore
 from operations_center.tuning.models import TuningConfig
 
 
 class DecisionLoaderProtocol(Protocol):
-    def load(self, *, repo: str | None, insight_run_id: str | None, history_limit: int):
-        ...
+    def load(self, *, repo: str | None, insight_run_id: str | None, history_limit: int): ...
 
 
-_DEFAULT_ALLOWED_FAMILIES: frozenset[str] = frozenset({"observation_coverage", "test_visibility", "dependency_drift", "execution_health_followup", "lint_fix", "type_fix", "validation_pattern_followup"})
-ALL_FAMILIES: frozenset[str] = frozenset({"observation_coverage", "test_visibility", "dependency_drift", "execution_health_followup", "lint_fix", "type_fix", "validation_pattern_followup", "ci_pattern", "hotspot_concentration", "todo_accumulation", "backlog_promotion", "arch_promotion", "coverage_gap", "lint_cluster"})
+_DEFAULT_ALLOWED_FAMILIES: frozenset[str] = frozenset(
+    {
+        "observation_coverage",
+        "test_visibility",
+        "dependency_drift",
+        "execution_health_followup",
+        "lint_fix",
+        "type_fix",
+        "validation_pattern_followup",
+    }
+)
+ALL_FAMILIES: frozenset[str] = frozenset(
+    {
+        "observation_coverage",
+        "test_visibility",
+        "dependency_drift",
+        "execution_health_followup",
+        "lint_fix",
+        "type_fix",
+        "validation_pattern_followup",
+        "ci_pattern",
+        "hotspot_concentration",
+        "todo_accumulation",
+        "backlog_promotion",
+        "arch_promotion",
+        "coverage_gap",
+        "lint_cluster",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -55,7 +85,9 @@ class DecisionContext:
     allowed_families: frozenset[str] = _DEFAULT_ALLOWED_FAMILIES
     max_proposals_per_24h: int = 10
     max_changed_files: int = 30
-    proposer_root: Path = field(default_factory=lambda: Path("tools/report/operations_center/proposer"))
+    proposer_root: Path = field(
+        default_factory=lambda: Path("tools/report/operations_center/proposer")
+    )
     feedback_root: Path = field(default_factory=lambda: Path("state/proposal_feedback"))
 
 
@@ -154,7 +186,10 @@ class DecisionEngineService:
                         family=candidate.family,
                         subject=candidate.subject,
                         reason="proposal_budget_too_low",
-                        evidence={"remaining_exec_capacity": remaining, "min_required": min_remaining},
+                        evidence={
+                            "remaining_exec_capacity": remaining,
+                            "min_required": min_remaining,
+                        },
                     )
                 )
             filtered_specs = []
@@ -232,7 +267,6 @@ class DecisionEngineService:
             suppressed=suppressed,
         )
         return artifact, self.artifact_writer.write(artifact)
-
 
     def _count_proposals_last_24h(self, context: DecisionContext) -> int:
         """Count proposals created in the proposer stage within the last 24 hours."""
@@ -350,5 +384,7 @@ def new_decision_context(
         generated_at=generated_at,
         source_command=source_command,
         dry_run=dry_run,
-        allowed_families=allowed_families if allowed_families is not None else _DEFAULT_ALLOWED_FAMILIES,
+        allowed_families=allowed_families
+        if allowed_families is not None
+        else _DEFAULT_ALLOWED_FAMILIES,
     )

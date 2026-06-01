@@ -21,15 +21,16 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from ..vocabulary import (
-    Limitation,
     ExampleManagedRepoArtifactKind,
     ExampleManagedRepoAuditType,
     ExampleManagedRepoSourceStage,
+    Limitation,
 )
 
 
 class ManagedRepoAuditTypeSpec(BaseModel):
     """Per-audit-type metadata for a managed repo."""
+
     audit_type: str
     output_dir: str
     run_status_finalization: bool
@@ -42,6 +43,7 @@ class ManagedRepoAuditTypeSpec(BaseModel):
 
 class ManagedRepoPathQuirk(BaseModel):
     """A known path-layout quirk specific to one bound managed repo."""
+
     description: str
     example: str | None = None
 

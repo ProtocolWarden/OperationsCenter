@@ -9,7 +9,7 @@ configs return error messages containing expected keywords.
 
 from __future__ import annotations
 
-
+from operations_center.policy.defaults import DEFAULT_POLICY_CONFIG
 from operations_center.policy.models import (
     BranchGuardrail,
     PathPolicy,
@@ -20,7 +20,6 @@ from operations_center.policy.models import (
     ValidationRequirement,
 )
 from operations_center.policy.validate import validate_config
-from operations_center.policy.defaults import DEFAULT_POLICY_CONFIG
 
 from .conftest import make_policy_config, make_repo_policy
 

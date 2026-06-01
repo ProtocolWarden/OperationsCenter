@@ -11,13 +11,13 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+# Re-use the helper from the existing test module.
+from test_insights import _make_snapshot as make_snapshot
+
 from operations_center.decision.rules.test_visibility import TestVisibilityRule
 from operations_center.insights.derivers.observation_coverage import ObservationCoverageDeriver
 from operations_center.insights.derivers.test_continuity import TestContinuityDeriver
 from operations_center.insights.normalizer import InsightNormalizer
-
-# Re-use the helper from the existing test module.
-from test_insights import _make_snapshot as make_snapshot
 
 
 def _normalizer() -> InsightNormalizer:

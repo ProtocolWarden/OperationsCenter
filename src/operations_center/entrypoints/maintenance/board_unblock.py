@@ -97,6 +97,7 @@ Usage:
     python -m operations_center.entrypoints.maintenance.board_unblock \\
         --config config/operations_center.local.yaml [--apply] [--stale-blocked-hours 4]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -110,8 +111,8 @@ from operations_center.adapters.plane import PlaneClient
 from operations_center.config import load_settings
 from operations_center.execution.usage_store import UsageStore
 
-_MEM_SKIP_THRESHOLD_GB = 1.7   # skip all rules below this
-_MEM_R4AI_THRESHOLD_GB = 8.0   # skip Rule 4 (requeue to R4AI) below this
+_MEM_SKIP_THRESHOLD_GB = 1.7  # skip all rules below this
+_MEM_R4AI_THRESHOLD_GB = 8.0  # skip Rule 4 (requeue to R4AI) below this
 
 _TERMINAL_STATES = {"done", "cancelled", "cancelled by operator", "closed"}
 
@@ -188,6 +189,8 @@ def _dispatch_cooldown_reason(usage_store: UsageStore, *, now: datetime) -> str 
         "Ready-for-AI promotion deferred to avoid re-dispatch into a session-limited "
         "backend (self-heals on cooldown reset)"
     )
+
+
 _DEAD_REMEDIATION_LABEL = "dead-remediation"
 _INVESTIGATE_LABEL = "task-kind: investigate"
 _IMPROVE_LABEL = "task-kind: improve"
@@ -225,7 +228,7 @@ def _state_name(issue: dict[str, Any]) -> str:
 def _label_value(labels: list[str], prefix: str) -> str | None:
     for label in labels:
         if label.lower().startswith(prefix.lower()):
-            return label[len(prefix):].strip()
+            return label[len(prefix) :].strip()
     return None
 
 
@@ -297,8 +300,7 @@ def _apply_rules(
             is_dead = _has_label(labels, _DEAD_REMEDIATION_LABEL)
             executor_signal_val = _label_value(labels, _SIGKILL_SIGNAL_PREFIX) or ""
             is_sigkill_exhausted = (
-                "sigkill" in executor_signal_val.lower()
-                and _retry_count(labels) >= 3
+                "sigkill" in executor_signal_val.lower() and _retry_count(labels) >= 3
             )
             if is_dead or is_sigkill_exhausted:
                 reason = (
@@ -306,52 +308,64 @@ def _apply_rules(
                     if is_dead
                     else "≥3 SIGKILL retries with no safe path"
                 )
-                actions.append({
-                    "task_id": task_id,
-                    "title": title,
-                    "rule": "DEAD_REMEDIATION_CANCEL",
-                    "from_state": state,
-                    "to_state": "Cancelled",
-                    "reason": reason,
-                })
+                actions.append(
+                    {
+                        "task_id": task_id,
+                        "title": title,
+                        "rule": "DEAD_REMEDIATION_CANCEL",
+                        "from_state": state,
+                        "to_state": "Cancelled",
+                        "reason": reason,
+                    }
+                )
                 continue
 
         # Rule 2 — investigate tasks deprioritised out of R4AI
         if state_lower == "ready for ai" and _has_label(labels, _INVESTIGATE_LABEL):
-            actions.append({
-                "task_id": task_id,
-                "title": title,
-                "rule": "INVESTIGATE_DEPRIORITISE",
-                "from_state": state,
-                "to_state": "Backlog",
-                "reason": "task-kind:investigate has no board_worker consumer; starving R4AI slot",
-            })
+            actions.append(
+                {
+                    "task_id": task_id,
+                    "title": title,
+                    "rule": "INVESTIGATE_DEPRIORITISE",
+                    "from_state": state,
+                    "to_state": "Backlog",
+                    "reason": "task-kind:investigate has no board_worker consumer; starving R4AI slot",
+                }
+            )
             continue
 
         # Rule 3 — improve/goal tasks stuck in Blocked (no self-modify gate)
         is_workable = _has_label(labels, _IMPROVE_LABEL) or _has_label(labels, _GOAL_LABEL)
-        if state_lower == "blocked" and is_workable and not _has_label(labels, _SELF_MODIFY_APPROVED_LABEL):
+        if (
+            state_lower == "blocked"
+            and is_workable
+            and not _has_label(labels, _SELF_MODIFY_APPROVED_LABEL)
+        ):
             blocker_id = _blocker_task_id(labels)
             if blocker_id and _is_terminal(id_state.get(blocker_id, "")):
-                actions.append({
-                    "task_id": task_id,
-                    "title": title,
-                    "rule": "IMPROVE_UNBLOCK",
-                    "from_state": state,
-                    "to_state": "Backlog",
-                    "reason": f"blocker {blocker_id} is now {id_state[blocker_id]}",
-                })
+                actions.append(
+                    {
+                        "task_id": task_id,
+                        "title": title,
+                        "rule": "IMPROVE_UNBLOCK",
+                        "from_state": state,
+                        "to_state": "Backlog",
+                        "reason": f"blocker {blocker_id} is now {id_state[blocker_id]}",
+                    }
+                )
                 continue
             updated_at = _parse_updated_at(issue)
             if updated_at and (now - updated_at) > timedelta(hours=stale_blocked_hours):
-                actions.append({
-                    "task_id": task_id,
-                    "title": title,
-                    "rule": "IMPROVE_UNBLOCK",
-                    "from_state": state,
-                    "to_state": "Backlog",
-                    "reason": f"stale in Blocked >{stale_blocked_hours}h with no executor progress",
-                })
+                actions.append(
+                    {
+                        "task_id": task_id,
+                        "title": title,
+                        "rule": "IMPROVE_UNBLOCK",
+                        "from_state": state,
+                        "to_state": "Backlog",
+                        "reason": f"stale in Blocked >{stale_blocked_hours}h with no executor progress",
+                    }
+                )
                 continue
 
         # Rule 4 — self-modify:approved tasks blocked on a resolved (or absent) dependency
@@ -371,45 +385,53 @@ def _apply_rules(
                 executor_exit_code_val.strip() == "0" and not executor_signal_val
             )
             if "sigkill" in executor_signal_val.lower():
-                actions.append({
-                    "task_id": task_id,
-                    "title": title,
-                    "rule": "SELF_MODIFY_REQUEUE",
-                    "from_state": state,
-                    "to_state": "Ready for AI",
-                    "reason": "SKIPPED — executor-signal:SIGKILL present; triage review required before requeue",
-                    "skipped": True,
-                })
+                actions.append(
+                    {
+                        "task_id": task_id,
+                        "title": title,
+                        "rule": "SELF_MODIFY_REQUEUE",
+                        "from_state": state,
+                        "to_state": "Ready for AI",
+                        "reason": "SKIPPED — executor-signal:SIGKILL present; triage review required before requeue",
+                        "skipped": True,
+                    }
+                )
             elif exit_code_zero_no_signal:
-                actions.append({
-                    "task_id": task_id,
-                    "title": title,
-                    "rule": "SELF_MODIFY_REQUEUE",
-                    "from_state": state,
-                    "to_state": "Ready for AI",
-                    "reason": "SKIPPED — executor-exit-code:0 with no signal label; empty result.json pattern requires execute.main fix before retry",
-                    "skipped": True,
-                })
+                actions.append(
+                    {
+                        "task_id": task_id,
+                        "title": title,
+                        "rule": "SELF_MODIFY_REQUEUE",
+                        "from_state": state,
+                        "to_state": "Ready for AI",
+                        "reason": "SKIPPED — executor-exit-code:0 with no signal label; empty result.json pattern requires execute.main fix before retry",
+                        "skipped": True,
+                    }
+                )
             elif mem_available_gb < _MEM_R4AI_THRESHOLD_GB:
-                actions.append({
-                    "task_id": task_id,
-                    "title": title,
-                    "rule": "SELF_MODIFY_REQUEUE",
-                    "from_state": state,
-                    "to_state": "Ready for AI",
-                    "reason": f"SKIPPED — mem {mem_available_gb:.2f}GB < {_MEM_R4AI_THRESHOLD_GB}GB threshold",
-                    "skipped": True,
-                })
+                actions.append(
+                    {
+                        "task_id": task_id,
+                        "title": title,
+                        "rule": "SELF_MODIFY_REQUEUE",
+                        "from_state": state,
+                        "to_state": "Ready for AI",
+                        "reason": f"SKIPPED — mem {mem_available_gb:.2f}GB < {_MEM_R4AI_THRESHOLD_GB}GB threshold",
+                        "skipped": True,
+                    }
+                )
             elif cooldown_skip_reason:
-                actions.append({
-                    "task_id": task_id,
-                    "title": title,
-                    "rule": "SELF_MODIFY_REQUEUE",
-                    "from_state": state,
-                    "to_state": "Ready for AI",
-                    "reason": f"SKIPPED — {cooldown_skip_reason}",
-                    "skipped": True,
-                })
+                actions.append(
+                    {
+                        "task_id": task_id,
+                        "title": title,
+                        "rule": "SELF_MODIFY_REQUEUE",
+                        "from_state": state,
+                        "to_state": "Ready for AI",
+                        "reason": f"SKIPPED — {cooldown_skip_reason}",
+                        "skipped": True,
+                    }
+                )
             else:
                 blocker_id = _blocker_task_id(labels)
                 if blocker_id is None or _is_terminal(id_state.get(blocker_id, "")):
@@ -418,14 +440,16 @@ def _apply_rules(
                         if blocker_id is None
                         else f"blocker {blocker_id} is now {id_state.get(blocker_id, 'unknown')}"
                     )
-                    actions.append({
-                        "task_id": task_id,
-                        "title": title,
-                        "rule": "SELF_MODIFY_REQUEUE",
-                        "from_state": state,
-                        "to_state": "Ready for AI",
-                        "reason": reason,
-                    })
+                    actions.append(
+                        {
+                            "task_id": task_id,
+                            "title": title,
+                            "rule": "SELF_MODIFY_REQUEUE",
+                            "from_state": state,
+                            "to_state": "Ready for AI",
+                            "reason": reason,
+                        }
+                    )
 
         # Rule 5 — orphaned In Review tasks (pr_review_watcher is PR-driven, not task-driven)
         # Skip tasks with a pr-url: label — those have an open PR being monitored by
@@ -433,14 +457,16 @@ def _apply_rules(
         if state_lower == "in review" and not _has_label_prefix(labels, _PR_URL_PREFIX):
             updated_at = _parse_updated_at(issue)
             if updated_at and (now - updated_at) > timedelta(hours=stale_blocked_hours):
-                actions.append({
-                    "task_id": task_id,
-                    "title": title,
-                    "rule": "STALE_IN_REVIEW",
-                    "from_state": state,
-                    "to_state": "Backlog",
-                    "reason": f"stale in In Review >{stale_blocked_hours}h — PR likely never created or already closed",
-                })
+                actions.append(
+                    {
+                        "task_id": task_id,
+                        "title": title,
+                        "rule": "STALE_IN_REVIEW",
+                        "from_state": state,
+                        "to_state": "Backlog",
+                        "reason": f"stale in In Review >{stale_blocked_hours}h — PR likely never created or already closed",
+                    }
+                )
 
         # Rule 6 — stale Running tasks whose executor died without updating Plane
         # Threshold must exceed the backend timeout (default 3600s = 1h) so legitimate
@@ -449,36 +475,38 @@ def _apply_rules(
             updated_at = _parse_updated_at(issue)
             if updated_at and (now - updated_at) > timedelta(hours=stale_running_hours):
                 if cooldown_skip_reason:
-                    actions.append({
-                        "task_id": task_id,
-                        "title": title,
-                        "rule": "STALE_RUNNING_REQUEUE",
-                        "from_state": state,
-                        "to_state": "Ready for AI",
-                        "reason": f"SKIPPED — {cooldown_skip_reason}",
-                        "skipped": True,
-                    })
+                    actions.append(
+                        {
+                            "task_id": task_id,
+                            "title": title,
+                            "rule": "STALE_RUNNING_REQUEUE",
+                            "from_state": state,
+                            "to_state": "Ready for AI",
+                            "reason": f"SKIPPED — {cooldown_skip_reason}",
+                            "skipped": True,
+                        }
+                    )
                 else:
-                    actions.append({
-                        "task_id": task_id,
-                        "title": title,
-                        "rule": "STALE_RUNNING_REQUEUE",
-                        "from_state": state,
-                        "to_state": "Ready for AI",
-                        "reason": (
-                            f"stale in Running >{stale_running_hours}h — executor likely died "
-                            f"(OOM/SIGKILL/watcher restart) without updating Plane state"
-                        ),
-                    })
+                    actions.append(
+                        {
+                            "task_id": task_id,
+                            "title": title,
+                            "rule": "STALE_RUNNING_REQUEUE",
+                            "from_state": state,
+                            "to_state": "Ready for AI",
+                            "reason": (
+                                f"stale in Running >{stale_running_hours}h — executor likely died "
+                                f"(OOM/SIGKILL/watcher restart) without updating Plane state"
+                            ),
+                        }
+                    )
 
         # Rule 7 — goal tasks whose parent task is terminal (patterns A and B).
-        _is_improve_suggestion = (
-            _has_label(labels, _SOURCE_AUTONOMY_LABEL)
-            and _has_label(labels, _SOURCE_IMPROVE_SUGGESTION_LABEL)
+        _is_improve_suggestion = _has_label(labels, _SOURCE_AUTONOMY_LABEL) and _has_label(
+            labels, _SOURCE_IMPROVE_SUGGESTION_LABEL
         )
-        _is_improvement_applied = (
-            _has_label(labels, _SOURCE_BOARD_WORKER_LABEL)
-            and _has_label(labels, _HANDOFF_IMPROVEMENT_LABEL)
+        _is_improvement_applied = _has_label(labels, _SOURCE_BOARD_WORKER_LABEL) and _has_label(
+            labels, _HANDOFF_IMPROVEMENT_LABEL
         )
         if (
             state_lower == "backlog"
@@ -492,27 +520,31 @@ def _apply_rules(
             if parent_id:
                 parent_state = id_state.get(parent_id, "")
                 if _is_terminal(parent_state) and cooldown_skip_reason:
-                    actions.append({
-                        "task_id": task_id,
-                        "title": title,
-                        "rule": "GOAL_BACKLOG_PROMOTE",
-                        "from_state": state,
-                        "to_state": "Ready for AI",
-                        "reason": f"SKIPPED — {cooldown_skip_reason}",
-                        "skipped": True,
-                    })
+                    actions.append(
+                        {
+                            "task_id": task_id,
+                            "title": title,
+                            "rule": "GOAL_BACKLOG_PROMOTE",
+                            "from_state": state,
+                            "to_state": "Ready for AI",
+                            "reason": f"SKIPPED — {cooldown_skip_reason}",
+                            "skipped": True,
+                        }
+                    )
                 elif _is_terminal(parent_state):
-                    actions.append({
-                        "task_id": task_id,
-                        "title": title,
-                        "rule": "GOAL_BACKLOG_PROMOTE",
-                        "from_state": state,
-                        "to_state": "Ready for AI",
-                        "reason": (
-                            f"parent improve task {parent_id} is {parent_state}; "
-                            "promote for goal board_worker dispatch"
-                        ),
-                    })
+                    actions.append(
+                        {
+                            "task_id": task_id,
+                            "title": title,
+                            "rule": "GOAL_BACKLOG_PROMOTE",
+                            "from_state": state,
+                            "to_state": "Ready for AI",
+                            "reason": (
+                                f"parent improve task {parent_id} is {parent_state}; "
+                                "promote for goal board_worker dispatch"
+                            ),
+                        }
+                    )
 
         # Rule 8 — clean-blocked tasks where no executor ran (pre-execution failure)
         # Workspace preparation failures, missing sandbox branch, transient infra errors.
@@ -535,18 +567,20 @@ def _apply_rules(
         if is_clean_blocked:
             updated_at = _parse_updated_at(issue)
             if updated_at and (now - updated_at) >= timedelta(minutes=clean_blocked_min_minutes):
-                actions.append({
-                    "task_id": task_id,
-                    "title": title,
-                    "rule": "CLEAN_BLOCKED_RETRY",
-                    "from_state": state,
-                    "to_state": "Backlog",
-                    "reason": (
-                        f"no executor-signal/exit-code/blocked-by labels — pre-execution failure "
-                        f"(workspace prep or infra config); safe to retry after "
-                        f"{clean_blocked_min_minutes}m min age"
-                    ),
-                })
+                actions.append(
+                    {
+                        "task_id": task_id,
+                        "title": title,
+                        "rule": "CLEAN_BLOCKED_RETRY",
+                        "from_state": state,
+                        "to_state": "Backlog",
+                        "reason": (
+                            f"no executor-signal/exit-code/blocked-by labels — pre-execution failure "
+                            f"(workspace prep or infra config); safe to retry after "
+                            f"{clean_blocked_min_minutes}m min age"
+                        ),
+                    }
+                )
 
         # Rule 9 — spec-author Backlog promotion.
         # Rule 8 moves budget-exhausted spec-author tasks Blocked → Backlog, but no watcher
@@ -557,24 +591,28 @@ def _apply_rules(
             and mem_available_gb >= _MEM_R4AI_THRESHOLD_GB
         ):
             if cooldown_skip_reason:
-                actions.append({
-                    "task_id": task_id,
-                    "title": title,
-                    "rule": "SPEC_AUTHOR_BACKLOG_PROMOTE",
-                    "from_state": state,
-                    "to_state": "Ready for AI",
-                    "reason": f"SKIPPED — {cooldown_skip_reason}",
-                    "skipped": True,
-                })
+                actions.append(
+                    {
+                        "task_id": task_id,
+                        "title": title,
+                        "rule": "SPEC_AUTHOR_BACKLOG_PROMOTE",
+                        "from_state": state,
+                        "to_state": "Ready for AI",
+                        "reason": f"SKIPPED — {cooldown_skip_reason}",
+                        "skipped": True,
+                    }
+                )
             else:
-                actions.append({
-                    "task_id": task_id,
-                    "title": title,
-                    "rule": "SPEC_AUTHOR_BACKLOG_PROMOTE",
-                    "from_state": state,
-                    "to_state": "Ready for AI",
-                    "reason": "spec-author task in Backlog; promoting for board_worker dispatch",
-                })
+                actions.append(
+                    {
+                        "task_id": task_id,
+                        "title": title,
+                        "rule": "SPEC_AUTHOR_BACKLOG_PROMOTE",
+                        "from_state": state,
+                        "to_state": "Ready for AI",
+                        "reason": "spec-author task in Backlog; promoting for board_worker dispatch",
+                    }
+                )
 
     return actions
 
@@ -582,14 +620,25 @@ def _apply_rules(
 def main() -> int:
     parser = argparse.ArgumentParser(description="Autonomous board unblocking")
     parser.add_argument("--config", required=True, type=Path)
-    parser.add_argument("--apply", action="store_true",
-                        help="apply transitions (default: dry-run)")
-    parser.add_argument("--stale-blocked-hours", type=int, default=4,
-                        help="hours after which an improve task in Blocked is considered stale")
-    parser.add_argument("--stale-running-hours", type=int, default=2,
-                        help="hours after which a Running task is considered orphaned (must exceed backend timeout)")
-    parser.add_argument("--clean-blocked-min-minutes", type=int, default=5,
-                        help="minimum minutes a task must be Blocked before Rule 8 re-queues it (avoids label-write race)")
+    parser.add_argument("--apply", action="store_true", help="apply transitions (default: dry-run)")
+    parser.add_argument(
+        "--stale-blocked-hours",
+        type=int,
+        default=4,
+        help="hours after which an improve task in Blocked is considered stale",
+    )
+    parser.add_argument(
+        "--stale-running-hours",
+        type=int,
+        default=2,
+        help="hours after which a Running task is considered orphaned (must exceed backend timeout)",
+    )
+    parser.add_argument(
+        "--clean-blocked-min-minutes",
+        type=int,
+        default=5,
+        help="minimum minutes a task must be Blocked before Rule 8 re-queues it (avoids label-write race)",
+    )
     args = parser.parse_args()
 
     settings = load_settings(args.config)
@@ -603,10 +652,15 @@ def main() -> int:
     mem_gb = _mem_available_gb()
     if mem_gb < _MEM_SKIP_THRESHOLD_GB:
         client.close()
-        print(json.dumps({
-            "skipped": True,
-            "reason": f"mem_available {mem_gb:.2f}GB < {_MEM_SKIP_THRESHOLD_GB}GB threshold — pre-OOM, skip all rules",
-        }, ensure_ascii=False))
+        print(
+            json.dumps(
+                {
+                    "skipped": True,
+                    "reason": f"mem_available {mem_gb:.2f}GB < {_MEM_SKIP_THRESHOLD_GB}GB threshold — pre-OOM, skip all rules",
+                },
+                ensure_ascii=False,
+            )
+        )
         return 0
 
     try:
@@ -622,7 +676,9 @@ def main() -> int:
     except Exception:
         cooldown_skip_reason = None
     actions = _apply_rules(
-        issues, now=now, stale_blocked_hours=args.stale_blocked_hours,
+        issues,
+        now=now,
+        stale_blocked_hours=args.stale_blocked_hours,
         stale_running_hours=args.stale_running_hours,
         clean_blocked_min_minutes=args.clean_blocked_min_minutes,
         mem_available_gb=mem_gb,
@@ -653,13 +709,19 @@ def main() -> int:
         results.append(entry)
 
     client.close()
-    print(json.dumps({
-        "scanned_at": now.isoformat(),
-        "mem_available_gb": round(mem_gb, 2),
-        "apply": args.apply,
-        "cooldown_skip_reason": cooldown_skip_reason,
-        "actions": results,
-    }, indent=2, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "scanned_at": now.isoformat(),
+                "mem_available_gb": round(mem_gb, 2),
+                "apply": args.apply,
+                "cooldown_skip_reason": cooldown_skip_reason,
+                "actions": results,
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
     return 0
 
 

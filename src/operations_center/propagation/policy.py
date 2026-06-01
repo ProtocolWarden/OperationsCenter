@@ -15,6 +15,7 @@ Operators express intent at three layers:
 Policy is read-only: the propagator asks `policy.decide(...)` and gets
 back a structured `PropagationDecision`.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -25,8 +26,8 @@ DEFAULT_DEDUP_WINDOW_HOURS: int = 24
 
 
 class _Action(str, Enum):
-    SKIP = "skip"               # don't fire any task
-    BACKLOG = "backlog"         # create a task in Backlog (default safe path)
+    SKIP = "skip"  # don't fire any task
+    BACKLOG = "backlog"  # create a task in Backlog (default safe path)
     READY_FOR_AI = "ready_for_ai"  # create + promote to Ready for AI (trusted pair)
 
 

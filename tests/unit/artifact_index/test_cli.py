@@ -14,7 +14,9 @@ from operations_center.artifact_index.cli import app
 _runner = CliRunner()
 
 
-def _write_bucket(root: Path, *, audit_type: str, run_id: str, payload_factory, materialize: bool = False) -> Path:
+def _write_bucket(
+    root: Path, *, audit_type: str, run_id: str, payload_factory, materialize: bool = False
+) -> Path:
     bucket = root / "tools" / "audit" / "report" / audit_type / f"Bucket_{run_id}"
     bucket.mkdir(parents=True, exist_ok=True)
     payload = payload_factory(run_id=run_id, run_root=str(bucket.relative_to(root)))
@@ -44,8 +46,18 @@ class TestCmdIndex:
     def test_lists_runs_in_table(self, tmp_path: Path) -> None:
         from tests.unit.artifact_index.conftest import _make_manifest_payload  # type: ignore
 
-        _write_bucket(tmp_path, audit_type="audit_type_1", run_id="run_a", payload_factory=_make_manifest_payload)
-        _write_bucket(tmp_path, audit_type="enrichment", run_id="run_b", payload_factory=_make_manifest_payload)
+        _write_bucket(
+            tmp_path,
+            audit_type="audit_type_1",
+            run_id="run_a",
+            payload_factory=_make_manifest_payload,
+        )
+        _write_bucket(
+            tmp_path,
+            audit_type="enrichment",
+            run_id="run_b",
+            payload_factory=_make_manifest_payload,
+        )
         out = _runner.invoke(app, ["index", str(tmp_path)])
         assert out.exit_code == 0
         assert "Audit Runs" in out.output
@@ -53,7 +65,12 @@ class TestCmdIndex:
     def test_json_output(self, tmp_path: Path) -> None:
         from tests.unit.artifact_index.conftest import _make_manifest_payload  # type: ignore
 
-        _write_bucket(tmp_path, audit_type="audit_type_1", run_id="run_a", payload_factory=_make_manifest_payload)
+        _write_bucket(
+            tmp_path,
+            audit_type="audit_type_1",
+            run_id="run_a",
+            payload_factory=_make_manifest_payload,
+        )
         out = _runner.invoke(app, ["index", str(tmp_path), "--json"])
         assert out.exit_code == 0
         data = json.loads(out.output)
@@ -62,7 +79,12 @@ class TestCmdIndex:
     def test_filter_by_repo(self, tmp_path: Path) -> None:
         from tests.unit.artifact_index.conftest import _make_manifest_payload  # type: ignore
 
-        _write_bucket(tmp_path, audit_type="audit_type_1", run_id="run_a", payload_factory=_make_manifest_payload)
+        _write_bucket(
+            tmp_path,
+            audit_type="audit_type_1",
+            run_id="run_a",
+            payload_factory=_make_manifest_payload,
+        )
         out = _runner.invoke(app, ["index", str(tmp_path), "--repo", "other", "--json"])
         # Filter eliminates everything → empty runs → exit 2
         assert out.exit_code == 2
@@ -91,7 +113,12 @@ class TestCmdIndexShow:
     def test_show_artifacts_table(self, tmp_path: Path) -> None:
         from tests.unit.artifact_index.conftest import _make_manifest_payload  # type: ignore
 
-        _write_bucket(tmp_path, audit_type="audit_type_1", run_id="run_a", payload_factory=_make_manifest_payload)
+        _write_bucket(
+            tmp_path,
+            audit_type="audit_type_1",
+            run_id="run_a",
+            payload_factory=_make_manifest_payload,
+        )
         out = _runner.invoke(app, ["index-show", str(tmp_path), "run_a"])
         assert out.exit_code == 0
         assert "run_a" in out.output
@@ -99,15 +126,30 @@ class TestCmdIndexShow:
     def test_unique_prefix_works(self, tmp_path: Path) -> None:
         from tests.unit.artifact_index.conftest import _make_manifest_payload  # type: ignore
 
-        _write_bucket(tmp_path, audit_type="audit_type_1", run_id="abc12345", payload_factory=_make_manifest_payload)
+        _write_bucket(
+            tmp_path,
+            audit_type="audit_type_1",
+            run_id="abc12345",
+            payload_factory=_make_manifest_payload,
+        )
         out = _runner.invoke(app, ["index-show", str(tmp_path), "abc"])
         assert out.exit_code == 0
 
     def test_ambiguous_prefix_exits_2(self, tmp_path: Path) -> None:
         from tests.unit.artifact_index.conftest import _make_manifest_payload  # type: ignore
 
-        _write_bucket(tmp_path, audit_type="audit_type_1", run_id="abc111", payload_factory=_make_manifest_payload)
-        _write_bucket(tmp_path, audit_type="audit_type_1", run_id="abc222", payload_factory=_make_manifest_payload)
+        _write_bucket(
+            tmp_path,
+            audit_type="audit_type_1",
+            run_id="abc111",
+            payload_factory=_make_manifest_payload,
+        )
+        _write_bucket(
+            tmp_path,
+            audit_type="audit_type_1",
+            run_id="abc222",
+            payload_factory=_make_manifest_payload,
+        )
         out = _runner.invoke(app, ["index-show", str(tmp_path), "abc"])
         assert out.exit_code == 2
         assert "Ambiguous" in out.output
@@ -128,7 +170,12 @@ class TestCmdIndexShow:
     def test_json_output(self, tmp_path: Path) -> None:
         from tests.unit.artifact_index.conftest import _make_manifest_payload  # type: ignore
 
-        _write_bucket(tmp_path, audit_type="audit_type_1", run_id="run_a", payload_factory=_make_manifest_payload)
+        _write_bucket(
+            tmp_path,
+            audit_type="audit_type_1",
+            run_id="run_a",
+            payload_factory=_make_manifest_payload,
+        )
         out = _runner.invoke(app, ["index-show", str(tmp_path), "run_a", "--json"])
         assert out.exit_code == 0
         data = json.loads(out.output)
@@ -143,7 +190,10 @@ class TestCmdIndexShow:
 
 class TestCmdGetArtifact:
     def test_resolves_path(self, tmp_path: Path) -> None:
-        from tests.unit.artifact_index.conftest import _make_manifest_payload, _BASE_ENTRY  # type: ignore
+        from tests.unit.artifact_index.conftest import (  # type: ignore
+            _BASE_ENTRY,
+            _make_manifest_payload,
+        )
 
         _write_bucket(
             tmp_path,
@@ -167,20 +217,43 @@ class TestCmdGetArtifact:
         assert _BASE_ENTRY["path"] in out.output
 
     def test_missing_file_exits_5(self, tmp_path: Path) -> None:
-        from tests.unit.artifact_index.conftest import _make_manifest_payload, _BASE_ENTRY  # type: ignore
+        from tests.unit.artifact_index.conftest import (  # type: ignore
+            _BASE_ENTRY,
+            _make_manifest_payload,
+        )
 
-        _write_bucket(tmp_path, audit_type="audit_type_1", run_id="run_a", payload_factory=_make_manifest_payload)
+        _write_bucket(
+            tmp_path,
+            audit_type="audit_type_1",
+            run_id="run_a",
+            payload_factory=_make_manifest_payload,
+        )
         out = _runner.invoke(
             app,
-            ["get-artifact", str(tmp_path), "run_a", _BASE_ENTRY["artifact_id"], "--repo-root", str(tmp_path)],
+            [
+                "get-artifact",
+                str(tmp_path),
+                "run_a",
+                _BASE_ENTRY["artifact_id"],
+                "--repo-root",
+                str(tmp_path),
+            ],
         )
         assert out.exit_code == 5
         assert "missing" in out.output.lower()
 
     def test_no_recheck_returns_path_even_if_missing(self, tmp_path: Path) -> None:
-        from tests.unit.artifact_index.conftest import _make_manifest_payload, _BASE_ENTRY  # type: ignore
+        from tests.unit.artifact_index.conftest import (  # type: ignore
+            _BASE_ENTRY,
+            _make_manifest_payload,
+        )
 
-        _write_bucket(tmp_path, audit_type="audit_type_1", run_id="run_a", payload_factory=_make_manifest_payload)
+        _write_bucket(
+            tmp_path,
+            audit_type="audit_type_1",
+            run_id="run_a",
+            payload_factory=_make_manifest_payload,
+        )
         out = _runner.invoke(
             app,
             [
@@ -198,15 +271,30 @@ class TestCmdGetArtifact:
     def test_unknown_artifact_exits_1(self, tmp_path: Path) -> None:
         from tests.unit.artifact_index.conftest import _make_manifest_payload  # type: ignore
 
-        _write_bucket(tmp_path, audit_type="audit_type_1", run_id="run_a", payload_factory=_make_manifest_payload)
+        _write_bucket(
+            tmp_path,
+            audit_type="audit_type_1",
+            run_id="run_a",
+            payload_factory=_make_manifest_payload,
+        )
         out = _runner.invoke(
             app,
-            ["get-artifact", str(tmp_path), "run_a", "no:such:artifact", "--repo-root", str(tmp_path)],
+            [
+                "get-artifact",
+                str(tmp_path),
+                "run_a",
+                "no:such:artifact",
+                "--repo-root",
+                str(tmp_path),
+            ],
         )
         assert out.exit_code == 1
 
     def test_print_content(self, tmp_path: Path) -> None:
-        from tests.unit.artifact_index.conftest import _make_manifest_payload, _BASE_ENTRY  # type: ignore
+        from tests.unit.artifact_index.conftest import (  # type: ignore
+            _BASE_ENTRY,
+            _make_manifest_payload,
+        )
 
         _write_bucket(
             tmp_path,

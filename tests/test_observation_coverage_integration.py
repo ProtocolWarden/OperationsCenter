@@ -1,18 +1,19 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Integration tests: observation_coverage deriver → rule pipeline."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from test_insights import _make_snapshot as make_snapshot
 
 from operations_center.decision.candidate_builder import CandidateSpec
 from operations_center.decision.rules.observation_coverage import ObservationCoverageRule
 from operations_center.insights.derivers.observation_coverage import ObservationCoverageDeriver
 from operations_center.insights.normalizer import InsightNormalizer
 
-from test_insights import _make_snapshot as make_snapshot
 pytestmark = pytest.mark.slow
 
 
@@ -47,9 +48,7 @@ class TestObservationCoveragePipeline:
 
         spec = test_candidates[0]
         assert "test_signal" in spec.proposal_outline.title_hint
-        assert spec.proposal_outline.title_hint == (
-            "Restore repeated missing test_signal coverage"
-        )
+        assert spec.proposal_outline.title_hint == ("Restore repeated missing test_signal coverage")
         assert spec.confidence == "high"  # 3 consecutive → high
 
     def test_dependency_drift_flows_through_pipeline(self) -> None:
@@ -89,7 +88,15 @@ class TestObservationCoverageWithNoneObservedAt:
     def test_unknown_test_signal_with_none_observed_at(self) -> None:
         """CheckSignal with None observed_at should use snapshot's observed_at as fallback."""
         from pathlib import Path
-        from operations_center.observer.models import CheckSignal, RepoContextSnapshot, RepoSignalsSnapshot, RepoStateSnapshot, TodoSignal, DependencyDriftSignal
+
+        from operations_center.observer.models import (
+            CheckSignal,
+            DependencyDriftSignal,
+            RepoContextSnapshot,
+            RepoSignalsSnapshot,
+            RepoStateSnapshot,
+            TodoSignal,
+        )
 
         deriver = ObservationCoverageDeriver(_normalizer())
         now = datetime(2026, 4, 20, 12, tzinfo=UTC)
@@ -105,7 +112,9 @@ class TestObservationCoverageWithNoneObservedAt:
                 is_dirty=False,
             ),
             signals=RepoSignalsSnapshot(
-                test_signal=CheckSignal(status="unknown", observed_at=None),  # signal has no timestamp
+                test_signal=CheckSignal(
+                    status="unknown", observed_at=None
+                ),  # signal has no timestamp
                 dependency_drift=DependencyDriftSignal(status="available"),
                 todo_signal=TodoSignal(),
             ),
@@ -121,7 +130,15 @@ class TestObservationCoverageWithNoneObservedAt:
     def test_persistent_unknown_with_none_observed_at(self) -> None:
         """Multiple snapshots with CheckSignal.observed_at=None should use snapshot times."""
         from pathlib import Path
-        from operations_center.observer.models import CheckSignal, RepoContextSnapshot, RepoSignalsSnapshot, RepoStateSnapshot, TodoSignal, DependencyDriftSignal
+
+        from operations_center.observer.models import (
+            CheckSignal,
+            DependencyDriftSignal,
+            RepoContextSnapshot,
+            RepoSignalsSnapshot,
+            RepoStateSnapshot,
+            TodoSignal,
+        )
 
         deriver = ObservationCoverageDeriver(_normalizer())
         t0 = datetime(2026, 4, 20, 12, tzinfo=UTC)

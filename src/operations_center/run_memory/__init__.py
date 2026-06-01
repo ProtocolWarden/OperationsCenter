@@ -15,8 +15,8 @@ from .index import (
     RunMemoryIndexWriter,
     RunMemoryQueryService,
     deterministic_record_id,
-    record_execution_result,
     rebuild_index_from_artifacts,
+    record_execution_result,
 )
 from .models import (
     RunMemoryQuery,

@@ -9,13 +9,16 @@ from typing import Protocol, Sequence
 
 from operations_center.insights.artifact_writer import InsightArtifactWriter
 from operations_center.insights.loader import SnapshotLoader
-from operations_center.insights.models import InsightRepoRef, RepoInsightsArtifact, SourceSnapshotRef
+from operations_center.insights.models import (
+    InsightRepoRef,
+    RepoInsightsArtifact,
+    SourceSnapshotRef,
+)
 from operations_center.observer.models import RepoStateSnapshot
 
 
 class InsightDeriver(Protocol):
-    def derive(self, snapshots: Sequence[RepoStateSnapshot]):
-        ...
+    def derive(self, snapshots: Sequence[RepoStateSnapshot]): ...
 
 
 @dataclass(frozen=True)

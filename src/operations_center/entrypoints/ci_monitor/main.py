@@ -8,6 +8,7 @@ Run as a standalone watcher:
 One-shot:
     python -m operations_center.entrypoints.ci_monitor.main --config config/operations_center.local.yaml
 """
+
 from __future__ import annotations
 
 import argparse
@@ -36,6 +37,7 @@ PR_REVIEW_STATE_DIR = Path("state/pr_reviews")
 # State helpers
 # ---------------------------------------------------------------------------
 
+
 def _ci_fix_state_path(owner: str, repo: str, pr_number: int) -> Path:
     return CI_FIX_STATE_DIR / f"{owner}_{repo}_{pr_number}.json"
 
@@ -52,7 +54,9 @@ def _load_ci_fix_state(owner: str, repo: str, pr_number: int) -> dict | None:
 
 def _save_ci_fix_state(owner: str, repo: str, pr_number: int, state: dict) -> None:
     CI_FIX_STATE_DIR.mkdir(parents=True, exist_ok=True)
-    _ci_fix_state_path(owner, repo, pr_number).write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
+    _ci_fix_state_path(owner, repo, pr_number).write_text(
+        json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
 
 
 def _pr_is_awaiting_ci(branch: str) -> bool:
@@ -74,6 +78,7 @@ def _pr_is_awaiting_ci(branch: str) -> bool:
 # ---------------------------------------------------------------------------
 # Task description builder
 # ---------------------------------------------------------------------------
+
 
 def _build_fix_pr_description(
     *,
@@ -111,6 +116,7 @@ def _build_fix_pr_description(
 # Monitor cycle
 # ---------------------------------------------------------------------------
 
+
 def run_ci_monitor_cycle(
     plane_client: PlaneClient,
     settings: Settings,
@@ -135,11 +141,16 @@ def run_ci_monitor_cycle(
         try:
             open_prs = gh.list_open_prs(owner, repo_name)
         except Exception as exc:
-            logger.warning(json.dumps({
-                "event": "ci_monitor_list_prs_failed",
-                "repo_key": repo_key,
-                "error": str(exc),
-            }, ensure_ascii=False))
+            logger.warning(
+                json.dumps(
+                    {
+                        "event": "ci_monitor_list_prs_failed",
+                        "repo_key": repo_key,
+                        "error": str(exc),
+                    },
+                    ensure_ascii=False,
+                )
+            )
             continue
 
         for pr in open_prs:
@@ -152,12 +163,17 @@ def run_ci_monitor_cycle(
 
             # Skip if the reviewer is already autonomously fixing CI for this PR.
             if _pr_is_awaiting_ci(branch):
-                logger.info(json.dumps({
-                    "event": "ci_monitor_skipped_awaiting_ci",
-                    "pr_number": pr_number,
-                    "repo_key": repo_key,
-                    "branch": branch,
-                }, ensure_ascii=False))
+                logger.info(
+                    json.dumps(
+                        {
+                            "event": "ci_monitor_skipped_awaiting_ci",
+                            "pr_number": pr_number,
+                            "repo_key": repo_key,
+                            "branch": branch,
+                        },
+                        ensure_ascii=False,
+                    )
+                )
                 continue
 
             try:
@@ -174,12 +190,17 @@ def run_ci_monitor_cycle(
                 # Deduplicate: skip if we already created a fix task for this commit.
                 existing = _load_ci_fix_state(owner, repo_name, pr_number)
                 if existing and existing.get("head_sha") == head_sha:
-                    logger.info(json.dumps({
-                        "event": "ci_monitor_skipped_already_tracked",
-                        "pr_number": pr_number,
-                        "repo_key": repo_key,
-                        "fix_task_id": existing.get("fix_task_id"),
-                    }, ensure_ascii=False))
+                    logger.info(
+                        json.dumps(
+                            {
+                                "event": "ci_monitor_skipped_already_tracked",
+                                "pr_number": pr_number,
+                                "repo_key": repo_key,
+                                "fix_task_id": existing.get("fix_task_id"),
+                            },
+                            ensure_ascii=False,
+                        )
+                    )
                     continue
 
                 description = _build_fix_pr_description(
@@ -202,34 +223,49 @@ def run_ci_monitor_cycle(
                 )
                 fix_task_id = str(created_issue.get("id", ""))
 
-                _save_ci_fix_state(owner, repo_name, pr_number, {
-                    "owner": owner,
-                    "repo": repo_name,
-                    "pr_number": pr_number,
-                    "branch": branch,
-                    "head_sha": head_sha,
-                    "fix_task_id": fix_task_id,
-                    "failures": failures,
-                    "created_at": datetime.now(UTC).isoformat(),
-                })
+                _save_ci_fix_state(
+                    owner,
+                    repo_name,
+                    pr_number,
+                    {
+                        "owner": owner,
+                        "repo": repo_name,
+                        "pr_number": pr_number,
+                        "branch": branch,
+                        "head_sha": head_sha,
+                        "fix_task_id": fix_task_id,
+                        "failures": failures,
+                        "created_at": datetime.now(UTC).isoformat(),
+                    },
+                )
 
-                logger.info(json.dumps({
-                    "event": "ci_fix_task_created",
-                    "pr_number": pr_number,
-                    "pr_url": pr_url,
-                    "repo_key": repo_key,
-                    "fix_task_id": fix_task_id,
-                    "failures": failures,
-                }, ensure_ascii=False))
+                logger.info(
+                    json.dumps(
+                        {
+                            "event": "ci_fix_task_created",
+                            "pr_number": pr_number,
+                            "pr_url": pr_url,
+                            "repo_key": repo_key,
+                            "fix_task_id": fix_task_id,
+                            "failures": failures,
+                        },
+                        ensure_ascii=False,
+                    )
+                )
                 created += 1
 
             except Exception as exc:
-                logger.warning(json.dumps({
-                    "event": "ci_monitor_pr_error",
-                    "pr_number": pr_number,
-                    "repo_key": repo_key,
-                    "error": str(exc),
-                }, ensure_ascii=False))
+                logger.warning(
+                    json.dumps(
+                        {
+                            "event": "ci_monitor_pr_error",
+                            "pr_number": pr_number,
+                            "repo_key": repo_key,
+                            "error": str(exc),
+                        },
+                        ensure_ascii=False,
+                    )
+                )
 
     return created
 
@@ -237,6 +273,7 @@ def run_ci_monitor_cycle(
 # ---------------------------------------------------------------------------
 # Watch loop
 # ---------------------------------------------------------------------------
+
 
 def run_monitor_loop(
     plane_client: PlaneClient,
@@ -251,24 +288,45 @@ def run_monitor_loop(
 
     while True:
         cycle += 1
-        logger.info(json.dumps({"event": "ci_monitor_cycle_start", "cycle": cycle}, ensure_ascii=False))
+        logger.info(
+            json.dumps({"event": "ci_monitor_cycle_start", "cycle": cycle}, ensure_ascii=False)
+        )
         try:
             created = run_ci_monitor_cycle(plane_client, settings, logger)
-            logger.info(json.dumps({"event": "ci_monitor_cycle_end", "cycle": cycle, "tasks_created": created}, ensure_ascii=False))
+            logger.info(
+                json.dumps(
+                    {"event": "ci_monitor_cycle_end", "cycle": cycle, "tasks_created": created},
+                    ensure_ascii=False,
+                )
+            )
 
             if status_dir:
                 status_dir.mkdir(parents=True, exist_ok=True)
-                (status_dir / "ci_monitor.status.json").write_text(json.dumps({
-                    "cycle": cycle,
-                    "tasks_created": created,
-                    "updated_at": datetime.now(UTC).isoformat(),
-                }, indent=2, ensure_ascii=False), encoding="utf-8")
+                (status_dir / "ci_monitor.status.json").write_text(
+                    json.dumps(
+                        {
+                            "cycle": cycle,
+                            "tasks_created": created,
+                            "updated_at": datetime.now(UTC).isoformat(),
+                        },
+                        indent=2,
+                        ensure_ascii=False,
+                    ),
+                    encoding="utf-8",
+                )
 
         except Exception as exc:
-            logger.warning(json.dumps({"event": "ci_monitor_cycle_error", "cycle": cycle, "error": str(exc)}, ensure_ascii=False))
+            logger.warning(
+                json.dumps(
+                    {"event": "ci_monitor_cycle_error", "cycle": cycle, "error": str(exc)},
+                    ensure_ascii=False,
+                )
+            )
 
         if max_cycles is not None and cycle >= max_cycles:
-            logger.info(json.dumps({"event": "ci_monitor_complete", "cycles": cycle}, ensure_ascii=False))
+            logger.info(
+                json.dumps({"event": "ci_monitor_complete", "cycles": cycle}, ensure_ascii=False)
+            )
             return
 
         time.sleep(poll_interval_seconds)
@@ -278,10 +336,15 @@ def run_monitor_loop(
 # Entrypoint
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Monitor open PRs for CI failures and create fix_pr tasks")
+    parser = argparse.ArgumentParser(
+        description="Monitor open PRs for CI failures and create fix_pr tasks"
+    )
     parser.add_argument("--config", required=True)
-    parser.add_argument("--watch", action="store_true", help="Run in watch mode (poll continuously)")
+    parser.add_argument(
+        "--watch", action="store_true", help="Run in watch mode (poll continuously)"
+    )
     parser.add_argument("--poll-interval-seconds", type=int, default=120)
     parser.add_argument("--max-cycles", type=int)
     parser.add_argument("--status-dir")

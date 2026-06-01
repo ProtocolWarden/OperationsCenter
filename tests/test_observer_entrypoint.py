@@ -33,15 +33,21 @@ def _write_config(tmp_path: Path) -> Path:
 
 
 def _init_git_repo(path: Path) -> None:
-    subprocess.run(["git", "init", "-b", "main"], cwd=path, check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "init", "-b", "main"], cwd=path, check=True, capture_output=True, text=True
+    )
     subprocess.run(["git", "config", "user.name", "Test User"], cwd=path, check=True)
     subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=path, check=True)
     (path / "README.md").write_text("hello\n")
     subprocess.run(["git", "add", "README.md"], cwd=path, check=True)
-    subprocess.run(["git", "commit", "-m", "init"], cwd=path, check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "commit", "-m", "init"], cwd=path, check=True, capture_output=True, text=True
+    )
 
 
-def test_observe_repo_cli_writes_artifact_and_prints_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_observe_repo_cli_writes_artifact_and_prints_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
     _init_git_repo(repo)
@@ -65,7 +71,9 @@ def test_observe_repo_cli_writes_artifact_and_prints_path(tmp_path: Path, monkey
     assert snapshot_path.exists()
 
 
-def test_observe_repo_cli_returns_nonzero_for_missing_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_observe_repo_cli_returns_nonzero_for_missing_repo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     config_path = _write_config(tmp_path)
     monkeypatch.setattr(
         "sys.argv",

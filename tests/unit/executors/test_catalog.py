@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Catalog v1 tests — load + the three queries + enforcement rules."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -15,7 +16,6 @@ from operations_center.executors.catalog import (
     load_catalog,
 )
 from operations_center.executors.catalog.loader import CatalogValidationError
-
 
 _REAL_DIR = Path("src/operations_center/executors")
 
@@ -76,7 +76,8 @@ class TestCapabilityQuery:
     def test_returns_empty_for_impossible_combo(self):
         cat = load_catalog(_REAL_DIR)
         out = backends_supporting_capabilities(
-            cat, required_capabilities={"repo_patch", "human_review"},
+            cat,
+            required_capabilities={"repo_patch", "human_review"},
         )
         assert out == []
 
@@ -104,10 +105,14 @@ class TestVerdictQuery:
 # ── Enforcement rules ───────────────────────────────────────────────────
 
 
-def _seed_minimal_backend(base: Path, backend_id: str, *,
-                          outcome: str = "adapter_only",
-                          gaps_yaml: str = "[]",
-                          gap_refs: list[str] | None = None) -> None:
+def _seed_minimal_backend(
+    base: Path,
+    backend_id: str,
+    *,
+    outcome: str = "adapter_only",
+    gaps_yaml: str = "[]",
+    gap_refs: list[str] | None = None,
+) -> None:
     # Pick a per_phase set that's matrix-consistent with the outcome,
     # so this fixture isolates the gap-ref enforcement under test.
     if outcome in ("fork_required", "upstream_patch_pending"):
@@ -119,15 +124,16 @@ def _seed_minimal_backend(base: Path, backend_id: str, *,
     backend = base / backend_id
     backend.mkdir(parents=True)
     (backend / "capability_card.yaml").write_text(
-        f"backend_id: {backend_id}\nbackend_version: u\n"
-        "advertised_capabilities: [repo_read]\n"
+        f"backend_id: {backend_id}\nbackend_version: u\nadvertised_capabilities: [repo_read]\n"
     )
     (backend / "runtime_support.yaml").write_text(
         f"backend_id: {backend_id}\nbackend_version: u\n"
         "supported_runtime_kinds: []\nsupported_selection_modes: []\n"
     )
     (backend / "contract_gaps.yaml").write_text(gaps_yaml)
-    refs_yaml = "gap_refs: []" if not gap_refs else "gap_refs:\n" + "\n".join(f"  - {r}" for r in gap_refs)
+    refs_yaml = (
+        "gap_refs: []" if not gap_refs else "gap_refs:\n" + "\n".join(f"  - {r}" for r in gap_refs)
+    )
     (backend / "audit_verdict.yaml").write_text(
         f"backend_id: {backend_id}\naudited_at: t\n"
         f"audited_against_cxrp_version: '0.2'\nbackend_version: u\n"
@@ -145,7 +151,8 @@ class TestEnforcement:
 
     def test_fork_required_without_forked_gap_rejected(self, tmp_path):
         _seed_minimal_backend(
-            tmp_path, "x",
+            tmp_path,
+            "x",
             outcome="fork_required",
             gaps_yaml=(
                 "- id: G-1\n  gap: g\n  discovered_at: t\n  impact: i\n"
@@ -158,7 +165,8 @@ class TestEnforcement:
 
     def test_fork_required_with_forked_gap_loads(self, tmp_path):
         _seed_minimal_backend(
-            tmp_path, "x",
+            tmp_path,
+            "x",
             outcome="fork_required",
             gaps_yaml=(
                 "- id: G-1\n  gap: g\n  discovered_at: t\n  impact: i\n"
@@ -171,7 +179,8 @@ class TestEnforcement:
 
     def test_upstream_patch_pending_without_deadline_rejected(self, tmp_path):
         _seed_minimal_backend(
-            tmp_path, "x",
+            tmp_path,
+            "x",
             outcome="upstream_patch_pending",
             gaps_yaml=(
                 "- id: G-1\n  gap: g\n  discovered_at: t\n  impact: i\n"
@@ -184,7 +193,8 @@ class TestEnforcement:
 
     def test_upstream_patch_pending_with_deadline_loads(self, tmp_path):
         _seed_minimal_backend(
-            tmp_path, "x",
+            tmp_path,
+            "x",
             outcome="upstream_patch_pending",
             gaps_yaml=(
                 "- id: G-1\n  gap: g\n  discovered_at: t\n  impact: i\n"

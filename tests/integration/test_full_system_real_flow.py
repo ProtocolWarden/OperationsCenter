@@ -64,6 +64,7 @@ _DISPATCH_TARGET = "operations_center.audit_governance.runner.dispatch_managed_a
 # Fake producer: write Phase 5 output files exactly per Phase 2 contract
 # ---------------------------------------------------------------------------
 
+
 def _write_fake_producer_outputs(run_dir: Path) -> tuple[Path, Path]:
     """Simulate a completed ExampleManagedRepo audit run.
 
@@ -74,12 +75,14 @@ def _write_fake_producer_outputs(run_dir: Path) -> tuple[Path, Path]:
     # Write a real artifact file
     artifact_file = run_dir / "topic_selection.json"
     artifact_file.write_text(
-        json.dumps({
-            "stage": "TopicSelectionStage",
-            "result": "ok",
-            "topics": ["AI developments", "Climate tech"],
-            "selected": "AI developments",
-        }),
+        json.dumps(
+            {
+                "stage": "TopicSelectionStage",
+                "result": "ok",
+                "topics": ["AI developments", "Climate tech"],
+                "selected": "AI developments",
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -205,6 +208,7 @@ def _make_dispatch_result(run_dir: Path, manifest_path: Path) -> ManagedAuditDis
 # Full system flow test
 # ---------------------------------------------------------------------------
 
+
 def test_full_system_real_flow(tmp_path: Path):
     """
     ExampleManagedRepo fake run → OpsCenter discovery → index → calibration
@@ -246,6 +250,7 @@ def test_full_system_real_flow(tmp_path: Path):
 
     # Governance report must be persisted with governance_status field
     from operations_center.audit_governance import load_governance_report
+
     gov_report = load_governance_report(Path(gov_result.report_path))
     assert gov_report.governance_status == "approved_and_dispatched"
     assert gov_report.dispatched_run_id == _RUN_ID
@@ -318,10 +323,7 @@ def test_full_system_real_flow(tmp_path: Path):
 
     # Suite report must be persisted
     report_file = (
-        tmp_path / "suite_out"
-        / suite.suite_id
-        / suite_report.suite_run_id
-        / "suite_report.json"
+        tmp_path / "suite_out" / suite.suite_id / suite_report.suite_run_id / "suite_report.json"
     )
     assert report_file.exists(), f"Suite report not written: {report_file}"
 
@@ -354,11 +356,14 @@ def test_full_system_governance_status_in_report(tmp_path: Path):
         )
 
     from operations_center.audit_governance import load_governance_report
+
     _gov_report = load_governance_report(Path(gov_result.report_path))
 
     # The persisted JSON must contain governance_status (gap_r2_003 closure check)
     raw = json.loads(Path(gov_result.report_path).read_text(encoding="utf-8"))
-    assert "governance_status" in raw, "governance_status must be persisted in governance_report.json"
+    assert "governance_status" in raw, (
+        "governance_status must be persisted in governance_report.json"
+    )
     assert raw["governance_status"] == "approved_and_dispatched"
 
 

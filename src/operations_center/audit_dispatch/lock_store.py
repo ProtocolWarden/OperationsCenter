@@ -45,7 +45,9 @@ from .errors import (
 def _locked_state_file(path: Path):
     """Lazy import shim — avoids circular import via audit_governance package init."""
     from operations_center.audit_governance.file_locks import locked_state_file
+
     return locked_state_file(path)
+
 
 LOCK_SCHEMA_VERSION = 1
 
@@ -123,20 +125,12 @@ class PersistentLockPayload:
                 started_at=str(data["started_at"]),
                 command=str(data["command"]),
                 expected_run_status_path=str(data["expected_run_status_path"]),
-                audit_pid=(
-                    int(data["audit_pid"])
-                    if data.get("audit_pid") is not None
-                    else None
-                ),
+                audit_pid=(int(data["audit_pid"]) if data.get("audit_pid") is not None else None),
                 audit_pgid=(
-                    int(data["audit_pgid"])
-                    if data.get("audit_pgid") is not None
-                    else None
+                    int(data["audit_pgid"]) if data.get("audit_pgid") is not None else None
                 ),
                 owner_hostname=str(data.get("owner_hostname", socket.gethostname())),
-                lock_schema_version=int(
-                    data.get("lock_schema_version", LOCK_SCHEMA_VERSION)
-                ),
+                lock_schema_version=int(data.get("lock_schema_version", LOCK_SCHEMA_VERSION)),
             )
         except (KeyError, ValueError, TypeError) as exc:
             raise LockStoreCorruptError(
@@ -187,9 +181,7 @@ class PersistentLockStore:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
-            raise LockStoreCorruptError(
-                f"lock file {path} is not valid JSON: {exc}"
-            ) from exc
+            raise LockStoreCorruptError(f"lock file {path} is not valid JSON: {exc}") from exc
         return PersistentLockPayload.from_json(data)
 
     def _iter_lock_files(self) -> list[Path]:
@@ -266,9 +258,7 @@ class PersistentLockStore:
         with _locked_state_file(path):
             existing = self.read(repo_id)
             if existing is None:
-                raise FileNotFoundError(
-                    f"no lock to update for repo {repo_id!r}"
-                )
+                raise FileNotFoundError(f"no lock to update for repo {repo_id!r}")
             updated = replace(existing, **changes)
             self._write_atomic(path, updated)
         return updated

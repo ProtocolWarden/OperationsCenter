@@ -8,16 +8,17 @@ Provides:
 - Summary statistics
 - Alert status visualization
 """
+
 from __future__ import annotations
 
-from dataclasses import dataclass, field as dataclass_field
-from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
+from datetime import datetime, timezone
 from typing import Optional
 
-from .health_checks import HealthChecker, HealthStatus
-from .metrics import CollectorMetrics, MetricsCollector, SystemMetrics
-from .security_logging import MalformedPayloadMetrics
-from .structured_logging import StructuredLogReader, StructuredLogWriter
+from .health_checks import HealthChecker
+from .metrics import MetricsCollector
+from .structured_logging import StructuredLogReader
 
 
 @dataclass
@@ -30,9 +31,7 @@ class DashboardMetric:
     status: str
     threshold_warning: Optional[float] = None
     threshold_critical: Optional[float] = None
-    timestamp: datetime = dataclass_field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    timestamp: datetime = dataclass_field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> dict:
         return {
@@ -53,9 +52,7 @@ class DashboardPanel:
     title: str
     description: str
     metrics: list[DashboardMetric] = dataclass_field(default_factory=list)
-    timestamp: datetime = dataclass_field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    timestamp: datetime = dataclass_field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> dict:
         return {
@@ -185,9 +182,7 @@ class DashboardProvider:
                 name="Overall Error Rate",
                 value=round(system_metrics.overall_error_rate_percent, 2),
                 unit="%",
-                status=self._get_error_rate_status(
-                    system_metrics.overall_error_rate_percent
-                ),
+                status=self._get_error_rate_status(system_metrics.overall_error_rate_percent),
                 threshold_warning=1.0,
                 threshold_critical=5.0,
             ),
@@ -195,21 +190,26 @@ class DashboardProvider:
                 name="Total Validation Failures",
                 value=system_metrics.total_validation_failures,
                 unit="count",
-                status="HEALTHY"
-                if system_metrics.total_validation_failures == 0
-                else "WARNING",
+                status="HEALTHY" if system_metrics.total_validation_failures == 0 else "WARNING",
             ),
             DashboardMetric(
                 name="Parse Errors",
                 value=sum(m.total_parse_errors for m in system_metrics.collector_metrics.values()),
                 unit="count",
-                status="WARNING" if sum(m.total_parse_errors for m in system_metrics.collector_metrics.values()) > 0 else "HEALTHY",
+                status="WARNING"
+                if sum(m.total_parse_errors for m in system_metrics.collector_metrics.values()) > 0
+                else "HEALTHY",
             ),
             DashboardMetric(
                 name="Structure Errors",
-                value=sum(m.total_structure_errors for m in system_metrics.collector_metrics.values()),
+                value=sum(
+                    m.total_structure_errors for m in system_metrics.collector_metrics.values()
+                ),
                 unit="count",
-                status="WARNING" if sum(m.total_structure_errors for m in system_metrics.collector_metrics.values()) > 0 else "HEALTHY",
+                status="WARNING"
+                if sum(m.total_structure_errors for m in system_metrics.collector_metrics.values())
+                > 0
+                else "HEALTHY",
             ),
             DashboardMetric(
                 name="IO Errors",
@@ -239,15 +239,13 @@ class DashboardProvider:
                 )
             ]
         else:
-            max_latency = max(
-                (m.max_latency_ms for m in collector_metrics.values()), default=0
+            max_latency = max((m.max_latency_ms for m in collector_metrics.values()), default=0)
+            mean_latency = (
+                sum(m.mean_latency_ms for m in collector_metrics.values()) / len(collector_metrics)
+                if collector_metrics
+                else 0
             )
-            mean_latency = sum(m.mean_latency_ms for m in collector_metrics.values()) / len(
-                collector_metrics
-            ) if collector_metrics else 0
-            throughput = sum(
-                m.throughput_artifacts_per_sec for m in collector_metrics.values()
-            )
+            throughput = sum(m.throughput_artifacts_per_sec for m in collector_metrics.values())
 
             metrics = [
                 DashboardMetric(
@@ -300,9 +298,7 @@ class DashboardProvider:
                 DashboardMetric(
                     name=f"{name} - Success Rate",
                     value=round(
-                        (m.successful_runs / m.total_runs * 100)
-                        if m.total_runs > 0
-                        else 0,
+                        (m.successful_runs / m.total_runs * 100) if m.total_runs > 0 else 0,
                         2,
                     ),
                     unit="%",

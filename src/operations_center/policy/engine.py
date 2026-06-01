@@ -134,6 +134,7 @@ class PolicyEngine:
     def from_defaults(cls) -> "PolicyEngine":
         """Create with the default conservative policy config."""
         from .defaults import DEFAULT_POLICY_CONFIG
+
         return cls(DEFAULT_POLICY_CONFIG)
 
     @classmethod
@@ -149,12 +150,14 @@ class PolicyEngine:
 
 def _check_repo_enabled(policy: RepoPolicy, violations: list[PolicyViolation]) -> None:
     if not policy.enabled:
-        violations.append(PolicyViolation(
-            rule_id="repo.disabled",
-            category="repo",
-            message=f"Repo {policy.repo_key!r} is disabled in policy configuration",
-            blocking=True,
-        ))
+        violations.append(
+            PolicyViolation(
+                rule_id="repo.disabled",
+                category="repo",
+                message=f"Repo {policy.repo_key!r} is disabled in policy configuration",
+                blocking=True,
+            )
+        )
 
 
 def _check_task_type(
@@ -165,25 +168,29 @@ def _check_task_type(
     task_type_value = proposal.task_type.value
 
     if policy.blocked_task_types and task_type_value in policy.blocked_task_types:
-        violations.append(PolicyViolation(
-            rule_id="task_type.blocked",
-            category="repo",
-            message=f"Task type {task_type_value!r} is blocked for repo {policy.repo_key!r}",
-            blocking=True,
-            related_repo=proposal.target.repo_key,
-        ))
+        violations.append(
+            PolicyViolation(
+                rule_id="task_type.blocked",
+                category="repo",
+                message=f"Task type {task_type_value!r} is blocked for repo {policy.repo_key!r}",
+                blocking=True,
+                related_repo=proposal.target.repo_key,
+            )
+        )
 
     if policy.allowed_task_types and task_type_value not in policy.allowed_task_types:
-        violations.append(PolicyViolation(
-            rule_id="task_type.not_in_allowlist",
-            category="repo",
-            message=(
-                f"Task type {task_type_value!r} is not in the allowed task type list "
-                f"for repo {policy.repo_key!r}"
-            ),
-            blocking=True,
-            related_repo=proposal.target.repo_key,
-        ))
+        violations.append(
+            PolicyViolation(
+                rule_id="task_type.not_in_allowlist",
+                category="repo",
+                message=(
+                    f"Task type {task_type_value!r} is not in the allowed task type list "
+                    f"for repo {policy.repo_key!r}"
+                ),
+                blocking=True,
+                related_repo=proposal.target.repo_key,
+            )
+        )
 
 
 def _check_routing_constraints(
@@ -199,15 +206,17 @@ def _check_routing_constraints(
     lane_value = decision.selected_lane.value
     if lane_value not in _LOCAL_LANES:
         triggering_labels = sorted(labels.intersection(_LOCAL_ONLY_LABELS))
-        violations.append(PolicyViolation(
-            rule_id="routing.local_only_violated",
-            category="routing",
-            message=(
-                f"Proposal labels {triggering_labels} require local execution, "
-                f"but routing selected remote lane {lane_value!r}"
-            ),
-            blocking=True,
-        ))
+        violations.append(
+            PolicyViolation(
+                rule_id="routing.local_only_violated",
+                category="routing",
+                message=(
+                    f"Proposal labels {triggering_labels} require local execution, "
+                    f"but routing selected remote lane {lane_value!r}"
+                ),
+                blocking=True,
+            )
+        )
 
 
 def _check_path_restrictions(
@@ -227,24 +236,28 @@ def _check_path_restrictions(
     if not candidate_paths:
         # No explicit path restriction declared; check default_mode.
         if policy.path_policy.default_mode == "block":
-            violations.append(PolicyViolation(
-                rule_id="path.unrestricted_writes_blocked",
-                category="path",
-                message=(
-                    "No path restriction declared on this task, but default path mode "
-                    "is 'block'. Explicit allowed_paths must be set."
-                ),
-                blocking=True,
-            ))
+            violations.append(
+                PolicyViolation(
+                    rule_id="path.unrestricted_writes_blocked",
+                    category="path",
+                    message=(
+                        "No path restriction declared on this task, but default path mode "
+                        "is 'block'. Explicit allowed_paths must be set."
+                    ),
+                    blocking=True,
+                )
+            )
         elif policy.path_policy.default_mode == "review_required":
-            warnings.append(PolicyWarning(
-                rule_id="path.unrestricted_writes_review",
-                category="path",
-                message=(
-                    "No path restriction declared on this task, but default path mode "
-                    "is 'review_required'. This task needs human review."
-                ),
-            ))
+            warnings.append(
+                PolicyWarning(
+                    rule_id="path.unrestricted_writes_review",
+                    category="path",
+                    message=(
+                        "No path restriction declared on this task, but default path mode "
+                        "is 'review_required'. This task needs human review."
+                    ),
+                )
+            )
         return
 
     task_type_value = proposal.task_type.value
@@ -254,40 +267,48 @@ def _check_path_restrictions(
         if matched_rule is None:
             # No rule matched; apply default mode
             if policy.path_policy.default_mode == "block":
-                violations.append(PolicyViolation(
-                    rule_id="path.default_blocked",
+                violations.append(
+                    PolicyViolation(
+                        rule_id="path.default_blocked",
+                        category="path",
+                        message=f"Path {path!r} is not covered by any allow rule and default mode is 'block'",
+                        blocking=True,
+                        related_path=path,
+                    )
+                )
+            elif policy.path_policy.default_mode == "review_required":
+                violations.append(
+                    PolicyViolation(
+                        rule_id="path.default_review_required",
+                        category="path",
+                        message=f"Path {path!r} requires review (default path mode)",
+                        blocking=False,
+                        related_path=path,
+                    )
+                )
+        elif matched_rule.access_mode == "block":
+            violations.append(
+                PolicyViolation(
+                    rule_id="path.blocked",
                     category="path",
-                    message=f"Path {path!r} is not covered by any allow rule and default mode is 'block'",
+                    message=f"Path {path!r} is blocked by policy rule (pattern: {matched_rule.path_pattern!r})",
                     blocking=True,
                     related_path=path,
-                ))
-            elif policy.path_policy.default_mode == "review_required":
-                violations.append(PolicyViolation(
-                    rule_id="path.default_review_required",
+                )
+            )
+        elif matched_rule.access_mode in ("read_only", "review_required"):
+            violations.append(
+                PolicyViolation(
+                    rule_id="path.review_required",
                     category="path",
-                    message=f"Path {path!r} requires review (default path mode)",
+                    message=(
+                        f"Path {path!r} requires human review "
+                        f"(pattern: {matched_rule.path_pattern!r}; mode: {matched_rule.access_mode!r})"
+                    ),
                     blocking=False,
                     related_path=path,
-                ))
-        elif matched_rule.access_mode == "block":
-            violations.append(PolicyViolation(
-                rule_id="path.blocked",
-                category="path",
-                message=f"Path {path!r} is blocked by policy rule (pattern: {matched_rule.path_pattern!r})",
-                blocking=True,
-                related_path=path,
-            ))
-        elif matched_rule.access_mode in ("read_only", "review_required"):
-            violations.append(PolicyViolation(
-                rule_id="path.review_required",
-                category="path",
-                message=(
-                    f"Path {path!r} requires human review "
-                    f"(pattern: {matched_rule.path_pattern!r}; mode: {matched_rule.access_mode!r})"
-                ),
-                blocking=False,
-                related_path=path,
-            ))
+                )
+            )
 
 
 def _match_path_rule(
@@ -318,32 +339,38 @@ def _check_branch_guardrail(
         # No branch prefix means caller didn't set one; this is fine in practice —
         # we only block if the proposal explicitly sets open_pr=False AND push_on_success=False
         # (which would mean: direct commit, no PR). Emit a warning.
-        warnings.append(PolicyWarning(
-            rule_id="branch.no_prefix_set",
-            category="branch",
-            message="branch_prefix is empty; ensure a task branch is used rather than direct commit",
-        ))
+        warnings.append(
+            PolicyWarning(
+                rule_id="branch.no_prefix_set",
+                category="branch",
+                message="branch_prefix is empty; ensure a task branch is used rather than direct commit",
+            )
+        )
 
     # Check allowed base branches
     if bg.allowed_base_branches and proposal.target.base_branch not in bg.allowed_base_branches:
-        violations.append(PolicyViolation(
-            rule_id="branch.base_branch_not_allowed",
-            category="branch",
-            message=(
-                f"Base branch {proposal.target.base_branch!r} is not in the allowed base branches "
-                f"list: {bg.allowed_base_branches}"
-            ),
-            blocking=True,
-        ))
+        violations.append(
+            PolicyViolation(
+                rule_id="branch.base_branch_not_allowed",
+                category="branch",
+                message=(
+                    f"Base branch {proposal.target.base_branch!r} is not in the allowed base branches "
+                    f"list: {bg.allowed_base_branches}"
+                ),
+                blocking=True,
+            )
+        )
 
     # Check PR requirement
     if bg.require_pr and not branch.open_pr:
-        violations.append(PolicyViolation(
-            rule_id="branch.pr_required",
-            category="branch",
-            message="Policy requires a PR, but proposal branch_policy.open_pr is False",
-            blocking=False,
-        ))
+        violations.append(
+            PolicyViolation(
+                rule_id="branch.pr_required",
+                category="branch",
+                message="Policy requires a PR, but proposal branch_policy.open_pr is False",
+                blocking=False,
+            )
+        )
 
 
 def _check_tool_guardrail(
@@ -358,36 +385,44 @@ def _check_tool_guardrail(
     if tg.network_mode == "local_only":
         lane_value = decision.selected_lane.value
         if lane_value not in _LOCAL_LANES:
-            violations.append(PolicyViolation(
-                rule_id="tool.network_local_only",
-                category="tool",
-                message=(
-                    "Tool policy requires local-only execution, but routing "
-                    f"selected remote lane {lane_value!r}"
-                ),
-                blocking=True,
-            ))
+            violations.append(
+                PolicyViolation(
+                    rule_id="tool.network_local_only",
+                    category="tool",
+                    message=(
+                        "Tool policy requires local-only execution, but routing "
+                        f"selected remote lane {lane_value!r}"
+                    ),
+                    blocking=True,
+                )
+            )
     elif tg.network_mode == "blocked":
-        violations.append(PolicyViolation(
-            rule_id="tool.network_blocked",
-            category="tool",
-            message="All network execution is blocked by tool policy for this repo",
-            blocking=True,
-        ))
+        violations.append(
+            PolicyViolation(
+                rule_id="tool.network_blocked",
+                category="tool",
+                message="All network execution is blocked by tool policy for this repo",
+                blocking=True,
+            )
+        )
 
     # Destructive action check: if the task type or labels suggest destructive work
     destructive_indicators = {"drop_table", "rm_rf", "force_push", "destructive"}
     proposal_labels_lower = {lbl.lower() for lbl in proposal.labels}
-    if not tg.allow_destructive_actions and destructive_indicators.intersection(proposal_labels_lower):
-        violations.append(PolicyViolation(
-            rule_id="tool.destructive_blocked",
-            category="tool",
-            message=(
-                "Destructive actions are blocked by policy, but proposal labels "
-                "indicate a potentially destructive operation"
-            ),
-            blocking=True,
-        ))
+    if not tg.allow_destructive_actions and destructive_indicators.intersection(
+        proposal_labels_lower
+    ):
+        violations.append(
+            PolicyViolation(
+                rule_id="tool.destructive_blocked",
+                category="tool",
+                message=(
+                    "Destructive actions are blocked by policy, but proposal labels "
+                    "indicate a potentially destructive operation"
+                ),
+                blocking=True,
+            )
+        )
 
 
 def _check_validation_requirements(
@@ -400,9 +435,7 @@ def _check_validation_requirements(
     risk_value = proposal.risk_level.value
     task_type_value = proposal.task_type.value
 
-    validation_available = (
-        request is not None and bool(request.validation_commands)
-    ) or (
+    validation_available = (request is not None and bool(request.validation_commands)) or (
         proposal.validation_profile.commands
     )
 
@@ -411,24 +444,28 @@ def _check_validation_requirements(
             continue
 
         if not validation_available and vr.block_if_unavailable:
-            violations.append(PolicyViolation(
-                rule_id="validation.required_unavailable",
-                category="validation",
-                message=(
-                    f"Validation profile {vr.required_profile!r} is required for "
-                    f"risk={risk_value!r} but no validation commands are configured"
-                ),
-                blocking=True,
-            ))
+            violations.append(
+                PolicyViolation(
+                    rule_id="validation.required_unavailable",
+                    category="validation",
+                    message=(
+                        f"Validation profile {vr.required_profile!r} is required for "
+                        f"risk={risk_value!r} but no validation commands are configured"
+                    ),
+                    blocking=True,
+                )
+            )
         elif not validation_available:
-            warnings.append(PolicyWarning(
-                rule_id="validation.recommended_unavailable",
-                category="validation",
-                message=(
-                    f"Validation profile {vr.required_profile!r} is recommended for "
-                    f"risk={risk_value!r} but no validation commands are configured"
-                ),
-            ))
+            warnings.append(
+                PolicyWarning(
+                    rule_id="validation.recommended_unavailable",
+                    category="validation",
+                    message=(
+                        f"Validation profile {vr.required_profile!r} is recommended for "
+                        f"risk={risk_value!r} but no validation commands are configured"
+                    ),
+                )
+            )
         break  # Use only the first matching requirement
 
 
@@ -442,11 +479,13 @@ def _validation_req_applies(
     return risk_match and type_match
 
 
-_TRUSTED_SOURCE_LABELS = frozenset({
-    "source: autonomy",
-    "source: spec-campaign",
-    "source: board_worker",  # follow-up tasks emitted by an already-trusted run
-})
+_TRUSTED_SOURCE_LABELS = frozenset(
+    {
+        "source: autonomy",
+        "source: spec-campaign",
+        "source: board_worker",  # follow-up tasks emitted by an already-trusted run
+    }
+)
 
 
 def _check_review_requirements(
@@ -460,12 +499,14 @@ def _check_review_requirements(
     labels = set(proposal.labels)
 
     if rr.blocked_without_human:
-        violations.append(PolicyViolation(
-            rule_id="review.blocked_without_human",
-            category="review",
-            message="Policy requires explicit human approval for this repo; autonomous execution is blocked",
-            blocking=True,
-        ))
+        violations.append(
+            PolicyViolation(
+                rule_id="review.blocked_without_human",
+                category="review",
+                message="Policy requires explicit human approval for this repo; autonomous execution is blocked",
+                blocking=True,
+            )
+        )
         return
 
     # Tasks from pre-authorized lanes (autonomy tier, spec campaigns) bypass the
@@ -488,15 +529,16 @@ def _check_review_requirements(
     )
 
     if needs_review:
-        violations.append(PolicyViolation(
-            rule_id="review.required",
-            category="review",
-            message=(
-                f"Human review required: risk={risk_value!r}, "
-                f"task_type={task_type_value!r}"
-            ),
-            blocking=False,
-        ))
+        violations.append(
+            PolicyViolation(
+                rule_id="review.required",
+                category="review",
+                message=(
+                    f"Human review required: risk={risk_value!r}, task_type={task_type_value!r}"
+                ),
+                blocking=False,
+            )
+        )
 
 
 # ---------------------------------------------------------------------------

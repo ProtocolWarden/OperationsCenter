@@ -58,13 +58,17 @@ class ExecutionArtifactCollector:
                 outcome = json.loads(outcome_text)
             except (OSError, UnicodeDecodeError) as e:
                 ArtifactValidator.log_io_error(
-                    outcome_file, e, context={"collector": "ExecutionArtifactCollector"},
+                    outcome_file,
+                    e,
+                    context={"collector": "ExecutionArtifactCollector"},
                     metrics_exporter=context.metrics_exporter,
                 )
                 continue
             except json.JSONDecodeError as e:
                 ArtifactValidator.log_parse_error(
-                    outcome_file, e, context={"collector": "ExecutionArtifactCollector"},
+                    outcome_file,
+                    e,
+                    context={"collector": "ExecutionArtifactCollector"},
                     metrics_exporter=context.metrics_exporter,
                 )
                 continue
@@ -85,13 +89,17 @@ class ExecutionArtifactCollector:
                 request = json.loads(request_text)
             except (OSError, UnicodeDecodeError) as e:
                 ArtifactValidator.log_io_error(
-                    request_file, e, context={"collector": "ExecutionArtifactCollector"},
+                    request_file,
+                    e,
+                    context={"collector": "ExecutionArtifactCollector"},
                     metrics_exporter=context.metrics_exporter,
                 )
                 continue
             except json.JSONDecodeError as e:
                 ArtifactValidator.log_parse_error(
-                    request_file, e, context={"collector": "ExecutionArtifactCollector"},
+                    request_file,
+                    e,
+                    context={"collector": "ExecutionArtifactCollector"},
                     metrics_exporter=context.metrics_exporter,
                 )
                 continue

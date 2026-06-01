@@ -15,18 +15,17 @@ Covers:
 - Plane API errors are captured in result.errors without aborting the run.
 - recorded_tier is parsed from the task body when present.
 """
+
 from __future__ import annotations
 
 from typing import Any
 from unittest.mock import MagicMock
-
 
 from operations_center.proposer.backlog_promoter import (
     BacklogPromoterService,
     _parse_recorded_tier,
     _parse_source_family,
 )
-
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -59,8 +58,10 @@ def _issue(
 
 def _tier_map(**overrides: int):
     """Return a get_tier callable using provided overrides, defaulting to 1."""
+
     def get_tier(family: str) -> int:
         return overrides.get(family, 1)
+
     return get_tier
 
 
@@ -130,8 +131,7 @@ def test_dry_run_does_not_call_transition() -> None:
 def test_multiple_promotable_tasks_all_promoted() -> None:
     issues = [
         _issue(task_id="t1", family="lint_fix"),
-        _issue(task_id="t2", family="type_fix", state="Backlog",
-               labels=["source: autonomy"]),
+        _issue(task_id="t2", family="type_fix", state="Backlog", labels=["source: autonomy"]),
     ]
     svc, client = _service(issues, tiers={"lint_fix": 2, "type_fix": 2}, dry_run=False)
     result = svc.promote()

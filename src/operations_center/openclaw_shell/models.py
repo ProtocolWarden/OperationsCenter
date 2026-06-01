@@ -53,16 +53,16 @@ class OperatorContext:
     repo_key: str
 
     # Task framing
-    task_type: str = "goal"           # e.g. "lint_fix", "bug_fix", "refactor"
-    execution_mode: str = "goal"      # e.g. "goal", "fix_pr"
+    task_type: str = "goal"  # e.g. "lint_fix", "bug_fix", "refactor"
+    execution_mode: str = "goal"  # e.g. "goal", "fix_pr"
 
     # Where
     clone_url: str = ""
     base_branch: str = "main"
 
     # Risk and priority
-    risk_level: str = "low"           # "low" | "medium" | "high"
-    priority: str = "normal"          # "low" | "normal" | "high" | "critical"
+    risk_level: str = "low"  # "low" | "medium" | "high"
+    priority: str = "normal"  # "low" | "normal" | "high" | "critical"
 
     # Optional constraints
     constraints_text: Optional[str] = None

@@ -8,8 +8,8 @@ import json
 
 import pytest
 
-from operations_center.contracts.routing import LaneDecision
 from operations_center.contracts.enums import BackendName, LaneName
+from operations_center.contracts.routing import LaneDecision
 
 
 def _minimal_decision(**kw) -> LaneDecision:

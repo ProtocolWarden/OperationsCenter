@@ -81,7 +81,9 @@ def test_http_client_posts_to_route_endpoint() -> None:
         captured.append(request)
         return httpx.Response(200, json=_stub_cxrp_response())
 
-    client = HttpLaneRoutingClient("http://switchboard.local", transport=httpx.MockTransport(handler))
+    client = HttpLaneRoutingClient(
+        "http://switchboard.local", transport=httpx.MockTransport(handler)
+    )
     proposal = build_proposal(_ctx())
     try:
         decision = client.select_lane(proposal)
@@ -100,7 +102,9 @@ def test_http_client_serializes_canonical_proposal() -> None:
         seen.update(json.loads(request.content.decode("utf-8")))
         return httpx.Response(200, json=_stub_cxrp_response())
 
-    client = HttpLaneRoutingClient("http://switchboard.local", transport=httpx.MockTransport(handler))
+    client = HttpLaneRoutingClient(
+        "http://switchboard.local", transport=httpx.MockTransport(handler)
+    )
     proposal = build_proposal(_ctx(task_id="TASK-9", project_id="proj-9"))
     try:
         client.select_lane(proposal)
@@ -112,7 +116,9 @@ def test_http_client_serializes_canonical_proposal() -> None:
     assert seen["goal_text"] == "Fix lint errors in src/"
 
 
-def test_http_client_from_env_prefers_operations_center_specific_url(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_http_client_from_env_prefers_operations_center_specific_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("OPERATIONS_CENTER_SWITCHBOARD_URL", "http://sb.internal:20401")
     client = HttpLaneRoutingClient.from_env()
     try:
@@ -157,15 +163,15 @@ def test_http_client_decodes_cxrp_shape_response() -> None:
         "backend": "team_executor",
         "rationale": "cxrp-shape decision",
         "confidence": 0.88,
-        "alternatives": [
-            {"lane": "coding_agent", "executor": "codex_cli"}
-        ],
+        "alternatives": [{"lane": "coding_agent", "executor": "codex_cli"}],
     }
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=cxrp_payload)
 
-    client = HttpLaneRoutingClient("http://switchboard.local", transport=httpx.MockTransport(handler))
+    client = HttpLaneRoutingClient(
+        "http://switchboard.local", transport=httpx.MockTransport(handler)
+    )
     proposal = build_proposal(_ctx())
     try:
         decision = client.select_lane(proposal)
@@ -188,7 +194,9 @@ def test_http_client_rejects_legacy_oc_shape_response() -> None:
         # OC's rich Pydantic dump — no schema_version/contract_kind keys.
         return httpx.Response(200, json=_stub_decision().model_dump(mode="json"))
 
-    client = HttpLaneRoutingClient("http://switchboard.local", transport=httpx.MockTransport(handler))
+    client = HttpLaneRoutingClient(
+        "http://switchboard.local", transport=httpx.MockTransport(handler)
+    )
     proposal = build_proposal(_ctx())
     try:
         with pytest.raises(ValueError, match="CxRP LaneDecision envelope"):
@@ -201,7 +209,9 @@ def test_connect_error_raises_switchboard_unavailable() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("Connection refused")
 
-    client = HttpLaneRoutingClient("http://switchboard.local", transport=httpx.MockTransport(handler))
+    client = HttpLaneRoutingClient(
+        "http://switchboard.local", transport=httpx.MockTransport(handler)
+    )
     proposal = build_proposal(_ctx())
     try:
         with pytest.raises(SwitchBoardUnavailableError, match="unreachable"):
@@ -214,7 +224,9 @@ def test_timeout_raises_switchboard_unavailable() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.TimeoutException("Request timed out")
 
-    client = HttpLaneRoutingClient("http://switchboard.local", transport=httpx.MockTransport(handler))
+    client = HttpLaneRoutingClient(
+        "http://switchboard.local", transport=httpx.MockTransport(handler)
+    )
     proposal = build_proposal(_ctx())
     try:
         with pytest.raises(SwitchBoardUnavailableError, match="timed out"):
@@ -227,7 +239,9 @@ def test_http_4xx_raises_http_status_error() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(422, json={"detail": "validation error"})
 
-    client = HttpLaneRoutingClient("http://switchboard.local", transport=httpx.MockTransport(handler))
+    client = HttpLaneRoutingClient(
+        "http://switchboard.local", transport=httpx.MockTransport(handler)
+    )
     proposal = build_proposal(_ctx())
     try:
         with pytest.raises(httpx.HTTPStatusError):
@@ -242,7 +256,9 @@ def test_switchboard_unavailable_error_wraps_cause() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise cause
 
-    client = HttpLaneRoutingClient("http://switchboard.local", transport=httpx.MockTransport(handler))
+    client = HttpLaneRoutingClient(
+        "http://switchboard.local", transport=httpx.MockTransport(handler)
+    )
     proposal = build_proposal(_ctx())
     try:
         with pytest.raises(SwitchBoardUnavailableError) as exc_info:

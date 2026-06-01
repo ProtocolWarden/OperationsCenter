@@ -20,7 +20,9 @@ class HotspotConcentrationRule:
             if insight.kind != "file_hotspot":
                 continue
             if insight.dedup_key.endswith("repeated_presence"):
-                repeated_by_subject[insight.subject] = int(insight.evidence.get("appears_in_recent_snapshots", 0))
+                repeated_by_subject[insight.subject] = int(
+                    insight.evidence.get("appears_in_recent_snapshots", 0)
+                )
             if insight.dedup_key.endswith("dominant_current"):
                 dominant_by_subject[insight.subject] = dict(insight.evidence)
 

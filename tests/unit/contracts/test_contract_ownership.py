@@ -10,26 +10,41 @@ from cxrp.contracts import ExecutionRequest as CxrpExecutionRequest
 from cxrp.contracts import ExecutionResult as CxrpExecutionResult
 from cxrp.contracts import LaneDecision as CxrpLaneDecision
 from cxrp.contracts import TaskProposal as CxrpTaskProposal
+
+from operations_center.contracts.common import (
+    BranchPolicy,
+    ExecutionConstraints,
+    TaskTarget,
+    ValidationProfile,
+    ValidationSummary,
+)
 from operations_center.contracts.cxrp_mapper import (
+    from_cxrp_lane_decision,
     to_cxrp_execution_request,
     to_cxrp_execution_result,
-    from_cxrp_lane_decision,
     to_cxrp_lane_decision,
     to_cxrp_task_proposal,
 )
-from operations_center.contracts.proposal import OcPlanningProposal, TaskProposal
-from operations_center.contracts.routing import LaneDecision, OcRoutingDecision
-from operations_center.contracts.common import BranchPolicy, ExecutionConstraints, TaskTarget, ValidationProfile
-from operations_center.contracts.enums import BackendName, ExecutionMode, LaneName, Priority, RiskLevel, TaskType
+from operations_center.contracts.enums import (
+    ArtifactType,
+    BackendName,
+    ExecutionMode,
+    ExecutionStatus,
+    LaneName,
+    Priority,
+    RiskLevel,
+    TaskType,
+    ValidationStatus,
+)
 from operations_center.contracts.execution import (
+    ExecutionArtifact,
     ExecutionRequest,
     ExecutionResult,
-    ExecutionArtifact,
     OcExecutionRequest,
     OcExecutionResult,
 )
-from operations_center.contracts.enums import ArtifactType, ExecutionStatus, ValidationStatus
-from operations_center.contracts.common import ValidationSummary
+from operations_center.contracts.proposal import OcPlanningProposal, TaskProposal
+from operations_center.contracts.routing import LaneDecision, OcRoutingDecision
 
 
 def _repo_root() -> Path:
@@ -144,7 +159,9 @@ def test_docs_state_cxrp_owns_canonical_wire_semantics() -> None:
     )
 
     assert "CxRP owns the wire contracts" in readme
-    assert "CxRP owns canonical cross-repo proposal, routing, and execution semantics." in contract_map
+    assert (
+        "CxRP owns canonical cross-repo proposal, routing, and execution semantics." in contract_map
+    )
     assert "OcPlanningProposal" in contract_map
     assert "OcRoutingDecision" in contract_map
     assert "OcExecutionRequest" in contract_map
@@ -164,5 +181,10 @@ def test_docs_do_not_describe_oc_internal_models_as_canonical_protocol_contracts
     assert "canonical `ExecutionResult`" not in readme
     assert "| `TaskProposal` | `src/operations_center/contracts/proposal.py` |" not in contract_map
     assert "| `LaneDecision` | `src/operations_center/contracts/routing.py` |" not in contract_map
-    assert "| `ExecutionRequest` | `src/operations_center/contracts/execution.py` |" not in contract_map
-    assert "| `ExecutionResult` | `src/operations_center/contracts/execution.py` |" not in contract_map
+    assert (
+        "| `ExecutionRequest` | `src/operations_center/contracts/execution.py` |"
+        not in contract_map
+    )
+    assert (
+        "| `ExecutionResult` | `src/operations_center/contracts/execution.py` |" not in contract_map
+    )

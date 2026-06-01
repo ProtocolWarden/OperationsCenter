@@ -15,9 +15,9 @@ from operations_center.contracts.enums import (
     ValidationStatus,
 )
 from operations_center.contracts.execution import ExecutionResult
-from operations_center.observability.models import BackendDetailRef
 from operations_center.execution.coordinator import ExecutionCoordinator
 from operations_center.execution.handoff import ExecutionRuntimeContext
+from operations_center.observability.models import BackendDetailRef
 from operations_center.planning.models import PlanningContext, ProposalDecisionBundle
 from operations_center.planning.proposal_builder import build_proposal
 from operations_center.policy.models import PolicyDecision, PolicyStatus
@@ -57,9 +57,11 @@ class _CaptureAdapter(_RecordingAdapter):
     def __init__(self, result: ExecutionResult, capture=None, refs=None) -> None:
         super().__init__(result)
         self.capture = capture if capture is not None else {"events": ["x"]}
-        self.refs = refs if refs is not None else [
-            BackendDetailRef(detail_type="event_trace", path="/tmp/raw-events.json")
-        ]
+        self.refs = (
+            refs
+            if refs is not None
+            else [BackendDetailRef(detail_type="event_trace", path="/tmp/raw-events.json")]
+        )
 
     def execute_and_capture(self, request):
         self.calls += 1
@@ -222,10 +224,7 @@ def test_capture_observed_runtime_flows_into_record_and_trace() -> None:
 
     outcome = coordinator.execute(bundle, _runtime())
 
-    assert (
-        outcome.record.metadata["observed_runtime"]["selected_worker_backend"]
-        == "codex_cli"
-    )
+    assert outcome.record.metadata["observed_runtime"]["selected_worker_backend"] == "codex_cli"
     assert outcome.trace.observed_runtime["fallback_used"] is True
 
 
@@ -355,4 +354,3 @@ def test_execute_returns_execution_result_instance_on_review_required() -> None:
     assert isinstance(outcome.result, ExecutionResult)
     assert outcome.result.status == ExecutionStatus.SKIPPED
     assert outcome.executed is False
-

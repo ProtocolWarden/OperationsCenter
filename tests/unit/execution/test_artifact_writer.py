@@ -7,15 +7,18 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-
-from operations_center.contracts.enums import BackendName, LaneName, ExecutionStatus, FailureReasonCategory
+from operations_center.contracts.enums import (
+    BackendName,
+    ExecutionStatus,
+    FailureReasonCategory,
+    LaneName,
+)
 from operations_center.contracts.execution import ExecutionRequest, ExecutionResult
 from operations_center.contracts.routing import LaneDecision
 from operations_center.execution.artifact_writer import RunArtifactWriter
+from operations_center.execution.handoff import ExecutionRequestBuilder, ExecutionRuntimeContext
 from operations_center.planning.models import PlanningContext, ProposalDecisionBundle
 from operations_center.planning.proposal_builder import build_proposal
-from operations_center.execution.handoff import ExecutionRequestBuilder, ExecutionRuntimeContext
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -51,6 +54,7 @@ def _request(bundle: ProposalDecisionBundle, tmp_path: Path) -> ExecutionRequest
 def _success_result(request: ExecutionRequest) -> ExecutionResult:
     from operations_center.contracts.common import ValidationSummary
     from operations_center.contracts.enums import ValidationStatus
+
     return ExecutionResult(
         run_id=request.run_id,
         proposal_id=request.proposal_id,
@@ -64,6 +68,7 @@ def _success_result(request: ExecutionRequest) -> ExecutionResult:
 def _failure_result(request: ExecutionRequest) -> ExecutionResult:
     from operations_center.contracts.common import ValidationSummary
     from operations_center.contracts.enums import ValidationStatus
+
     return ExecutionResult(
         run_id=request.run_id,
         proposal_id=request.proposal_id,
@@ -111,7 +116,13 @@ class TestWriteRun:
         )
         assert len(written) == 5
         run_dir = tmp_path / "runs" / result.run_id
-        for name in ("proposal.json", "decision.json", "execution_request.json", "result.json", "run_metadata.json"):
+        for name in (
+            "proposal.json",
+            "decision.json",
+            "execution_request.json",
+            "result.json",
+            "run_metadata.json",
+        ):
             assert (run_dir / name).exists(), f"{name} missing"
 
     def test_returns_paths_as_strings(self, tmp_path):
@@ -288,7 +299,9 @@ class TestWritePartial:
     def test_creates_run_directory(self, tmp_path):
         bundle = _bundle()
         writer = RunArtifactWriter(root=tmp_path / "runs")
-        writer.write_partial(run_id="partial-run-1", proposal=bundle.proposal, reason="SwitchBoard down")
+        writer.write_partial(
+            run_id="partial-run-1", proposal=bundle.proposal, reason="SwitchBoard down"
+        )
         assert (tmp_path / "runs" / "partial-run-1").is_dir()
 
     def test_writes_proposal_when_provided(self, tmp_path):
@@ -311,7 +324,9 @@ class TestWritePartial:
     def test_metadata_marks_partial(self, tmp_path):
         writer = RunArtifactWriter(root=tmp_path / "runs")
         writer.write_partial(run_id="partial-run-1", reason="SwitchBoard down")
-        metadata = json.loads((tmp_path / "runs" / "partial-run-1" / "run_metadata.json").read_text())
+        metadata = json.loads(
+            (tmp_path / "runs" / "partial-run-1" / "run_metadata.json").read_text()
+        )
         assert metadata["partial"] is True
         assert metadata["reason"] == "SwitchBoard down"
         assert metadata["run_id"] == "partial-run-1"

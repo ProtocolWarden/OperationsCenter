@@ -13,6 +13,7 @@ Usage::
     python -m operations_center.entrypoints.campaign_status.main --status in_progress
     python -m operations_center.entrypoints.campaign_status.main --json
 """
+
 from __future__ import annotations
 
 import argparse

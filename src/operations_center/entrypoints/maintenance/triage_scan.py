@@ -17,6 +17,7 @@ Two scans run together:
         --config config/operations_center.local.yaml \\
         [--apply] [--awaiting-input-state "Awaiting Input"]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -31,14 +32,18 @@ from operations_center.priority_scans import (
     handle_awaiting_input_scan,
     handle_priority_rescore_scan,
 )
-from operations_center.queue_healing import QueueHealingDecision, QueueHealingEngine, QueueHealingTask, QueueTransition
+from operations_center.queue_healing import (
+    QueueHealingDecision,
+    QueueHealingEngine,
+    QueueHealingTask,
+    QueueTransition,
+)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Periodic triage: priority + awaiting-input")
     parser.add_argument("--config", required=True, type=Path)
-    parser.add_argument("--apply", action="store_true",
-                        help="apply transitions (default: dry-run)")
+    parser.add_argument("--apply", action="store_true", help="apply transitions (default: dry-run)")
     parser.add_argument("--awaiting-input-state", default="Awaiting Input")
     args = parser.parse_args()
 
@@ -64,7 +69,8 @@ def main() -> int:
     rescore_actions: list[dict] = []
     for c in rescore_candidates:
         entry = {
-            "task_id": c.task_id, "title": c.title,
+            "task_id": c.task_id,
+            "title": c.title,
             "current_priority": c.current_priority,
             "proposed_priority": c.proposed_priority,
             "reason": c.reason,
@@ -90,7 +96,8 @@ def main() -> int:
     awaiting_actions: list[dict] = []
     for a in awaiting:
         entry = {
-            "task_id": a.task_id, "title": a.title,
+            "task_id": a.task_id,
+            "title": a.title,
             "new_comment_count": a.new_comment_count,
         }
         if args.apply:
@@ -164,13 +171,19 @@ def main() -> int:
         queue_healing_actions.append(entry)
 
     client.close()
-    print(json.dumps({
-        "scanned_at": now.isoformat(),
-        "apply":      args.apply,
-        "rescore":    rescore_actions,
-        "awaiting":   awaiting_actions,
-        "queue_healing": queue_healing_actions,
-    }, indent=2, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "scanned_at": now.isoformat(),
+                "apply": args.apply,
+                "rescore": rescore_actions,
+                "awaiting": awaiting_actions,
+                "queue_healing": queue_healing_actions,
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
     return 0
 
 
@@ -192,7 +205,7 @@ def _label_value(labels: tuple[str, ...], *prefixes: str) -> str | None:
         prefix_l = prefix.lower()
         for low, original in lowered:
             if low.startswith(prefix_l):
-                return original[len(prefix):].strip()
+                return original[len(prefix) :].strip()
     return None
 
 

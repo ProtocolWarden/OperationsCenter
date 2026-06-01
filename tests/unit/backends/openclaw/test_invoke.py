@@ -4,19 +4,20 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from operations_center.backends.openclaw.invoke import (
     OpenClawBackendInvoker,
-    OpenClawRunResult,
     OpenClawRunner,
+    OpenClawRunResult,
     StubOpenClawRunner,
 )
 from operations_center.backends.openclaw.models import (
     OpenClawPreparedRun,
     OpenClawRunCapture,
 )
-from pathlib import Path
 
 
 def _prepared(**kw) -> OpenClawPreparedRun:

@@ -21,6 +21,7 @@ The Optimizer LLM closed loop, budgets, variable-preservation checks,
 and async wiring are intentionally NOT carried over — OC drives the
 LLM elsewhere (board_worker spec-author task-kind).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -61,10 +62,7 @@ class Edit(BaseModel):
     )
     new_text: str | None = Field(
         default=None,
-        description=(
-            "Replacement text (for replace) or text to insert/append. "
-            "Null for `delete`."
-        ),
+        description=("Replacement text (for replace) or text to insert/append. Null for `delete`."),
     )
     reason: str = Field(
         description="Why this edit. Short — operator/auditor reads this.",

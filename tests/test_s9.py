@@ -9,6 +9,7 @@ S9-6  Budget allocation by acceptance rate
 S9-7  Test coverage gap detection
 S9-10 Theme aggregation deriver
 """
+
 from __future__ import annotations
 
 import json
@@ -22,8 +23,9 @@ import pytest
 # S9-1: Event-driven pipeline trigger
 # ---------------------------------------------------------------------------
 
+
 def test_pipeline_trigger_snapshot_mtimes_detects_new_file(tmp_path: Path) -> None:
-    from operations_center.entrypoints.pipeline_trigger.main import _snapshot_mtimes, _has_changed
+    from operations_center.entrypoints.pipeline_trigger.main import _has_changed, _snapshot_mtimes
 
     f = tmp_path / "fetch_head"
     sources = [f]
@@ -64,12 +66,17 @@ def test_pipeline_trigger_no_change_when_same(tmp_path: Path) -> None:
 # S9-3: No-op loop detection
 # ---------------------------------------------------------------------------
 
+
 def test_noop_loop_deriver_no_insights_when_no_proposals(tmp_path: Path) -> None:
     from operations_center.insights.derivers.noop_loop import NoOpLoopDeriver
     from operations_center.insights.normalizer import InsightNormalizer
     from operations_center.observer.models import (
-        RepoContextSnapshot, RepoSignalsSnapshot, RepoStateSnapshot,
-        CheckSignal, DependencyDriftSignal, TodoSignal,
+        CheckSignal,
+        DependencyDriftSignal,
+        RepoContextSnapshot,
+        RepoSignalsSnapshot,
+        RepoStateSnapshot,
+        TodoSignal,
     )
 
     normalizer = InsightNormalizer()
@@ -98,8 +105,12 @@ def test_noop_loop_deriver_detects_cycling_family(tmp_path: Path) -> None:
     from operations_center.insights.derivers.noop_loop import NoOpLoopDeriver
     from operations_center.insights.normalizer import InsightNormalizer
     from operations_center.observer.models import (
-        RepoContextSnapshot, RepoSignalsSnapshot, RepoStateSnapshot,
-        CheckSignal, DependencyDriftSignal, TodoSignal,
+        CheckSignal,
+        DependencyDriftSignal,
+        RepoContextSnapshot,
+        RepoSignalsSnapshot,
+        RepoStateSnapshot,
+        TodoSignal,
     )
 
     proposer_root = tmp_path / "proposer"
@@ -109,10 +120,14 @@ def test_noop_loop_deriver_detects_cycling_family(tmp_path: Path) -> None:
 
     # Create 4 proposer artifacts all proposing lint_fix
     for i in range(4):
-        (proposer_root / f"proposer_result_{i:04d}.json").write_text(json.dumps({
-            "generated_at": datetime.now(UTC).isoformat(),
-            "created_tasks": [{"source_family": "lint_fix", "title": f"Fix lint {i}"}],
-        }))
+        (proposer_root / f"proposer_result_{i:04d}.json").write_text(
+            json.dumps(
+                {
+                    "generated_at": datetime.now(UTC).isoformat(),
+                    "created_tasks": [{"source_family": "lint_fix", "title": f"Fix lint {i}"}],
+                }
+            )
+        )
 
     # No feedback records (zero merges)
 
@@ -148,8 +163,12 @@ def test_noop_loop_deriver_no_insight_when_family_has_merges(tmp_path: Path) -> 
     from operations_center.insights.derivers.noop_loop import NoOpLoopDeriver
     from operations_center.insights.normalizer import InsightNormalizer
     from operations_center.observer.models import (
-        RepoContextSnapshot, RepoSignalsSnapshot, RepoStateSnapshot,
-        CheckSignal, DependencyDriftSignal, TodoSignal,
+        CheckSignal,
+        DependencyDriftSignal,
+        RepoContextSnapshot,
+        RepoSignalsSnapshot,
+        RepoStateSnapshot,
+        TodoSignal,
     )
 
     proposer_root = tmp_path / "proposer"
@@ -158,18 +177,26 @@ def test_noop_loop_deriver_no_insight_when_family_has_merges(tmp_path: Path) -> 
     feedback_root.mkdir()
 
     for i in range(4):
-        (proposer_root / f"proposer_result_{i:04d}.json").write_text(json.dumps({
-            "generated_at": datetime.now(UTC).isoformat(),
-            "created_tasks": [{"source_family": "lint_fix"}],
-        }))
+        (proposer_root / f"proposer_result_{i:04d}.json").write_text(
+            json.dumps(
+                {
+                    "generated_at": datetime.now(UTC).isoformat(),
+                    "created_tasks": [{"source_family": "lint_fix"}],
+                }
+            )
+        )
 
     # One merged outcome
-    (feedback_root / "task1.json").write_text(json.dumps({
-        "recorded_at": datetime.now(UTC).isoformat(),
-        "outcome": "merged",
-        "family": "lint_fix",
-        "source_family": "lint_fix",
-    }))
+    (feedback_root / "task1.json").write_text(
+        json.dumps(
+            {
+                "recorded_at": datetime.now(UTC).isoformat(),
+                "outcome": "merged",
+                "family": "lint_fix",
+                "source_family": "lint_fix",
+            }
+        )
+    )
 
     normalizer = InsightNormalizer()
     deriver = NoOpLoopDeriver(
@@ -198,8 +225,9 @@ def test_noop_loop_deriver_no_insight_when_family_has_merges(tmp_path: Path) -> 
 # S9-4: Per-repo × family calibration
 # ---------------------------------------------------------------------------
 
+
 def test_calibration_per_repo_segregation(tmp_path: Path) -> None:
-    from operations_center.tuning.calibration import ConfidenceCalibrationStore, _MIN_SAMPLE_SIZE
+    from operations_center.tuning.calibration import _MIN_SAMPLE_SIZE, ConfidenceCalibrationStore
 
     store = ConfidenceCalibrationStore(tmp_path / "cal.json")
 
@@ -219,7 +247,7 @@ def test_calibration_per_repo_segregation(tmp_path: Path) -> None:
 
 
 def test_calibration_global_aggregate_includes_all_repos(tmp_path: Path) -> None:
-    from operations_center.tuning.calibration import ConfidenceCalibrationStore, _MIN_SAMPLE_SIZE
+    from operations_center.tuning.calibration import _MIN_SAMPLE_SIZE, ConfidenceCalibrationStore
 
     store = ConfidenceCalibrationStore(tmp_path / "cal.json")
     for _ in range(_MIN_SAMPLE_SIZE):
@@ -233,7 +261,7 @@ def test_calibration_global_aggregate_includes_all_repos(tmp_path: Path) -> None
 
 
 def test_calibration_per_repo_report(tmp_path: Path) -> None:
-    from operations_center.tuning.calibration import ConfidenceCalibrationStore, _MIN_SAMPLE_SIZE
+    from operations_center.tuning.calibration import _MIN_SAMPLE_SIZE, ConfidenceCalibrationStore
 
     store = ConfidenceCalibrationStore(tmp_path / "cal.json")
     for _ in range(_MIN_SAMPLE_SIZE):
@@ -250,6 +278,7 @@ def test_calibration_per_repo_report(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # S9-6: Budget allocation by acceptance rate
 # ---------------------------------------------------------------------------
+
 
 def test_budget_calibration_penalty_not_applied_when_no_calibration_data(tmp_path: Path) -> None:
     """When no calibration data exists, no penalty should be applied."""
@@ -273,6 +302,7 @@ def test_calibration_ratio_computation_for_low_performance() -> None:
 # ---------------------------------------------------------------------------
 # S9-7: Test coverage gap detection
 # ---------------------------------------------------------------------------
+
 
 def test_coverage_signal_collector_reads_coverage_xml(tmp_path: Path) -> None:
     from operations_center.observer.collectors.coverage_signal import CoverageSignalCollector
@@ -322,8 +352,13 @@ def test_coverage_gap_deriver_emits_low_overall(tmp_path: Path) -> None:
     from operations_center.insights.derivers.coverage_gap import CoverageGapDeriver
     from operations_center.insights.normalizer import InsightNormalizer
     from operations_center.observer.models import (
-        CoverageSignal, RepoContextSnapshot, RepoSignalsSnapshot, RepoStateSnapshot,
-        CheckSignal, DependencyDriftSignal, TodoSignal,
+        CheckSignal,
+        CoverageSignal,
+        DependencyDriftSignal,
+        RepoContextSnapshot,
+        RepoSignalsSnapshot,
+        RepoStateSnapshot,
+        TodoSignal,
     )
 
     normalizer = InsightNormalizer()
@@ -354,8 +389,13 @@ def test_coverage_gap_deriver_no_insight_when_unavailable(tmp_path: Path) -> Non
     from operations_center.insights.derivers.coverage_gap import CoverageGapDeriver
     from operations_center.insights.normalizer import InsightNormalizer
     from operations_center.observer.models import (
-        CoverageSignal, RepoContextSnapshot, RepoSignalsSnapshot, RepoStateSnapshot,
-        CheckSignal, DependencyDriftSignal, TodoSignal,
+        CheckSignal,
+        CoverageSignal,
+        DependencyDriftSignal,
+        RepoContextSnapshot,
+        RepoSignalsSnapshot,
+        RepoStateSnapshot,
+        TodoSignal,
     )
 
     normalizer = InsightNormalizer()
@@ -381,10 +421,17 @@ def test_coverage_gap_deriver_no_insight_when_unavailable(tmp_path: Path) -> Non
 # S9-10: Theme aggregation deriver
 # ---------------------------------------------------------------------------
 
+
 def _make_snap_with_lint_file(tmp_path: Path, fpath: str, run_id: str) -> "RepoStateSnapshot":  # noqa: F821
     from operations_center.observer.models import (
-        LintSignal, LintViolation, RepoContextSnapshot, RepoSignalsSnapshot,
-        RepoStateSnapshot, CheckSignal, DependencyDriftSignal, TodoSignal,
+        CheckSignal,
+        DependencyDriftSignal,
+        LintSignal,
+        LintViolation,
+        RepoContextSnapshot,
+        RepoSignalsSnapshot,
+        RepoStateSnapshot,
+        TodoSignal,
     )
 
     return RepoStateSnapshot(

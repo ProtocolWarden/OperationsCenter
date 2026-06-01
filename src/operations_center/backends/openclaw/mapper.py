@@ -21,7 +21,6 @@ from operations_center.contracts.execution import ExecutionRequest
 
 from .models import OpenClawPreparedRun, SupportCheck
 
-
 # Map canonical execution mode names to OpenClaw run modes.
 _EXECUTION_MODE_TO_RUN_MODE: dict[str, str] = {
     "goal": "goal",
@@ -104,6 +103,7 @@ def map_request(
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _resolve_run_mode(request: ExecutionRequest, explicit: str) -> str:
     """Resolve run mode from explicit arg, falling back to execution mode hint."""

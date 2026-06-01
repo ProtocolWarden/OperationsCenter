@@ -13,11 +13,15 @@ from __future__ import annotations
 
 import pytest
 
-from operations_center.audit_contracts.profiles import EXAMPLE_MANAGED_REPO_PROFILE, ManagedRepoAuditProfile
+from operations_center.audit_contracts.profiles import (
+    EXAMPLE_MANAGED_REPO_PROFILE,
+    ManagedRepoAuditProfile,
+)
 from operations_center.audit_contracts.vocabulary import (
     GENERIC_ENUMS,
     ExampleManagedRepoAuditType,
 )
+
 pytestmark = pytest.mark.smoke
 
 
@@ -41,6 +45,7 @@ class TestExampleManagedRepoProfileSeparation:
         assert other.producer_id == "other_repo"
         # Generic contract models are unchanged by this profile
         from operations_center.audit_contracts.run_status import ManagedRunStatus
+
         assert ManagedRunStatus is not None
 
 
@@ -105,7 +110,9 @@ class TestManagedRepoPathQuirks:
         assert len(EXAMPLE_MANAGED_REPO_PROFILE.path_quirks) >= 2
 
     def test_non_uniform_layout_quirk_documented(self) -> None:
-        quirk_descs = " ".join(q.description for q in EXAMPLE_MANAGED_REPO_PROFILE.path_quirks).lower()
+        quirk_descs = " ".join(
+            q.description for q in EXAMPLE_MANAGED_REPO_PROFILE.path_quirks
+        ).lower()
         assert "non-uniform" in quirk_descs or "uniform" in quirk_descs
 
 
@@ -113,7 +120,13 @@ class TestBoundaryEnforcement:
     def test_no_managed_repo_imports_in_contract_code(self) -> None:
         import ast
         from pathlib import Path
-        contract_dir = Path(__file__).parent.parent.parent.parent / "src" / "operations_center" / "audit_contracts"
+
+        contract_dir = (
+            Path(__file__).parent.parent.parent.parent
+            / "src"
+            / "operations_center"
+            / "audit_contracts"
+        )
         for py_file in contract_dir.rglob("*.py"):
             source = py_file.read_text()
             tree = ast.parse(source, filename=str(py_file))

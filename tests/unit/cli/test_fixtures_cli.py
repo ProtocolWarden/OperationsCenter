@@ -29,6 +29,7 @@ _LOAD_PACK_TARGET = "operations_center.entrypoints.fixtures.main.load_fixture_pa
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_mock_index() -> MagicMock:
     index = MagicMock()
     index.source.repo_id = "example_managed_repo"
@@ -68,6 +69,7 @@ def _make_manifest_file(tmp_path: Path) -> Path:
 # cmd_harvest
 # ---------------------------------------------------------------------------
 
+
 class TestCmdHarvest:
     def test_harvest_success(self, tmp_path: Path):
         mf = _make_manifest_file(tmp_path)
@@ -87,6 +89,7 @@ class TestCmdHarvest:
 
     def test_harvest_input_error_exits_code_3(self, tmp_path: Path):
         from operations_center.fixture_harvesting import HarvestInputError
+
         mf = _make_manifest_file(tmp_path)
         with (
             patch(_LOAD_MANIFEST_TARGET, return_value=MagicMock()),
@@ -102,6 +105,7 @@ class TestCmdHarvest:
 
     def test_harvest_manifest_not_found_exits_code_1(self, tmp_path: Path):
         from operations_center.artifact_index import ManifestNotFoundError
+
         with patch(_LOAD_MANIFEST_TARGET, side_effect=ManifestNotFoundError("missing")):
             out = _runner.invoke(
                 app,
@@ -114,6 +118,7 @@ class TestCmdHarvest:
 # ---------------------------------------------------------------------------
 # cmd_inspect
 # ---------------------------------------------------------------------------
+
 
 class TestCmdInspect:
     def test_inspect_success(self, tmp_path: Path):
@@ -133,6 +138,7 @@ class TestCmdInspect:
 
     def test_inspect_load_error_exits_code_2(self, tmp_path: Path):
         from operations_center.fixture_harvesting import FixturePackLoadError
+
         pack_file = tmp_path / "fixture_pack.json"
         pack_file.write_text("{}", encoding="utf-8")
         with patch(_LOAD_PACK_TARGET, side_effect=FixturePackLoadError("corrupted")):
@@ -144,6 +150,7 @@ class TestCmdInspect:
 # ---------------------------------------------------------------------------
 # cmd_list
 # ---------------------------------------------------------------------------
+
 
 class TestCmdList:
     def test_list_no_packs(self, tmp_path: Path):

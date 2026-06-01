@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Regression tests for task parser edge cases."""
+
 import pytest
+
 from operations_center.application.task_parser import TaskParser
 
 

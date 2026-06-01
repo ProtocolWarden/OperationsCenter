@@ -33,6 +33,7 @@ _RUN_ROOT = "tools/audit/report/representative/Bucket_run999"
 # Manifest / index helpers (duplicated locally — no cross-test imports)
 # ---------------------------------------------------------------------------
 
+
 def _base_entry(
     artifact_id: str = "example_managed_repo:audit_type_1:TopicSelectionStage:topic_selection",
 ) -> dict:
@@ -139,6 +140,7 @@ def _make_fixture_pack(index, profile: HarvestProfile, output_dir: Path, **kwarg
 # Pytest fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def good_pack(tmp_path: Path):
     """Fixture pack with one copied JSON artifact."""
@@ -147,7 +149,9 @@ def good_pack(tmp_path: Path):
 
     artifact_path = tmp_path / _RUN_ROOT / "topic_selection.json"
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
-    artifact_path.write_text(json.dumps({"stage": "topic_selection", "result": "ok"}), encoding="utf-8")
+    artifact_path.write_text(
+        json.dumps({"stage": "topic_selection", "result": "ok"}), encoding="utf-8"
+    )
 
     manifest_path = tmp_path / _RUN_ROOT / "artifact_manifest.json"
     manifest = load_artifact_manifest(manifest_path)

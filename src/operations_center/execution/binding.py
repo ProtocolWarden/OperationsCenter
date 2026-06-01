@@ -13,6 +13,7 @@ Errors:
   - PolicyViolationError        : bound target rejected by policy
   - MissingProvenanceError      : registry-strict mode and no entry
 """
+
 from __future__ import annotations
 
 from typing import Optional, Protocol
@@ -26,7 +27,6 @@ from operations_center.execution.target import (
     BackendProvenance,
     BoundExecutionTarget,
 )
-
 
 # ── Typed errors ────────────────────────────────────────────────────────
 
@@ -84,6 +84,7 @@ def _provenance_from_registry(backend_id: str) -> Optional[BackendProvenance]:
     """
     try:
         from pathlib import Path
+
         from source_registry import SourceRegistry, load_patches
     except ImportError:
         return None
@@ -114,7 +115,10 @@ def _provenance_from_registry(backend_id: str) -> Optional[BackendProvenance]:
             patch_ids = []
 
     return BackendProvenance(
-        source="registry", repo=repo, ref=entry.expected_sha, patches=patch_ids,
+        source="registry",
+        repo=repo,
+        ref=entry.expected_sha,
+        patches=patch_ids,
     )
 
 
@@ -132,8 +136,10 @@ def _runtime_binding_to_summary(rb) -> Optional[RuntimeBindingSummary]:
                 if isinstance(rb.selection_mode, SelectionMode)
                 else str(rb.selection_mode)
             ),
-            model=rb.model, provider=rb.provider,
-            endpoint=rb.endpoint, config_ref=rb.config_ref,
+            model=rb.model,
+            provider=rb.provider,
+            endpoint=rb.endpoint,
+            config_ref=rb.config_ref,
         )
     except (AttributeError, TypeError) as exc:
         raise InvalidRuntimeBindingError(
@@ -174,9 +180,7 @@ def bind_execution_target(
     lane = envelope.lane.value if hasattr(envelope.lane, "value") else str(envelope.lane)
 
     if catalog is not None and backend.value not in catalog.entries:
-        raise UnknownBackendError(
-            f"backend {backend.value!r} not present in executor catalog"
-        )
+        raise UnknownBackendError(f"backend {backend.value!r} not present in executor catalog")
 
     runtime_summary = _runtime_binding_to_summary(envelope.runtime_binding)
     provenance = _provenance_from_registry(backend.value)
@@ -186,8 +190,11 @@ def bind_execution_target(
         )
 
     target = BoundExecutionTarget(
-        lane=lane, backend=backend, executor=executor,
-        runtime_binding=runtime_summary, provenance=provenance,
+        lane=lane,
+        backend=backend,
+        executor=executor,
+        runtime_binding=runtime_summary,
+        provenance=provenance,
     )
 
     pol = policy or _AlwaysAllowPolicy()

@@ -6,13 +6,13 @@ These tests verify that the collectors handle files deleted between glob()
 and stat() calls (TOCTOU race condition) with graceful degradation and
 proper error handling.
 """
+
 import json
 import os
 import threading
 import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
 
 from operations_center.observer.collectors.check_signal import (
     CheckSignalCollector,
@@ -187,7 +187,9 @@ class TestCheckSignalCollectorRaceCondition:
     def test_happy_path_test_log_found(self, tmp_artifact_dir):
         """Happy path: test log found and processed."""
         test_log = tmp_artifact_dir / "test_results_test.log"
-        test_log.write_text("============================= test session starts ==============================\n5 passed in 0.42s\n")
+        test_log.write_text(
+            "============================= test session starts ==============================\n5 passed in 0.42s\n"
+        )
 
         context = MagicMock()
         context.logs_root = tmp_artifact_dir

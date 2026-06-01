@@ -4,11 +4,10 @@
 
 from __future__ import annotations
 
+import tempfile
 import threading
 
 import pytest
-
-import tempfile
 
 from operations_center.audit_dispatch.errors import RepoLockAlreadyHeldError
 from operations_center.audit_dispatch.locks import (

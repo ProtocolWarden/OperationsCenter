@@ -30,7 +30,11 @@ import statistics
 from collections import defaultdict
 from typing import Optional
 
-from operations_center.contracts.enums import ExecutionStatus, FailureReasonCategory, ValidationStatus
+from operations_center.contracts.enums import (
+    ExecutionStatus,
+    FailureReasonCategory,
+    ValidationStatus,
+)
 from operations_center.observability.changed_files import ChangedFilesStatus
 from operations_center.observability.models import ExecutionRecord
 
@@ -106,7 +110,11 @@ def compare_by_task_type(
     groups: dict[tuple[str, str, str], list[ExecutionRecord]] = defaultdict(list)
     for record in records:
         task_type = str(record.metadata.get("task_type", "unknown"))
-        key: tuple[str, str, str] = (record.lane or "unknown", record.backend or "unknown", task_type)
+        key: tuple[str, str, str] = (
+            record.lane or "unknown",
+            record.backend or "unknown",
+            task_type,
+        )
         groups[key].append(record)
 
     summaries = []
@@ -163,27 +171,26 @@ def _build_summary(
 
     success_count = sum(1 for r in records if r.result.success)
     failure_count = sum(
-        1 for r in records
+        1
+        for r in records
         if r.result.status in (ExecutionStatus.FAILED, ExecutionStatus.CANCELLED)
         or r.result.failure_category == FailureReasonCategory.TIMEOUT
     )
     partial_count = sum(
-        1 for r in records
-        if r.result.failure_category == FailureReasonCategory.NO_CHANGES
+        1 for r in records if r.result.failure_category == FailureReasonCategory.NO_CHANGES
     )
     timeout_count = sum(
-        1 for r in records
+        1
+        for r in records
         if r.result.failure_category == FailureReasonCategory.TIMEOUT
         or r.result.status == ExecutionStatus.TIMED_OUT
     )
 
     val_pass_count = sum(
-        1 for r in records
-        if r.validation_evidence.status == ValidationStatus.PASSED
+        1 for r in records if r.validation_evidence.status == ValidationStatus.PASSED
     )
     val_skip_count = sum(
-        1 for r in records
-        if r.validation_evidence.status == ValidationStatus.SKIPPED
+        1 for r in records if r.validation_evidence.status == ValidationStatus.SKIPPED
     )
 
     evidence_strength = _evidence_strength(n)
@@ -240,12 +247,12 @@ def _change_evidence_class(records: list[ExecutionRecord]) -> ChangeEvidenceClas
 
     # Count runs with KNOWN or NONE (reliable evidence)
     reliable_count = sum(
-        1 for r in records
+        1
+        for r in records
         if r.changed_files_evidence.status in (ChangedFilesStatus.KNOWN, ChangedFilesStatus.NONE)
     )
     applicable_count = sum(
-        1 for r in records
-        if r.changed_files_evidence.status != ChangedFilesStatus.NOT_APPLICABLE
+        1 for r in records if r.changed_files_evidence.status != ChangedFilesStatus.NOT_APPLICABLE
     )
 
     if applicable_count == 0:
