@@ -77,13 +77,17 @@ jobs:
         # Unit suite only — integration tests under tests/integration/ need
         # live external services (SwitchBoard, Plane, Archon) and run on
         # demand, not in CI. PRs exclude slow tests for quick validation.
-        run: pytest -q tests/unit -m "not slow" --cov=src --cov-report=html --cov-report=xml --cov-report=term-missing
+        # Coverage threshold of 85% is the design target from Stage 0.
+        # CI will fail until coverage improves to meet this target.
+        run: pytest -q tests/unit -m "not slow" --cov=src --cov-report=html --cov-report=xml --cov-report=term-missing --cov-fail-under=85
       - name: Run full unit test suite including slow (main/merge)
         if: github.event_name == 'push'
         # Unit suite only — integration tests under tests/integration/ need
         # live external services (SwitchBoard, Plane, Archon) and run on
         # demand, not in CI. Pushes run full suite including slow tests.
-        run: pytest -q tests/unit --cov=src --cov-report=html --cov-report=xml --cov-report=term-missing
+        # Coverage threshold of 85% is the design target from Stage 0.
+        # CI will fail until coverage improves to meet this target.
+        run: pytest -q tests/unit --cov=src --cov-report=html --cov-report=xml --cov-report=term-missing --cov-fail-under=85
       - name: Upload coverage to Codecov
         if: always()
         uses: codecov/codecov-action@v4
