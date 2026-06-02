@@ -1,3 +1,59 @@
+## 2026-06-02 — Reviewer gate: bound CI-defer + fix hermetic probe tests (operator-directed)
+
+**Status**: ✅ Added to `fix/reviewer-gate-gaps`. Two follow-on findings while
+verifying CI for the gap-fix PR:
+
+- **CRITICAL — #226 could stall the loop.** The CI-green precondition deferred on
+  ANY failed check; OC's own "Test (pytest)" check is red on every PR (coverage
+  gate, below), and OC has `auto_merge_on_ci_green: true` — so every OC autonomy
+  PR would defer forever. Fixed: bound the deferral (`_MAX_CI_WAIT_CYCLES`=20);
+  persistently-red CI now escalates to needs-human (leave open) instead of
+  silently stalling or merging on red.
+- **Hermetic probe tests.** `tests/unit/backends/test_worker_backend_probe.py`
+  called the real `shutil.which` for `claude`/`codex`, so 3 tests passed on dev
+  boxes (CLI present) but failed in CI (absent). Added an autouse fixture stubbing
+  `_resolve`. All 2694 unit tests now pass.
+
+**Open decision (NOT changed — needs operator call):** the #215 coverage gate
+`--cov-fail-under=85` (ci.yml:82/90, .coveragerc:13) measures all of `src` from
+the `tests/unit` subset → ~61.5%, so "Test (pytest)" has been red on every PR
+since #215. It's the last root cause of OC's red CI and now (with the precondition)
+gates OC autonomy. Needs a decision: lower the threshold to a realistic floor,
+measure coverage over the full suite, or scope `--cov`.
+
+---
+
+## 2026-06-02 — Reviewer gate: adversarial-audit gap fixes (operator-directed)
+
+**Status**: ✅ On `fix/reviewer-gate-gaps`. Adversarial audit of the verdict-gate
+work (#224/#226) surfaced gaps; fixed the real ones:
+
+- **Fix-pass no-op signal** (`_run_fix_pass`): returned True on `result.success`
+  even when nothing was pushed; now keys off `branch_pushed` only, so a no-op
+  pass is logged honestly.
+- **Dedicated re-queue budget**: `_requeue_plane_task` used the shared
+  `retry-count` label (also bumped by executor-kill/transient retries), so the
+  re-queue budget was conflated/non-deterministic. Now uses its own
+  `reviewer-requeue-count` label.
+- **Don't lose work on close** (`_close_and_requeue`): re-queue now happens
+  FIRST and returns a bool — the PR is closed only after the issue is safely
+  re-queued (a Plane outage no longer closes a PR into the void). Closing now
+  also deletes the head branch (no orphan-branch accumulation). No Plane task →
+  escalate (leave open) instead of closing.
+- **No-verdict ≠ bad PR**: a persistent no-verdict (usually a transient backend
+  rate-limit) now leaves the PR OPEN + needs-human (via new
+  `_escalate_needs_human`) and keeps polling, instead of closing/re-queuing a
+  possibly-good PR.
+- **DoD wording** made role-neutral (applies to test/goal alike).
+
+Noted but NOT changed (pre-existing / out of scope): H1 fix-pass plans against
+default_branch (oversize check is vs HEAD so it only measures the fix delta —
+benign; branch is squash-rewritten, fine for squash-merge repos); Phase-0
+ci_fix stash robustness; non-atomic state writes; conflicted-LGTM retried
+forever. 34 reviewer tests + 113 total (reviewer+entrypoints) pass; ruff clean.
+
+---
+
 ## 2026-06-02 — Reviewer: CI-green is a precondition, not an auto-merge (operator-directed)
 
 **Status**: ✅ Implemented on `feat/ci-green-requires-lgtm`. Closes the bypass left

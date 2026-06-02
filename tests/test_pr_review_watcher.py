@@ -240,8 +240,9 @@ def test_phase1_no_verdict_retries_next_poll(tmp_path: Path) -> None:
     gh.post_comment.assert_not_called()
 
 
-def test_phase1_no_verdict_closes_and_requeues_at_max_loops(tmp_path: Path) -> None:
-    # No parseable verdict at the retry cap → close+requeue, never merge blind.
+def test_phase1_no_verdict_escalates_keeps_pr_open(tmp_path: Path) -> None:
+    # No parseable verdict at the retry cap → escalate (leave PR open), never
+    # merge blind and never close/destroy a possibly-good PR over infra flakiness.
     # max_self_review_loops=2; pre-seed one prior no-verdict pass so this is the 2nd.
     state, sp = _make_state(tmp_path, phase="self_review", self_review_loops=1, no_verdict_passes=1)
     gh = _make_gh()
@@ -249,15 +250,19 @@ def test_phase1_no_verdict_closes_and_requeues_at_max_loops(tmp_path: Path) -> N
     with (
         patch.object(watcher, "_run_pipeline", return_value=None),
         patch.object(watcher, "_merge_and_done") as mock_merge,
-        patch.object(watcher, "_close_and_requeue") as mock_requeue,
+        patch.object(watcher, "_close_and_requeue") as mock_close,
     ):
         watcher._phase1(
             state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
         )
 
     mock_merge.assert_not_called()
-    mock_requeue.assert_called_once()
-    assert mock_requeue.call_args[1]["reason"] == "no_verdict_exhausted"
+    mock_close.assert_not_called()  # good PR is NOT closed on reviewer-unavailable
+    gh.close_pr.assert_not_called()
+    gh.post_comment.assert_called_once()  # one needs-human escalation comment
+    loaded = watcher._load_state(sp)
+    assert loaded["escalated_needs_human"] is True
+    assert loaded["no_verdict_passes"] == 0  # reset to keep retrying
 
 
 def test_phase1_skips_empty_diff(tmp_path: Path) -> None:
@@ -328,6 +333,30 @@ def test_phase1_ci_red_defers_without_review(tmp_path: Path) -> None:
 
     mock_pipeline.assert_not_called()
     gh.merge_pr.assert_not_called()
+    # the wait counter advances so the deferral is bounded
+    assert watcher._load_state(sp)["ci_wait_cycles"] == 1
+
+
+def test_phase1_ci_persistently_red_escalates(tmp_path: Path) -> None:
+    # Red CI that never goes green must NOT defer forever and must NOT merge —
+    # after the wait cap it escalates to a human (leaves the PR open).
+    state, sp = _make_state(
+        tmp_path, phase="self_review", ci_wait_cycles=watcher._MAX_CI_WAIT_CYCLES - 1
+    )
+    gh = _make_gh()
+    gh.get_failed_checks.return_value = ["Test (pytest): fail"]  # persistently red
+    settings = _settings_with_ci_green_repo()
+
+    with patch.object(watcher, "_run_pipeline") as mock_pipeline:
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", settings
+        )
+
+    mock_pipeline.assert_not_called()
+    gh.merge_pr.assert_not_called()
+    gh.close_pr.assert_not_called()  # work preserved, not closed
+    gh.post_comment.assert_called_once()  # needs-human escalation
+    assert watcher._load_state(sp)["escalated_needs_human"] is True
 
 
 # ── merge_and_done ────────────────────────────────────────────────────────────
@@ -360,7 +389,55 @@ def test_merge_and_done_transitions_plane_task(tmp_path: Path) -> None:
 # ── close + re-queue (verdict gate's escape hatch) ─────────────────────────────
 
 
-def test_close_and_requeue_closes_without_merge(tmp_path: Path) -> None:
+def test_close_and_requeue_requeues_then_closes_and_deletes_branch(tmp_path: Path) -> None:
+    # Re-queue succeeds → close PR (no merge) + delete head branch + drop state.
+    state, sp = _make_state(tmp_path, plane_task_id="task-abc")
+    gh = _make_gh()
+
+    with patch.object(watcher, "_requeue_plane_task", return_value=True) as mock_rq:
+        watcher._close_and_requeue(
+            state,
+            sp,
+            _pr_data(),
+            gh,
+            "owner",
+            "repo",
+            SETTINGS,
+            reason="fix_attempts_exhausted",
+            detail="nope",
+        )
+
+    mock_rq.assert_called_once()
+    gh.close_pr.assert_called_once_with("owner", "repo", PR_NUMBER)
+    gh.delete_branch.assert_called_once_with("owner", "repo", f"goal/{PR_NUMBER}")
+    gh.merge_pr.assert_not_called()
+    assert not sp.exists()
+
+
+def test_close_and_requeue_keeps_pr_open_when_requeue_fails(tmp_path: Path) -> None:
+    # Plane down → re-queue fails → DON'T close (work would be lost); retry later.
+    state, sp = _make_state(tmp_path, plane_task_id="task-abc")
+    gh = _make_gh()
+
+    with patch.object(watcher, "_requeue_plane_task", return_value=False):
+        watcher._close_and_requeue(
+            state,
+            sp,
+            _pr_data(),
+            gh,
+            "owner",
+            "repo",
+            SETTINGS,
+            reason="fix_attempts_exhausted",
+            detail="nope",
+        )
+
+    gh.close_pr.assert_not_called()
+    assert sp.exists()  # state preserved → retried next cycle
+
+
+def test_close_and_requeue_no_task_escalates_not_closes(tmp_path: Path) -> None:
+    # No Plane task → nowhere to re-queue → escalate (leave open), never close.
     state, sp = _make_state(tmp_path, plane_task_id=None)
     gh = _make_gh()
 
@@ -376,32 +453,74 @@ def test_close_and_requeue_closes_without_merge(tmp_path: Path) -> None:
         detail="nope",
     )
 
-    gh.close_pr.assert_called_once_with("owner", "repo", PR_NUMBER)
-    gh.merge_pr.assert_not_called()
-    assert not sp.exists()
+    gh.close_pr.assert_not_called()
+    gh.post_comment.assert_called_once()  # needs-human escalation
+    assert watcher._load_state(sp)["escalated_needs_human"] is True
 
 
 def test_requeue_plane_task_below_cap_goes_ready(tmp_path: Path) -> None:
     mock_client = MagicMock()
-    mock_client.fetch_issue.return_value = {"id": "t1", "labels": [{"name": "retry-count: 0"}]}
+    mock_client.fetch_issue.return_value = {"id": "t1", "labels": []}
 
     with patch.object(watcher, "_plane_client", return_value=mock_client):
-        watcher._requeue_plane_task(SETTINGS, "t1", pr_number=PR_NUMBER, reason="x")
+        ok = watcher._requeue_plane_task(SETTINGS, "t1", pr_number=PR_NUMBER, reason="x")
 
+    assert ok is True
     mock_client.transition_issue.assert_called_once_with("t1", "Ready for AI")
+    # dedicated label bumped to 1
+    labels = mock_client.update_issue_labels.call_args[0][1]
+    assert "reviewer-requeue-count: 1" in labels
 
 
 def test_requeue_plane_task_at_cap_goes_blocked(tmp_path: Path) -> None:
     mock_client = MagicMock()
     mock_client.fetch_issue.return_value = {
         "id": "t1",
-        "labels": [{"name": f"retry-count: {watcher._MAX_REQUEUES}"}],
+        "labels": [{"name": f"reviewer-requeue-count: {watcher._MAX_REQUEUES}"}],
+    }
+
+    with patch.object(watcher, "_plane_client", return_value=mock_client):
+        ok = watcher._requeue_plane_task(SETTINGS, "t1", pr_number=PR_NUMBER, reason="x")
+
+    assert ok is True
+    mock_client.transition_issue.assert_called_once_with("t1", "Blocked")
+    labels = mock_client.update_issue_labels.call_args[0][1]
+    assert "needs-human" in labels
+
+
+def test_requeue_plane_task_ignores_execution_retry_count(tmp_path: Path) -> None:
+    # board_worker's retry-count must NOT consume the reviewer re-queue budget.
+    mock_client = MagicMock()
+    mock_client.fetch_issue.return_value = {
+        "id": "t1",
+        "labels": [{"name": "retry-count: 9"}],  # high execution-retry count
     }
 
     with patch.object(watcher, "_plane_client", return_value=mock_client):
         watcher._requeue_plane_task(SETTINGS, "t1", pr_number=PR_NUMBER, reason="x")
 
-    mock_client.transition_issue.assert_called_once_with("t1", "Blocked")
+    # Still re-queues (not Blocked) — reviewer-requeue-count is absent → 0.
+    mock_client.transition_issue.assert_called_once_with("t1", "Ready for AI")
+
+
+def test_requeue_plane_task_returns_false_when_plane_unavailable(tmp_path: Path) -> None:
+    mock_client = MagicMock()
+    mock_client.fetch_issue.side_effect = Exception("plane down")
+
+    with patch.object(watcher, "_plane_client", return_value=mock_client):
+        ok = watcher._requeue_plane_task(SETTINGS, "t1", pr_number=PR_NUMBER, reason="x")
+
+    assert ok is False
+
+
+def test_run_fix_pass_noop_returns_false(tmp_path: Path) -> None:
+    # Executor ran cleanly but pushed nothing → must NOT report a push.
+    outcome = {"result": {"success": True, "branch_pushed": False}}
+    with patch.object(watcher, "_run_pipeline", return_value=outcome):
+        pushed = watcher._run_fix_pass(
+            tmp_path, tmp_path / "cfg.yaml", REPO_KEY, "goal/1", "fix it", SETTINGS, state_key="k"
+        )
+    assert pushed is False
 
 
 def test_merge_and_done_keeps_state_on_merge_failure(tmp_path: Path) -> None:
