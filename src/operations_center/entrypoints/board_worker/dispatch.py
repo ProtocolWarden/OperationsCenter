@@ -79,6 +79,10 @@ def dispatch_issue(
 
     if role == "improve":
         goal_text = _append_improve_output_prompt(goal_text)
+    else:
+        # First-pass depth: require the initial pass to fully implement and
+        # self-verify before the PR opens, so the review loop has less to fix.
+        goal_text = _append_definition_of_done(goal_text)
 
     execution_mode = (
         task_kind if task_kind in {"goal", "test_campaign", "improve_campaign"} else task_kind
@@ -348,6 +352,27 @@ def _repo_local_path(settings, repo_key: str) -> str:
     if repo and repo.local_path:
         return repo.local_path
     return str(GITHUB_DIR / repo_key)
+
+
+def _append_definition_of_done(goal_text: str) -> str:
+    """Append an explicit definition-of-done so the first pass ships a complete,
+    self-verified change rather than a partial one the review loop must finish.
+
+    The downstream review loop only merges on an LGTM verdict and re-queues PRs
+    it can't get clean, so a thorough first pass directly reduces fix cycles."""
+    return (
+        f"{goal_text}\n\n"
+        "## Definition of done (complete ALL before finishing)\n"
+        "1. Implement the issue in its ENTIRETY — every acceptance criterion, every\n"
+        "   file the change implies (code, tests, and docs). Do not leave TODOs,\n"
+        "   stubs, or 'follow-up' gaps; a partial change will be rejected in review.\n"
+        "2. Add or update tests that prove the change works.\n"
+        "3. Run the repository's test suite and linters/formatters and make them\n"
+        "   pass locally. If anything fails, fix it before finishing — do not hand\n"
+        "   off a red build.\n"
+        "4. Only consider the task done when the full change is implemented AND\n"
+        "   verified green. The PR you open should be mergeable as-is.\n"
+    )
 
 
 def _append_improve_output_prompt(goal_text: str) -> str:

@@ -1,3 +1,31 @@
+## 2026-06-02 — Reviewer: verdict-gated merges + auto-fix loop (operator-directed)
+
+**Status**: ✅ Implemented on branch `feat/verdict-gated-fix-loop` (worktree).
+
+**Why**: The self-review track re-reviewed an unchanged diff up to
+`max_self_review_loops` then merged regardless of verdict
+(`self_review_auto_merge` / `no_verdict_auto_merge`) — PR #215 shipped
+half-finished this way. Reviews never fixed anything.
+
+**What changed** (`entrypoints/pr_review_watcher/main.py`, `board_worker/dispatch.py`,
+`config/settings.py`):
+- LGTM is now the ONLY merge path; CONCERNS never merges.
+- On CONCERNS, dispatch a fix pass that resolves concerns on the PR's own head
+  branch and pushes (PR updates in place), then re-review. Loop up to
+  `reviewer.max_fix_attempts` (new setting, default 6).
+- On exhaustion (fix cap / repeated no-verdict), close the PR + re-queue the
+  issue (`STATE_READY`), bounded by `_MAX_REQUEUES`=3 → then `STATE_BLOCKED`
+  + `needs-human`. Never merge half-finished.
+- `no_verdict_passes` tracked separately from `self_review_loops`.
+- First-pass depth: `_append_definition_of_done` requires the initial pass to
+  fully implement + run tests/linters green before the PR opens.
+
+**Tests**: rewrote merge-on-CONCERNS/no-verdict tests → assert close+requeue;
+added fix-pass dispatch, bounded re-queue (Ready vs Blocked), and DoD coverage.
+341 passed (-k settings/config/reviewer/dispatch). ruff clean.
+
+---
+
 ## 2026-06-02 — Stage 3 FINAL: Spec Compliance Validation and Readiness Confirmation
 
 **Status**: ✅ **COMPLETE** — Queue-drain spec validated for full compliance and production readiness

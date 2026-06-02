@@ -280,8 +280,16 @@ class ReviewerSettings(BaseModel):
     bot_logins: list[str] = Field(default_factory=list)
     # If non-empty, only comments from these logins trigger human revisions
     allowed_reviewer_logins: list[str] = Field(default_factory=list)
-    # Max self-review+revision cycles before auto-merging (no human escalation)
+    # Max self-review passes that produce no parseable verdict before the PR is
+    # closed and the issue re-queued. NOT a merge cap — a stuck PR is never
+    # merged on CONCERNS; LGTM is the only merge path.
     max_self_review_loops: int = 3
+    # Max fix→review cycles on a CONCERNS verdict. Each CONCERNS dispatches a
+    # fix pass (worker addresses the concerns and pushes to the PR branch), then
+    # the next cycle re-reviews. Generous so genuine fixes have room; on
+    # exhaustion the PR is closed and the issue re-queued for a fresh attempt —
+    # never merged half-finished.
+    max_fix_attempts: int = 6
     # Unused — human_review phase removed. Kept for config-file compatibility.
     max_human_review_loops: int = 3
     human_review_timeout_seconds: int = 86400

@@ -28,6 +28,7 @@ REVIEWER_CFG = MagicMock(
     bot_logins=[],
     allowed_reviewer_logins=[],
     max_self_review_loops=2,
+    max_fix_attempts=2,
     bot_comment_marker="<!-- operations-center:bot -->",
 )
 
@@ -39,7 +40,12 @@ SETTINGS = MagicMock(
 
 
 def _pr_data(*, draft: bool = False, title: str = "My PR") -> dict[str, Any]:
-    return {"number": PR_NUMBER, "title": title, "draft": draft}
+    return {
+        "number": PR_NUMBER,
+        "title": title,
+        "draft": draft,
+        "head": {"ref": f"goal/{PR_NUMBER}"},
+    }
 
 
 def _make_state(tmp_path: Path, **overrides: Any) -> tuple[dict, Path]:
@@ -175,9 +181,31 @@ def test_phase1_concerns_stays_in_phase1_below_max_loops(tmp_path: Path) -> None
     assert loaded["self_review_loops"] == 1
 
 
-def test_phase1_concerns_auto_merges_at_max_loops(tmp_path: Path) -> None:
-    # max_self_review_loops=2, already at loop 1 — this call pushes to 2 → auto-merge
-    state, sp = _make_state(tmp_path, phase="self_review", self_review_loops=1)
+def test_phase1_concerns_dispatches_fix_pass_below_cap(tmp_path: Path) -> None:
+    # CONCERNS below the fix cap → dispatch a fix pass, never merge.
+    state, sp = _make_state(tmp_path, phase="self_review", self_review_loops=0, fix_attempts=0)
+    gh = _make_gh()
+
+    with (
+        patch.object(
+            watcher, "_run_pipeline", return_value={"result": "CONCERNS", "summary": "issues"}
+        ),
+        patch.object(watcher, "_run_fix_pass", return_value=True) as mock_fix,
+        patch.object(watcher, "_merge_and_done") as mock_merge,
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+
+    mock_fix.assert_called_once()
+    mock_merge.assert_not_called()
+    loaded = watcher._load_state(sp)
+    assert loaded["fix_attempts"] == 1
+
+
+def test_phase1_concerns_closes_and_requeues_at_fix_cap(tmp_path: Path) -> None:
+    # max_fix_attempts=2, already at 2 — CONCERNS must close+requeue, NOT merge.
+    state, sp = _make_state(tmp_path, phase="self_review", self_review_loops=1, fix_attempts=2)
     gh = _make_gh()
 
     with (
@@ -185,13 +213,15 @@ def test_phase1_concerns_auto_merges_at_max_loops(tmp_path: Path) -> None:
             watcher, "_run_pipeline", return_value={"result": "CONCERNS", "summary": "still broken"}
         ),
         patch.object(watcher, "_merge_and_done") as mock_merge,
+        patch.object(watcher, "_close_and_requeue") as mock_requeue,
     ):
         watcher._phase1(
             state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
         )
 
-    mock_merge.assert_called_once()
-    assert mock_merge.call_args[1]["reason"] == "self_review_auto_merge"
+    mock_merge.assert_not_called()
+    mock_requeue.assert_called_once()
+    assert mock_requeue.call_args[1]["reason"] == "fix_attempts_exhausted"
 
 
 def test_phase1_no_verdict_retries_next_poll(tmp_path: Path) -> None:
@@ -210,21 +240,24 @@ def test_phase1_no_verdict_retries_next_poll(tmp_path: Path) -> None:
     gh.post_comment.assert_not_called()
 
 
-def test_phase1_no_verdict_auto_merges_at_max_loops(tmp_path: Path) -> None:
-    # No verdict at max loops → auto-merge rather than stalling
-    state, sp = _make_state(tmp_path, phase="self_review", self_review_loops=1)
+def test_phase1_no_verdict_closes_and_requeues_at_max_loops(tmp_path: Path) -> None:
+    # No parseable verdict at the retry cap → close+requeue, never merge blind.
+    # max_self_review_loops=2; pre-seed one prior no-verdict pass so this is the 2nd.
+    state, sp = _make_state(tmp_path, phase="self_review", self_review_loops=1, no_verdict_passes=1)
     gh = _make_gh()
 
     with (
         patch.object(watcher, "_run_pipeline", return_value=None),
         patch.object(watcher, "_merge_and_done") as mock_merge,
+        patch.object(watcher, "_close_and_requeue") as mock_requeue,
     ):
         watcher._phase1(
             state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
         )
 
-    mock_merge.assert_called_once()
-    assert mock_merge.call_args[1]["reason"] == "no_verdict_auto_merge"
+    mock_merge.assert_not_called()
+    mock_requeue.assert_called_once()
+    assert mock_requeue.call_args[1]["reason"] == "no_verdict_exhausted"
 
 
 def test_phase1_skips_empty_diff(tmp_path: Path) -> None:
@@ -266,6 +299,53 @@ def test_merge_and_done_transitions_plane_task(tmp_path: Path) -> None:
 
     mock_client.transition_issue.assert_called_once_with("task-abc", "Done")
     mock_client.comment_issue.assert_called_once()
+
+
+# ── close + re-queue (verdict gate's escape hatch) ─────────────────────────────
+
+
+def test_close_and_requeue_closes_without_merge(tmp_path: Path) -> None:
+    state, sp = _make_state(tmp_path, plane_task_id=None)
+    gh = _make_gh()
+
+    watcher._close_and_requeue(
+        state,
+        sp,
+        _pr_data(),
+        gh,
+        "owner",
+        "repo",
+        SETTINGS,
+        reason="fix_attempts_exhausted",
+        detail="nope",
+    )
+
+    gh.close_pr.assert_called_once_with("owner", "repo", PR_NUMBER)
+    gh.merge_pr.assert_not_called()
+    assert not sp.exists()
+
+
+def test_requeue_plane_task_below_cap_goes_ready(tmp_path: Path) -> None:
+    mock_client = MagicMock()
+    mock_client.fetch_issue.return_value = {"id": "t1", "labels": [{"name": "retry-count: 0"}]}
+
+    with patch.object(watcher, "_plane_client", return_value=mock_client):
+        watcher._requeue_plane_task(SETTINGS, "t1", pr_number=PR_NUMBER, reason="x")
+
+    mock_client.transition_issue.assert_called_once_with("t1", "Ready for AI")
+
+
+def test_requeue_plane_task_at_cap_goes_blocked(tmp_path: Path) -> None:
+    mock_client = MagicMock()
+    mock_client.fetch_issue.return_value = {
+        "id": "t1",
+        "labels": [{"name": f"retry-count: {watcher._MAX_REQUEUES}"}],
+    }
+
+    with patch.object(watcher, "_plane_client", return_value=mock_client):
+        watcher._requeue_plane_task(SETTINGS, "t1", pr_number=PR_NUMBER, reason="x")
+
+    mock_client.transition_issue.assert_called_once_with("t1", "Blocked")
 
 
 def test_merge_and_done_keeps_state_on_merge_failure(tmp_path: Path) -> None:

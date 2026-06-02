@@ -7,14 +7,18 @@ Phase 0 (ci_fix): when CI is failing on an autonomy PR, auto-fix the branch.
   - Retries up to max_ci_fix_attempts; then falls through to self_review.
 
 Phase 1 (self_review): executor reviews the diff and emits LGTM or CONCERNS.
-  - LGTM → auto-merge.
-  - No verdict (pipeline crash/timeout) → retry silently; auto-merge after
-    max_self_review_loops to avoid stalling indefinitely.
-  - CONCERNS → log, retry up to max_self_review_loops; auto-merge when
-    exhausted. OC figures it out — no human escalation.
+  - LGTM → merge. This is the ONLY merge path on the self-review track
+    (verdict-gated — a PR is never merged while concerns are unresolved).
+  - CONCERNS → dispatch a fix pass that resolves the concerns on the PR's own
+    branch (updating the open PR), then re-review next cycle. After
+    max_fix_attempts without reaching LGTM, the PR is CLOSED and the issue is
+    re-queued for a fresh attempt — a half-finished PR is never shipped.
+  - No verdict (pipeline crash/timeout) → retry; after max_self_review_loops
+    with no parseable verdict, close + re-queue rather than merge blind.
 
-There is no human_review phase. Human escalation is removed entirely.
-All PRs from autonomy branches resolve autonomously.
+Re-queuing is bounded by _MAX_REQUEUES; once exhausted the issue is left
+Blocked for a human. There is no human_review phase — autonomy PRs either reach
+LGTM and merge, or are closed and re-queued.
 
 State per PR persisted in state/pr_reviews/<repo_key>-<pr_number>.json.
 The state file is the single source of truth; Plane is updated after state is written.
@@ -156,8 +160,16 @@ def _run_pipeline(
     source: str,
     state_key: str,
     branch_suffix: str,
+    task_branch: str | None = None,
+    return_result: bool = False,
 ) -> dict | None:
-    """Run worker.main → execute.main and return verdict.json contents, or None."""
+    """Run worker.main → execute.main.
+
+    By default returns the parsed ``verdict.json`` (review pass). When
+    ``return_result`` is True, returns the parsed ``result.json`` execution
+    outcome instead (fix pass — no verdict is produced). ``task_branch``
+    overrides the branch the executor commits to; when None a throwaway
+    ``review/<suffix>`` branch is used. Returns None on failure."""
     python = _venv_python(oc_root)
     env = _build_env(oc_root)
     repo_cfg = settings.repos.get(repo_key)
@@ -229,7 +241,7 @@ def _run_pipeline(
             "--workspace-path",
             str(workspace),
             "--task-branch",
-            f"review/{branch_suffix}",
+            task_branch or f"review/{branch_suffix}",
             "--output",
             str(result_file),
             "--source",
@@ -257,6 +269,16 @@ def _run_pipeline(
                 state_key,
                 (exec_proc.stderr or exec_proc.stdout or "").strip()[-2000:],
             )
+
+        if return_result:
+            if result_file.exists():
+                try:
+                    return json.loads(result_file.read_text(encoding="utf-8"))
+                except Exception:
+                    logger.warning(
+                        "pr_review_watcher: malformed result.json for state_key=%s", state_key
+                    )
+            return None
 
         verdict_path = workspace / "verdict.json"
         if verdict_path.exists():
@@ -331,6 +353,156 @@ def _merge_and_done(
             )
 
     state_path.unlink(missing_ok=True)
+
+
+# ── Fix pass + close/re-queue ─────────────────────────────────────────────────
+
+# How many times an issue may be re-queued for a fresh attempt before it is
+# left Blocked for a human. Bounds the close→re-queue→new-PR cycle so an
+# unfixable issue can't loop forever, while still never merging half-finished.
+_MAX_REQUEUES = 3
+
+
+def _run_fix_pass(
+    oc_root: Path,
+    config_path: Path,
+    repo_key: str,
+    head_ref: str,
+    concerns: str,
+    settings,
+    *,
+    state_key: str,
+) -> bool:
+    """Dispatch a worker pass that resolves review concerns on the PR's own
+    branch and pushes (updating the open PR). Returns True if the pass reported
+    pushing changes — best-effort, used only for logging; the next review cycle
+    re-evaluates the actual diff regardless."""
+    goal_text = (
+        "A self-review of the currently open pull request raised the concerns "
+        "below. Resolve ALL of them by editing the code on the current branch, "
+        "then commit and push. Do NOT open a new pull request — push to the "
+        "existing branch so the open PR updates in place. Before finishing, run "
+        "the repository's tests and linters and make sure they pass.\n\n"
+        f"## Review concerns to resolve\n\n{concerns}"
+    )
+    outcome = _run_pipeline(
+        oc_root,
+        config_path,
+        repo_key,
+        goal_text,
+        settings,
+        source="reviewer_fix",
+        state_key=state_key,
+        branch_suffix=f"{state_key[:12]}",
+        task_branch=head_ref,
+        return_result=True,
+    )
+    if not isinstance(outcome, dict):
+        return False
+    result = outcome.get("result")
+    if not isinstance(result, dict):
+        result = outcome
+    return bool(result.get("branch_pushed") or result.get("success"))
+
+
+def _close_and_requeue(
+    state: dict,
+    state_path: Path,
+    _pr_data: dict,
+    gh_client,
+    owner: str,
+    repo: str,
+    settings,
+    *,
+    reason: str,
+    detail: str,
+) -> None:
+    """Close a PR WITHOUT merging and re-queue its issue for a fresh attempt.
+
+    The verdict gate's escape hatch: when a PR cannot reach LGTM, it is never
+    merged half-finished — it is closed and the originating issue is sent back
+    to the queue (bounded by ``_MAX_REQUEUES``)."""
+    pr_number = state["pr_number"]
+    marker = settings.reviewer.bot_comment_marker
+    try:
+        gh_client.post_comment(
+            owner,
+            repo,
+            pr_number,
+            f"{marker}\n**Closing without merge** (reason=`{reason}`). A PR is never "
+            f"merged with unresolved review concerns — re-queuing the issue for a "
+            f"fresh attempt.\n\n{detail}",
+        )
+    except Exception as exc:
+        logger.warning(
+            "pr_review_watcher: failed to comment before close PR #%d — %s", pr_number, exc
+        )
+    try:
+        gh_client.close_pr(owner, repo, pr_number)
+        logger.info("pr_review_watcher: closed PR #%d without merge (reason=%s)", pr_number, reason)
+    except Exception as exc:
+        logger.error("pr_review_watcher: failed to close PR #%d — %s", pr_number, exc)
+        return  # leave state file so the close is retried next cycle
+
+    plane_task_id = state.get("plane_task_id")
+    if plane_task_id:
+        _requeue_plane_task(settings, plane_task_id, pr_number=pr_number, reason=reason)
+
+    state_path.unlink(missing_ok=True)
+
+
+def _requeue_plane_task(settings, plane_task_id: str, *, pr_number: int, reason: str) -> None:
+    """Send the issue back to the queue for a fresh attempt, bounded by
+    ``_MAX_REQUEUES``; once exhausted, leave it Blocked for a human."""
+    from operations_center.entrypoints.board_worker.labels import (
+        STATE_BLOCKED,
+        STATE_READY,
+        add_label,
+        increment_retry_count,
+        retry_count_from_labels,
+    )
+
+    try:
+        client = _plane_client(settings)
+    except Exception as exc:
+        logger.warning(
+            "pr_review_watcher: cannot open Plane client to re-queue task=%s — %s",
+            plane_task_id,
+            exc,
+        )
+        return
+    try:
+        issue = client.fetch_issue(plane_task_id)
+        attempts = retry_count_from_labels(issue.get("labels", []) or [])
+        if attempts >= _MAX_REQUEUES:
+            add_label(client, issue, "needs-human")
+            client.transition_issue(plane_task_id, STATE_BLOCKED)
+            client.comment_issue(
+                plane_task_id,
+                f"PR #{pr_number} closed ({reason}); re-queue limit "
+                f"({_MAX_REQUEUES}) reached — blocked for human review.",
+            )
+            logger.warning("pr_review_watcher: task=%s hit re-queue limit — Blocked", plane_task_id)
+        else:
+            increment_retry_count(client, issue)
+            client.transition_issue(plane_task_id, STATE_READY)
+            client.comment_issue(
+                plane_task_id,
+                f"PR #{pr_number} closed ({reason}); re-queued for a fresh attempt "
+                f"(#{attempts + 1} of {_MAX_REQUEUES}).",
+            )
+            logger.info(
+                "pr_review_watcher: re-queued task=%s to Ready (attempt %d)",
+                plane_task_id,
+                attempts + 1,
+            )
+    except Exception as exc:
+        logger.warning("pr_review_watcher: re-queue failed task=%s — %s", plane_task_id, exc)
+    finally:
+        try:
+            client.close()
+        except Exception:
+            pass
 
 
 # ── Spec + Custodian context helpers ─────────────────────────────────────────
@@ -720,22 +892,22 @@ def _phase1(
     )
 
     state["self_review_loops"] += 1
+    state.setdefault("fix_attempts", 0)
+    state.setdefault("no_verdict_passes", 0)
 
     if verdict is None:
-        # Pipeline produced no verdict (crash/timeout/rate-limit).
-        # Retry silently up to max_self_review_loops, then auto-merge rather
-        # than stalling the queue. No comment posted — don't spam the PR.
-        logger.warning(
-            "pr_review_watcher: no verdict PR #%d (loop=%d/%d) — %s",
-            pr_number,
-            state["self_review_loops"],
-            reviewer.max_self_review_loops,
-            "will retry"
-            if state["self_review_loops"] < reviewer.max_self_review_loops
-            else "auto-merging",
-        )
-        if state["self_review_loops"] >= reviewer.max_self_review_loops:
-            _merge_and_done(
+        # Pipeline produced no verdict (crash/timeout/rate-limit). Retry a few
+        # times; if it never produces a parseable verdict, the PR is
+        # unreviewable — close it and re-queue rather than merging blind.
+        state["no_verdict_passes"] += 1
+        if state["no_verdict_passes"] >= reviewer.max_self_review_loops:
+            logger.warning(
+                "pr_review_watcher: PR #%d produced no verdict after %d passes — "
+                "closing and re-queuing (never auto-merge unreviewed)",
+                pr_number,
+                state["no_verdict_passes"],
+            )
+            _close_and_requeue(
                 state,
                 state_path,
                 pr_data,
@@ -743,48 +915,44 @@ def _phase1(
                 owner,
                 repo,
                 settings,
-                reason="no_verdict_auto_merge",
+                reason="no_verdict_exhausted",
+                detail="Self-review produced no parseable verdict after repeated passes.",
             )
         else:
+            logger.warning(
+                "pr_review_watcher: no verdict PR #%d (no_verdict_pass=%d/%d) — will retry",
+                pr_number,
+                state["no_verdict_passes"],
+                reviewer.max_self_review_loops,
+            )
             _save_state(state_path, state)
         return
 
+    state["no_verdict_passes"] = 0  # a verdict was produced
     result = (verdict.get("result") or "CONCERNS").upper()
     summary = verdict.get("summary", "(no summary)")
 
     logger.info("pr_review_watcher: PR #%d self-review verdict=%s", pr_number, result)
 
     if result == "LGTM":
+        # The ONLY merge path on the self-review track — verdict-gated.
         _merge_and_done(
             state, state_path, pr_data, gh_client, owner, repo, settings, reason="self_review_lgtm"
         )
         return
 
-    # CONCERNS — post once on the first pass, then retry silently.
-    # Auto-merge when loops exhausted rather than escalating to humans.
-    if state["self_review_loops"] == 1:
-        concern_body = (
-            f"{reviewer.bot_comment_marker}\n"
-            f"**Self-review concerns (will auto-merge after {reviewer.max_self_review_loops} passes):**\n\n{summary}"
-        )
-        try:
-            gh_client.post_comment(owner, repo, pr_number, concern_body)
-        except Exception as exc:
-            logger.warning(
-                "pr_review_watcher: failed to post concern comment PR #%d — %s", pr_number, exc
-            )
-    else:
-        logger.info(
-            "pr_review_watcher: PR #%d still CONCERNS on loop %d — %s",
+    # CONCERNS — never merge. Dispatch a fix pass that resolves the concerns on
+    # the PR's own branch (updating the PR), then re-review next cycle. After
+    # max_fix_attempts without reaching LGTM, close the PR and re-queue the
+    # issue for a fresh attempt — a half-finished PR is never shipped.
+    if state["fix_attempts"] >= reviewer.max_fix_attempts:
+        logger.warning(
+            "pr_review_watcher: PR #%d still CONCERNS after %d fix attempts — "
+            "closing and re-queuing",
             pr_number,
-            state["self_review_loops"],
-            "retrying"
-            if state["self_review_loops"] < reviewer.max_self_review_loops
-            else "auto-merging",
+            state["fix_attempts"],
         )
-
-    if state["self_review_loops"] >= reviewer.max_self_review_loops:
-        _merge_and_done(
+        _close_and_requeue(
             state,
             state_path,
             pr_data,
@@ -792,10 +960,72 @@ def _phase1(
             owner,
             repo,
             settings,
-            reason="self_review_auto_merge",
+            reason="fix_attempts_exhausted",
+            detail=(
+                f"Could not resolve review concerns after {state['fix_attempts']} "
+                f"fix attempts. Last concerns:\n\n{summary}"
+            ),
         )
         return
 
+    # Post the concerns once, on the first CONCERNS pass.
+    if state["fix_attempts"] == 0:
+        concern_body = (
+            f"{reviewer.bot_comment_marker}\n"
+            f"**Self-review concerns** — auto-fixing (up to {reviewer.max_fix_attempts} "
+            f"attempts; re-queued if still unresolved):\n\n{summary}"
+        )
+        try:
+            gh_client.post_comment(owner, repo, pr_number, concern_body)
+        except Exception as exc:
+            logger.warning(
+                "pr_review_watcher: failed to post concern comment PR #%d — %s", pr_number, exc
+            )
+
+    head_ref = (pr_data.get("head") or {}).get("ref") or ""
+    if not head_ref:
+        logger.error(
+            "pr_review_watcher: PR #%d has no head ref — cannot dispatch fix pass; "
+            "closing and re-queuing",
+            pr_number,
+        )
+        _close_and_requeue(
+            state,
+            state_path,
+            pr_data,
+            gh_client,
+            owner,
+            repo,
+            settings,
+            reason="no_head_ref",
+            detail="The PR head branch could not be determined, so concerns cannot be auto-fixed.",
+        )
+        return
+
+    logger.info(
+        "pr_review_watcher: PR #%d CONCERNS — dispatching fix pass %d/%d on branch %s",
+        pr_number,
+        state["fix_attempts"] + 1,
+        reviewer.max_fix_attempts,
+        head_ref,
+    )
+    pushed = _run_fix_pass(
+        oc_root,
+        config_path,
+        repo_key,
+        head_ref,
+        summary,
+        settings,
+        state_key=state_key,
+    )
+    state["fix_attempts"] += 1
+    if not pushed:
+        logger.warning(
+            "pr_review_watcher: fix pass for PR #%d pushed no changes (attempt %d/%d)",
+            pr_number,
+            state["fix_attempts"],
+            reviewer.max_fix_attempts,
+        )
     _save_state(state_path, state)
 
 
