@@ -1,3 +1,28 @@
+## 2026-06-02 — Reviewer gate: bound CI-defer + fix hermetic probe tests (operator-directed)
+
+**Status**: ✅ Added to `fix/reviewer-gate-gaps`. Two follow-on findings while
+verifying CI for the gap-fix PR:
+
+- **CRITICAL — #226 could stall the loop.** The CI-green precondition deferred on
+  ANY failed check; OC's own "Test (pytest)" check is red on every PR (coverage
+  gate, below), and OC has `auto_merge_on_ci_green: true` — so every OC autonomy
+  PR would defer forever. Fixed: bound the deferral (`_MAX_CI_WAIT_CYCLES`=20);
+  persistently-red CI now escalates to needs-human (leave open) instead of
+  silently stalling or merging on red.
+- **Hermetic probe tests.** `tests/unit/backends/test_worker_backend_probe.py`
+  called the real `shutil.which` for `claude`/`codex`, so 3 tests passed on dev
+  boxes (CLI present) but failed in CI (absent). Added an autouse fixture stubbing
+  `_resolve`. All 2694 unit tests now pass.
+
+**Open decision (NOT changed — needs operator call):** the #215 coverage gate
+`--cov-fail-under=85` (ci.yml:82/90, .coveragerc:13) measures all of `src` from
+the `tests/unit` subset → ~61.5%, so "Test (pytest)" has been red on every PR
+since #215. It's the last root cause of OC's red CI and now (with the precondition)
+gates OC autonomy. Needs a decision: lower the threshold to a realistic floor,
+measure coverage over the full suite, or scope `--cov`.
+
+---
+
 ## 2026-06-02 — Reviewer gate: adversarial-audit gap fixes (operator-directed)
 
 **Status**: ✅ On `fix/reviewer-gate-gaps`. Adversarial audit of the verdict-gate

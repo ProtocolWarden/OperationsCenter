@@ -333,6 +333,30 @@ def test_phase1_ci_red_defers_without_review(tmp_path: Path) -> None:
 
     mock_pipeline.assert_not_called()
     gh.merge_pr.assert_not_called()
+    # the wait counter advances so the deferral is bounded
+    assert watcher._load_state(sp)["ci_wait_cycles"] == 1
+
+
+def test_phase1_ci_persistently_red_escalates(tmp_path: Path) -> None:
+    # Red CI that never goes green must NOT defer forever and must NOT merge —
+    # after the wait cap it escalates to a human (leaves the PR open).
+    state, sp = _make_state(
+        tmp_path, phase="self_review", ci_wait_cycles=watcher._MAX_CI_WAIT_CYCLES - 1
+    )
+    gh = _make_gh()
+    gh.get_failed_checks.return_value = ["Test (pytest): fail"]  # persistently red
+    settings = _settings_with_ci_green_repo()
+
+    with patch.object(watcher, "_run_pipeline") as mock_pipeline:
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", settings
+        )
+
+    mock_pipeline.assert_not_called()
+    gh.merge_pr.assert_not_called()
+    gh.close_pr.assert_not_called()  # work preserved, not closed
+    gh.post_comment.assert_called_once()  # needs-human escalation
+    assert watcher._load_state(sp)["escalated_needs_human"] is True
 
 
 # ── merge_and_done ────────────────────────────────────────────────────────────

@@ -6,6 +6,9 @@ import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
+
+from operations_center.backends import worker_backend_probe
 from operations_center.backends.worker_backend_probe import (
     ProbeResult,
     probe_model,
@@ -14,6 +17,15 @@ from operations_center.backends.worker_backend_probe import (
 from operations_center.execution.usage_store import UsageStore
 
 _NOW = datetime(2026, 5, 31, 8, tzinfo=UTC)
+
+
+@pytest.fixture(autouse=True)
+def _stub_cli_resolution(monkeypatch):
+    """Make the probed CLI always resolvable so probe_model exercises the
+    injected fake runner. Without this the tests depend on the `claude`/`codex`
+    binary being installed on the host (present on dev machines, absent in CI),
+    making them pass locally but fail in CI."""
+    monkeypatch.setattr(worker_backend_probe, "_resolve", lambda command: f"/usr/bin/{command}")
 
 
 class _FakeProc:

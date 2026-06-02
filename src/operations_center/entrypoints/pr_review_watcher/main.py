@@ -367,6 +367,11 @@ def _merge_and_done(
 # unfixable issue can't loop forever, while still never merging half-finished.
 _MAX_REQUEUES = 3
 
+# How many polls a PR may wait for red CI to go green before it is escalated to
+# a human (rather than deferring forever — a persistently-red required check
+# must not silently stall the loop, nor merge on red).
+_MAX_CI_WAIT_CYCLES = 20
+
 
 def _run_fix_pass(
     oc_root: Path,
@@ -931,14 +936,39 @@ def _phase1(
                     ignored_checks=ignored,
                 )
                 if failed:
+                    # Defer while CI is red so ci_fix / CI can resolve it — but
+                    # BOUND the wait. If CI never goes green (e.g. a persistently
+                    # failing check), don't defer forever (that would silently
+                    # stall the loop) and don't merge red — escalate for a human.
+                    state["ci_wait_cycles"] = state.get("ci_wait_cycles", 0) + 1
+                    if state["ci_wait_cycles"] >= _MAX_CI_WAIT_CYCLES:
+                        _escalate_needs_human(
+                            state,
+                            state_path,
+                            gh_client,
+                            owner,
+                            repo,
+                            settings,
+                            reason="ci_persistently_red",
+                            detail=(
+                                f"CI has not gone green after {state['ci_wait_cycles']} "
+                                f"checks ({len(failed)} failing: "
+                                f"{', '.join(failed[:5])}). Not merged (red CI) and not "
+                                f"closed (work preserved) — needs a human to fix CI."
+                            ),
+                        )
+                        return
                     logger.info(
-                        "pr_review_watcher: PR #%d CI not green (%d failed) — deferring "
-                        "self-review until CI is green",
+                        "pr_review_watcher: PR #%d CI not green (%d failed, wait %d/%d) — "
+                        "deferring self-review until CI is green",
                         pr_number,
                         len(failed),
+                        state["ci_wait_cycles"],
+                        _MAX_CI_WAIT_CYCLES,
                     )
                     _save_state(state_path, state)
                     return
+                state["ci_wait_cycles"] = 0  # CI green — reset the wait counter
                 logger.info(
                     "pr_review_watcher: PR #%d CI green — proceeding to verdict-gated "
                     "self-review (LGTM required to merge)",
