@@ -1,3 +1,65 @@
+## 2026-06-02 — Stage 3 FINAL: Spec Compliance Validation and Readiness Confirmation
+
+**Status**: ✅ **COMPLETE** — Queue-drain spec validated for full compliance and production readiness
+
+**Stage 3 Deliverables:**
+
+**Compliance Verification:**
+1. ✅ **Provenance comment**: `<!-- generated_by_run: c2e98074-597c-40b0-ac62-b2c3268a0d15 -->` (line 1)
+2. ✅ **YAML front-matter** (lines 3–20):
+   - campaign_id: 7f558a6c-6ad4-44cf-940a-d86b3d5059f7 (UUID v4)
+   - slug: queue-drain-20260602T162852 (matches file name)
+   - phases: implement, test, improve (3 phases)
+   - repos: OperationsCenter (single valid repo)
+   - area_keywords: observer, test_coverage, collectors, alert_pipeline, instrumentation (5 keywords)
+   - status: active
+   - created_at: 2026-06-02T17:22:01Z (ISO 8601 UTC)
+3. ✅ **YAML parsing**: Valid YAML, all required fields present
+4. ✅ **Markdown sections**:
+   - Overview (2 sentences): Observer coverage gap (61.76% → 85%), improvement approach
+   - Goals (4 numbered items): Collector tests, pipeline tests, instrumentation, coverage gate
+   - Constraints (4 sections): Scope, allowed paths, avoid patterns, performance bounds
+   - Success Criteria (5 detailed criteria): Measurable outcomes with coverage targets
+
+**Validation Results:**
+- ✅ YAML front-matter: Valid, all required fields present
+- ✅ File permissions: Standard (rw-r--r--, 4966 bytes)
+- ✅ Encoding: UTF-8 text (no issues)
+- ✅ Repository integrity: No other files modified (only spec file + console files)
+- ✅ Git status: Only `.console/`, `.team_executor/`, and `docs/specs/` changes present
+
+**All Stage 3 Acceptance Criteria Met:**
+1. ✅ **YAML front-matter is valid and parses correctly** (confirmed via Python yaml.safe_load)
+2. ✅ **All required sections present and well-formed** (Overview, Goals, Constraints, Success Criteria)
+3. ✅ **Campaign goals are concrete and achievable** (4 goals, each completable in stated timeframe)
+4. ✅ **No other files in repository were modified** (verified with git diff)
+5. ✅ **File permissions and encoding correct** (rw-r--r--, UTF-8 text)
+
+**Spec Summary:**
+- File: `docs/specs/queue-drain-20260602T162852.md` (4,966 bytes)
+- Campaign: Observer module test coverage hardening (61.76% → 85%)
+- Repository: OperationsCenter
+- Phases: implement, test, improve
+- Goals: 4 concrete, bounded tasks (25–30 unit tests, 8–10 integration tests, performance baselines, coverage compliance)
+- Status: Ready for queue intake and multi-task campaign execution
+
+---
+
+## 2026-06-02 — Spec authoring: observer test coverage campaign
+
+**Status**: ✅ **COMPLETE** — Queue-drain spec created for observer module test coverage hardening
+
+**Deliverables:**
+- Created `docs/specs/queue-drain-20260602T162852.md`
+- Campaign ID: 7f558a6c-6ad4-44cf-940a-d86b3d5059f7
+- Focus: OperationsCenter observer module test coverage (61.76% → 85% target)
+- Goals: Collector edge-case tests, alert pipeline integration tests, performance instrumentation, coverage gate compliance
+- Bounded scope: 25–30 new unit tests, 8–10 integration tests, operator documentation
+
+**Decision rationale**: Recent audit fixes (PR #213) and role-validation hardening (PR #217) provide test templates. Observer module identified as under-tested in Stage 0 coverage baseline. New 85% gate (from commit 53129d6e) drives targeted test development. This spec builds on existing patterns from cooldown/backend observability specs but addresses a distinct subsystem gap.
+
+---
+
 ## 2026-06-02 — Probe-and-clear for stale worker-backend cooldowns
 
 Worker-backend cooldowns carry an *estimated* `reset_at` and were never retracted

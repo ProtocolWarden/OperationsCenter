@@ -13,6 +13,29 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## In Progress
 
+- [x] **Spec Authoring: Observer Test Coverage Campaign — COMPLETE ✅ (2026-06-02)**:
+  - **Objective:** Create focused queue-drain spec for OperationsCenter observer module test coverage hardening
+  - **Stage 0 (2026-06-02):** ✅ COMPLETE — Research domain context and review existing spec templates
+    - Reviewed 4 existing queue-drain specs across different focus areas
+    - Identified pattern: test coverage + observability + instrumentation + documentation
+    - Analyzed recent OperationsCenter commits and identified gaps
+    - Observer module identified as under-tested (61.76% baseline from Stage 0 CI coverage work)
+  - **Stage 1 (2026-06-02):** ✅ COMPLETE — Design spec content and define improvement campaign
+    - Created spec file: `docs/specs/queue-drain-20260602T162852.md`
+    - Campaign ID: 7f558a6c-6ad4-44cf-940a-d86b3d5059f7
+    - Focus areas: Collector edge-case tests, alert pipeline integration, performance instrumentation, coverage gate compliance
+    - Bounded scope: 25–30 new unit tests, 8–10 integration tests, operator documentation
+  - **Stage 2 (2026-06-02):** ✅ COMPLETE — Write and populate queue-drain spec file
+    - File created with all required sections and content
+    - YAML front-matter complete and valid
+  - **Stage 3 (2026-06-02):** ✅ COMPLETE — Validate spec compliance and readiness
+    - YAML front-matter validated (all required fields present)
+    - All markdown sections present and well-formed
+    - Campaign goals are concrete and achievable
+    - No other repository files modified
+    - File permissions and encoding correct
+    - Ready for queue intake and multi-task campaign execution
+
 - [x] **Update CI/CD Pipeline to Gate on Coverage Threshold — Stages 0–3 COMPLETE ✅ (2026-06-01)** [MOVED TO STAGE 4]:
   - **Objective:** Implement coverage threshold enforcement in GitHub Actions CI to prevent coverage regressions
   - **Stage 0 (2026-06-01):** ✅ COMPLETE — Analyze current CI/CD pipeline and capture actual baseline metrics
