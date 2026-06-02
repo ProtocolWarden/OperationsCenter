@@ -25,6 +25,7 @@ CLI matches the reviewer role contract used by operations-center.sh:
     --poll-interval-seconds N
     --status-dir          directory for heartbeat_review.json
 """
+
 from __future__ import annotations
 
 import argparse
@@ -45,6 +46,7 @@ _STATE_SUBDIR = Path("state") / "pr_reviews"
 
 
 # ── State file helpers ────────────────────────────────────────────────────────
+
 
 def _state_key(repo_key: str, pr_number: int) -> str:
     return f"{repo_key}-{pr_number}"
@@ -71,31 +73,34 @@ def _save_state(path: Path, state: dict) -> None:
 def _new_state(repo_key: str, pr_number: int) -> dict:
     now = datetime.now(UTC).isoformat()
     return {
-        "state_key":            _state_key(repo_key, pr_number),
-        "pr_number":            pr_number,
-        "repo_key":             repo_key,
-        "phase":                "ci_fix",
-        "ci_fix_attempts":      0,
-        "ci_fix_last_push_at":  None,
-        "self_review_loops":    0,
-        "human_review_loops":   0,
+        "state_key": _state_key(repo_key, pr_number),
+        "pr_number": pr_number,
+        "repo_key": repo_key,
+        "phase": "ci_fix",
+        "ci_fix_attempts": 0,
+        "ci_fix_last_push_at": None,
+        "self_review_loops": 0,
+        "human_review_loops": 0,
         "processed_comment_ids": [],
-        "plane_task_id":        None,
-        "phase2_entered_at":    None,
-        "created_at":           now,
-        "updated_at":           now,
+        "plane_task_id": None,
+        "phase2_entered_at": None,
+        "created_at": now,
+        "updated_at": now,
     }
 
 
 # ── Settings / adapter helpers ────────────────────────────────────────────────
 
+
 def _load_settings(config_path: Path):
     from operations_center.config import load_settings
+
     return load_settings(config_path)
 
 
 def _github_client(settings):
     from operations_center.adapters.github_pr import GitHubPRClient
+
     token = settings.git_token()
     if not token:
         raise RuntimeError("no GitHub token — set GIT_TOKEN in .env")
@@ -104,6 +109,7 @@ def _github_client(settings):
 
 def _plane_client(settings):
     from operations_center.adapters.plane import PlaneClient
+
     return PlaneClient(
         base_url=settings.plane.base_url,
         api_token=settings.plane_token(),
@@ -114,6 +120,7 @@ def _plane_client(settings):
 
 def _owner_repo(clone_url: str) -> tuple[str, str]:
     from operations_center.adapters.github_pr import GitHubPRClient
+
     return GitHubPRClient.owner_repo_from_clone_url(clone_url)
 
 
@@ -138,6 +145,7 @@ def _label_value(labels: list, prefix: str) -> str:
 
 # ── pr review pipeline ────────────────────────────────────────────────────────
 
+
 def _run_pipeline(
     oc_root: Path,
     config_path: Path,
@@ -150,8 +158,8 @@ def _run_pipeline(
     branch_suffix: str,
 ) -> dict | None:
     """Run worker.main → execute.main and return verdict.json contents, or None."""
-    python  = _venv_python(oc_root)
-    env     = _build_env(oc_root)
+    python = _venv_python(oc_root)
+    env = _build_env(oc_root)
     repo_cfg = settings.repos.get(repo_key)
     if not repo_cfg:
         logger.error("pr_review_watcher: unknown repo_key=%s", repo_key)
@@ -161,15 +169,25 @@ def _run_pipeline(
         tmp = Path(tmpdir)
 
         plan_cmd = [
-            python, "-m", "operations_center.entrypoints.worker.main",
-            "--goal",           goal_text,
-            "--task-type",      "chore",
-            "--execution-mode", "goal",
-            "--repo-key",       repo_key,
-            "--clone-url",      repo_cfg.clone_url,
-            "--base-branch",    repo_cfg.default_branch,
-            "--project-id",     settings.plane.project_id,
-            "--task-id",        state_key,
+            python,
+            "-m",
+            "operations_center.entrypoints.worker.main",
+            "--goal",
+            goal_text,
+            "--task-type",
+            "chore",
+            "--execution-mode",
+            "goal",
+            "--repo-key",
+            repo_key,
+            "--clone-url",
+            repo_cfg.clone_url,
+            "--base-branch",
+            repo_cfg.default_branch,
+            "--project-id",
+            settings.plane.project_id,
+            "--task-id",
+            state_key,
         ]
         plan_proc = subprocess.run(plan_cmd, cwd=oc_root, env=env, capture_output=True, text=True)
 
@@ -178,49 +196,65 @@ def _run_pipeline(
         except Exception:
             logger.error(
                 "pr_review_watcher: planning produced no JSON for state_key=%s\n%s",
-                state_key, (plan_proc.stderr or plan_proc.stdout).strip(),
+                state_key,
+                (plan_proc.stderr or plan_proc.stdout).strip(),
             )
             return None
 
         if plan_proc.returncode != 0:
             logger.error(
                 "pr_review_watcher: planning failed state_key=%s — %s",
-                state_key, bundle.get("message", "unknown"),
+                state_key,
+                bundle.get("message", "unknown"),
             )
             return None
 
-        bundle_file  = tmp / "bundle.json"
-        config_copy  = tmp / "ops.yaml"
-        workspace    = tmp / "workspace"
-        result_file  = tmp / "result.json"
+        bundle_file = tmp / "bundle.json"
+        config_copy = tmp / "ops.yaml"
+        workspace = tmp / "workspace"
+        result_file = tmp / "result.json"
 
         bundle_file.write_text(json.dumps(bundle, ensure_ascii=False), encoding="utf-8")
         shutil.copy(config_path, config_copy)
         workspace.mkdir()
 
         exec_cmd = [
-            python, "-m", "operations_center.entrypoints.execute.main",
-            "--config",         str(config_copy),
-            "--bundle",         str(bundle_file),
-            "--workspace-path", str(workspace),
-            "--task-branch",    f"review/{branch_suffix}",
-            "--output",         str(result_file),
-            "--source",         source,
+            python,
+            "-m",
+            "operations_center.entrypoints.execute.main",
+            "--config",
+            str(config_copy),
+            "--bundle",
+            str(bundle_file),
+            "--workspace-path",
+            str(workspace),
+            "--task-branch",
+            f"review/{branch_suffix}",
+            "--output",
+            str(result_file),
+            "--source",
+            source,
         ]
         try:
             exec_proc = subprocess.run(
-                exec_cmd, cwd=oc_root, env=env, capture_output=True, text=True,
+                exec_cmd,
+                cwd=oc_root,
+                env=env,
+                capture_output=True,
+                text=True,
                 timeout=1800,  # 30 min hard cap — prevents hung executor blocking the watcher
             )
         except subprocess.TimeoutExpired:
             logger.warning(
-                "pr_review_watcher: execute pipeline timed out after 30m for state_key=%s", state_key,
+                "pr_review_watcher: execute pipeline timed out after 30m for state_key=%s",
+                state_key,
             )
             return None
         if exec_proc.returncode != 0:
             logger.warning(
                 "pr_review_watcher: execute pipeline exited rc=%d for state_key=%s\nstderr: %s",
-                exec_proc.returncode, state_key,
+                exec_proc.returncode,
+                state_key,
                 (exec_proc.stderr or exec_proc.stdout or "").strip()[-2000:],
             )
 
@@ -229,11 +263,14 @@ def _run_pipeline(
             try:
                 return json.loads(verdict_path.read_text(encoding="utf-8"))
             except Exception:
-                logger.warning("pr_review_watcher: malformed verdict.json for state_key=%s", state_key)
+                logger.warning(
+                    "pr_review_watcher: malformed verdict.json for state_key=%s", state_key
+                )
         else:
             logger.warning(
                 "pr_review_watcher: no verdict.json produced for state_key=%s (rc=%d)",
-                state_key, exec_proc.returncode,
+                state_key,
+                exec_proc.returncode,
             )
         return None
 
@@ -242,6 +279,7 @@ def _run_pipeline(
 
 
 # ── Merge + Plane done ────────────────────────────────────────────────────────
+
 
 def _merge_and_done(
     state: dict,
@@ -262,12 +300,18 @@ def _merge_and_done(
         logger.warning(
             "pr_review_watcher: PR #%d has merge conflicts — skipping merge (reason=%s); "
             "branch must be rebased before auto-merge will proceed",
-            pr_number, reason,
+            pr_number,
+            reason,
         )
         return
     try:
         gh_client.merge_pr(owner, repo, pr_number, merge_method="squash")
-        logger.info("pr_review_watcher: merged PR #%d repo=%s reason=%s", pr_number, state["repo_key"], reason)
+        logger.info(
+            "pr_review_watcher: merged PR #%d repo=%s reason=%s",
+            pr_number,
+            state["repo_key"],
+            reason,
+        )
     except Exception as exc:
         logger.error("pr_review_watcher: merge failed PR #%d — %s", pr_number, exc)
         return  # leave state file — operator must inspect
@@ -282,12 +326,15 @@ def _merge_and_done(
             finally:
                 client.close()
         except Exception as exc:
-            logger.warning("pr_review_watcher: Plane Done failed task_id=%s — %s", plane_task_id, exc)
+            logger.warning(
+                "pr_review_watcher: Plane Done failed task_id=%s — %s", plane_task_id, exc
+            )
 
     state_path.unlink(missing_ok=True)
 
 
 # ── Spec + Custodian context helpers ─────────────────────────────────────────
+
 
 def _load_campaign_spec(oc_root: Path, settings, plane_task_id: str | None) -> str:
     """Return the campaign spec text for a Plane task, or '' if unavailable."""
@@ -304,6 +351,7 @@ def _load_campaign_spec(oc_root: Path, settings, plane_task_id: str | None) -> s
         if not campaign_id:
             return ""
         from operations_center.spec_author.state import CampaignStateManager
+
         campaigns_state = CampaignStateManager().load()
         for campaign in campaigns_state.active_campaigns():
             if campaign.campaign_id == campaign_id:
@@ -333,7 +381,9 @@ def _custodian_findings(oc_root: Path, repo_key: str, settings) -> str:
     try:
         proc = subprocess.run(
             [str(custodian_bin), "--repos", str(local_path), "--json"],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
         output = (proc.stdout or "").strip()
         if not output:
@@ -341,12 +391,12 @@ def _custodian_findings(oc_root: Path, repo_key: str, settings) -> str:
         results = json.loads(output)
         findings = []
         for repo_result in results:
-            for det in (repo_result.get("detectors") or []):
+            for det in repo_result.get("detectors") or []:
                 if det.get("findings"):
                     for f in det["findings"]:
                         findings.append(
-                            f"  [{det.get('code','?')}] {det.get('description','?')}: "
-                            f"{f.get('path','?')}:{f.get('line','?')} — {f.get('message','')}"
+                            f"  [{det.get('code', '?')}] {det.get('description', '?')}: "
+                            f"{f.get('path', '?')}:{f.get('line', '?')} — {f.get('message', '')}"
                         )
         if findings:
             return "Custodian findings on current branch:\n" + "\n".join(findings[:50])
@@ -364,12 +414,12 @@ _CI_FIX_WAIT_SECONDS = 120  # wait after pushing before re-checking CI
 _AUTOFIX_CHECK_NAMES = {"lint (ruff)", "ruff", "lint"}
 
 
-def _ci_checks_failing(gh_client, owner: str, repo: str, pr_number: int,
-                        ignored: list[str]) -> list[str]:
+def _ci_checks_failing(
+    gh_client, owner: str, repo: str, pr_number: int, ignored: list[str]
+) -> list[str]:
     """Return names of currently failing (non-ignored) checks, or [] if all green."""
     try:
-        return gh_client.get_failed_checks(owner, repo, pr_number,
-                                            ignored_checks=ignored) or []
+        return gh_client.get_failed_checks(owner, repo, pr_number, ignored_checks=ignored) or []
     except Exception:
         return []
 
@@ -389,15 +439,15 @@ def _phase0_ci_fix(
     Transitions to self_review when CI is green or when attempts are exhausted.
     """
     pr_number = int(state["pr_number"])
-    repo_key  = state["repo_key"]
-    repo_cfg  = settings.repos.get(repo_key)
+    repo_key = state["repo_key"]
+    repo_cfg = settings.repos.get(repo_key)
     if not repo_cfg:
         state["phase"] = "self_review"
         _save_state(state_path, state)
         return
 
-    ignored  = list(getattr(repo_cfg, "ci_ignored_checks", []) or [])
-    failed   = _ci_checks_failing(gh_client, owner, repo, pr_number, ignored)
+    ignored = list(getattr(repo_cfg, "ci_ignored_checks", []) or [])
+    failed = _ci_checks_failing(gh_client, owner, repo, pr_number, ignored)
 
     if not failed:
         # CI is green — move straight to self_review
@@ -413,7 +463,8 @@ def _phase0_ci_fix(
         if elapsed < _CI_FIX_WAIT_SECONDS:
             logger.debug(
                 "pr_review_watcher: PR #%d CI fix pushed %.0fs ago — waiting for CI rerun",
-                pr_number, elapsed,
+                pr_number,
+                elapsed,
             )
             return
 
@@ -422,7 +473,9 @@ def _phase0_ci_fix(
         logger.info(
             "pr_review_watcher: PR #%d exhausted %d CI fix attempts (%s still failing) "
             "— advancing to self_review",
-            pr_number, attempts, failed,
+            pr_number,
+            attempts,
+            failed,
         )
         state["phase"] = "self_review"
         _save_state(state_path, state)
@@ -433,13 +486,15 @@ def _phase0_ci_fix(
     def _is_fixable(check_name: str) -> bool:
         cn = check_name.lower().split(":")[0].strip()
         return cn in _AUTOFIX_CHECK_NAMES or any(cn.startswith(k) for k in _AUTOFIX_CHECK_NAMES)
+
     fixable_failing = [c for c in failed if _is_fixable(c)]
     unfixable = [c for c in failed if not _is_fixable(c)]
     if unfixable and not fixable_failing:
         logger.info(
             "pr_review_watcher: PR #%d CI failing on non-auto-fixable checks %s "
             "— advancing to self_review",
-            pr_number, unfixable,
+            pr_number,
+            unfixable,
         )
         state["phase"] = "self_review"
         _save_state(state_path, state)
@@ -447,32 +502,33 @@ def _phase0_ci_fix(
 
     # --- Attempt auto-fix on the local repo checkout ---
     local_path = getattr(repo_cfg, "local_path", None)
-    head_ref   = ((pr_data.get("head") or {}).get("ref") or "").strip()
+    head_ref = ((pr_data.get("head") or {}).get("ref") or "").strip()
     if not local_path or not head_ref:
         state["phase"] = "self_review"
         _save_state(state_path, state)
         return
 
     local_path = Path(local_path)
-    venv_bin   = local_path / (getattr(repo_cfg, "venv_dir", ".venv") or ".venv") / "bin"
-    ruff_bin   = venv_bin / "ruff"
+    venv_bin = local_path / (getattr(repo_cfg, "venv_dir", ".venv") or ".venv") / "bin"
+    ruff_bin = venv_bin / "ruff"
     if not ruff_bin.exists():
         ruff_bin = Path(shutil.which("ruff") or "ruff")
 
     git_env = dict(os.environ)
     git_token = settings.git_token()
-    author_name  = getattr(settings.git, "author_name",  "Operations Center Bot")
+    author_name = getattr(settings.git, "author_name", "Operations Center Bot")
     author_email = getattr(settings.git, "author_email", "operations-center-bot@example.com")
-    git_env["GIT_AUTHOR_NAME"]     = author_name
-    git_env["GIT_AUTHOR_EMAIL"]    = author_email
-    git_env["GIT_COMMITTER_NAME"]  = author_name
+    git_env["GIT_AUTHOR_NAME"] = author_name
+    git_env["GIT_AUTHOR_EMAIL"] = author_email
+    git_env["GIT_COMMITTER_NAME"] = author_name
     git_env["GIT_COMMITTER_EMAIL"] = author_email
     if git_token:
         git_env["GH_TOKEN"] = git_token
 
     def _git(*args: str) -> subprocess.CompletedProcess:
-        return subprocess.run(["git", *args], cwd=local_path, env=git_env,
-                              capture_output=True, text=True)
+        return subprocess.run(
+            ["git", *args], cwd=local_path, env=git_env, capture_output=True, text=True
+        )
 
     try:
         # Stash any in-progress work, checkout the PR branch, pull latest.
@@ -484,17 +540,18 @@ def _phase0_ci_fix(
         _git("pull", "--ff-only", "origin", head_ref)
 
         # Run ruff auto-fix.
-        subprocess.run([str(ruff_bin), "check", "--fix", "."],
-                       cwd=local_path, capture_output=True, text=True)
-        subprocess.run([str(ruff_bin), "format", "."],
-                       cwd=local_path, capture_output=True, text=True)
+        subprocess.run(
+            [str(ruff_bin), "check", "--fix", "."], cwd=local_path, capture_output=True, text=True
+        )
+        subprocess.run(
+            [str(ruff_bin), "format", "."], cwd=local_path, capture_output=True, text=True
+        )
 
         # Check if anything changed.
         status = _git("status", "--porcelain")
         if not status.stdout.strip():
             logger.info(
-                "pr_review_watcher: PR #%d ruff fix produced no changes — "
-                "advancing to self_review",
+                "pr_review_watcher: PR #%d ruff fix produced no changes — advancing to self_review",
                 pr_number,
             )
             state["phase"] = "self_review"
@@ -502,23 +559,25 @@ def _phase0_ci_fix(
             return
 
         _git("add", "-A")
-        _git("commit", "-m",
-             f"fix(ci): auto-fix ruff lint violations on {head_ref}")
+        _git("commit", "-m", f"fix(ci): auto-fix ruff lint violations on {head_ref}")
         push = _git("push", "origin", head_ref)
         if push.returncode != 0:
             logger.warning(
                 "pr_review_watcher: PR #%d ci-fix push failed — %s",
-                pr_number, push.stderr.strip(),
+                pr_number,
+                push.stderr.strip(),
             )
             state["phase"] = "self_review"
             _save_state(state_path, state)
             return
 
-        state["ci_fix_attempts"]     = attempts + 1
+        state["ci_fix_attempts"] = attempts + 1
         state["ci_fix_last_push_at"] = datetime.now(UTC).isoformat()
         logger.info(
             "pr_review_watcher: PR #%d ci-fix attempt %d pushed to %s — waiting for CI",
-            pr_number, attempts + 1, head_ref,
+            pr_number,
+            attempts + 1,
+            head_ref,
         )
         _save_state(state_path, state)
 
@@ -535,6 +594,7 @@ def _phase0_ci_fix(
 
 # ── Phase 1: self-review ──────────────────────────────────────────────────────
 
+
 def _phase1(
     state: dict,
     state_path: Path,
@@ -546,10 +606,10 @@ def _phase1(
     config_path: Path,
     settings,
 ) -> None:
-    pr_number   = int(state["pr_number"])
-    repo_key    = state["repo_key"]
-    state_key   = state["state_key"]
-    reviewer    = settings.reviewer
+    pr_number = int(state["pr_number"])
+    repo_key = state["repo_key"]
+    state_key = state["state_key"]
+    reviewer = settings.reviewer
 
     # ── auto-merge-on-CI-green (fast path) ───────────────────────────────────
     # For autonomy PRs on repos that opt in, skip the self-review pipeline
@@ -562,22 +622,34 @@ def _phase1(
         if is_autonomy:
             try:
                 ignored = list(getattr(repo_cfg, "ci_ignored_checks", []) or [])
-                failed  = gh_client.get_failed_checks(
-                    owner, repo, pr_number, pr_data=pr_data, ignored_checks=ignored,
+                failed = gh_client.get_failed_checks(
+                    owner,
+                    repo,
+                    pr_number,
+                    pr_data=pr_data,
+                    ignored_checks=ignored,
                 )
                 if not failed:
                     logger.info(
                         "pr_review_watcher: PR #%d auto-merging — CI green, "
-                        "auto_merge_on_ci_green=True", pr_number,
+                        "auto_merge_on_ci_green=True",
+                        pr_number,
                     )
                     _merge_and_done(
-                        state, state_path, pr_data, gh_client, owner, repo, settings,
+                        state,
+                        state_path,
+                        pr_data,
+                        gh_client,
+                        owner,
+                        repo,
+                        settings,
                         reason="auto_merge_on_ci_green",
                     )
                     return
                 logger.debug(
                     "pr_review_watcher: PR #%d CI not green (%d failed) — proceeding to self-review",
-                    pr_number, len(failed),
+                    pr_number,
+                    len(failed),
                 )
             except Exception as exc:
                 logger.debug("pr_review_watcher: CI check failed PR #%d — %s", pr_number, exc)
@@ -586,21 +658,26 @@ def _phase1(
     if not diff:
         logger.warning("pr_review_watcher: empty diff PR #%d, skipping", pr_number)
         return
+    if diff.startswith("[DIFF_TOO_LARGE"):
+        logger.warning(
+            "pr_review_watcher: PR #%d diff exceeds GitHub API limit — reviewing file list only",
+            pr_number,
+        )
 
     diff_excerpt = diff[:8000] + ("\n...[diff truncated]" if len(diff) > 8000 else "")
-    title        = pr_data.get("title", "")
+    title = pr_data.get("title", "")
 
     # Load optional campaign spec and Custodian findings for spec-aware review
-    spec_text       = _load_campaign_spec(oc_root, settings, state.get("plane_task_id"))
-    custodian_text  = _custodian_findings(oc_root, repo_key, settings)
+    spec_text = _load_campaign_spec(oc_root, settings, state.get("plane_task_id"))
+    custodian_text = _custodian_findings(oc_root, repo_key, settings)
 
     spec_section = (
         f"\n\n## Campaign spec (review against this — violations are CONCERNS)\n\n{spec_text}"
-        if spec_text else ""
+        if spec_text
+        else ""
     )
     custodian_section = (
-        f"\n\n## Custodian static analysis\n\n{custodian_text}"
-        if custodian_text else ""
+        f"\n\n## Custodian static analysis\n\n{custodian_text}" if custodian_text else ""
     )
 
     goal_text = (
@@ -626,11 +703,17 @@ def _phase1(
 
     logger.info(
         "pr_review_watcher: self-review PR #%d repo=%s loop=%d",
-        pr_number, repo_key, state["self_review_loops"],
+        pr_number,
+        repo_key,
+        state["self_review_loops"],
     )
 
     verdict = _run_pipeline(
-        oc_root, config_path, repo_key, goal_text, settings,
+        oc_root,
+        config_path,
+        repo_key,
+        goal_text,
+        settings,
         source="reviewer_self",
         state_key=state_key,
         branch_suffix=f"{state_key[:12]}",
@@ -644,26 +727,37 @@ def _phase1(
         # than stalling the queue. No comment posted — don't spam the PR.
         logger.warning(
             "pr_review_watcher: no verdict PR #%d (loop=%d/%d) — %s",
-            pr_number, state["self_review_loops"], reviewer.max_self_review_loops,
-            "will retry" if state["self_review_loops"] < reviewer.max_self_review_loops
+            pr_number,
+            state["self_review_loops"],
+            reviewer.max_self_review_loops,
+            "will retry"
+            if state["self_review_loops"] < reviewer.max_self_review_loops
             else "auto-merging",
         )
         if state["self_review_loops"] >= reviewer.max_self_review_loops:
             _merge_and_done(
-                state, state_path, pr_data, gh_client, owner, repo, settings,
+                state,
+                state_path,
+                pr_data,
+                gh_client,
+                owner,
+                repo,
+                settings,
                 reason="no_verdict_auto_merge",
             )
         else:
             _save_state(state_path, state)
         return
 
-    result  = (verdict.get("result") or "CONCERNS").upper()
+    result = (verdict.get("result") or "CONCERNS").upper()
     summary = verdict.get("summary", "(no summary)")
 
     logger.info("pr_review_watcher: PR #%d self-review verdict=%s", pr_number, result)
 
     if result == "LGTM":
-        _merge_and_done(state, state_path, pr_data, gh_client, owner, repo, settings, reason="self_review_lgtm")
+        _merge_and_done(
+            state, state_path, pr_data, gh_client, owner, repo, settings, reason="self_review_lgtm"
+        )
         return
 
     # CONCERNS — post once on the first pass, then retry silently.
@@ -676,17 +770,28 @@ def _phase1(
         try:
             gh_client.post_comment(owner, repo, pr_number, concern_body)
         except Exception as exc:
-            logger.warning("pr_review_watcher: failed to post concern comment PR #%d — %s", pr_number, exc)
+            logger.warning(
+                "pr_review_watcher: failed to post concern comment PR #%d — %s", pr_number, exc
+            )
     else:
         logger.info(
             "pr_review_watcher: PR #%d still CONCERNS on loop %d — %s",
-            pr_number, state["self_review_loops"],
-            "retrying" if state["self_review_loops"] < reviewer.max_self_review_loops else "auto-merging",
+            pr_number,
+            state["self_review_loops"],
+            "retrying"
+            if state["self_review_loops"] < reviewer.max_self_review_loops
+            else "auto-merging",
         )
 
     if state["self_review_loops"] >= reviewer.max_self_review_loops:
         _merge_and_done(
-            state, state_path, pr_data, gh_client, owner, repo, settings,
+            state,
+            state_path,
+            pr_data,
+            gh_client,
+            owner,
+            repo,
+            settings,
             reason="self_review_auto_merge",
         )
         return
@@ -694,9 +799,8 @@ def _phase1(
     _save_state(state_path, state)
 
 
-
-
 # ── Plane task lookup ─────────────────────────────────────────────────────────
+
 
 def _find_plane_task_id(settings, repo_key: str, pr_number: int, _pr_data: dict) -> str | None:
     """Attempt to find a Plane 'In Review' task matching this PR. Best-effort."""
@@ -707,7 +811,7 @@ def _find_plane_task_id(settings, repo_key: str, pr_number: int, _pr_data: dict)
         finally:
             client.close()
         for issue in issues:
-            state_obj  = issue.get("state")
+            state_obj = issue.get("state")
             state_name = (state_obj.get("name", "") if isinstance(state_obj, dict) else "").strip()
             if state_name != "In Review":
                 continue
@@ -724,29 +828,33 @@ def _find_plane_task_id(settings, repo_key: str, pr_number: int, _pr_data: dict)
 
 # ── Heartbeat ──────────────────────────────────────────────────────────────────
 
+
 def _write_heartbeat(status_dir: Path) -> None:
     try:
         status_dir.mkdir(parents=True, exist_ok=True)
         hb = status_dir / "heartbeat_review.json"
-        hb.write_text(json.dumps({
-            "role":   "review",
-            "at":     datetime.now(UTC).isoformat(),
-            "status": "active",
-        }, ensure_ascii=False), encoding="utf-8")
+        hb.write_text(
+            json.dumps(
+                {
+                    "role": "review",
+                    "at": datetime.now(UTC).isoformat(),
+                    "status": "active",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
     except Exception:
         pass
 
 
 # ── Poll cycle ────────────────────────────────────────────────────────────────
 
+
 def _poll_once(oc_root: Path, config_path: Path, settings) -> None:
     gh_client = _github_client(settings)
 
-    repos_to_watch = {
-        key: repo
-        for key, repo in settings.repos.items()
-        if repo.await_review
-    }
+    repos_to_watch = {key: repo for key, repo in settings.repos.items() if repo.await_review}
 
     if not repos_to_watch:
         logger.debug("pr_review_watcher: no repos with await_review=true, nothing to do")
@@ -770,7 +878,7 @@ def _poll_once(oc_root: Path, config_path: Path, settings) -> None:
                 continue
 
             pr_number = int(pr_data["number"])
-            sp        = _state_path(oc_root, repo_key, pr_number)
+            sp = _state_path(oc_root, repo_key, pr_number)
 
             if not sp.exists():
                 state = _new_state(repo_key, pr_number)
@@ -798,15 +906,16 @@ def _poll_once(oc_root: Path, config_path: Path, settings) -> None:
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="OperationsCenter PR review watcher — two-phase state machine"
     )
-    parser.add_argument("--config",                  required=True, type=Path)
-    parser.add_argument("--watch",                   action="store_true")
-    parser.add_argument("--poll-interval-seconds",   type=int, default=60, dest="poll_interval")
-    parser.add_argument("--status-dir",              type=Path, default=None, dest="status_dir")
-    parser.add_argument("--log-level",               default="INFO")
+    parser.add_argument("--config", required=True, type=Path)
+    parser.add_argument("--watch", action="store_true")
+    parser.add_argument("--poll-interval-seconds", type=int, default=60, dest="poll_interval")
+    parser.add_argument("--status-dir", type=Path, default=None, dest="status_dir")
+    parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -815,7 +924,7 @@ def main() -> int:
         datefmt="%H:%M:%S",
     )
 
-    oc_root    = Path(__file__).resolve().parents[4]
+    oc_root = Path(__file__).resolve().parents[4]
     status_dir = args.status_dir or (oc_root / "logs" / "local" / "watch-all")
 
     if not args.watch:
