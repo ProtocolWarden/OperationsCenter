@@ -1,3 +1,45 @@
+## 2026-06-02 — Probe-and-clear for stale worker-backend cooldowns
+
+Worker-backend cooldowns carry an *estimated* `reset_at` and were never retracted
+on their own — only expiring when `reset_at` passed. When a limit lifted early
+(e.g. sonnet recovered before its guessed weekly reset), the cooldown lingered:
+status surfaces showed the model cooling, and when every model looked cooling the
+board_unblock gate deferred dispatch for no reason.
+
+Added a probe-and-clear path:
+- `UsageStore.clear_worker_backend_cooldown(worker_backend, model, ..., include_account_wide)`
+  retracts a model's active `model_weekly` cooldown (and, on request, account-wide
+  cooldowns — one model running disproves an all-models block); appends a
+  `worker_backend_cooldown_cleared` audit event.
+- `backends/worker_backend_probe.py` — `probe_model` runs a cheap `claude -p`/`codex
+  exec` against a model (mirrors the controller's invocation); `ok` only on exit 0
+  with no limit signal. `refresh_cooldowns` probes each *cooling* model and clears
+  the ones proven runnable. Probes never record cooldowns — a flaky probe can only
+  fail to clear, never falsely block.
+- New entrypoint `operations-center-worker-backend-probe` + `worker-backend-probe`
+  subcommand (safe to run on a schedule / cron).
+- Wired as a self-heal into `board_unblock._dispatch_cooldown_reason`: when every
+  allowed backend looks cooling, probe + re-read before deferring — turning a
+  would-be stale-cooldown deadlock into a self-heal. Injected for offline tests.
+
+Plus three hardening fixes:
+- Periodic self-heal: the watchdog hourly loop now runs `worker-backend-probe`
+  (--timeout 30) so stale cooldowns clear even when the board is idle (no-op when
+  nothing is cooling).
+- `record_worker_backend_cooldown` coalesces duplicates — drops any still-active
+  cooldown for the same (worker_backend, limit_kind, model) before appending, so
+  re-recording the same limit each cycle no longer piles up identical events
+  (observed: 12 identical sonnet rows).
+- The board_unblock gate bounds its probe to `_GATE_PROBE_TIMEOUT_SECONDS` (20s)
+  so a hung probe can't stall a board cycle; the standalone CLI/cron keeps the
+  90s default.
+
+Tests: clear primitive (per-model / account-wide / no-op), dedup-on-record,
+probe module (fake runner: ok/limit-signal/nonzero/timeout; refresh clears only
+runnable models; account-wide cleared on first success; no-op when nothing
+cooling), CLI smoke, and the board_unblock self-heal. Verified end-to-end against
+the live claude CLI.
+
 ## 2026-06-01 — Stage 4 FINAL: Documentation and Deployment Complete
 
 **Status**: ✅ **COMPLETE** — Coverage gating mechanism fully documented and committed to main

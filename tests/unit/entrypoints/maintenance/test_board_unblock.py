@@ -308,6 +308,42 @@ def test_dispatch_cooldown_reason_none_when_nothing_cooling(monkeypatch):
     assert _dispatch_cooldown_reason(store, now=_NOW) is None
 
 
+class _RefreshableFakeUsageStore(_FakeUsageStore):
+    """Fake store whose snapshot a refresh callback can flip to runnable."""
+
+    def set_runnable(self, backend: str) -> None:
+        self._snapshot[backend] = {"cooling_down": False, "reset_at": None}
+
+
+def test_dispatch_cooldown_reason_self_heals_via_refresh(monkeypatch):
+    # All allowed backends look cooling, but a probe proves one is runnable: the
+    # injected refresh clears it, the gate re-reads, and dispatch is no longer
+    # deferred. This is the probe-and-clear self-heal at the dispatch boundary.
+    monkeypatch.setenv("OPERATIONS_CENTER_ALLOWED_PROVIDERS", "claude")
+    store = _RefreshableFakeUsageStore(
+        {"claude_code": {"cooling_down": True, "reset_at": "2026-06-03T13:00:00+00:00"}}
+    )
+    calls: list[str] = []
+
+    def fake_refresh(s, *, now):
+        calls.append("refreshed")
+        s.set_runnable("claude_code")
+
+    assert _dispatch_cooldown_reason(store, now=_NOW, refresh=fake_refresh) is None
+    assert calls == ["refreshed"]
+
+
+def test_dispatch_cooldown_reason_still_blocks_when_refresh_finds_nothing(monkeypatch):
+    # Refresh runs but the limit is genuinely still active → gate still defers.
+    monkeypatch.setenv("OPERATIONS_CENTER_ALLOWED_PROVIDERS", "claude")
+    store = _RefreshableFakeUsageStore(
+        {"claude_code": {"cooling_down": True, "reset_at": "2026-06-03T13:00:00+00:00"}}
+    )
+    reason = _dispatch_cooldown_reason(store, now=_NOW, refresh=lambda s, *, now: None)
+    assert reason is not None
+    assert "claude_code" in reason
+
+
 def test_rule7_goal_backlog_promote_skips_thin_goal():
     """GOAL_BACKLOG_PROMOTE must NOT fire for Backlog goal tasks carrying thin-goal."""
     parent = _issue(
