@@ -280,7 +280,9 @@ class GitHubPRClient:
         """Return the unified diff for a pull request as a string.
 
         Uses the GitHub ``diff`` media type on the pulls endpoint.
-        Returns an empty string on any error.
+        On 406 (diff too large for the API), falls back to a file-list
+        summary so the review watcher can still process the PR.
+        Returns an empty string only when both methods fail.
         """
         try:
             diff_headers = dict(self._headers)
@@ -291,8 +293,35 @@ class GitHubPRClient:
                 timeout=30,
                 follow_redirects=True,
             )
+            if resp.status_code == 406:
+                return self._pr_diff_too_large_summary(owner, repo, pr_number)
             resp.raise_for_status()
             return resp.text
+        except Exception:
+            return ""
+
+    def _pr_diff_too_large_summary(self, owner: str, repo: str, pr_number: int) -> str:
+        """Return a file-list summary when the full diff exceeds GitHub's API limit."""
+        try:
+            resp = self._request(
+                "GET",
+                f"{self._API}/repos/{owner}/{repo}/pulls/{pr_number}/files",
+                params={"per_page": 100},
+            )
+            resp.raise_for_status()
+            files = resp.json()
+            lines = [
+                f"[DIFF_TOO_LARGE — showing {len(files)} changed files only]\n"
+            ]
+            for f in files:
+                if not isinstance(f, dict):
+                    continue
+                status = f.get("status", "modified")
+                path = f.get("filename", "")
+                adds = f.get("additions", 0)
+                dels = f.get("deletions", 0)
+                lines.append(f"{status:8s} {path} (+{adds}/-{dels})")
+            return "\n".join(lines)
         except Exception:
             return ""
 

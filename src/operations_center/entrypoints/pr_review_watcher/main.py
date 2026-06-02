@@ -658,6 +658,11 @@ def _phase1(
     if not diff:
         logger.warning("pr_review_watcher: empty diff PR #%d, skipping", pr_number)
         return
+    if diff.startswith("[DIFF_TOO_LARGE"):
+        logger.warning(
+            "pr_review_watcher: PR #%d diff exceeds GitHub API limit — reviewing file list only",
+            pr_number,
+        )
 
     diff_excerpt = diff[:8000] + ("\n...[diff truncated]" if len(diff) > 8000 else "")
     title = pr_data.get("title", "")
