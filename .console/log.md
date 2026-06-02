@@ -1,3 +1,34 @@
+## 2026-06-02 — Reviewer gate: adversarial-audit gap fixes (operator-directed)
+
+**Status**: ✅ On `fix/reviewer-gate-gaps`. Adversarial audit of the verdict-gate
+work (#224/#226) surfaced gaps; fixed the real ones:
+
+- **Fix-pass no-op signal** (`_run_fix_pass`): returned True on `result.success`
+  even when nothing was pushed; now keys off `branch_pushed` only, so a no-op
+  pass is logged honestly.
+- **Dedicated re-queue budget**: `_requeue_plane_task` used the shared
+  `retry-count` label (also bumped by executor-kill/transient retries), so the
+  re-queue budget was conflated/non-deterministic. Now uses its own
+  `reviewer-requeue-count` label.
+- **Don't lose work on close** (`_close_and_requeue`): re-queue now happens
+  FIRST and returns a bool — the PR is closed only after the issue is safely
+  re-queued (a Plane outage no longer closes a PR into the void). Closing now
+  also deletes the head branch (no orphan-branch accumulation). No Plane task →
+  escalate (leave open) instead of closing.
+- **No-verdict ≠ bad PR**: a persistent no-verdict (usually a transient backend
+  rate-limit) now leaves the PR OPEN + needs-human (via new
+  `_escalate_needs_human`) and keeps polling, instead of closing/re-queuing a
+  possibly-good PR.
+- **DoD wording** made role-neutral (applies to test/goal alike).
+
+Noted but NOT changed (pre-existing / out of scope): H1 fix-pass plans against
+default_branch (oversize check is vs HEAD so it only measures the fix delta —
+benign; branch is squash-rewritten, fine for squash-merge repos); Phase-0
+ci_fix stash robustness; non-atomic state writes; conflicted-LGTM retried
+forever. 34 reviewer tests + 113 total (reviewer+entrypoints) pass; ruff clean.
+
+---
+
 ## 2026-06-02 — Reviewer: CI-green is a precondition, not an auto-merge (operator-directed)
 
 **Status**: ✅ Implemented on `feat/ci-green-requires-lgtm`. Closes the bypass left

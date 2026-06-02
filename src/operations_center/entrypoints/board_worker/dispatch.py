@@ -363,15 +363,16 @@ def _append_definition_of_done(goal_text: str) -> str:
     return (
         f"{goal_text}\n\n"
         "## Definition of done (complete ALL before finishing)\n"
-        "1. Implement the issue in its ENTIRETY — every acceptance criterion, every\n"
-        "   file the change implies (code, tests, and docs). Do not leave TODOs,\n"
-        "   stubs, or 'follow-up' gaps; a partial change will be rejected in review.\n"
-        "2. Add or update tests that prove the change works.\n"
+        "1. Complete the task in its ENTIRETY — every acceptance criterion and every\n"
+        "   file the task implies (implementation, tests, and docs as applicable). Do\n"
+        "   not leave TODOs, stubs, or 'follow-up' gaps; a partial change is rejected\n"
+        "   in review.\n"
+        "2. Add or update tests/checks that prove the work is correct.\n"
         "3. Run the repository's test suite and linters/formatters and make them\n"
         "   pass locally. If anything fails, fix it before finishing — do not hand\n"
         "   off a red build.\n"
-        "4. Only consider the task done when the full change is implemented AND\n"
-        "   verified green. The PR you open should be mergeable as-is.\n"
+        "4. Only consider the task done when the full change is in place AND verified\n"
+        "   green. The PR you open should be mergeable as-is.\n"
     )
 
 

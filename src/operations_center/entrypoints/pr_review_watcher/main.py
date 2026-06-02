@@ -13,12 +13,17 @@ Phase 1 (self_review): executor reviews the diff and emits LGTM or CONCERNS.
     branch (updating the open PR), then re-review next cycle. After
     max_fix_attempts without reaching LGTM, the PR is CLOSED and the issue is
     re-queued for a fresh attempt — a half-finished PR is never shipped.
-  - No verdict (pipeline crash/timeout) → retry; after max_self_review_loops
-    with no parseable verdict, close + re-queue rather than merge blind.
+  - No verdict (pipeline crash/timeout/rate-limit) → retry; after
+    max_self_review_loops with no parseable verdict the PR is left OPEN and
+    flagged needs-human (a reviewer outage must not destroy a good PR), and
+    polling continues so a recovered backend reviews it later.
 
-Re-queuing is bounded by _MAX_REQUEUES; once exhausted the issue is left
-Blocked for a human. There is no human_review phase — autonomy PRs either reach
-LGTM and merge, or are closed and re-queued.
+Green CI is a precondition for merge, not a trigger: a red-CI PR defers; a
+green-CI PR still must pass the verdict gate. Re-queuing is bounded by
+_MAX_REQUEUES (its own label); once exhausted the issue is left Blocked for a
+human. There is no human_review phase — autonomy PRs reach LGTM and merge, are
+closed + re-queued (concerns unresolvable), or are left open for a human
+(unreviewable).
 
 State per PR persisted in state/pr_reviews/<repo_key>-<pr_number>.json.
 The state file is the single source of truth; Plane is updated after state is written.
@@ -374,9 +379,10 @@ def _run_fix_pass(
     state_key: str,
 ) -> bool:
     """Dispatch a worker pass that resolves review concerns on the PR's own
-    branch and pushes (updating the open PR). Returns True if the pass reported
-    pushing changes — best-effort, used only for logging; the next review cycle
-    re-evaluates the actual diff regardless."""
+    branch and pushes (updating the open PR). Returns True only if the pass
+    actually pushed changes to the branch — a no-op pass (worker couldn't
+    resolve anything) returns False so the caller can log it; the next review
+    cycle re-evaluates the actual diff regardless."""
     goal_text = (
         "A self-review of the currently open pull request raised the concerns "
         "below. Resolve ALL of them by editing the code on the current branch, "
@@ -402,13 +408,86 @@ def _run_fix_pass(
     result = outcome.get("result")
     if not isinstance(result, dict):
         result = outcome
-    return bool(result.get("branch_pushed") or result.get("success"))
+    # Only "branch_pushed" proves the diff changed. result.success is True even
+    # for a no-op pass (executor ran cleanly but committed nothing), which would
+    # mask a worker that resolved nothing — don't count that as a push.
+    return bool(result.get("branch_pushed"))
+
+
+# Dedicated label for reviewer re-queues — kept separate from board_worker's
+# `retry-count` (executor-kill/transient retries) so the two budgets don't
+# consume each other.
+_REQUEUE_LABEL_PREFIX = "reviewer-requeue-count"
+
+
+def _label_names(labels: list) -> list[str]:
+    out = []
+    for lab in labels or []:
+        name = (lab.get("name", "") if isinstance(lab, dict) else str(lab)).strip()
+        if name:
+            out.append(name)
+    return out
+
+
+def _requeue_count(labels: list) -> int:
+    raw = _label_value(labels, _REQUEUE_LABEL_PREFIX)
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _labels_with_requeue_count(
+    labels: list, count: int, *, extra: list[str] | None = None
+) -> list[str]:
+    """Full replacement label set: existing names minus the old requeue-count
+    (and any in *extra*, to avoid dupes), plus the new count and *extra*."""
+    drop = {_REQUEUE_LABEL_PREFIX.lower()} | {e.lower() for e in (extra or [])}
+    kept = [n for n in _label_names(labels) if n.split(":", 1)[0].strip().lower() not in drop]
+    return kept + [f"{_REQUEUE_LABEL_PREFIX}: {count}", *(extra or [])]
+
+
+def _escalate_needs_human(
+    state: dict,
+    state_path: Path,
+    gh_client,
+    owner: str,
+    repo: str,
+    settings,
+    *,
+    reason: str,
+    detail: str,
+) -> None:
+    """Leave the PR OPEN and flag it for a human. Used when the PR must not be
+    merged (unresolved) but also must not be closed (work would be lost) — e.g.
+    the review pipeline is persistently unavailable, or there is no Plane task
+    to re-queue. Comments exactly once, then keeps polling."""
+    pr_number = state["pr_number"]
+    if not state.get("escalated_needs_human"):
+        marker = settings.reviewer.bot_comment_marker
+        try:
+            gh_client.post_comment(
+                owner,
+                repo,
+                pr_number,
+                f"{marker}\n**Needs human attention** (reason=`{reason}`). Left open — "
+                f"not merged (unresolved) and not closed (work preserved).\n\n{detail}",
+            )
+        except Exception as exc:
+            logger.warning(
+                "pr_review_watcher: failed to post needs-human comment PR #%d — %s", pr_number, exc
+            )
+        state["escalated_needs_human"] = True
+        logger.warning(
+            "pr_review_watcher: PR #%d escalated for human attention (reason=%s)", pr_number, reason
+        )
+    _save_state(state_path, state)
 
 
 def _close_and_requeue(
     state: dict,
     state_path: Path,
-    _pr_data: dict,
+    pr_data: dict,
     gh_client,
     owner: str,
     repo: str,
@@ -419,10 +498,41 @@ def _close_and_requeue(
 ) -> None:
     """Close a PR WITHOUT merging and re-queue its issue for a fresh attempt.
 
-    The verdict gate's escape hatch: when a PR cannot reach LGTM, it is never
-    merged half-finished — it is closed and the originating issue is sent back
-    to the queue (bounded by ``_MAX_REQUEUES``)."""
+    The verdict gate's escape hatch: when a PR cannot reach LGTM it is never
+    merged half-finished. Re-queue happens FIRST — the PR is only closed once
+    the issue is safely back in the queue, so a Plane outage can't lose the
+    work. With no Plane task to re-queue, the PR is left open + escalated rather
+    than closed into the void."""
     pr_number = state["pr_number"]
+    plane_task_id = state.get("plane_task_id")
+
+    if not plane_task_id:
+        logger.warning(
+            "pr_review_watcher: PR #%d has no Plane task — escalating instead of closing "
+            "(closing would lose the work)",
+            pr_number,
+        )
+        _escalate_needs_human(
+            state,
+            state_path,
+            gh_client,
+            owner,
+            repo,
+            settings,
+            reason=f"{reason}:no_task",
+            detail=detail,
+        )
+        return
+
+    # Re-queue first; only close if it succeeded.
+    if not _requeue_plane_task(settings, plane_task_id, pr_number=pr_number, reason=reason):
+        logger.warning(
+            "pr_review_watcher: re-queue failed for PR #%d — leaving PR open, will retry",
+            pr_number,
+        )
+        _save_state(state_path, state)
+        return
+
     marker = settings.reviewer.bot_comment_marker
     try:
         gh_client.post_comment(
@@ -430,8 +540,8 @@ def _close_and_requeue(
             repo,
             pr_number,
             f"{marker}\n**Closing without merge** (reason=`{reason}`). A PR is never "
-            f"merged with unresolved review concerns — re-queuing the issue for a "
-            f"fresh attempt.\n\n{detail}",
+            f"merged with unresolved review concerns — the issue has been re-queued for "
+            f"a fresh attempt.\n\n{detail}",
         )
     except Exception as exc:
         logger.warning(
@@ -441,26 +551,35 @@ def _close_and_requeue(
         gh_client.close_pr(owner, repo, pr_number)
         logger.info("pr_review_watcher: closed PR #%d without merge (reason=%s)", pr_number, reason)
     except Exception as exc:
+        # Issue is already re-queued; the open PR is gated from double-claim by
+        # OPEN_PR_GATE. Keep state so the close is retried next cycle.
         logger.error("pr_review_watcher: failed to close PR #%d — %s", pr_number, exc)
-        return  # leave state file so the close is retried next cycle
+        _save_state(state_path, state)
+        return
 
-    plane_task_id = state.get("plane_task_id")
-    if plane_task_id:
-        _requeue_plane_task(settings, plane_task_id, pr_number=pr_number, reason=reason)
+    # Delete the head branch so closed-PR branches don't accumulate as orphans.
+    head_ref = (pr_data.get("head") or {}).get("ref") or ""
+    if head_ref:
+        try:
+            gh_client.delete_branch(owner, repo, head_ref)
+        except Exception as exc:
+            logger.warning(
+                "pr_review_watcher: failed to delete branch %s for PR #%d — %s",
+                head_ref,
+                pr_number,
+                exc,
+            )
 
     state_path.unlink(missing_ok=True)
 
 
-def _requeue_plane_task(settings, plane_task_id: str, *, pr_number: int, reason: str) -> None:
+def _requeue_plane_task(settings, plane_task_id: str, *, pr_number: int, reason: str) -> bool:
     """Send the issue back to the queue for a fresh attempt, bounded by
-    ``_MAX_REQUEUES``; once exhausted, leave it Blocked for a human."""
-    from operations_center.entrypoints.board_worker.labels import (
-        STATE_BLOCKED,
-        STATE_READY,
-        add_label,
-        increment_retry_count,
-        retry_count_from_labels,
-    )
+    ``_MAX_REQUEUES`` (its own dedicated label); once exhausted, leave it
+    Blocked for a human. Returns True if the issue was handled (re-queued or
+    blocked), False on failure (e.g. Plane unreachable) so the caller can keep
+    the PR open and retry."""
+    from operations_center.entrypoints.board_worker.labels import STATE_BLOCKED, STATE_READY
 
     try:
         client = _plane_client(settings)
@@ -470,12 +589,15 @@ def _requeue_plane_task(settings, plane_task_id: str, *, pr_number: int, reason:
             plane_task_id,
             exc,
         )
-        return
+        return False
     try:
         issue = client.fetch_issue(plane_task_id)
-        attempts = retry_count_from_labels(issue.get("labels", []) or [])
+        labels = issue.get("labels", []) or []
+        attempts = _requeue_count(labels)
         if attempts >= _MAX_REQUEUES:
-            add_label(client, issue, "needs-human")
+            client.update_issue_labels(
+                plane_task_id, _labels_with_requeue_count(labels, attempts, extra=["needs-human"])
+            )
             client.transition_issue(plane_task_id, STATE_BLOCKED)
             client.comment_issue(
                 plane_task_id,
@@ -484,7 +606,9 @@ def _requeue_plane_task(settings, plane_task_id: str, *, pr_number: int, reason:
             )
             logger.warning("pr_review_watcher: task=%s hit re-queue limit — Blocked", plane_task_id)
         else:
-            increment_retry_count(client, issue)
+            client.update_issue_labels(
+                plane_task_id, _labels_with_requeue_count(labels, attempts + 1)
+            )
             client.transition_issue(plane_task_id, STATE_READY)
             client.comment_issue(
                 plane_task_id,
@@ -496,8 +620,10 @@ def _requeue_plane_task(settings, plane_task_id: str, *, pr_number: int, reason:
                 plane_task_id,
                 attempts + 1,
             )
+        return True
     except Exception as exc:
         logger.warning("pr_review_watcher: re-queue failed task=%s — %s", plane_task_id, exc)
+        return False
     finally:
         try:
             client.close()
@@ -891,28 +1017,38 @@ def _phase1(
     state.setdefault("no_verdict_passes", 0)
 
     if verdict is None:
-        # Pipeline produced no verdict (crash/timeout/rate-limit). Retry a few
-        # times; if it never produces a parseable verdict, the PR is
-        # unreviewable — close it and re-queue rather than merging blind.
+        # Pipeline produced no verdict (crash/timeout/rate-limit). This is a
+        # REVIEWER failure, not a PR-quality failure — the PR may be perfectly
+        # good, we just can't review it right now (often a transient backend
+        # rate-limit). Never merge blind; but also never close/destroy a good
+        # PR over infra flakiness. Retry a few times, then leave the PR open and
+        # escalate for a human, and keep polling (a recovered backend will
+        # review it next cycle).
         state["no_verdict_passes"] += 1
         if state["no_verdict_passes"] >= reviewer.max_self_review_loops:
             logger.warning(
                 "pr_review_watcher: PR #%d produced no verdict after %d passes — "
-                "closing and re-queuing (never auto-merge unreviewed)",
+                "escalating (leaving open; reviewer unavailable, work preserved)",
                 pr_number,
                 state["no_verdict_passes"],
             )
-            _close_and_requeue(
+            _escalate_needs_human(
                 state,
                 state_path,
-                pr_data,
                 gh_client,
                 owner,
                 repo,
                 settings,
-                reason="no_verdict_exhausted",
-                detail="Self-review produced no parseable verdict after repeated passes.",
+                reason="no_verdict_unreviewable",
+                detail=(
+                    "Self-review produced no parseable verdict after repeated passes "
+                    "(likely a transient backend/rate-limit issue, or a diff too large "
+                    "to review). The PR is left open for human attention; automated "
+                    "review will retry."
+                ),
             )
+            state["no_verdict_passes"] = 0  # keep retrying in case it was transient
+            _save_state(state_path, state)
         else:
             logger.warning(
                 "pr_review_watcher: no verdict PR #%d (no_verdict_pass=%d/%d) — will retry",
