@@ -3062,3 +3062,8 @@ parse_rate_limit_reset returns (dt, text) tuple. _handle_backend_limit single re
 ## 2026-06-01 — Fix CI failures from PR #213 merge
 
 Applied ruff format + import sort across all 553 files, fixed G004/F841/DTZ007 lint violations in observer module (alert_channels.py, alert_validation.py, exporters.py), converted async notify() to sync (no await operations), fixed test threshold/assertion errors in test_stage3_observability.py and test_alert_channels.py.
+
+
+## 2026-06-02 — Fix spec-author campaign build closed-loop stagnation
+
+`SpecFrontMatter.from_spec_text()` rejected specs starting with `<!-- generated_by_run: ... -->` comment (executor-added prefix), causing every queue-drain spec to fail campaign build and trigger another queue-drain in a stagnation loop (3 tasks: d0f5af4d, 8f17cc68, ae6e5235). Fixed by stripping leading HTML comment before YAML front matter check.

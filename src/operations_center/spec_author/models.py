@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import re
 from enum import Enum
 from typing import ClassVar, Literal
 
@@ -68,16 +69,23 @@ class SpecFrontMatter(BaseModel):
         "improve": "improve_campaign",
     }
 
+    # Executor prepends a run-ID comment to every committed file; strip it before
+    # looking for the YAML front matter so parsing works regardless of that prefix.
+    _LEADING_COMMENT_RE: ClassVar[re.Pattern] = re.compile(
+        r"^<!--.*?-->\s*", re.DOTALL
+    )
+
     @classmethod
     def from_spec_text(cls, text: str) -> "SpecFrontMatter":
         """Parse YAML front matter from a spec document."""
-        if not (text.startswith("---") and len(text) > 3 and text[3] in ("\n", "\r", " ")):
+        body = cls._LEADING_COMMENT_RE.sub("", text)
+        if not (body.startswith("---") and len(body) > 3 and body[3] in ("\n", "\r", " ")):
             raise ValueError("Spec text does not have YAML front matter")
         try:
-            end = text.index("---", 3)
+            end = body.index("---", 3)
         except ValueError:
             raise ValueError("Spec text is missing closing '---' for YAML front matter")
-        front = text[3:end].strip()
+        front = body[3:end].strip()
         data = yaml.safe_load(front) or {}
         # Convert datetime objects (from YAML parsing) to ISO strings
         normalized = {
