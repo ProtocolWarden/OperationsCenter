@@ -1,3 +1,33 @@
+## 2026-06-02 — Raise unit coverage past the 85% gate (operator-directed)
+
+**Status**: ✅ On `test/coverage-climb-1`. The #215 `--cov-fail-under=85` gate had
+never passed (unit ~61.5%); operator chose to keep 85% and reach it with real
+tests. Drove it with two parallel test-writing workflows (one agent per high-gap
+module): wave 1 (22 modules: tuning/, observer/, decision, policy, run_memory,
+slice_replay, worker_backend_selector, artifact_index, ci_evaluator/coordinator,
+audit_governance, executors) → 61.5%→68.9%; wave 2 (26 modules: usage_store,
+board_worker outcomes/dispatch/spec_author/_text, plane & git & github adapters,
+workspace, coordinator, campaign_store, proposer/*, spec_author/*, scheduled_tasks,
+triage_scan, board_unblock, task_parser, quality_alerts, …) → **86.9%**.
+
+~49 new hermetic test files (~2,300 tests), all `*_cov.py`. Fixes along the way:
+made all `tests/unit/` subdirs proper packages (`__init__.py`) to resolve
+duplicate-basename collisions; patched the policy/engine agent's tests (missing
+required `PolicyViolation.message`); ruff-fixed one unused import. Full gate:
+`pytest tests/unit -m "not slow" --cov=src --cov-fail-under=85` → 4561 passed,
+86.9%. CI "Test (pytest)" now goes green, so OC autonomy PRs can self-merge again
+(no longer escalated by the bounded CI-green precondition).
+
+Third workflow then cleaned the Custodian test-hygiene findings the generated
+tests tripped (the pre-push guard runs `--fail-on-findings`): 43 N2 (module-level
+helpers renamed to `_`-prefix + call sites), 23 T2 (assert-less tests given
+meaningful assertions), 1 T3 (ungated `pytest.skip` removed). Custodian audit now
+0 findings; full gate still green at 86.9%. Also added the SPDX license header
+to the new `tests/unit/**/__init__.py` package markers (CI's License-headers job
+requires it on every `.py`).
+
+---
+
 ## 2026-06-02 — Reviewer gate: bound CI-defer + fix hermetic probe tests (operator-directed)
 
 **Status**: ✅ Added to `fix/reviewer-gate-gaps`. Two follow-on findings while
