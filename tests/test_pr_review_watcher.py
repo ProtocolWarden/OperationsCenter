@@ -274,6 +274,62 @@ def test_phase1_skips_empty_diff(tmp_path: Path) -> None:
     gh.merge_pr.assert_not_called()
 
 
+# ── CI-green precondition (not an auto-merge trigger) ──────────────────────────
+
+
+def _settings_with_ci_green_repo() -> MagicMock:
+    repo_cfg = MagicMock(
+        auto_merge_on_ci_green=True,
+        ci_ignored_checks=[],
+        clone_url=f"git@github.com:owner/{REPO_KEY}.git",
+        default_branch="main",
+        await_review=True,
+    )
+    return MagicMock(
+        reviewer=REVIEWER_CFG,
+        repos={REPO_KEY: repo_cfg},
+        plane=MagicMock(base_url="http://plane.local", project_id="proj", workspace_slug="ws"),
+    )
+
+
+def test_phase1_ci_green_requires_lgtm_not_automerge(tmp_path: Path) -> None:
+    # Green CI must NOT auto-merge — it proceeds to the verdict gate; only LGTM merges.
+    state, sp = _make_state(tmp_path, phase="self_review")
+    gh = _make_gh()
+    gh.get_failed_checks.return_value = []  # CI green
+    settings = _settings_with_ci_green_repo()
+
+    with (
+        patch.object(
+            watcher, "_run_pipeline", return_value={"result": "LGTM", "summary": "ok"}
+        ) as mock_pipeline,
+        patch.object(watcher, "_merge_and_done") as mock_merge,
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", settings
+        )
+
+    mock_pipeline.assert_called_once()  # the verdict gate ran
+    mock_merge.assert_called_once()
+    assert mock_merge.call_args[1]["reason"] == "self_review_lgtm"  # not auto_merge_on_ci_green
+
+
+def test_phase1_ci_red_defers_without_review(tmp_path: Path) -> None:
+    # Red CI defers — no expensive self-review, no merge — until CI goes green.
+    state, sp = _make_state(tmp_path, phase="self_review")
+    gh = _make_gh()
+    gh.get_failed_checks.return_value = ["Lint (ruff): failure"]  # CI red
+    settings = _settings_with_ci_green_repo()
+
+    with patch.object(watcher, "_run_pipeline") as mock_pipeline:
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", settings
+        )
+
+    mock_pipeline.assert_not_called()
+    gh.merge_pr.assert_not_called()
+
+
 # ── merge_and_done ────────────────────────────────────────────────────────────
 
 

@@ -1,3 +1,21 @@
+## 2026-06-02 — Reviewer: CI-green is a precondition, not an auto-merge (operator-directed)
+
+**Status**: ✅ Implemented on `feat/ci-green-requires-lgtm`. Closes the bypass left
+by the verdict-gate work (#224): every managed repo has
+`auto_merge_on_ci_green: true`, which merged autonomy PRs the instant CI was
+green — *before* the new verdict gate ran. Green CI ≠ complete (missing docs etc.
+pass CI), so PRs could still ship half-finished.
+
+**Change** (`pr_review_watcher/main.py _phase1` fast path): CI-green is now a
+PRECONDITION. While CI is red the PR defers (no expensive self-review). Once CI
+is green it falls through to the verdict-gated self-review — LGTM is still the
+only merge path. Stale `operations_center.example.yaml` reviewer docs updated
+(removed human-review phase, surfaced `max_fix_attempts`, documented the
+precondition). Tests: ci-green-requires-LGTM + ci-red-defers-without-review.
+108 passed; ruff clean.
+
+---
+
 ## 2026-06-02 — Reviewer: verdict-gated merges + auto-fix loop (operator-directed)
 
 **Status**: ✅ Implemented on branch `feat/verdict-gated-fix-loop` (worktree).
