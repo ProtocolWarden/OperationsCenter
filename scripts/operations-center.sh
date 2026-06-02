@@ -286,6 +286,11 @@ start_watch_role() {
     propose) poll_interval="${OPERATIONS_CENTER_WATCH_INTERVAL_PROPOSE_SECONDS:-${OPERATIONS_CENTER_PROPOSE_POLL_SECONDS:-120}}" ;;
     review) poll_interval="${OPERATIONS_CENTER_WATCH_INTERVAL_REVIEW_SECONDS:-60}" ;;
     spec) poll_interval="${OPERATIONS_CENTER_WATCH_INTERVAL_SPEC_SECONDS:-120}" ;;
+    intake) ;; # handled separately below
+    *)
+      echo "start_watch_role: unknown role '${role}' (valid: goal, test, improve, propose, review, spec, intake)" >&2
+      return 1
+      ;;
   esac
   local pid_file
   pid_file="$(watch_pid_file "${role}")"
