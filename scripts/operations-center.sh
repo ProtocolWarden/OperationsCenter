@@ -158,6 +158,7 @@ Usage:
   scripts/operations-center.sh tune-autonomy [--window N] [--apply]
   scripts/operations-center.sh promote-backlog [--family FAMILY] [--execute]
   scripts/operations-center.sh worker-backend-status [--json]
+  scripts/operations-center.sh worker-backend-probe [--json] [--timeout N]
   scripts/operations-center.sh watchdog-loop-acquire
   scripts/operations-center.sh watchdog-loop-release
   scripts/operations-center.sh watchdog-loop-status
@@ -513,6 +514,10 @@ start_watchdog() {
       printf '{\"role\":\"watchdog\",\"at\":\"%s\",\"status\":\"idle\"}\n' \
         \$(date -u +%Y-%m-%dT%H:%M:%S+00:00) \
         > '${WATCH_DIR}/heartbeat_watchdog.json'
+      # Periodic probe-and-clear (~hourly): retract worker-backend cooldowns whose
+      # limit lifted before the estimated reset, so status surfaces self-heal even
+      # when the board is idle. No-op when nothing is cooling.
+      '${ROOT_DIR}/scripts/operations-center.sh' worker-backend-probe --timeout 30 >/dev/null 2>&1 || true
       _slept=0
       while [[ \$_slept -lt 3600 && -f '${pid_file}' ]]; do
         sleep 300
@@ -618,7 +623,7 @@ shift || true
 cd "${ROOT_DIR}"
 # Skip janitor for read-only / stop commands — they're fast and don't need it.
 case "${cmd}" in
-  watch-all-status|dev-status|watch-all-stop|watch-stop|watchdog-stop|plane-status|providers-status|doctor|status|worker-backend-status|loop-start|loop-stop|loop-status|loop-log) ;;
+  watch-all-status|dev-status|watch-all-stop|watch-stop|watchdog-stop|plane-status|providers-status|doctor|status|worker-backend-status|worker-backend-probe|loop-start|loop-stop|loop-status|loop-log) ;;
   *) run_janitor ;;
 esac
 
@@ -901,6 +906,11 @@ PYEOF
     ensure_venv
     load_env_file
     "${VENV_DIR}/bin/python" -m operations_center.entrypoints.worker_backend_status.main "$@"
+    ;;
+  worker-backend-probe)
+    ensure_venv
+    load_env_file
+    "${VENV_DIR}/bin/python" -m operations_center.entrypoints.worker_backend_probe.main "$@"
     ;;
   plane-doctor)
     ensure_venv

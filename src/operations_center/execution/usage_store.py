@@ -461,6 +461,20 @@ class UsageStore:
         """
         with self._exclusive():
             data = self.load()
+            # Coalesce: drop any still-active cooldown for the same
+            # (worker_backend, limit_kind, model) so re-recording the same limit
+            # each cycle doesn't pile up duplicate events (observed: 12 identical
+            # sonnet rows). The newest record supersedes — latest estimate wins.
+            events = [
+                ev
+                for ev in data.get("events", [])
+                if not (
+                    self._is_active_cooldown_for(ev, worker_backend, now=now)
+                    and ev.get("limit_kind") == limit_kind
+                    and ev.get("model") == model
+                )
+            ]
+            data["events"] = events
             event = {
                 "kind": "worker_backend_cooldown",
                 "worker_backend": worker_backend,
@@ -633,6 +647,91 @@ class UsageStore:
                 "cooldowns": self.worker_backend_cooldown_details(worker_backend, now=now),
             }
         return snapshot
+
+    def clear_worker_backend_cooldown(
+        self,
+        *,
+        worker_backend: str,
+        model: str | None,
+        now: datetime,
+        include_account_wide: bool = True,
+        reason: str = "probe",
+    ) -> int:
+        """Retract active worker-backend cooldowns proven stale (e.g. by a probe).
+
+        A recorded cooldown carries an *estimated* ``reset_at`` and is otherwise
+        never retracted, so a model that recovers before its estimate keeps
+        reading as cooling — misleading the status surfaces and, when every model
+        looks cooling, falsely deferring dispatch. When a live probe confirms
+        ``model`` is runnable again, drop its active (future) cooldown events:
+
+          * the ``model_weekly`` cooldown for ``model`` (if any); and
+          * when ``include_account_wide`` — every account-wide cooldown for the
+            backend (``session_5h`` / ``global_weekly`` / unattributed), since a
+            single model running disproves a block that was meant to stop all.
+
+        Other models' ``model_weekly`` cooldowns are preserved. Returns the count
+        of removed events and appends a ``worker_backend_cooldown_cleared`` audit
+        event recording what was retracted and why.
+        """
+        with self._exclusive():
+            data = self.load()
+            events = list(data.get("events", []))
+            removed = 0
+            kept: list[dict[str, Any]] = []
+            for event in events:
+                if not self._is_active_cooldown_for(event, worker_backend, now=now):
+                    kept.append(event)
+                    continue
+                is_model_weekly = (
+                    event.get("limit_kind") == MODEL_WEEKLY and event.get("model") is not None
+                )
+                if is_model_weekly:
+                    drop = event.get("model") == model
+                else:
+                    # Account-wide / unattributed cooldown.
+                    drop = include_account_wide
+                if drop:
+                    removed += 1
+                else:
+                    kept.append(event)
+            data["events"] = kept
+            if removed:
+                self._append_event(
+                    data,
+                    {
+                        "kind": "worker_backend_cooldown_cleared",
+                        "worker_backend": worker_backend,
+                        "model": model,
+                        "include_account_wide": include_account_wide,
+                        "reason": reason,
+                        "removed": removed,
+                        "timestamp": now.isoformat(),
+                    },
+                    now=now,
+                )
+            else:
+                # Nothing to retract — still persist the pruned list so a no-op
+                # clear can't leave duplicate stale events behind.
+                self.save(data, now=now)
+            return removed
+
+    @staticmethod
+    def _is_active_cooldown_for(
+        event: dict[str, Any], worker_backend: str, *, now: datetime
+    ) -> bool:
+        """True if ``event`` is a future (still-active) cooldown for the backend."""
+        if event.get("kind") != "worker_backend_cooldown":
+            return False
+        if event.get("worker_backend") != worker_backend:
+            return False
+        reset_raw = event.get("reset_at")
+        if not isinstance(reset_raw, str):
+            return False
+        try:
+            return datetime.fromisoformat(reset_raw) > now
+        except ValueError:
+            return False
 
     # ---------------------------------------------------------------------------
     # S6-2: Per-repo execution budget

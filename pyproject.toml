@@ -76,6 +76,7 @@ operations-center-run-memory        = "operations_center.run_memory.cli:app"
 # from execution_trace.json alone. Hardening arc item 3.
 operations-center-run-show          = "operations_center.entrypoints.run_show.main:main"
 operations-center-worker-backend-status = "operations_center.entrypoints.worker_backend_status.main:main"
+operations-center-worker-backend-probe = "operations_center.entrypoints.worker_backend_probe.main:main"
 # ADR 0007 Phase A — spec_hygiene watcher. Non-LLM hygiene + active.json
 # projection rebuild extracted from spec_director. Single writer of
 # state/campaigns/active.json.

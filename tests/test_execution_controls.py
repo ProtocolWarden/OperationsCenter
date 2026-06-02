@@ -529,6 +529,98 @@ def test_account_wide_limit_blocks_backend(monkeypatch, tmp_path: Path) -> None:
     assert store.current_worker_backend_cooldowns(now=now)["claude_code"]["cooling_down"] is True
 
 
+def test_clear_worker_backend_cooldown_retracts_one_model(monkeypatch, tmp_path: Path) -> None:
+    # A probe proves sonnet is runnable again before its estimated reset; clearing
+    # it must drop sonnet's cooldown while leaving opus's untouched.
+    monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
+    store = UsageStore()
+    now = datetime(2026, 5, 31, 8, tzinfo=UTC)
+    for model in ("sonnet", "opus"):
+        store.record_worker_backend_cooldown(
+            worker_backend="claude_code",
+            reset_at=now + timedelta(days=3),
+            now=now,
+            limit_kind="model_weekly",
+            model=model,
+        )
+
+    removed = store.clear_worker_backend_cooldown(
+        worker_backend="claude_code", model="sonnet", now=now
+    )
+
+    assert removed == 1
+    models = {c["model"] for c in store.worker_backend_cooldown_details("claude_code", now=now)}
+    assert models == {"opus"}
+
+
+def test_clear_worker_backend_cooldown_drops_account_wide(monkeypatch, tmp_path: Path) -> None:
+    # One model running disproves an account-wide block → clearing any model also
+    # retracts the session/account-wide cooldown so the backend frees up.
+    monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
+    store = UsageStore()
+    now = datetime(2026, 5, 31, 8, tzinfo=UTC)
+    store.record_worker_backend_cooldown(
+        worker_backend="claude_code",
+        reset_at=now + timedelta(hours=5),
+        now=now,
+        limit_kind="session_5h",
+        model=None,
+    )
+
+    removed = store.clear_worker_backend_cooldown(
+        worker_backend="claude_code", model="sonnet", now=now, include_account_wide=True
+    )
+
+    assert removed == 1
+    assert store.worker_backend_blocked_until("claude_code", now=now) is None
+
+
+def test_clear_worker_backend_cooldown_noop_when_nothing_active(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
+    store = UsageStore()
+    now = datetime(2026, 5, 31, 8, tzinfo=UTC)
+    assert (
+        store.clear_worker_backend_cooldown(worker_backend="claude_code", model="sonnet", now=now)
+        == 0
+    )
+
+
+def test_record_worker_backend_cooldown_coalesces_duplicates(monkeypatch, tmp_path: Path) -> None:
+    # Re-recording the same (backend, kind, model) limit each cycle must not pile
+    # up duplicate active events — the newest record supersedes.
+    monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
+    store = UsageStore()
+    now = datetime(2026, 5, 31, 8, tzinfo=UTC)
+    for i in range(5):
+        store.record_worker_backend_cooldown(
+            worker_backend="claude_code",
+            reset_at=now + timedelta(days=3),
+            now=now + timedelta(minutes=i),
+            limit_kind="model_weekly",
+            model="sonnet",
+        )
+
+    data = store.load()
+    active = [
+        e
+        for e in data["events"]
+        if e.get("kind") == "worker_backend_cooldown" and e.get("model") == "sonnet"
+    ]
+    assert len(active) == 1
+    # A different model still records its own distinct event.
+    store.record_worker_backend_cooldown(
+        worker_backend="claude_code",
+        reset_at=now + timedelta(days=1),
+        now=now,
+        limit_kind="model_weekly",
+        model="opus",
+    )
+    details = {c["model"] for c in store.worker_backend_cooldown_details("claude_code", now=now)}
+    assert details == {"sonnet", "opus"}
+
+
 def test_circuit_breaker_uses_backend_version_only(monkeypatch, tmp_path: Path) -> None:
     """Mixed-version window blocks the breaker; single-version triggers it.
 

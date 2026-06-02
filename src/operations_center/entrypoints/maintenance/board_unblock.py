@@ -105,7 +105,7 @@ import json
 import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from operations_center.adapters.plane import PlaneClient
 from operations_center.config import load_settings
@@ -155,7 +155,16 @@ def _allowed_worker_backends() -> set[str]:
     return backends or {"claude_code"}
 
 
-def _dispatch_cooldown_reason(usage_store: UsageStore, *, now: datetime) -> str | None:
+# Gate-path probe timeout: bounded so a hung probe can't stall a board cycle.
+_GATE_PROBE_TIMEOUT_SECONDS = 20
+
+
+def _dispatch_cooldown_reason(
+    usage_store: UsageStore,
+    *,
+    now: datetime,
+    refresh: Callable[..., object] | None = None,
+) -> str | None:
     """Return a skip reason when every *allowed* worker backend is cooling down.
 
     When the only worker backend(s) the executor may use are all in a known
@@ -166,6 +175,13 @@ def _dispatch_cooldown_reason(usage_store: UsageStore, *, now: datetime) -> str 
     churns the board across cycles.  Returning a reason here lets the promotion
     rules defer until the cooldown resets, at which point the board self-heals.
 
+    Cooldowns carry an *estimated* reset that is never retracted on its own, so a
+    backend can read as cooling long after its limit actually lifted.  Before
+    deferring, if every allowed backend looks cooling, ``refresh`` (when supplied)
+    probes the live backends and clears any cooldown a probe proves stale — turning
+    a would-be deadlock into a self-heal.  ``refresh`` is injected so tests stay
+    offline; ``main`` wires the real probe.
+
     Returns ``None`` (no gating) when at least one allowed backend is free, or on
     any error reading cooldown state — board-unblock must never harden into a
     deadlock because the usage store was momentarily unreadable.
@@ -175,6 +191,16 @@ def _dispatch_cooldown_reason(usage_store: UsageStore, *, now: datetime) -> str 
         snapshot = usage_store.current_worker_backend_cooldowns(now=now)
     except Exception:
         return None
+    if (
+        refresh is not None
+        and allowed
+        and all(snapshot.get(b, {}).get("cooling_down") for b in allowed)
+    ):
+        try:
+            refresh(usage_store, now=now)
+            snapshot = usage_store.current_worker_backend_cooldowns(now=now)
+        except Exception:
+            pass
     cooling: list[str] = []
     for backend in sorted(allowed):
         status = snapshot.get(backend, {})
@@ -672,7 +698,18 @@ def main() -> int:
 
     now = datetime.now(UTC)
     try:
-        cooldown_skip_reason = _dispatch_cooldown_reason(UsageStore(), now=now)
+        from operations_center.backends.worker_backend_probe import refresh_cooldowns
+
+        # Bound the gate-path probe: a successful probe returns in seconds, but a
+        # hung one must not stall the board cycle. Tighter than the standalone
+        # CLI/cron default.
+        cooldown_skip_reason = _dispatch_cooldown_reason(
+            UsageStore(),
+            now=now,
+            refresh=lambda store, *, now: refresh_cooldowns(
+                store, now=now, timeout=_GATE_PROBE_TIMEOUT_SECONDS
+            ),
+        )
     except Exception:
         cooldown_skip_reason = None
     actions = _apply_rules(
