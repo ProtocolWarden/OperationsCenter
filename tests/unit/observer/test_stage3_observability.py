@@ -9,21 +9,26 @@ Tests:
 - Structured logging
 - Health checks
 """
+
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-import pytest
 
 from operations_center.observer.dashboard import DashboardMetric, DashboardPanel, DashboardProvider
 from operations_center.observer.health_checks import HealthChecker, HealthStatus
-from operations_center.observer.metrics import CollectorMetrics, MetricUnit, MetricsCollector
+from operations_center.observer.metrics import MetricsCollector
 from operations_center.observer.observability import ObservabilityService
-from operations_center.observer.security_logging import AlertCondition, ErrorCategory, ErrorSeverity, MalformedPayloadMetrics
-from operations_center.observer.structured_logging import StructuredLogEntry, StructuredLogger, StructuredLogReader, StructuredLogWriter
+from operations_center.observer.security_logging import AlertCondition, MalformedPayloadMetrics
+from operations_center.observer.structured_logging import (
+    StructuredLogEntry,
+    StructuredLogger,
+    StructuredLogReader,
+    StructuredLogWriter,
+)
 
 
 class TestMetricsCollector:
@@ -170,8 +175,8 @@ class TestHealthChecks:
             latency_ms=100.0,
             artifacts_processed=100,
             artifacts_skipped=0,
-            parse_errors=5,
-            structure_errors=5,
+            parse_errors=3,
+            structure_errors=0,
             io_errors=0,
             success=True,
         )

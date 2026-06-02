@@ -7,14 +7,15 @@ Defines:
 - AlertValidator — validates alert configuration
 - evaluate_alerts_dry_run() — test all alerts without notification
 """
+
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from operations_center.observer.alert_config import (
     ALERT_ROUTES,
@@ -26,7 +27,6 @@ from operations_center.observer.security_logging import (
     ALERT_CONDITIONS,
     AlertCondition,
     MalformedPayloadMetrics,
-    SecurityLogEntry,
     should_trigger_alert,
 )
 
@@ -110,16 +110,13 @@ class AlertValidator:
         for route_name, route in self.alert_routes.items():
             if route.condition_name not in self.alert_conditions:
                 issues.append(
-                    f"Route '{route_name}' references unknown condition "
-                    f"'{route.condition_name}'"
+                    f"Route '{route_name}' references unknown condition '{route.condition_name}'"
                 )
 
         # Check that all conditions have routes
         for condition_name in self.alert_conditions:
             if condition_name not in self.alert_routes:
-                logger.warning(
-                    f"Alert condition '{condition_name}' has no route configured"
-                )
+                logger.warning("Alert condition '%s' has no route configured", condition_name)
 
         # Validate per-collector thresholds
         for collector_name, thresholds in COLLECTOR_THRESHOLDS.items():
@@ -150,7 +147,7 @@ class AlertValidator:
         """
         condition = self.alert_conditions.get(condition_name)
         if not condition:
-            logger.warning(f"Unknown alert condition: {condition_name}")
+            logger.warning("Unknown alert condition: %s", condition_name)
             return None
 
         # Check if alert would trigger
@@ -161,8 +158,7 @@ class AlertValidator:
         matching_errors = [
             e.to_dict()
             for e in metrics.recent_errors
-            if e.normalized_timestamp() >= cutoff_time
-            and e.error_type == condition.category.value
+            if e.normalized_timestamp() >= cutoff_time and e.error_type == condition.category.value
         ]
 
         # Get routes for this condition
@@ -296,9 +292,7 @@ class AlertValidator:
             if result.channels:
                 lines.append(f"       Channels: {', '.join(result.channels)}")
             if result.matching_errors and result.would_trigger:
-                lines.append(
-                    f"       Sample errors ({len(result.matching_errors)} total):"
-                )
+                lines.append(f"       Sample errors ({len(result.matching_errors)} total):")
                 for error in result.matching_errors[:2]:
                     msg = error.get("error_msg", "N/A")
                     lines.append(f"         - {msg[:60]}")
@@ -332,9 +326,9 @@ class AlertValidator:
             output_path: Path to write JSON file
         """
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_path, "w") as f:
-            json.dump(report.to_dict(), f, indent=2)
-        logger.info(f"Saved validation report to {output_path}")
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(report.to_dict(), f, indent=2, ensure_ascii=False)
+        logger.info("Saved validation report to %s", output_path)
 
 
 def evaluate_alerts_dry_run(

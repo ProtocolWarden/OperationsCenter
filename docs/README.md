@@ -13,6 +13,8 @@ This directory holds OC-specific material.
 - [TESTING.md](TESTING.md) — Parallel test execution with pytest-xdist: setup, usage, configuration, and performance.
 - [TESTING_DEVELOPER_GUIDE.md](TESTING_DEVELOPER_GUIDE.md) — Writing parallel-safe tests: fixture patterns, common pitfalls, and best practices.
 - [TESTING_TROUBLESHOOTING.md](TESTING_TROUBLESHOOTING.md) — Diagnosing and fixing parallel test issues: shared state, race conditions, worker crashes.
+- [coverage-threshold-configuration.md](coverage-threshold-configuration.md) — Configuring and operating the pytest-cov coverage threshold gate.
+- [architecture/ci/coverage-gating.md](architecture/ci/coverage-gating.md) — CI coverage gating architecture: how the 85% threshold is enforced in GitHub Actions.
 
 ## Operator
 

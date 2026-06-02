@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Tests for alert notification channels."""
+
 import pytest
 import logging
 
 from operations_center.observer.alert_channels import (
-    AlertChannel,
     AlertChannelFactory,
     AlertChannelResult,
     OperatorLogChannel,
@@ -42,8 +42,7 @@ class TestAlertChannelResult:
 class TestOperatorLogChannel:
     """Test OperatorLogChannel."""
 
-    @pytest.mark.asyncio
-    async def test_notify_success(self, caplog: pytest.LogCaptureFixture) -> None:
+    def test_notify_success(self, caplog: pytest.LogCaptureFixture) -> None:
         channel = OperatorLogChannel()
         context = {
             "condition_name": "test_alert",
@@ -55,14 +54,13 @@ class TestOperatorLogChannel:
         }
 
         with caplog.at_level(logging.CRITICAL):
-            result = await channel.notify(context)
+            result = channel.notify(context)
 
         assert result.success is True
         assert result.channel == "operator_log"
         assert "test_alert" in result.message
 
-    @pytest.mark.asyncio
-    async def test_notify_medium_severity(self, caplog: pytest.LogCaptureFixture) -> None:
+    def test_notify_medium_severity(self, caplog: pytest.LogCaptureFixture) -> None:
         channel = OperatorLogChannel()
         context = {
             "condition_name": "test",
@@ -72,12 +70,11 @@ class TestOperatorLogChannel:
         }
 
         with caplog.at_level(logging.WARNING):
-            result = await channel.notify(context)
+            result = channel.notify(context)
 
         assert result.success is True
 
-    @pytest.mark.asyncio
-    async def test_notify_info_severity(self, caplog: pytest.LogCaptureFixture) -> None:
+    def test_notify_info_severity(self, caplog: pytest.LogCaptureFixture) -> None:
         channel = OperatorLogChannel()
         context = {
             "condition_name": "test",
@@ -85,7 +82,7 @@ class TestOperatorLogChannel:
         }
 
         with caplog.at_level(logging.INFO):
-            result = await channel.notify(context)
+            result = channel.notify(context)
 
         assert result.success is True
 
@@ -97,18 +94,16 @@ class TestOperatorLogChannel:
 class TestPlaneTaskChannel:
     """Test PlaneTaskChannel."""
 
-    @pytest.mark.asyncio
-    async def test_notify_not_configured(self) -> None:
+    def test_notify_not_configured(self) -> None:
         channel = PlaneTaskChannel()
         context = {"condition_name": "test"}
 
-        result = await channel.notify(context)
+        result = channel.notify(context)
 
         assert result.success is False
         assert "not configured" in result.error
 
-    @pytest.mark.asyncio
-    async def test_notify_with_client(self) -> None:
+    def test_notify_with_client(self) -> None:
         mock_client = object()  # Mock plane client
         channel = PlaneTaskChannel(plane_client=mock_client)
         context = {
@@ -119,7 +114,7 @@ class TestPlaneTaskChannel:
             "severity": "HIGH",
         }
 
-        result = await channel.notify(context)
+        result = channel.notify(context)
 
         assert result.success is True
         assert "Would create" in result.message
@@ -175,22 +170,20 @@ class TestPlaneTaskChannel:
 class TestSlackChannel:
     """Test SlackChannel."""
 
-    @pytest.mark.asyncio
-    async def test_notify_not_configured(self) -> None:
+    def test_notify_not_configured(self) -> None:
         channel = SlackChannel()
         context = {"condition_name": "test"}
 
-        result = await channel.notify(context)
+        result = channel.notify(context)
 
         assert result.success is False
         assert "not configured" in result.error
 
-    @pytest.mark.asyncio
-    async def test_notify_with_webhook(self) -> None:
+    def test_notify_with_webhook(self) -> None:
         channel = SlackChannel(webhook_url="https://hooks.slack.com/test")
         context = {"condition_name": "test"}
 
-        result = await channel.notify(context)
+        result = channel.notify(context)
 
         assert result.success is True
         assert "would be sent" in result.message
@@ -207,22 +200,20 @@ class TestSlackChannel:
 class TestPagerDutyChannel:
     """Test PagerDutyChannel."""
 
-    @pytest.mark.asyncio
-    async def test_notify_not_configured(self) -> None:
+    def test_notify_not_configured(self) -> None:
         channel = PagerDutyChannel()
         context = {"condition_name": "test"}
 
-        result = await channel.notify(context)
+        result = channel.notify(context)
 
         assert result.success is False
         assert "not configured" in result.error
 
-    @pytest.mark.asyncio
-    async def test_notify_with_api_key(self) -> None:
+    def test_notify_with_api_key(self) -> None:
         channel = PagerDutyChannel(api_key="test_key_123")
         context = {"condition_name": "test"}
 
-        result = await channel.notify(context)
+        result = channel.notify(context)
 
         assert result.success is True
         assert "would be created" in result.message

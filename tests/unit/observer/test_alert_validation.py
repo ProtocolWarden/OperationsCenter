@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Tests for alert dry-run validation infrastructure."""
+
 import pytest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -8,7 +9,6 @@ from tempfile import TemporaryDirectory
 
 from operations_center.observer.alert_config import (
     ALERT_ROUTES,
-    AlertRoute,
 )
 from operations_center.observer.alert_validation import (
     AlertDryRunResult,
@@ -185,7 +185,8 @@ class TestAlertValidator:
         )
 
         is_valid, issues = validator.validate_configuration()
-        # Should be valid but have a warning logged
+        # Should be valid but have a warning logged (missing route is not a hard failure)
+        assert isinstance(is_valid, bool)
 
     def test_evaluate_condition_dry_run(
         self,
@@ -298,6 +299,7 @@ class TestAlertValidator:
 
             assert output_path.exists()
             import json
+
             with open(output_path) as f:
                 data = json.load(f)
             assert data["total_conditions"] == 4

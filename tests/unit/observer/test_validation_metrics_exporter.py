@@ -10,14 +10,14 @@ Tests cover:
 - Error handling for I/O failures
 - Factory method for creating metrics from errors
 """
+
 from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
 
 from operations_center.observer.exporters import (
     ValidationFailureMetric,
@@ -175,6 +175,7 @@ class TestValidationMetricsExporter:
 
         # Should not raise, should not write
         exporter.export_failure(metric)
+        assert not list(tmp_path.glob("*.jsonl")), "No metrics files should be written"
 
     def test_export_failure_handles_io_errors(self, tmp_path: Path) -> None:
         """Test that export handles I/O errors gracefully."""
@@ -193,8 +194,9 @@ class TestValidationMetricsExporter:
 
         # Mock open to raise OSError
         with patch("builtins.open", side_effect=OSError("Permission denied")):
-            # Should handle gracefully
+            # Should handle gracefully without raising
             exporter.export_failure(metric)
+        assert True  # reaching here means no exception was raised
 
     def test_get_metrics_file_path(self, tmp_path: Path) -> None:
         """Test getting metrics file path with date."""
@@ -231,9 +233,9 @@ class TestValidationMetricsExporter:
         # Create files with various dates
         dates = [
             (datetime.now(UTC) - timedelta(days=10)).strftime("%Y-%m-%d"),  # Too old
-            (datetime.now(UTC) - timedelta(days=5)).strftime("%Y-%m-%d"),   # Keep
-            (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d"),   # Keep
-            datetime.now(UTC).strftime("%Y-%m-%d"),                         # Keep
+            (datetime.now(UTC) - timedelta(days=5)).strftime("%Y-%m-%d"),  # Keep
+            (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d"),  # Keep
+            datetime.now(UTC).strftime("%Y-%m-%d"),  # Keep
         ]
 
         for date_str in dates:
@@ -469,9 +471,7 @@ class TestValidationMetricsExporter:
 
     def test_auto_rotate_configuration(self, tmp_path: Path) -> None:
         """Test auto_rotate can be disabled."""
-        exporter = ValidationMetricsExporter(
-            export_dir=tmp_path, auto_rotate=False
-        )
+        exporter = ValidationMetricsExporter(export_dir=tmp_path, auto_rotate=False)
         assert exporter.auto_rotate is False
 
         # _rotate_if_needed should be a no-op
