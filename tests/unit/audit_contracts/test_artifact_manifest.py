@@ -22,6 +22,7 @@ from operations_center.audit_contracts.vocabulary import (
     PathRole,
     ValidFor,
 )
+
 pytestmark = pytest.mark.smoke
 
 _NOW = datetime(2026, 4, 26, 15, 34, 55, tzinfo=timezone.utc)
@@ -80,7 +81,9 @@ class TestManagedArtifactManifest:
         assert not ManagedArtifactManifest.model_validate(data).is_terminal
 
     def test_empty_artifacts_allowed(self) -> None:
-        m = ManagedArtifactManifest.model_validate({**_MINIMAL_MANIFEST, "manifest_status": "initializing"})
+        m = ManagedArtifactManifest.model_validate(
+            {**_MINIMAL_MANIFEST, "manifest_status": "initializing"}
+        )
         assert m.artifacts == []
 
     def test_artifacts_added(self) -> None:
@@ -110,7 +113,9 @@ class TestManagedArtifactManifest:
     def test_artifact_by_id(self) -> None:
         data = {**_MINIMAL_MANIFEST, "artifacts": [_MINIMAL_ARTIFACT]}
         m = ManagedArtifactManifest.model_validate(data)
-        found = m.artifact_by_id("example_managed_repo:representative:TopicSelectionStage:topic_selection")
+        found = m.artifact_by_id(
+            "example_managed_repo:representative:TopicSelectionStage:topic_selection"
+        )
         assert found is not None
         assert found.location == Location.RUN_ROOT
 

@@ -1,14 +1,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Tests for operations-center-graph-doctor (R4.1)."""
+
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-
 from operations_center.entrypoints.graph_doctor.main import main
-
 
 _BASE_YAML = """\
 plane:
@@ -73,20 +72,19 @@ class TestWithProject:
     def test_project_layer_loaded(self, tmp_path: Path, capsys) -> None:
         proj = tmp_path / "project.yaml"
         proj.write_text(
-            'manifest_kind: project\n'
+            "manifest_kind: project\n"
             'manifest_version: "1.0.0"\n'
-            'repos:\n'
-            '  vfa:\n'
-            '    canonical_name: VFAApi\n'
-            '    visibility: private\n'
-            'edges:\n'
-            '  - {from: VFAApi, to: OperationsCenter, type: dispatches_to}\n',
+            "repos:\n"
+            "  vfa:\n"
+            "    canonical_name: VFAApi\n"
+            "    visibility: private\n"
+            "edges:\n"
+            "  - {from: VFAApi, to: OperationsCenter, type: dispatches_to}\n",
             encoding="utf-8",
         )
         cfg = _write_config(
             tmp_path,
-            f"\nplatform_manifest:\n"
-            f"  project_manifest_path: {proj}\n",
+            f"\nplatform_manifest:\n  project_manifest_path: {proj}\n",
         )
         rc = main(["--config", str(cfg), "--json"])
         assert rc == 0
@@ -107,8 +105,7 @@ class TestFailure:
     ) -> None:
         cfg = _write_config(
             tmp_path,
-            "\nplatform_manifest:\n"
-            "  project_manifest_path: /does/not/exist.yaml\n",
+            "\nplatform_manifest:\n  project_manifest_path: /does/not/exist.yaml\n",
         )
         rc = main(["--config", str(cfg), "--json"])
         assert rc == 1
@@ -121,16 +118,15 @@ class TestFailure:
         proj = tmp_path / "project.yaml"
         # Project manifest declares a node without canonical_name → loader error
         proj.write_text(
-            'manifest_kind: project\n'
+            "manifest_kind: project\n"
             'manifest_version: "1.0.0"\n'
-            'repos:\n'
-            '  bad: {visibility: private}\n',
+            "repos:\n"
+            "  bad: {visibility: private}\n",
             encoding="utf-8",
         )
         cfg = _write_config(
             tmp_path,
-            f"\nplatform_manifest:\n"
-            f"  project_manifest_path: {proj}\n",
+            f"\nplatform_manifest:\n  project_manifest_path: {proj}\n",
         )
         rc = main(["--config", str(cfg), "--json"])
         assert rc == 1
@@ -180,21 +176,23 @@ class TestVersionPinRegression:
     """
 
     def test_project_pin_excluding_installed_pm_is_explicit(
-        self, tmp_path: Path, capsys,
+        self,
+        tmp_path: Path,
+        capsys,
     ) -> None:
         proj = tmp_path / "project.yaml"
         # An impossible upper bound so the constraint can't be satisfied
         # by any released PlatformManifest version (current or future).
         proj.write_text(
-            'manifest_kind: project\n'
+            "manifest_kind: project\n"
             'manifest_version: "1.0.0"\n'
-            'platform_manifest:\n'
-            '  name: PlatformManifest\n'
+            "platform_manifest:\n"
+            "  name: PlatformManifest\n"
             '  version_constraint: ">=0.0.1,<0.0.2"\n'
-            'repos:\n'
-            '  example:\n'
-            '    canonical_name: Example\n'
-            '    visibility: private\n',
+            "repos:\n"
+            "  example:\n"
+            "    canonical_name: Example\n"
+            "    visibility: private\n",
             encoding="utf-8",
         )
         cfg = _write_config(
@@ -215,10 +213,7 @@ class TestVersionPinRegression:
         # find the right manifest to bump without trial and error.
         warnings = report.get("warnings") or []
         assert any(
-            "version_constraint" in w
-            or ">=0.0.1" in w
-            or "does not satisfy" in w
-            for w in warnings
+            "version_constraint" in w or ">=0.0.1" in w or "does not satisfy" in w for w in warnings
         ), f"warnings missing version-pin context: {warnings}"
 
 
@@ -235,8 +230,7 @@ class TestHumanOutput:
     def test_human_default_failure(self, tmp_path: Path, capsys) -> None:
         cfg = _write_config(
             tmp_path,
-            "\nplatform_manifest:\n"
-            "  project_manifest_path: /does/not/exist.yaml\n",
+            "\nplatform_manifest:\n  project_manifest_path: /does/not/exist.yaml\n",
         )
         rc = main(["--config", str(cfg)])
         assert rc == 1
@@ -251,13 +245,13 @@ class TestHumanOutput:
 
 
 _PROJECT_YAML = (
-    'manifest_kind: project\n'
+    "manifest_kind: project\n"
     'manifest_version: "1.0.0"\n'
-    'repos:\n'
-    '  myproj_api:\n'
-    '    canonical_name: MyProjAPI\n'
-    '    visibility: private\n'
-    '    runtime_role: project_service\n'
+    "repos:\n"
+    "  myproj_api:\n"
+    "    canonical_name: MyProjAPI\n"
+    "    visibility: private\n"
+    "    runtime_role: project_service\n"
 )
 
 
@@ -287,10 +281,10 @@ class TestMode:
         proj.write_text(_PROJECT_YAML, encoding="utf-8")
         ws = tmp_path / "work_scope.yaml"
         ws.write_text(
-            'manifest_kind: work_scope\n'
+            "manifest_kind: work_scope\n"
             'manifest_version: "1.0.0"\n'
-            'includes:\n'
-            f'  - {{name: P, project_manifest_path: {proj}}}\n',
+            "includes:\n"
+            f"  - {{name: P, project_manifest_path: {proj}}}\n",
             encoding="utf-8",
         )
         cfg = _write_config(
@@ -306,9 +300,7 @@ class TestMode:
         assert report["nodes_by_source"]["project"] >= 1
 
     def test_disabled_mode(self, tmp_path: Path, capsys) -> None:
-        cfg = _write_config(
-            tmp_path, "\nplatform_manifest:\n  enabled: false\n"
-        )
+        cfg = _write_config(tmp_path, "\nplatform_manifest:\n  enabled: false\n")
         rc = main(["--config", str(cfg), "--json"])
         assert rc == 0
         report = json.loads(capsys.readouterr().out)
@@ -321,48 +313,44 @@ class TestMode:
 
 
 _PROJECT_A_YAML = (
-    'manifest_kind: project\n'
+    "manifest_kind: project\n"
     'manifest_version: "1.0.0"\n'
-    'repos:\n'
-    '  proj_a_api:\n'
-    '    canonical_name: ProjectAAPI\n'
-    '    visibility: private\n'
-    'edges:\n'
-    '  - {from: ProjectAAPI, to: OperationsCenter, type: dispatches_to}\n'
+    "repos:\n"
+    "  proj_a_api:\n"
+    "    canonical_name: ProjectAAPI\n"
+    "    visibility: private\n"
+    "edges:\n"
+    "  - {from: ProjectAAPI, to: OperationsCenter, type: dispatches_to}\n"
 )
 _PROJECT_B_YAML = (
-    'manifest_kind: project\n'
+    "manifest_kind: project\n"
     'manifest_version: "1.0.0"\n'
-    'repos:\n'
-    '  proj_b_api:\n'
-    '    canonical_name: ProjectBAPI\n'
-    '    visibility: private\n'
-    '  proj_b_worker:\n'
-    '    canonical_name: ProjectBWorker\n'
-    '    visibility: private\n'
+    "repos:\n"
+    "  proj_b_api:\n"
+    "    canonical_name: ProjectBAPI\n"
+    "    visibility: private\n"
+    "  proj_b_worker:\n"
+    "    canonical_name: ProjectBWorker\n"
+    "    visibility: private\n"
 )
 
 
 class TestPerIncludeBreakdown:
-    def test_work_scope_mode_reports_per_include_counts(
-        self, tmp_path: Path, capsys
-    ) -> None:
+    def test_work_scope_mode_reports_per_include_counts(self, tmp_path: Path, capsys) -> None:
         a = tmp_path / "a.yaml"
         a.write_text(_PROJECT_A_YAML, encoding="utf-8")
         b = tmp_path / "b.yaml"
         b.write_text(_PROJECT_B_YAML, encoding="utf-8")
         ws = tmp_path / "work_scope.yaml"
         ws.write_text(
-            'manifest_kind: work_scope\n'
+            "manifest_kind: work_scope\n"
             'manifest_version: "1.0.0"\n'
-            'includes:\n'
-            f'  - {{name: A, project_manifest_path: {a}}}\n'
-            f'  - {{name: B, project_manifest_path: {b}}}\n',
+            "includes:\n"
+            f"  - {{name: A, project_manifest_path: {a}}}\n"
+            f"  - {{name: B, project_manifest_path: {b}}}\n",
             encoding="utf-8",
         )
-        cfg = _write_config(
-            tmp_path, f"\nplatform_manifest:\n  work_scope_manifest_path: {ws}\n"
-        )
+        cfg = _write_config(tmp_path, f"\nplatform_manifest:\n  work_scope_manifest_path: {ws}\n")
         rc = main(["--config", str(cfg), "--json"])
         assert rc == 0
         report = json.loads(capsys.readouterr().out)
@@ -378,14 +366,10 @@ class TestPerIncludeBreakdown:
         assert b_entry["nodes_contributed"] == 2
         assert b_entry["edges_contributed"] == 0
 
-    def test_project_mode_has_no_includes_field(
-        self, tmp_path: Path, capsys
-    ) -> None:
+    def test_project_mode_has_no_includes_field(self, tmp_path: Path, capsys) -> None:
         proj = tmp_path / "p.yaml"
         proj.write_text(_PROJECT_A_YAML, encoding="utf-8")
-        cfg = _write_config(
-            tmp_path, f"\nplatform_manifest:\n  project_manifest_path: {proj}\n"
-        )
+        cfg = _write_config(tmp_path, f"\nplatform_manifest:\n  project_manifest_path: {proj}\n")
         rc = main(["--config", str(cfg), "--json"])
         assert rc == 0
         report = json.loads(capsys.readouterr().out)
@@ -396,15 +380,13 @@ class TestPerIncludeBreakdown:
         a.write_text(_PROJECT_A_YAML, encoding="utf-8")
         ws = tmp_path / "work_scope.yaml"
         ws.write_text(
-            'manifest_kind: work_scope\n'
+            "manifest_kind: work_scope\n"
             'manifest_version: "1.0.0"\n'
-            'includes:\n'
-            f'  - {{name: ProjectA, project_manifest_path: {a}}}\n',
+            "includes:\n"
+            f"  - {{name: ProjectA, project_manifest_path: {a}}}\n",
             encoding="utf-8",
         )
-        cfg = _write_config(
-            tmp_path, f"\nplatform_manifest:\n  work_scope_manifest_path: {ws}\n"
-        )
+        cfg = _write_config(tmp_path, f"\nplatform_manifest:\n  work_scope_manifest_path: {ws}\n")
         rc = main(["--config", str(cfg)])
         assert rc == 0
         out = capsys.readouterr().out
@@ -450,14 +432,10 @@ class TestNodesByVisibility:
         assert nbv["public"] == report["nodes_total"]
         assert nbv.get("private", 0) == 0
 
-    def test_project_with_private_node_reports_private_count(
-        self, tmp_path: Path, capsys
-    ) -> None:
+    def test_project_with_private_node_reports_private_count(self, tmp_path: Path, capsys) -> None:
         proj = tmp_path / "p.yaml"
         proj.write_text(_PROJECT_YAML, encoding="utf-8")
-        cfg = _write_config(
-            tmp_path, f"\nplatform_manifest:\n  project_manifest_path: {proj}\n"
-        )
+        cfg = _write_config(tmp_path, f"\nplatform_manifest:\n  project_manifest_path: {proj}\n")
         rc = main(["--config", str(cfg), "--json"])
         assert rc == 0
         report = json.loads(capsys.readouterr().out)
@@ -466,9 +444,7 @@ class TestNodesByVisibility:
         assert nbv["private"] == 1
         assert nbv["public"] == report["nodes_total"] - 1
 
-    def test_human_output_includes_visibility_breakdown(
-        self, tmp_path: Path, capsys
-    ) -> None:
+    def test_human_output_includes_visibility_breakdown(self, tmp_path: Path, capsys) -> None:
         cfg = _write_config(tmp_path)
         rc = main(["--config", str(cfg)])
         assert rc == 0

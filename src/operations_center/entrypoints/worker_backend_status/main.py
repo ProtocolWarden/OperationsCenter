@@ -4,8 +4,8 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import typer
@@ -52,34 +52,44 @@ def _command(
     _console.print(f"  usage_path : {payload['usage_path']}")
     table = Table(show_header=True, header_style="bold")
     table.add_column("worker_backend")
+    table.add_column("scope")
     table.add_column("limit_kind")
     table.add_column("model")
-    table.add_column("cooling_down")
+    table.add_column("dispatch / cooling")
     table.add_column("reset_at")
     table.add_column("seconds_remaining")
     for worker_backend, details in snapshot.items():
-        cooldowns = details.get("cooldowns") or []
-        if not cooldowns:
-            # No per-kind detail (e.g. legacy events) — one summary row.
+        # Backend-scope row first: this is the dispatch verdict. It is the only
+        # row that governs whether the executor may select this backend.
+        blocked = bool(details["cooling_down"])
+        verdict = "[red]BLOCKED[/red]" if blocked else "[green]runnable[/green]"
+        table.add_row(
+            worker_backend,
+            "backend",
+            "—",
+            "—",
+            verdict,
+            str(details["reset_at"] or "—"),
+            str(details["seconds_remaining"] or "—"),
+        )
+        # Per-model rows are informational: a model_weekly cooldown on one model
+        # does not block dispatch unless every model for the backend is cooling.
+        for cd in details.get("cooldowns") or []:  # ty: ignore[not-iterable]
             table.add_row(
-                worker_backend,
-                "—",
-                "—",
-                "yes" if details["cooling_down"] else "no",
-                str(details["reset_at"] or "—"),
-                str(details["seconds_remaining"] or "—"),
-            )
-            continue
-        for idx, cd in enumerate(cooldowns):
-            table.add_row(
-                worker_backend if idx == 0 else "",
+                "",
+                "model",
                 str(cd.get("limit_kind") or "—"),
                 str(cd.get("model") or "all"),
-                "yes",
+                "cooling",
                 str(cd.get("reset_at") or "—"),
                 str(cd.get("seconds_remaining") or "—"),
             )
     _console.print(table)
+    _console.print(
+        "  [dim]scope=backend is the dispatch verdict (governs selection); "
+        "scope=model rows are per-model cooldowns that do not block dispatch "
+        "unless all models are cooling.[/dim]"
+    )
 
 
 def main() -> None:

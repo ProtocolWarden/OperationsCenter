@@ -11,6 +11,7 @@ Covers:
 - TypeImprovementRule boosts confidence to 'high' when cross_signal insight is present.
 - Isolated signals (no cross_signal insight) keep their original confidence.
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -21,6 +22,7 @@ from operations_center.insights.derivers.cross_signal import CrossSignalDeriver
 from operations_center.insights.models import DerivedInsight
 from operations_center.insights.normalizer import InsightNormalizer
 from operations_center.observer.models import (
+    CheckSignal,
     DependencyDriftSignal,
     FileHotspot,
     LintSignal,
@@ -28,10 +30,9 @@ from operations_center.observer.models import (
     RepoContextSnapshot,
     RepoSignalsSnapshot,
     RepoStateSnapshot,
-    CheckSignal,
     TodoSignal,
-    TypeSignal,
     TypeError,
+    TypeSignal,
 )
 
 _NOW = datetime(2026, 4, 5, 12, tzinfo=UTC)
@@ -43,8 +44,12 @@ def _snapshot(
     type_paths: list[str] | None = None,
     hotspot_paths: list[str] | None = None,
 ) -> RepoStateSnapshot:
-    violations = [LintViolation(path=p, line=1, col=1, code="E501", message="x") for p in (lint_paths or [])]
-    type_errors = [TypeError(path=p, line=1, col=1, code="attr", message="y") for p in (type_paths or [])]
+    violations = [
+        LintViolation(path=p, line=1, col=1, code="E501", message="x") for p in (lint_paths or [])
+    ]
+    type_errors = [
+        TypeError(path=p, line=1, col=1, code="attr", message="y") for p in (type_paths or [])
+    ]
     hotspots = [FileHotspot(path=p, touch_count=5) for p in (hotspot_paths or [])]
     signals = RepoSignalsSnapshot(
         test_signal=CheckSignal(status="unknown"),

@@ -5,6 +5,7 @@
 Covers the pure logic — _delta, _render_body, _find_open_sweep_task,
 _discover_targets — without invoking custodian-audit or hitting Plane.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -12,12 +13,12 @@ from types import SimpleNamespace
 
 from operations_center.entrypoints.custodian_sweep.main import (
     _DEDUP_LABEL_PREFIX,
-    _RepoSweep,
-    _RepoTarget,
     _delta,
     _discover_targets,
     _find_open_sweep_task,
     _render_body,
+    _RepoSweep,
+    _RepoTarget,
 )
 
 
@@ -62,14 +63,25 @@ def test_render_body_for_error_sweep() -> None:
 
 
 def test_find_open_sweep_task_matches_dedup_label() -> None:
-    plane = SimpleNamespace(list_issues=lambda: [
-        {"id": "1", "state": {"name": "Done"},
-         "labels": [{"name": f"{_DEDUP_LABEL_PREFIX}Demo"}]},      # closed → skip
-        {"id": "2", "state": {"name": "Backlog"},
-         "labels": [{"name": "unrelated"}]},                        # wrong label
-        {"id": "3", "state": {"name": "Backlog"},
-         "labels": [{"name": f"{_DEDUP_LABEL_PREFIX}Demo"}]},      # match
-    ])
+    plane = SimpleNamespace(
+        list_issues=lambda: [
+            {
+                "id": "1",
+                "state": {"name": "Done"},
+                "labels": [{"name": f"{_DEDUP_LABEL_PREFIX}Demo"}],
+            },  # closed → skip
+            {
+                "id": "2",
+                "state": {"name": "Backlog"},
+                "labels": [{"name": "unrelated"}],
+            },  # wrong label
+            {
+                "id": "3",
+                "state": {"name": "Backlog"},
+                "labels": [{"name": f"{_DEDUP_LABEL_PREFIX}Demo"}],
+            },  # match
+        ]
+    )
     found = _find_open_sweep_task(plane, "Demo")
     assert found is not None and found["id"] == "3"
 
@@ -85,11 +97,13 @@ def test_discover_targets_filters_to_repos_with_custodian_yaml(tmp_path: Path) -
     (has_yaml / ".custodian.yaml").write_text("repo_key: WithYaml\n")
     no_yaml = tmp_path / "NoYaml"
     no_yaml.mkdir()
-    settings = SimpleNamespace(repos={
-        "WithYaml":  SimpleNamespace(local_path=str(has_yaml)),
-        "NoYaml":    SimpleNamespace(local_path=str(no_yaml)),
-        "NoCheckout": SimpleNamespace(local_path=None),
-    })
+    settings = SimpleNamespace(
+        repos={
+            "WithYaml": SimpleNamespace(local_path=str(has_yaml)),
+            "NoYaml": SimpleNamespace(local_path=str(no_yaml)),
+            "NoCheckout": SimpleNamespace(local_path=None),
+        }
+    )
     targets = _discover_targets(settings)
     assert [t.repo_key for t in targets] == ["WithYaml"]
     assert isinstance(targets[0], _RepoTarget)

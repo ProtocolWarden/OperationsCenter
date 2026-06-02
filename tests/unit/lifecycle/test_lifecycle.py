@@ -12,8 +12,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from operations_center.contracts.execution import ExecutionRequest, ExecutionResult
 from operations_center.contracts.enums import ExecutionStatus
+from operations_center.contracts.execution import ExecutionRequest, ExecutionResult
 from operations_center.lifecycle import (
     Check,
     CheckResult,
@@ -27,7 +27,6 @@ from operations_center.lifecycle import (
     StageStatus,
     TaskLifecycleStage,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -195,9 +194,7 @@ class TestRunnerFailures:
         runner = LifecycleRunner(
             StageHandlers(plan=_ok_plan, execute=_exec_raises, verify=_all_pass_verify)
         )
-        meta = LifecycleMetadata(
-            stage_policy=LifecycleStagePolicy.RUN_ALL_BEST_EFFORT
-        )
+        meta = LifecycleMetadata(stage_policy=LifecycleStagePolicy.RUN_ALL_BEST_EFFORT)
         req = _make_request(meta)
         result = runner.run(request=req, metadata=meta)
         assert TaskLifecycleStage.EXECUTE in result.outcome.failed_stages

@@ -16,9 +16,8 @@ top of every cycle so OperatorConsole reads a Plane-derived view.
 Phase advance detection only; LLM rewrite still happens via phase_orchestrator
 until ADR 0007 Phase D.
 """
-from __future__ import annotations
 
-from typing import Any
+from __future__ import annotations
 
 import argparse
 import json
@@ -27,6 +26,7 @@ import time
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from operations_center.adapters.plane import PlaneClient
 from operations_center.config import load_settings
@@ -92,7 +92,7 @@ def _slug_of(issue: dict) -> str:
     """Best-effort slug extraction from a [Campaign] parent issue name."""
     name = str(issue.get("name", "")).strip()
     if name.startswith("[Campaign]"):
-        return name[len("[Campaign]"):].strip()
+        return name[len("[Campaign]") :].strip()
     return ""
 
 
@@ -171,10 +171,15 @@ def _rebuild_active_projection(
         )
 
     state_mgr.save(ActiveCampaigns(campaigns=rebuilt))
-    logger.info(json.dumps({
-        "event": "spec_active_projection_rebuilt",
-        "campaign_count": len(rebuilt),
-    }, ensure_ascii=False))
+    logger.info(
+        json.dumps(
+            {
+                "event": "spec_active_projection_rebuilt",
+                "campaign_count": len(rebuilt),
+            },
+            ensure_ascii=False,
+        )
+    )
 
 
 def _bootstrap_orphan_campaigns(
@@ -207,26 +212,44 @@ def _bootstrap_orphan_campaigns(
             continue
         spec_path = _SPECS_DIR / f"{campaign.slug}.md"
         if not spec_path.exists():
-            logger.warning(json.dumps({
-                "event": "orphan_campaign_no_spec", "slug": campaign.slug,
-            }, ensure_ascii=False))
+            logger.warning(
+                json.dumps(
+                    {
+                        "event": "orphan_campaign_no_spec",
+                        "slug": campaign.slug,
+                    },
+                    ensure_ascii=False,
+                )
+            )
             continue
         try:
             spec_text = spec_path.read_text(encoding="utf-8")
             fm = SpecFrontMatter.from_spec_text(spec_text)
         except Exception as exc:
-            logger.error(json.dumps({
-                "event": "orphan_campaign_parse_failed",
-                "slug": campaign.slug, "error": str(exc),
-            }, ensure_ascii=False))
+            logger.error(
+                json.dumps(
+                    {
+                        "event": "orphan_campaign_parse_failed",
+                        "slug": campaign.slug,
+                        "error": str(exc),
+                    },
+                    ensure_ascii=False,
+                )
+            )
             continue
         repo_key = fm.repos[0] if fm.repos else ""
         repo_cfg = settings.repos.get(repo_key) if settings.repos else None
         if repo_cfg is None:
-            logger.warning(json.dumps({
-                "event": "orphan_campaign_unknown_repo",
-                "slug": campaign.slug, "repo": repo_key,
-            }, ensure_ascii=False))
+            logger.warning(
+                json.dumps(
+                    {
+                        "event": "orphan_campaign_unknown_repo",
+                        "slug": campaign.slug,
+                        "repo": repo_key,
+                    },
+                    ensure_ascii=False,
+                )
+            )
             continue
         try:
             task_ids = builder.build(
@@ -234,17 +257,28 @@ def _bootstrap_orphan_campaigns(
                 repo_key=repo_key,
                 base_branch=repo_cfg.default_branch,
             )
-            logger.info(json.dumps({
-                "event": "orphan_campaign_bootstrapped",
-                "campaign_id": campaign.campaign_id,
-                "slug": campaign.slug,
-                "tasks_created": len(task_ids),
-            }, ensure_ascii=False))
+            logger.info(
+                json.dumps(
+                    {
+                        "event": "orphan_campaign_bootstrapped",
+                        "campaign_id": campaign.campaign_id,
+                        "slug": campaign.slug,
+                        "tasks_created": len(task_ids),
+                    },
+                    ensure_ascii=False,
+                )
+            )
         except Exception as exc:
-            logger.error(json.dumps({
-                "event": "orphan_campaign_bootstrap_failed",
-                "slug": campaign.slug, "error": str(exc),
-            }, ensure_ascii=False))
+            logger.error(
+                json.dumps(
+                    {
+                        "event": "orphan_campaign_bootstrap_failed",
+                        "slug": campaign.slug,
+                        "error": str(exc),
+                    },
+                    ensure_ascii=False,
+                )
+            )
 
 
 def _auto_promote_backlog(client: PlaneClient, issues: list[dict]) -> None:
@@ -256,7 +290,8 @@ def _auto_promote_backlog(client: PlaneClient, issues: list[dict]) -> None:
       * escalated  — out of normal automated flow
     """
     from operations_center.autonomy_tiers.config import (
-        get_family_tier, load_tiers_config,
+        get_family_tier,
+        load_tiers_config,
     )
     from operations_center.proposer.backlog_promoter import BacklogPromoterService
 
@@ -278,14 +313,21 @@ def _auto_promote_backlog(client: PlaneClient, issues: list[dict]) -> None:
     try:
         result = service.promote(issues=filtered)
     except Exception as exc:
-        logger.error(json.dumps({"event": "auto_promote_failed", "error": str(exc)}, ensure_ascii=False))
+        logger.error(
+            json.dumps({"event": "auto_promote_failed", "error": str(exc)}, ensure_ascii=False)
+        )
         return
     if result.promoted:
-        logger.info(json.dumps({
-            "event": "auto_promote_backlog",
-            "count": len(result.promoted),
-            "families": sorted({t.family for t in result.promoted}),
-        }, ensure_ascii=False))
+        logger.info(
+            json.dumps(
+                {
+                    "event": "auto_promote_backlog",
+                    "count": len(result.promoted),
+                    "families": sorted({t.family for t in result.promoted}),
+                },
+                ensure_ascii=False,
+            )
+        )
 
 
 def _build_phase_advance_seed(advance: PendingPhaseAdvance) -> str:
@@ -322,15 +364,22 @@ def _emit_phase_advance_tasks(
     created = 0
     for advance in pending:
         existing = find_in_flight_phase_advance(
-            all_issues, advance.spec_slug, advance.next_phase,
+            all_issues,
+            advance.spec_slug,
+            advance.next_phase,
         )
         if existing is not None:
-            logger.info(json.dumps({
-                "event": "spec_phase_advance_skip_dedupe",
-                "spec_slug": advance.spec_slug,
-                "task_phase": advance.next_phase,
-                "existing_issue_id": existing,
-            }, ensure_ascii=False))
+            logger.info(
+                json.dumps(
+                    {
+                        "event": "spec_phase_advance_skip_dedupe",
+                        "spec_slug": advance.spec_slug,
+                        "task_phase": advance.next_phase,
+                        "existing_issue_id": existing,
+                    },
+                    ensure_ascii=False,
+                )
+            )
             continue
         payload = SpecAuthorPayload(
             spec_slug=advance.spec_slug,
@@ -342,21 +391,31 @@ def _emit_phase_advance_tasks(
         try:
             issue_id = create_spec_author_task(client, payload)
         except Exception as exc:
-            logger.error(json.dumps({
-                "event": "spec_phase_advance_create_failed",
-                "spec_slug": advance.spec_slug,
-                "task_phase": advance.next_phase,
-                "error": str(exc),
-            }, ensure_ascii=False))
+            logger.error(
+                json.dumps(
+                    {
+                        "event": "spec_phase_advance_create_failed",
+                        "spec_slug": advance.spec_slug,
+                        "task_phase": advance.next_phase,
+                        "error": str(exc),
+                    },
+                    ensure_ascii=False,
+                )
+            )
             continue
         created += 1
-        logger.info(json.dumps({
-            "event": "spec_phase_advance_task_created",
-            "issue_id": issue_id,
-            "spec_slug": advance.spec_slug,
-            "task_phase": advance.next_phase,
-            "campaign_id": advance.campaign_id,
-        }, ensure_ascii=False))
+        logger.info(
+            json.dumps(
+                {
+                    "event": "spec_phase_advance_task_created",
+                    "issue_id": issue_id,
+                    "spec_slug": advance.spec_slug,
+                    "task_phase": advance.next_phase,
+                    "campaign_id": advance.campaign_id,
+                },
+                ensure_ascii=False,
+            )
+        )
     return created
 
 
@@ -393,10 +452,12 @@ def run_once(settings: Any, client: PlaneClient) -> dict[str, Any]:
     try:
         all_issues = client.list_issues()
     except Exception as exc:
-        logger.error(json.dumps(
-            {"event": "spec_hygiene_board_fetch_failed", "error": str(exc)},
-            ensure_ascii=False,
-        ))
+        logger.error(
+            json.dumps(
+                {"event": "spec_hygiene_board_fetch_failed", "error": str(exc)},
+                ensure_ascii=False,
+            )
+        )
         summary["status_hint"] = "failed"
         summary["error"] = f"board_fetch_failed: {exc}"
         return summary
@@ -405,10 +466,11 @@ def run_once(settings: Any, client: PlaneClient) -> dict[str, Any]:
     # Single-writer invariant per ADR 0007. OperatorConsole reads this projection.
     _rebuild_active_projection(state_mgr, all_issues)
     summary["campaigns_projected"] = sum(
-        1 for i in all_issues
+        1
+        for i in all_issues
         if any(
-            (lab.get("name", "") if isinstance(lab, dict) else str(lab))
-            .lower() == "source: spec-campaign"
+            (lab.get("name", "") if isinstance(lab, dict) else str(lab)).lower()
+            == "source: spec-campaign"
             for lab in (i.get("labels") or [])
         )
     )
@@ -440,17 +502,24 @@ def run_once(settings: Any, client: PlaneClient) -> dict[str, Any]:
     summary["phases_advanced"] = int(orch_result.phases_advanced or 0)
     summary["campaigns_completed"] = int(orch_result.campaigns_completed or 0)
     summary["phase_advance_tasks_emitted"] = int(tasks_emitted)
-    if any([
-        orch_result.phases_advanced,
-        orch_result.campaigns_completed,
-        tasks_emitted,
-    ]):
-        logger.info(json.dumps({
-            "event": "spec_phase_orchestration",
-            "phases_advanced": orch_result.phases_advanced,
-            "campaigns_completed": orch_result.campaigns_completed,
-            "phase_advance_tasks_emitted": tasks_emitted,
-        }, ensure_ascii=False))
+    if any(
+        [
+            orch_result.phases_advanced,
+            orch_result.campaigns_completed,
+            tasks_emitted,
+        ]
+    ):
+        logger.info(
+            json.dumps(
+                {
+                    "event": "spec_phase_orchestration",
+                    "phases_advanced": orch_result.phases_advanced,
+                    "campaigns_completed": orch_result.campaigns_completed,
+                    "phase_advance_tasks_emitted": tasks_emitted,
+                },
+                ensure_ascii=False,
+            )
+        )
 
     # Step 5: Recovery scan — abandon stale campaigns past the threshold.
     active = state_mgr.load()
@@ -464,10 +533,12 @@ def run_once(settings: Any, client: PlaneClient) -> dict[str, Any]:
         if recovery.should_abandon(campaign):
             recovery.self_cancel(campaign, "abandon_hours_exceeded", _SPECS_DIR)
             abandoned += 1
-            logger.info(json.dumps(
-                {"event": "spec_campaign_abandoned", "campaign_id": campaign.campaign_id},
-                ensure_ascii=False,
-            ))
+            logger.info(
+                json.dumps(
+                    {"event": "spec_campaign_abandoned", "campaign_id": campaign.campaign_id},
+                    ensure_ascii=False,
+                )
+            )
     summary["campaigns_abandoned"] = abandoned
     summary["status_hint"] = "ok"
     return summary
@@ -550,14 +621,19 @@ def _write_heartbeat(status_dir: Path | None) -> None:
 
 
 def _log_maintenance_result(result: MaintenanceResult) -> None:
-    logger.info(json.dumps({
-        "event": "maintenance_task_run",
-        "name": result.name,
-        "status": result.status,
-        "duration_seconds": round(result.duration_seconds, 3),
-        "details": result.details,
-        "error": result.error,
-    }, ensure_ascii=False))
+    logger.info(
+        json.dumps(
+            {
+                "event": "maintenance_task_run",
+                "name": result.name,
+                "status": result.status,
+                "duration_seconds": round(result.duration_seconds, 3),
+                "details": result.details,
+                "error": result.error,
+            },
+            ensure_ascii=False,
+        )
+    )
 
 
 def main() -> None:
@@ -567,7 +643,9 @@ def main() -> None:
     parser.add_argument("--config", required=True)
     parser.add_argument("--once", action="store_true", help="Run one cycle and exit")
     parser.add_argument(
-        "--status-dir", type=Path, default=None,
+        "--status-dir",
+        type=Path,
+        default=None,
         help="Directory for heartbeat_spec_hygiene.json",
     )
     parser.add_argument(
@@ -575,7 +653,7 @@ def main() -> None:
         type=Path,
         default=None,
         help="Override path for the maintenance registry's last-run sidecar "
-             "(default: .console/maintenance_state.json)",
+        "(default: .console/maintenance_state.json)",
     )
     args = parser.parse_args()
 
@@ -618,10 +696,12 @@ def main() -> None:
                 for r in results:
                     _log_maintenance_result(r)
             except Exception as exc:
-                logger.error(json.dumps(
-                    {"event": "spec_hygiene_cycle_error", "cycle": cycle, "error": str(exc)},
-                    ensure_ascii=False,
-                ))
+                logger.error(
+                    json.dumps(
+                        {"event": "spec_hygiene_cycle_error", "cycle": cycle, "error": str(exc)},
+                        ensure_ascii=False,
+                    )
+                )
             cycle += 1
             time.sleep(sd.poll_interval_seconds)
     finally:

@@ -3,8 +3,8 @@
 """Verify the OC_VALIDATE_CATALOG_AT_STARTUP env var actually wires
 the catalog validator into the audit CLI's app callback.
 """
-from __future__ import annotations
 
+from __future__ import annotations
 
 import pytest
 
@@ -44,8 +44,7 @@ def test_audit_cli_fails_fast_on_corrupt_catalog(tmp_path, monkeypatch):
     backend = tmp_path / "executors" / "broken"
     backend.mkdir(parents=True)
     (backend / "capability_card.yaml").write_text(
-        "backend_id: broken\nbackend_version: u\n"
-        "advertised_capabilities: [definitely_not_real]\n"
+        "backend_id: broken\nbackend_version: u\nadvertised_capabilities: [definitely_not_real]\n"
     )
     (backend / "runtime_support.yaml").write_text(
         "backend_id: broken\nsupported_runtime_kinds: []\nsupported_selection_modes: []\n"
@@ -62,5 +61,6 @@ def test_audit_cli_fails_fast_on_corrupt_catalog(tmp_path, monkeypatch):
     # without code change, so just call initialize_catalog directly with
     # the corrupt dir.
     from operations_center.executors.startup import initialize_catalog
+
     with pytest.raises(Exception):
         initialize_catalog(tmp_path / "executors", fail_fast=True)

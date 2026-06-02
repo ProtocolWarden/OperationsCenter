@@ -40,7 +40,10 @@ class ObserverArtifactWriter:
         )
         md_lines.extend(["", "## File Hotspots"])
         md_lines.extend(
-            [f"- {hotspot.path}: {hotspot.touch_count}" for hotspot in snapshot.signals.file_hotspots]
+            [
+                f"- {hotspot.path}: {hotspot.touch_count}"
+                for hotspot in snapshot.signals.file_hotspots
+            ]
             or ["- none"]
         )
         md_lines.extend(
@@ -64,10 +67,13 @@ class ObserverArtifactWriter:
             ]
         )
         md_lines.extend(
-            [f"- {item.path}: {item.count}" for item in snapshot.signals.todo_signal.top_files] or ["- none"]
+            [f"- {item.path}: {item.count}" for item in snapshot.signals.todo_signal.top_files]
+            or ["- none"]
         )
         if snapshot.collector_errors:
             md_lines.extend(["", "## Collector Errors"])
-            md_lines.extend([f"- {name}: {error}" for name, error in snapshot.collector_errors.items()])
+            md_lines.extend(
+                [f"- {name}: {error}" for name, error in snapshot.collector_errors.items()]
+            )
         md_path.write_text("\n".join(md_lines), encoding="utf-8")
         return [str(json_path), str(md_path)]

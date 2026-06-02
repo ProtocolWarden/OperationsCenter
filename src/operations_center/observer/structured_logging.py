@@ -8,16 +8,14 @@ Provides:
 - Metrics aggregation from logs
 - Log queries and filtering
 """
+
 from __future__ import annotations
 
 import json
-import logging
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
-
-from .security_logging import ErrorCategory, ErrorSeverity, SecurityLogEntry
 
 
 @dataclass
@@ -36,7 +34,7 @@ class StructuredLogEntry:
     latency_ms: Optional[float] = None
     artifacts_processed: Optional[int] = None
     error_count: Optional[int] = None
-    context: dict = None
+    context: Optional[dict] = None
 
     def __post_init__(self) -> None:
         if self.context is None:
@@ -61,7 +59,7 @@ class StructuredLogEntry:
         }
         # Remove None values
         return json.dumps(
-            {k: v for k, v in entry_dict.items() if v is not None}
+            {k: v for k, v in entry_dict.items() if v is not None}, ensure_ascii=False
         )
 
 
@@ -85,7 +83,7 @@ class StructuredLogWriter:
         """Write a structured log entry."""
         self._rotate_if_needed()
 
-        with open(self.log_path, "a") as f:
+        with open(self.log_path, "a", encoding="utf-8") as f:
             f.write(entry.to_json() + "\n")
 
     def _rotate_if_needed(self) -> None:
@@ -140,7 +138,7 @@ class StructuredLogReader:
 
         # Read from most recent file first
         for log_file in reversed(files):
-            with open(log_file, "r") as f:
+            with open(log_file, encoding="utf-8") as f:
                 for line in f:
                     if not line.strip():
                         continue
@@ -269,7 +267,13 @@ class StructuredLogger:
         context: Optional[dict] = None,
     ) -> None:
         """Log a health status update."""
-        level = "ERROR" if status == "CRITICAL" else "WARNING" if status in ("DEGRADED", "NOMINAL") else "INFO"
+        level = (
+            "ERROR"
+            if status == "CRITICAL"
+            else "WARNING"
+            if status in ("DEGRADED", "NOMINAL")
+            else "INFO"
+        )
         entry = StructuredLogEntry(
             timestamp=datetime.now(timezone.utc),
             level=level,

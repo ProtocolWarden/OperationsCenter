@@ -29,7 +29,6 @@ from ..observability.conftest import (
     make_result,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -120,7 +119,9 @@ def test_status_from_record_summary_from_trace():
 
 
 def test_status_from_record_lane_backend():
-    record, trace = _make_record_and_trace(_success_result(), backend="team_executor", lane="claude_cli")
+    record, trace = _make_record_and_trace(
+        _success_result(), backend="team_executor", lane="claude_cli"
+    )
     summary = status_from_record(record, trace)
     assert summary.selected_lane == "claude_cli"
     assert summary.selected_backend == "team_executor"
@@ -134,10 +135,12 @@ def test_status_from_record_recorded_at_set():
 
 
 def test_status_from_record_artifact_count():
-    result = _success_result(artifacts=[
-        make_artifact(ArtifactType.DIFF, "diff", "content"),
-        make_artifact(ArtifactType.LOG_EXCERPT, "log", "log"),
-    ])
+    result = _success_result(
+        artifacts=[
+            make_artifact(ArtifactType.DIFF, "diff", "content"),
+            make_artifact(ArtifactType.LOG_EXCERPT, "log", "log"),
+        ]
+    )
     record, trace = _make_record_and_trace(result)
     summary = status_from_record(record, trace)
     assert summary.artifact_count == 2
@@ -269,11 +272,13 @@ def test_status_from_result_only_changed_files_unknown():
 
 
 def test_status_from_result_only_artifact_count():
-    result = _success_result(artifacts=[
-        make_artifact(ArtifactType.DIFF, "diff", "c"),
-        make_artifact(ArtifactType.LOG_EXCERPT, "log", "c"),
-        make_artifact(ArtifactType.VALIDATION_REPORT, "report", "c"),
-    ])
+    result = _success_result(
+        artifacts=[
+            make_artifact(ArtifactType.DIFF, "diff", "c"),
+            make_artifact(ArtifactType.LOG_EXCERPT, "log", "c"),
+            make_artifact(ArtifactType.VALIDATION_REPORT, "report", "c"),
+        ]
+    )
     summary = status_from_result_only(result)
     assert summary.artifact_count == 3
 
@@ -342,28 +347,34 @@ def test_inspection_from_record_record_id_set():
 
 
 def test_inspection_from_record_lane_backend():
-    record, trace = _make_record_and_trace(_success_result(), backend="team_executor", lane="claude_cli")
+    record, trace = _make_record_and_trace(
+        _success_result(), backend="team_executor", lane="claude_cli"
+    )
     r = inspection_from_record(record, trace)
     assert r.selected_lane == "claude_cli"
     assert r.selected_backend == "team_executor"
 
 
 def test_inspection_from_record_artifact_count():
-    result = _success_result(artifacts=[
-        make_artifact(ArtifactType.DIFF, "diff", "c"),
-        make_artifact(ArtifactType.VALIDATION_REPORT, "report", "c"),
-    ])
+    result = _success_result(
+        artifacts=[
+            make_artifact(ArtifactType.DIFF, "diff", "c"),
+            make_artifact(ArtifactType.VALIDATION_REPORT, "report", "c"),
+        ]
+    )
     record, trace = _make_record_and_trace(result)
     r = inspection_from_record(record, trace)
     assert r.artifact_count == 2
 
 
 def test_inspection_from_record_primary_artifact_count():
-    result = _success_result(artifacts=[
-        make_artifact(ArtifactType.DIFF, "diff", "c"),
-        make_artifact(ArtifactType.VALIDATION_REPORT, "report", "c"),
-        make_artifact(ArtifactType.LOG_EXCERPT, "log", "c"),
-    ])
+    result = _success_result(
+        artifacts=[
+            make_artifact(ArtifactType.DIFF, "diff", "c"),
+            make_artifact(ArtifactType.VALIDATION_REPORT, "report", "c"),
+            make_artifact(ArtifactType.LOG_EXCERPT, "log", "c"),
+        ]
+    )
     record, trace = _make_record_and_trace(result)
     r = inspection_from_record(record, trace)
     assert r.primary_artifact_count >= 0

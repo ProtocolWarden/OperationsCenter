@@ -82,10 +82,7 @@ def _compute_summary(results: list[SliceReplayCheckResult]) -> str:
     errored = sum(1 for r in results if r.status == "error")
     skipped = sum(1 for r in results if r.status == "skipped")
     total = len(results)
-    return (
-        f"{total} checks: {passed} passed, {failed} failed, "
-        f"{errored} error, {skipped} skipped"
-    )
+    return f"{total} checks: {passed} passed, {failed} failed, {errored} error, {skipped} skipped"
 
 
 def run_slice_replay(request: SliceReplayRequest) -> SliceReplayReport:
@@ -131,13 +128,15 @@ def run_slice_replay(request: SliceReplayRequest) -> SliceReplayReport:
         check_fn = CHECK_REGISTRY.get(spec.check_type)
         if check_fn is None:
             # Unknown check type — record as error and continue
-            results.append(SliceReplayCheckResult(
-                check_id=str(uuid.uuid4()),
-                status="error",
-                fixture_artifact_ids=[],
-                summary=f"Unknown check type: {spec.check_type!r}",
-                error="not in CHECK_REGISTRY",
-            ))
+            results.append(
+                SliceReplayCheckResult(
+                    check_id=str(uuid.uuid4()),
+                    status="error",
+                    fixture_artifact_ids=[],
+                    summary=f"Unknown check type: {spec.check_type!r}",
+                    error="not in CHECK_REGISTRY",
+                )
+            )
             continue
 
         artifact_filter = get_artifact_filter(spec.apply_only_when)
@@ -165,12 +164,14 @@ def run_slice_replay(request: SliceReplayRequest) -> SliceReplayReport:
                         description=f"{spec.check_type} (filtered out)",
                         required=spec.required,
                     )
-                    results.append(SliceReplayCheckResult(
-                        check_id=check.check_id,
-                        status="skipped",
-                        fixture_artifact_ids=[artifact.source_artifact_id],
-                        summary=f"Skipped: filter {spec.apply_only_when!r} not matched",
-                    ))
+                    results.append(
+                        SliceReplayCheckResult(
+                            check_id=check.check_id,
+                            status="skipped",
+                            fixture_artifact_ids=[artifact.source_artifact_id],
+                            summary=f"Skipped: filter {spec.apply_only_when!r} not matched",
+                        )
+                    )
                     continue
 
                 check = SliceReplayCheck(

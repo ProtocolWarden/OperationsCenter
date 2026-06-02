@@ -16,6 +16,7 @@ format. Two line shapes appear:
 Returns a dict with ``event`` plus any structured fields we can extract,
 or ``None`` when the line is plain text (e.g. heartbeat noise).
 """
+
 from __future__ import annotations
 
 import json
@@ -55,11 +56,11 @@ class OCLogScanner:
         m = _BOARD_WORKER_RE.match(line)
         if m:
             event = {
-                "event":   f"board_worker_{m.group('action')}",
-                "ts":      m.group("ts"),
-                "role":    m.group("role"),
-                "level":   m.group("level"),
-                "action":  m.group("action"),
+                "event": f"board_worker_{m.group('action')}",
+                "ts": m.group("ts"),
+                "role": m.group("role"),
+                "level": m.group("level"),
+                "action": m.group("action"),
             }
             if m.group("task_id"):
                 event["task_id"] = m.group("task_id")

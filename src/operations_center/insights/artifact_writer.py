@@ -28,7 +28,10 @@ class InsightArtifactWriter:
             "",
             "## Source Snapshots",
         ]
-        lines.extend([f"- {ref.run_id} @ {ref.observed_at.isoformat()}" for ref in artifact.source_snapshots] or ["- none"])
+        lines.extend(
+            [f"- {ref.run_id} @ {ref.observed_at.isoformat()}" for ref in artifact.source_snapshots]
+            or ["- none"]
+        )
         lines.extend(["", "## Insights"])
         lines.extend(
             [

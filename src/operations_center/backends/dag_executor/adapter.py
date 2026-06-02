@@ -9,10 +9,11 @@ Workflow resolution order:
   1. {workspace_path}/.dag_executor/workflow.yaml — operator-authored workflow
   2. Single-agent fallback GraphSpec built from goal_text
 """
+
 from __future__ import annotations
 
-from datetime import UTC, datetime
 import logging
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -23,7 +24,11 @@ from operations_center.backends.worker_backend_selector import (
 )
 from operations_center.config.settings import DAGExecutorSettings
 from operations_center.contracts.common import ValidationSummary
-from operations_center.contracts.enums import ExecutionStatus, FailureReasonCategory, ValidationStatus
+from operations_center.contracts.enums import (
+    ExecutionStatus,
+    FailureReasonCategory,
+    ValidationStatus,
+)
 from operations_center.contracts.execution import ExecutionRequest, ExecutionResult
 from operations_center.execution.usage_store import UsageStore
 
@@ -35,7 +40,9 @@ _WORKFLOW_FILENAME = ".dag_executor/workflow.yaml"
 class DAGExecutorBackendAdapter:
     """Canonical adapter for DAGExecutor backend execution."""
 
-    def __init__(self, settings: DAGExecutorSettings, usage_store: UsageStore | None = None) -> None:
+    def __init__(
+        self, settings: DAGExecutorSettings, usage_store: UsageStore | None = None
+    ) -> None:
         self._settings = settings
         self._usage_store = usage_store
 
@@ -47,9 +54,17 @@ class DAGExecutorBackendAdapter:
         self, request: ExecutionRequest
     ) -> tuple[ExecutionResult, object | None]:
         try:
-            from dag_executor.executor import DAGExecutorRunner  # ty: ignore[unresolved-import]  # noqa: PGH003
-            from dag_executor.models import GraphSpec, NodeSpec, NodeType  # ty: ignore[unresolved-import]  # noqa: PGH003
-            from dag_executor.loader import load_graph_file  # ty: ignore[unresolved-import]  # noqa: PGH003
+            from dag_executor.executor import (  # ty: ignore[unresolved-import]  # noqa: PGH003
+                DAGExecutorRunner,
+            )
+            from dag_executor.loader import (  # ty: ignore[unresolved-import]  # noqa: PGH003
+                load_graph_file,
+            )
+            from dag_executor.models import (  # ty: ignore[unresolved-import]  # noqa: PGH003
+                GraphSpec,
+                NodeSpec,
+                NodeType,
+            )
         except ImportError as exc:
             return _error_result(request, f"dag_executor not installed: {exc}"), None
 
@@ -80,7 +95,7 @@ class DAGExecutorBackendAdapter:
                 artifacts_dir=artifacts_dir,
                 working_directory=str(workspace),
                 timeout_seconds=self._settings.timeout_seconds or None,
-                worker_backend=worker_backend,  # ty: ignore[invalid-argument-type]  # noqa: PGH003
+                worker_backend=worker_backend,  # ty: ignore[invalid-argument-type]
             )
             if workflow_path.exists():
                 spec = load_graph_file(str(workflow_path), goal_text=request.goal_text)
@@ -101,9 +116,7 @@ class DAGExecutorBackendAdapter:
                 execute_once=_run_once,
                 failed=lambda payload: payload.get("status") != "succeeded",
                 failure_text=lambda payload: payload.get("error_summary"),
-                logger=lambda msg: logger.info(
-                    "DAGExecutorAdapter[%s]: %s", request.run_id, msg
-                ),
+                logger=lambda msg: logger.info("DAGExecutorAdapter[%s]: %s", request.run_id, msg),
             )
         except Exception as exc:
             logger.error("DAGExecutorAdapter: run=%s raised %s", request.run_id, exc)
@@ -156,7 +169,9 @@ def _dict_to_result(request: ExecutionRequest, result_dict: dict) -> ExecutionRe
         branch_pushed=False,
         branch_name=request.task_branch,
         failure_category=None if success else FailureReasonCategory.BACKEND_ERROR,
-        failure_reason=None if success else (result_dict.get("error_summary") or "dag_executor run failed"),
+        failure_reason=None
+        if success
+        else (result_dict.get("error_summary") or "dag_executor run failed"),
     )
 
 

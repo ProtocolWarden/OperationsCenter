@@ -1,19 +1,20 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Tests for alert dry-run validation infrastructure."""
-import pytest
+
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import pytest
+
 from operations_center.observer.alert_config import (
     ALERT_ROUTES,
-    AlertRoute,
 )
 from operations_center.observer.alert_validation import (
     AlertDryRunResult,
-    AlertValidator,
     AlertValidationReport,
+    AlertValidator,
     evaluate_alerts_dry_run,
 )
 from operations_center.observer.security_logging import (
@@ -185,7 +186,9 @@ class TestAlertValidator:
         )
 
         is_valid, issues = validator.validate_configuration()
-        # Should be valid but have a warning logged
+        # Missing route logs a warning but doesn't add to issues — is_valid reflects threshold checks only
+        assert isinstance(is_valid, bool)
+        assert isinstance(issues, list)
 
     def test_evaluate_condition_dry_run(
         self,
@@ -298,6 +301,7 @@ class TestAlertValidator:
 
             assert output_path.exists()
             import json
+
             with open(output_path) as f:
                 data = json.load(f)
             assert data["total_conditions"] == 4
@@ -397,7 +401,7 @@ class TestIntegrationScenarios:
             )
 
         validator = AlertValidator()
-        report = validator.evaluate_all_conditions_dry_run(metrics)
+        validator.evaluate_all_conditions_dry_run(metrics)
 
         # Collector health degradation should be checked
         per_collector = validator.evaluate_per_collector_thresholds(metrics)

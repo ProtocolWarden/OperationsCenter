@@ -30,7 +30,9 @@ def query_cmd(
     status: str | None = typer.Option(None, "--status"),
     contract_kind: str | None = typer.Option(None, "--contract-kind"),
     tag: str | None = typer.Option(None, "--tag"),
-    text: str | None = typer.Option(None, "--text", help="Substring across summary/tags/artifacts/repo/run"),
+    text: str | None = typer.Option(
+        None, "--text", help="Substring across summary/tags/artifacts/repo/run"
+    ),
     json_out: bool = typer.Option(False, "--json", help="Emit JSON array instead of a table"),
 ) -> None:
     """Substring + exact-match search over indexed run memory."""
@@ -46,7 +48,11 @@ def query_cmd(
     )
     records = svc.query(q)
     if json_out:
-        typer.echo(json.dumps([r.to_jsonl() for r in records], sort_keys=True, indent=2, ensure_ascii=False))
+        typer.echo(
+            json.dumps(
+                [r.to_jsonl() for r in records], sort_keys=True, indent=2, ensure_ascii=False
+            )
+        )
         return
     table = Table(title=f"Run Memory ({len(records)} matches)")
     table.add_column("created_at")
@@ -61,7 +67,9 @@ def query_cmd(
 
 @app.command("rebuild")
 def rebuild_cmd(
-    artifacts_dir: Path = typer.Option(..., "--artifacts-dir", help="Directory of execution_result*.json artifacts"),
+    artifacts_dir: Path = typer.Option(
+        ..., "--artifacts-dir", help="Directory of execution_result*.json artifacts"
+    ),
     index_dir: Path = typer.Option(..., "--index-dir"),
 ) -> None:
     """Regenerate the index from on-disk ExecutionResult artifacts."""

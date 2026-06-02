@@ -14,15 +14,14 @@ from operations_center.insights.models import DerivedInsight
 from operations_center.insights.normalizer import InsightNormalizer
 from operations_center.observer.collectors.execution_health import ExecutionArtifactCollector
 from operations_center.observer.models import (
+    CheckSignal,
     DependencyDriftSignal,
     ExecutionHealthSignal,
     RepoContextSnapshot,
     RepoSignalsSnapshot,
     RepoStateSnapshot,
-    CheckSignal,
     TodoSignal,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -114,12 +113,41 @@ def test_collector_counts_outcomes_for_matching_repo(tmp_path: Path) -> None:
     root.mkdir()
     # 3 no_ops for the target repo
     for i in range(3):
-        _write_run(root, repo_key="OperationsCenter", run_id=f"r{i}", task_id=f"t{i}", worker_role="goal", outcome_status="no_op", outcome_reason="no_material_change")
+        _write_run(
+            root,
+            repo_key="OperationsCenter",
+            run_id=f"r{i}",
+            task_id=f"t{i}",
+            worker_role="goal",
+            outcome_status="no_op",
+            outcome_reason="no_material_change",
+        )
     # 2 executed
-    _write_run(root, repo_key="OperationsCenter", run_id="r3", task_id="t3", worker_role="goal", outcome_status="executed")
-    _write_run(root, repo_key="OperationsCenter", run_id="r4", task_id="t4", worker_role="test", outcome_status="executed")
+    _write_run(
+        root,
+        repo_key="OperationsCenter",
+        run_id="r3",
+        task_id="t3",
+        worker_role="goal",
+        outcome_status="executed",
+    )
+    _write_run(
+        root,
+        repo_key="OperationsCenter",
+        run_id="r4",
+        task_id="t4",
+        worker_role="test",
+        outcome_status="executed",
+    )
     # 1 run for a different repo — should be ignored
-    _write_run(root, repo_key="OtherRepo", run_id="r5", task_id="t5", worker_role="goal", outcome_status="no_op")
+    _write_run(
+        root,
+        repo_key="OtherRepo",
+        run_id="r5",
+        task_id="t5",
+        worker_role="goal",
+        outcome_status="no_op",
+    )
 
     ctx = _FakeContext("OperationsCenter", root)
     sig = ExecutionArtifactCollector().collect(ctx)  # type: ignore[arg-type]
@@ -134,9 +162,33 @@ def test_collector_counts_outcomes_for_matching_repo(tmp_path: Path) -> None:
 def test_collector_counts_validation_failures(tmp_path: Path) -> None:
     root = tmp_path / "executor_plane"
     root.mkdir()
-    _write_run(root, repo_key="OperationsCenter", run_id="r0", task_id="t0", worker_role="goal", outcome_status="executed", validation_passed=False)
-    _write_run(root, repo_key="OperationsCenter", run_id="r1", task_id="t1", worker_role="goal", outcome_status="executed", validation_passed=False)
-    _write_run(root, repo_key="OperationsCenter", run_id="r2", task_id="t2", worker_role="goal", outcome_status="executed", validation_passed=True)
+    _write_run(
+        root,
+        repo_key="OperationsCenter",
+        run_id="r0",
+        task_id="t0",
+        worker_role="goal",
+        outcome_status="executed",
+        validation_passed=False,
+    )
+    _write_run(
+        root,
+        repo_key="OperationsCenter",
+        run_id="r1",
+        task_id="t1",
+        worker_role="goal",
+        outcome_status="executed",
+        validation_passed=False,
+    )
+    _write_run(
+        root,
+        repo_key="OperationsCenter",
+        run_id="r2",
+        task_id="t2",
+        worker_role="goal",
+        outcome_status="executed",
+        validation_passed=True,
+    )
 
     ctx = _FakeContext("OperationsCenter", root)
     sig = ExecutionArtifactCollector().collect(ctx)  # type: ignore[arg-type]
@@ -158,9 +210,30 @@ def test_collector_returns_empty_signal_when_no_artifacts(tmp_path: Path) -> Non
 def test_collector_counts_unknown_outcomes(tmp_path: Path) -> None:
     root = tmp_path / "executor_plane"
     root.mkdir()
-    _write_run(root, repo_key="OperationsCenter", run_id="r0", task_id="t0", worker_role="goal", outcome_status="unknown")
-    _write_run(root, repo_key="OperationsCenter", run_id="r1", task_id="t1", worker_role="goal", outcome_status="unknown")
-    _write_run(root, repo_key="OperationsCenter", run_id="r2", task_id="t2", worker_role="goal", outcome_status="executed")
+    _write_run(
+        root,
+        repo_key="OperationsCenter",
+        run_id="r0",
+        task_id="t0",
+        worker_role="goal",
+        outcome_status="unknown",
+    )
+    _write_run(
+        root,
+        repo_key="OperationsCenter",
+        run_id="r1",
+        task_id="t1",
+        worker_role="goal",
+        outcome_status="unknown",
+    )
+    _write_run(
+        root,
+        repo_key="OperationsCenter",
+        run_id="r2",
+        task_id="t2",
+        worker_role="goal",
+        outcome_status="executed",
+    )
 
     ctx = _FakeContext("OperationsCenter", root)
     sig = ExecutionArtifactCollector().collect(ctx)  # type: ignore[arg-type]
@@ -174,10 +247,38 @@ def test_collector_counts_unknown_outcomes(tmp_path: Path) -> None:
 def test_collector_counts_error_outcomes(tmp_path: Path) -> None:
     root = tmp_path / "executor_plane"
     root.mkdir()
-    _write_run(root, repo_key="OperationsCenter", run_id="r0", task_id="t0", worker_role="goal", outcome_status="error")
-    _write_run(root, repo_key="OperationsCenter", run_id="r1", task_id="t1", worker_role="goal", outcome_status="error")
-    _write_run(root, repo_key="OperationsCenter", run_id="r2", task_id="t2", worker_role="goal", outcome_status="error")
-    _write_run(root, repo_key="OperationsCenter", run_id="r3", task_id="t3", worker_role="goal", outcome_status="executed")
+    _write_run(
+        root,
+        repo_key="OperationsCenter",
+        run_id="r0",
+        task_id="t0",
+        worker_role="goal",
+        outcome_status="error",
+    )
+    _write_run(
+        root,
+        repo_key="OperationsCenter",
+        run_id="r1",
+        task_id="t1",
+        worker_role="goal",
+        outcome_status="error",
+    )
+    _write_run(
+        root,
+        repo_key="OperationsCenter",
+        run_id="r2",
+        task_id="t2",
+        worker_role="goal",
+        outcome_status="error",
+    )
+    _write_run(
+        root,
+        repo_key="OperationsCenter",
+        run_id="r3",
+        task_id="t3",
+        worker_role="goal",
+        outcome_status="executed",
+    )
 
     ctx = _FakeContext("OperationsCenter", root)
     sig = ExecutionArtifactCollector().collect(ctx)  # type: ignore[arg-type]
@@ -191,11 +292,46 @@ def test_collector_counts_error_outcomes(tmp_path: Path) -> None:
 def test_collector_counts_mixed_unknown_and_error_outcomes(tmp_path: Path) -> None:
     root = tmp_path / "executor_plane"
     root.mkdir()
-    _write_run(root, repo_key="OperationsCenter", run_id="r0", task_id="t0", worker_role="goal", outcome_status="unknown")
-    _write_run(root, repo_key="OperationsCenter", run_id="r1", task_id="t1", worker_role="goal", outcome_status="error")
-    _write_run(root, repo_key="OperationsCenter", run_id="r2", task_id="t2", worker_role="goal", outcome_status="no_op")
-    _write_run(root, repo_key="OperationsCenter", run_id="r3", task_id="t3", worker_role="goal", outcome_status="executed")
-    _write_run(root, repo_key="OperationsCenter", run_id="r4", task_id="t4", worker_role="goal", outcome_status="unknown")
+    _write_run(
+        root,
+        repo_key="OperationsCenter",
+        run_id="r0",
+        task_id="t0",
+        worker_role="goal",
+        outcome_status="unknown",
+    )
+    _write_run(
+        root,
+        repo_key="OperationsCenter",
+        run_id="r1",
+        task_id="t1",
+        worker_role="goal",
+        outcome_status="error",
+    )
+    _write_run(
+        root,
+        repo_key="OperationsCenter",
+        run_id="r2",
+        task_id="t2",
+        worker_role="goal",
+        outcome_status="no_op",
+    )
+    _write_run(
+        root,
+        repo_key="OperationsCenter",
+        run_id="r3",
+        task_id="t3",
+        worker_role="goal",
+        outcome_status="executed",
+    )
+    _write_run(
+        root,
+        repo_key="OperationsCenter",
+        run_id="r4",
+        task_id="t4",
+        worker_role="goal",
+        outcome_status="unknown",
+    )
 
     ctx = _FakeContext("OperationsCenter", root)
     sig = ExecutionArtifactCollector().collect(ctx)  # type: ignore[arg-type]
@@ -227,7 +363,9 @@ def test_collector_ignores_dirs_without_required_files(tmp_path: Path) -> None:
 
 def test_deriver_emits_high_no_op_rate_insight(tmp_path: Path) -> None:
     # 6 runs, 4 no_ops → 67% no_op rate ≥ 50% threshold
-    sig = ExecutionHealthSignal(total_runs=6, executed_count=2, no_op_count=4, validation_failed_count=0)
+    sig = ExecutionHealthSignal(
+        total_runs=6, executed_count=2, no_op_count=4, validation_failed_count=0
+    )
     snapshot = _make_snapshot("OperationsCenter", sig)
 
     insights = ExecutionHealthDeriver(InsightNormalizer()).derive([snapshot])
@@ -239,7 +377,9 @@ def test_deriver_emits_high_no_op_rate_insight(tmp_path: Path) -> None:
 
 def test_deriver_does_not_emit_when_below_min_runs(tmp_path: Path) -> None:
     # Only 4 runs — below the 5-run minimum
-    sig = ExecutionHealthSignal(total_runs=4, executed_count=0, no_op_count=4, validation_failed_count=0)
+    sig = ExecutionHealthSignal(
+        total_runs=4, executed_count=0, no_op_count=4, validation_failed_count=0
+    )
     snapshot = _make_snapshot("OperationsCenter", sig)
 
     insights = ExecutionHealthDeriver(InsightNormalizer()).derive([snapshot])
@@ -249,7 +389,9 @@ def test_deriver_does_not_emit_when_below_min_runs(tmp_path: Path) -> None:
 
 def test_deriver_does_not_emit_when_no_op_rate_below_threshold(tmp_path: Path) -> None:
     # 10 runs, 3 no_ops → 30% < 50% threshold
-    sig = ExecutionHealthSignal(total_runs=10, executed_count=7, no_op_count=3, validation_failed_count=0)
+    sig = ExecutionHealthSignal(
+        total_runs=10, executed_count=7, no_op_count=3, validation_failed_count=0
+    )
     snapshot = _make_snapshot("OperationsCenter", sig)
 
     insights = ExecutionHealthDeriver(InsightNormalizer()).derive([snapshot])
@@ -258,7 +400,9 @@ def test_deriver_does_not_emit_when_no_op_rate_below_threshold(tmp_path: Path) -
 
 
 def test_deriver_emits_persistent_validation_failures_insight(tmp_path: Path) -> None:
-    sig = ExecutionHealthSignal(total_runs=10, executed_count=5, no_op_count=5, validation_failed_count=2)
+    sig = ExecutionHealthSignal(
+        total_runs=10, executed_count=5, no_op_count=5, validation_failed_count=2
+    )
     snapshot = _make_snapshot("OperationsCenter", sig)
 
     insights = ExecutionHealthDeriver(InsightNormalizer()).derive([snapshot])
@@ -267,7 +411,9 @@ def test_deriver_emits_persistent_validation_failures_insight(tmp_path: Path) ->
 
 
 def test_deriver_does_not_emit_validation_insight_below_threshold(tmp_path: Path) -> None:
-    sig = ExecutionHealthSignal(total_runs=10, executed_count=5, no_op_count=5, validation_failed_count=1)
+    sig = ExecutionHealthSignal(
+        total_runs=10, executed_count=5, no_op_count=5, validation_failed_count=1
+    )
     snapshot = _make_snapshot("OperationsCenter", sig)
 
     insights = ExecutionHealthDeriver(InsightNormalizer()).derive([snapshot])
@@ -279,13 +425,17 @@ def test_deriver_respects_custom_threshold(tmp_path: Path) -> None:
     deriver = ExecutionHealthDeriver(InsightNormalizer(), validation_failure_threshold=4)
 
     # count=3 should NOT trigger with threshold=4
-    sig_below = ExecutionHealthSignal(total_runs=10, executed_count=5, no_op_count=5, validation_failed_count=3)
+    sig_below = ExecutionHealthSignal(
+        total_runs=10, executed_count=5, no_op_count=5, validation_failed_count=3
+    )
     snapshot_below = _make_snapshot("OperationsCenter", sig_below)
     insights_below = deriver.derive([snapshot_below])
     assert not any("persistent_validation_failures" in i.dedup_key for i in insights_below)
 
     # count=4 SHOULD trigger with threshold=4
-    sig_at = ExecutionHealthSignal(total_runs=10, executed_count=5, no_op_count=5, validation_failed_count=4)
+    sig_at = ExecutionHealthSignal(
+        total_runs=10, executed_count=5, no_op_count=5, validation_failed_count=4
+    )
     snapshot_at = _make_snapshot("OperationsCenter", sig_at)
     insights_at = deriver.derive([snapshot_at])
     assert any("persistent_validation_failures" in i.dedup_key for i in insights_at)
@@ -293,7 +443,9 @@ def test_deriver_respects_custom_threshold(tmp_path: Path) -> None:
 
 def test_deriver_emits_repeated_unknown_failures_at_threshold() -> None:
     # unknown_count=1 + error_count=1 = 2 >= default threshold of 2
-    sig = ExecutionHealthSignal(total_runs=5, executed_count=3, no_op_count=0, unknown_count=1, error_count=1)
+    sig = ExecutionHealthSignal(
+        total_runs=5, executed_count=3, no_op_count=0, unknown_count=1, error_count=1
+    )
     snapshot = _make_snapshot("OperationsCenter", sig)
 
     insights = ExecutionHealthDeriver(InsightNormalizer()).derive([snapshot])
@@ -308,7 +460,9 @@ def test_deriver_emits_repeated_unknown_failures_at_threshold() -> None:
 
 def test_deriver_no_repeated_unknown_failures_below_threshold() -> None:
     # unknown_count=1 + error_count=0 = 1 < default threshold of 2
-    sig = ExecutionHealthSignal(total_runs=5, executed_count=4, no_op_count=0, unknown_count=1, error_count=0)
+    sig = ExecutionHealthSignal(
+        total_runs=5, executed_count=4, no_op_count=0, unknown_count=1, error_count=0
+    )
     snapshot = _make_snapshot("OperationsCenter", sig)
 
     insights = ExecutionHealthDeriver(InsightNormalizer()).derive([snapshot])
@@ -320,13 +474,17 @@ def test_deriver_repeated_unknown_failures_respects_custom_threshold() -> None:
     deriver = ExecutionHealthDeriver(InsightNormalizer(), unknown_failure_threshold=4)
 
     # 3 < 4 threshold → no insight
-    sig_below = ExecutionHealthSignal(total_runs=5, executed_count=2, no_op_count=0, unknown_count=2, error_count=1)
+    sig_below = ExecutionHealthSignal(
+        total_runs=5, executed_count=2, no_op_count=0, unknown_count=2, error_count=1
+    )
     snapshot_below = _make_snapshot("OperationsCenter", sig_below)
     insights_below = deriver.derive([snapshot_below])
     assert not any("repeated_unknown_failures" in i.dedup_key for i in insights_below)
 
     # 4 >= 4 threshold → insight
-    sig_at = ExecutionHealthSignal(total_runs=6, executed_count=2, no_op_count=0, unknown_count=2, error_count=2)
+    sig_at = ExecutionHealthSignal(
+        total_runs=6, executed_count=2, no_op_count=0, unknown_count=2, error_count=2
+    )
     snapshot_at = _make_snapshot("OperationsCenter", sig_at)
     insights_at = deriver.derive([snapshot_at])
     assert any("repeated_unknown_failures" in i.dedup_key for i in insights_at)
@@ -351,7 +509,15 @@ def _make_insight(pattern: str, repo: str = "OperationsCenter") -> object:
         kind="execution_health",
         subject=repo,
         status="present",
-        evidence={"repo": repo, "pattern": pattern, "total_runs": 10, "no_op_count": 6, "no_op_rate": 0.6, "validation_failed_count": 3, "executed_count": 5},
+        evidence={
+            "repo": repo,
+            "pattern": pattern,
+            "total_runs": 10,
+            "no_op_count": 6,
+            "no_op_rate": 0.6,
+            "validation_failed_count": 3,
+            "executed_count": 5,
+        },
         first_seen_at=ts,
         last_seen_at=ts,
     )
@@ -492,4 +658,8 @@ def test_rule_produces_candidates_for_all_three_patterns() -> None:
 
     assert len(specs) == 3
     patterns = {s.pattern_key for s in specs}
-    assert patterns == {"high_no_op_rate", "persistent_validation_failures", "repeated_unknown_failures"}
+    assert patterns == {
+        "high_no_op_rate",
+        "persistent_validation_failures",
+        "repeated_unknown_failures",
+    }

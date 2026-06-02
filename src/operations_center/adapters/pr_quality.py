@@ -10,6 +10,7 @@ the conventional sections (## Goal, ## Changes, etc.).
 Read-only: returns a structured result. The caller decides what to do
 (comment on the PR, mark needs-improvement, etc.). No state writes.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -25,8 +26,9 @@ _RECOMMENDED_SECTIONS = ("## goal", "## changes", "## summary", "## why")
 @dataclass(frozen=True)
 class PRQualityCheck:
     """Result of a PR description quality check."""
+
     ok: bool
-    score: float                      # 0.0 - 1.0
+    score: float  # 0.0 - 1.0
     reasons: tuple[str, ...]
     body_length: int
 
@@ -44,9 +46,7 @@ def _check_pr_description_quality(body: str | None) -> PRQualityCheck:
     passes the body-length check.
     """
     if not body:
-        return PRQualityCheck(ok=False, score=0.0,
-                              reasons=("empty_body",),
-                              body_length=0)
+        return PRQualityCheck(ok=False, score=0.0, reasons=("empty_body",), body_length=0)
     body = body.strip()
     body_length = len(body)
     reasons: list[str] = []

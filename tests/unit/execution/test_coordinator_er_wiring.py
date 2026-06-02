@@ -6,6 +6,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from platform_manifest import (
+    RepoGraph,
+    RepoNode,
+    load_default_repo_graph,
+)
 
 from operations_center.contracts.common import ValidationSummary
 from operations_center.contracts.enums import (
@@ -22,13 +27,7 @@ from operations_center.lifecycle import LifecycleMetadata, TaskLifecycleStage
 from operations_center.planning.models import PlanningContext, ProposalDecisionBundle
 from operations_center.planning.proposal_builder import build_proposal
 from operations_center.policy.models import PolicyDecision, PolicyStatus
-from platform_manifest import (
-    RepoGraph,
-    RepoNode,
-    load_default_repo_graph,
-)
 from operations_center.run_memory import RunMemoryQueryService
-
 
 # ---------------------------------------------------------------------------
 # Test doubles
@@ -166,9 +165,7 @@ class TestRunMemoryWiring:
         adapter = _RecordingAdapter(_success(bundle))
         coord = ExecutionCoordinator(
             adapter_registry=_Registry(adapter),
-            policy_engine=_StubPolicy(
-                PolicyDecision(status=PolicyStatus.BLOCK, notes="nope")
-            ),
+            policy_engine=_StubPolicy(PolicyDecision(status=PolicyStatus.BLOCK, notes="nope")),
             run_memory_index_dir=tmp_path,
         )
         coord.execute(bundle, _runtime())

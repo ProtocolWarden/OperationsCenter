@@ -19,6 +19,7 @@ Design constraints:
 - Avoids re-emitting insights that were already emitted in the same cycle run.
 - Min 2 repos required before emitting anything (single-repo overlap is trivial).
 """
+
 from __future__ import annotations
 
 import json
@@ -32,7 +33,7 @@ from operations_center.insights.models import DerivedInsight
 from operations_center.insights.normalizer import InsightNormalizer
 from operations_center.observer.models import RepoStateSnapshot
 
-_MIN_REPOS_FOR_PATTERN = 2    # ≥2 repos must share the kind before emitting
+_MIN_REPOS_FOR_PATTERN = 2  # ≥2 repos must share the kind before emitting
 _INSIGHT_ROOT = Path("tools/report/operations_center/insights")
 _logger = logging.getLogger(__name__)
 

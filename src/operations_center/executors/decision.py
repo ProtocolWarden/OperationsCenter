@@ -15,6 +15,7 @@ criteria from Phase 11 (PR merge time, maintainer responsiveness, fork
 deadline). This module returns ``UPSTREAM_PATCH_PENDING_OR_FORK`` for
 the FAIL case rather than guessing.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -29,9 +30,9 @@ from operations_center.executors._artifacts import (
 
 
 class ExpectedOutcome(str, Enum):
-    ADAPTER_ONLY                    = "adapter_only"
-    ADAPTER_PLUS_WRAPPER            = "adapter_plus_wrapper"
-    UPSTREAM_PATCH_PENDING_OR_FORK  = "upstream_patch_pending_or_fork"
+    ADAPTER_ONLY = "adapter_only"
+    ADAPTER_PLUS_WRAPPER = "adapter_plus_wrapper"
+    UPSTREAM_PATCH_PENDING_OR_FORK = "upstream_patch_pending_or_fork"
 
 
 @dataclass(frozen=True)

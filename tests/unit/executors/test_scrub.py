@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Sample scrubber tests."""
+
 from __future__ import annotations
 
 from operations_center.executors._scrub import REDACTED, scrub_sample, scrub_text

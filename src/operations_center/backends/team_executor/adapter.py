@@ -6,20 +6,25 @@ backends/team_executor/adapter.py — TeamExecutorBackendAdapter.
 Wraps TeamExecutorRunner.run() behind the canonical ExecutionRequest → ExecutionResult
 contract. Reads team_name and worker_backend from TeamExecutorSettings.
 """
+
 from __future__ import annotations
 
-from datetime import UTC, datetime
 import logging
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
-from operations_center.config.settings import TeamExecutorSettings
 from operations_center.backends.tiering import select_tier
 from operations_center.backends.worker_backend_selector import (
     execute_with_worker_backend_round_robin,
     worker_backend_observed_runtime,
 )
+from operations_center.config.settings import TeamExecutorSettings
 from operations_center.contracts.common import ValidationSummary
-from operations_center.contracts.enums import ExecutionStatus, FailureReasonCategory, ValidationStatus
+from operations_center.contracts.enums import (
+    ExecutionStatus,
+    FailureReasonCategory,
+    ValidationStatus,
+)
 from operations_center.contracts.execution import ExecutionRequest, ExecutionResult
 from operations_center.execution.usage_store import UsageStore
 
@@ -29,7 +34,9 @@ logger = logging.getLogger(__name__)
 class TeamExecutorBackendAdapter:
     """Canonical adapter for TeamExecutor backend execution."""
 
-    def __init__(self, settings: TeamExecutorSettings, usage_store: UsageStore | None = None) -> None:
+    def __init__(
+        self, settings: TeamExecutorSettings, usage_store: UsageStore | None = None
+    ) -> None:
         self._settings = settings
         self._usage_store = usage_store
 
@@ -41,7 +48,9 @@ class TeamExecutorBackendAdapter:
         self, request: ExecutionRequest
     ) -> tuple[ExecutionResult, object | None]:
         try:
-            from team_executor.executor import TeamExecutorRunner  # ty: ignore[unresolved-import]  # noqa: PGH003
+            from team_executor.executor import (  # ty: ignore[unresolved-import]  # noqa: PGH003
+                TeamExecutorRunner,
+            )
         except ImportError as exc:
             return _error_result(request, f"team_executor not installed: {exc}"), None
 
@@ -64,7 +73,7 @@ class TeamExecutorBackendAdapter:
             runner = TeamExecutorRunner(
                 team_name=team_name,
                 working_dir=working_dir,
-                worker_backend=worker_backend,  # ty: ignore[invalid-argument-type]  # noqa: PGH003
+                worker_backend=worker_backend,  # ty: ignore[invalid-argument-type]
             )
             return runner.run(
                 goal_text=request.goal_text,
@@ -79,9 +88,7 @@ class TeamExecutorBackendAdapter:
                 execute_once=_run_once,
                 failed=lambda payload: payload.status != "succeeded",
                 failure_text=lambda payload: payload.error_summary,
-                logger=lambda msg: logger.info(
-                    "TeamExecutorAdapter[%s]: %s", request.run_id, msg
-                ),
+                logger=lambda msg: logger.info("TeamExecutorAdapter[%s]: %s", request.run_id, msg),
             )
         except Exception as exc:
             logger.error("TeamExecutorAdapter: run=%s raised %s", request.run_id, exc)
@@ -134,7 +141,9 @@ def _rxp_to_result(request: ExecutionRequest, rxp_result) -> ExecutionResult:
         branch_pushed=False,
         branch_name=request.task_branch,
         failure_category=None if success else FailureReasonCategory.BACKEND_ERROR,
-        failure_reason=None if success else (rxp_result.error_summary or "team_executor run failed"),
+        failure_reason=None
+        if success
+        else (rxp_result.error_summary or "team_executor run failed"),
     )
 
 

@@ -55,15 +55,20 @@ class _FakeRuntime:
     stdout/stderr to the artifact_directory, and returns a synthetic
     RuntimeResult.
     """
-    def __init__(self, *, status: str = "succeeded", stdout: str = "",
-                 stderr: str = "", exit_code: int | None = None,
-                 raise_exc: BaseException | None = None) -> None:
+
+    def __init__(
+        self,
+        *,
+        status: str = "succeeded",
+        stdout: str = "",
+        stderr: str = "",
+        exit_code: int | None = None,
+        raise_exc: BaseException | None = None,
+    ) -> None:
         self.status = status
         self.stdout = stdout
         self.stderr = stderr
-        self.exit_code = exit_code if exit_code is not None else (
-            0 if status == "succeeded" else 1
-        )
+        self.exit_code = exit_code if exit_code is not None else (0 if status == "succeeded" else 1)
         self.raise_exc = raise_exc
         self.last_invocation: RuntimeInvocation | None = None
 
@@ -102,6 +107,7 @@ def _mock_git_diff(returncode: int = 0, stdout: str = "") -> MagicMock:
 # ---------------------------------------------------------------------------
 # Command builder
 # ---------------------------------------------------------------------------
+
 
 class TestBuildCommand:
     def test_includes_model_flag(self) -> None:
@@ -145,6 +151,7 @@ class TestBuildCommand:
 # ---------------------------------------------------------------------------
 # Subprocess success / failure
 # ---------------------------------------------------------------------------
+
 
 class TestExecute:
     def test_success_returns_succeeded_status(self, tmp_path: Path) -> None:
@@ -241,9 +248,12 @@ class TestExecute:
         req = _request(tmp_path)
 
         import os
+
         env_without_key = {k: v for k, v in os.environ.items() if k != "OPENAI_API_KEY"}
-        with patch("subprocess.run", return_value=_mock_git_diff()), \
-             patch("os.environ", env_without_key):
+        with (
+            patch("subprocess.run", return_value=_mock_git_diff()),
+            patch("os.environ", env_without_key),
+        ):
             adapter.execute(req)
 
         # The captured invocation should have OPENAI_API_KEY injected
@@ -266,8 +276,10 @@ class TestExecute:
 # BackendName enum
 # ---------------------------------------------------------------------------
 
+
 def test_backend_name_aider_local_exists() -> None:
     from operations_center.contracts.enums import BackendName
+
     assert BackendName.AIDER_LOCAL.value == "aider_local"
 
 
@@ -275,11 +287,17 @@ def test_backend_name_aider_local_exists() -> None:
 # Factory registration
 # ---------------------------------------------------------------------------
 
+
 def test_factory_registers_aider_local(tmp_path: Path) -> None:
     from operations_center.backends.factory import CanonicalBackendRegistry
+    from operations_center.config.settings import (
+        GitSettings,
+        PlaneSettings,
+        Settings,
+        TeamExecutorSettings,
+    )
     from operations_center.contracts.enums import BackendName
 
-    from operations_center.config.settings import Settings, PlaneSettings, GitSettings, TeamExecutorSettings
     settings = Settings(
         plane=PlaneSettings(
             base_url="http://plane.local",

@@ -19,12 +19,13 @@ from pydantic import BaseModel, Field
 from operations_center.contracts.enums import ArtifactType
 from operations_center.contracts.execution import ExecutionArtifact
 
-
-_PRIMARY_TYPES: frozenset[ArtifactType] = frozenset({
-    ArtifactType.DIFF,
-    ArtifactType.PATCH,
-    ArtifactType.VALIDATION_REPORT,
-})
+_PRIMARY_TYPES: frozenset[ArtifactType] = frozenset(
+    {
+        ArtifactType.DIFF,
+        ArtifactType.PATCH,
+        ArtifactType.VALIDATION_REPORT,
+    }
+)
 
 
 class ArtifactIndex(BaseModel):

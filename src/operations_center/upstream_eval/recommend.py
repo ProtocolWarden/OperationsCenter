@@ -68,7 +68,10 @@ def _proposal_for(
         return None
     if finding.architectural_impact != ArchitecturalImpactClass.MAJOR:
         return None
-    if assessment.workaround_complexity == WorkaroundComplexityClass.SIMPLE and assessment.workaround_reliability == WorkaroundReliabilityClass.STABLE:
+    if (
+        assessment.workaround_complexity == WorkaroundComplexityClass.SIMPLE
+        and assessment.workaround_reliability == WorkaroundReliabilityClass.STABLE
+    ):
         return None
 
     risks = [
@@ -77,7 +80,9 @@ def _proposal_for(
         f"Ongoing maintenance burden is {assessment.ongoing_maintenance_cost.value}.",
     ]
     if assessment.divergence_risk == DivergenceRiskClass.HIGH:
-        risks.append("High divergence risk may outweigh the value of carrying a fork unless the blocker is persistent.")
+        risks.append(
+            "High divergence risk may outweigh the value of carrying a fork unless the blocker is persistent."
+        )
 
     return UpstreamPatchProposal(
         upstream_target=finding.upstream_target,

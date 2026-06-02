@@ -67,8 +67,7 @@ class ExecutionCallable(Protocol):
         attempt_number: int,
         strategy: ImprovementStrategy,
         proposal_id: str,
-    ) -> tuple[str, list[str], bool]:
-        ...
+    ) -> tuple[str, list[str], bool]: ...
 
 
 @dataclass(frozen=True)
@@ -162,9 +161,7 @@ class CiCoordinator:
 
             eval_output_path: Optional[Path] = None
             if ctx.eval_output_dir:
-                eval_output_path = (
-                    ctx.eval_output_dir / f"attempt-{attempt_n}" / "eval.json"
-                )
+                eval_output_path = ctx.eval_output_dir / f"attempt-{attempt_n}" / "eval.json"
 
             eval_ctx = EvaluationContext(
                 repo_path=ctx.repo_path,
@@ -253,7 +250,10 @@ class CiCoordinator:
             return RefinementDecision.ABANDON, "guardrail_violated outcome from evaluator"
 
         if outcome == EvaluationOutcome.IMPROVED:
-            return RefinementDecision.ACCEPT, f"Primary metric improved (delta={score.primary_metric_delta})"
+            return (
+                RefinementDecision.ACCEPT,
+                f"Primary metric improved (delta={score.primary_metric_delta})",
+            )
 
         if outcome == EvaluationOutcome.NEUTRAL and policy.accept_on_neutral:
             return RefinementDecision.ACCEPT, "Neutral outcome accepted per policy"
@@ -287,7 +287,9 @@ class CiCoordinator:
     ) -> ImprovementLineage:
         new_status = self._status_for_decision(decision, lineage.current_attempt_number + 1)
         accepted_n = (
-            attempt.attempt_number if decision == RefinementDecision.ACCEPT else lineage.accepted_attempt_number
+            attempt.attempt_number
+            if decision == RefinementDecision.ACCEPT
+            else lineage.accepted_attempt_number
         )
         return ImprovementLineage(
             lineage_id=lineage.lineage_id,
@@ -299,9 +301,7 @@ class CiCoordinator:
         )
 
     @staticmethod
-    def _status_for_decision(
-        decision: RefinementDecision, attempt_number: int
-    ) -> RefinementStatus:
+    def _status_for_decision(decision: RefinementDecision, attempt_number: int) -> RefinementStatus:
         return {
             RefinementDecision.ACCEPT: RefinementStatus.ACCEPTED,
             RefinementDecision.ABANDON: RefinementStatus.ABANDONED,

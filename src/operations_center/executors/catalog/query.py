@@ -5,6 +5,7 @@
 No ranking, no scoring, no DSL. Each query takes the catalog + a filter
 and returns matching backend_ids in deterministic (sorted) order.
 """
+
 from __future__ import annotations
 
 from typing import Iterable
@@ -47,8 +48,4 @@ def backends_by_outcome(
 ) -> list[str]:
     """Return backend_ids whose audit_verdict.outcome matches."""
     target = outcome.value if isinstance(outcome, AuditOutcome) else outcome
-    return sorted(
-        e.backend_id
-        for e in catalog.all()
-        if e.audit_verdict.outcome.value == target
-    )
+    return sorted(e.backend_id for e in catalog.all() if e.audit_verdict.outcome.value == target)

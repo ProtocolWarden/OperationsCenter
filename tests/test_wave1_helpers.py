@@ -5,19 +5,20 @@
 Each function is small and pure (or a thin shim around an existing call)
 so tests focus on edge cases that would otherwise re-introduce the gap.
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
-
-
 # ── _count_quality_suppressions ──────────────────────────────────────────────
+
 
 def test_quality_suppressions_empty_diff():
     from operations_center.observer.collectors.quality_suppressions import (
         _count_quality_suppressions,
     )
+
     out = _count_quality_suppressions("")
     assert out.total == 0
     assert out.by_kind == {}
@@ -28,9 +29,10 @@ def test_quality_suppressions_counts_added_lines_only():
     from operations_center.observer.collectors.quality_suppressions import (
         _count_quality_suppressions,
     )
+
     diff = (
         "+def foo():  # noqa: E501\n"
-        "-def bar():  # noqa: E501\n"      # removal — must not count
+        "-def bar():  # noqa: E501\n"  # removal — must not count
         " def baz():\n"
         "+    pass  # type: ignore\n"
     )
@@ -45,19 +47,21 @@ def test_quality_suppressions_excludes_diff_header():
     from operations_center.observer.collectors.quality_suppressions import (
         _count_quality_suppressions,
     )
+
     diff = (
         "--- a/foo.py\n"
-        "+++ b/foo.py  # noqa\n"          # header — `++` should be skipped
+        "+++ b/foo.py  # noqa\n"  # header — `++` should be skipped
         "+    pass  # noqa\n"
     )
     out = _count_quality_suppressions(diff)
-    assert out.total == 1   # only the body line
+    assert out.total == 1  # only the body line
 
 
 def test_quality_suppressions_each_kind():
     from operations_center.observer.collectors.quality_suppressions import (
         _count_quality_suppressions,
     )
+
     diff = (
         "+x = 1  # noqa\n"
         "+y = 2  # type: ignore\n"
@@ -72,8 +76,10 @@ def test_quality_suppressions_each_kind():
 
 # ── _check_pr_description_quality ────────────────────────────────────────────
 
+
 def test_pr_quality_empty_body_fails():
     from operations_center.adapters.pr_quality import _check_pr_description_quality
+
     out = _check_pr_description_quality(None)
     assert not out.ok
     assert out.score == 0.0
@@ -82,6 +88,7 @@ def test_pr_quality_empty_body_fails():
 
 def test_pr_quality_short_body_fails():
     from operations_center.adapters.pr_quality import _check_pr_description_quality
+
     out = _check_pr_description_quality("fix")
     assert not out.ok
     assert "body_too_short" in " ".join(out.reasons)
@@ -89,6 +96,7 @@ def test_pr_quality_short_body_fails():
 
 def test_pr_quality_well_formed_passes():
     from operations_center.adapters.pr_quality import _check_pr_description_quality
+
     body = (
         "## Goal\n"
         "Add coverage for the dependency_drift collector.\n\n"
@@ -104,13 +112,8 @@ def test_pr_quality_well_formed_passes():
 def test_pr_quality_diff_only_body_fails():
     """A body that's just an embedded diff with no prose — fails."""
     from operations_center.adapters.pr_quality import _check_pr_description_quality
-    body = (
-        "## Diff\n"
-        "```\n"
-        "+++ a/foo.py\n"
-        "+def bar(): pass\n"
-        "```\n"
-    )
+
+    body = "## Diff\n```\n+++ a/foo.py\n+def bar(): pass\n```\n"
     out = _check_pr_description_quality(body)
     # Has section + length, but no prose — score in the middle, not great
     assert "no_prose_explanation" in out.reasons
@@ -118,18 +121,21 @@ def test_pr_quality_diff_only_body_fails():
 
 # ── _in_maintenance_window ───────────────────────────────────────────────────
 
+
 def _window(start_hour, end_hour, days=()):
     return SimpleNamespace(start_hour=start_hour, end_hour=end_hour, days=list(days))
 
 
 def test_maintenance_window_no_windows_configured():
     from operations_center.maintenance_windows import _in_maintenance_window
+
     settings = SimpleNamespace(maintenance_windows=[])
     assert not _in_maintenance_window(settings, datetime(2026, 1, 1, 12, 0, tzinfo=UTC))
 
 
 def test_maintenance_window_simple_match():
     from operations_center.maintenance_windows import _in_maintenance_window
+
     s = SimpleNamespace(maintenance_windows=[_window(2, 6)])
     assert _in_maintenance_window(s, datetime(2026, 1, 1, 4, 0, tzinfo=UTC))
     assert not _in_maintenance_window(s, datetime(2026, 1, 1, 8, 0, tzinfo=UTC))
@@ -137,24 +143,25 @@ def test_maintenance_window_simple_match():
 
 def test_maintenance_window_wraps_midnight():
     from operations_center.maintenance_windows import _in_maintenance_window
+
     # 22:00 → 04:00 next day
     s = SimpleNamespace(maintenance_windows=[_window(22, 4)])
     assert _in_maintenance_window(s, datetime(2026, 1, 1, 23, 0, tzinfo=UTC))
-    assert _in_maintenance_window(s, datetime(2026, 1, 1, 2,  0, tzinfo=UTC))
+    assert _in_maintenance_window(s, datetime(2026, 1, 1, 2, 0, tzinfo=UTC))
     assert not _in_maintenance_window(s, datetime(2026, 1, 1, 12, 0, tzinfo=UTC))
 
 
 def test_maintenance_window_weekday_gate():
     from operations_center.maintenance_windows import _in_maintenance_window
+
     s = SimpleNamespace(maintenance_windows=[_window(0, 23, days=[5, 6])])  # weekends only
-    assert _in_maintenance_window(s, datetime(2026, 1, 3, 12, 0, tzinfo=UTC))   # Sat
+    assert _in_maintenance_window(s, datetime(2026, 1, 3, 12, 0, tzinfo=UTC))  # Sat
     assert not _in_maintenance_window(s, datetime(2026, 1, 5, 12, 0, tzinfo=UTC))  # Mon
 
 
 def test_maintenance_window_defensive_against_missing_fields():
     from operations_center.maintenance_windows import _in_maintenance_window
+
     s = SimpleNamespace(maintenance_windows=[SimpleNamespace()])  # no fields at all
     # Defaults to start=0, end=0 → never in window
     assert not _in_maintenance_window(s, datetime(2026, 1, 1, 12, 0, tzinfo=UTC))
-
-

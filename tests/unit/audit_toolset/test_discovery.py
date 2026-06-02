@@ -108,18 +108,21 @@ class TestResolveArtifactManifestPath:
     def test_raises_when_path_is_missing(self) -> None:
         data = {**_MINIMAL_RUN_STATUS, "artifact_manifest_path": None}
         from operations_center.audit_contracts.run_status import ManagedRunStatus
+
         rs = ManagedRunStatus.model_validate(data)
         with pytest.raises(ArtifactManifestPathMissingError):
             resolve_artifact_manifest_path(rs)
 
     def test_raises_for_relative_path_without_base_dir(self) -> None:
         from operations_center.audit_contracts.run_status import ManagedRunStatus
+
         rs = ManagedRunStatus.model_validate(_MINIMAL_RUN_STATUS)
         with pytest.raises(ArtifactManifestPathResolutionError):
             resolve_artifact_manifest_path(rs)
 
     def test_absolute_path_returned_as_is(self) -> None:
         from operations_center.audit_contracts.run_status import ManagedRunStatus
+
         data = {**_MINIMAL_RUN_STATUS, "artifact_manifest_path": "/abs/path/artifact_manifest.json"}
         rs = ManagedRunStatus.model_validate(data)
         resolved = resolve_artifact_manifest_path(rs)
@@ -127,13 +130,17 @@ class TestResolveArtifactManifestPath:
 
     def test_base_dir_string_accepted(self, tmp_path: Path) -> None:
         from operations_center.audit_contracts.run_status import ManagedRunStatus
+
         rs = ManagedRunStatus.model_validate(_MINIMAL_RUN_STATUS)
         resolved = resolve_artifact_manifest_path(rs, base_dir=str(tmp_path))
         assert resolved.is_absolute()
 
     def test_manifest_path_missing_error_mentions_run_id(self) -> None:
         from operations_center.audit_contracts.run_status import ManagedRunStatus
-        rs = ManagedRunStatus.model_validate({**_MINIMAL_RUN_STATUS, "artifact_manifest_path": None})
+
+        rs = ManagedRunStatus.model_validate(
+            {**_MINIMAL_RUN_STATUS, "artifact_manifest_path": None}
+        )
         with pytest.raises(ArtifactManifestPathMissingError, match="3dead998"):
             resolve_artifact_manifest_path(rs)
 
@@ -141,6 +148,9 @@ class TestResolveArtifactManifestPath:
         # Even if artifact_manifest.json exists nearby, it is not found by scanning.
         (tmp_path / "artifact_manifest.json").write_text("{}", encoding="utf-8")
         from operations_center.audit_contracts.run_status import ManagedRunStatus
-        rs = ManagedRunStatus.model_validate({**_MINIMAL_RUN_STATUS, "artifact_manifest_path": None})
+
+        rs = ManagedRunStatus.model_validate(
+            {**_MINIMAL_RUN_STATUS, "artifact_manifest_path": None}
+        )
         with pytest.raises(ArtifactManifestPathMissingError):
             resolve_artifact_manifest_path(rs, base_dir=tmp_path)

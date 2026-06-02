@@ -5,17 +5,16 @@
 Settings block tests + entrypoint integration with --dry-run so we
 don't need a real Plane.
 """
+
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-
 from operations_center.config.settings import (
     load_settings,
 )
 from operations_center.entrypoints.propagate.main import main
-
 
 _BASE_YAML = """\
 plane:
@@ -62,7 +61,9 @@ class TestSettingsBlock:
         )
         s = load_settings(cfg)
         assert s.contract_change_propagation.enabled is True
-        assert s.contract_change_propagation.auto_trigger_edge_types == ["depends_on_contracts_from"]
+        assert s.contract_change_propagation.auto_trigger_edge_types == [
+            "depends_on_contracts_from"
+        ]
         assert s.contract_change_propagation.dedup_window_hours == 12
 
     def test_pair_overrides_parsed(self, tmp_path: Path) -> None:
@@ -90,25 +91,33 @@ class TestSettingsBlock:
 
 class TestEntrypointArgs:
     def test_missing_config_exits_two(self, tmp_path: Path, capsys) -> None:
-        rc = main([
-            "--target", "cxrp",
-            "--version", "v1",
-            "--config", str(tmp_path / "nope.yaml"),
-        ])
+        rc = main(
+            [
+                "--target",
+                "cxrp",
+                "--version",
+                "v1",
+                "--config",
+                str(tmp_path / "nope.yaml"),
+            ]
+        )
         assert rc == 2
         err = capsys.readouterr().err
         assert "config not found" in err.lower()
 
-    def test_require_enabled_with_disabled_config_exits_one(
-        self, tmp_path: Path, capsys
-    ) -> None:
+    def test_require_enabled_with_disabled_config_exits_one(self, tmp_path: Path, capsys) -> None:
         cfg = _write_config(tmp_path)  # disabled by default
-        rc = main([
-            "--target", "cxrp",
-            "--version", "v1",
-            "--config", str(cfg),
-            "--require-enabled",
-        ])
+        rc = main(
+            [
+                "--target",
+                "cxrp",
+                "--version",
+                "v1",
+                "--config",
+                str(cfg),
+                "--require-enabled",
+            ]
+        )
         assert rc == 1
         err = capsys.readouterr().err
         assert "enabled is False" in err
@@ -120,13 +129,18 @@ class TestDryRunHappyPath:
     ) -> None:
         monkeypatch.chdir(tmp_path)
         cfg = _write_config(tmp_path)
-        rc = main([
-            "--target", "cxrp",
-            "--version", "v1",
-            "--config", str(cfg),
-            "--dry-run",
-            "--json",
-        ])
+        rc = main(
+            [
+                "--target",
+                "cxrp",
+                "--version",
+                "v1",
+                "--config",
+                str(cfg),
+                "--dry-run",
+                "--json",
+            ]
+        )
         assert rc == 0
         payload = json.loads(capsys.readouterr().out)
         # Disabled policy → all outcomes are skip
@@ -149,13 +163,18 @@ class TestDryRunHappyPath:
             "  auto_trigger_edge_types:\n"
             "    - depends_on_contracts_from\n",
         )
-        rc = main([
-            "--target", "cxrp",
-            "--version", "v1",
-            "--config", str(cfg),
-            "--dry-run",
-            "--json",
-        ])
+        rc = main(
+            [
+                "--target",
+                "cxrp",
+                "--version",
+                "v1",
+                "--config",
+                str(cfg),
+                "--dry-run",
+                "--json",
+            ]
+        )
         assert rc == 0
         payload = json.loads(capsys.readouterr().out)
         # All consumers got synthetic DRY-RUN issue ids
@@ -167,12 +186,17 @@ class TestDryRunHappyPath:
     def test_dry_run_human_output(self, tmp_path: Path, monkeypatch, capsys) -> None:
         monkeypatch.chdir(tmp_path)
         cfg = _write_config(tmp_path)
-        rc = main([
-            "--target", "cxrp",
-            "--version", "v1",
-            "--config", str(cfg),
-            "--dry-run",
-        ])
+        rc = main(
+            [
+                "--target",
+                "cxrp",
+                "--version",
+                "v1",
+                "--config",
+                str(cfg),
+                "--dry-run",
+            ]
+        )
         assert rc == 0
         out = capsys.readouterr().out
         assert "propagation run:" in out
@@ -185,13 +209,18 @@ class TestUnknownTargetGracefulRecord:
     ) -> None:
         monkeypatch.chdir(tmp_path)
         cfg = _write_config(tmp_path)
-        rc = main([
-            "--target", "ghost-repo",
-            "--version", "v1",
-            "--config", str(cfg),
-            "--dry-run",
-            "--json",
-        ])
+        rc = main(
+            [
+                "--target",
+                "ghost-repo",
+                "--version",
+                "v1",
+                "--config",
+                str(cfg),
+                "--dry-run",
+                "--json",
+            ]
+        )
         assert rc == 0
         payload = json.loads(capsys.readouterr().out)
         assert payload["target_canonical"] == "(unknown)"

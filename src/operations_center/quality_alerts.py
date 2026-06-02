@@ -12,6 +12,7 @@ the natural integration points (Plane comments, backend prompt assembly).
 Invariants: read-only utilities, no contract mutation, no
 behavior_calibration imports.
 """
+
 from __future__ import annotations
 
 import json
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 # ── _comment_markdown ────────────────────────────────────────────────────────
+
 
 def _comment_markdown(
     *,
@@ -50,6 +52,7 @@ def _comment_markdown(
 
 
 # ── _extract_rejection_patterns + _load_rejection_patterns_for_proposal ──────
+
 
 def _extract_rejection_patterns(rejection_records: list[dict]) -> list[str]:
     """Pull the most-cited rejection reasons across recent records.
@@ -116,10 +119,10 @@ def _escalate_to_human(
     + Slack/email integration). This is the durable record.
     """
     payload = {
-        "ts":       datetime.now(UTC).isoformat(),
-        "task_id":  task_id,
-        "reason":   reason,
-        "detail":   (detail or "")[:1000],
+        "ts": datetime.now(UTC).isoformat(),
+        "task_id": task_id,
+        "reason": reason,
+        "detail": (detail or "")[:1000],
         "severity": severity,
     }
     try:
@@ -133,6 +136,7 @@ def _escalate_to_human(
 
 
 # ── _process_self_review (reviewer-side helper) ──────────────────────────────
+
 
 def _process_self_review(verdict: dict | None, *, max_summary: int = 400) -> tuple[str, str]:
     """Normalise a backend verdict dict into (result, summary).

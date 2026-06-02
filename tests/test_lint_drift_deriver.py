@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Tests for LintDriftDeriver."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -13,8 +14,8 @@ from operations_center.observer.models import (
     BenchmarkSignal,
     CheckSignal,
     DependencyDriftSignal,
-    LintViolation,
     LintSignal,
+    LintViolation,
     RepoContextSnapshot,
     RepoSignalsSnapshot,
     RepoStateSnapshot,
@@ -104,13 +105,19 @@ class TestLintDriftDeriver:
         snap_recent = _make_snapshot(
             lint_status="violations",
             violation_count=5,
-            top_violations=[LintViolation(code="E501", path="f.py", line=1, col=0, message="Error") for _ in range(5)],
+            top_violations=[
+                LintViolation(code="E501", path="f.py", line=1, col=0, message="Error")
+                for _ in range(5)
+            ],
             observed_at=newer,
         )
         snap_older = _make_snapshot(
             lint_status="violations",
             violation_count=2,
-            top_violations=[LintViolation(code="E501", path="f.py", line=1, col=0, message="Error") for _ in range(2)],
+            top_violations=[
+                LintViolation(code="E501", path="f.py", line=1, col=0, message="Error")
+                for _ in range(2)
+            ],
             observed_at=older,
         )
         insights = deriver.derive([snap_recent, snap_older])
@@ -128,13 +135,19 @@ class TestLintDriftDeriver:
         snap_recent = _make_snapshot(
             lint_status="violations",
             violation_count=2,
-            top_violations=[LintViolation(code="E501", path="f.py", line=1, col=0, message="Error") for _ in range(2)],
+            top_violations=[
+                LintViolation(code="E501", path="f.py", line=1, col=0, message="Error")
+                for _ in range(2)
+            ],
             observed_at=newer,
         )
         snap_older = _make_snapshot(
             lint_status="violations",
             violation_count=5,
-            top_violations=[LintViolation(code="E501", path="f.py", line=1, col=0, message="Error") for _ in range(5)],
+            top_violations=[
+                LintViolation(code="E501", path="f.py", line=1, col=0, message="Error")
+                for _ in range(5)
+            ],
             observed_at=older,
         )
         insights = deriver.derive([snap_recent, snap_older])
@@ -156,7 +169,10 @@ class TestLintDriftDeriver:
         snap_older = _make_snapshot(
             lint_status="violations",
             violation_count=5,
-            top_violations=[LintViolation(code="E501", path="f.py", line=1, col=0, message="Error") for _ in range(5)],
+            top_violations=[
+                LintViolation(code="E501", path="f.py", line=1, col=0, message="Error")
+                for _ in range(5)
+            ],
             observed_at=older,
         )
         insights = deriver.derive([snap_recent, snap_older])
@@ -172,7 +188,10 @@ class TestLintDriftDeriver:
         snap_recent = _make_snapshot(
             lint_status="violations",
             violation_count=3,
-            top_violations=[LintViolation(code="E501", path="f.py", line=1, col=0, message="Error") for _ in range(3)],
+            top_violations=[
+                LintViolation(code="E501", path="f.py", line=1, col=0, message="Error")
+                for _ in range(3)
+            ],
             observed_at=newer,
         )
         snap_older = _make_snapshot(

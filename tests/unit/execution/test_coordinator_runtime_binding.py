@@ -24,7 +24,6 @@ from operations_center.policy.runtime_binding_policy import (
     RuntimeBindingPolicy,
 )
 
-
 # ---------------------------------------------------------------------------
 # Reused stubs from test_coordinator.py shape
 # ---------------------------------------------------------------------------
@@ -56,8 +55,11 @@ class _Registry:
         return self._adapter
 
 
-def _bundle(task_type: str = "refactor", lane: LaneName = LaneName.CLAUDE_CLI) -> ProposalDecisionBundle:
+def _bundle(
+    task_type: str = "refactor", lane: LaneName = LaneName.CLAUDE_CLI
+) -> ProposalDecisionBundle:
     from operations_center.contracts.routing import LaneDecision
+
     proposal = build_proposal(
         PlanningContext(
             goal_text="Refactor the foo module",

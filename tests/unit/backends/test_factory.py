@@ -36,7 +36,9 @@ def test_canonical_registry_does_not_thread_switchboard_proxy_transport(monkeypa
     monkeypatch.setattr(backend_factory, "AiderLocalBackendAdapter", FakeAiderLocalAdapter)
     monkeypatch.setattr(backend_factory, "TeamExecutorBackendAdapter", FakeTeamExecutorAdapter)
     monkeypatch.setattr(backend_factory, "DAGExecutorBackendAdapter", FakeDAGExecutorAdapter)
-    monkeypatch.setattr(backend_factory, "CritiqueExecutorBackendAdapter", FakeCritiqueExecutorAdapter)
+    monkeypatch.setattr(
+        backend_factory, "CritiqueExecutorBackendAdapter", FakeCritiqueExecutorAdapter
+    )
 
     settings = SimpleNamespace(
         team_executor=object(),

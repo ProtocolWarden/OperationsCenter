@@ -159,7 +159,9 @@ class TestStaleReclaim:
         proc = _spawn_short_subprocess()
         proc.wait()
         store._write_atomic(tmp_path / "repo_a.lock", _payload(repo_id="repo_a", oc_pid=proc.pid))
-        store._write_atomic(tmp_path / "repo_b.lock", _payload(repo_id="repo_b", oc_pid=os.getpid()))
+        store._write_atomic(
+            tmp_path / "repo_b.lock", _payload(repo_id="repo_b", oc_pid=os.getpid())
+        )
         reclaimed = store.sweep_stale()
         assert reclaimed == ["repo_a"]
         assert (tmp_path / "repo_b.lock").exists()

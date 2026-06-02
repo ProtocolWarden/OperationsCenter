@@ -33,7 +33,11 @@ from .models import CoverageAuditSummary
 
 logger = logging.getLogger(__name__)
 
-_COVERAGE_RULES = ("CV1_MODULE_UNEXECUTED", "CV2_FUNCTION_UNEXECUTED", "CV3_MODULE_BELOW_MIN_COVERAGE")
+_COVERAGE_RULES = (
+    "CV1_MODULE_UNEXECUTED",
+    "CV2_FUNCTION_UNEXECUTED",
+    "CV3_MODULE_BELOW_MIN_COVERAGE",
+)
 _DEFAULT_TIMEOUT_S = 120
 _MAX_SAMPLES = 6
 
@@ -48,7 +52,9 @@ def _find_coverage_json(artifact_manifest_path: str | Path) -> Path | None:
     try:
         manifest = load_artifact_manifest(mp)
     except (ManifestNotFoundError, ManifestInvalidError) as exc:
-        logger.warning("coverage_analysis_manifest_unreadable", extra={"path": str(mp), "error": str(exc)})
+        logger.warning(
+            "coverage_analysis_manifest_unreadable", extra={"path": str(mp), "error": str(exc)}
+        )
         return None
 
     index = build_artifact_index(manifest, mp)
@@ -58,7 +64,9 @@ def _find_coverage_json(artifact_manifest_path: str | Path) -> Path | None:
     return None
 
 
-def _summarize(stdout: str, exit_code: int, coverage_json_path: Path | None) -> CoverageAuditSummary:
+def _summarize(
+    stdout: str, exit_code: int, coverage_json_path: Path | None
+) -> CoverageAuditSummary:
     """Parse Custodian's --json output and produce a compact summary."""
     cv_counts = {rule: 0 for rule in _COVERAGE_RULES}
     samples: list[str] = []
@@ -73,13 +81,13 @@ def _summarize(stdout: str, exit_code: int, coverage_json_path: Path | None) -> 
             error="custodian stdout was not valid JSON",
         )
 
-    patterns = (payload.get("patterns") or {})
+    patterns = payload.get("patterns") or {}
     cov_block = patterns.get("COVERAGE")
     if cov_block:
         # Custodian wraps adapter findings under one COVERAGE pattern entry.
         # cov_block["count"] is the total; cov_block["samples"] include the rule-tagged messages.
         total = int(cov_block.get("count") or 0)
-        for sample in (cov_block.get("samples") or []):
+        for sample in cov_block.get("samples") or []:
             for rule in _COVERAGE_RULES:
                 if rule in sample:
                     cv_counts[rule] += 1
@@ -152,9 +160,11 @@ def run_post_dispatch_coverage_audit(
     argv = [
         binary,
         "audit",
-        "--repo", str(repo_root),
+        "--repo",
+        str(repo_root),
         "--enable-coverage",
-        "--coverage-json", str(coverage_json),
+        "--coverage-json",
+        str(coverage_json),
         "--json",
         "--no-color",
         *extra_argv,

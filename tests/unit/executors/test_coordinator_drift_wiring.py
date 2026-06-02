@@ -7,10 +7,11 @@ asserts that when ExecutionRequest.runtime_binding is set AND the
 adapter's capture reports observed_runtime, BACKEND_DRIFT lands in the
 observability metadata.
 """
+
 from __future__ import annotations
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 # Pull in the existing test fixtures; they are not packaged so add the path.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "execution"))
@@ -42,6 +43,7 @@ def _request_builder_with_binding(binding: RuntimeBindingSummary):
     class _Builder:
         def build(self, bundle, runtime, policy_decision=None):
             from operations_center.contracts.execution import ExecutionRequest
+
             return ExecutionRequest(
                 proposal_id=bundle.proposal.proposal_id,
                 decision_id=bundle.decision.decision_id,
@@ -60,8 +62,10 @@ def _request_builder_with_binding(binding: RuntimeBindingSummary):
 def test_no_drift_when_observed_matches_bound():
     bundle = tc._bundle()
     binding = RuntimeBindingSummary(
-        kind="cli_subscription", selection_mode="explicit_request",
-        provider="anthropic", model="opus",
+        kind="cli_subscription",
+        selection_mode="explicit_request",
+        provider="anthropic",
+        model="opus",
     )
     capture = _CaptureWithObservation(
         duration_ms=10,
@@ -82,8 +86,10 @@ def test_no_drift_when_observed_matches_bound():
 def test_drift_recorded_when_model_diverges():
     bundle = tc._bundle()
     binding = RuntimeBindingSummary(
-        kind="cli_subscription", selection_mode="explicit_request",
-        provider="anthropic", model="opus",
+        kind="cli_subscription",
+        selection_mode="explicit_request",
+        provider="anthropic",
+        model="opus",
     )
     capture = _CaptureWithObservation(
         duration_ms=10,

@@ -11,6 +11,7 @@ Emits:
   theme/lint_cluster    — a file appears persistently in top lint violations
   theme/type_cluster    — a file appears persistently in top type errors
 """
+
 from __future__ import annotations
 
 from collections import Counter
@@ -20,9 +21,9 @@ from operations_center.insights.models import DerivedInsight
 from operations_center.insights.normalizer import InsightNormalizer
 from operations_center.observer.models import RepoStateSnapshot
 
-_MIN_SNAPSHOTS = 3            # need this many snapshots to detect a pattern
+_MIN_SNAPSHOTS = 3  # need this many snapshots to detect a pattern
 _MIN_SNAPSHOT_APPEARANCES = 3  # file must appear in this many snapshots to qualify
-_MAX_CLUSTER_FILES = 3         # emit at most this many cluster insights per run
+_MAX_CLUSTER_FILES = 3  # emit at most this many cluster insights per run
 
 
 class ThemeAggregationDeriver:

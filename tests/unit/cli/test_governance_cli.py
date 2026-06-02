@@ -34,6 +34,7 @@ _DISPATCH_TARGET = "operations_center.audit_governance.runner.dispatch_managed_a
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_request_file(tmp_path: Path, **kwargs) -> Path:
     defaults = dict(
         repo_id="example_managed_repo",
@@ -50,10 +51,14 @@ def _make_request_file(tmp_path: Path, **kwargs) -> Path:
     return p
 
 
-def _make_decision_file(tmp_path: Path, request: AuditGovernanceRequest, **eval_kwargs) -> tuple[Path, AuditGovernanceDecision]:
+def _make_decision_file(
+    tmp_path: Path, request: AuditGovernanceRequest, **eval_kwargs
+) -> tuple[Path, AuditGovernanceDecision]:
     cfg = GovernanceConfig(
         known_repos=eval_kwargs.get("known_repos", ["example_managed_repo"]),
-        known_audit_types=eval_kwargs.get("known_audit_types", {"example_managed_repo": ["audit_type_1"]}),
+        known_audit_types=eval_kwargs.get(
+            "known_audit_types", {"example_managed_repo": ["audit_type_1"]}
+        ),
     )
     results = evaluate_governance_policies(
         request,
@@ -68,6 +73,7 @@ def _make_decision_file(tmp_path: Path, request: AuditGovernanceRequest, **eval_
 
 def _make_dispatch_result() -> ManagedAuditDispatchResult:
     from datetime import UTC, datetime
+
     now = datetime.now(UTC)
     return ManagedAuditDispatchResult(
         repo_id="example_managed_repo",
@@ -84,15 +90,23 @@ def _make_dispatch_result() -> ManagedAuditDispatchResult:
 # cmd_request
 # ---------------------------------------------------------------------------
 
+
 class TestCmdRequest:
     def test_prints_request_json_to_stdout(self):
-        result = _runner.invoke(app, [
-            "request",
-            "--repo", "example_managed_repo",
-            "--type", "audit_type_1",
-            "--reason", "manual fixture refresh",
-            "--requested-by", "alice",
-        ])
+        result = _runner.invoke(
+            app,
+            [
+                "request",
+                "--repo",
+                "example_managed_repo",
+                "--type",
+                "audit_type_1",
+                "--reason",
+                "manual fixture refresh",
+                "--requested-by",
+                "alice",
+            ],
+        )
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["repo_id"] == "example_managed_repo"
@@ -100,28 +114,44 @@ class TestCmdRequest:
 
     def test_writes_request_to_file(self, tmp_path: Path):
         out = tmp_path / "req.json"
-        result = _runner.invoke(app, [
-            "request",
-            "--repo", "example_managed_repo",
-            "--type", "audit_type_1",
-            "--reason", "manual refresh",
-            "--requested-by", "alice",
-            "--output", str(out),
-        ])
+        result = _runner.invoke(
+            app,
+            [
+                "request",
+                "--repo",
+                "example_managed_repo",
+                "--type",
+                "audit_type_1",
+                "--reason",
+                "manual refresh",
+                "--requested-by",
+                "alice",
+                "--output",
+                str(out),
+            ],
+        )
         assert result.exit_code == 0
         assert out.exists()
         data = json.loads(out.read_text())
         assert data["repo_id"] == "example_managed_repo"
 
     def test_invalid_urgency_exits_nonzero(self):
-        result = _runner.invoke(app, [
-            "request",
-            "--repo", "example_managed_repo",
-            "--type", "audit_type_1",
-            "--reason", "test",
-            "--requested-by", "alice",
-            "--urgency", "invalid_urgency_value",
-        ])
+        result = _runner.invoke(
+            app,
+            [
+                "request",
+                "--repo",
+                "example_managed_repo",
+                "--type",
+                "audit_type_1",
+                "--reason",
+                "test",
+                "--requested-by",
+                "alice",
+                "--urgency",
+                "invalid_urgency_value",
+            ],
+        )
         assert result.exit_code != 0
 
     def test_missing_required_flags_exits_nonzero(self):
@@ -133,48 +163,74 @@ class TestCmdRequest:
 # cmd_evaluate
 # ---------------------------------------------------------------------------
 
+
 class TestCmdEvaluate:
     def test_evaluate_known_repo_exits_zero(self, tmp_path: Path):
         req_path = _make_request_file(tmp_path)
-        result = _runner.invoke(app, [
-            "evaluate",
-            "--request", str(req_path),
-            "--known-repos", "example_managed_repo",
-            "--known-types", "audit_type_1",
-        ])
+        result = _runner.invoke(
+            app,
+            [
+                "evaluate",
+                "--request",
+                str(req_path),
+                "--known-repos",
+                "example_managed_repo",
+                "--known-types",
+                "audit_type_1",
+            ],
+        )
         assert result.exit_code == 0
 
     def test_evaluate_unknown_repo_exits_nonzero(self, tmp_path: Path):
         req_path = _make_request_file(tmp_path, repo_id="unknown_repo")
-        result = _runner.invoke(app, [
-            "evaluate",
-            "--request", str(req_path),
-            "--known-repos", "example_managed_repo",
-            "--known-types", "audit_type_1",
-        ])
+        result = _runner.invoke(
+            app,
+            [
+                "evaluate",
+                "--request",
+                str(req_path),
+                "--known-repos",
+                "example_managed_repo",
+                "--known-types",
+                "audit_type_1",
+            ],
+        )
         assert result.exit_code != 0
 
     def test_evaluate_missing_request_file_exits_nonzero(self, tmp_path: Path):
-        result = _runner.invoke(app, [
-            "evaluate",
-            "--request", str(tmp_path / "nonexistent.json"),
-        ])
+        result = _runner.invoke(
+            app,
+            [
+                "evaluate",
+                "--request",
+                str(tmp_path / "nonexistent.json"),
+            ],
+        )
         assert result.exit_code != 0
 
     def test_evaluate_prints_decision(self, tmp_path: Path):
         req_path = _make_request_file(tmp_path)
-        result = _runner.invoke(app, [
-            "evaluate",
-            "--request", str(req_path),
-            "--known-repos", "example_managed_repo",
-            "--known-types", "audit_type_1",
-        ])
-        assert "APPROVED" in result.output.upper() or "NEEDS_MANUAL_APPROVAL" in result.output.upper()
+        result = _runner.invoke(
+            app,
+            [
+                "evaluate",
+                "--request",
+                str(req_path),
+                "--known-repos",
+                "example_managed_repo",
+                "--known-types",
+                "audit_type_1",
+            ],
+        )
+        assert (
+            "APPROVED" in result.output.upper() or "NEEDS_MANUAL_APPROVAL" in result.output.upper()
+        )
 
 
 # ---------------------------------------------------------------------------
 # cmd_approve
 # ---------------------------------------------------------------------------
+
 
 class TestCmdApprove:
     def test_approve_needs_manual_approval_decision(self, tmp_path: Path):
@@ -192,13 +248,20 @@ class TestCmdApprove:
         assert decision.requires_manual_approval
 
         out = tmp_path / "approval.json"
-        result = _runner.invoke(app, [
-            "approve",
-            "--decision", str(dec_path),
-            "--request", str(req_path),
-            "--approved-by", "bob",
-            "--output", str(out),
-        ])
+        result = _runner.invoke(
+            app,
+            [
+                "approve",
+                "--decision",
+                str(dec_path),
+                "--request",
+                str(req_path),
+                "--approved-by",
+                "bob",
+                "--output",
+                str(out),
+            ],
+        )
         assert result.exit_code == 0
         assert out.exists()
         approval_data = json.loads(out.read_text())
@@ -207,12 +270,18 @@ class TestCmdApprove:
 
     def test_approve_missing_decision_file(self, tmp_path: Path):
         req_path = _make_request_file(tmp_path)
-        result = _runner.invoke(app, [
-            "approve",
-            "--decision", str(tmp_path / "missing.json"),
-            "--request", str(req_path),
-            "--approved-by", "bob",
-        ])
+        result = _runner.invoke(
+            app,
+            [
+                "approve",
+                "--decision",
+                str(tmp_path / "missing.json"),
+                "--request",
+                str(req_path),
+                "--approved-by",
+                "bob",
+            ],
+        )
         assert result.exit_code != 0
 
 
@@ -220,44 +289,69 @@ class TestCmdApprove:
 # cmd_run
 # ---------------------------------------------------------------------------
 
+
 class TestCmdRun:
     def test_run_approved_dispatches(self, tmp_path: Path):
         req_path = _make_request_file(tmp_path)
         dispatch_mock = MagicMock(return_value=_make_dispatch_result())
         with patch(_DISPATCH_TARGET, dispatch_mock):
-            result = _runner.invoke(app, [
-                "run",
-                "--request", str(req_path),
-                "--known-repos", "example_managed_repo",
-                "--known-types", "audit_type_1",
-                "--output-dir", str(tmp_path / "out"),
-                "--state-dir", str(tmp_path / "state"),
-            ])
+            result = _runner.invoke(
+                app,
+                [
+                    "run",
+                    "--request",
+                    str(req_path),
+                    "--known-repos",
+                    "example_managed_repo",
+                    "--known-types",
+                    "audit_type_1",
+                    "--output-dir",
+                    str(tmp_path / "out"),
+                    "--state-dir",
+                    str(tmp_path / "state"),
+                ],
+            )
         assert dispatch_mock.called, f"Dispatch not called. Output: {result.output}"
         assert result.exit_code == 0
 
     def test_run_denied_exits_nonzero(self, tmp_path: Path):
         req_path = _make_request_file(tmp_path, repo_id="unknown_repo")
-        result = _runner.invoke(app, [
-            "run",
-            "--request", str(req_path),
-            "--known-repos", "example_managed_repo",
-            "--known-types", "audit_type_1",
-            "--output-dir", str(tmp_path / "out"),
-            "--state-dir", str(tmp_path / "state"),
-        ])
+        result = _runner.invoke(
+            app,
+            [
+                "run",
+                "--request",
+                str(req_path),
+                "--known-repos",
+                "example_managed_repo",
+                "--known-types",
+                "audit_type_1",
+                "--output-dir",
+                str(tmp_path / "out"),
+                "--state-dir",
+                str(tmp_path / "state"),
+            ],
+        )
         assert result.exit_code != 0
 
     def test_run_needs_manual_approval_without_approval_exits_nonzero(self, tmp_path: Path):
         req_path = _make_request_file(tmp_path, urgency="urgent")
-        result = _runner.invoke(app, [
-            "run",
-            "--request", str(req_path),
-            "--known-repos", "example_managed_repo",
-            "--known-types", "audit_type_1",
-            "--output-dir", str(tmp_path / "out"),
-            "--state-dir", str(tmp_path / "state"),
-        ])
+        result = _runner.invoke(
+            app,
+            [
+                "run",
+                "--request",
+                str(req_path),
+                "--known-repos",
+                "example_managed_repo",
+                "--known-types",
+                "audit_type_1",
+                "--output-dir",
+                str(tmp_path / "out"),
+                "--state-dir",
+                str(tmp_path / "state"),
+            ],
+        )
         assert result.exit_code != 0
 
     def test_run_with_approval_file_dispatches(self, tmp_path: Path):
@@ -279,31 +373,47 @@ class TestCmdRun:
 
         dispatch_mock = MagicMock(return_value=_make_dispatch_result())
         with patch(_DISPATCH_TARGET, dispatch_mock):
-            result = _runner.invoke(app, [
-                "run",
-                "--request", str(req_path),
-                "--approval", str(approval_path),
-                "--known-repos", "example_managed_repo",
-                "--known-types", "audit_type_1",
-                "--output-dir", str(tmp_path / "out"),
-                "--state-dir", str(tmp_path / "state"),
-            ])
+            result = _runner.invoke(
+                app,
+                [
+                    "run",
+                    "--request",
+                    str(req_path),
+                    "--approval",
+                    str(approval_path),
+                    "--known-repos",
+                    "example_managed_repo",
+                    "--known-types",
+                    "audit_type_1",
+                    "--output-dir",
+                    str(tmp_path / "out"),
+                    "--state-dir",
+                    str(tmp_path / "state"),
+                ],
+            )
         assert dispatch_mock.called, f"Dispatch not called. Output: {result.output}"
         assert result.exit_code == 0
 
     def test_run_missing_request_file_exits_nonzero(self, tmp_path: Path):
-        result = _runner.invoke(app, [
-            "run",
-            "--request", str(tmp_path / "nonexistent.json"),
-            "--output-dir", str(tmp_path / "out"),
-            "--state-dir", str(tmp_path / "state"),
-        ])
+        result = _runner.invoke(
+            app,
+            [
+                "run",
+                "--request",
+                str(tmp_path / "nonexistent.json"),
+                "--output-dir",
+                str(tmp_path / "out"),
+                "--state-dir",
+                str(tmp_path / "state"),
+            ],
+        )
         assert result.exit_code != 0
 
 
 # ---------------------------------------------------------------------------
 # cmd_inspect
 # ---------------------------------------------------------------------------
+
 
 class TestCmdInspect:
     def test_inspect_written_report(self, tmp_path: Path):
@@ -325,25 +435,37 @@ class TestCmdInspect:
         with patch(_DISPATCH_TARGET, dispatch_mock):
             run_result = run_governed_audit(req, governance_config=cfg, output_dir=tmp_path / "out")
 
-        result = _runner.invoke(app, [
-            "inspect",
-            "--report", run_result.report_path,
-        ])
+        result = _runner.invoke(
+            app,
+            [
+                "inspect",
+                "--report",
+                run_result.report_path,
+            ],
+        )
         assert result.exit_code == 0
         assert "example_managed_repo" in result.output
 
     def test_inspect_missing_report_exits_nonzero(self, tmp_path: Path):
-        result = _runner.invoke(app, [
-            "inspect",
-            "--report", str(tmp_path / "nonexistent.json"),
-        ])
+        result = _runner.invoke(
+            app,
+            [
+                "inspect",
+                "--report",
+                str(tmp_path / "nonexistent.json"),
+            ],
+        )
         assert result.exit_code != 0
 
     def test_inspect_invalid_report_exits_nonzero(self, tmp_path: Path):
         bad = tmp_path / "bad.json"
         bad.write_text("not json", encoding="utf-8")
-        result = _runner.invoke(app, [
-            "inspect",
-            "--report", str(bad),
-        ])
+        result = _runner.invoke(
+            app,
+            [
+                "inspect",
+                "--report",
+                str(bad),
+            ],
+        )
         assert result.exit_code != 0

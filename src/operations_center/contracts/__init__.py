@@ -22,26 +22,6 @@ Canonical wire format:  CxRP v0.2 (https://github.com/ProtocolWarden/CxRP)
 Internal owner:         OperationsCenter (Pydantic; this package)
 """
 
-from .enums import (
-    ArtifactType,
-    BackendName,
-    EnforcedGuardrail,
-    EvaluationCommandSource,
-    EvaluationOutcome,
-    EvidenceType,
-    ExecutionMode,
-    ExecutionStatus,
-    FailureReasonCategory,
-    LaneName,
-    LineageBranchReason,
-    Priority,
-    RefinementDecision,
-    RefinementStatus,
-    RiskLevel,
-    TaskType,
-    ValidationStatus,
-)
-from .evidence import RuleEvidence
 from .ci import (
     ClpBinding,
     ContinuousImprovementSpec,
@@ -63,8 +43,26 @@ from .common import (
     ValidationProfile,
     ValidationSummary,
 )
-from .proposal import OcPlanningProposal, TaskProposal
-from .routing import LaneDecision, OcRoutingDecision
+from .enums import (
+    ArtifactType,
+    BackendName,
+    EnforcedGuardrail,
+    EvaluationCommandSource,
+    EvaluationOutcome,
+    EvidenceType,
+    ExecutionMode,
+    ExecutionStatus,
+    FailureReasonCategory,
+    LaneName,
+    LineageBranchReason,
+    Priority,
+    RefinementDecision,
+    RefinementStatus,
+    RiskLevel,
+    TaskType,
+    ValidationStatus,
+)
+from .evidence import RuleEvidence
 from .execution import (
     ExecutionArtifact,
     ExecutionRequest,
@@ -73,6 +71,8 @@ from .execution import (
     OcExecutionResult,
     RunTelemetry,
 )
+from .proposal import OcPlanningProposal, TaskProposal
+from .routing import LaneDecision, OcRoutingDecision
 
 __all__ = [
     # enums

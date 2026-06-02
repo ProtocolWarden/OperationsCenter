@@ -20,12 +20,12 @@ Boundary refinement (per Custodian Boundary Refinement spec):
 
 The legacy Python AI3 detector was removed once Semgrep parity landed.
 """
+
 from __future__ import annotations
 
 import ast
 
-from custodian.audit_kit.detector import AuditContext, Detector, DetectorResult, HIGH
-
+from custodian.audit_kit.detector import HIGH, AuditContext, Detector, DetectorResult
 
 # ── AI4: anti-collapse guardrail structurally present ─────────────────────────
 
@@ -34,8 +34,11 @@ _AI4_CORE_FORBIDDEN = frozenset({"auto_apply", "execute"})
 
 def _extract_frozenset_strings(node: ast.expr) -> set[str]:
     strings: set[str] = set()
-    if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-            and node.func.id == "frozenset"):
+    if not (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "frozenset"
+    ):
         return strings
     if not node.args:
         return strings
@@ -77,13 +80,16 @@ def _detect_ai4_anti_collapse(ctx: AuditContext) -> DetectorResult:
     if missing_core:
         return DetectorResult(
             count=1,
-            samples=[f"{rel}: _FORBIDDEN_MUTATION_FIELDS missing core fields: {sorted(missing_core)}"],
+            samples=[
+                f"{rel}: _FORBIDDEN_MUTATION_FIELDS missing core fields: {sorted(missing_core)}"
+            ],
         )
 
     return DetectorResult(count=0, samples=[])
 
 
 # ── plugin entry point ────────────────────────────────────────────────────────
+
 
 def build_oc_architecture_detectors() -> list[Detector]:
     """Custodian plugin contributor for OC's architecture invariants.
@@ -94,5 +100,11 @@ def build_oc_architecture_detectors() -> list[Detector]:
       AI4      → custom Python (this file)
     """
     return [
-        Detector("AI4", "anti-collapse guardrail structurally present", "fixed", _detect_ai4_anti_collapse, HIGH),
+        Detector(
+            "AI4",
+            "anti-collapse guardrail structurally present",
+            "fixed",
+            _detect_ai4_anti_collapse,
+            HIGH,
+        ),
     ]

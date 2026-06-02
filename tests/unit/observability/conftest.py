@@ -106,9 +106,15 @@ def successful_rich_result() -> ExecutionResult:
         validation_commands_run=2,
         validation_commands_passed=2,
         artifacts=[
-            make_artifact(ArtifactType.DIFF, "pre-merge diff", "--- a/src/main.py\n+++ b/src/main.py"),
+            make_artifact(
+                ArtifactType.DIFF, "pre-merge diff", "--- a/src/main.py\n+++ b/src/main.py"
+            ),
             make_artifact(ArtifactType.VALIDATION_REPORT, "ruff output", "All checks passed."),
-            make_artifact(ArtifactType.LOG_EXCERPT, "executor run log", "executor: 2 files fixed\nexecutor: done"),
+            make_artifact(
+                ArtifactType.LOG_EXCERPT,
+                "executor run log",
+                "executor: 2 files fixed\nexecutor: done",
+            ),
         ],
     )
 

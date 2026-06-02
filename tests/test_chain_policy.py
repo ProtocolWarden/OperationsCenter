@@ -10,6 +10,7 @@ Covers:
 - Suppression evidence names the specific upstream and downstream families.
 - When upstream is absent, downstream candidate passes through.
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -18,10 +19,10 @@ from pathlib import Path
 from operations_center.decision.candidate_builder import CandidateSpec
 from operations_center.decision.chain_policy import ChainPolicy
 from operations_center.decision.models import (
-    DecisionRepoRef,
-    ProposalCandidatesArtifact,
-    ProposalCandidate,
     CandidateRationale,
+    DecisionRepoRef,
+    ProposalCandidate,
+    ProposalCandidatesArtifact,
     ProposalOutline,
 )
 
@@ -147,9 +148,7 @@ def test_downstream_passes_when_upstream_outside_cooldown() -> None:
         generated_at=_NOW - timedelta(hours=3),
     )
     specs = [_spec("type_fix")]
-    live, suppressed = policy.apply(
-        specs=specs, prior_artifacts=[old_artifact], generated_at=_NOW
-    )
+    live, suppressed = policy.apply(specs=specs, prior_artifacts=[old_artifact], generated_at=_NOW)
     assert len(live) == 1
     assert not any(s.reason.startswith("upstream_family") for s in suppressed)
 

@@ -25,11 +25,13 @@ _MAX_NO_OP_RATE = 0.30
 _MAX_VALIDATION_FAILURES = 0
 
 # Tuning families that must all show "keep" before arch work is scheduled.
-_REQUIRED_STABLE_FAMILIES = frozenset({
-    "observation_coverage",
-    "test_visibility",
-    "dependency_drift",
-})
+_REQUIRED_STABLE_FAMILIES = frozenset(
+    {
+        "observation_coverage",
+        "test_visibility",
+        "dependency_drift",
+    }
+)
 
 # Types treated as arch-class (never auto-promoted by the regular backlog family).
 _ARCH_TYPES: frozenset[str] = frozenset({"arch", "redesign"})
@@ -65,8 +67,7 @@ class ArchSchedulerDeriver:
         repo_name = current.repo.name
 
         arch_items = [
-            item for item in current.signals.backlog.items
-            if item.item_type in _ARCH_TYPES
+            item for item in current.signals.backlog.items if item.item_type in _ARCH_TYPES
         ]
         if not arch_items:
             return []

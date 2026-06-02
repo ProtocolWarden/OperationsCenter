@@ -6,6 +6,7 @@ Confirms OC consumes the merged EffectiveRepoGraph (platform + project
 + local) rather than a bare platform manifest, and that the lifecycle
 plan stage still resolves repo identity through it.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -29,7 +30,6 @@ from operations_center.planning.models import PlanningContext, ProposalDecisionB
 from operations_center.planning.proposal_builder import build_proposal
 from operations_center.policy.models import PolicyDecision, PolicyStatus
 from operations_center.repo_graph_factory import build_effective_repo_graph
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -113,28 +113,28 @@ class TestThreeLayerComposition:
     def test_project_and_local_layered_in(self, tmp_path: Path) -> None:
         proj = tmp_path / "project.yaml"
         proj.write_text(
-            'manifest_kind: project\n'
+            "manifest_kind: project\n"
             'manifest_version: "1.0.0"\n'
-            'repos:\n'
-            '  example_api:\n'
-            '    canonical_name: ExampleAPI\n'
-            '    visibility: private\n'
-            '    runtime_role: project_service\n'
-            'edges:\n'
-            '  - {from: ExampleAPI, to: OperationsCenter, type: dispatches_to}\n',
+            "repos:\n"
+            "  example_api:\n"
+            "    canonical_name: ExampleAPI\n"
+            "    visibility: private\n"
+            "    runtime_role: project_service\n"
+            "edges:\n"
+            "  - {from: ExampleAPI, to: OperationsCenter, type: dispatches_to}\n",
             encoding="utf-8",
         )
         local = tmp_path / "local.yaml"
         local.write_text(
-            'manifest_kind: local\n'
+            "manifest_kind: local\n"
             'manifest_version: "1.0.0"\n'
-            'repos:\n'
-            '  operations_center:\n'
-            '    local_path: /home/dev/src/OperationsCenter\n'
-            '    local_port: 8080\n'
-            '  example_api:\n'
-            '    local_path: /home/dev/private/example_api\n'
-            '    gpu_required: true\n',
+            "repos:\n"
+            "  operations_center:\n"
+            "    local_path: /home/dev/src/OperationsCenter\n"
+            "    local_port: 8080\n"
+            "  example_api:\n"
+            "    local_path: /home/dev/private/example_api\n"
+            "    gpu_required: true\n",
             encoding="utf-8",
         )
         g = build_effective_repo_graph(
@@ -175,12 +175,12 @@ class TestCoordinatorReceivesEffectiveGraph:
         # as the lifecycle plan-stage repo identity context.
         proj = tmp_path / "project.yaml"
         proj.write_text(
-            'manifest_kind: project\n'
+            "manifest_kind: project\n"
             'manifest_version: "1.0.0"\n'
-            'repos:\n'
-            '  example_api:\n'
-            '    canonical_name: ExampleAPI\n'
-            '    visibility: private\n',
+            "repos:\n"
+            "  example_api:\n"
+            "    canonical_name: ExampleAPI\n"
+            "    visibility: private\n",
             encoding="utf-8",
         )
         graph = build_effective_repo_graph(project_manifest_path=proj)
@@ -212,12 +212,12 @@ class TestComposeFailuresPropagate:
     def test_project_redefining_platform_repo_propagates(self, tmp_path: Path) -> None:
         proj = tmp_path / "project.yaml"
         proj.write_text(
-            'manifest_kind: project\n'
+            "manifest_kind: project\n"
             'manifest_version: "1.0.0"\n'
-            'repos:\n'
-            '  operations_center:\n'
-            '    canonical_name: MyCustomOperationsCenter\n'
-            '    visibility: private\n',
+            "repos:\n"
+            "  operations_center:\n"
+            "    canonical_name: MyCustomOperationsCenter\n"
+            "    visibility: private\n",
             encoding="utf-8",
         )
         # PM raises RepoGraphConfigError; we pass it through unchanged.

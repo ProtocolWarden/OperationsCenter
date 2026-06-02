@@ -31,12 +31,26 @@ from typing import Any
 
 from cxrp.contracts import (
     Artifact as CxrpArtifact,
+)
+from cxrp.contracts import (
     ExecutionLimits as CxrpExecutionLimits,
+)
+from cxrp.contracts import (
     ExecutionRequest as CxrpExecutionRequest,
+)
+from cxrp.contracts import (
     ExecutionResult as CxrpExecutionResult,
+)
+from cxrp.contracts import (
     LaneAlternative as CxrpLaneAlternative,
+)
+from cxrp.contracts import (
     LaneDecision as CxrpLaneDecision,
+)
+from cxrp.contracts import (
     RuntimeBinding as CxrpRuntimeBinding,
+)
+from cxrp.contracts import (
     TaskProposal as CxrpTaskProposal,
 )
 from cxrp.vocabulary.lane import LaneType
@@ -112,7 +126,8 @@ def to_cxrp_lane_decision(
     Mirrors switchboard.adapters.cxrp_mapper but lives here so OC's own
     audit/observability code can emit the same wire shape.
     """
-    from cxrp.contracts import BackendName as CxrpBackendName, ExecutorName as CxrpExecutorName
+    from cxrp.contracts import BackendName as CxrpBackendName
+    from cxrp.contracts import ExecutorName as CxrpExecutorName
 
     metadata: dict[str, Any] = {
         "policy_rule_matched": oc.policy_rule_matched,
@@ -202,12 +217,12 @@ def to_cxrp_execution_request(
         "validation_commands": list(oc.validation_commands),
     }
     runtime_binding_cxrp = (
-        runtime_binding_from_summary(oc.runtime_binding)
-        if oc.runtime_binding is not None
-        else None
+        runtime_binding_from_summary(oc.runtime_binding) if oc.runtime_binding is not None else None
     )
     # Schema 0.3 — backend/executor are typed CxRP enums
-    from cxrp.contracts import BackendName as CxrpBackendName, ExecutorName as CxrpExecutorName
+    from cxrp.contracts import BackendName as CxrpBackendName
+    from cxrp.contracts import ExecutorName as CxrpExecutorName
+
     return CxrpExecutionRequest(
         request_id=oc.run_id,
         proposal_id=oc.proposal_id,
@@ -278,6 +293,7 @@ def to_cxrp_execution_result(oc: OcExecutionResult) -> CxrpExecutionResult:
 # ---------------------------------------------------------------------------
 # RuntimeBinding mapping (CxRP <-> OC summary)
 # ---------------------------------------------------------------------------
+
 
 def runtime_binding_to_summary(rb: CxrpRuntimeBinding) -> RuntimeBindingSummary:
     """Translate a CxRP RuntimeBinding (validated dataclass) into the

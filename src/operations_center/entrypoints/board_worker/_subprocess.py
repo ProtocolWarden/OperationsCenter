@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Subprocess and environment helpers for board_worker."""
+
 from __future__ import annotations
 
 import os
@@ -8,9 +9,19 @@ from pathlib import Path
 
 _TRANSIENT_CATEGORIES = {"backend_error", "timeout"}
 _TRANSIENT_REASON_PATTERNS = (
-    "connection refused", "connection reset", "timed out", "timeout",
-    "502", "503", "504", "bad gateway", "gateway timeout", "service unavailable",
-    "remote disconnected", "network is unreachable", "temporary failure",
+    "connection refused",
+    "connection reset",
+    "timed out",
+    "timeout",
+    "502",
+    "503",
+    "504",
+    "bad gateway",
+    "gateway timeout",
+    "service unavailable",
+    "remote disconnected",
+    "network is unreachable",
+    "temporary failure",
 )
 
 

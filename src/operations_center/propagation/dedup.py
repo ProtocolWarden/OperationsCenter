@@ -14,6 +14,7 @@ The store is a single JSON file. Concurrent writers use the existing
 file-lock helper from `audit_governance/file_locks` so cross-process
 safety lines up with the rest of the system.
 """
+
 from __future__ import annotations
 
 import json

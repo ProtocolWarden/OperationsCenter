@@ -17,6 +17,7 @@ Exit codes:
 
 Designed to be safe to run repeatedly. Reads only — never mutates state.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -83,16 +84,12 @@ def main(argv: list[str] | None = None) -> int:
     log_buffer = StringIO()
     handler = logging.StreamHandler(log_buffer)
     handler.setLevel(logging.WARNING)
-    factory_logger = logging.getLogger(
-        "operations_center.repo_graph_factory"
-    )
+    factory_logger = logging.getLogger("operations_center.repo_graph_factory")
     prior_level = factory_logger.level
     factory_logger.addHandler(handler)
     factory_logger.setLevel(logging.WARNING)
     try:
-        graph = build_effective_repo_graph_from_settings(
-            settings, repo_root=args.repo_root
-        )
+        graph = build_effective_repo_graph_from_settings(settings, repo_root=args.repo_root)
     finally:
         factory_logger.removeHandler(handler)
         factory_logger.setLevel(prior_level)
@@ -122,9 +119,15 @@ def main(argv: list[str] | None = None) -> int:
             "mode": mode,
             "version": _resolve_platform_manifest_version(),
             "project_slug": pm.project_slug,
-            "private_manifest_path": str(pm.private_manifest_path) if pm.private_manifest_path else None,
-            "project_manifest_path": str(pm.project_manifest_path) if pm.project_manifest_path else None,
-            "work_scope_manifest_path": str(pm.work_scope_manifest_path) if pm.work_scope_manifest_path else None,
+            "private_manifest_path": str(pm.private_manifest_path)
+            if pm.private_manifest_path
+            else None,
+            "project_manifest_path": str(pm.project_manifest_path)
+            if pm.project_manifest_path
+            else None,
+            "work_scope_manifest_path": str(pm.work_scope_manifest_path)
+            if pm.work_scope_manifest_path
+            else None,
             "local_manifest_path": str(pm.local_manifest_path) if pm.local_manifest_path else None,
         },
         "repo_root": str(args.repo_root) if args.repo_root else None,
@@ -152,9 +155,7 @@ def main(argv: list[str] | None = None) -> int:
         # composing each include's project manifest standalone against
         # the platform base and counting the delta.
         if mode == "work_scope" and pm.work_scope_manifest_path is not None:
-            report["includes"] = _compute_per_include_breakdown(
-                pm.work_scope_manifest_path
-            )
+            report["includes"] = _compute_per_include_breakdown(pm.work_scope_manifest_path)
 
     # Decide pass/fail.
     if not pm.enabled:
@@ -230,6 +231,7 @@ def _resolve_platform_manifest_version() -> str | None:
     """Return the installed platform-manifest distribution version, or None
     if the package isn't installed via metadata-discoverable means."""
     from importlib import metadata as _md
+
     try:
         return _md.version("platform-manifest")
     except _md.PackageNotFoundError:
@@ -247,7 +249,6 @@ def _compute_per_include_breakdown(
     not a hot path; one extra `load_effective_graph` call per include.
     """
     import yaml as _yaml
-
     from platform_manifest import (
         RepoGraphConfigError,
         default_config_path,
@@ -282,10 +283,12 @@ def _compute_per_include_breakdown(
         name = inc.get("name") or f"include[{idx}]"
         path_raw = inc.get("project_manifest_path")
         if not isinstance(path_raw, str):
-            out.append({
-                "name": name,
-                "error": "missing or non-string 'project_manifest_path'",
-            })
+            out.append(
+                {
+                    "name": name,
+                    "error": "missing or non-string 'project_manifest_path'",
+                }
+            )
             continue
         # Resolve include path relative to the work-scope manifest's directory
         inc_path = (work_scope_path.parent / Path(path_raw)).resolve()
@@ -294,12 +297,14 @@ def _compute_per_include_breakdown(
         except (RepoGraphConfigError, OSError) as exc:
             out.append({"name": name, "path": str(inc_path), "error": str(exc)})
             continue
-        out.append({
-            "name": name,
-            "path": str(inc_path),
-            "nodes_contributed": len(g.list_nodes()) - platform_node_count,
-            "edges_contributed": len(g.edges) - platform_edge_count,
-        })
+        out.append(
+            {
+                "name": name,
+                "path": str(inc_path),
+                "nodes_contributed": len(g.list_nodes()) - platform_node_count,
+                "edges_contributed": len(g.edges) - platform_edge_count,
+            }
+        )
     return out
 
 

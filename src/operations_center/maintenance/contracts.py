@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Contracts for the maintenance-task registration pattern."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

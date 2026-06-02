@@ -28,10 +28,10 @@ from operations_center.mini_regression import (
 from operations_center.mini_regression.runner import _compute_suite_status
 from operations_center.slice_replay.models import SliceReplayProfile, SliceReplayReport
 
-
 # ---------------------------------------------------------------------------
 # Contract 1 — Suite loader: valid load
 # ---------------------------------------------------------------------------
+
 
 class TestSuiteLoader:
     def test_load_valid_suite(self, tmp_path: Path, simple_suite: MiniRegressionSuiteDefinition):
@@ -85,6 +85,7 @@ class TestSuiteLoader:
 # Contract 2 — Suite entry model validation
 # ---------------------------------------------------------------------------
 
+
 class TestSuiteEntry:
     def test_required_default(self):
         entry = MiniRegressionSuiteEntry(
@@ -117,6 +118,7 @@ class TestSuiteEntry:
 # Contract 3 — Suite definition properties
 # ---------------------------------------------------------------------------
 
+
 class TestSuiteDefinition:
     def test_required_entries_property(self, mixed_suite: MiniRegressionSuiteDefinition):
         req = mixed_suite.required_entries
@@ -137,6 +139,7 @@ class TestSuiteDefinition:
 # ---------------------------------------------------------------------------
 # Contract 4 — Runner: all-passed suite
 # ---------------------------------------------------------------------------
+
 
 class TestRunnerPassed:
     def test_all_required_passed(self, run_request: MiniRegressionRunRequest):
@@ -163,6 +166,7 @@ class TestRunnerPassed:
 # ---------------------------------------------------------------------------
 # Contract 5 — Runner: required entry failure → suite failed
 # ---------------------------------------------------------------------------
+
 
 class TestRunnerFailure:
     def test_bad_pack_path_required_entry_errors(self, tmp_path: Path):
@@ -211,6 +215,7 @@ class TestRunnerFailure:
 # Contract 6 — Runner: optional entry skip
 # ---------------------------------------------------------------------------
 
+
 class TestRunnerOptionalSkip:
     def test_optional_skipped_when_flag_false(
         self, mixed_suite: MiniRegressionSuiteDefinition, tmp_path: Path
@@ -257,6 +262,7 @@ class TestRunnerOptionalSkip:
 # Contract 7 — Runner: fail_fast stops early
 # ---------------------------------------------------------------------------
 
+
 class TestRunnerFailFast:
     def test_fail_fast_stops_after_first_required_failure(self, tmp_path: Path):
         suite = MiniRegressionSuiteDefinition(
@@ -291,9 +297,11 @@ class TestRunnerFailFast:
 # Contract 8 — Suite status computation rules
 # ---------------------------------------------------------------------------
 
+
 class TestSuiteStatusRules:
     def _make_result(self, *, required: bool, status: str):
         from operations_center.mini_regression.models import MiniRegressionEntryResult
+
         return MiniRegressionEntryResult(
             entry_id="e",
             fixture_pack_id="p",
@@ -339,6 +347,7 @@ class TestSuiteStatusRules:
 # Contract 9 — Report persistence: write and load
 # ---------------------------------------------------------------------------
 
+
 class TestReportPersistence:
     def test_write_creates_file(self, run_request: MiniRegressionRunRequest):
         report = run_mini_regression_suite(run_request)
@@ -377,13 +386,9 @@ class TestReportPersistence:
 # Contract 10 — Import boundary: mini_regression never imports managed repo
 # ---------------------------------------------------------------------------
 
+
 class TestImportBoundary:
-    _PACKAGE_ROOT = (
-        Path(__file__).parents[3]
-        / "src"
-        / "operations_center"
-        / "mini_regression"
-    )
+    _PACKAGE_ROOT = Path(__file__).parents[3] / "src" / "operations_center" / "mini_regression"
 
     _FORBIDDEN_PREFIXES = (
         "example_managed_repo",
@@ -418,14 +423,13 @@ class TestImportBoundary:
 # Contract 11 — Suite limitations are aggregated from replay reports (gap_005)
 # ---------------------------------------------------------------------------
 
+
 class TestSuiteLimitations:
     def test_limitations_field_is_list(self, run_request: MiniRegressionRunRequest):
         report = run_mini_regression_suite(run_request)
         assert isinstance(report.limitations, list)
 
-    def test_limitations_aggregated_from_failure_pack(
-        self, failure_pack, tmp_path: Path
-    ):
+    def test_limitations_aggregated_from_failure_pack(self, failure_pack, tmp_path: Path):
         """A failure fixture pack with partial_run limitation should surface it in the suite."""
         _, pack_dir = failure_pack
         suite = MiniRegressionSuiteDefinition(
@@ -449,7 +453,9 @@ class TestSuiteLimitations:
         # (they may be empty if the replay found none — that is also valid)
         assert isinstance(report.limitations, list)
 
-    def test_no_duplicate_limitations(self, mixed_suite: MiniRegressionSuiteDefinition, tmp_path: Path):
+    def test_no_duplicate_limitations(
+        self, mixed_suite: MiniRegressionSuiteDefinition, tmp_path: Path
+    ):
         """Duplicate limitation strings from multiple entries must be de-duplicated."""
         request = MiniRegressionRunRequest(
             suite_definition=mixed_suite,
@@ -461,6 +467,7 @@ class TestSuiteLimitations:
     def test_make_suite_run_id_unique(self):
         """Parallel calls to make_suite_run_id must not collide (gap_008)."""
         from operations_center.mini_regression.models import make_suite_run_id
+
         ids = {make_suite_run_id("test_suite") for _ in range(20)}
         assert len(ids) == 20
 
@@ -566,12 +573,11 @@ class TestReplayPartialSemantics:
 # Contract 13 — repo_id / audit_type propagation from suite definition
 # ---------------------------------------------------------------------------
 
+
 class TestRepoAuditTypeFields:
     """Top-level repo_id and audit_type propagate from suite definition to report."""
 
-    def test_repo_id_and_audit_type_propagated(
-        self, good_pack, tmp_path: Path
-    ):
+    def test_repo_id_and_audit_type_propagated(self, good_pack, tmp_path: Path):
         _, pack_dir = good_pack
         suite = MiniRegressionSuiteDefinition(
             suite_id="typed_suite",
@@ -634,6 +640,7 @@ class TestRepoAuditTypeFields:
     def test_schema_version_is_1_1(self):
         """MiniRegressionSuiteReport schema_version must be 1.1 after field addition."""
         from operations_center.mini_regression.models import MiniRegressionSuiteReport
+
         assert MiniRegressionSuiteReport.model_fields["schema_version"].default == "1.1"
 
     def test_suite_definition_schema_version_is_1_1(self):
@@ -643,12 +650,14 @@ class TestRepoAuditTypeFields:
     def test_suite_report_schema_delta_zero(self):
         """suite_report.schema.json must match MiniRegressionSuiteReport fields exactly."""
         from operations_center.mini_regression.models import MiniRegressionSuiteReport
+
         schema_path = (
-            Path(__file__).parents[3]
-            / "schemas"
-            / "mini_regression"
-            / "suite_report.schema.json"
+            Path(__file__).parents[3] / "schemas" / "mini_regression" / "suite_report.schema.json"
         )
         file_fields = set(json.loads(schema_path.read_text()).get("properties", {}).keys())
-        model_fields = set(MiniRegressionSuiteReport.model_json_schema().get("properties", {}).keys())
-        assert file_fields == model_fields, f"Schema delta: {file_fields.symmetric_difference(model_fields)}"
+        model_fields = set(
+            MiniRegressionSuiteReport.model_json_schema().get("properties", {}).keys()
+        )
+        assert file_fields == model_fields, (
+            f"Schema delta: {file_fields.symmetric_difference(model_fields)}"
+        )

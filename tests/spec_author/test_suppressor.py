@@ -2,7 +2,9 @@
 # Copyright (C) 2026 ProtocolWarden
 # tests/spec_director/test_suppressor.py
 from __future__ import annotations
+
 from pathlib import Path
+
 from operations_center.spec_author.models import CampaignRecord
 
 
@@ -21,36 +23,49 @@ def _active(keywords: list[str], tmp_path: Path) -> tuple[list[CampaignRecord], 
     specs_dir.mkdir(parents=True, exist_ok=True)
     spec_path = _write_spec(specs_dir, "add-auth", keywords)
     record = CampaignRecord(
-        campaign_id="abc", slug="add-auth", spec_file=str(spec_path),
-        status="active", created_at="2026-04-15T00:00:00+00:00",
+        campaign_id="abc",
+        slug="add-auth",
+        spec_file=str(spec_path),
+        status="active",
+        created_at="2026-04-15T00:00:00+00:00",
     )
     return [record], specs_dir
 
 
 def test_suppressed_by_path_keyword(tmp_path):
     from operations_center.spec_author.suppressor import is_suppressed
+
     campaigns, specs_dir = _active(["src/auth/"], tmp_path)
     assert is_suppressed("Fix auth login", ["src/auth/session.py"], campaigns, specs_dir) is True
 
 
 def test_suppressed_by_title_keyword(tmp_path):
     from operations_center.spec_author.suppressor import is_suppressed
+
     campaigns, specs_dir = _active(["authentication"], tmp_path)
     assert is_suppressed("Improve authentication flow", [], campaigns, specs_dir) is True
 
 
 def test_not_suppressed_unrelated(tmp_path):
     from operations_center.spec_author.suppressor import is_suppressed
+
     campaigns, specs_dir = _active(["src/auth/"], tmp_path)
-    assert is_suppressed("Fix lint errors in src/reporting/", ["src/reporting/base.py"], campaigns, specs_dir) is False
+    assert (
+        is_suppressed(
+            "Fix lint errors in src/reporting/", ["src/reporting/base.py"], campaigns, specs_dir
+        )
+        is False
+    )
 
 
 def test_not_suppressed_no_active_campaigns():
     from operations_center.spec_author.suppressor import is_suppressed
+
     assert is_suppressed("Fix anything", ["src/auth/x.py"], [], None) is False
 
 
 def test_suppressed_case_insensitive(tmp_path):
     from operations_center.spec_author.suppressor import is_suppressed
+
     campaigns, specs_dir = _active(["Authentication"], tmp_path)
     assert is_suppressed("improve authentication handler", [], campaigns, specs_dir) is True

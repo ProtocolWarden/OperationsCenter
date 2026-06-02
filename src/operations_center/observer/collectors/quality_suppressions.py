@@ -13,6 +13,7 @@ anti-collapse invariant, nothing here imports `behavior_calibration` or
 prescribes runtime changes — the count becomes a finding for downstream
 observability.
 """
+
 from __future__ import annotations
 
 import re
@@ -36,6 +37,7 @@ _ADDED_LINE_RE = re.compile(r"^\+(?!\+\+).*", re.MULTILINE)
 @dataclass(frozen=True)
 class SuppressionCount:
     """Counts of each suppression kind added in a diff."""
+
     total: int
     by_kind: dict[str, int]
 

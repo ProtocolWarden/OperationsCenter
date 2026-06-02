@@ -17,7 +17,6 @@ from operations_center.routing.smoke import (
     assert_decision_complete,
 )
 
-
 # ---------------------------------------------------------------------------
 # assert_decision_complete
 # ---------------------------------------------------------------------------
@@ -69,11 +68,13 @@ def test_missing_switchboard_version_allowed_for_stub() -> None:
 
 def test_error_lists_every_missing_field() -> None:
     with pytest.raises(IncompleteRoutingDecisionError) as exc_info:
-        assert_decision_complete(_full_decision(
-            policy_rule_matched=None,
-            rationale=None,
-            switchboard_version=None,
-        ))
+        assert_decision_complete(
+            _full_decision(
+                policy_rule_matched=None,
+                rationale=None,
+                switchboard_version=None,
+            )
+        )
     msg = str(exc_info.value)
     assert "policy_rule_matched" in msg
     assert "rationale" in msg
@@ -100,8 +101,7 @@ def test_cxrp_round_trip_preserves_switchboard_version() -> None:
         "confidence": cxrp.confidence,
         "metadata": dict(cxrp.metadata),
         "alternatives": [
-            {"executor": alt.executor.value if alt.executor else None}
-            for alt in cxrp.alternatives
+            {"executor": alt.executor.value if alt.executor else None} for alt in cxrp.alternatives
         ],
     }
     decoded = from_cxrp_lane_decision(payload)

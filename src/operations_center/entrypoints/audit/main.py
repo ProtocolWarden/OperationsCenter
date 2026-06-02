@@ -66,9 +66,11 @@ def _validate_executor_catalog_if_requested() -> None:
     default off.
     """
     import os
+
     if os.environ.get("OC_VALIDATE_CATALOG_AT_STARTUP", "").lower() not in ("1", "true", "yes"):
         return
     from operations_center.executors.startup import initialize_catalog
+
     initialize_catalog(fail_fast=True)
 
 
@@ -84,10 +86,10 @@ for _index_cmd in _index_app.registered_commands:
 
 @app.command("run")
 def cmd_run(
-    repo: str = typer.Option(..., "--repo", "-r", help="Managed repo ID (e.g. 'example_managed_repo')."),
-    audit_type: str = typer.Option(
-        ..., "--type", "-t", help="Audit type (e.g. 'representative')."
+    repo: str = typer.Option(
+        ..., "--repo", "-r", help="Managed repo ID (e.g. 'example_managed_repo')."
     ),
+    audit_type: str = typer.Option(..., "--type", "-t", help="Audit type (e.g. 'representative')."),
     allow_unverified: bool = typer.Option(
         False,
         "--allow-unverified",
@@ -299,9 +301,7 @@ def cmd_watch(
         raise typer.Exit(code=1)
 
     output_dir = _Path(payload.expected_run_status_path)
-    console.print(
-        f"[dim]watching run_id={payload.run_id} under {output_dir}[/dim]"
-    )
+    console.print(f"[dim]watching run_id={payload.run_id} under {output_dir}[/dim]")
     for snapshot in poll_run_status(
         output_dir,
         payload.run_id,
@@ -366,7 +366,9 @@ def _print_dispatch_result(result) -> None:
     t.add_row("run_id", result.run_id or "—")
     t.add_row("status", f"[{status_style}]{result.status.value}[/{status_style}]")
     t.add_row("failure_kind", result.failure_kind.value if result.failure_kind else "—")
-    t.add_row("exit_code", str(result.process_exit_code) if result.process_exit_code is not None else "—")
+    t.add_row(
+        "exit_code", str(result.process_exit_code) if result.process_exit_code is not None else "—"
+    )
     t.add_row("duration", f"{result.duration_seconds:.1f}s")
     t.add_row("run_status_path", result.run_status_path or "—")
     t.add_row("artifact_manifest_path", result.artifact_manifest_path or "—")

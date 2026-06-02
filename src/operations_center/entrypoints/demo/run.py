@@ -52,7 +52,6 @@ from operations_center.policy.models import (
     ToolGuardrail,
 )
 
-
 # ---------------------------------------------------------------------------
 # Demo-specific policy: explicitly permissive, labeled as demo-only
 # ---------------------------------------------------------------------------
@@ -159,7 +158,9 @@ def _write_evidence(
         "executed": outcome.executed,
     }
     meta_path = evidence_dir / "run_metadata.json"
-    meta_path.write_text(json.dumps(meta, indent=2, default=str, ensure_ascii=False) + "\n", encoding="utf-8")
+    meta_path.write_text(
+        json.dumps(meta, indent=2, default=str, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
     written.append(meta_path)
     return written
 
@@ -344,8 +345,9 @@ def main(argv: list[str] | None = None) -> int:
 
     # --- 5. Policy engine ---
     if args.blocked_policy:
-        from operations_center.policy.models import RepoPolicy, PolicyConfig
         from operations_center.policy.models import (
+            PolicyConfig,
+            RepoPolicy,
             ReviewRequirement,
         )
 

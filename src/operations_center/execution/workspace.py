@@ -20,6 +20,7 @@ WorkspaceManager closes that gap:
 The manager is optional on ExecutionCoordinator — coordinator tests construct
 the coordinator without one, preserving the existing pure-coordinator surface.
 """
+
 from __future__ import annotations
 
 import logging
@@ -100,7 +101,10 @@ class WorkspaceManager:
         # (measured: shallow clone ~38s vs full clone >120s for large repos).
         proc = subprocess.run(
             ["git", "clone", "--depth", "1", "--no-single-branch", request.clone_url, "."],
-            cwd=ws, capture_output=True, text=True, timeout=300,
+            cwd=ws,
+            capture_output=True,
+            text=True,
+            timeout=300,
         )
         if proc.returncode != 0:
             raise RuntimeError(
@@ -145,7 +149,8 @@ class WorkspaceManager:
                 logger.warning(
                     "WorkspaceManager.prepare: base_branch %r was missing on "
                     "origin; self-healed by creating it from %s",
-                    request.base_branch, default_ref,
+                    request.base_branch,
+                    default_ref,
                 )
             except Exception:
                 raise RuntimeError(
@@ -175,7 +180,9 @@ class WorkspaceManager:
         self._git.create_task_branch(ws, request.task_branch)
         logger.info(
             "WorkspaceManager.prepare: cloned %s into %s on branch %s",
-            request.clone_url, ws, request.task_branch,
+            request.clone_url,
+            ws,
+            request.task_branch,
         )
 
     # ── post-execution ───────────────────────────────────────────────────────
@@ -200,8 +207,8 @@ class WorkspaceManager:
         # workspace. Reviewer self-review: writes verdict.json, never code.
         if request.task_branch.startswith(_NO_PUSH_BRANCH_PREFIXES):
             logger.info(
-                "WorkspaceManager.finalize: skipping push for %s (branch prefix "
-                "is analysis-only)", request.task_branch,
+                "WorkspaceManager.finalize: skipping push for %s (branch prefix is analysis-only)",
+                request.task_branch,
             )
             return result
 
@@ -220,36 +227,45 @@ class WorkspaceManager:
             logger.warning(
                 "WorkspaceManager.finalize: refusing to commit oversized diff "
                 "for %s — %d files, %d lines (caps: %d files, %d lines)",
-                request.task_branch, n_files, n_lines, self._max_files, self._max_lines,
+                request.task_branch,
+                n_files,
+                n_lines,
+                self._max_files,
+                self._max_lines,
             )
             # Persist the file list so the caller (board_worker) can build
             # a focused split-task per chunk before the workspace is torn down.
             try:
                 import json as _json
+
                 (ws / "scope-too-wide.json").write_text(
                     _json.dumps({"files": file_list, "n_lines": n_lines}),
                     encoding="utf-8",
                 )
             except OSError as exc:
-                logger.warning("WorkspaceManager.finalize: could not persist scope-too-wide.json — %s", exc)
+                logger.warning(
+                    "WorkspaceManager.finalize: could not persist scope-too-wide.json — %s", exc
+                )
             # Detailed reason — surfaces in the Plane comment via _handle_failure
             # plumbing. Lists the top files so an operator (or a future
             # auto-split recovery service) can see exactly where the executor
             # went wide and break the work into focused chunks.
             top_files = "\n".join(f"  - {f}" for f in file_list[:15])
             extra = f" (+{len(file_list) - 15} more)" if len(file_list) > 15 else ""
-            return result.model_copy(update={
-                "branch_pushed":  False,
-                "failure_category": "scope_too_wide",
-                "failure_reason": (
-                    f"diff exceeded soft cap: {n_files} files, {n_lines} lines "
-                    f"(caps {self._max_files} / {self._max_lines}). "
-                    "Suggested next: split into smaller goal tasks scoped to one or "
-                    "two files each, or raise OPS_CENTER_MAX_FILES / "
-                    f"OPS_CENTER_MAX_LINES if the wide scope is intentional.\n"
-                    f"Top files in this run:\n{top_files}{extra}"
-                ),
-            })
+            return result.model_copy(
+                update={
+                    "branch_pushed": False,
+                    "failure_category": "scope_too_wide",
+                    "failure_reason": (
+                        f"diff exceeded soft cap: {n_files} files, {n_lines} lines "
+                        f"(caps {self._max_files} / {self._max_lines}). "
+                        "Suggested next: split into smaller goal tasks scoped to one or "
+                        "two files each, or raise OPS_CENTER_MAX_FILES / "
+                        f"OPS_CENTER_MAX_LINES if the wide scope is intentional.\n"
+                        f"Top files in this run:\n{top_files}{extra}"
+                    ),
+                }
+            )
 
         # Commit anything the executor left in the working tree
         if self._git.changed_files(ws):
@@ -258,8 +274,9 @@ class WorkspaceManager:
 
         if not self._has_new_commits(ws, request.base_branch):
             logger.info(
-                "WorkspaceManager.finalize: no new commits on %s vs origin/%s — "
-                "nothing to push", request.task_branch, request.base_branch,
+                "WorkspaceManager.finalize: no new commits on %s vs origin/%s — nothing to push",
+                request.task_branch,
+                request.base_branch,
             )
             return result
 
@@ -286,11 +303,13 @@ class WorkspaceManager:
 
         pr_url = self._maybe_create_pr(request)
 
-        return result.model_copy(update={
-            "branch_pushed":    True,
-            "branch_name":      request.task_branch,
-            "pull_request_url": pr_url,
-        })
+        return result.model_copy(
+            update={
+                "branch_pushed": True,
+                "branch_name": request.task_branch,
+                "pull_request_url": pr_url,
+            }
+        )
 
     def _warn_cross_repo_impact(self, ws: Path, request: ExecutionRequest) -> None:
         """Log a warning when changed files cross another repo's interface.
@@ -322,7 +341,11 @@ class WorkspaceManager:
         try:
             proc = subprocess.run(
                 ["git", "diff", "--name-only", "HEAD~1..HEAD"],
-                cwd=ws, capture_output=True, text=True, check=True, timeout=30,
+                cwd=ws,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=30,
             )
         except subprocess.CalledProcessError:
             return
@@ -330,13 +353,16 @@ class WorkspaceManager:
         if not files:
             return
         impacts = _check_cross_repo_impact(
-            files, repos=all_repos, source_repo_key=request.repo_key,
+            files,
+            repos=all_repos,
+            source_repo_key=request.repo_key,
         )
         for impact in impacts:
             logger.warning(
                 "WorkspaceManager.finalize: cross-repo impact — %s touched paths "
                 "declared by %s: %s",
-                request.repo_key, impact.repo_key,
+                request.repo_key,
+                impact.repo_key,
                 ", ".join(impact.matched_paths),
             )
 
@@ -349,14 +375,24 @@ class WorkspaceManager:
         so the comment we write to Plane is deterministic.
         """
         try:
-            subprocess.run(["git", "add", "-A"], cwd=ws, check=True, capture_output=True, timeout=30)
+            subprocess.run(
+                ["git", "add", "-A"], cwd=ws, check=True, capture_output=True, timeout=30
+            )
             proc = subprocess.run(
                 ["git", "diff", "--cached", "--shortstat"],
-                cwd=ws, capture_output=True, text=True, check=True, timeout=30,
+                cwd=ws,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=30,
             )
             files_proc = subprocess.run(
                 ["git", "diff", "--cached", "--name-only"],
-                cwd=ws, capture_output=True, text=True, check=True, timeout=30,
+                cwd=ws,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=30,
             )
         except subprocess.CalledProcessError:
             return None
@@ -367,6 +403,7 @@ class WorkspaceManager:
         n_files = len(file_list)
         n_lines = 0
         import re
+
         for m in re.finditer(r"(\d+)\s+(?:insertion|deletion)", proc.stdout):
             n_lines += int(m.group(1))
         if n_files > self._max_files or n_lines > self._max_lines:
@@ -376,7 +413,10 @@ class WorkspaceManager:
     def _has_new_commits(self, ws: Path, base_branch: str) -> bool:
         proc = subprocess.run(
             ["git", "rev-list", "--count", f"origin/{base_branch}..HEAD"],
-            cwd=ws, capture_output=True, text=True, timeout=30,
+            cwd=ws,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         if proc.returncode != 0:
             return False
@@ -394,11 +434,12 @@ class WorkspaceManager:
         that no useful title can be extracted.
         """
         import re
+
         text = (request.goal_text or "").strip()
         first_line = text.splitlines()[0].strip() if text else ""
-        first_line = re.sub(r"^\[\w+\]\s*", "", first_line)        # strip [Impl]/[Test]/[Improve]
+        first_line = re.sub(r"^\[\w+\]\s*", "", first_line)  # strip [Impl]/[Test]/[Improve]
         first_line = re.sub(r"\*\*([^*]+)\*\*", r"\1", first_line)  # **bold** → bold
-        first_line = re.sub(r"`([^`]+)`", r"\1", first_line)        # `code` → code
+        first_line = re.sub(r"`([^`]+)`", r"\1", first_line)  # `code` → code
         first_line = first_line.strip(" .—-")
         if not first_line:
             return f"Operations Center run {request.run_id[:8]}"
@@ -420,18 +461,21 @@ class WorkspaceManager:
             return None
         try:
             from operations_center.adapters.github_pr import GitHubPRClient
+
             owner, repo = GitHubPRClient.owner_repo_from_clone_url(request.clone_url)
             gh = GitHubPRClient(self._token)
             title = self._commit_message(request)
             body = (
-                f"Auto-generated by Operations Center execution.\n\n"
-                f"## Goal\n{request.goal_text}\n"
+                f"Auto-generated by Operations Center execution.\n\n## Goal\n{request.goal_text}\n"
             )
-            pr = gh.create_pr(owner, repo,
-                              head=request.task_branch,
-                              base=request.base_branch,
-                              title=title,
-                              body=body)
+            pr = gh.create_pr(
+                owner,
+                repo,
+                head=request.task_branch,
+                base=request.base_branch,
+                title=title,
+                body=body,
+            )
             return pr.get("html_url")
         except Exception as exc:
             logger.warning("WorkspaceManager: PR creation failed — %s", exc)
@@ -453,15 +497,18 @@ class WorkspaceManager:
             from operations_center.execution.baseline_validation import (
                 run_baseline_validation,
             )
+
             summary = run_baseline_validation(ws, repo_cfg=repo_cfg)
         except Exception as exc:
             logger.warning(
-                "WorkspaceManager.prepare: baseline validation crashed — %s", exc,
+                "WorkspaceManager.prepare: baseline validation crashed — %s",
+                exc,
             )
             return
         try:
             (ws / ".baseline-validation.json").write_text(
-                summary.model_dump_json(), encoding="utf-8",
+                summary.model_dump_json(),
+                encoding="utf-8",
             )
         except OSError as exc:
             logger.debug("baseline-validation marker write failed — %s", exc)
@@ -493,19 +540,25 @@ class WorkspaceManager:
                 if not isinstance(cmd, str) or not cmd.strip():
                     continue
                 proc = subprocess.run(
-                    cmd, shell=True, cwd=ws,
-                    capture_output=True, text=True, timeout=600,
+                    cmd,
+                    shell=True,
+                    cwd=ws,
+                    capture_output=True,
+                    text=True,
+                    timeout=600,
                 )
                 if proc.returncode != 0:
                     logger.warning(
-                        "WorkspaceManager: bootstrap_commands step failed (%s) "
-                        "in %s — %s", cmd, request.repo_key,
+                        "WorkspaceManager: bootstrap_commands step failed (%s) in %s — %s",
+                        cmd,
+                        request.repo_key,
                         (proc.stderr or proc.stdout).strip()[:200],
                     )
                     return
             logger.info(
                 "WorkspaceManager: bootstrap_commands ran (%d step(s)) for %s",
-                len(custom), request.repo_key,
+                len(custom),
+                request.repo_key,
             )
             return
 
@@ -515,12 +568,17 @@ class WorkspaceManager:
         try:
             subprocess.run(
                 [python_bin, "-m", "venv", venv_dir],
-                cwd=ws, capture_output=True, text=True, timeout=300, check=True,
+                cwd=ws,
+                capture_output=True,
+                text=True,
+                timeout=300,
+                check=True,
             )
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as exc:
             logger.warning(
                 "WorkspaceManager: venv creation failed for %s — %s",
-                request.repo_key, exc,
+                request.repo_key,
+                exc,
             )
             return
         # install_cmd is non-None at this point (early-returned above when both
@@ -528,8 +586,12 @@ class WorkspaceManager:
         if install_cmd is None:  # pragma: no cover — guarded by early return above
             return
         proc = subprocess.run(
-            install_cmd, shell=True, cwd=ws,
-            capture_output=True, text=True, timeout=900,
+            install_cmd,
+            shell=True,
+            cwd=ws,
+            capture_output=True,
+            text=True,
+            timeout=900,
         )
         if proc.returncode != 0:
             logger.warning(
@@ -538,5 +600,6 @@ class WorkspaceManager:
                 (proc.stderr or proc.stdout).strip()[:200],
             )
             return
-        logger.info("WorkspaceManager: bootstrapped venv at %s/%s for %s",
-                    ws, venv_dir, request.repo_key)
+        logger.info(
+            "WorkspaceManager: bootstrapped venv at %s/%s for %s", ws, venv_dir, request.repo_key
+        )

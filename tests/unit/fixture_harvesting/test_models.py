@@ -9,6 +9,7 @@ import re
 
 import pytest
 
+from operations_center.behavior_calibration.models import ArtifactIndexSummary
 from operations_center.fixture_harvesting import (
     CopyPolicy,
     FixtureArtifact,
@@ -17,7 +18,6 @@ from operations_center.fixture_harvesting import (
     HarvestProfile,
     make_fixture_pack_id,
 )
-from operations_center.behavior_calibration.models import ArtifactIndexSummary
 
 
 def _make_summary() -> ArtifactIndexSummary:
@@ -67,15 +67,21 @@ def _make_pack() -> FixturePack:
 
 class TestFixturePackId:
     def test_make_fixture_pack_id_is_path_safe(self) -> None:
-        pack_id = make_fixture_pack_id("example_managed_repo", "run999", HarvestProfile.MINIMAL_FAILURE)
+        pack_id = make_fixture_pack_id(
+            "example_managed_repo", "run999", HarvestProfile.MINIMAL_FAILURE
+        )
         assert re.match(r"^[a-zA-Z0-9_\-]+$", pack_id), f"Not path-safe: {pack_id!r}"
 
     def test_make_fixture_pack_id_contains_repo_id(self) -> None:
-        pack_id = make_fixture_pack_id("example_managed_repo", "run999", HarvestProfile.MINIMAL_FAILURE)
+        pack_id = make_fixture_pack_id(
+            "example_managed_repo", "run999", HarvestProfile.MINIMAL_FAILURE
+        )
         assert "example_managed_repo" in pack_id
 
     def test_make_fixture_pack_id_contains_run_id(self) -> None:
-        pack_id = make_fixture_pack_id("example_managed_repo", "run999", HarvestProfile.MINIMAL_FAILURE)
+        pack_id = make_fixture_pack_id(
+            "example_managed_repo", "run999", HarvestProfile.MINIMAL_FAILURE
+        )
         assert "run999" in pack_id
 
     def test_make_fixture_pack_id_contains_profile(self) -> None:
@@ -87,7 +93,9 @@ class TestFixturePackId:
         assert " " not in pack_id
 
     def test_make_fixture_pack_id_no_colons(self) -> None:
-        pack_id = make_fixture_pack_id("example_managed_repo", "run:999", HarvestProfile.MANUAL_SELECTION)
+        pack_id = make_fixture_pack_id(
+            "example_managed_repo", "run:999", HarvestProfile.MANUAL_SELECTION
+        )
         assert ":" not in pack_id
 
 
@@ -149,7 +157,9 @@ class TestFixturePack:
 
     def test_fixture_pack_artifact_count(self) -> None:
         pack = _make_pack()
-        pack2 = pack.model_copy(update={"artifacts": [_make_fixture_artifact(), _make_fixture_artifact(copied=False)]})
+        pack2 = pack.model_copy(
+            update={"artifacts": [_make_fixture_artifact(), _make_fixture_artifact(copied=False)]}
+        )
         assert pack2.artifact_count == 2
         assert pack2.copied_count == 1
         assert pack2.metadata_only_count == 1

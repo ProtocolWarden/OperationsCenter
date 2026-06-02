@@ -53,9 +53,7 @@ def load_run_status_entrypoint(path: Path | str) -> ManagedRunStatus:
     """
     p = Path(path)
     if not p.exists():
-        raise RunStatusNotFoundError(
-            f"run_status.json not found: {p}"
-        )
+        raise RunStatusNotFoundError(f"run_status.json not found: {p}")
     try:
         raw = json.loads(p.read_text(encoding="utf-8"))
         raw.pop("_example_note", None)

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Unit tests for the SlowTestTracker class."""
+
 import importlib.util
 from pathlib import Path
 

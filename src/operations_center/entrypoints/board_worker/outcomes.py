@@ -5,6 +5,7 @@
 Covers success, failure, follow-up creation, scope-split, and the
 improve-campaign CI refinement loop.
 """
+
 from __future__ import annotations
 
 import json
@@ -13,11 +14,11 @@ import subprocess
 from pathlib import Path
 
 from .labels import (
+    LIFECYCLE_EXPANDED,
     STATE_BLOCKED,
     STATE_DONE,
     STATE_READY,
     STATE_REVIEW,
-    LIFECYCLE_EXPANDED,
     add_label,
     increment_retry_count,
     label_value,
@@ -31,17 +32,22 @@ _MAX_FOLLOW_UP_RETRIES = 3
 
 # ── Atomic failure transition ─────────────────────────────────────────────────
 
+
 def fail_task(client, task_id: str, role: str, reason: str) -> None:
     try:
         client.transition_issue(task_id, STATE_BLOCKED)
         client.comment_issue(task_id, f"board_worker[{role}] blocked — {reason}")
     except Exception as exc:
         logger.warning(
-            "board_worker[%s]: failed to mark task_id=%s blocked — %s", role, task_id, exc,
+            "board_worker[%s]: failed to mark task_id=%s blocked — %s",
+            role,
+            task_id,
+            exc,
         )
 
 
 # ── Improve output ────────────────────────────────────────────────────────────
+
 
 def read_improve_output(workspace: Path) -> list[dict]:
     """Pull structured suggestions written by the executor to improve-output.json.
@@ -65,6 +71,7 @@ def read_improve_output(workspace: Path) -> list[dict]:
 
 # ── Success handler ───────────────────────────────────────────────────────────
 
+
 def handle_success(
     client,
     issue: dict,
@@ -76,21 +83,28 @@ def handle_success(
     improve_suggestions: list[dict] | None = None,
     pr_url: str | None = None,
 ) -> None:
-    task_id   = str(issue["id"])
-    labels    = issue.get("labels", [])
-    repo_key  = label_value(labels, "repo")
+    task_id = str(issue["id"])
+    labels = issue.get("labels", [])
+    repo_key = label_value(labels, "repo")
     await_review = (
-        settings.repos.get(repo_key) and settings.repos[repo_key].await_review
-    ) if repo_key else False
+        (settings.repos.get(repo_key) and settings.repos[repo_key].await_review)
+        if repo_key
+        else False
+    )
 
     try:
         if role == "goal":
             if needs_verification:
                 follow_id = create_follow_up(
-                    client, issue, settings, follow_kind="test", reason="verification_needed",
+                    client,
+                    issue,
+                    settings,
+                    follow_kind="test",
+                    reason="verification_needed",
                 )
                 client.comment_issue(
-                    task_id, f"Implementation complete — created verification task #{follow_id}",
+                    task_id,
+                    f"Implementation complete — created verification task #{follow_id}",
                 )
                 client.transition_issue(task_id, STATE_DONE)
             elif await_review:
@@ -131,18 +145,23 @@ def handle_success(
     except Exception as exc:
         logger.warning(
             "board_worker[%s]: post-success transition failed task_id=%s — %s",
-            role, task_id, exc,
+            role,
+            task_id,
+            exc,
         )
 
     try:
         maybe_close_split_parent(client, issue)
     except Exception as exc:
         logger.warning(
-            "board_worker: close-parent check failed for task_id=%s — %s", task_id, exc,
+            "board_worker: close-parent check failed for task_id=%s — %s",
+            task_id,
+            exc,
         )
 
 
 # ── Split-parent closer ───────────────────────────────────────────────────────
+
 
 def maybe_close_split_parent(client, completed_issue: dict) -> None:
     """Close the parent of a scope-split when its last child completes.
@@ -190,8 +209,7 @@ def maybe_close_split_parent(client, completed_issue: dict) -> None:
 
     other = [s for s in siblings if str(s.get("id", "")) != this_task_id]
     other_done = all(
-        (s.get("state") or {}).get("name", "").strip().lower() == "done"
-        for s in other
+        (s.get("state") or {}).get("name", "").strip().lower() == "done" for s in other
     )
     if not other_done:
         return
@@ -209,18 +227,24 @@ def maybe_close_split_parent(client, completed_issue: dict) -> None:
         )
         logger.info(
             "board_worker: closed parent task_id=%s after %d split children Done",
-            parent_id, n_total,
+            parent_id,
+            n_total,
         )
     except Exception as exc:
         logger.warning(
-            "board_worker: failed to close parent task_id=%s — %s", parent_id, exc,
+            "board_worker: failed to close parent task_id=%s — %s",
+            parent_id,
+            exc,
         )
 
 
 # ── Scope-split helpers ───────────────────────────────────────────────────────
 
+
 def split_files_into_chunks(
-    files: list[str], chunk_size: int = 15, max_chunks: int = 6,
+    files: list[str],
+    chunk_size: int = 15,
+    max_chunks: int = 6,
 ) -> list[list[str]]:
     """Group files into roughly-equal chunks capped at max_chunks total."""
     if not files:
@@ -233,7 +257,7 @@ def split_files_into_chunks(
     chunks: list[list[str]] = []
     for group in groups:
         for i in range(0, len(group), chunk_size):
-            chunks.append(group[i: i + chunk_size])
+            chunks.append(group[i : i + chunk_size])
     while len(chunks) > max_chunks and len(chunks) >= 2:
         chunks.sort(key=len)
         merged = chunks[0] + chunks[1]
@@ -242,22 +266,27 @@ def split_files_into_chunks(
 
 
 def create_split_followups(
-    client, parent: dict, _settings, file_list: list[str], reason: str,
+    client,
+    parent: dict,
+    _settings,
+    file_list: list[str],
+    reason: str,
 ) -> list[str]:
     """Spawn smaller goal tasks scoped to file subsets after a scope_too_wide block.
 
     Caps split depth at 2 (retry-count >= 2 → block instead of split).
     """
-    parent_id     = str(parent["id"])
-    parent_title  = parent.get("name", "")
+    parent_id = str(parent["id"])
+    parent_title = parent.get("name", "")
     parent_labels = parent.get("labels", [])
-    repo_key      = label_value(parent_labels, "repo")
-    retry_count   = retry_count_from_labels(parent_labels)
+    repo_key = label_value(parent_labels, "repo")
+    retry_count = retry_count_from_labels(parent_labels)
 
     if retry_count >= 2:
         logger.info(
             "board_worker: not splitting task_id=%s — retry-count=%d already exhausted",
-            parent_id, retry_count,
+            parent_id,
+            retry_count,
         )
         return []
 
@@ -270,7 +299,8 @@ def create_split_followups(
         for lab in parent_labels
     ]
     inherited_sources = [
-        s for s in inherited_sources
+        s
+        for s in inherited_sources
         if s.lower().startswith("source:") and s.lower() != "source: board_worker"
     ]
 
@@ -299,8 +329,10 @@ def create_split_followups(
         ]
         try:
             new_issue = client.create_issue(
-                name=title, description=description,
-                state=STATE_READY, label_names=labels,
+                name=title,
+                description=description,
+                state=STATE_READY,
+                label_names=labels,
             )
             new_id = str(new_issue.get("id", ""))
             if new_id:
@@ -313,12 +345,16 @@ def create_split_followups(
 
     logger.info(
         "board_worker: split task_id=%s into %d chunks (retry-count=%d → %d)",
-        parent_id, len(created), retry_count, retry_count + 1,
+        parent_id,
+        len(created),
+        retry_count,
+        retry_count + 1,
     )
     return created
 
 
 # ── Failure handler ───────────────────────────────────────────────────────────
+
 
 def handle_failure(
     client,
@@ -330,32 +366,44 @@ def handle_failure(
     *,
     scope_files: list[str] | None = None,
 ) -> None:
-    task_id  = str(issue["id"])
-    status   = result.get("status", "unknown")
+    task_id = str(issue["id"])
+    status = result.get("status", "unknown")
     category = result.get("failure_category") or "unknown"
-    reason   = result.get("failure_reason") or "(no reason provided)"
+    reason = result.get("failure_reason") or "(no reason provided)"
 
     split_ids: list[str] = []
     if category == "scope_too_wide" and scope_files:
         try:
             split_ids = create_split_followups(
-                client, issue, settings, scope_files, reason="scope_too_wide_split",
+                client,
+                issue,
+                settings,
+                scope_files,
+                reason="scope_too_wide_split",
             )
         except Exception as exc:
             logger.warning("board_worker: scope-split spawn failed — %s", exc)
 
     logger.warning(
         "board_worker[%s]: task_id=%s blocked status=%s category=%s reason=%s",
-        role, task_id, status, category, reason,
+        role,
+        task_id,
+        status,
+        category,
+        reason,
     )
 
     executor_exit_code: int | None = result.get("executor_exit_code")
-    executor_signal: str | None    = result.get("executor_signal")
+    executor_signal: str | None = result.get("executor_signal")
 
     try:
         if role == "test":
             follow_id = create_follow_up(
-                client, issue, settings, follow_kind="goal", reason="verification_failed",
+                client,
+                issue,
+                settings,
+                follow_kind="goal",
+                reason="verification_failed",
             )
             client.transition_issue(task_id, STATE_BLOCKED)
             client.comment_issue(
@@ -370,9 +418,8 @@ def handle_failure(
             client.transition_issue(task_id, STATE_BLOCKED)
             split_block = ""
             if split_ids:
-                split_block = (
-                    f"\n\nAuto-split into {len(split_ids)} focused task(s): "
-                    + ", ".join(f"#{i}" for i in split_ids)
+                split_block = f"\n\nAuto-split into {len(split_ids)} focused task(s): " + ", ".join(
+                    f"#{i}" for i in split_ids
                 )
             exec_block = ""
             if executor_exit_code is not None:
@@ -398,23 +445,29 @@ def handle_failure(
     except Exception as exc:
         logger.warning(
             "board_worker[%s]: post-failure transition failed task_id=%s — %s",
-            role, task_id, exc,
+            role,
+            task_id,
+            exc,
         )
 
 
 # ── Follow-up creators ────────────────────────────────────────────────────────
 
+
 def create_improve_follow_up(
-    client, parent: dict, _settings, suggestion: dict,
+    client,
+    parent: dict,
+    _settings,
+    suggestion: dict,
 ) -> str | None:
     """Create a focused goal task from one improve suggestion."""
-    parent_id     = str(parent["id"])
+    parent_id = str(parent["id"])
     parent_labels = parent.get("labels", [])
-    repo_key      = label_value(parent_labels, "repo")
+    repo_key = label_value(parent_labels, "repo")
 
-    title      = str(suggestion.get("title", "")).strip()[:80] or "Improve follow-up"
-    rationale  = str(suggestion.get("rationale", "")).strip()
-    files      = suggestion.get("files") or []
+    title = str(suggestion.get("title", "")).strip()[:80] or "Improve follow-up"
+    rationale = str(suggestion.get("rationale", "")).strip()
+    files = suggestion.get("files") or []
     complexity = str(suggestion.get("complexity", "")).strip().lower()
 
     files_block = ""
@@ -437,8 +490,12 @@ def create_improve_follow_up(
     inherited_sources = [
         (lab.get("name", "") if isinstance(lab, dict) else str(lab)).strip()
         for lab in parent_labels
-        if (lab.get("name", "") if isinstance(lab, dict) else str(lab)).strip().lower().startswith("source:")
-        and (lab.get("name", "") if isinstance(lab, dict) else str(lab)).strip().lower() != "source: board_worker"
+        if (lab.get("name", "") if isinstance(lab, dict) else str(lab))
+        .strip()
+        .lower()
+        .startswith("source:")
+        and (lab.get("name", "") if isinstance(lab, dict) else str(lab)).strip().lower()
+        != "source: board_worker"
     ]
     label_names = [
         "task-kind: goal",
@@ -454,40 +511,51 @@ def create_improve_follow_up(
 
     try:
         issue = client.create_issue(
-            name=title, description=description,
-            state=STATE_READY, label_names=label_names,
+            name=title,
+            description=description,
+            state=STATE_READY,
+            label_names=label_names,
         )
         new_id = str(issue.get("id", ""))
         logger.info(
             "board_worker[improve]: spawned follow-up task_id=%s title=%r complexity=%s",
-            new_id, title, complexity,
+            new_id,
+            title,
+            complexity,
         )
         return new_id or None
     except Exception as exc:
         logger.warning(
-            "board_worker[improve]: failed to create follow-up for %r — %s", title, exc,
+            "board_worker[improve]: failed to create follow-up for %r — %s",
+            title,
+            exc,
         )
         return None
 
 
 def create_follow_up(
-    client, parent: dict, _settings, follow_kind: str, reason: str,
+    client,
+    parent: dict,
+    _settings,
+    follow_kind: str,
+    reason: str,
 ) -> str:
     """Create a follow-up Plane task with full lineage metadata.
 
     Returns the new task id, or "" when the retry cap is reached.
     """
-    parent_id     = str(parent["id"])
-    parent_title  = parent.get("name", "")
+    parent_id = str(parent["id"])
+    parent_title = parent.get("name", "")
     parent_labels = parent.get("labels", [])
-    repo_key      = label_value(parent_labels, "repo")
-    base_branch   = label_value(parent_labels, "base-branch")
-    retry_count   = retry_count_from_labels(parent_labels)
+    repo_key = label_value(parent_labels, "repo")
+    base_branch = label_value(parent_labels, "base-branch")
+    retry_count = retry_count_from_labels(parent_labels)
 
     if retry_count >= _MAX_FOLLOW_UP_RETRIES:
         logger.info(
             "board_worker: refusing follow-up — parent task_id=%s already at retry-count=%d",
-            parent_id, retry_count,
+            parent_id,
+            retry_count,
         )
         return ""
 
@@ -495,15 +563,18 @@ def create_follow_up(
         f"## Goal\n{parent_title} — {reason.replace('_', ' ')}\n\n"
         f"## Execution\n"
         f"repo: {repo_key}\n"
-        f"mode: {follow_kind}\n"
-        + (f"base_branch: {base_branch}\n" if base_branch else "")
+        f"mode: {follow_kind}\n" + (f"base_branch: {base_branch}\n" if base_branch else "")
     )
 
     inherited_sources = [
         (lab.get("name", "") if isinstance(lab, dict) else str(lab)).strip()
         for lab in parent_labels
-        if (lab.get("name", "") if isinstance(lab, dict) else str(lab)).strip().lower().startswith("source:")
-        and (lab.get("name", "") if isinstance(lab, dict) else str(lab)).strip().lower() != "source: board_worker"
+        if (lab.get("name", "") if isinstance(lab, dict) else str(lab))
+        .strip()
+        .lower()
+        .startswith("source:")
+        and (lab.get("name", "") if isinstance(lab, dict) else str(lab)).strip().lower()
+        != "source: board_worker"
     ]
     label_names = [
         f"task-kind: {follow_kind}",
@@ -524,12 +595,15 @@ def create_follow_up(
     new_id = str(issue.get("id", "?"))
     logger.info(
         "board_worker: created follow-up task_id=%s kind=%s reason=%s",
-        new_id, follow_kind, reason,
+        new_id,
+        follow_kind,
+        reason,
     )
     return new_id
 
 
 # ── CI refinement loop (improve_campaign) ─────────────────────────────────────
+
 
 def run_ci_loop(
     *,
@@ -550,23 +624,30 @@ def run_ci_loop(
     short_id: str,
 ) -> bool:
     """Drive a ContinuousImprovementSpec refinement loop for an improve_campaign task."""
+    from pydantic import ValidationError
+
     from operations_center.contracts.ci import ContinuousImprovementSpec
     from operations_center.contracts.enums import RefinementStatus
     from operations_center.execution.ci_coordinator import CiCoordinator, CiRunContext
     from operations_center.execution.ci_store import CiStore
-    from pydantic import ValidationError
 
     try:
         ci_spec = ContinuousImprovementSpec.model_validate(ci_spec_raw)
     except (ValidationError, Exception) as exc:
         logger.error(
             "board_worker[%s]: task_id=%s invalid ContinuousImprovementSpec — %s",
-            role, task_id, exc,
+            role,
+            task_id,
+            exc,
         )
         fail_task(client, task_id, role, f"invalid continuous_improvement spec: {exc}")
         return False
 
-    repo_path = Path(settings.repos[repo_key].local_path) if settings.repos.get(repo_key) else Path(repo_key)
+    repo_path = (
+        Path(settings.repos[repo_key].local_path)
+        if settings.repos.get(repo_key)
+        else Path(repo_key)
+    )
     lineage_id = f"lin-{task_id[:12]}"
     validation_commands: list[str] = []
     repo_cfg = settings.repos.get(repo_key)
@@ -588,21 +669,32 @@ def run_ci_loop(
     last_attempt_result: dict = {}
 
     def execute(*, attempt_number: int, strategy, proposal_id: str):
-        attempt_workspace  = tmp / f"workspace-ci-{attempt_number}"
+        attempt_workspace = tmp / f"workspace-ci-{attempt_number}"
         attempt_workspace.mkdir(exist_ok=True)
         attempt_result_file = tmp / f"result-ci-{attempt_number}.json"
 
         exec_cmd = [
-            python, "-m", "operations_center.entrypoints.execute.main",
-            "--config",         str(config_file),
-            "--bundle",         str(bundle_file),
-            "--workspace-path", str(attempt_workspace),
-            "--task-branch",    f"{role}/{short_id}-ci{attempt_number}",
-            "--output",         str(attempt_result_file),
-            "--source",         f"board_worker_{role}_ci_{attempt_number}",
+            python,
+            "-m",
+            "operations_center.entrypoints.execute.main",
+            "--config",
+            str(config_file),
+            "--bundle",
+            str(bundle_file),
+            "--workspace-path",
+            str(attempt_workspace),
+            "--task-branch",
+            f"{role}/{short_id}-ci{attempt_number}",
+            "--output",
+            str(attempt_result_file),
+            "--source",
+            f"board_worker_{role}_ci_{attempt_number}",
         ]
         logger.info(
-            "board_worker[%s]: CI attempt %d for task_id=%s", role, attempt_number, task_id,
+            "board_worker[%s]: CI attempt %d for task_id=%s",
+            role,
+            attempt_number,
+            task_id,
         )
         subprocess.run(exec_cmd, cwd=oc_root, env=env, capture_output=True, text=True)
 
@@ -614,30 +706,38 @@ def run_ci_loop(
             try:
                 attempt_outcome = json.loads(attempt_result_file.read_text(encoding="utf-8"))
                 r = attempt_outcome.get("result", {})
-                success       = r.get("success", False)
-                run_id        = r.get("run_id", run_id)
+                success = r.get("success", False)
+                run_id = r.get("run_id", run_id)
                 changed_files = [f["path"] for f in r.get("changed_files", []) if "path" in f]
                 last_attempt_result.update(r)
             except Exception as exc:
                 logger.warning(
                     "board_worker[%s]: CI attempt %d result parse failed — %s",
-                    role, attempt_number, exc,
+                    role,
+                    attempt_number,
+                    exc,
                 )
         return run_id, changed_files, success
 
     try:
         coordinator = CiCoordinator(store=CiStore(path=store_path))
-        ci_result   = coordinator.run(ctx, execute)
+        ci_result = coordinator.run(ctx, execute)
     except Exception as exc:
         logger.error(
-            "board_worker[%s]: CI coordinator failed task_id=%s — %s", role, task_id, exc,
+            "board_worker[%s]: CI coordinator failed task_id=%s — %s",
+            role,
+            task_id,
+            exc,
         )
         fail_task(client, task_id, role, f"CI coordinator error: {exc}")
         return False
 
     logger.info(
         "board_worker[%s]: CI loop done task_id=%s status=%s attempts=%d",
-        role, task_id, ci_result.final_status.value, ci_result.total_attempts,
+        role,
+        task_id,
+        ci_result.final_status.value,
+        ci_result.total_attempts,
     )
     add_label(client, issue, f"ci-status: {ci_result.final_status.value}")
     add_label(client, issue, f"ci-attempts: {ci_result.total_attempts}")
@@ -648,7 +748,9 @@ def run_ci_loop(
 
     if ci_result.final_status == RefinementStatus.ESCALATED:
         fail_task(
-            client, task_id, role,
+            client,
+            task_id,
+            role,
             f"CI loop escalated after {ci_result.total_attempts} attempt(s) — "
             "inconclusive outcome requires operator decision",
         )

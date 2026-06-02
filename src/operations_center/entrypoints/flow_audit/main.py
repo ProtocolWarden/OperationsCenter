@@ -10,6 +10,7 @@ Partial patterns the count is the size of the gap.
     python -m operations_center.entrypoints.flow_audit \\
         --config config/operations_center.local.yaml [--since 24h]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -41,6 +42,7 @@ class FlowContext:
 
 # ── F1: stale Running tasks ──────────────────────────────────────────────────
 
+
 def _detect_f1_stale_running(ctx: FlowContext) -> tuple[int, list[str]]:
     """Tasks Running for >4h without an updated_at refresh.
 
@@ -63,18 +65,21 @@ def _detect_f1_stale_running(ctx: FlowContext) -> tuple[int, list[str]]:
             continue
         age = (now - ts).total_seconds()
         if age > threshold:
-            samples.append(f"{(issue.get('name') or '')[:60]} ({int(age/60)}m)")
+            samples.append(f"{(issue.get('name') or '')[:60]} ({int(age / 60)}m)")
     return len(samples), samples[:5]
 
 
 # ── F3: proposal duplicates ──────────────────────────────────────────────────
+
 
 def _detect_f3_proposal_dupes(ctx: FlowContext) -> tuple[int, list[str]]:
     """Non-terminal tasks sharing normalised title within the same family."""
     by_key: dict[str, list[dict]] = {}
     for issue in ctx.plane_issues:
         state = issue.get("state")
-        name = (state.get("name", "") if isinstance(state, dict) else str(state or "")).strip().lower()
+        name = (
+            (state.get("name", "") if isinstance(state, dict) else str(state or "")).strip().lower()
+        )
         if name in {"done", "cancelled", "blocked"}:
             continue
         title_norm = re.sub(r"\s+", " ", (issue.get("name") or "").strip().lower())
@@ -82,7 +87,9 @@ def _detect_f3_proposal_dupes(ctx: FlowContext) -> tuple[int, list[str]]:
             (lab.get("name", "") if isinstance(lab, dict) else str(lab)).strip().lower()
             for lab in issue.get("labels", [])
         ]
-        family = next((lab.split(":", 1)[1].strip() for lab in labels if lab.startswith("source-family:")), "")
+        family = next(
+            (lab.split(":", 1)[1].strip() for lab in labels if lab.startswith("source-family:")), ""
+        )
         key = f"{family}|{title_norm}"
         by_key.setdefault(key, []).append(issue)
     samples = []
@@ -93,6 +100,7 @@ def _detect_f3_proposal_dupes(ctx: FlowContext) -> tuple[int, list[str]]:
 
 
 # ── F11: runaway follow-up retries ───────────────────────────────────────────
+
 
 def _detect_f11_retry_overflow(ctx: FlowContext) -> tuple[int, list[str]]:
     """Tasks with retry-count: N where N >= 3 (cap exceeded somehow)."""
@@ -114,6 +122,7 @@ def _detect_f11_retry_overflow(ctx: FlowContext) -> tuple[int, list[str]]:
 # cleanup_state from drifting if a new state store is added later.
 try:
     from _custodian.state_scanner import OCStateScanner  # ty:ignore[unresolved-import]
+
     _STATE_SCANNER = OCStateScanner()
     _PER_TASK_SUBDIRS = _STATE_SCANNER.per_task_subdirs
 except ImportError:
@@ -148,18 +157,21 @@ def _detect_f13_stale_state(ctx: FlowContext) -> tuple[int, list[str]]:
                 continue
             n += 1
             if len(samples) < 5:
-                samples.append(f"{f} ({int(age/86400)}d)")
+                samples.append(f"{f} ({int(age / 86400)}d)")
     return n, samples
 
 
 # ── F8: ready-queue size (back-pressure) ─────────────────────────────────────
+
 
 def _detect_f8_ready_queue_size(ctx: FlowContext) -> tuple[int, list[str]]:
     """Number of tasks in Ready for AI; large values mean propose isn't being throttled."""
     n = 0
     for issue in ctx.plane_issues:
         state = issue.get("state")
-        name = (state.get("name", "") if isinstance(state, dict) else str(state or "")).strip().lower()
+        name = (
+            (state.get("name", "") if isinstance(state, dict) else str(state or "")).strip().lower()
+        )
         if name == "ready for ai":
             n += 1
     samples = [f"ready_for_ai_count={n}"] if n > 50 else []
@@ -168,11 +180,11 @@ def _detect_f8_ready_queue_size(ctx: FlowContext) -> tuple[int, list[str]]:
 
 
 _DETECTORS: list[Detector] = [
-    Detector("F1",  "stale Running task auto-recovery",        "fixed",   _detect_f1_stale_running),
-    Detector("F3",  "proposal deduplication",                  "fixed",   _detect_f3_proposal_dupes),
-    Detector("F8",  "back-pressure on Ready queue",            "partial", _detect_f8_ready_queue_size),
-    Detector("F11", "runaway follow-up retries",               "fixed",   _detect_f11_retry_overflow),
-    Detector("F13", "stale state file cleanup",                "fixed",   _detect_f13_stale_state),
+    Detector("F1", "stale Running task auto-recovery", "fixed", _detect_f1_stale_running),
+    Detector("F3", "proposal deduplication", "fixed", _detect_f3_proposal_dupes),
+    Detector("F8", "back-pressure on Ready queue", "partial", _detect_f8_ready_queue_size),
+    Detector("F11", "runaway follow-up retries", "fixed", _detect_f11_retry_overflow),
+    Detector("F13", "stale state file cleanup", "fixed", _detect_f13_stale_state),
 ]
 
 
@@ -190,15 +202,16 @@ def _parse_since(raw: str) -> datetime:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Flow-gap audit scanner")
     parser.add_argument("--config", required=True, type=Path)
-    parser.add_argument("--since",  default="24h")
+    parser.add_argument("--since", default="24h")
     parser.add_argument("--state-dir", type=Path, default=Path("state"))
-    parser.add_argument("--log-dir",   type=Path, default=None)
+    parser.add_argument("--log-dir", type=Path, default=None)
     args = parser.parse_args()
 
     plane_issues: list[dict] = []
     try:
         from operations_center.adapters.plane import PlaneClient
         from operations_center.config import load_settings
+
         settings = load_settings(args.config)
         client = PlaneClient(
             base_url=settings.plane.base_url,
@@ -221,8 +234,8 @@ def main() -> int:
     )
     out: dict[str, Any] = {
         "scanned_at": datetime.now(UTC).isoformat(),
-        "since":      ctx.since.isoformat(),
-        "patterns":   {},
+        "since": ctx.since.isoformat(),
+        "patterns": {},
     }
     for det in _DETECTORS:
         try:
@@ -230,15 +243,15 @@ def main() -> int:
         except Exception as exc:
             out["patterns"][det.pattern_id] = {
                 "description": det.description,
-                "status":      det.status,
-                "error":       str(exc),
+                "status": det.status,
+                "error": str(exc),
             }
             continue
         out["patterns"][det.pattern_id] = {
             "description": det.description,
-            "status":      det.status,
-            "count":       count,
-            "samples":     samples,
+            "status": det.status,
+            "count": count,
+            "samples": samples,
         }
     out["total_open_gaps"] = sum(
         v.get("count", 0) for v in out["patterns"].values() if isinstance(v, dict)

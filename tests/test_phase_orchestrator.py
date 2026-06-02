@@ -1,15 +1,15 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Tests for PhaseOrchestrator — phase advancement and blocked-task unblocking."""
+
 from __future__ import annotations
 
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from operations_center.spec_author.phase_orchestrator import PhaseOrchestrator
 from operations_center.spec_author.models import CampaignRecord
+from operations_center.spec_author.phase_orchestrator import PhaseOrchestrator
 from operations_center.spec_author.state import CampaignStateManager
-
 
 _CAMPAIGN_ID = "test-campaign-uuid"
 
@@ -119,7 +119,9 @@ def test_advances_to_improve_when_all_test_done(tmp_path):
         _make_parent(),
         _make_issue(task_id="impl-1", name="[Impl] Goal 1", state="Done", kind="goal"),
         _make_issue(task_id="test-1", name="[Test] Goal 1", state="Done", kind="test_campaign"),
-        _make_issue(task_id="imp-1", name="[Improve] Goal 1", state="Backlog", kind="improve_campaign"),
+        _make_issue(
+            task_id="imp-1", name="[Improve] Goal 1", state="Backlog", kind="improve_campaign"
+        ),
     ]
     result = orch.run(issues)
     assert result.phases_advanced >= 1
@@ -134,7 +136,9 @@ def test_completes_campaign_when_all_phases_terminal(tmp_path):
         _make_parent(),
         _make_issue(task_id="impl-1", name="[Impl] Goal 1", state="Done", kind="goal"),
         _make_issue(task_id="test-1", name="[Test] Goal 1", state="Done", kind="test_campaign"),
-        _make_issue(task_id="imp-1", name="[Improve] Goal 1", state="Cancelled", kind="improve_campaign"),
+        _make_issue(
+            task_id="imp-1", name="[Improve] Goal 1", state="Cancelled", kind="improve_campaign"
+        ),
     ]
     result = orch.run(issues)
 

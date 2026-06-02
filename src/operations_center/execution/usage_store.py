@@ -16,7 +16,12 @@ from operations_center.backends.limit_classifier import (
     MODEL_WEEKLY,
     WORKER_BACKEND_MODELS,
 )
-from operations_center.execution.models import BudgetDecision, ExecutionControlSettings, NoOpDecision, RetryDecision
+from operations_center.execution.models import (
+    BudgetDecision,
+    ExecutionControlSettings,
+    NoOpDecision,
+    RetryDecision,
+)
 
 # ---------------------------------------------------------------------------
 # Module-level path-keyed threading locks.
@@ -44,13 +49,15 @@ _CB_WINDOW = max(3, int(os.environ.get("OPERATIONS_CENTER_CIRCUIT_BREAKER_WINDOW
 # If ALL outcomes in the window are older than this many hours, auto-recover.
 # Prevents indefinite deadlock from historical failures after the underlying
 # issue has been resolved and the operator hasn't manually cleared usage.json.
-_CB_STALENESS_HOURS = float(os.environ.get("OPERATIONS_CENTER_CIRCUIT_BREAKER_STALENESS_HOURS", "4"))
+_CB_STALENESS_HOURS = float(
+    os.environ.get("OPERATIONS_CENTER_CIRCUIT_BREAKER_STALENESS_HOURS", "4")
+)
 
 # ---------------------------------------------------------------------------
 # Disk-space guardrail constants.
 # ---------------------------------------------------------------------------
-_DISK_WARN_MB = 200   # Log a warning below this threshold
-_DISK_MIN_MB = 50     # Raise OSError below this threshold (avoids partial writes)
+_DISK_WARN_MB = 200  # Log a warning below this threshold
+_DISK_MIN_MB = 50  # Raise OSError below this threshold (avoids partial writes)
 
 
 def _check_disk_space(path: Path) -> None:
@@ -73,9 +80,12 @@ def _check_disk_space(path: Path) -> None:
     # Warn (non-fatal) when space is getting low
     if free_mb < _DISK_WARN_MB:
         import logging
+
         logging.getLogger(__name__).warning(
             '{"event": "disk_space_low", "free_mb": %.0f, "warn_threshold_mb": %d, "path": "%s"}',
-            free_mb, _DISK_WARN_MB, path,
+            free_mb,
+            _DISK_WARN_MB,
+            path,
         )
 
 
@@ -158,7 +168,8 @@ class UsageStore:
         # version should not block the newly deployed version.
         stale_cutoff = now - timedelta(hours=_CB_STALENESS_HOURS)
         outcomes = [
-            e for e in reversed(events)
+            e
+            for e in reversed(events)
             if e.get("kind") == "execution_outcome"
             and datetime.fromisoformat(e["timestamp"]) > stale_cutoff
         ][:_CB_WINDOW]
@@ -181,8 +192,12 @@ class UsageStore:
     def remaining_exec_capacity(self, *, now: datetime) -> int:
         data = self.load()
         events = self._prune_events(list(data.get("events", [])), now=now)
-        hourly = self.settings.max_exec_per_hour - self._exec_count(events, since=now - timedelta(hours=1))
-        daily = self.settings.max_exec_per_day - self._exec_count(events, since=now - timedelta(days=1))
+        hourly = self.settings.max_exec_per_hour - self._exec_count(
+            events, since=now - timedelta(hours=1)
+        )
+        daily = self.settings.max_exec_per_day - self._exec_count(
+            events, since=now - timedelta(days=1)
+        )
         return min(hourly, daily)
 
     def retry_decision(self, *, task_id: str, now: datetime | None = None) -> RetryDecision:
@@ -203,7 +218,9 @@ class UsageStore:
                     attempts=attempts,
                     limit=self.settings.max_retries_per_task,
                 )
-        return RetryDecision(allowed=True, attempts=attempts, limit=self.settings.max_retries_per_task)
+        return RetryDecision(
+            allowed=True, attempts=attempts, limit=self.settings.max_retries_per_task
+        )
 
     def _last_attempt_timestamp(self, data: dict[str, object], task_id: str) -> datetime | None:
         """Return the timestamp of the most recent execution event for this task_id."""
@@ -219,6 +236,7 @@ class UsageStore:
                 if ts:
                     try:
                         from datetime import timezone
+
                         dt = datetime.fromisoformat(str(ts))
                         if dt.tzinfo is None:
                             dt = dt.replace(tzinfo=timezone.utc)
@@ -612,9 +630,7 @@ class UsageStore:
                 "cooling_down": reset_at is not None,
                 "reset_at": reset_at.isoformat() if reset_at is not None else None,
                 "seconds_remaining": seconds_remaining,
-                "cooldowns": self.worker_backend_cooldown_details(
-                    worker_backend, now=now
-                ),
+                "cooldowns": self.worker_backend_cooldown_details(worker_backend, now=now),
             }
         return snapshot
 
@@ -1066,10 +1082,7 @@ class UsageStore:
         """
         data = self.load()
         events = self._prune_events(list(data.get("events", [])), now=now)
-        outcomes = [
-            e for e in reversed(events)
-            if e.get("kind") == "execution_outcome"
-        ][:window]
+        outcomes = [e for e in reversed(events) if e.get("kind") == "execution_outcome"][:window]
         if len(outcomes) < 5:
             return None
         successes = sum(1 for e in outcomes if e.get("succeeded"))
@@ -1119,6 +1132,7 @@ class UsageStore:
         Returns ``None`` if fewer than 3 samples exist.
         """
         from datetime import timezone as _tz
+
         _now = now or datetime.now(_tz.utc)
         data = self.load()
         events = self._prune_events(list(data.get("events", [])), now=_now)
@@ -1180,59 +1194,69 @@ class UsageStore:
                 continue
 
             if kind == "execution_outcome":
-                audit_rows.append({
-                    "kind": "execution",
-                    "task_id": e.get("task_id", ""),
-                    "role": e.get("role", ""),
-                    "outcome": "succeeded" if e.get("succeeded") else "failed",
-                    "repo_key": e.get("repo_key", ""),
-                    "duration_seconds": durations.get(str(e.get("task_id", "")), None),
-                    "backend": e.get("backend", ""),
-                    "backend_version": e.get("backend_version", None),
-                    "timestamp": e["timestamp"],
-                })
+                audit_rows.append(
+                    {
+                        "kind": "execution",
+                        "task_id": e.get("task_id", ""),
+                        "role": e.get("role", ""),
+                        "outcome": "succeeded" if e.get("succeeded") else "failed",
+                        "repo_key": e.get("repo_key", ""),
+                        "duration_seconds": durations.get(str(e.get("task_id", "")), None),
+                        "backend": e.get("backend", ""),
+                        "backend_version": e.get("backend_version", None),
+                        "timestamp": e["timestamp"],
+                    }
+                )
             elif kind == "quota_event":
-                audit_rows.append({
-                    "kind": "execution",
-                    "task_id": e.get("task_id", ""),
-                    "role": e.get("role", ""),
-                    "outcome": "quota_exhausted",
-                    "repo_key": "",
-                    "backend": e.get("backend", ""),
-                    "duration_seconds": None,
-                    "timestamp": e["timestamp"],
-                })
+                audit_rows.append(
+                    {
+                        "kind": "execution",
+                        "task_id": e.get("task_id", ""),
+                        "role": e.get("role", ""),
+                        "outcome": "quota_exhausted",
+                        "repo_key": "",
+                        "backend": e.get("backend", ""),
+                        "duration_seconds": None,
+                        "timestamp": e["timestamp"],
+                    }
+                )
             elif kind == "executor_quality_warning":
-                audit_rows.append({
-                    "kind": "quality_warning",
-                    "task_id": e.get("task_id", ""),
-                    "role": "",
-                    "outcome": "quality_warning",
-                    "repo_key": e.get("repo_key", ""),
-                    "suppression_counts": e.get("suppression_counts", {}),
-                    "timestamp": e["timestamp"],
-                })
+                audit_rows.append(
+                    {
+                        "kind": "quality_warning",
+                        "task_id": e.get("task_id", ""),
+                        "role": "",
+                        "outcome": "quality_warning",
+                        "repo_key": e.get("repo_key", ""),
+                        "suppression_counts": e.get("suppression_counts", {}),
+                        "timestamp": e["timestamp"],
+                    }
+                )
             elif kind == "scope_violation":
-                audit_rows.append({
-                    "kind": "scope_violation",
-                    "task_id": e.get("task_id", ""),
-                    "role": "",
-                    "outcome": "scope_violation",
-                    "repo_key": e.get("repo_key", ""),
-                    "violated_files": e.get("violated_files", []),
-                    "timestamp": e["timestamp"],
-                })
+                audit_rows.append(
+                    {
+                        "kind": "scope_violation",
+                        "task_id": e.get("task_id", ""),
+                        "role": "",
+                        "outcome": "scope_violation",
+                        "repo_key": e.get("repo_key", ""),
+                        "violated_files": e.get("violated_files", []),
+                        "timestamp": e["timestamp"],
+                    }
+                )
             elif kind == "escalation_sent":
-                audit_rows.append({
-                    "kind": "escalation",
-                    "task_id": "",
-                    "role": "",
-                    "outcome": "escalated",
-                    "repo_key": "",
-                    "classification": e.get("classification", ""),
-                    "task_ids": e.get("task_ids", []),
-                    "timestamp": e["timestamp"],
-                })
+                audit_rows.append(
+                    {
+                        "kind": "escalation",
+                        "task_id": "",
+                        "role": "",
+                        "outcome": "escalated",
+                        "repo_key": "",
+                        "classification": e.get("classification", ""),
+                        "task_ids": e.get("task_ids", []),
+                        "timestamp": e["timestamp"],
+                    }
+                )
 
         audit_rows.sort(key=lambda r: r["timestamp"])
         return audit_rows
@@ -1278,7 +1302,9 @@ class UsageStore:
                 now=now,
             )
 
-    def record_retry_cap(self, *, role: str, task_id: str, now: datetime, attempts: int, limit: int) -> None:
+    def record_retry_cap(
+        self, *, role: str, task_id: str, now: datetime, attempts: int, limit: int
+    ) -> None:
         with self._exclusive():
             data = self.load()
             self._append_event(
@@ -1357,7 +1383,9 @@ class UsageStore:
         can re-evaluate immediately after tasks complete rather than staying
         silent until an external autonomy-cycle refresh.
         """
-        del now  # reserved for future time-bounded reset (currently removes all proposal_cycle events)
+        del (
+            now
+        )  # reserved for future time-bounded reset (currently removes all proposal_cycle events)
         with self._exclusive():
             data = self.load()
             data["events"] = [
@@ -1398,7 +1426,8 @@ class UsageStore:
         data = self.load()
         events = self._prune_events(list(data.get("events", [])), now=now)
         outcomes = [
-            e for e in reversed(events)
+            e
+            for e in reversed(events)
             if e.get("kind") == "proposal_outcome" and e.get("category") == category
         ][:window]
         if len(outcomes) < 3:
@@ -1438,7 +1467,8 @@ class UsageStore:
         data = self.load()
         events = self._prune_events(list(data.get("events", [])), now=now)
         outcomes = [
-            e for e in reversed(events)
+            e
+            for e in reversed(events)
             if e.get("kind") == "validation_outcome" and e.get("command") == command
         ][:window]
         if len(outcomes) < window:
@@ -1476,7 +1506,7 @@ class UsageStore:
         *classification* within *window_seconds* AND no ``escalation_sent`` event
         for this classification within *cooldown_seconds*.
         """
-        from datetime import timezone, timedelta
+        from datetime import timedelta, timezone
 
         data = self.load()
         events = self._prune_events(list(data.get("events", [])), now=now)
@@ -1583,7 +1613,9 @@ class UsageStore:
                 now=now,
             )
 
-    def get_spend_report(self, *, window_days: int = 1, now: datetime | None = None) -> dict[str, Any]:
+    def get_spend_report(
+        self, *, window_days: int = 1, now: datetime | None = None
+    ) -> dict[str, Any]:
         """Return a spend summary for the last *window_days* days.
 
         Returns::
@@ -1631,7 +1663,9 @@ class UsageStore:
             "per_repo": per_repo,
         }
 
-    def record_proposal_budget_suppression(self, *, reason: str, now: datetime, evidence: dict[str, object]) -> None:
+    def record_proposal_budget_suppression(
+        self, *, reason: str, now: datetime, evidence: dict[str, object]
+    ) -> None:
         with self._exclusive():
             data = self.load()
             self._append_event(
@@ -1645,7 +1679,9 @@ class UsageStore:
                 now=now,
             )
 
-    def record_task_artifact(self, *, task_id: str, artifact: dict[str, Any], now: datetime) -> None:
+    def record_task_artifact(
+        self, *, task_id: str, artifact: dict[str, Any], now: datetime
+    ) -> None:
         """Persist a structured execution artifact keyed by task_id.
 
         Callers should pass fields like ``outcome_status``, ``changed_files``,

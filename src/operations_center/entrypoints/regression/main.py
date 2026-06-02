@@ -44,19 +44,19 @@ console = Console()
 
 @app.command("run")
 def cmd_run(
-    suite: str = typer.Option(
-        ..., "--suite", "-s", help="Path to suite definition JSON file."
-    ),
+    suite: str = typer.Option(..., "--suite", "-s", help="Path to suite definition JSON file."),
     output_dir: str = typer.Option(
         "tools/audit/report/mini_regression",
-        "--output-dir", "-o",
+        "--output-dir",
+        "-o",
         help="Root directory for suite and replay reports.",
     ),
     fail_fast: bool = typer.Option(
         False, "--fail-fast", help="Stop after first required entry failure."
     ),
     include_optional: bool = typer.Option(
-        True, "--include-optional/--skip-optional",
+        True,
+        "--include-optional/--skip-optional",
         help="Whether to run optional suite entries.",
     ),
     run_id: str | None = typer.Option(
@@ -96,8 +96,10 @@ def cmd_run(
         raise typer.Exit(code=3) from exc
 
     status_color = (
-        "green" if report.status == "passed"
-        else "red" if report.status in ("failed", "error")
+        "green"
+        if report.status == "passed"
+        else "red"
+        if report.status in ("failed", "error")
         else "yellow"
     )
     console.print(f"[bold]{suite_def.name}[/bold]")
@@ -115,11 +117,7 @@ def cmd_run(
 
     for result in report.entry_results:
         s = result.status
-        color = (
-            "green" if s == "passed"
-            else "red" if s in ("failed", "error")
-            else "dim"
-        )
+        color = "green" if s == "passed" else "red" if s in ("failed", "error") else "dim"
         req_marker = "Y" if result.required else "n"
         table.add_row(
             f"[{color}]{s}[/{color}]",
@@ -149,8 +147,10 @@ def cmd_inspect(
         raise typer.Exit(code=2) from exc
 
     status_color = (
-        "green" if rep.status == "passed"
-        else "red" if rep.status in ("failed", "error")
+        "green"
+        if rep.status == "passed"
+        else "red"
+        if rep.status in ("failed", "error")
         else "yellow"
     )
     console.print("[bold]Mini Regression Suite Report[/bold]")
@@ -170,11 +170,7 @@ def cmd_inspect(
 
     for result in rep.entry_results:
         s = result.status
-        color = (
-            "green" if s == "passed"
-            else "red" if s in ("failed", "error")
-            else "dim"
-        )
+        color = "green" if s == "passed" else "red" if s in ("failed", "error") else "dim"
         req_marker = "Y" if result.required else "n"
         table.add_row(
             f"[{color}]{s}[/{color}]",
@@ -201,9 +197,11 @@ def cmd_list(
         raise typer.Exit(code=2) from exc
 
     console.print(f"[bold]{suite_def.name}[/bold]  (suite_id={suite_def.suite_id})")
-    console.print(f"  {len(suite_def.entries)} entries "
-                  f"({len(suite_def.required_entries)} required, "
-                  f"{len(suite_def.optional_entries)} optional)")
+    console.print(
+        f"  {len(suite_def.entries)} entries "
+        f"({len(suite_def.required_entries)} required, "
+        f"{len(suite_def.optional_entries)} optional)"
+    )
 
     table = Table(show_header=True, header_style="bold")
     table.add_column("Entry ID", overflow="fold")

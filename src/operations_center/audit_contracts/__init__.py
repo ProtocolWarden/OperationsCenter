@@ -23,19 +23,19 @@ from .artifact_manifest import (
 )
 from .run_status import ManagedRunStatus
 from .vocabulary import (
+    EXAMPLE_MANAGED_REPO_PROFILE_ENUMS,
+    GENERIC_ENUMS,
     ArtifactStatus,
     ConsumerType,
-    GENERIC_ENUMS,
+    ExampleManagedRepoArtifactKind,
+    ExampleManagedRepoAuditType,
+    ExampleManagedRepoSourceStage,
     Limitation,
     Location,
     ManifestStatus,
     PathRole,
     RunStatus,
     ValidFor,
-    ExampleManagedRepoArtifactKind,
-    ExampleManagedRepoAuditType,
-    ExampleManagedRepoSourceStage,
-    EXAMPLE_MANAGED_REPO_PROFILE_ENUMS,
 )
 
 CONTRACT_VERSION = "1.0"

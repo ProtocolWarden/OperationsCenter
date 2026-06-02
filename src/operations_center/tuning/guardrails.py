@@ -103,10 +103,7 @@ class TuningGuardrails:
         # Daily quota (including changes already applied in this run)
         today_start = generated_at.replace(hour=0, minute=0, second=0, microsecond=0)
         changes_today = sum(
-            1
-            for pr in prior_runs
-            for ch in pr.changes_applied
-            if ch.applied_at >= today_start
+            1 for pr in prior_runs for ch in pr.changes_applied if ch.applied_at >= today_start
         ) + len(changes_so_far)
         if changes_today >= self.max_changes_per_day:
             return False, "quota_exceeded"

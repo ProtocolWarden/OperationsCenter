@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -23,7 +21,9 @@ def test_removed_modules_cannot_be_imported(assert_module_unavailable) -> None:
 
 
 def test_routing_client_no_longer_supports_in_process_bypass() -> None:
-    source = (REPO_ROOT / "src" / "operations_center" / "routing" / "client.py").read_text(encoding="utf-8")
+    source = (REPO_ROOT / "src" / "operations_center" / "routing" / "client.py").read_text(
+        encoding="utf-8"
+    )
     assert "LocalLaneRoutingClient" not in source
     assert 'os.environ.get("SWITCHBOARD_URL")' not in source
 
@@ -75,18 +75,24 @@ def test_adr_0007_no_claude_cli_imports_in_source_tree() -> None:
             if isinstance(node, ast.ImportFrom):
                 mod = node.module or ""
                 if "_claude_cli" in mod:
-                    offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}: import from {mod}")
+                    offenders.append(
+                        f"{path.relative_to(REPO_ROOT)}:{node.lineno}: import from {mod}"
+                    )
             # `import operations_center.spec_author._claude_cli`
             elif isinstance(node, ast.Import):
                 for alias in node.names:
                     if "_claude_cli" in alias.name:
-                        offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}: import {alias.name}")
+                        offenders.append(
+                            f"{path.relative_to(REPO_ROOT)}:{node.lineno}: import {alias.name}"
+                        )
             # `call_claude(...)`
             elif isinstance(node, ast.Call):
                 func = node.func
                 name = getattr(func, "attr", None) or getattr(func, "id", None)
                 if name == "call_claude":
-                    offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}: call_claude(...) invocation")
+                    offenders.append(
+                        f"{path.relative_to(REPO_ROOT)}:{node.lineno}: call_claude(...) invocation"
+                    )
     assert not offenders, _ADR_0007_FORBIDDEN_MSG + "\nOffenders:\n" + "\n".join(offenders)
 
 

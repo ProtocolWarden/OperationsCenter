@@ -16,6 +16,8 @@ from pathlib import Path
 import pytest
 from cxrp.contracts import (
     ExecutionResult as CxrpExecutionResult,
+)
+from cxrp.contracts import (
     TaskProposal as CxrpTaskProposal,
 )
 from cxrp.validation.json_schema import validate_contract, validate_payload
@@ -46,7 +48,11 @@ from operations_center.contracts.enums import (
     TaskType,
     ValidationStatus,
 )
-from operations_center.contracts.execution import ExecutionArtifact, ExecutionRequest, ExecutionResult
+from operations_center.contracts.execution import (
+    ExecutionArtifact,
+    ExecutionRequest,
+    ExecutionResult,
+)
 from operations_center.contracts.proposal import TaskProposal
 from operations_center.contracts.routing import LaneDecision
 
@@ -64,9 +70,7 @@ def _serialize_envelope(contract) -> dict:
     if "alternatives" in payload:
         payload["alternatives"] = [asdict(alt) for alt in contract.alternatives]
         for alt in payload["alternatives"]:
-            alt["lane"] = (
-                alt["lane"].value if hasattr(alt["lane"], "value") else alt["lane"]
-            )
+            alt["lane"] = alt["lane"].value if hasattr(alt["lane"], "value") else alt["lane"]
     return payload
 
 
@@ -145,7 +149,9 @@ def _make_result(request: ExecutionRequest) -> ExecutionResult:
         decision_id=request.decision_id,
         status=ExecutionStatus.SUCCEEDED,
         success=True,
-        validation=ValidationSummary(status=ValidationStatus.PASSED, commands_run=1, commands_passed=1),
+        validation=ValidationSummary(
+            status=ValidationStatus.PASSED, commands_run=1, commands_passed=1
+        ),
         branch_pushed=True,
         branch_name="fix/user-serializer-null-email",
         pull_request_url="https://github.com/ProtocolWarden/api-service/pull/482",
@@ -235,7 +241,9 @@ def test_to_cxrp_execution_request_validates_against_schema():
     req = _make_request("p-1", "d-1")
     cxrp = to_cxrp_execution_request(req, executor="claude_cli", backend="team_executor")
     payload = cxrp.to_dict()
-    payload["lane"] = payload["lane"].value if hasattr(payload["lane"], "value") else payload["lane"]
+    payload["lane"] = (
+        payload["lane"].value if hasattr(payload["lane"], "value") else payload["lane"]
+    )
     validate_contract("execution_request", payload)
     assert payload["executor"] is not None
 
@@ -248,7 +256,9 @@ def test_execution_request_input_payload_validates_against_lane_schema():
 
 
 def test_execution_request_limits_are_universal():
-    cxrp = to_cxrp_execution_request(_make_request("p", "d"), executor="claude_cli", backend="team_executor")
+    cxrp = to_cxrp_execution_request(
+        _make_request("p", "d"), executor="claude_cli", backend="team_executor"
+    )
     assert cxrp.limits is not None
     assert cxrp.limits.max_changed_files == 25
     assert cxrp.limits.timeout_seconds == 600

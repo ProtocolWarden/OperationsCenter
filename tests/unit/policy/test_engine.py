@@ -15,7 +15,6 @@ Structure:
 
 from __future__ import annotations
 
-
 from operations_center.contracts.enums import RiskLevel, TaskType
 from operations_center.policy.engine import PolicyEngine
 from operations_center.policy.models import (
@@ -31,7 +30,6 @@ from .conftest import (
     make_repo_policy,
     remote_decision,
 )
-
 
 # ---------------------------------------------------------------------------
 # TestAllowPath

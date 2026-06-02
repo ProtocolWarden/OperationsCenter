@@ -73,7 +73,8 @@ def cmd_harvest(
     manifest: str = typer.Option(..., "--manifest", "-m", help="Path to artifact_manifest.json."),
     profile: HarvestProfile = typer.Option(
         HarvestProfile.MINIMAL_FAILURE,
-        "--profile", "-p",
+        "--profile",
+        "-p",
         help="Harvest profile.",
     ),
     artifact_id: list[str] = typer.Option(
@@ -81,14 +82,21 @@ def cmd_harvest(
         "--artifact-id",
         help="Explicit artifact IDs to include (for MANUAL_SELECTION profile).",
     ),
-    source_stage: str | None = typer.Option(None, "--stage", help="Filter by source_stage (STAGE_SLICE profile)."),
-    include_singletons: bool = typer.Option(False, "--include-singletons", help="Include repo singleton artifacts."),
+    source_stage: str | None = typer.Option(
+        None, "--stage", help="Filter by source_stage (STAGE_SLICE profile)."
+    ),
+    include_singletons: bool = typer.Option(
+        False, "--include-singletons", help="Include repo singleton artifacts."
+    ),
     output_dir: str = typer.Option(
         "tools/audit/fixtures",
-        "--output-dir", "-o",
+        "--output-dir",
+        "-o",
         help="Root directory for fixture packs.",
     ),
-    repo_root: str | None = typer.Option(None, "--repo-root", help="Override managed repo root for path resolution."),
+    repo_root: str | None = typer.Option(
+        None, "--repo-root", help="Override managed repo root for path resolution."
+    ),
     max_artifact_bytes: int = typer.Option(
         10 * 1024 * 1024,
         "--max-artifact-bytes",
@@ -127,7 +135,9 @@ def cmd_harvest(
 
 @app.command("inspect")
 def cmd_inspect(
-    fixture_pack: str = typer.Option(..., "--fixture-pack", "-", help="Path to fixture_pack.json or pack directory."),
+    fixture_pack: str = typer.Option(
+        ..., "--fixture-pack", "-", help="Path to fixture_pack.json or pack directory."
+    ),
 ) -> None:
     """Inspect a fixture pack and display its contents."""
     path = Path(fixture_pack)
@@ -145,7 +155,9 @@ def cmd_inspect(
     console.print(f"  run_id:    {pack.source_run_id}")
     console.print(f"  profile:   {pack.harvest_profile.value}")
     console.print(f"  created:   {pack.created_at.isoformat()}")
-    console.print(f"  artifacts: {pack.artifact_count} ({pack.copied_count} copied, {pack.metadata_only_count} metadata-only)")
+    console.print(
+        f"  artifacts: {pack.artifact_count} ({pack.copied_count} copied, {pack.metadata_only_count} metadata-only)"
+    )
 
     if pack.findings:
         console.print(f"  findings:  {len(pack.findings)} referenced")
@@ -176,7 +188,8 @@ def cmd_inspect(
 def cmd_list(
     root: str = typer.Option(
         "tools/audit/fixtures",
-        "--root", "-r",
+        "--root",
+        "-r",
         help="Root directory to search for fixture packs.",
     ),
 ) -> None:

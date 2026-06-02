@@ -2,10 +2,10 @@
 # Copyright (C) 2026 ProtocolWarden
 from __future__ import annotations
 
+import sys
 from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
-import sys
 
 from cxrp.contracts.runtime_binding import RuntimeBinding
 from cxrp.vocabulary.runtime import RuntimeKind, SelectionMode
@@ -71,7 +71,9 @@ def test_adapter_builds_budget_profile_for_codex(monkeypatch) -> None:
                 setattr(self, k, v)
 
     fake_executor = SimpleNamespace(CritiqueExecutorRunner=FakeRunner)
-    fake_models = SimpleNamespace(CritiqueConfig=FakeCritiqueConfig, CritiqueTopology=FakeCritiqueTopology())
+    fake_models = SimpleNamespace(
+        CritiqueConfig=FakeCritiqueConfig, CritiqueTopology=FakeCritiqueTopology()
+    )
     monkeypatch.setitem(sys.modules, "critique_executor.executor", fake_executor)
     monkeypatch.setitem(sys.modules, "critique_executor.models", fake_models)
 
@@ -111,7 +113,9 @@ def test_adapter_downgrades_premium_to_standard_under_pressure(monkeypatch) -> N
                 setattr(self, k, v)
 
     fake_executor = SimpleNamespace(CritiqueExecutorRunner=FakeRunner)
-    fake_models = SimpleNamespace(CritiqueConfig=FakeCritiqueConfig, CritiqueTopology=FakeCritiqueTopology())
+    fake_models = SimpleNamespace(
+        CritiqueConfig=FakeCritiqueConfig, CritiqueTopology=FakeCritiqueTopology()
+    )
     monkeypatch.setitem(sys.modules, "critique_executor.executor", fake_executor)
     monkeypatch.setitem(sys.modules, "critique_executor.models", fake_models)
 
@@ -150,7 +154,9 @@ def test_adapter_falls_back_to_codex_when_claude_backend_is_cooling_down(monkeyp
                 setattr(self, k, v)
 
     fake_executor = SimpleNamespace(CritiqueExecutorRunner=FakeRunner)
-    fake_models = SimpleNamespace(CritiqueConfig=FakeCritiqueConfig, CritiqueTopology=FakeCritiqueTopology())
+    fake_models = SimpleNamespace(
+        CritiqueConfig=FakeCritiqueConfig, CritiqueTopology=FakeCritiqueTopology()
+    )
     monkeypatch.setitem(sys.modules, "critique_executor.executor", fake_executor)
     monkeypatch.setitem(sys.modules, "critique_executor.models", fake_models)
 
@@ -191,7 +197,9 @@ def test_adapter_execute_and_capture_reports_selected_worker_backend(monkeypatch
                 setattr(self, k, v)
 
     fake_executor = SimpleNamespace(CritiqueExecutorRunner=FakeRunner)
-    fake_models = SimpleNamespace(CritiqueConfig=FakeCritiqueConfig, CritiqueTopology=FakeCritiqueTopology())
+    fake_models = SimpleNamespace(
+        CritiqueConfig=FakeCritiqueConfig, CritiqueTopology=FakeCritiqueTopology()
+    )
     monkeypatch.setitem(sys.modules, "critique_executor.executor", fake_executor)
     monkeypatch.setitem(sys.modules, "critique_executor.models", fake_models)
 

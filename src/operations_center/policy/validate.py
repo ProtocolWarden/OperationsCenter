@@ -15,7 +15,6 @@ from __future__ import annotations
 
 from .models import PathPolicy, PolicyConfig, RepoPolicy, ToolGuardrail
 
-
 _VALID_ACCESS_MODES = frozenset({"allow", "read_only", "block", "review_required"})
 _VALID_NETWORK_MODES = frozenset({"allowed", "local_only", "blocked"})
 _VALID_DEFAULT_MODES = frozenset({"allow", "block", "review_required"})

@@ -1,22 +1,30 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Phase 4 + 7 — bind_execution_target tests."""
+
 from __future__ import annotations
 
-
 import pytest
-
 from cxrp.contracts import (
-    BackendName as CxrpBackendName, ExecutionTargetEnvelope,
-    ExecutorName as CxrpExecutorName, RuntimeBinding,
+    BackendName as CxrpBackendName,
+)
+from cxrp.contracts import (
+    ExecutionTargetEnvelope,
+    RuntimeBinding,
+)
+from cxrp.contracts import (
+    ExecutorName as CxrpExecutorName,
 )
 from cxrp.vocabulary.lane import LaneType
 from cxrp.vocabulary.runtime import RuntimeKind, SelectionMode
 
 from operations_center.contracts.enums import BackendName, LaneName
 from operations_center.execution.binding import (
-    InvalidRuntimeBindingError, MissingProvenanceError, PolicyViolationError,
-    UnknownBackendError, bind_execution_target,
+    InvalidRuntimeBindingError,
+    MissingProvenanceError,
+    PolicyViolationError,
+    UnknownBackendError,
+    bind_execution_target,
 )
 from operations_center.execution.target import (
     BoundExecutionTarget,
@@ -66,7 +74,8 @@ class TestNarrowing:
         rb = RuntimeBinding(
             kind=RuntimeKind.CLI_SUBSCRIPTION,
             selection_mode=SelectionMode.EXPLICIT_REQUEST,
-            provider="anthropic", model="opus",
+            provider="anthropic",
+            model="opus",
         )
         target = bind_execution_target(_envelope(runtime_binding=rb))
         assert target.runtime_binding.kind == "cli_subscription"
@@ -95,6 +104,7 @@ class TestRejection:
     def test_invalid_runtime_binding_raises(self):
         class FakeBinding:
             pass
+
         with pytest.raises(InvalidRuntimeBindingError):
             bind_execution_target(_envelope(runtime_binding=FakeBinding()))
 
@@ -105,13 +115,17 @@ class TestRejection:
 class TestPolicy:
     def test_policy_allow(self):
         class _AllowAll:
-            def allows(self, target): return True, ""
+            def allows(self, target):
+                return True, ""
+
         target = bind_execution_target(_envelope(), policy=_AllowAll())
         assert target.backend == BackendName.OPENCLAW
 
     def test_policy_reject_raises(self):
         class _RejectAll:
-            def allows(self, target): return False, "backend not allowed"
+            def allows(self, target):
+                return False, "backend not allowed"
+
         with pytest.raises(PolicyViolationError, match="not allowed"):
             bind_execution_target(_envelope(), policy=_RejectAll())
 
@@ -169,11 +183,13 @@ class TestProvenance:
 class TestContractMirror:
     def test_bound_target_round_trips_through_mirror(self):
         from operations_center.contracts.execution import (
-            BackendProvenanceMirror, BoundExecutionTargetMirror,
+            BackendProvenanceMirror,
+            BoundExecutionTargetMirror,
         )
+
         bound = bind_execution_target(_envelope(backend="direct_local", executor=None))
         mirror = BoundExecutionTargetMirror(
-            lane=bound.lane,                # already a str
+            lane=bound.lane,  # already a str
             backend=bound.backend.value,
             executor=bound.executor.value if bound.executor else None,
             runtime_binding=bound.runtime_binding,
@@ -182,7 +198,9 @@ class TestContractMirror:
                 repo=bound.provenance.repo,
                 ref=bound.provenance.ref,
                 patches=list(bound.provenance.patches),
-            ) if bound.provenance else None,
+            )
+            if bound.provenance
+            else None,
         )
         # Round-trip
         d = mirror.model_dump()

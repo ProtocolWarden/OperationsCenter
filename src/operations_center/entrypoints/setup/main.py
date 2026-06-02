@@ -2,19 +2,19 @@
 # Copyright (C) 2026 ProtocolWarden
 from __future__ import annotations
 
-from dataclasses import dataclass
 import os
-from pathlib import Path
 import shutil
 import subprocess
-from typing import cast
 import webbrowser
+from dataclasses import dataclass
+from pathlib import Path
+from typing import cast
 
+import typer
+import yaml
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-import typer
-import yaml
 
 from operations_center.entrypoints.setup.providers import (
     PROVIDER_SPECS,
@@ -126,7 +126,9 @@ def print_banner() -> None:
     console.print(f"[blue]{rule}[/blue]")
 
 
-def prompt_with_default(label: str, default: str, *, note: str | None = None, hide_input: bool = False) -> str:
+def prompt_with_default(
+    label: str, default: str, *, note: str | None = None, hide_input: bool = False
+) -> str:
     if note:
         console.print(f"[bright_black]{note}[/bright_black]")
     return typer.prompt(label, default=default, hide_input=hide_input)
@@ -216,7 +218,9 @@ def ensure_executor_installed(binary: str, install_ref: str | None = None) -> No
 
 def verify_executor(binary: str) -> None:
     typer.echo("[executor] Verifying...")
-    proc = subprocess.run([binary, "--help"], check=False, capture_output=True, text=True, env=os.environ.copy())
+    proc = subprocess.run(
+        [binary, "--help"], check=False, capture_output=True, text=True, env=os.environ.copy()
+    )
     if proc.returncode != 0:
         raise typer.BadParameter("[executor] ERROR: executor not functioning")
     typer.echo("[executor] OK")
@@ -297,7 +301,9 @@ def infer_repo_key_from_clone_url(clone_url: str) -> str:
     return tail[:-4] if tail.endswith(".git") else tail
 
 
-def discover_repo_choices(existing_config: dict[str, object], repo_root: Path) -> list[RepoDiscoveryChoice]:
+def discover_repo_choices(
+    existing_config: dict[str, object], repo_root: Path
+) -> list[RepoDiscoveryChoice]:
     choices: list[RepoDiscoveryChoice] = []
     seen: set[str] = set()
 
@@ -382,7 +388,9 @@ def prompt_branch_selection(clone_url: str, default_branch: str) -> tuple[str, l
 
     options = [(branch, branch) for branch in branches[:15]]
     options.append(("__manual__", "Enter branch manually"))
-    selected = prompt_choice("Select repo default branch", options, default_index=branches.index(default_branch) + 1)
+    selected = prompt_choice(
+        "Select repo default branch", options, default_index=branches.index(default_branch) + 1
+    )
     if selected == "__manual__":
         selected = typer.prompt("Repo default branch", default=default_branch)
 
@@ -396,7 +404,9 @@ def prompt_branch_selection(clone_url: str, default_branch: str) -> tuple[str, l
 def run_local_command(command: str) -> None:
     proc = subprocess.run(command, shell=True, check=False)
     if proc.returncode != 0:
-        raise typer.BadParameter(f"Plane start command failed with exit code {proc.returncode}: {command}")
+        raise typer.BadParameter(
+            f"Plane start command failed with exit code {proc.returncode}: {command}"
+        )
 
 
 def maybe_open_url(url: str) -> None:
@@ -490,7 +500,9 @@ def start_ssh_agent() -> None:
 
 def add_ssh_key_to_agent(private_key: Path) -> None:
     start_ssh_agent()
-    proc = subprocess.run(["ssh-add", str(private_key)], check=False, capture_output=True, text=True)
+    proc = subprocess.run(
+        ["ssh-add", str(private_key)], check=False, capture_output=True, text=True
+    )
     if proc.returncode != 0:
         raise typer.BadParameter(f"ssh-add failed: {proc.stderr.strip()}")
 
@@ -563,7 +575,9 @@ def ensure_github_ssh_setup(git_email: str, repo_root: Path) -> None:
         typer.echo("--- BEGIN SSH KEY ---")
         typer.echo(public_key.read_text(encoding="utf-8").strip())
         typer.echo("--- END SSH KEY ---")
-        typer.prompt("Press ENTER after adding the SSH key to GitHub", default="", show_default=False)
+        typer.prompt(
+            "Press ENTER after adding the SSH key to GitHub", default="", show_default=False
+        )
         success, output = verify_github_ssh()
 
     if not success:
@@ -612,7 +626,8 @@ def render_settings_yaml(answers: SetupAnswers) -> str:
             "bootstrap_enabled": repo.repo_bootstrap_enabled,
             "python_binary": repo.repo_python_binary,
             "venv_dir": repo.repo_venv_dir,
-            "install_dev_command": repo.repo_install_dev_command or f"{repo.repo_venv_dir}/bin/pip install -e .[dev]",
+            "install_dev_command": repo.repo_install_dev_command
+            or f"{repo.repo_venv_dir}/bin/pip install -e .[dev]",
         }
 
     config = {
@@ -679,13 +694,19 @@ def render_env_file(answers: SetupAnswers) -> str:
         f"export OPERATIONS_CENTER_PROVIDER_HEADLESS_REQUIRED={'1' if answers.headless_required else '0'}",
     ]
     if answers.plane_start_command:
-        lines.append(f"export OPERATIONS_CENTER_PLANE_START_COMMAND={shell_quote(answers.plane_start_command)}")
+        lines.append(
+            f"export OPERATIONS_CENTER_PLANE_START_COMMAND={shell_quote(answers.plane_start_command)}"
+        )
     if answers.plane_version:
         lines.append(f"export OPERATIONS_CENTER_PLANE_VERSION={shell_quote(answers.plane_version)}")
     if answers.plane_setup_url:
-        lines.append(f"export OPERATIONS_CENTER_PLANE_SETUP_URL={shell_quote(answers.plane_setup_url)}")
+        lines.append(
+            f"export OPERATIONS_CENTER_PLANE_SETUP_URL={shell_quote(answers.plane_setup_url)}"
+        )
     if answers.executor_install_ref:
-        lines.append(f"export OPERATIONS_CENTER_EXECUTOR_INSTALL_REF={shell_quote(answers.executor_install_ref)}")
+        lines.append(
+            f"export OPERATIONS_CENTER_EXECUTOR_INSTALL_REF={shell_quote(answers.executor_install_ref)}"
+        )
     provider_env_keys = {
         "claude": "OPERATIONS_CENTER_PROVIDER_CLAUDE_VERSION",
         "codex": "OPERATIONS_CENTER_PROVIDER_CODEX_VERSION",
@@ -697,7 +718,9 @@ def render_env_file(answers: SetupAnswers) -> str:
             lines.append(f"export {env_key}={shell_quote(version)}")
     if answers.plane_open_browser:
         lines.append("export OPERATIONS_CENTER_PLANE_OPEN_BROWSER='1'")
-    lines.append("# Provider auth is handled by provider-specific CLIs or env vars on this machine.")
+    lines.append(
+        "# Provider auth is handled by provider-specific CLIs or env vars on this machine."
+    )
     lines.extend(
         [
             f"export OPERATIONS_CENTER_DEFAULT_REPO={shell_quote(answers.default_repo_key)}",
@@ -751,21 +774,31 @@ def prompt_repo_with_discovery(
         console.print(f"[bright_black]Defaulting to {choices[0].label}[/bright_black]")
         use_default_repo = typer.confirm("Use this repo?", default=True)
         if not use_default_repo:
-            selection_options = [(f"choice:{index}", choice.label) for index, choice in enumerate(choices, start=1)]
+            selection_options = [
+                (f"choice:{index}", choice.label) for index, choice in enumerate(choices, start=1)
+            ]
             selection_options.append(("manual", "Enter repo details manually"))
             selected_mode = prompt_choice("Select repo source", selection_options, default_index=1)
     else:
-        selection_options = [(f"choice:{index}", choice.label) for index, choice in enumerate(choices, start=1)]
+        selection_options = [
+            (f"choice:{index}", choice.label) for index, choice in enumerate(choices, start=1)
+        ]
         selection_options.append(("manual", "Enter repo details manually"))
         selected_mode = prompt_choice("Select repo source", selection_options, default_index=1)
 
     if selected_mode == "manual":
-        repo_key = typer.prompt("Repo key", default="operations-center" if repo_index == 1 else f"repo_{repo_index}")
+        repo_key = typer.prompt(
+            "Repo key", default="operations-center" if repo_index == 1 else f"repo_{repo_index}"
+        )
         repo_clone_url = typer.prompt(
             "Repo clone URL",
-            default="git@github.com:you/operations-center.git" if repo_index == 1 else "git@github.com:you/repo.git",
+            default="git@github.com:you/operations-center.git"
+            if repo_index == 1
+            else "git@github.com:you/repo.git",
         )
-        repo_default_branch, repo_allowed_base_branches = prompt_branch_selection(repo_clone_url, "main")
+        repo_default_branch, repo_allowed_base_branches = prompt_branch_selection(
+            repo_clone_url, "main"
+        )
     else:
         selected_choice = choices[int(selected_mode.split(":")[1]) - 1]
         console.print(
@@ -778,7 +811,9 @@ def prompt_repo_with_discovery(
             selected_choice.default_branch,
         )
 
-    repo_advanced = typer.confirm("Adjust validation or bootstrap details for this repo?", default=False)
+    repo_advanced = typer.confirm(
+        "Adjust validation or bootstrap details for this repo?", default=False
+    )
     if repo_advanced:
         repo_validation_commands = split_multiline(
             typer.prompt(
@@ -786,7 +821,9 @@ def prompt_repo_with_discovery(
                 default=".venv/bin/pytest -q;.venv/bin/ruff check .",
             ).replace(";", "\n")
         )
-        repo_bootstrap_enabled = typer.confirm("Bootstrap repo-local .venv for this repo?", default=True)
+        repo_bootstrap_enabled = typer.confirm(
+            "Bootstrap repo-local .venv for this repo?", default=True
+        )
         repo_python_binary = typer.prompt("Python binary for bootstrap", default="python3")
         repo_venv_dir = typer.prompt("Repo-local venv directory", default=".venv")
         repo_install_dev_command = typer.prompt(
@@ -794,7 +831,9 @@ def prompt_repo_with_discovery(
             default=f"{repo_venv_dir}/bin/pip install -e .[dev]",
         ).strip()
     else:
-        console.print("[bright_black]Using default validation and repo-local .venv bootstrap settings.[/bright_black]")
+        console.print(
+            "[bright_black]Using default validation and repo-local .venv bootstrap settings.[/bright_black]"
+        )
         repo_validation_commands = [".venv/bin/pytest -q", ".venv/bin/ruff check ."]
         repo_bootstrap_enabled = True
         repo_python_binary = "python3"
@@ -833,7 +872,10 @@ def main(
     existing_env = load_env_exports(env_path)
     existing_config = load_existing_config(config_path)
 
-    print_section("Plane", "Local Plane service plus the Plane API workspace/project values used by the wrapper.")
+    print_section(
+        "Plane",
+        "Local Plane service plus the Plane API workspace/project values used by the wrapper.",
+    )
     advanced_mode = typer.confirm("Advanced setup?", default=False)
     plane_base_default = (
         existing_env.get("OPERATIONS_CENTER_PLANE_URL")
@@ -843,9 +885,14 @@ def main(
     plane_base_url = prompt_with_default(
         "Plane base URL",
         plane_base_default,
-        note="Using saved value." if existing_env.get("OPERATIONS_CENTER_PLANE_URL") or existing_config_value(existing_config, "plane", "base_url") else None,
+        note="Using saved value."
+        if existing_env.get("OPERATIONS_CENTER_PLANE_URL")
+        or existing_config_value(existing_config, "plane", "base_url")
+        else None,
     )
-    plane_workspace_default = existing_config_value(existing_config, "plane", "workspace_slug") or "engineering"
+    plane_workspace_default = (
+        existing_config_value(existing_config, "plane", "workspace_slug") or "engineering"
+    )
     plane_workspace_slug = prompt_with_default(
         "Plane API workspace slug",
         plane_workspace_default,
@@ -865,24 +912,37 @@ def main(
             else "Used for Plane API paths like /api/v1/workspaces/{workspace_slug}/projects/{project_id}/... Not used for the browser open URL."
         ),
     )
-    plane_api_token_env = existing_config_value(existing_config, "plane", "api_token_env") or "PLANE_API_TOKEN"
+    plane_api_token_env = (
+        existing_config_value(existing_config, "plane", "api_token_env") or "PLANE_API_TOKEN"
+    )
     if advanced_mode:
-        plane_api_token_env = typer.prompt("Plane token env var name (required)", default="PLANE_API_TOKEN")
+        plane_api_token_env = typer.prompt(
+            "Plane token env var name (required)", default="PLANE_API_TOKEN"
+        )
     default_plane_start_command = resolve_default_plane_start_command(env_path)
     plane_start_command = default_plane_start_command
     plane_open_browser = False
     plane_version = existing_env.get("OPERATIONS_CENTER_PLANE_VERSION") or None
     plane_setup_url = existing_env.get("OPERATIONS_CENTER_PLANE_SETUP_URL") or None
     if advanced_mode:
-        print_section("Version Pins", "Optional install refs or versions for Plane, executor, and provider CLIs.")
-        plane_version = typer.prompt(
-            "Plane release tag (optional; pins repo-managed setup download)",
-            default=plane_version or "",
-        ).strip() or None
-        plane_setup_url = typer.prompt(
-            "Plane setup URL override (optional; takes precedence over release tag)",
-            default=plane_setup_url or "",
-        ).strip() or None
+        print_section(
+            "Version Pins",
+            "Optional install refs or versions for Plane, executor, and provider CLIs.",
+        )
+        plane_version = (
+            typer.prompt(
+                "Plane release tag (optional; pins repo-managed setup download)",
+                default=plane_version or "",
+            ).strip()
+            or None
+        )
+        plane_setup_url = (
+            typer.prompt(
+                "Plane setup URL override (optional; takes precedence over release tag)",
+                default=plane_setup_url or "",
+            ).strip()
+            or None
+        )
     if advanced_mode and default_plane_start_command:
         typer.echo(f"Using saved Plane start command: {default_plane_start_command}")
         change_plane_start_command = typer.confirm(
@@ -890,10 +950,13 @@ def main(
             default=False,
         )
         if change_plane_start_command:
-            plane_start_command = typer.prompt(
-                "Plane start command",
-                default=default_plane_start_command,
-            ).strip() or None
+            plane_start_command = (
+                typer.prompt(
+                    "Plane start command",
+                    default=default_plane_start_command,
+                ).strip()
+                or None
+            )
         plane_open_browser = typer.confirm(
             "Try to open the Plane URL in a browser after running `plane-up`?",
             default=True,
@@ -904,7 +967,10 @@ def main(
             default=True,
         )
         if save_plane_start_command:
-            plane_start_command = typer.prompt("Plane start command", default=DEFAULT_PLANE_START_COMMAND).strip() or None
+            plane_start_command = (
+                typer.prompt("Plane start command", default=DEFAULT_PLANE_START_COMMAND).strip()
+                or None
+            )
             plane_open_browser = typer.confirm(
                 "Try to open the Plane URL in a browser after running `plane-up`?",
                 default=True,
@@ -926,7 +992,9 @@ def main(
             default=True,
         )
     else:
-        typer.echo("No Plane start command is configured. Start Plane separately, then paste the token.")
+        typer.echo(
+            "No Plane start command is configured. Start Plane separately, then paste the token."
+        )
         start_plane_now = False
 
     if start_plane_now:
@@ -945,7 +1013,9 @@ def main(
 
     existing_plane_token = existing_env.get(plane_api_token_env, "")
     if existing_plane_token:
-        reuse_plane_token = typer.confirm("Reuse existing Plane API token from local env?", default=True)
+        reuse_plane_token = typer.confirm(
+            "Reuse existing Plane API token from local env?", default=True
+        )
         if reuse_plane_token:
             plane_api_token_value = existing_plane_token
             typer.secho("Reusing existing Plane API token.", fg=typer.colors.BRIGHT_BLACK)
@@ -984,7 +1054,9 @@ def main(
             "Git authentication key env var name (optional; used for HTTPS clone/push)",
             default=git_token_env,
         )
-    typer.echo("HTTPS authentication is optional. If your remotes use SSH, leave the auth key blank.")
+    typer.echo(
+        "HTTPS authentication is optional. If your remotes use SSH, leave the auth key blank."
+    )
     existing_git_token = existing_env.get(git_token_env, "")
     if existing_git_token:
         reuse_git_token = typer.confirm("Reuse existing Git token from local env?", default=True)
@@ -1006,40 +1078,57 @@ def main(
     git_author_name = prompt_with_default(
         "Git bot author name",
         existing_config_value(existing_config, "git", "author_name") or "Operations Center Bot",
-        note="Using saved value." if existing_config_value(existing_config, "git", "author_name") else None,
+        note="Using saved value."
+        if existing_config_value(existing_config, "git", "author_name")
+        else None,
     )
     git_author_email = prompt_with_default(
         "Git bot author email",
-        existing_config_value(existing_config, "git", "author_email") or "operations-center-bot@example.com",
-        note="Using saved value." if existing_config_value(existing_config, "git", "author_email") else None,
+        existing_config_value(existing_config, "git", "author_email")
+        or "operations-center-bot@example.com",
+        note="Using saved value."
+        if existing_config_value(existing_config, "git", "author_email")
+        else None,
     )
     typer.echo("Commit signing is optional and only affects future signed-commit wiring.")
     git_sign_commits = typer.confirm(
         "Configure commit signing for the bot identity?",
-        default=(existing_config_value(existing_config, "git", "sign_commits") or "false").lower() == "true",
+        default=(existing_config_value(existing_config, "git", "sign_commits") or "false").lower()
+        == "true",
     )
     existing_signing_key = existing_config_value(existing_config, "git", "signing_key") or ""
     git_signing_key: str | None = None
     if git_sign_commits:
-        git_signing_key = typer.prompt(
-            "Git signing key id/fingerprint (optional; leave blank to configure later)",
-            default=existing_signing_key,
-        ).strip() or None
+        git_signing_key = (
+            typer.prompt(
+                "Git signing key id/fingerprint (optional; leave blank to configure later)",
+                default=existing_signing_key,
+            ).strip()
+            or None
+        )
     ensure_github_ssh_setup(git_author_email, Path.cwd())
 
-    existing_executor_binary = existing_config_value(existing_config, "team_executor", "binary") or "team-executor"
+    existing_executor_binary = (
+        existing_config_value(existing_config, "team_executor", "binary") or "team-executor"
+    )
     executor_install_ref = existing_env.get("OPERATIONS_CENTER_EXECUTOR_INSTALL_REF") or None
     print_section("Executor Install", "Ensure the executor CLI is available before writing config.")
     executor_binary = prompt_with_default(
         "Executor binary",
         existing_executor_binary,
-        note="Using saved value." if existing_executor_binary != "team-executor" or existing_config_value(existing_config, "team_executor", "binary") else None,
+        note="Using saved value."
+        if existing_executor_binary != "team-executor"
+        or existing_config_value(existing_config, "team_executor", "binary")
+        else None,
     )
     if advanced_mode:
-        executor_install_ref = typer.prompt(
-            "Executor git ref/tag/SHA for install (optional)",
-            default=executor_install_ref or "",
-        ).strip() or None
+        executor_install_ref = (
+            typer.prompt(
+                "Executor git ref/tag/SHA for install (optional)",
+                default=executor_install_ref or "",
+            ).strip()
+            or None
+        )
 
     print_section("Providers", "Supported executor backends detected on this machine.")
     statuses = detect_all_provider_statuses()
@@ -1065,7 +1154,10 @@ def main(
         if not spec.installable:
             typer.echo(f"[provider] {spec.label}: install manually if you want to use it.")
             continue
-        should_install = typer.confirm(f"Install {spec.label} via {spec.install_method}?", default=status.key in {"codex", "claude"})
+        should_install = typer.confirm(
+            f"Install {spec.label} via {spec.install_method}?",
+            default=status.key in {"codex", "claude"},
+        )
         if should_install:
             typer.echo(f"[provider] Installing {spec.label}...")
             install_provider(spec, version=provider_versions.get(status.key) or None)
@@ -1081,15 +1173,23 @@ def main(
             if env_var:
                 has_env = bool(os.environ.get(env_var))
                 if not has_env:
-                    prompt_api_key = typer.confirm(f"Use {env_var} for headless auth with {spec.label}?", default=False)
+                    prompt_api_key = typer.confirm(
+                        f"Use {env_var} for headless auth with {spec.label}?", default=False
+                    )
                     if prompt_api_key:
-                        typer.echo(f"Set {env_var} in your shell or local env file before unattended runs.")
+                        typer.echo(
+                            f"Set {env_var} in your shell or local env file before unattended runs."
+                        )
             if spec.interactive_login_command and not status.authenticated:
-                run_login = typer.confirm(f"Launch {spec.label} login now?", default=status.key in {"codex"})
+                run_login = typer.confirm(
+                    f"Launch {spec.label} login now?", default=status.key in {"codex"}
+                )
                 if run_login:
                     typer.echo(f"[provider] Running: {spec.interactive_login_command}")
                     if not run_interactive_provider_login(spec, cwd=Path.cwd()):
-                        typer.echo(f"[provider] {spec.label} login did not complete successfully. You can finish it later and rerun setup or providers-status.")
+                        typer.echo(
+                            f"[provider] {spec.label} login did not complete successfully. You can finish it later and rerun setup or providers-status."
+                        )
         elif status.key == "claude":
             if status.authenticated:
                 typer.echo("[provider] Claude Code is already logged in.")
@@ -1099,7 +1199,9 @@ def main(
                 if run_login:
                     typer.echo(f"[provider] Running: {spec.interactive_login_command}")
                     if not run_interactive_provider_login(spec, cwd=Path.cwd()):
-                        typer.echo("[provider] Claude Code login did not complete successfully. Finish it later with `claude auth login`.")
+                        typer.echo(
+                            "[provider] Claude Code login did not complete successfully. Finish it later with `claude auth login`."
+                        )
 
     statuses = detect_all_provider_statuses()
     typer.echo("[provider] Final provider summary:")
@@ -1110,12 +1212,20 @@ def main(
 
     usable_providers = [status.key for status in statuses if status.interactive_ready]
     if not usable_providers:
-        raise typer.BadParameter("No usable provider backend is ready. Install/authenticate at least one provider.")
+        raise typer.BadParameter(
+            "No usable provider backend is ready. Install/authenticate at least one provider."
+        )
 
-    existing_headless_required = existing_env.get("OPERATIONS_CENTER_PROVIDER_HEADLESS_REQUIRED") == "1"
-    headless_required = typer.confirm("Require unattended/headless provider readiness?", default=existing_headless_required)
+    existing_headless_required = (
+        existing_env.get("OPERATIONS_CENTER_PROVIDER_HEADLESS_REQUIRED") == "1"
+    )
+    headless_required = typer.confirm(
+        "Require unattended/headless provider readiness?", default=existing_headless_required
+    )
     if headless_required and not any(status.headless_ready for status in statuses):
-        raise typer.BadParameter("Headless mode requested, but no provider has API-key/headless readiness.")
+        raise typer.BadParameter(
+            "Headless mode requested, but no provider has API-key/headless readiness."
+        )
 
     preferred_smart_provider = choose_preferred_provider(
         statuses,
@@ -1132,7 +1242,9 @@ def main(
     executor_team = prompt_with_default(
         "Executor team name",
         existing_config_value(existing_config, "team_executor", "team_name") or "budget",
-        note="Using saved value." if existing_config_value(existing_config, "team_executor", "team_name") else None,
+        note="Using saved value."
+        if existing_config_value(existing_config, "team_executor", "team_name")
+        else None,
     )
     executor_orchestrator = prompt_with_default(
         "Executor orchestrator",
@@ -1141,27 +1253,39 @@ def main(
             preferred_smart_provider=preferred_smart_provider,
             saved_value=existing_config_value(existing_config, "team_executor", "orchestrator"),
         ),
-        note="Using saved value." if existing_config_value(existing_config, "team_executor", "orchestrator") else None,
+        note="Using saved value."
+        if existing_config_value(existing_config, "team_executor", "orchestrator")
+        else None,
     )
-    executor_cycles = int(prompt_with_default(
-        "Executor cycles",
-        existing_config_value(existing_config, "team_executor", "cycles") or "3",
-        note="Using saved value." if existing_config_value(existing_config, "team_executor", "cycles") else None,
-    ))
+    executor_cycles = int(
+        prompt_with_default(
+            "Executor cycles",
+            existing_config_value(existing_config, "team_executor", "cycles") or "3",
+            note="Using saved value."
+            if existing_config_value(existing_config, "team_executor", "cycles")
+            else None,
+        )
+    )
     executor_exchanges = int(
         prompt_with_default(
             "Executor exchanges",
             existing_config_value(existing_config, "team_executor", "exchanges") or "20",
-            note="Using saved value." if existing_config_value(existing_config, "team_executor", "exchanges") else None,
+            note="Using saved value."
+            if existing_config_value(existing_config, "team_executor", "exchanges")
+            else None,
         )
     )
     executor_effort = prompt_with_default(
         "Executor effort",
         existing_config_value(existing_config, "team_executor", "effort") or "standard",
-        note="Using saved value." if existing_config_value(existing_config, "team_executor", "effort") else None,
+        note="Using saved value."
+        if existing_config_value(existing_config, "team_executor", "effort")
+        else None,
     )
 
-    print_section("Repos", "Target repositories, branch policy, validation, and repo-local bootstrap.")
+    print_section(
+        "Repos", "Target repositories, branch policy, validation, and repo-local bootstrap."
+    )
     repos: list[RepoSetupAnswers] = []
     repo_index = 1
     while True:
@@ -1171,7 +1295,9 @@ def main(
             break
 
     default_repo_keys = ", ".join(repo.repo_key for repo in repos)
-    default_repo_key = typer.prompt("Default repo key for generated task template", default=repos[0].repo_key)
+    default_repo_key = typer.prompt(
+        "Default repo key for generated task template", default=repos[0].repo_key
+    )
     if default_repo_key not in {repo.repo_key for repo in repos}:
         raise typer.BadParameter(
             f"Default repo key '{default_repo_key}' must match one of the configured repos: {default_repo_keys}"

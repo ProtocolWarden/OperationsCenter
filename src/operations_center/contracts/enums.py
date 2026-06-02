@@ -14,6 +14,7 @@ from enum import Enum
 
 class TaskType(str, Enum):
     """Broad category of work being proposed."""
+
     LINT_FIX = "lint_fix"
     BUG_FIX = "bug_fix"
     SIMPLE_EDIT = "simple_edit"
@@ -27,6 +28,7 @@ class TaskType(str, Enum):
 
 class LaneName(str, Enum):
     """Execution lanes available in the platform."""
+
     CLAUDE_CLI = "claude_cli"
     CODEX_CLI = "codex_cli"
     AIDER_LOCAL = "aider_local"
@@ -47,6 +49,7 @@ class BackendName(str, Enum):
     Will migrate into executor services in a future work order:
       - ``aider_local``, ``direct_local``
     """
+
     DIRECT_LOCAL = "direct_local"
     AIDER_LOCAL = "aider_local"
     TEAM_EXECUTOR = "team_executor"
@@ -56,20 +59,25 @@ class BackendName(str, Enum):
     DEMO_STUB = "demo_stub"
 
 
-EXECUTOR_LANE_NAMES: frozenset[str] = frozenset({
-    BackendName.TEAM_EXECUTOR,
-    BackendName.DAG_EXECUTOR,
-    BackendName.CRITIQUE_EXECUTOR,
-})
+EXECUTOR_LANE_NAMES: frozenset[str] = frozenset(
+    {
+        BackendName.TEAM_EXECUTOR,
+        BackendName.DAG_EXECUTOR,
+        BackendName.CRITIQUE_EXECUTOR,
+    }
+)
 
-DIRECT_WORKER_BACKEND_NAMES: frozenset[str] = frozenset({
-    BackendName.AIDER_LOCAL,
-    BackendName.DIRECT_LOCAL,
-})
+DIRECT_WORKER_BACKEND_NAMES: frozenset[str] = frozenset(
+    {
+        BackendName.AIDER_LOCAL,
+        BackendName.DIRECT_LOCAL,
+    }
+)
 
 
 class ExecutionMode(str, Enum):
     """High-level execution strategy for the run."""
+
     GOAL = "goal"
     FIX_PR = "fix_pr"
     TEST_CAMPAIGN = "test_campaign"
@@ -78,6 +86,7 @@ class ExecutionMode(str, Enum):
 
 class ExecutionStatus(str, Enum):
     """Terminal or in-progress outcome of an execution run."""
+
     PENDING = "pending"
     RUNNING = "running"
     SUCCEEDED = "succeeded"
@@ -89,6 +98,7 @@ class ExecutionStatus(str, Enum):
 
 class ArtifactType(str, Enum):
     """Type of artifact produced during execution."""
+
     DIFF = "diff"
     PATCH = "patch"
     VALIDATION_REPORT = "validation_report"
@@ -100,6 +110,7 @@ class ArtifactType(str, Enum):
 
 class ValidationStatus(str, Enum):
     """Outcome of a validation step."""
+
     PASSED = "passed"
     FAILED = "failed"
     SKIPPED = "skipped"
@@ -108,6 +119,7 @@ class ValidationStatus(str, Enum):
 
 class RiskLevel(str, Enum):
     """Risk estimate for a proposed change."""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -115,6 +127,7 @@ class RiskLevel(str, Enum):
 
 class Priority(str, Enum):
     """Scheduling priority for the task."""
+
     LOW = "low"
     NORMAL = "normal"
     HIGH = "high"
@@ -123,6 +136,7 @@ class Priority(str, Enum):
 
 class FailureReasonCategory(str, Enum):
     """Coarse failure category for routing and retry decisions."""
+
     VALIDATION_FAILED = "validation_failed"
     BACKEND_ERROR = "backend_error"
     UNSUPPORTED_REQUEST = "unsupported_request"
@@ -139,8 +153,10 @@ class FailureReasonCategory(str, Enum):
 # Continuous improvement enums
 # ---------------------------------------------------------------------------
 
+
 class RefinementStatus(str, Enum):
     """Overall status of the refinement lifecycle for a work item."""
+
     NOT_STARTED = "not_started"
     IN_PROGRESS = "in_progress"
     ACCEPTED = "accepted"
@@ -151,6 +167,7 @@ class RefinementStatus(str, Enum):
 
 class RefinementDecision(str, Enum):
     """Decision emitted after evaluating a single attempt."""
+
     ACCEPT = "accept"
     RETRY = "retry"
     ABANDON = "abandon"
@@ -159,6 +176,7 @@ class RefinementDecision(str, Enum):
 
 class EvaluationOutcome(str, Enum):
     """Coarse evaluation result for a single attempt."""
+
     IMPROVED = "improved"
     NEUTRAL = "neutral"
     REGRESSED = "regressed"
@@ -168,6 +186,7 @@ class EvaluationOutcome(str, Enum):
 
 class LineageBranchReason(str, Enum):
     """Why a new lineage branch was created."""
+
     INITIAL = "initial"
     RETRY_AFTER_FAILURE = "retry_after_failure"
     STRATEGY_VARIATION = "strategy_variation"
@@ -185,6 +204,7 @@ class EnforcedGuardrail(str, Enum):
       REGRESSION_FIXTURES_PASS  → re-run validation_profile.commands on result branch
       NO_RUNTIME_POLICY_WIDENING → static check: forbidden_paths unchanged, no policy file edits
     """
+
     NO_LOST_ESCALATIONS = "no_lost_escalations"
     CUSTODIAN_CLEAN = "custodian_clean"
     NO_ARCHITECTURE_VIOLATIONS = "no_architecture_violations"
@@ -194,6 +214,7 @@ class EnforcedGuardrail(str, Enum):
 
 class EvaluationCommandSource(str, Enum):
     """How evaluation_command was determined."""
+
     OC_DERIVED = "oc_derived"
     PROPOSER_SUGGESTED = "proposer_suggested"
     VALIDATION_PROFILE = "validation_profile"
@@ -201,6 +222,7 @@ class EvaluationCommandSource(str, Enum):
 
 class EvidenceType(str, Enum):
     """Discriminator for evidence payloads carried in an observation record."""
+
     CHANGED_FILES = "changed_files"
     VALIDATION = "validation"
     RULE = "rule"

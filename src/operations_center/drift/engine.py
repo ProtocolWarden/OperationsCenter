@@ -5,6 +5,7 @@
 Adapters report what happened; OperationsCenter (this module) decides
 whether it is drift.
 """
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
@@ -13,9 +14,9 @@ from typing import Any
 
 
 class DriftKind(str, Enum):
-    RUNTIME          = "runtime"
-    CAPABILITY       = "capability"
-    OUTPUT_SHAPE     = "output_shape"
+    RUNTIME = "runtime"
+    CAPABILITY = "capability"
+    OUTPUT_SHAPE = "output_shape"
     INTERNAL_ROUTING = "internal_routing"
 
 
@@ -43,11 +44,22 @@ class BackendDriftFinding:
 
 
 # Per-result schema reference for output_shape drift detection.
-_CXRP_RESULT_TOP_LEVEL_FIELDS: frozenset[str] = frozenset({
-    "schema_version", "contract_kind", "result_id", "request_id", "ok",
-    "status", "summary", "artifacts", "diagnostics", "evidence",
-    "metadata", "created_at",
-})
+_CXRP_RESULT_TOP_LEVEL_FIELDS: frozenset[str] = frozenset(
+    {
+        "schema_version",
+        "contract_kind",
+        "result_id",
+        "request_id",
+        "ok",
+        "status",
+        "summary",
+        "artifacts",
+        "diagnostics",
+        "evidence",
+        "metadata",
+        "created_at",
+    }
+)
 
 
 def detect_runtime_drift(

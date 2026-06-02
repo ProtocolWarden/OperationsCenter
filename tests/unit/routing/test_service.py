@@ -191,7 +191,9 @@ def test_http_backed_service_routes_over_switchboard_boundary():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=cxrp_payload)
 
-    client = HttpLaneRoutingClient("http://switchboard.local", transport=httpx.MockTransport(handler))
+    client = HttpLaneRoutingClient(
+        "http://switchboard.local", transport=httpx.MockTransport(handler)
+    )
     service = PlanningService.with_client(client)
     try:
         bundle = service.plan(_ctx(task_type="lint_fix", risk_level="low"))

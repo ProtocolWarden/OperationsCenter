@@ -27,6 +27,7 @@ Usage (foreground / debug):
 The watch loop uses inotifywait when available (near-instant pickup) and
 falls back to polling every 10 seconds.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -48,6 +49,7 @@ POLL_INTERVAL = 10  # seconds — used both as inotifywait timeout and fallback 
 
 # ── Context helpers ───────────────────────────────────────────────────────────
 
+
 def _read_console_file(repo_path: Path, name: str, max_lines: int = 40) -> str:
     """Read a .console/ context file, truncated to max_lines."""
     p = repo_path / ".console" / name
@@ -64,7 +66,9 @@ def _recent_commits(repo_path: Path, n: int = 10) -> str:
     try:
         result = subprocess.run(
             ["git", "-C", str(repo_path), "log", f"-{n}", "--oneline", "--no-decorate"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         return result.stdout.strip()
     except Exception:
@@ -102,6 +106,7 @@ def _build_elaborated_goal(item: dict) -> str:
 
 # ── Queue processing ──────────────────────────────────────────────────────────
 
+
 def _process_item(item: dict, config_path: Path, venv_python: str) -> bool:
     """
     Run one queued task through the planning → execution pipeline.
@@ -116,21 +121,32 @@ def _process_item(item: dict, config_path: Path, venv_python: str) -> bool:
 
     logger.info("intake: processing task_id=%s repo=%s type=%s", task_id, repo_name, task_type)
 
-    oc_root = Path(__file__).resolve().parents[4]  # src/operations_center/entrypoints/intake → repo root
+    oc_root = (
+        Path(__file__).resolve().parents[4]
+    )  # src/operations_center/entrypoints/intake → repo root
 
     with tempfile.TemporaryDirectory(prefix="oc-intake-") as tmpdir:
         tmp = Path(tmpdir)
 
         # ── Step 1: Planning ──────────────────────────────────────────────────
         plan_cmd = [
-            venv_python, "-m", "operations_center.entrypoints.worker.main",
-            "--goal", goal,
-            "--task-type", task_type,
-            "--repo-key", repo_name,
-            "--clone-url", f"file://{repo_path}" if repo_path else "https://example.invalid/placeholder.git",
-            "--project-id", "intake",
-            "--task-id", f"intake-{task_id}",
-            "--priority", priority,
+            venv_python,
+            "-m",
+            "operations_center.entrypoints.worker.main",
+            "--goal",
+            goal,
+            "--task-type",
+            task_type,
+            "--repo-key",
+            repo_name,
+            "--clone-url",
+            f"file://{repo_path}" if repo_path else "https://example.invalid/placeholder.git",
+            "--project-id",
+            "intake",
+            "--task-id",
+            f"intake-{task_id}",
+            "--priority",
+            priority,
         ]
 
         env = _build_env(oc_root)
@@ -139,13 +155,19 @@ def _process_item(item: dict, config_path: Path, venv_python: str) -> bool:
         try:
             bundle = json.loads(plan_proc.stdout)
         except Exception:
-            logger.error("intake: planning produced no JSON for task_id=%s\n%s",
-                         task_id, plan_proc.stderr.strip() or plan_proc.stdout.strip())
+            logger.error(
+                "intake: planning produced no JSON for task_id=%s\n%s",
+                task_id,
+                plan_proc.stderr.strip() or plan_proc.stdout.strip(),
+            )
             return False
 
         if plan_proc.returncode != 0:
-            logger.error("intake: planning failed for task_id=%s — %s",
-                         task_id, bundle.get("message", "unknown error"))
+            logger.error(
+                "intake: planning failed for task_id=%s — %s",
+                task_id,
+                bundle.get("message", "unknown error"),
+            )
             return False
 
         # ── Step 2: Execution ─────────────────────────────────────────────────
@@ -160,20 +182,31 @@ def _process_item(item: dict, config_path: Path, venv_python: str) -> bool:
         result_file = tmp / "result.json"
 
         exec_cmd = [
-            venv_python, "-m", "operations_center.entrypoints.execute.main",
-            "--config", str(config_file),
-            "--bundle", str(bundle_file),
-            "--workspace-path", str(workspace),
-            "--task-branch", f"intake/{task_id}",
-            "--output", str(result_file),
-            "--source", "intake",
+            venv_python,
+            "-m",
+            "operations_center.entrypoints.execute.main",
+            "--config",
+            str(config_file),
+            "--bundle",
+            str(bundle_file),
+            "--workspace-path",
+            str(workspace),
+            "--task-branch",
+            f"intake/{task_id}",
+            "--output",
+            str(result_file),
+            "--source",
+            "intake",
         ]
 
         exec_proc = subprocess.run(exec_cmd, cwd=oc_root, env=env, capture_output=True, text=True)
 
         if not result_file.exists():
-            logger.error("intake: execute produced no result file for task_id=%s\n%s",
-                         task_id, exec_proc.stderr.strip())
+            logger.error(
+                "intake: execute produced no result file for task_id=%s\n%s",
+                task_id,
+                exec_proc.stderr.strip(),
+            )
             return False
 
         outcome = json.loads(result_file.read_text(encoding="utf-8"))
@@ -184,14 +217,19 @@ def _process_item(item: dict, config_path: Path, venv_python: str) -> bool:
         if success:
             logger.info("intake: task_id=%s completed — status=%s", task_id, status)
         else:
-            logger.warning("intake: task_id=%s failed — status=%s category=%s",
-                           task_id, status, result.get("failure_category"))
+            logger.warning(
+                "intake: task_id=%s failed — status=%s category=%s",
+                task_id,
+                status,
+                result.get("failure_category"),
+            )
 
         return success
 
 
 def _build_env(oc_root: Path) -> dict:
     import os
+
     env = dict(os.environ)
     env["PYTHONPATH"] = str(oc_root / "src")
     return env
@@ -204,6 +242,7 @@ def _venv_python(oc_root: Path) -> str:
 
 # ── Watch loop ────────────────────────────────────────────────────────────────
 
+
 def _has_inotifywait() -> bool:
     return shutil.which("inotifywait") is not None
 
@@ -214,7 +253,14 @@ def _write_heartbeat(status_dir: Path | None) -> None:
     try:
         hb = status_dir / "heartbeat_intake.json"
         hb.write_text(
-            json.dumps({"role": "intake", "at": time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime()), "status": "idle"}, ensure_ascii=False),
+            json.dumps(
+                {
+                    "role": "intake",
+                    "at": time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime()),
+                    "status": "idle",
+                },
+                ensure_ascii=False,
+            ),
             encoding="utf-8",
         )
     except OSError:
@@ -239,7 +285,9 @@ def _drain_queue(config_path: Path, venv_python: str) -> None:
             logger.warning("intake: leaving queue file %s for inspection", f.name)
 
 
-def _watch_loop_inotify(config_path: Path, venv_python: str, status_dir: Path | None = None) -> None:
+def _watch_loop_inotify(
+    config_path: Path, venv_python: str, status_dir: Path | None = None
+) -> None:
     """Event-driven loop using inotifywait with POLL_INTERVAL timeout as heartbeat."""
     logger.info("intake: starting inotifywait watch on %s", QUEUE_DIR)
     QUEUE_DIR.mkdir(parents=True, exist_ok=True)
@@ -254,9 +302,12 @@ def _watch_loop_inotify(config_path: Path, venv_python: str, status_dir: Path | 
                 [
                     "inotifywait",
                     "--quiet",
-                    "--event", "create",
-                    "--event", "moved_to",
-                    "--timeout", str(POLL_INTERVAL),
+                    "--event",
+                    "create",
+                    "--event",
+                    "moved_to",
+                    "--timeout",
+                    str(POLL_INTERVAL),
                     str(QUEUE_DIR),
                 ],
                 timeout=POLL_INTERVAL + 5,
@@ -283,13 +334,24 @@ def _watch_loop_poll(config_path: Path, venv_python: str, status_dir: Path | Non
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
+
 def main() -> int:
     global QUEUE_DIR
-    parser = argparse.ArgumentParser(description="OperationsCenter intake role — operator queue processor")
-    parser.add_argument("--config", required=True, type=Path, help="Path to operations_center config YAML")
-    parser.add_argument("--queue-dir", type=Path, default=QUEUE_DIR, help="Override queue directory")
-    parser.add_argument("--once", action="store_true", help="Drain queue once and exit (no watch loop)")
-    parser.add_argument("--status-dir", type=Path, default=None, help="Directory for heartbeat_intake.json")
+    parser = argparse.ArgumentParser(
+        description="OperationsCenter intake role — operator queue processor"
+    )
+    parser.add_argument(
+        "--config", required=True, type=Path, help="Path to operations_center config YAML"
+    )
+    parser.add_argument(
+        "--queue-dir", type=Path, default=QUEUE_DIR, help="Override queue directory"
+    )
+    parser.add_argument(
+        "--once", action="store_true", help="Drain queue once and exit (no watch loop)"
+    )
+    parser.add_argument(
+        "--status-dir", type=Path, default=None, help="Directory for heartbeat_intake.json"
+    )
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args()
 

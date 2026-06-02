@@ -26,26 +26,32 @@ class RecoveryPolicy:
     unknown_retry_limit: int = 0
 
     retryable_kinds: frozenset[ExecutionFailureKind] = field(
-        default_factory=lambda: frozenset({
-            ExecutionFailureKind.TRANSIENT,
-            ExecutionFailureKind.TIMEOUT,
-            ExecutionFailureKind.BACKEND_UNAVAILABLE,
-        })
+        default_factory=lambda: frozenset(
+            {
+                ExecutionFailureKind.TRANSIENT,
+                ExecutionFailureKind.TIMEOUT,
+                ExecutionFailureKind.BACKEND_UNAVAILABLE,
+            }
+        )
     )
 
     non_retryable_kinds: frozenset[ExecutionFailureKind] = field(
-        default_factory=lambda: frozenset({
-            ExecutionFailureKind.AUTH,
-            ExecutionFailureKind.CONTRACT_VIOLATION,
-            ExecutionFailureKind.CONFIGURATION,
-            ExecutionFailureKind.UNKNOWN,
-        })
+        default_factory=lambda: frozenset(
+            {
+                ExecutionFailureKind.AUTH,
+                ExecutionFailureKind.CONTRACT_VIOLATION,
+                ExecutionFailureKind.CONFIGURATION,
+                ExecutionFailureKind.UNKNOWN,
+            }
+        )
     )
 
     pre_send_failure_kinds: frozenset[ExecutionFailureKind] = field(
-        default_factory=lambda: frozenset({
-            ExecutionFailureKind.BACKEND_UNAVAILABLE,
-        })
+        default_factory=lambda: frozenset(
+            {
+                ExecutionFailureKind.BACKEND_UNAVAILABLE,
+            }
+        )
     )
 
     rate_limit_retry_requires_backoff: bool = True
@@ -63,8 +69,7 @@ class RetryBudgetChecker(Protocol):
         self,
         request: ExecutionRequest,
         context: RecoveryContext,
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
 
 class NoPaidRetryBudgetChecker:

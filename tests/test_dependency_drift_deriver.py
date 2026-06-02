@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Tests for DependencyDriftDeriver."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -34,7 +35,9 @@ def _make_snapshot(
     now = observed_at or datetime(2026, 4, 6, 12, 0, 0, tzinfo=UTC)
     signals = RepoSignalsSnapshot(
         test_signal=CheckSignal(status="unknown"),
-        dependency_drift=DependencyDriftSignal(status=dependency_drift_status, observed_at=signal_observed_at),
+        dependency_drift=DependencyDriftSignal(
+            status=dependency_drift_status, observed_at=signal_observed_at
+        ),
         todo_signal=TodoSignal(),
         architecture_signal=ArchitectureSignal(status="unavailable"),
         benchmark_signal=BenchmarkSignal(status="unavailable"),

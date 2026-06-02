@@ -47,12 +47,16 @@ class DecisionLoader:
         prior_decisions = [
             artifact
             for artifact in self._all_decisions()
-            if artifact.repo.path == current.repo.path and artifact.source_insight_run_id != current.run_id
+            if artifact.repo.path == current.repo.path
+            and artifact.source_insight_run_id != current.run_id
         ][:history_limit]
         return current, prior_decisions
 
     def _all_insights(self) -> list[RepoInsightsArtifact]:
-        artifacts = [RepoInsightsArtifact.model_validate_json(path.read_text(encoding="utf-8")) for path in self.insights_root.glob("*/repo_insights.json")]
+        artifacts = [
+            RepoInsightsArtifact.model_validate_json(path.read_text(encoding="utf-8"))
+            for path in self.insights_root.glob("*/repo_insights.json")
+        ]
         return sorted(artifacts, key=lambda artifact: artifact.generated_at, reverse=True)
 
     def _all_decisions(self) -> list[ProposalCandidatesArtifact]:

@@ -12,6 +12,7 @@ Re-audit if ANY of:
 The CxRP-version trigger overlaps with the schema-change triggers in
 most real bumps. The redundancy is intentional belt-and-suspenders.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -23,11 +24,11 @@ from operations_center.executors._artifacts import AuditVerdict
 
 
 class ReauditReason(str, Enum):
-    BACKEND_VERSION_CHANGED        = "backend_version_changed"
-    RUNTIMEBINDING_SCHEMA_CHANGED  = "runtimebinding_schema_changed"
-    CAPABILITYSET_SCHEMA_CHANGED   = "capabilityset_schema_changed"
-    CXRP_MINOR_VERSION_ADVANCED    = "cxrp_minor_version_advanced"
-    STALE_AND_RECENTLY_INVOKED     = "stale_and_recently_invoked"
+    BACKEND_VERSION_CHANGED = "backend_version_changed"
+    RUNTIMEBINDING_SCHEMA_CHANGED = "runtimebinding_schema_changed"
+    CAPABILITYSET_SCHEMA_CHANGED = "capabilityset_schema_changed"
+    CXRP_MINOR_VERSION_ADVANCED = "cxrp_minor_version_advanced"
+    STALE_AND_RECENTLY_INVOKED = "stale_and_recently_invoked"
 
 
 @dataclass(frozen=True)

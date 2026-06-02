@@ -308,7 +308,9 @@ def cmd_get_artifact(
     if len(text) > max_bytes:
         truncated = text[:max_bytes]
         typer.echo(truncated)
-        typer.echo(f"\n[... truncated {len(text) - max_bytes} bytes — pass --max-bytes to widen ...]")
+        typer.echo(
+            f"\n[... truncated {len(text) - max_bytes} bytes — pass --max-bytes to widen ...]"
+        )
     else:
         typer.echo(text)
 

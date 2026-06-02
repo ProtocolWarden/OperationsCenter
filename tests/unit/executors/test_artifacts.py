@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Tests for the per-backend artifact loaders + validation."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -18,9 +19,8 @@ from operations_center.executors._artifacts import (
     load_runtime_support,
 )
 
-
 _TEAM_EXECUTOR_DIR = Path("src/operations_center/executors/team_executor")
-_DAG_EXECUTOR_DIR  = Path("src/operations_center/executors/dag_executor")
+_DAG_EXECUTOR_DIR = Path("src/operations_center/executors/dag_executor")
 
 
 # ── shipped artifacts load and validate ─────────────────────────────────
@@ -87,8 +87,7 @@ class TestValidation:
     def test_runtime_support_rejects_unknown_selection_mode(self, tmp_path):
         p = tmp_path / "rs.yaml"
         p.write_text(
-            "backend_id: x\nsupported_runtime_kinds: []\n"
-            "supported_selection_modes: [vibes]\n"
+            "backend_id: x\nsupported_runtime_kinds: []\nsupported_selection_modes: [vibes]\n"
         )
         with pytest.raises(AuditArtifactError, match="unknown SelectionMode"):
             load_runtime_support(p)

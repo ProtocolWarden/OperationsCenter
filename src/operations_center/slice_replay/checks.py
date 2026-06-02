@@ -18,14 +18,16 @@ from operations_center.fixture_harvesting.models import FixtureArtifact, Fixture
 
 from .models import SliceReplayCheck, SliceReplayCheckResult, SliceReplayRequest
 
-_TEXT_CONTENT_TYPES = frozenset({
-    "application/json",
-    "application/x-ndjson",
-    "text/plain",
-    "text/csv",
-    "text/yaml",
-    "application/yaml",
-})
+_TEXT_CONTENT_TYPES = frozenset(
+    {
+        "application/json",
+        "application/x-ndjson",
+        "text/plain",
+        "text/csv",
+        "text/yaml",
+        "application/yaml",
+    }
+)
 
 
 def _is_json_type(content_type: str) -> bool:
@@ -80,6 +82,7 @@ def _error(check: SliceReplayCheck, summary: str, err: str) -> SliceReplayCheckR
 # ---------------------------------------------------------------------------
 # Check implementations
 # ---------------------------------------------------------------------------
+
 
 def check_fixture_pack_loads(
     check: SliceReplayCheck,
@@ -189,7 +192,9 @@ def check_source_index_summary_loads(
             "source_index_summary.json missing 'total_artifacts' field",
             detail=f"Keys present: {list(data.keys())[:10]}",
         )
-    return _pass(check, f"source_index_summary.json valid — total_artifacts={data['total_artifacts']}")
+    return _pass(
+        check, f"source_index_summary.json valid — total_artifacts={data['total_artifacts']}"
+    )
 
 
 def check_json_artifact_reads(

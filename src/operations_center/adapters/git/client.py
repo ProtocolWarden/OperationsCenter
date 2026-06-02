@@ -12,7 +12,9 @@ logger = logging.getLogger(__name__)
 
 class GitClient:
     def _run(self, args: list[str], cwd: Path | None = None, *, timeout: int = 60) -> str:
-        proc = subprocess.run(args, cwd=cwd, capture_output=True, text=True, check=False, timeout=timeout)
+        proc = subprocess.run(
+            args, cwd=cwd, capture_output=True, text=True, check=False, timeout=timeout
+        )
         if proc.returncode != 0:
             raise RuntimeError(f"git command failed: {' '.join(args)}\n{proc.stderr}")
         return proc.stdout.strip()
@@ -54,12 +56,16 @@ class GitClient:
         remote's default branch.
         """
         ref = self._run(
-            ["git", "symbolic-ref", "refs/remotes/origin/HEAD"], cwd=repo_path,
+            ["git", "symbolic-ref", "refs/remotes/origin/HEAD"],
+            cwd=repo_path,
         )
         return ref.rsplit("/", 1)[-1]
 
     def create_remote_branch_from(
-        self, repo_path: Path, branch: str, source_ref: str,
+        self,
+        repo_path: Path,
+        branch: str,
+        source_ref: str,
     ) -> None:
         """Create `branch` on origin pointing at `source_ref` (e.g. 'origin/main').
 
@@ -104,11 +110,12 @@ class GitClient:
             # for branches that diverged early, causing `checkout -b ... origin/...`
             # to fail with an empty-stderr git error.
             self._run(
-                ["git", "fetch", "origin",
-                 f"{task_branch}:refs/remotes/origin/{task_branch}"],
+                ["git", "fetch", "origin", f"{task_branch}:refs/remotes/origin/{task_branch}"],
                 cwd=repo_path,
             )
-            self._run(["git", "checkout", "-b", task_branch, f"origin/{task_branch}"], cwd=repo_path)
+            self._run(
+                ["git", "checkout", "-b", task_branch, f"origin/{task_branch}"], cwd=repo_path
+            )
             return True
         self._run(["git", "checkout", "-b", task_branch], cwd=repo_path)
         return False
@@ -123,14 +130,20 @@ class GitClient:
         """
         proc = subprocess.run(
             ["git", "merge", "--no-edit", f"origin/{base_branch}"],
-            cwd=repo_path, capture_output=True, text=True, timeout=60,
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
         if proc.returncode == 0:
             return True, []
         # Collect unmerged paths
         status = subprocess.run(
             ["git", "diff", "--name-only", "--diff-filter=U"],
-            cwd=repo_path, capture_output=True, text=True, timeout=30,
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         if status.returncode != 0:
             logger.warning(
@@ -179,10 +192,14 @@ class GitClient:
     def diff_stat(self, repo_path: Path) -> str:
         tracked = self._run(["git", "diff", "--stat", "HEAD"], cwd=repo_path)
         untracked = self._parse_null_delimited_paths(
-            self._run_bytes(["git", "ls-files", "--others", "--exclude-standard", "-z"], cwd=repo_path)
+            self._run_bytes(
+                ["git", "ls-files", "--others", "--exclude-standard", "-z"], cwd=repo_path
+            )
         )
         lines = [line for line in tracked.splitlines() if line.strip()]
-        lines.extend(f" untracked | {self._normalize_repo_relative_path(path)}" for path in untracked)
+        lines.extend(
+            f" untracked | {self._normalize_repo_relative_path(path)}" for path in untracked
+        )
         return "\n".join(lines).strip()
 
     def diff_patch(self, repo_path: Path) -> str:
@@ -228,7 +245,8 @@ class GitClient:
         self._run(["git", "commit", "-m", message], cwd=repo_path)
         logger.info(
             "GitClient.squash_commits: collapsed %d commits into 1 (base=%s)",
-            count, base_branch,
+            count,
+            base_branch,
         )
         return True
 
@@ -279,7 +297,9 @@ class GitClient:
         if not output:
             return []
 
-        parts = [part.decode("utf-8", errors="surrogateescape") for part in output.split(b"\x00") if part]
+        parts = [
+            part.decode("utf-8", errors="surrogateescape") for part in output.split(b"\x00") if part
+        ]
         files: list[str] = []
         idx = 0
         while idx < len(parts):
@@ -304,9 +324,7 @@ class GitClient:
         if not output:
             return []
         return [
-            part.decode("utf-8", errors="surrogateescape")
-            for part in output.split(b"\x00")
-            if part
+            part.decode("utf-8", errors="surrogateescape") for part in output.split(b"\x00") if part
         ]
 
     def _normalize_repo_relative_path(self, path: str) -> str:

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """CoverageGapRule — propose test coverage improvement tasks."""
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -55,7 +56,9 @@ class CoverageGapRule:
             elif insight.kind == "coverage_gap/uncovered_files":
                 count = insight.evidence.get("uncovered_file_count", 0)
                 top_files = insight.evidence.get("top_uncovered", [])
-                files_str = ", ".join(str(f) for f in top_files[:3]) if top_files else "several files"
+                files_str = (
+                    ", ".join(str(f) for f in top_files[:3]) if top_files else "several files"
+                )
                 threshold = insight.evidence.get("threshold_pct", 80)
                 candidates.append(
                     CandidateSpec(

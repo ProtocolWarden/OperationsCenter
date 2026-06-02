@@ -7,6 +7,7 @@ and depends on OC to supply an implementation. This adapter wraps the
 loaded ExecutorCatalog so it satisfies the SB port without SB needing
 to import OC code.
 """
+
 from __future__ import annotations
 
 from typing import Iterable
@@ -32,7 +33,8 @@ class SwitchboardCatalogAdapter:
         self, *, required_capabilities: Iterable[str]
     ) -> list[str]:
         return backends_supporting_capabilities(
-            self._catalog, required_capabilities=required_capabilities,
+            self._catalog,
+            required_capabilities=required_capabilities,
         )
 
     def backends_by_outcome(self, *, outcome: str) -> list[str]:

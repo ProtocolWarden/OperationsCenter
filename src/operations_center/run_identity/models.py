@@ -36,10 +36,10 @@ from typing import Any
 from pydantic import BaseModel, Field, field_validator
 
 _RUN_ID_PATTERN = re.compile(
-    r"^[a-z0-9_]+"        # repo_id (one or more chars)
-    r"_[a-z0-9_]+"        # _audit_type (one or more chars)
-    r"_\d{8}T\d{6}Z"      # _YYYYMMDDTHHMMSSz
-    r"_[a-f0-9]{8}$"      # _xxxxxxxx (8 hex chars)
+    r"^[a-z0-9_]+"  # repo_id (one or more chars)
+    r"_[a-z0-9_]+"  # _audit_type (one or more chars)
+    r"_\d{8}T\d{6}Z"  # _YYYYMMDDTHHMMSSz
+    r"_[a-f0-9]{8}$"  # _xxxxxxxx (8 hex chars)
 )
 
 

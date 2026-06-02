@@ -2,10 +2,10 @@
 # Copyright (C) 2026 ProtocolWarden
 from __future__ import annotations
 
+import sys
 from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
-import sys
 
 from cxrp.contracts.runtime_binding import RuntimeBinding
 from cxrp.vocabulary.runtime import RuntimeKind, SelectionMode
@@ -56,10 +56,26 @@ def _usage_store(*, remaining: int, max_per_hour: int = 10, max_per_day: int = 5
 def test_select_team_name_uses_runtime_binding_tier_without_pressure() -> None:
     settings = TeamExecutorSettings(team_name="standard", dynamic_team_selection=True)
 
-    assert _select_team_name(settings, _request(model="opus"), usage_store=_usage_store(remaining=10)) == "premium"
-    assert _select_team_name(settings, _request(model="sonnet"), usage_store=_usage_store(remaining=10)) == "standard"
-    assert _select_team_name(settings, _request(model="haiku"), usage_store=_usage_store(remaining=10)) == "budget"
-    assert _select_team_name(settings, _request(model="gpt-5.4-mini"), usage_store=_usage_store(remaining=10)) == "budget"
+    assert (
+        _select_team_name(settings, _request(model="opus"), usage_store=_usage_store(remaining=10))
+        == "premium"
+    )
+    assert (
+        _select_team_name(
+            settings, _request(model="sonnet"), usage_store=_usage_store(remaining=10)
+        )
+        == "standard"
+    )
+    assert (
+        _select_team_name(settings, _request(model="haiku"), usage_store=_usage_store(remaining=10))
+        == "budget"
+    )
+    assert (
+        _select_team_name(
+            settings, _request(model="gpt-5.4-mini"), usage_store=_usage_store(remaining=10)
+        )
+        == "budget"
+    )
 
 
 def test_select_team_name_prefers_config_ref_tier_hint() -> None:
@@ -217,9 +233,7 @@ def test_adapter_execute_forwards_goal_text_to_runner(monkeypatch) -> None:
         usage_store=_usage_store(remaining=10),
     )
 
-    request = _request().model_copy(
-        update={"goal_text": "Fix the authentication bug"}
-    )
+    request = _request().model_copy(update={"goal_text": "Fix the authentication bug"})
     result = adapter.execute(request)
 
     assert result.success is True

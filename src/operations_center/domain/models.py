@@ -13,7 +13,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-
 ExecutionMode = Literal["goal", "fix_pr", "test_campaign", "improve_campaign"]
 
 

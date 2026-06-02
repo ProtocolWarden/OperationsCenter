@@ -14,6 +14,7 @@ Default threshold: 30 days. Conservative — adjust per-deployment via
     python -m operations_center.entrypoints.maintenance.cleanup_stale_backlog \\
         --config config/operations_center.local.yaml [--dry-run]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -80,9 +81,9 @@ def main() -> int:
         if age_days < threshold_days:
             continue
         entry = {
-            "id":        str(issue.get("id")),
-            "title":     (issue.get("name") or "")[:80],
-            "age_days":  round(age_days, 1),
+            "id": str(issue.get("id")),
+            "title": (issue.get("name") or "")[:80],
+            "age_days": round(age_days, 1),
             "threshold": threshold_days,
         }
         if args.dry_run:
@@ -101,19 +102,19 @@ def main() -> int:
             cancelled.append(entry)
         except Exception as exc:
             entry["action"] = "error"
-            entry["error"]  = str(exc)
+            entry["error"] = str(exc)
             skipped.append(entry)
 
     client.close()
     out = {
-        "scanned_at":          now.isoformat(),
-        "dry_run":             args.dry_run,
-        "threshold_days":      threshold_days,
-        "cancelled_count":     sum(1 for c in cancelled if c.get("action") == "cancelled"),
-        "would_cancel_count":  sum(1 for c in cancelled if c.get("action") == "would_cancel"),
-        "skipped_count":       len(skipped),
-        "cancelled":           cancelled,
-        "skipped":             skipped[:20],
+        "scanned_at": now.isoformat(),
+        "dry_run": args.dry_run,
+        "threshold_days": threshold_days,
+        "cancelled_count": sum(1 for c in cancelled if c.get("action") == "cancelled"),
+        "would_cancel_count": sum(1 for c in cancelled if c.get("action") == "would_cancel"),
+        "skipped_count": len(skipped),
+        "cancelled": cancelled,
+        "skipped": skipped[:20],
     }
     print(json.dumps(out, indent=2, ensure_ascii=False))
     return 0

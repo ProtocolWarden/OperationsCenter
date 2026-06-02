@@ -17,18 +17,24 @@ This scanner is consumed by Custodian's maintenance utilities; the
 corresponding OC-specific maintenance CLI lives in
 ``src/operations_center/entrypoints/maintenance/cleanup_state.py``.
 """
-from __future__ import annotations
 
+from __future__ import annotations
 
 # Plane states that mean "the task is done with whatever it was going to do"
 _TERMINAL_PLANE_STATES = frozenset({"done", "blocked", "cancelled"})
 
 # Per-record status fields that count as terminal regardless of Plane state.
-_TERMINAL_RECORD_STATUSES = frozenset({
-    "done", "complete", "completed", "cancelled", "abandoned",
-    "merged",   # pr_reviews
-    "rejected", # proposal_feedback
-})
+_TERMINAL_RECORD_STATUSES = frozenset(
+    {
+        "done",
+        "complete",
+        "completed",
+        "cancelled",
+        "abandoned",
+        "merged",  # pr_reviews
+        "rejected",  # proposal_feedback
+    }
+)
 
 
 class OCStateScanner:

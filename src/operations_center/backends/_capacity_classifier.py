@@ -24,7 +24,6 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-
 _CAPACITY_PATTERNS: tuple[re.Pattern[str], ...] = (
     # Claude / claude-code: "You're out of extra usage · resets 4:20am"
     re.compile(r"\bout of (?:extra )?usage\b", re.IGNORECASE),

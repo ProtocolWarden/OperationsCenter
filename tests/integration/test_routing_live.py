@@ -21,11 +21,12 @@ from __future__ import annotations
 
 import pytest
 
-from operations_center.contracts.enums import LaneName, BackendName
+from operations_center.contracts.enums import BackendName, LaneName
 from operations_center.contracts.routing import LaneDecision
 from operations_center.planning.models import PlanningContext
 from operations_center.planning.proposal_builder import build_proposal
 from operations_center.routing.client import HttpLaneRoutingClient, SwitchBoardUnavailableError
+
 pytestmark = [pytest.mark.integration, pytest.mark.slow]
 
 

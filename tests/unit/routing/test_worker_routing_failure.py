@@ -8,11 +8,11 @@ must:
 - Emit structured error JSON to stdout
 - Attempt to write a partial artifact (best-effort; not asserted here)
 """
+
 from __future__ import annotations
 
 import json
 from unittest.mock import MagicMock, patch
-
 
 from operations_center.planning.models import PlanningContext, ProposalDecisionBundle
 from operations_center.planning.proposal_builder import build_proposal
@@ -38,6 +38,7 @@ def _make_service(*, route_raises: Exception | None = None):
     else:
         from operations_center.contracts.enums import BackendName, LaneName
         from operations_center.contracts.routing import LaneDecision
+
         decision = LaneDecision(
             proposal_id=proposal.proposal_id,
             selected_lane=LaneName.AIDER_LOCAL,
@@ -61,12 +62,16 @@ class TestWorkerSwitchBoardFailure:
         """Run main() with a mock service, capturing stdout."""
         from operations_center.entrypoints.worker import main as worker_main
 
-        exc = raises or SwitchBoardUnavailableError("SwitchBoard unreachable at http://localhost:20401")
+        exc = raises or SwitchBoardUnavailableError(
+            "SwitchBoard unreachable at http://localhost:20401"
+        )
         service, proposal = _make_service(route_raises=exc)
 
         with patch("sys.argv", ["worker", "--goal", goal]):
             # Suppress partial artifact write (RunArtifactWriter default path)
-            with patch("operations_center.execution.artifact_writer.RunArtifactWriter.write_partial"):
+            with patch(
+                "operations_center.execution.artifact_writer.RunArtifactWriter.write_partial"
+            ):
                 code = worker_main.main(service=service)
 
         captured = capsys.readouterr()
@@ -115,6 +120,7 @@ class TestWorkerSwitchBoardFailure:
 
     def test_timeout_exception_also_handled(self, capsys):
         from operations_center.routing.client import SwitchBoardUnavailableError
+
         code, out, _ = self._run(capsys, raises=SwitchBoardUnavailableError("timed out"))
         assert code == 1
         data = json.loads(out)

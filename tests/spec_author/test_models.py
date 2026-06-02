@@ -1,10 +1,15 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 from __future__ import annotations
+
 import pytest
+
 from operations_center.spec_author.models import (
-    CampaignRecord, ActiveCampaigns, ComplianceVerdict,
-    SpecFrontMatter, TriggerSource,
+    ActiveCampaigns,
+    CampaignRecord,
+    ComplianceVerdict,
+    SpecFrontMatter,
+    TriggerSource,
 )
 
 
@@ -21,12 +26,24 @@ def test_campaign_record_defaults():
 
 
 def test_active_campaigns_active_only():
-    ac = ActiveCampaigns(campaigns=[
-        CampaignRecord(campaign_id="1", slug="a", spec_file="docs/specs/a.md",
-                       status="active", created_at="2026-01-01T00:00:00+00:00"),
-        CampaignRecord(campaign_id="2", slug="b", spec_file="docs/specs/b.md",
-                       status="complete", created_at="2026-01-01T00:00:00+00:00"),
-    ])
+    ac = ActiveCampaigns(
+        campaigns=[
+            CampaignRecord(
+                campaign_id="1",
+                slug="a",
+                spec_file="docs/specs/a.md",
+                status="active",
+                created_at="2026-01-01T00:00:00+00:00",
+            ),
+            CampaignRecord(
+                campaign_id="2",
+                slug="b",
+                spec_file="docs/specs/b.md",
+                status="complete",
+                created_at="2026-01-01T00:00:00+00:00",
+            ),
+        ]
+    )
     assert len(ac.active_campaigns()) == 1
     assert ac.active_campaigns()[0].campaign_id == "1"
 
@@ -75,6 +92,7 @@ def test_trigger_source_values():
 
 def test_spec_author_settings_defaults():
     from operations_center.config.settings import SpecAuthorSettings
+
     s = SpecAuthorSettings()
     assert s.enabled is True
     assert s.poll_interval_seconds == 120
@@ -85,12 +103,14 @@ def test_spec_author_settings_defaults():
 
 def test_spec_front_matter_missing_close_delimiter():
     from operations_center.spec_author.models import SpecFrontMatter
+
     with pytest.raises(ValueError, match="missing closing"):
         SpecFrontMatter.from_spec_text("---\ncampaign_id: abc\n# no closing delimiter")
 
 
 def test_spec_front_matter_yaml_date_normalized():
     from operations_center.spec_author.models import SpecFrontMatter
+
     raw = "---\ncampaign_id: abc-123\nslug: test\ncreated_at: 2026-04-15\n---\n# Title\n"
     fm = SpecFrontMatter.from_spec_text(raw)
     assert isinstance(fm.created_at, str)

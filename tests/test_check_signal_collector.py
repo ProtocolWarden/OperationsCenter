@@ -80,10 +80,7 @@ def test_discoverable_with_pyproject(tmp_path: Path) -> None:
     pyproject.write_text("[tool.pytest.ini_options]\naddopts = '-v'\n")
 
     collect_stdout = (
-        "tests/test_foo.py::test_bar\n"
-        "tests/test_foo.py::test_baz\n"
-        "\n"
-        "2 tests collected\n"
+        "tests/test_foo.py::test_bar\ntests/test_foo.py::test_baz\n\n2 tests collected\n"
     )
     fake_result = subprocess.CompletedProcess(
         args=["pytest", "--collect-only", "-q", "--no-header"],
@@ -92,7 +89,10 @@ def test_discoverable_with_pyproject(tmp_path: Path) -> None:
         stderr="",
     )
 
-    with patch("operations_center.observer.collectors.check_signal.subprocess.run", return_value=fake_result) as mock_run:
+    with patch(
+        "operations_center.observer.collectors.check_signal.subprocess.run",
+        return_value=fake_result,
+    ) as mock_run:
         sig = CheckSignalCollector().collect(ctx)
 
     assert sig.status == "discoverable"
@@ -108,10 +108,16 @@ def test_discoverable_with_pytest_ini(tmp_path: Path) -> None:
 
     collect_stdout = "tests/test_a.py::test_one\n\n1 tests collected\n"
     fake_result = subprocess.CompletedProcess(
-        args=[], returncode=0, stdout=collect_stdout, stderr="",
+        args=[],
+        returncode=0,
+        stdout=collect_stdout,
+        stderr="",
     )
 
-    with patch("operations_center.observer.collectors.check_signal.subprocess.run", return_value=fake_result):
+    with patch(
+        "operations_center.observer.collectors.check_signal.subprocess.run",
+        return_value=fake_result,
+    ):
         sig = CheckSignalCollector().collect(ctx)
 
     assert sig.status == "discoverable"
@@ -173,10 +179,16 @@ def test_unknown_on_nonzero_returncode(tmp_path: Path) -> None:
     (ctx.repo_path / "pytest.ini").write_text("[pytest]\n")
 
     fake_result = subprocess.CompletedProcess(
-        args=[], returncode=1, stdout="", stderr="ERROR collecting\n",
+        args=[],
+        returncode=1,
+        stdout="",
+        stderr="ERROR collecting\n",
     )
 
-    with patch("operations_center.observer.collectors.check_signal.subprocess.run", return_value=fake_result):
+    with patch(
+        "operations_center.observer.collectors.check_signal.subprocess.run",
+        return_value=fake_result,
+    ):
         sig = CheckSignalCollector().collect(ctx)
 
     assert sig.status == "unknown"
@@ -192,10 +204,16 @@ def test_unknown_on_zero_tests_collected(tmp_path: Path) -> None:
     (ctx.repo_path / "pytest.ini").write_text("[pytest]\n")
 
     fake_result = subprocess.CompletedProcess(
-        args=[], returncode=5, stdout="no tests ran in 0.01s\n", stderr="",
+        args=[],
+        returncode=5,
+        stdout="no tests ran in 0.01s\n",
+        stderr="",
     )
 
-    with patch("operations_center.observer.collectors.check_signal.subprocess.run", return_value=fake_result):
+    with patch(
+        "operations_center.observer.collectors.check_signal.subprocess.run",
+        return_value=fake_result,
+    ):
         sig = CheckSignalCollector().collect(ctx)
 
     assert sig.status == "unknown"
@@ -233,8 +251,8 @@ def test_guard_single_file_deleted_during_discovery(tmp_path: Path) -> None:
             raise FileNotFoundError(f"File deleted: {self}")
         return original_stat(self)
 
-    with patch.object(Path, 'glob', mock_glob):
-        with patch.object(Path, 'stat', mock_stat):
+    with patch.object(Path, "glob", mock_glob):
+        with patch.object(Path, "stat", mock_stat):
             sig = CheckSignalCollector().collect(ctx)
 
     # Should use log2 (the one that didn't get deleted)
@@ -261,8 +279,8 @@ def test_guard_all_files_deleted_during_discovery(tmp_path: Path) -> None:
         """Always raise FileNotFoundError."""
         raise FileNotFoundError(f"File deleted: {self}")
 
-    with patch.object(Path, 'glob', mock_glob):
-        with patch.object(Path, 'stat', mock_stat):
+    with patch.object(Path, "glob", mock_glob):
+        with patch.object(Path, "stat", mock_stat):
             sig = CheckSignalCollector().collect(ctx)
 
     # Should fall back to discovery (not available → no_config/discoverable/unknown)
@@ -278,6 +296,7 @@ def test_guard_uses_captured_mtime_not_new_stat(tmp_path: Path) -> None:
 
     # Set mtime to a specific value
     import os
+
     os.utime(log, (1000, 1000))  # old mtime
 
     stat_call_count = 0
@@ -291,23 +310,26 @@ def test_guard_uses_captured_mtime_not_new_stat(tmp_path: Path) -> None:
             if stat_call_count == 1:
                 # First call (discovery): return old mtime
                 original_stat(self)
+
                 # Create new stat_result with old mtime
                 class FakeStat:
                     def __init__(self, mtime):
                         self.st_mtime = mtime
+
                 return FakeStat(1000)
             else:
                 # Second call should NOT happen (guard should use captured mtime)
                 raise RuntimeError("stat() called twice on same file (race condition not guarded!)")
         return original_stat(self)
 
-    with patch.object(Path, 'stat', counting_stat):
+    with patch.object(Path, "stat", counting_stat):
         sig = CheckSignalCollector().collect(ctx)
 
     # Should succeed and use the old mtime from first stat
     assert sig.status == "passed"
     # observed_at should be based on old mtime (1000)
-    from datetime import datetime, UTC
+    from datetime import UTC, datetime
+
     expected_time = datetime.fromtimestamp(1000, tz=UTC)
     assert sig.observed_at == expected_time
 
@@ -331,8 +353,8 @@ def test_guard_oserror_also_skipped(tmp_path: Path) -> None:
             raise OSError("Permission denied")
         return original_stat(self)
 
-    with patch.object(Path, 'glob', lambda self, p: original_glob(self, p)):
-        with patch.object(Path, 'stat', mock_stat):
+    with patch.object(Path, "glob", lambda self, p: original_glob(self, p)):
+        with patch.object(Path, "stat", mock_stat):
             sig = CheckSignalCollector().collect(ctx)
 
     # Should use log2 since log1 failed

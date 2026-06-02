@@ -7,13 +7,13 @@ from pathlib import Path
 
 from operations_center.config import Settings, load_settings
 from operations_center.observer.artifact_writer import ObserverArtifactWriter
-from operations_center.observer.collectors.dependency_drift import DependencyDriftCollector
 from operations_center.observer.collectors.backlog import BacklogCollector
+from operations_center.observer.collectors.check_signal import CheckSignalCollector
+from operations_center.observer.collectors.dependency_drift import DependencyDriftCollector
 from operations_center.observer.collectors.execution_health import ExecutionArtifactCollector
 from operations_center.observer.collectors.file_hotspots import FileHotspotsCollector
 from operations_center.observer.collectors.git_context import GitContextCollector, run_git
 from operations_center.observer.collectors.recent_commits import RecentCommitsCollector
-from operations_center.observer.collectors.check_signal import CheckSignalCollector
 from operations_center.observer.collectors.todo_signal import TodoSignalCollector
 from operations_center.observer.exporters import ValidationMetricsExporter
 from operations_center.observer.service import RepoObserverService, new_observer_context
@@ -44,7 +44,9 @@ def resolve_repo_path(arg_repo: str | None, settings: Settings) -> tuple[Path, s
             configured_key, _ = configured_repo_match(settings, cwd)
             if configured_key == arg_repo:
                 return cwd, cwd.name
-            raise ValueError(f"Repo key '{arg_repo}' does not map to a local path here; pass --repo /abs/path")
+            raise ValueError(
+                f"Repo key '{arg_repo}' does not map to a local path here; pass --repo /abs/path"
+            )
         raise ValueError(f"Repo path or configured repo key not found: {arg_repo}")
     cwd = Path.cwd().resolve()
     return cwd, cwd.name
@@ -58,7 +60,9 @@ def ensure_git_repo(repo_path: Path) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Collect a read-only repo snapshot for downstream autonomy")
+    parser = argparse.ArgumentParser(
+        description="Collect a read-only repo snapshot for downstream autonomy"
+    )
     parser.add_argument("--config", required=True)
     parser.add_argument("--repo")
     parser.add_argument("--base-branch")

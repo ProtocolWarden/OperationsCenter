@@ -8,7 +8,6 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-
 from operations_center.audit_governance.coverage_analysis import (
     _find_coverage_json,
     _summarize,
@@ -99,19 +98,21 @@ class TestSummarize:
     def test_parses_custodian_findings(self, tmp_path: Path):
         cov = tmp_path / "coverage.json"
         cov.write_text("{}")
-        stdout = json.dumps({
-            "patterns": {
-                "COVERAGE": {
-                    "count": 4,
-                    "samples": [
-                        "src/foo/bar.py:0: CV1_MODULE_UNEXECUTED 0/12 statements",
-                        "src/foo/baz.py:42: CV2_FUNCTION_UNEXECUTED 'func_x' never executed",
-                        "src/foo/qux.py:0: CV2_FUNCTION_UNEXECUTED 'func_y' never executed",
-                        "src/foo/zoo.py:0: CV3_MODULE_BELOW_MIN_COVERAGE 30%",
-                    ],
+        stdout = json.dumps(
+            {
+                "patterns": {
+                    "COVERAGE": {
+                        "count": 4,
+                        "samples": [
+                            "src/foo/bar.py:0: CV1_MODULE_UNEXECUTED 0/12 statements",
+                            "src/foo/baz.py:42: CV2_FUNCTION_UNEXECUTED 'func_x' never executed",
+                            "src/foo/qux.py:0: CV2_FUNCTION_UNEXECUTED 'func_y' never executed",
+                            "src/foo/zoo.py:0: CV3_MODULE_BELOW_MIN_COVERAGE 30%",
+                        ],
+                    },
                 },
-            },
-        })
+            }
+        )
         summary = _summarize(stdout, exit_code=0, coverage_json_path=cov)
         assert summary.findings_total == 4
         assert summary.cv1_count == 1
@@ -142,27 +143,31 @@ class TestRunPostDispatchCoverageAudit:
         bucket = tmp_path / "bucket"
         bucket.mkdir()
         mp = bucket / "artifact_manifest.json"
-        mp.write_text(json.dumps({
-            "schema_version": "1.0",
-            "contract_name": "managed-repo-audit",
-            "producer": "example_managed_repo",
-            "repo_id": "example_managed_repo",
-            "run_id": "r1",
-            "audit_type": "audit_type_1",
-            "manifest_status": "completed",
-            "run_status": "completed",
-            "created_at": "2026-05-04T00:00:00Z",
-            "updated_at": "2026-05-04T00:00:00Z",
-            "finalized_at": "2026-05-04T00:00:00Z",
-            "artifact_root": None,
-            "run_root": "bucket",
-            "artifacts": [],
-            "excluded_paths": [],
-            "warnings": [],
-            "errors": [],
-            "limitations": [],
-            "metadata": {},
-        }))
+        mp.write_text(
+            json.dumps(
+                {
+                    "schema_version": "1.0",
+                    "contract_name": "managed-repo-audit",
+                    "producer": "example_managed_repo",
+                    "repo_id": "example_managed_repo",
+                    "run_id": "r1",
+                    "audit_type": "audit_type_1",
+                    "manifest_status": "completed",
+                    "run_status": "completed",
+                    "created_at": "2026-05-04T00:00:00Z",
+                    "updated_at": "2026-05-04T00:00:00Z",
+                    "finalized_at": "2026-05-04T00:00:00Z",
+                    "artifact_root": None,
+                    "run_root": "bucket",
+                    "artifacts": [],
+                    "excluded_paths": [],
+                    "warnings": [],
+                    "errors": [],
+                    "limitations": [],
+                    "metadata": {},
+                }
+            )
+        )
         summary = run_post_dispatch_coverage_audit(
             artifact_manifest_path=mp,
             consuming_repo_root=tmp_path,
@@ -173,21 +178,29 @@ class TestRunPostDispatchCoverageAudit:
 
     def test_invokes_custodian_subprocess(self, tmp_path: Path):
         mp = _write_manifest_with_coverage(tmp_path)
-        fake_stdout = json.dumps({
-            "patterns": {
-                "COVERAGE": {
-                    "count": 1,
-                    "samples": ["src/foo.py:0: CV1_MODULE_UNEXECUTED 0/5 statements"],
+        fake_stdout = json.dumps(
+            {
+                "patterns": {
+                    "COVERAGE": {
+                        "count": 1,
+                        "samples": ["src/foo.py:0: CV1_MODULE_UNEXECUTED 0/5 statements"],
+                    },
                 },
-            },
-        })
+            }
+        )
 
         class FakeProc:
             stdout = fake_stdout
             returncode = 0
 
-        with patch("operations_center.audit_governance.coverage_analysis.shutil.which", return_value="/usr/bin/custodian"):
-            with patch("operations_center.audit_governance.coverage_analysis.subprocess.run", return_value=FakeProc()) as mock_run:
+        with patch(
+            "operations_center.audit_governance.coverage_analysis.shutil.which",
+            return_value="/usr/bin/custodian",
+        ):
+            with patch(
+                "operations_center.audit_governance.coverage_analysis.subprocess.run",
+                return_value=FakeProc(),
+            ) as mock_run:
                 summary = run_post_dispatch_coverage_audit(
                     artifact_manifest_path=mp,
                     consuming_repo_root=tmp_path,
@@ -204,7 +217,9 @@ class TestRunPostDispatchCoverageAudit:
 
     def test_custodian_unavailable_returns_error(self, tmp_path: Path):
         mp = _write_manifest_with_coverage(tmp_path)
-        with patch("operations_center.audit_governance.coverage_analysis.shutil.which", return_value=None):
+        with patch(
+            "operations_center.audit_governance.coverage_analysis.shutil.which", return_value=None
+        ):
             summary = run_post_dispatch_coverage_audit(
                 artifact_manifest_path=mp,
                 consuming_repo_root=tmp_path,
@@ -213,8 +228,12 @@ class TestRunPostDispatchCoverageAudit:
 
     def test_subprocess_timeout_returns_error(self, tmp_path: Path):
         import subprocess as _subprocess
+
         mp = _write_manifest_with_coverage(tmp_path)
-        with patch("operations_center.audit_governance.coverage_analysis.shutil.which", return_value="/usr/bin/custodian"):
+        with patch(
+            "operations_center.audit_governance.coverage_analysis.shutil.which",
+            return_value="/usr/bin/custodian",
+        ):
             with patch(
                 "operations_center.audit_governance.coverage_analysis.subprocess.run",
                 side_effect=_subprocess.TimeoutExpired(cmd="custodian", timeout=120),

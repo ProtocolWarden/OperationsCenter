@@ -36,7 +36,6 @@ from .routing_models import (
 )
 from .routing_recommend import derive_findings, generate_recommendations
 
-
 DEFAULT_POLICY_GUARDRAILS = [
     "Routing tuning cannot override explicit repo policy, safety guardrails, or blocked task/path/tool rules.",
     "Routing tuning cannot mutate active SwitchBoard policy; it only emits reviewable proposals.",
@@ -184,8 +183,7 @@ def _identify_limitations(records: list[ExecutionRecord]) -> list[str]:
 
     # Check for validation coverage
     records_with_validation = sum(
-        1 for r in records
-        if r.validation_evidence.status.value != "skipped"
+        1 for r in records if r.validation_evidence.status.value != "skipped"
     )
     if records_with_validation == 0:
         limitations.append(
@@ -208,8 +206,7 @@ def _identify_limitations(records: list[ExecutionRecord]) -> list[str]:
     records_with_task_type = sum(1 for r in records if r.metadata.get("task_type"))
     if records_with_task_type == 0 and records:
         limitations.append(
-            "No records carry task_type metadata. "
-            "Per-task-type comparison is unavailable."
+            "No records carry task_type metadata. Per-task-type comparison is unavailable."
         )
 
     return limitations

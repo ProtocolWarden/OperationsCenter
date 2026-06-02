@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 from operations_center.backends.demo_stub import DemoStubBackendAdapter
 from operations_center.backends.factory import CanonicalBackendRegistry
 from operations_center.contracts.enums import BackendName, ExecutionStatus, LaneName

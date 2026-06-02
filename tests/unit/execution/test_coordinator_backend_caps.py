@@ -12,6 +12,7 @@ Covers task #31. Tests assert that:
   - The finished marker fires from a finally — even when the adapter
     raises — so the concurrency cap can't deadlock on a crashed run.
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -106,20 +107,27 @@ def _runtime() -> ExecutionRuntimeContext:
 
 class TestRateCapBlocks:
     def test_daily_rate_cap_blocks_dispatch(
-        self, monkeypatch, tmp_path: Path,
+        self,
+        monkeypatch,
+        tmp_path: Path,
     ) -> None:
         monkeypatch.setenv(
-            "OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"),
+            "OPERATIONS_CENTER_EXECUTION_USAGE_PATH",
+            str(tmp_path / "usage.json"),
         )
         store = UsageStore()
         bundle = _bundle()
         # Pre-load 5 prior dispatches for direct_local within today's window.
         now = datetime.now(UTC)
         from datetime import timedelta
+
         for i in range(5):
             store.record_execution(
-                role="lint_fix", task_id=f"prior-{i}", signature=f"s{i}",
-                now=now - timedelta(hours=1 + i), backend="direct_local",
+                role="lint_fix",
+                task_id=f"prior-{i}",
+                signature=f"s{i}",
+                now=now - timedelta(hours=1 + i),
+                backend="direct_local",
             )
         adapter = _RecordingAdapter(_success(bundle))
         coord = ExecutionCoordinator(
@@ -141,20 +149,27 @@ class TestRateCapBlocks:
 
 class TestConcurrencyCapBlocks:
     def test_concurrency_cap_blocks_when_in_flight_at_max(
-        self, monkeypatch, tmp_path: Path,
+        self,
+        monkeypatch,
+        tmp_path: Path,
     ) -> None:
         monkeypatch.setenv(
-            "OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"),
+            "OPERATIONS_CENTER_EXECUTION_USAGE_PATH",
+            str(tmp_path / "usage.json"),
         )
         store = UsageStore()
         bundle = _bundle()
         now = datetime.now(UTC)
         # Two unfinished dispatches in flight.
         store.record_execution_started(
-            task_id="other-1", backend="direct_local", now=now,
+            task_id="other-1",
+            backend="direct_local",
+            now=now,
         )
         store.record_execution_started(
-            task_id="other-2", backend="direct_local", now=now,
+            task_id="other-2",
+            backend="direct_local",
+            now=now,
         )
         adapter = _RecordingAdapter(_success(bundle))
         coord = ExecutionCoordinator(
@@ -173,10 +188,13 @@ class TestConcurrencyCapBlocks:
 
 class TestMemoryThresholdBlocks:
     def test_memory_threshold_blocks_when_below_min(
-        self, monkeypatch, tmp_path: Path,
+        self,
+        monkeypatch,
+        tmp_path: Path,
     ) -> None:
         monkeypatch.setenv(
-            "OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"),
+            "OPERATIONS_CENTER_EXECUTION_USAGE_PATH",
+            str(tmp_path / "usage.json"),
         )
         store = UsageStore()
         # Force /proc/meminfo read to a low value
@@ -207,14 +225,19 @@ class TestMemoryThresholdBlocks:
 
 class TestAllowPathRecording:
     def test_records_started_finished_execution_outcome_events(
-        self, monkeypatch, tmp_path: Path,
+        self,
+        monkeypatch,
+        tmp_path: Path,
     ) -> None:
         monkeypatch.setenv(
-            "OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"),
+            "OPERATIONS_CENTER_EXECUTION_USAGE_PATH",
+            str(tmp_path / "usage.json"),
         )
         # Pretend RAM is plenty so the threshold doesn't fire.
         monkeypatch.setattr(
-            UsageStore, "available_memory_mb", staticmethod(lambda: 32_000),
+            UsageStore,
+            "available_memory_mb",
+            staticmethod(lambda: 32_000),
         )
         store = UsageStore()
         bundle = _bundle()
@@ -225,7 +248,8 @@ class TestAllowPathRecording:
             usage_store=store,
             backend_caps={
                 "direct_local": BackendCapSettings(
-                    max_per_day=10, max_concurrent=4,
+                    max_per_day=10,
+                    max_concurrent=4,
                     min_available_memory_mb=1024,
                 ),
             },
@@ -244,15 +268,16 @@ class TestAllowPathRecording:
         assert "execution" in kinds
         assert "execution_outcome" in kinds
         # All four are tagged with backend=direct_local
-        for k in ("execution_started", "execution_finished",
-                  "execution", "execution_outcome"):
+        for k in ("execution_started", "execution_finished", "execution", "execution_outcome"):
             ev = next(e for e in events if e.get("kind") == k)
             assert ev.get("backend") == "direct_local", f"{k} missing backend"
 
 
 class TestFinishedFiresOnAdapterCrash:
     def test_finished_marker_fires_when_adapter_crashes(
-        self, monkeypatch, tmp_path: Path,
+        self,
+        monkeypatch,
+        tmp_path: Path,
     ) -> None:
         """A crashed adapter must NOT deadlock the per-backend max_concurrent cap.
 
@@ -261,7 +286,8 @@ class TestFinishedFiresOnAdapterCrash:
         finally block must still record the finished marker.
         """
         monkeypatch.setenv(
-            "OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"),
+            "OPERATIONS_CENTER_EXECUTION_USAGE_PATH",
+            str(tmp_path / "usage.json"),
         )
         store = UsageStore()
         bundle = _bundle()
@@ -278,9 +304,13 @@ class TestFinishedFiresOnAdapterCrash:
         # The recovery loop turned the adapter raise into a crash result.
         assert outcome.result.success is False
         # Started event recorded, finished event also recorded → 0 in flight.
-        assert store.concurrent_runs_for_backend(
-            "direct_local", now=datetime.now(UTC),
-        ) == 0
+        assert (
+            store.concurrent_runs_for_backend(
+                "direct_local",
+                now=datetime.now(UTC),
+            )
+            == 0
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -290,7 +320,9 @@ class TestFinishedFiresOnAdapterCrash:
 
 class TestNoUsageStorePreservesBehavior:
     def test_no_usage_store_does_not_record_or_block(
-        self, monkeypatch, tmp_path: Path,
+        self,
+        monkeypatch,
+        tmp_path: Path,
     ) -> None:
         # Even with rate exhausted on a separate store, a coordinator
         # without usage_store sees no caps — preserves stub-adapter tests.
@@ -308,10 +340,13 @@ class TestNoUsageStorePreservesBehavior:
 
 class TestNoBackendCapsAllowsButRecords:
     def test_usage_store_without_caps_still_records_events(
-        self, monkeypatch, tmp_path: Path,
+        self,
+        monkeypatch,
+        tmp_path: Path,
     ) -> None:
         monkeypatch.setenv(
-            "OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"),
+            "OPERATIONS_CENTER_EXECUTION_USAGE_PATH",
+            str(tmp_path / "usage.json"),
         )
         store = UsageStore()
         bundle = _bundle()

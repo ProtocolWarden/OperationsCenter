@@ -22,12 +22,17 @@ import pytest
 # ---------------------------------------------------------------------------
 # S8-2: ExecutionOutcomeDeriver (Phase 4)
 # ---------------------------------------------------------------------------
-
-from operations_center.insights.derivers.execution_outcome import ExecutionOutcomeDeriver  # noqa: E402
+from operations_center.insights.derivers.execution_outcome import (
+    ExecutionOutcomeDeriver,  # noqa: E402
+)
 from operations_center.insights.normalizer import InsightNormalizer  # noqa: E402
 from operations_center.observer.models import (  # noqa: E402
-    RepoContextSnapshot, RepoSignalsSnapshot, RepoStateSnapshot,
-    CheckSignal, DependencyDriftSignal, TodoSignal,
+    CheckSignal,
+    DependencyDriftSignal,
+    RepoContextSnapshot,
+    RepoSignalsSnapshot,
+    RepoStateSnapshot,
+    TodoSignal,
 )
 
 
@@ -36,7 +41,9 @@ def _make_snapshot(repo_name: str = "testrepo") -> RepoStateSnapshot:
         run_id="r1",
         observed_at=datetime.now(UTC),
         source_command="test",
-        repo=RepoContextSnapshot(name=repo_name, path=Path("/tmp"), current_branch="main", is_dirty=False),
+        repo=RepoContextSnapshot(
+            name=repo_name, path=Path("/tmp"), current_branch="main", is_dirty=False
+        ),
         signals=RepoSignalsSnapshot(
             test_signal=CheckSignal(status="unavailable"),
             dependency_drift=DependencyDriftSignal(status="unavailable"),
@@ -62,10 +69,14 @@ def test_execution_outcome_deriver_detects_timeout_pattern(tmp_path: Path) -> No
         run_dir = artifact_root / f"2025-01-01_task{i:04d}_r{i}"
         run_dir.mkdir()
         (run_dir / "request.json").write_text(json.dumps({"task": {"repo_key": "myrepo"}}))
-        (run_dir / "control_outcome.json").write_text(json.dumps({
-            "outcome_status": "blocked",
-            "blocked_classification": "timeout",
-        }))
+        (run_dir / "control_outcome.json").write_text(
+            json.dumps(
+                {
+                    "outcome_status": "blocked",
+                    "blocked_classification": "timeout",
+                }
+            )
+        )
 
     deriver = ExecutionOutcomeDeriver(normalizer, artifact_root=artifact_root)
     insights = deriver.derive([_make_snapshot("myrepo")])
@@ -83,17 +94,22 @@ def test_execution_outcome_deriver_detects_validation_loop(tmp_path: Path) -> No
     for i in range(3):
         run_dir = artifact_root / f"run_{i:04d}"
         run_dir.mkdir()
-        (run_dir / "request.json").write_text(json.dumps({"task": {"repo_key": "repo1", "task_id": task_id}}))
-        (run_dir / "control_outcome.json").write_text(json.dumps({
-            "outcome_status": "blocked",
-            "blocked_classification": "validation_failure",
-        }))
+        (run_dir / "request.json").write_text(
+            json.dumps({"task": {"repo_key": "repo1", "task_id": task_id}})
+        )
+        (run_dir / "control_outcome.json").write_text(
+            json.dumps(
+                {
+                    "outcome_status": "blocked",
+                    "blocked_classification": "validation_failure",
+                }
+            )
+        )
 
     deriver = ExecutionOutcomeDeriver(normalizer, artifact_root=artifact_root)
     insights = deriver.derive([_make_snapshot("repo1")])
     kinds = [i.kind for i in insights]
     assert "execution_outcome/validation_loop" in kinds
-
 
 
 # ---------------------------------------------------------------------------
@@ -109,17 +125,31 @@ def test_git_revert_commit_creates_branch(tmp_path: Path) -> None:
     repo_path.mkdir()
 
     import subprocess
+
     subprocess.run(["git", "init"], cwd=repo_path, check=True, capture_output=True)
-    subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=repo_path, check=True, capture_output=True)
-    subprocess.run(["git", "config", "user.name", "Test"], cwd=repo_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.com"],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"], cwd=repo_path, check=True, capture_output=True
+    )
     (repo_path / "file.txt").write_text("initial")
     subprocess.run(["git", "add", "."], cwd=repo_path, check=True, capture_output=True)
-    subprocess.run(["git", "commit", "-m", "initial"], cwd=repo_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "initial"], cwd=repo_path, check=True, capture_output=True
+    )
     (repo_path / "file.txt").write_text("changed")
     subprocess.run(["git", "add", "."], cwd=repo_path, check=True, capture_output=True)
-    subprocess.run(["git", "commit", "-m", "change"], cwd=repo_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "change"], cwd=repo_path, check=True, capture_output=True
+    )
 
-    sha_result = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_path, capture_output=True, text=True)
+    sha_result = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo_path, capture_output=True, text=True
+    )
     merge_sha = sha_result.stdout.strip()
 
     gc = GitClient()
@@ -127,13 +157,13 @@ def test_git_revert_commit_creates_branch(tmp_path: Path) -> None:
     assert success is True
 
     # Should be on the revert branch
-    branch_result = subprocess.run(["git", "branch", "--show-current"], cwd=repo_path, capture_output=True, text=True)
+    branch_result = subprocess.run(
+        ["git", "branch", "--show-current"], cwd=repo_path, capture_output=True, text=True
+    )
     assert branch_result.stdout.strip() == "revert/test"
 
     # File should be back to initial
     assert (repo_path / "file.txt").read_text() == "initial"
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -148,6 +178,7 @@ def _make_snapshot_with_metrics(
     lint_violations: int, type_errors: int, days_ago: int = 0
 ) -> RepoStateSnapshot:
     from operations_center.observer.models import RepoSignalsSnapshot
+
     signals = RepoSignalsSnapshot(
         test_signal=CheckSignal(status="unavailable"),
         dependency_drift=DependencyDriftSignal(status="unavailable"),
@@ -165,7 +196,9 @@ def _make_snapshot_with_metrics(
         run_id=f"r-{days_ago}",
         observed_at=datetime.now(UTC) - timedelta(days=days_ago),
         source_command="test",
-        repo=RepoContextSnapshot(name="repo", path=Path("/tmp"), current_branch="main", is_dirty=False),
+        repo=RepoContextSnapshot(
+            name="repo", path=Path("/tmp"), current_branch="main", is_dirty=False
+        ),
         signals=signals,
     )
     return snap
@@ -226,7 +259,11 @@ def test_quality_trend_stagnant() -> None:
 # S8-8: Runtime error ingestion
 # ---------------------------------------------------------------------------
 
-from operations_center.entrypoints.error_ingest.main import _is_duplicate, _mark_created, _dedup_key  # noqa: E402
+from operations_center.entrypoints.error_ingest.main import (  # noqa: E402
+    _dedup_key,
+    _is_duplicate,
+    _mark_created,
+)
 
 
 def test_error_ingest_dedup_key_is_stable() -> None:
@@ -237,6 +274,7 @@ def test_error_ingest_dedup_key_is_stable() -> None:
 
 def test_error_ingest_dedup_not_duplicate_before_mark(tmp_path: Path) -> None:
     import operations_center.entrypoints.error_ingest.main as eingest
+
     orig = eingest._DEDUP_STATE_PATH
     eingest._DEDUP_STATE_PATH = tmp_path / "dedup.json"
 
@@ -248,6 +286,7 @@ def test_error_ingest_dedup_not_duplicate_before_mark(tmp_path: Path) -> None:
 
 def test_error_ingest_dedup_is_duplicate_after_mark(tmp_path: Path) -> None:
     import operations_center.entrypoints.error_ingest.main as eingest
+
     orig = eingest._DEDUP_STATE_PATH
     eingest._DEDUP_STATE_PATH = tmp_path / "dedup.json"
 
@@ -261,6 +300,7 @@ def test_error_ingest_dedup_is_duplicate_after_mark(tmp_path: Path) -> None:
 def test_error_ingest_webhook_creates_plane_task(tmp_path: Path) -> None:
     """The webhook handler creates a Plane task for a valid ingest POST."""
     import operations_center.entrypoints.error_ingest.main as eingest
+
     orig = eingest._DEDUP_STATE_PATH
     eingest._DEDUP_STATE_PATH = tmp_path / "dedup.json"
 
@@ -273,14 +313,17 @@ def test_error_ingest_webhook_creates_plane_task(tmp_path: Path) -> None:
             return t
 
     from operations_center.entrypoints.error_ingest.main import _make_webhook_handler
+
     handler_class = _make_webhook_handler(_MockClient(), "myrepo")
 
     # Simulate a POST request using a mock socket
-    payload = json.dumps({
-        "title": "Database connection timeout",
-        "severity": "error",
-        "source": "test",
-    }).encode()
+    payload = json.dumps(
+        {
+            "title": "Database connection timeout",
+            "severity": "error",
+            "source": "test",
+        }
+    ).encode()
 
     req = MagicMock()
     req.headers = {"Content-Length": str(len(payload))}
@@ -306,12 +349,14 @@ def test_error_ingest_webhook_creates_plane_task(tmp_path: Path) -> None:
     eingest._DEDUP_STATE_PATH = orig
 
 
-
 # ---------------------------------------------------------------------------
 # S8-10: Confidence calibration infrastructure
 # ---------------------------------------------------------------------------
 
-from operations_center.tuning.calibration import ConfidenceCalibrationStore, _MIN_SAMPLE_SIZE  # noqa: E402
+from operations_center.tuning.calibration import (  # noqa: E402
+    _MIN_SAMPLE_SIZE,
+    ConfidenceCalibrationStore,
+)
 
 
 def test_calibration_record_and_retrieve(tmp_path: Path) -> None:

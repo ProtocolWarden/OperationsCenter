@@ -20,7 +20,8 @@ class DependencyDriftRule:
                 insight.kind == "dependency_drift_continuity"
                 and insight.subject == "dependency_drift"
                 and insight.dedup_key.endswith("present|persistent")
-                and int(insight.evidence.get("consecutive_snapshots", 0)) >= self.min_consecutive_runs
+                and int(insight.evidence.get("consecutive_snapshots", 0))
+                >= self.min_consecutive_runs
             ):
                 consecutive = int(insight.evidence.get("consecutive_snapshots", 0))
                 candidates.append(

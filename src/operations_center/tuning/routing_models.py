@@ -46,6 +46,7 @@ class EvidenceStrength(str, Enum):
     MODERATE — 8–19 samples with consistent signals
     STRONG   — 20+ samples with consistent signals
     """
+
     WEAK = "weak"
     MODERATE = "moderate"
     STRONG = "strong"
@@ -53,17 +54,19 @@ class EvidenceStrength(str, Enum):
 
 class LatencyClass(str, Enum):
     """Approximate execution latency class derived from retained duration data."""
-    FAST = "fast"       # median < 30 s
-    MEDIUM = "medium"   # median 30–120 s
-    SLOW = "slow"       # median > 120 s
-    UNKNOWN = "unknown" # duration data unavailable
+
+    FAST = "fast"  # median < 30 s
+    MEDIUM = "medium"  # median 30–120 s
+    SLOW = "slow"  # median > 120 s
+    UNKNOWN = "unknown"  # duration data unavailable
 
 
 class ReliabilityClass(str, Enum):
     """Success-rate reliability class for a backend/lane combination."""
-    LOW = "low"       # success_rate < 0.60
-    MEDIUM = "medium" # success_rate 0.60–0.84
-    HIGH = "high"     # success_rate >= 0.85
+
+    LOW = "low"  # success_rate < 0.60
+    MEDIUM = "medium"  # success_rate 0.60–0.84
+    HIGH = "high"  # success_rate >= 0.85
 
 
 class ChangeEvidenceClass(str, Enum):
@@ -74,6 +77,7 @@ class ChangeEvidenceClass(str, Enum):
       partial — 40–79% have KNOWN or NONE
       poor    — < 40% have KNOWN or NONE
     """
+
     STRONG = "strong"
     PARTIAL = "partial"
     POOR = "poor"
@@ -91,7 +95,9 @@ class BackendComparisonSummary(BaseModel):
     This is evidence-derived, not a policy statement.
     """
 
-    backend: str = Field(description="Backend name, e.g. 'team_executor', 'dag_executor', 'openclaw'")
+    backend: str = Field(
+        description="Backend name, e.g. 'team_executor', 'dag_executor', 'openclaw'"
+    )
     lane: str = Field(description="Lane name, e.g. 'claude_cli', 'aider_local'")
     task_type_scope: list[str] = Field(
         default_factory=list,
@@ -120,7 +126,9 @@ class BackendComparisonSummary(BaseModel):
         description="Rate of runs where validation passed (0 if validation always skipped)",
     )
     validation_skip_rate: float = Field(
-        ge=0.0, le=1.0, default=0.0,
+        ge=0.0,
+        le=1.0,
+        default=0.0,
         description="Rate of runs where validation was skipped",
     )
 

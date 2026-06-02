@@ -24,8 +24,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
-from operations_center.contracts.execution import ExecutionResult
 from operations_center.backend_health import BackendHealthRegistry, BackendHealthState
+from operations_center.contracts.execution import ExecutionResult
 
 from .classifier import FailureClassifier
 from .handlers import RecoveryHandler
@@ -38,7 +38,6 @@ from .models import (
     RecoveryOutcome,
 )
 from .policy import RecoveryPolicy, RetryBudgetChecker
-
 
 _RETRY_AFTER_KEYS = ("retry_after", "retry_after_seconds")
 
@@ -59,7 +58,7 @@ def _retry_after_seconds(result: ExecutionResult) -> float | None:
         idx = reason.find(token)
         if idx == -1:
             continue
-        rest = reason[idx + len(token):]
+        rest = reason[idx + len(token) :]
         end = 0
         while end < len(rest) and (rest[end].isdigit() or rest[end] == "."):
             end += 1
@@ -137,8 +136,7 @@ class RecoveryEngine:
                 now=datetime.now(UTC),
             )
             if (
-                transition.current
-                in {BackendHealthState.UNSTABLE, BackendHealthState.UNAVAILABLE}
+                transition.current in {BackendHealthState.UNSTABLE, BackendHealthState.UNAVAILABLE}
                 and transition.cooldown_applied
             ):
                 return RecoveryOutcome(
@@ -148,8 +146,7 @@ class RecoveryEngine:
                         failure_kind=failure_kind,
                         decision=RecoveryDecision.STOP_COOLDOWN_REQUIRED,
                         reason=(
-                            "backend health registry applied cooldown after "
-                            f"{transition.reason}"
+                            f"backend health registry applied cooldown after {transition.reason}"
                         ),
                         handler_name="backend_health_registry",
                     ),
@@ -169,7 +166,8 @@ class RecoveryEngine:
                 )
             # Opt-in unknown retry: respect the separate budget
             unknown_retries_used = sum(
-                1 for a in context.previous_actions
+                1
+                for a in context.previous_actions
                 if a.failure_kind == ExecutionFailureKind.UNKNOWN
             )
             if unknown_retries_used >= self._policy.unknown_retry_limit:
@@ -230,9 +228,8 @@ class RecoveryEngine:
             )
 
         # Rule 7: cost budget
-        if (
-            self._budget_checker is not None
-            and not self._budget_checker.can_retry(context.current_request, context)
+        if self._budget_checker is not None and not self._budget_checker.can_retry(
+            context.current_request, context
         ):
             return RecoveryOutcome(
                 decision=RecoveryDecision.STOP_COST_BUDGET_EXHAUSTED,
@@ -241,8 +238,7 @@ class RecoveryEngine:
                     failure_kind=failure_kind,
                     decision=RecoveryDecision.STOP_COST_BUDGET_EXHAUSTED,
                     reason=(
-                        f"retry budget checker {type(self._budget_checker).__name__} "
-                        "refused retry"
+                        f"retry budget checker {type(self._budget_checker).__name__} refused retry"
                     ),
                 ),
             )
@@ -286,9 +282,7 @@ class RecoveryEngine:
                 continue
             # Rule 12: clamp delay if engine derived one above
             final_delay = (
-                outcome.delay_seconds
-                if outcome.delay_seconds is not None
-                else delay_seconds
+                outcome.delay_seconds if outcome.delay_seconds is not None else delay_seconds
             )
             if final_delay is not None:
                 final_delay = min(final_delay, self._policy.max_delay_seconds)

@@ -15,6 +15,7 @@ Invariants:
   • Mutations (transition_issue) only when caller passes apply=True
   • No imports of behavior_calibration
 """
+
 from __future__ import annotations
 
 import logging
@@ -30,9 +31,11 @@ logger = logging.getLogger(__name__)
 
 # ── handle_priority_rescore_scan ─────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class PriorityRescoreCandidate:
     """A task that should change Plane priority based on age + signals."""
+
     task_id: str
     title: str
     current_priority: str
@@ -48,7 +51,7 @@ def issue_urgency_score(issue: dict, *, now: datetime | None = None) -> float:
       • Has 'lifecycle: escalated' label             (boost)
       • Has 'retry-count: N' label with N >= 1       (boost — flailing tasks)
     """
-    moment = (now or datetime.now(UTC))
+    moment = now or datetime.now(UTC)
     score = 0.0
     # Age component
     ts_raw = issue.get("created_at") or issue.get("updated_at") or ""
@@ -91,7 +94,7 @@ def handle_priority_rescore_scan(
     still 'low' / 'none' / 'medium', OR score <= 0.2 but priority is
     'urgent' / 'high'.
     """
-    moment = (now or datetime.now(UTC))
+    moment = now or datetime.now(UTC)
     out: list[PriorityRescoreCandidate] = []
     for issue in issues:
         st = issue.get("state")
@@ -109,21 +112,25 @@ def handle_priority_rescore_scan(
             proposed = "low"
             reason = f"urgency_score={score} but priority={cur_pri}"
         if proposed != cur_pri:
-            out.append(PriorityRescoreCandidate(
-                task_id=str(issue.get("id", "")),
-                title=(issue.get("name") or "")[:80],
-                current_priority=cur_pri,
-                proposed_priority=proposed,
-                reason=reason,
-            ))
+            out.append(
+                PriorityRescoreCandidate(
+                    task_id=str(issue.get("id", "")),
+                    title=(issue.get("name") or "")[:80],
+                    current_priority=cur_pri,
+                    proposed_priority=proposed,
+                    reason=reason,
+                )
+            )
     return out
 
 
 # ── handle_awaiting_input_scan ───────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class AwaitingInputResult:
     """A task in awaiting-input state that has new comments to act on."""
+
     task_id: str
     title: str
     new_comment_count: int
@@ -155,19 +162,25 @@ def handle_awaiting_input_scan(
             continue
         # Operator comments only — skip our own bot comments
         op_comments = [
-            c for c in comments
-            if not str(c.get("comment_html") or c.get("comment_stripped") or "").lower().startswith("<!-- operations-center")
+            c
+            for c in comments
+            if not str(c.get("comment_html") or c.get("comment_stripped") or "")
+            .lower()
+            .startswith("<!-- operations-center")
         ]
         if op_comments:
-            out.append(AwaitingInputResult(
-                task_id=task_id,
-                title=(issue.get("name") or "")[:80],
-                new_comment_count=len(op_comments),
-            ))
+            out.append(
+                AwaitingInputResult(
+                    task_id=task_id,
+                    title=(issue.get("name") or "")[:80],
+                    new_comment_count=len(op_comments),
+                )
+            )
     return out
 
 
 # ── signal_stale ─────────────────────────────────────────────────────────────
+
 
 def signal_stale(
     snapshot_age_hours: float | None,

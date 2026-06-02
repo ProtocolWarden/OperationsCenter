@@ -63,7 +63,9 @@ class CandidateProposerIntegrationService:
             repo=context.repo_filter,
             decision_run_id=context.decision_run_id,
         )
-        candidates = [candidate for candidate in decision_artifact.candidates if candidate.status == "emit"]
+        candidates = [
+            candidate for candidate in decision_artifact.candidates if candidate.status == "emit"
+        ]
         created: list[CreatedProposalResult] = []
         skipped: list[SkippedProposalResult] = []
         failed: list[FailedProposalResult] = []
@@ -71,6 +73,7 @@ class CandidateProposerIntegrationService:
         _active_campaign_list: list = []
         try:
             from operations_center.spec_author.state import CampaignStateManager
+
             _active_campaign_list = CampaignStateManager().load().active_campaigns()
         except Exception:
             _active_campaign_list = []
@@ -86,10 +89,18 @@ class CandidateProposerIntegrationService:
             try:
                 _all_issues = self.client.list_issues()
                 _ready_count = sum(
-                    1 for _i in _all_issues
-                    if (str((_i.get("state") or {}).get("name", "")
-                           if isinstance(_i.get("state"), dict) else "").strip().lower())
-                       == "ready for ai"
+                    1
+                    for _i in _all_issues
+                    if (
+                        str(
+                            (_i.get("state") or {}).get("name", "")
+                            if isinstance(_i.get("state"), dict)
+                            else ""
+                        )
+                        .strip()
+                        .lower()
+                    )
+                    == "ready for ai"
                 )
                 if _ready_count >= _ready_cap:
                     _queue_saturated = True
@@ -100,7 +111,8 @@ class CandidateProposerIntegrationService:
         # excluded from proposal generation entirely. Built once so the
         # per-candidate loop below is a cheap lookup.
         _propose_disabled_repos = {
-            rk for rk, rcfg in (self.settings.repos or {}).items()
+            rk
+            for rk, rcfg in (self.settings.repos or {}).items()
             if not getattr(rcfg, "propose_enabled", True)
         }
 
@@ -136,7 +148,6 @@ class CandidateProposerIntegrationService:
                 )
                 continue
 
-
             if len(created) >= context.max_create:
                 skipped.append(
                     SkippedProposalResult(
@@ -149,10 +160,13 @@ class CandidateProposerIntegrationService:
                 )
                 continue
 
-            _paths = [str(f) for f in getattr(candidate, "changed_files", [])] + \
-                     [str(f) for f in getattr(candidate, "target_paths", [])]
+            _paths = [str(f) for f in getattr(candidate, "changed_files", [])] + [
+                str(f) for f in getattr(candidate, "target_paths", [])
+            ]
             _title = candidate.proposal_outline.title_hint or candidate.subject
-            if _spec_suppressed(_title, _paths, _active_campaign_list, specs_dir=Path("docs/specs")):
+            if _spec_suppressed(
+                _title, _paths, _active_campaign_list, specs_dir=Path("docs/specs")
+            ):
                 skipped.append(
                     SkippedProposalResult(
                         candidate_id=candidate.candidate_id,
@@ -227,7 +241,9 @@ class CandidateProposerIntegrationService:
                 )
                 self.client.comment_issue(
                     str(issue.get("id")),
-                    self._created_comment(candidate=candidate, draft=draft, decision_run_id=decision_artifact.run_id),
+                    self._created_comment(
+                        candidate=candidate, draft=draft, decision_run_id=decision_artifact.run_id
+                    ),
                 )
                 created.append(
                     CreatedProposalResult(
@@ -254,7 +270,9 @@ class CandidateProposerIntegrationService:
             run_id=context.run_id,
             generated_at=context.generated_at,
             source_command=context.source_command,
-            repo=ProposerRepoRef(name=decision_artifact.repo.name, path=decision_artifact.repo.path),
+            repo=ProposerRepoRef(
+                name=decision_artifact.repo.name, path=decision_artifact.repo.path
+            ),
             source_decision_run_id=decision_artifact.run_id,
             dry_run=context.dry_run,
             created=created,

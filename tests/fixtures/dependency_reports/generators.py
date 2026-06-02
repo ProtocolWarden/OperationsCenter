@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Generators for synthetic dependency report data."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -125,9 +126,10 @@ class DependencyReportGenerator:
         deps = []
         action_count = max(1, int(dep_count * actionable_pct))
 
-        dep_list = (DependencyReportGenerator.REALISTIC_DEPS * ((dep_count // len(DependencyReportGenerator.REALISTIC_DEPS)) + 1))[
-            :dep_count
-        ]
+        dep_list = (
+            DependencyReportGenerator.REALISTIC_DEPS
+            * ((dep_count // len(DependencyReportGenerator.REALISTIC_DEPS)) + 1)
+        )[:dep_count]
 
         for idx, (pkg, installed, latest) in enumerate(dep_list):
             is_actionable = idx < action_count
@@ -146,16 +148,15 @@ class DependencyReportGenerator:
         return DependencyReportData(statuses=deps, created_task_ids=task_ids)
 
     @staticmethod
-    def large_actionable(
-        dep_count: int = 10, actionable_pct: float = 0.8
-    ) -> DependencyReportData:
+    def large_actionable(dep_count: int = 10, actionable_pct: float = 0.8) -> DependencyReportData:
         """Generate large-actionable report: N deps, 80% actionable, ~10KB."""
         deps = []
         action_count = max(1, int(dep_count * actionable_pct))
 
-        dep_list = (DependencyReportGenerator.REALISTIC_DEPS * ((dep_count // len(DependencyReportGenerator.REALISTIC_DEPS)) + 1))[
-            :dep_count
-        ]
+        dep_list = (
+            DependencyReportGenerator.REALISTIC_DEPS
+            * ((dep_count // len(DependencyReportGenerator.REALISTIC_DEPS)) + 1)
+        )[:dep_count]
 
         for idx, (pkg, installed, latest) in enumerate(dep_list):
             is_actionable = idx < action_count
@@ -183,9 +184,10 @@ class DependencyReportGenerator:
         deps = []
         action_count = max(1, int(dep_count * 0.5))
 
-        dep_list = (DependencyReportGenerator.REALISTIC_DEPS * ((dep_count // len(DependencyReportGenerator.REALISTIC_DEPS)) + 1))[
-            :dep_count
-        ]
+        dep_list = (
+            DependencyReportGenerator.REALISTIC_DEPS
+            * ((dep_count // len(DependencyReportGenerator.REALISTIC_DEPS)) + 1)
+        )[:dep_count]
 
         verbose_note = "x" * note_length
 
@@ -215,9 +217,10 @@ class DependencyReportGenerator:
         deps = []
         action_count = max(1, int(dep_count * actionable_pct))
 
-        dep_list = (DependencyReportGenerator.REALISTIC_DEPS * ((dep_count // len(DependencyReportGenerator.REALISTIC_DEPS)) + 1))[
-            :dep_count
-        ]
+        dep_list = (
+            DependencyReportGenerator.REALISTIC_DEPS
+            * ((dep_count // len(DependencyReportGenerator.REALISTIC_DEPS)) + 1)
+        )[:dep_count]
 
         for idx, (pkg, installed, latest) in enumerate(dep_list):
             is_actionable = idx < action_count
@@ -249,9 +252,10 @@ class DependencyReportGenerator:
         deps = []
         action_count = max(0, int(dep_count * actionable_pct))
 
-        dep_list = (DependencyReportGenerator.REALISTIC_DEPS * ((dep_count // len(DependencyReportGenerator.REALISTIC_DEPS)) + 1))[
-            :dep_count
-        ]
+        dep_list = (
+            DependencyReportGenerator.REALISTIC_DEPS
+            * ((dep_count // len(DependencyReportGenerator.REALISTIC_DEPS)) + 1)
+        )[:dep_count]
 
         verbose_note = "x" * note_length if note_length > 0 else ""
 

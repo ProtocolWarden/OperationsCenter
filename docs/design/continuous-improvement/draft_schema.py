@@ -32,40 +32,44 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
-
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
 
+
 class RefinementStatus(str, Enum):
     """Overall status of the refinement lifecycle for this work item."""
+
     NOT_STARTED = "not_started"
     IN_PROGRESS = "in_progress"
-    ACCEPTED = "accepted"                # an attempt met all guardrails; proposed for merge
+    ACCEPTED = "accepted"  # an attempt met all guardrails; proposed for merge
     BUDGET_EXHAUSTED = "budget_exhausted"  # max_attempts reached without acceptance
-    ABANDONED = "abandoned"              # explicitly halted (hard invariant violation)
-    ESCALATED = "escalated"             # requires operator decision
+    ABANDONED = "abandoned"  # explicitly halted (hard invariant violation)
+    ESCALATED = "escalated"  # requires operator decision
 
 
 class RefinementDecision(str, Enum):
     """Decision emitted after evaluating a single attempt."""
-    ACCEPT = "accept"       # attempt passes all guardrails; propose for merge
-    RETRY = "retry"         # attempt failed a non-fatal gate; retry within budget
-    ABANDON = "abandon"     # attempt violated a hard invariant; no retry
-    ESCALATE = "escalate"   # ambiguous outcome; requires operator decision
+
+    ACCEPT = "accept"  # attempt passes all guardrails; propose for merge
+    RETRY = "retry"  # attempt failed a non-fatal gate; retry within budget
+    ABANDON = "abandon"  # attempt violated a hard invariant; no retry
+    ESCALATE = "escalate"  # ambiguous outcome; requires operator decision
 
 
 class EvaluationOutcome(str, Enum):
     """Coarse evaluation result for a single attempt."""
-    IMPROVED = "improved"                  # primary metric improved, all guardrails passed
-    NEUTRAL = "neutral"                    # no regression, no improvement
-    REGRESSED = "regressed"               # primary metric worsened
+
+    IMPROVED = "improved"  # primary metric improved, all guardrails passed
+    NEUTRAL = "neutral"  # no regression, no improvement
+    REGRESSED = "regressed"  # primary metric worsened
     GUARDRAIL_VIOLATED = "guardrail_violated"  # hard gate failed
-    INCONCLUSIVE = "inconclusive"         # not enough evidence to score
+    INCONCLUSIVE = "inconclusive"  # not enough evidence to score
 
 
 class LineageBranchReason(str, Enum):
     """Why a new lineage branch was created."""
+
     INITIAL = "initial"
     RETRY_AFTER_FAILURE = "retry_after_failure"
     STRATEGY_VARIATION = "strategy_variation"
@@ -86,6 +90,7 @@ class EnforcedGuardrail(str, Enum):
       REGRESSION_FIXTURES_PASS  → re-run validation_profile.commands on result branch
       NO_RUNTIME_POLICY_WIDENING → static check: forbidden_paths unchanged, no policy file edits
     """
+
     NO_LOST_ESCALATIONS = "no_lost_escalations"
     CUSTODIAN_CLEAN = "custodian_clean"
     NO_ARCHITECTURE_VIOLATIONS = "no_architecture_violations"
@@ -100,7 +105,8 @@ class EvaluationCommandSource(str, Enum):
     Q1 decision: OC derives the command from validation_profile; proposer may suggest
     one but OC validates/normalizes it before use.
     """
-    OC_DERIVED = "oc_derived"               # OC built the command from validation_profile
+
+    OC_DERIVED = "oc_derived"  # OC built the command from validation_profile
     PROPOSER_SUGGESTED = "proposer_suggested"  # proposer suggested; OC validated
     VALIDATION_PROFILE = "validation_profile"  # taken directly from validation_profile.commands
 
@@ -108,6 +114,7 @@ class EvaluationCommandSource(str, Enum):
 # ---------------------------------------------------------------------------
 # Strategy
 # ---------------------------------------------------------------------------
+
 
 class ImprovementStrategy(BaseModel):
     """
@@ -117,6 +124,7 @@ class ImprovementStrategy(BaseModel):
     ``constraints`` are hard limits propagated directly into WorkerHandoff.worker_scope
     and enforced by ContextGuard — not advisory.
     """
+
     principle: str = Field(
         description="One-sentence improvement heuristic",
     )
@@ -137,8 +145,10 @@ class ImprovementStrategy(BaseModel):
 # Evaluation
 # ---------------------------------------------------------------------------
 
+
 class ScoringMetric(BaseModel):
     """A single measurable improvement target."""
+
     metric: str = Field(description="Name of the metric, e.g. 'duplicate_escalations_reduced'")
     direction: str = Field(
         default="lower_is_better",
@@ -175,6 +185,7 @@ class EvaluationSpec(BaseModel):
       is stored in ``evaluation_command`` with its source in
       ``evaluation_command_source``.
     """
+
     baseline_description: str = Field(
         description="Human-readable description of baseline behavior",
     )
@@ -230,6 +241,7 @@ class EvaluationSpec(BaseModel):
 # Refinement policy
 # ---------------------------------------------------------------------------
 
+
 class RefinementPolicy(BaseModel):
     """
     Governs retry and refinement behavior.
@@ -240,6 +252,7 @@ class RefinementPolicy(BaseModel):
     ``failure_penalty`` applies a budget deduction when an attempt fails a
     hard guardrail — prevents degenerate retries on bad attempts.
     """
+
     enabled: bool = Field(default=True)
     max_attempts: int = Field(default=3, ge=1, le=10)
     requires_checkpoint_between_attempts: bool = Field(
@@ -265,6 +278,7 @@ class RefinementPolicy(BaseModel):
 # CLP binding
 # ---------------------------------------------------------------------------
 
+
 class ClpBinding(BaseModel):
     """
     References to CLP artifacts providing continuity across refinement attempts.
@@ -275,6 +289,7 @@ class ClpBinding(BaseModel):
     All paths are relative to the target repo root. Path references only —
     the worker loads artifacts at runtime via standard CLP schema.
     """
+
     investigation_capsule_path: Optional[str] = Field(
         default=None,
         description="Active InvestigationCapsule, e.g. '.context/active/inv-<id>.yaml'",
@@ -310,8 +325,10 @@ class ClpBinding(BaseModel):
 # Lineage — per-attempt records
 # ---------------------------------------------------------------------------
 
+
 class EvaluationScore(BaseModel):
     """Scored outcome of a single evaluation run."""
+
     primary_metric_value: Optional[float] = Field(default=None)
     primary_metric_delta: Optional[float] = Field(
         default=None,
@@ -344,6 +361,7 @@ class LineageAttempt(BaseModel):
     .context/capsules/<lineage_id>/attempt-<n>/ alongside implementation
     and evaluation artifacts.
     """
+
     attempt_number: int = Field(ge=1)
     run_id: str = Field(description="OcExecutionRequest.run_id for this attempt")
     branch_reason: LineageBranchReason = LineageBranchReason.INITIAL
@@ -395,6 +413,7 @@ class OcLineageIndexEntry(BaseModel):
     index entry for fast status queries without loading the full lineage.
     Warehouse receives the full lineage artifact post-resolution.
     """
+
     lineage_id: str
     proposal_id: str
     lineage_artifact_path: str = Field(
@@ -419,6 +438,7 @@ class ImprovementLineage(BaseModel):
 
     Append-only in normal operation.
     """
+
     lineage_id: str = Field(
         description="Stable identifier for this lineage chain (survives retries)",
     )
@@ -436,6 +456,7 @@ class ImprovementLineage(BaseModel):
 # Top-level extension block
 # ---------------------------------------------------------------------------
 
+
 class ContinuousImprovementSpec(BaseModel):
     """
     Continuous improvement metadata for a work item.
@@ -449,6 +470,7 @@ class ContinuousImprovementSpec(BaseModel):
     Q4: stays OC-internal. Not added to CxRP TaskProposal yet.
     Q5: no new ExecutionMode. improve_campaign + this block's presence is sufficient.
     """
+
     strategy: ImprovementStrategy
     evaluation: EvaluationSpec
     refinement: RefinementPolicy = Field(default_factory=RefinementPolicy)
@@ -461,6 +483,7 @@ class ContinuousImprovementSpec(BaseModel):
 # Mutable execution-side state (separate from frozen proposal)
 # ---------------------------------------------------------------------------
 
+
 class OcContinuousImprovementState(BaseModel):
     """
     Mutable CI execution state managed by OC.
@@ -472,6 +495,7 @@ class OcContinuousImprovementState(BaseModel):
     Stored in OC run store. Updated after each attempt.
     Full lineage artifact lives at clp_binding.lineage_artifact_path.
     """
+
     proposal_id: str
     lineage_index: OcLineageIndexEntry
     spec_snapshot: ContinuousImprovementSpec = Field(

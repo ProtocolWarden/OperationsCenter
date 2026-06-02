@@ -19,6 +19,7 @@ _RUN_ROOT = "tools/audit/report/representative/Bucket_run999"
 # Manifest entry builders
 # ---------------------------------------------------------------------------
 
+
 def _base_entry(
     artifact_id: str = "example_managed_repo:audit_type_1:TopicSelectionStage:topic_selection",
 ) -> dict:
@@ -139,6 +140,7 @@ def _write_manifest(tmp_path: Path, payload: dict) -> Path:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def completed_index(tmp_path: Path):
     payload = _make_manifest_payload(artifacts=[_base_entry(), _singleton_entry()])
@@ -178,7 +180,9 @@ def index_with_real_file(tmp_path: Path):
 
     artifact_path = tmp_path / _RUN_ROOT / "topic_selection.json"
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
-    artifact_path.write_text(json.dumps({"key": "value", "stage": "topic_selection"}), encoding="utf-8")
+    artifact_path.write_text(
+        json.dumps({"key": "value", "stage": "topic_selection"}), encoding="utf-8"
+    )
 
     manifest = load_artifact_manifest(manifest_path)
     return build_artifact_index(manifest, manifest_path, repo_root=tmp_path)

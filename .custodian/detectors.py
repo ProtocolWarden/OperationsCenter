@@ -29,15 +29,16 @@ Superseded and removed (native Custodian covers them):
   OC7  → F3 (Pydantic BaseModel field liveness)
   OC9  → K2 (doc value drift; OC known_values in audit.known_values)
 """
+
 from __future__ import annotations
 
 import re
 from pathlib import Path
 
-from custodian.audit_kit.detector import AuditContext, Detector, DetectorResult, MEDIUM, LOW
-
+from custodian.audit_kit.detector import LOW, MEDIUM, AuditContext, Detector, DetectorResult
 
 # ── helpers ──────────────────────────────────────────────────────────────────
+
 
 def _py_files(root: Path) -> list[Path]:
     if not root.exists():
@@ -46,6 +47,7 @@ def _py_files(root: Path) -> list[Path]:
 
 
 # ── OC3: orphaned entrypoints ─────────────────────────────────────────────────
+
 
 def _detect_oc3_orphaned_entrypoints(ctx: AuditContext) -> DetectorResult:
     ep_root = ctx.src_root / "entrypoints"
@@ -57,13 +59,20 @@ def _detect_oc3_orphaned_entrypoints(ctx: AuditContext) -> DetectorResult:
             continue
         ref_count = 0
         rx = f"operations_center.entrypoints.{sub.name}"
-        for root in (ctx.src_root, ctx.tests_root, ctx.repo_root / "scripts", ctx.repo_root / "docs"):
+        for root in (
+            ctx.src_root,
+            ctx.tests_root,
+            ctx.repo_root / "scripts",
+            ctx.repo_root / "docs",
+        ):
             if not root.exists():
                 continue
             for f in root.rglob("*"):
                 if not f.is_file() or "__pycache__" in f.parts:
                     continue
-                if str(f.relative_to(ctx.repo_root)).startswith(f"src/operations_center/entrypoints/{sub.name}"):
+                if str(f.relative_to(ctx.repo_root)).startswith(
+                    f"src/operations_center/entrypoints/{sub.name}"
+                ):
                     continue
                 try:
                     if rx in f.read_text(errors="replace"):
@@ -87,9 +96,10 @@ def _detect_oc3_orphaned_entrypoints(ctx: AuditContext) -> DetectorResult:
 
 # ── OC8: doc phantom symbols (field-def aware) ────────────────────────────────
 
+
 def _detect_oc8_phantom_symbols(ctx: AuditContext) -> DetectorResult:
     docs_root = ctx.repo_root / "docs"
-    readme    = ctx.repo_root / "README.md"
+    readme = ctx.repo_root / "README.md"
     files: list[Path] = [readme] if readme.exists() else []
     for sub in ("design", "architecture"):
         d = docs_root / sub
@@ -129,6 +139,7 @@ def _detect_oc8_phantom_symbols(ctx: AuditContext) -> DetectorResult:
     stale_handlers = set(audit_cfg.get("stale_handlers", []) or [])
 
     field_def_re_template = r"^\s+{name}\s*:\s*[A-Za-z]"
+
     def _exists(name: str) -> bool:
         if name in common_words:
             return True
@@ -181,6 +192,7 @@ def _detect_oc8_phantom_symbols(ctx: AuditContext) -> DetectorResult:
 
 # ── OC10: team_executor max_concurrent must be 1 ──────────────────────────────
 
+
 def _detect_oc10_team_executor_max_concurrent(ctx: AuditContext) -> DetectorResult:
     """Confirm backend_caps.team_executor.max_concurrent == 1 in the local config.
 
@@ -197,12 +209,7 @@ def _detect_oc10_team_executor_max_concurrent(ctx: AuditContext) -> DetectorResu
     except Exception:
         return DetectorResult(count=0, samples=[])
 
-    actual = (
-        (data or {})
-        .get("backend_caps", {})
-        .get("team_executor", {})
-        .get("max_concurrent")
-    )
+    actual = (data or {}).get("backend_caps", {}).get("team_executor", {}).get("max_concurrent")
     if actual is None:
         # Key absent — not a violation; may be inheriting default.
         return DetectorResult(count=0, samples=[])
@@ -220,6 +227,7 @@ def _detect_oc10_team_executor_max_concurrent(ctx: AuditContext) -> DetectorResu
 
 # ── OC11: managed-repo config schema sync ────────────────────────────────────
 
+
 def _detect_oc11_schema_sync(ctx: AuditContext) -> DetectorResult:
     """Every Pydantic field in models.py must appear as a YAML key in example_managed_repo.yaml.
 
@@ -227,6 +235,7 @@ def _detect_oc11_schema_sync(ctx: AuditContext) -> DetectorResult:
     model) but the operator-facing example template is not updated to match.
     """
     import ast as _ast
+
     import yaml as _yaml
 
     models_path = ctx.src_root / "operations_center" / "managed_repos" / "models.py"
@@ -246,8 +255,8 @@ def _detect_oc11_schema_sync(ctx: AuditContext) -> DetectorResult:
     for node in _ast.walk(tree):
         if isinstance(node, _ast.ClassDef):
             if any(
-                (isinstance(b, _ast.Name) and b.id in pydantic_bases) or
-                (isinstance(b, _ast.Attribute) and b.attr in pydantic_bases)
+                (isinstance(b, _ast.Name) and b.id in pydantic_bases)
+                or (isinstance(b, _ast.Attribute) and b.attr in pydantic_bases)
                 for b in node.bases
             ):
                 model_class_names.add(node.name)
@@ -291,10 +300,25 @@ def _detect_oc11_schema_sync(ctx: AuditContext) -> DetectorResult:
 
 # ── contributor entry point ───────────────────────────────────────────────────
 
+
 def build_oc_detectors() -> list[Detector]:
     return [
-        Detector("OC3",  "orphaned entrypoints",                             "open", _detect_oc3_orphaned_entrypoints,  MEDIUM),
-        Detector("OC8",  "docs reference a symbol that doesn't exist",       "open", _detect_oc8_phantom_symbols,       LOW),
-        Detector("OC10", "team_executor max_concurrent must be 1",            "open", _detect_oc10_team_executor_max_concurrent,  MEDIUM),
-        Detector("OC11", "managed-repo config schema sync",                  "open", _detect_oc11_schema_sync,          MEDIUM),
+        Detector("OC3", "orphaned entrypoints", "open", _detect_oc3_orphaned_entrypoints, MEDIUM),
+        Detector(
+            "OC8",
+            "docs reference a symbol that doesn't exist",
+            "open",
+            _detect_oc8_phantom_symbols,
+            LOW,
+        ),
+        Detector(
+            "OC10",
+            "team_executor max_concurrent must be 1",
+            "open",
+            _detect_oc10_team_executor_max_concurrent,
+            MEDIUM,
+        ),
+        Detector(
+            "OC11", "managed-repo config schema sync", "open", _detect_oc11_schema_sync, MEDIUM
+        ),
     ]

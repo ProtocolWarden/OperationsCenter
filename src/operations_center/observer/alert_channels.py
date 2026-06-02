@@ -10,6 +10,7 @@ Defines:
 - PagerDutyChannel stub — for future PagerDuty integration
 - AlertChannelFactory — instantiate channels from configuration
 """
+
 from __future__ import annotations
 
 import logging
@@ -34,7 +35,7 @@ class AlertChannel(ABC):
     """Base class for alert notification channels."""
 
     @abstractmethod
-    async def notify(self, context: dict[str, Any]) -> AlertChannelResult:
+    def notify(self, context: dict[str, Any]) -> AlertChannelResult:
         """Send alert notification through this channel.
 
         Args:
@@ -62,7 +63,7 @@ class OperatorLogChannel(AlertChannel):
         self.logger = logging.getLogger(logger_name)
         self.name = "operator_log"
 
-    async def notify(self, context: dict[str, Any]) -> AlertChannelResult:
+    def notify(self, context: dict[str, Any]) -> AlertChannelResult:
         """Log alert to operator logger.
 
         Args:
@@ -96,7 +97,7 @@ class OperatorLogChannel(AlertChannel):
             return AlertChannelResult(
                 channel=self.name,
                 success=True,
-                message=f"Logged to {self.logger.name}",
+                message=f"Logged {condition} to {self.logger.name}",
             )
         except Exception as e:
             return AlertChannelResult(
@@ -122,7 +123,7 @@ class PlaneTaskChannel(AlertChannel):
         self.name = "plane"
         self.enabled = plane_client is not None
 
-    async def notify(self, context: dict[str, Any]) -> AlertChannelResult:
+    def notify(self, context: dict[str, Any]) -> AlertChannelResult:
         """Create Plane improve task for alert.
 
         Args:
@@ -140,25 +141,16 @@ class PlaneTaskChannel(AlertChannel):
 
         try:
             condition = context.get("condition_name", "unknown")
-            collector = context.get("collector_name", "system")
             error_count = context.get("error_count", 0)
             threshold = context.get("threshold", 0)
-            severity = context.get("severity", "MEDIUM")
 
-            # Build task description
-            description = self._build_task_description(context)
-
-            # TODO: Call plane_client.create_issue(
-            #     project_id=self.project_id,
-            #     title=f"[Alert] {condition}",
-            #     description=description,
-            #     priority=self._severity_to_priority(severity),
-            #     labels=self._build_labels(context),
-            # )
-
+            # Stub: full Plane integration planned for Stage 3+.
+            # Will call plane_client.create_issue() with condition/description/labels.
             logger.info(
-                f"Plane task creation stub: {condition} "
-                f"({error_count}/{threshold} errors)",
+                "Plane task creation stub: %s (%s/%s errors)",
+                condition,
+                error_count,
+                threshold,
                 extra={"alert_context": context},
             )
 
@@ -214,9 +206,9 @@ class PlaneTaskChannel(AlertChannel):
         """Build labels for Plane task from alert context."""
         labels = ["validation", "alert"]
         if context.get("condition_name"):
-            labels.append(context.get("condition_name").replace("_", "-"))
+            labels.append((context.get("condition_name") or "").replace("_", "-"))
         if context.get("severity"):
-            labels.append(f"severity-{context.get('severity').lower()}")
+            labels.append(f"severity-{(context.get('severity') or '').lower()}")
         return labels
 
 
@@ -232,7 +224,7 @@ class SlackChannel(AlertChannel):
         self.name = "slack"
         self.enabled = webhook_url is not None
 
-    async def notify(self, context: dict[str, Any]) -> AlertChannelResult:
+    def notify(self, context: dict[str, Any]) -> AlertChannelResult:
         """Send alert to Slack (stub).
 
         Args:
@@ -249,7 +241,7 @@ class SlackChannel(AlertChannel):
             )
 
         # Stub implementation — would call webhook_url with formatted message
-        logger.debug(f"Slack notification stub: {context.get('condition_name')}")
+        logger.debug("Slack notification stub: %s", context.get("condition_name"))
         return AlertChannelResult(
             channel=self.name,
             success=True,
@@ -273,7 +265,7 @@ class PagerDutyChannel(AlertChannel):
         self.name = "pagerduty"
         self.enabled = api_key is not None
 
-    async def notify(self, context: dict[str, Any]) -> AlertChannelResult:
+    def notify(self, context: dict[str, Any]) -> AlertChannelResult:
         """Page on-call engineer (stub).
 
         Args:
@@ -290,7 +282,7 @@ class PagerDutyChannel(AlertChannel):
             )
 
         # Stub implementation — would call PagerDuty API
-        logger.debug(f"PagerDuty notification stub: {context.get('condition_name')}")
+        logger.debug("PagerDuty notification stub: %s", context.get("condition_name"))
         return AlertChannelResult(
             channel=self.name,
             success=True,
@@ -322,7 +314,9 @@ class AlertChannelFactory:
         config = config or {}
 
         if channel_name == "operator_log":
-            return OperatorLogChannel(logger_name=config.get("logger_name"))
+            return OperatorLogChannel(
+                logger_name=config.get("logger_name") or "operations_center.alerts"
+            )
         elif channel_name == "plane":
             return PlaneTaskChannel(plane_client=config.get("plane_client"))
         elif channel_name == "slack":
@@ -330,7 +324,7 @@ class AlertChannelFactory:
         elif channel_name == "pagerduty":
             return PagerDutyChannel(api_key=config.get("api_key"))
         else:
-            logger.warning(f"Unknown alert channel: {channel_name}")
+            logger.warning("Unknown alert channel: %s", channel_name)
             return None
 
     @staticmethod

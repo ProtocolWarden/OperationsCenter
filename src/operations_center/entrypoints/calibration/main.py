@@ -79,9 +79,17 @@ def cmd_analyze(
         "-p",
         help="Analysis profile: summary | failure_diagnosis | coverage_gaps | artifact_health | producer_compliance | recommendation",
     ),
-    repo_root: Optional[str] = typer.Option(None, "--repo-root", help="Override managed repo root for path resolution."),
-    include_content: bool = typer.Option(False, "--include-content", help="Opt-in artifact content analysis (JSON readability check)."),
-    output_dir: Optional[str] = typer.Option(None, "--output-dir", help="Write JSON report to this directory."),
+    repo_root: Optional[str] = typer.Option(
+        None, "--repo-root", help="Override managed repo root for path resolution."
+    ),
+    include_content: bool = typer.Option(
+        False,
+        "--include-content",
+        help="Opt-in artifact content analysis (JSON readability check).",
+    ),
+    output_dir: Optional[str] = typer.Option(
+        None, "--output-dir", help="Write JSON report to this directory."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print report as JSON."),
 ) -> NoReturn:
     """Analyze an artifact manifest with an explicit analysis profile."""
@@ -121,7 +129,9 @@ def cmd_analyze(
 def cmd_tune_autonomy(
     manifest: str = typer.Option(..., "--manifest", "-m", help="Path to artifact_manifest.json."),
     repo_root: Optional[str] = typer.Option(None, "--repo-root"),
-    output_dir: Optional[str] = typer.Option(None, "--output-dir", help="Write JSON report to this directory."),
+    output_dir: Optional[str] = typer.Option(
+        None, "--output-dir", help="Write JSON report to this directory."
+    ),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     """Run recommendation profile and produce advisory tuning suggestions.

@@ -11,7 +11,6 @@ from operations_center.observability.artifacts import ArtifactNormalizer
 
 from .conftest import make_artifact
 
-
 # ---------------------------------------------------------------------------
 # Empty input
 # ---------------------------------------------------------------------------

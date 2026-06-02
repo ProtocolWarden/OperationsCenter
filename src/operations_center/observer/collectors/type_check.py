@@ -73,40 +73,36 @@ class TypeSignalCollector:
             data = json.loads(raw)
         except json.JSONDecodeError as e:
             logger.debug(
-                "Failed to parse ty output: %s at line %d, col %d",
-                e.msg, e.lineno, e.colno
+                "Failed to parse ty output: %s at line %d, col %d", e.msg, e.lineno, e.colno
             )
             return TypeSignal(status="unavailable", source="ty_parse_error")
 
         if not isinstance(data, dict):
-            logger.warning(
-                "ty output: expected dict, got %s", type(data).__name__
-            )
+            logger.warning("ty output: expected dict, got %s", type(data).__name__)
             return TypeSignal(status="unavailable", source="ty_unexpected_format")
 
         diagnostics = data.get("diagnostics", [])
         if not isinstance(diagnostics, list):
-            logger.warning(
-                "ty diagnostics: expected list, got %s", type(diagnostics).__name__
-            )
+            logger.warning("ty diagnostics: expected list, got %s", type(diagnostics).__name__)
             return TypeSignal(status="unavailable", source="ty_unexpected_format")
 
         total = len(diagnostics)
-        distinct_file_count = len({item.get("file", "") for item in diagnostics if isinstance(item, dict) and item.get("file")})
+        distinct_file_count = len(
+            {
+                item.get("file", "")
+                for item in diagnostics
+                if isinstance(item, dict) and item.get("file")
+            }
+        )
 
         errors: list[TypeError] = []
         for idx, item in enumerate(diagnostics[:_MAX_ERRORS]):
             if not isinstance(item, dict):
-                logger.debug(
-                    "Skipping non-dict ty diagnostic[%d]: %s",
-                    idx, type(item).__name__
-                )
+                logger.debug("Skipping non-dict ty diagnostic[%d]: %s", idx, type(item).__name__)
                 continue
 
             try:
-                loc = ArtifactValidator.safe_get(
-                    item, ["range", "start"], {}
-                )
+                loc = ArtifactValidator.safe_get(item, ["range", "start"], {})
                 errors.append(
                     TypeError(
                         path=str(item.get("file", "")),
@@ -141,16 +137,11 @@ class TypeSignalCollector:
             try:
                 item = json.loads(line)
             except json.JSONDecodeError as e:
-                logger.debug(
-                    "Failed to parse mypy line %d: %s", line_idx, e.msg
-                )
+                logger.debug("Failed to parse mypy line %d: %s", line_idx, e.msg)
                 continue
 
             if not isinstance(item, dict):
-                logger.debug(
-                    "mypy line %d: expected dict, got %s",
-                    line_idx, type(item).__name__
-                )
+                logger.debug("mypy line %d: expected dict, got %s", line_idx, type(item).__name__)
                 continue
 
             if item.get("severity") != "error":

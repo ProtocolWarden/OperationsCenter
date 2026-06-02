@@ -61,7 +61,8 @@ class ExecutionRequestBuilder:
         )
 
         bound_target = _bound_target_from_decision(
-            bundle, runtime.runtime_binding,
+            bundle,
+            runtime.runtime_binding,
         )
 
         # ADR 0007 follow-up B: substitute {{RUN_ID}} in goal_text now that
@@ -70,7 +71,10 @@ class ExecutionRequestBuilder:
         # _new_id) at construction; to keep the substitution and the run_id
         # consistent on a single frozen instance, generate the id first and
         # pass both explicitly.
-        from operations_center.contracts.execution import _new_id  # local import: avoid top-level coupling
+        from operations_center.contracts.execution import (
+            _new_id,
+        )  # local import: avoid top-level coupling
+
         run_id = _new_id()
         goal_text = (proposal.goal_text or "").replace("{{RUN_ID}}", run_id)
 
@@ -128,7 +132,8 @@ def _bound_target_from_decision(
             ref=provenance.ref,
             patches=list(provenance.patches),
         )
-        if provenance is not None else None
+        if provenance is not None
+        else None
     )
 
     return BoundExecutionTargetMirror(

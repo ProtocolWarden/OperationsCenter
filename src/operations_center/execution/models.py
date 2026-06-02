@@ -21,10 +21,18 @@ class ExecutionControlSettings:
     @classmethod
     def from_env(cls) -> "ExecutionControlSettings":
         return cls(
-            max_exec_per_hour=max(0, int(os.environ.get("OPERATIONS_CENTER_MAX_EXEC_PER_HOUR", "10"))),
-            max_exec_per_day=max(0, int(os.environ.get("OPERATIONS_CENTER_MAX_EXEC_PER_DAY", "50"))),
-            max_retries_per_task=max(1, int(os.environ.get("OPERATIONS_CENTER_MAX_RETRIES_PER_TASK", "3"))),
-            min_watch_interval_seconds=max(1, int(os.environ.get("OPERATIONS_CENTER_MIN_WATCH_INTERVAL_SECONDS", "5"))),
+            max_exec_per_hour=max(
+                0, int(os.environ.get("OPERATIONS_CENTER_MAX_EXEC_PER_HOUR", "10"))
+            ),
+            max_exec_per_day=max(
+                0, int(os.environ.get("OPERATIONS_CENTER_MAX_EXEC_PER_DAY", "50"))
+            ),
+            max_retries_per_task=max(
+                1, int(os.environ.get("OPERATIONS_CENTER_MAX_RETRIES_PER_TASK", "3"))
+            ),
+            min_watch_interval_seconds=max(
+                1, int(os.environ.get("OPERATIONS_CENTER_MIN_WATCH_INTERVAL_SECONDS", "5"))
+            ),
             min_remaining_exec_for_proposals=max(
                 0,
                 int(os.environ.get("OPERATIONS_CENTER_MIN_REMAINING_EXEC_FOR_PROPOSALS", "3")),
@@ -35,7 +43,8 @@ class ExecutionControlSettings:
                     "tools/report/operations_center/execution/usage.json",
                 )
             ),
-            pr_dry_run=os.environ.get("OPERATIONS_CENTER_PR_DRY_RUN", "0").strip() in ("1", "true", "yes"),
+            pr_dry_run=os.environ.get("OPERATIONS_CENTER_PR_DRY_RUN", "0").strip()
+            in ("1", "true", "yes"),
         )
 
 

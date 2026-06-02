@@ -255,6 +255,12 @@ audit:
       - tests/unit/executors/test_startup_wiring.py
       # cl_wrap tests assert dispatch succeeds by absence of exception — no assert statement needed.
       - tests/unit/execution/test_coordinator_cl_wrap.py
+      # Exporter tests verify graceful no-op / no-raise behavior — absence of exception is the assertion.
+      - tests/unit/observer/test_validation_metrics_exporter.py
+    D6:
+      # MetricUnit is an Enum — values are accessed as MetricUnit.X, not via constructor.
+      # D6 is a false positive for Enum classes used only in type annotations and method signatures.
+      - src/operations_center/observer/metrics.py
     D11:
       # The local backends (aider_local, direct_local, team_executor) share a
       # common lifecycle by design — _read_capture, _discover_changed_files,

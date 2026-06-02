@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Tests for alert configuration infrastructure."""
+
 import pytest
 
 from operations_center.observer.alert_config import (

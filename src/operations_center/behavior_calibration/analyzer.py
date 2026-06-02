@@ -78,32 +78,21 @@ def _build_index_summary(index: "ManagedArtifactIndex") -> ArtifactIndexSummary:
 
 def _run_summary_rules(index: "ManagedArtifactIndex") -> list[CalibrationFinding]:
     return (
-        check_run_status(index)
-        + check_excluded_paths(index)
-        + check_singleton_limitations(index)
+        check_run_status(index) + check_excluded_paths(index) + check_singleton_limitations(index)
     )
 
 
 def _run_failure_diagnosis_rules(index: "ManagedArtifactIndex") -> list[CalibrationFinding]:
-    return (
-        check_run_status(index)
-        + check_partial_artifacts(index)
-        + check_missing_files(index)
-    )
+    return check_run_status(index) + check_partial_artifacts(index) + check_missing_files(index)
 
 
 def _run_coverage_gap_rules(index: "ManagedArtifactIndex") -> list[CalibrationFinding]:
-    return (
-        check_coverage_gaps(index)
-        + check_partial_artifacts(index)
-    )
+    return check_coverage_gaps(index) + check_partial_artifacts(index)
 
 
 def _run_artifact_health_rules(index: "ManagedArtifactIndex") -> list[CalibrationFinding]:
     return (
-        check_unresolved_paths(index)
-        + check_missing_files(index)
-        + check_partial_artifacts(index)
+        check_unresolved_paths(index) + check_missing_files(index) + check_partial_artifacts(index)
     )
 
 

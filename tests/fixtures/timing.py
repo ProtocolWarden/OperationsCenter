@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Timing and memory measurement utilities for performance regression tests."""
+
 from __future__ import annotations
 
 import time

@@ -99,7 +99,9 @@ class RuntimeBindingPolicy:
             if rule.matches(attrs):
                 logger.debug(
                     "RuntimeBindingPolicy: rule=%s matched task_type=%s lane=%s",
-                    rule.name, attrs["task_type"], attrs["lane"],
+                    rule.name,
+                    attrs["task_type"],
+                    attrs["lane"],
                 )
                 return rule.to_binding()
         if self.default is not None:
@@ -126,7 +128,11 @@ class RuntimeBindingPolicy:
         for entry in raw.get("rules") or []:
             rules.append(_rule_from_dict(entry))
         default_block = raw.get("default")
-        default = _rule_from_dict({"name": "default", "when": {}, **default_block}) if default_block else None
+        default = (
+            _rule_from_dict({"name": "default", "when": {}, **default_block})
+            if default_block
+            else None
+        )
         return cls(rules=tuple(rules), default=default)
 
 

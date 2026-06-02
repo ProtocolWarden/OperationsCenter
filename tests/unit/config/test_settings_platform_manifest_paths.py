@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Settings load — platform_manifest path resolution + slug auto-resolve."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -8,7 +9,6 @@ from pathlib import Path
 import pytest
 
 from operations_center.config.settings import load_settings
-
 
 _BASE_YAML = """\
 plane:
@@ -52,11 +52,10 @@ class TestPathResolution:
         config_dir.mkdir()
         cfg = config_dir / "operations_center.yaml"
         cfg.write_text(
-            _BASE_YAML
-            + "\nplatform_manifest:\n"
-              "  private_manifest_path: ../private.yaml\n"
-              "  project_manifest_path: ../project.yaml\n"
-              "  local_manifest_path: local/here.yaml\n",
+            _BASE_YAML + "\nplatform_manifest:\n"
+            "  private_manifest_path: ../private.yaml\n"
+            "  project_manifest_path: ../project.yaml\n"
+            "  local_manifest_path: local/here.yaml\n",
             encoding="utf-8",
         )
         (tmp_path / "private.yaml").touch()
@@ -67,13 +66,12 @@ class TestPathResolution:
         s = load_settings(cfg)
         assert s.platform_manifest.private_manifest_path == (tmp_path / "private.yaml").resolve()
         assert s.platform_manifest.project_manifest_path == (tmp_path / "project.yaml").resolve()
-        assert s.platform_manifest.local_manifest_path == (
-            config_dir / "local" / "here.yaml"
-        ).resolve()
+        assert (
+            s.platform_manifest.local_manifest_path
+            == (config_dir / "local" / "here.yaml").resolve()
+        )
 
-    def test_tilde_expands_to_home(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_tilde_expands_to_home(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("HOME", str(tmp_path))
         cfg = _write_config(
             tmp_path,
@@ -107,8 +105,7 @@ class TestSlugAutoResolve:
     def test_auto_slug_from_self_repo_key(self, tmp_path: Path) -> None:
         cfg = _write_config(
             tmp_path,
-            "\nself_repo_key: ExampleManagedRepo\n"
-            "platform_manifest:\n  enabled: true\n",
+            "\nself_repo_key: ExampleManagedRepo\nplatform_manifest:\n  enabled: true\n",
         )
         s = load_settings(cfg)
         # The derivation lowercases without inserting separators between
@@ -118,8 +115,7 @@ class TestSlugAutoResolve:
     def test_auto_slug_translates_underscores(self, tmp_path: Path) -> None:
         cfg = _write_config(
             tmp_path,
-            "\nself_repo_key: my_project_repo\n"
-            "platform_manifest:\n  enabled: true\n",
+            "\nself_repo_key: my_project_repo\nplatform_manifest:\n  enabled: true\n",
         )
         s = load_settings(cfg)
         assert s.platform_manifest.project_slug == "my-project-repo"
@@ -139,8 +135,7 @@ class TestWorkScopeManifestPath:
     def test_work_scope_path_pass_through(self, tmp_path: Path) -> None:
         cfg = _write_config(
             tmp_path,
-            "\nplatform_manifest:\n"
-            "  work_scope_manifest_path: ./work_scope.yaml\n",
+            "\nplatform_manifest:\n  work_scope_manifest_path: ./work_scope.yaml\n",
         )
         s = load_settings(cfg)
         assert s.platform_manifest.work_scope_manifest_path == tmp_path / "work_scope.yaml"
@@ -159,9 +154,7 @@ class TestWorkScopeManifestPath:
     def test_work_scope_only_no_project(self, tmp_path: Path) -> None:
         cfg = _write_config(
             tmp_path,
-            "\nplatform_manifest:\n"
-            "  enabled: true\n"
-            "  work_scope_manifest_path: ./scope.yaml\n",
+            "\nplatform_manifest:\n  enabled: true\n  work_scope_manifest_path: ./scope.yaml\n",
         )
         s = load_settings(cfg)
         assert s.platform_manifest.work_scope_manifest_path is not None

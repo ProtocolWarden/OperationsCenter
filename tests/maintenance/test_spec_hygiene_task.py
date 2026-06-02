@@ -2,6 +2,7 @@
 # Copyright (C) 2026 ProtocolWarden
 """SpecHygieneTask conforms to MaintenanceTask and returns a structured
 result on the happy path (ADR 0007 follow-up D)."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone

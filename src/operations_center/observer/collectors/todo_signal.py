@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+
 from operations_center.observer.models import TodoFileCount, TodoSignal
 from operations_center.observer.service import ObserverContext
 

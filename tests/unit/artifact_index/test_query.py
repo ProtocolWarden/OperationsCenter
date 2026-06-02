@@ -92,16 +92,12 @@ class TestQueryArtifacts:
         assert len(results) >= 1
 
     def test_query_by_is_repo_singleton_true(self, index_from_completed) -> None:
-        results = query_artifacts(
-            index_from_completed, ArtifactQuery(is_repo_singleton=True)
-        )
+        results = query_artifacts(index_from_completed, ArtifactQuery(is_repo_singleton=True))
         assert all(a.is_repo_singleton for a in results)
         assert len(results) >= 1
 
     def test_query_by_is_repo_singleton_false(self, index_from_completed) -> None:
-        results = query_artifacts(
-            index_from_completed, ArtifactQuery(is_repo_singleton=False)
-        )
+        results = query_artifacts(index_from_completed, ArtifactQuery(is_repo_singleton=False))
         assert all(not a.is_repo_singleton for a in results)
         assert len(results) >= 1
 
@@ -110,9 +106,7 @@ class TestQueryArtifacts:
         assert all(a.is_partial for a in results)
 
     def test_query_by_status_missing(self, index_from_failed) -> None:
-        results = query_artifacts(
-            index_from_failed, ArtifactQuery(status=ArtifactStatus.MISSING)
-        )
+        results = query_artifacts(index_from_failed, ArtifactQuery(status=ArtifactStatus.MISSING))
         assert all(a.status == ArtifactStatus.MISSING for a in results)
         assert len(results) >= 1
 
@@ -148,9 +142,7 @@ class TestQueryArtifacts:
         assert len(results) == len(index_from_completed.artifacts)
 
     def test_query_by_wrong_repo_id_returns_empty(self, index_from_completed) -> None:
-        results = query_artifacts(
-            index_from_completed, ArtifactQuery(repo_id="otherrepo")
-        )
+        results = query_artifacts(index_from_completed, ArtifactQuery(repo_id="otherrepo"))
         assert results == []
 
     def test_query_never_includes_excluded_paths(

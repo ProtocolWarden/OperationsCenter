@@ -19,13 +19,14 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
 
+
 class AnalysisProfile(str, Enum):
     """Explicit analysis profile requested by the caller."""
+
     SUMMARY = "summary"
     FAILURE_DIAGNOSIS = "failure_diagnosis"
     COVERAGE_GAPS = "coverage_gaps"
@@ -36,6 +37,7 @@ class AnalysisProfile(str, Enum):
 
 class FindingSeverity(str, Enum):
     """Severity level of a calibration finding."""
+
     INFO = "info"
     WARNING = "warning"
     ERROR = "error"
@@ -44,6 +46,7 @@ class FindingSeverity(str, Enum):
 
 class FindingCategory(str, Enum):
     """Category of a calibration finding."""
+
     MISSING_ARTIFACT = "missing_artifact"
     PARTIAL_RUN = "partial_run"
     FAILED_RUN = "failed_run"
@@ -60,6 +63,7 @@ class FindingCategory(str, Enum):
 
 class RecommendationPriority(str, Enum):
     """Priority level of a calibration recommendation."""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -69,6 +73,7 @@ class RecommendationPriority(str, Enum):
 # ---------------------------------------------------------------------------
 # Input
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class BehaviorCalibrationInput:
@@ -93,6 +98,7 @@ class BehaviorCalibrationInput:
 # ---------------------------------------------------------------------------
 # Output types (Pydantic, serializable)
 # ---------------------------------------------------------------------------
+
 
 class ArtifactIndexSummary(BaseModel, frozen=True):
     """High-level summary of a ManagedArtifactIndex."""
@@ -208,8 +214,7 @@ class BehaviorCalibrationReport(BaseModel):
     @property
     def has_errors(self) -> bool:
         return any(
-            f.severity in (FindingSeverity.ERROR, FindingSeverity.CRITICAL)
-            for f in self.findings
+            f.severity in (FindingSeverity.ERROR, FindingSeverity.CRITICAL) for f in self.findings
         )
 
 

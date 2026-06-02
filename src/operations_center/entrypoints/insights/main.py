@@ -5,11 +5,11 @@ from __future__ import annotations
 import argparse
 
 from operations_center.insights.artifact_writer import InsightArtifactWriter
+from operations_center.insights.derivers.arch_scheduler import ArchSchedulerDeriver
+from operations_center.insights.derivers.backlog_promotion import BacklogPromotionDeriver
 from operations_center.insights.derivers.commit_activity import CommitActivityDeriver
 from operations_center.insights.derivers.dependency_drift import DependencyDriftDeriver
 from operations_center.insights.derivers.dirty_tree import DirtyTreeDeriver
-from operations_center.insights.derivers.arch_scheduler import ArchSchedulerDeriver
-from operations_center.insights.derivers.backlog_promotion import BacklogPromotionDeriver
 from operations_center.insights.derivers.execution_health import ExecutionHealthDeriver
 from operations_center.insights.derivers.file_hotspots import FileHotspotsDeriver
 from operations_center.insights.derivers.observation_coverage import ObservationCoverageDeriver
@@ -21,7 +21,9 @@ from operations_center.insights.service import InsightEngineService, new_generat
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate normalized insights from retained observer snapshots")
+    parser = argparse.ArgumentParser(
+        description="Generate normalized insights from retained observer snapshots"
+    )
     parser.add_argument("--snapshot-run-id")
     parser.add_argument("--history-limit", type=int, default=5)
     parser.add_argument("--repo")

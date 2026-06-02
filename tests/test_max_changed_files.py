@@ -9,10 +9,10 @@ Covers:
 - The guard fires in DecisionPolicy, not silently.
 - distinct_file_count is present in lint/type insight evidence.
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
-
 
 from operations_center.decision.candidate_builder import CandidateSpec
 from operations_center.decision.models import ProposalOutline
@@ -21,18 +21,17 @@ from operations_center.insights.derivers.lint_drift import LintDriftDeriver
 from operations_center.insights.derivers.type_health import TypeHealthDeriver
 from operations_center.insights.normalizer import InsightNormalizer
 from operations_center.observer.models import (
+    CheckSignal,
+    DependencyDriftSignal,
     LintSignal,
     LintViolation,
     RepoContextSnapshot,
     RepoSignalsSnapshot,
     RepoStateSnapshot,
-    CheckSignal,
-    DependencyDriftSignal,
     TodoSignal,
-    TypeSignal,
     TypeError,
+    TypeSignal,
 )
-
 
 _NOW = datetime(2026, 4, 5, 12, tzinfo=UTC)
 
@@ -122,9 +121,7 @@ def test_scope_suppression_recorded_in_artifact() -> None:
     """Suppression evidence must include both the estimate and the limit."""
     policy = _make_policy(max_changed_files=3)
     spec = _make_spec(estimated_affected_files=15)
-    _, suppressed = policy.apply(
-        candidate_specs=[spec], prior_artifacts=[], generated_at=_NOW
-    )
+    _, suppressed = policy.apply(candidate_specs=[spec], prior_artifacts=[], generated_at=_NOW)
     ev = suppressed[0].evidence
     assert "estimated_affected_files" in ev
     assert "max_changed_files" in ev

@@ -21,6 +21,7 @@ Invariants:
   • No mutation of frozen contracts
   • No autonomous decision to revert — caller orchestrates
 """
+
 from __future__ import annotations
 
 import logging
@@ -39,6 +40,7 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class RegressionSignal:
     """One detected regression candidate."""
+
     pr_number: int | None
     merge_commit_sha: str
     head_sha: str
@@ -76,7 +78,9 @@ def detect_post_merge_regressions(
     # Failed checks at HEAD of base — anything not in ignored_checks
     try:
         failed = gh_client.get_failed_checks(
-            owner, repo, 0,  # PR number 0 = use head_sha lookup path
+            owner,
+            repo,
+            0,  # PR number 0 = use head_sha lookup path
             ignored_checks=list(ignored_checks),
         )
     except Exception as exc:
@@ -91,14 +95,16 @@ def detect_post_merge_regressions(
     list_merged = getattr(gh_client, "list_recently_merged_prs", None)
     if not callable(list_merged):
         # Without merged-PR enumeration we can only attribute the head.
-        out.append(RegressionSignal(
-            pr_number=None,
-            merge_commit_sha=head_sha,
-            head_sha=head_sha,
-            failed_checks=tuple(failed),
-            merged_at=datetime.now(UTC).isoformat(),
-            base_branch=base_branch,
-        ))
+        out.append(
+            RegressionSignal(
+                pr_number=None,
+                merge_commit_sha=head_sha,
+                head_sha=head_sha,
+                failed_checks=tuple(failed),
+                merged_at=datetime.now(UTC).isoformat(),
+                base_branch=base_branch,
+            )
+        )
         return out
 
     try:
@@ -114,14 +120,16 @@ def detect_post_merge_regressions(
         if merged_at < cutoff:
             continue
         merge_sha = pr.get("merge_commit_sha") or ""
-        out.append(RegressionSignal(
-            pr_number=int(pr.get("number") or 0) or None,
-            merge_commit_sha=merge_sha,
-            head_sha=head_sha,
-            failed_checks=tuple(failed),
-            merged_at=merged_at.isoformat(),
-            base_branch=base_branch,
-        ))
+        out.append(
+            RegressionSignal(
+                pr_number=int(pr.get("number") or 0) or None,
+                merge_commit_sha=merge_sha,
+                head_sha=head_sha,
+                failed_checks=tuple(failed),
+                merged_at=merged_at.isoformat(),
+                base_branch=base_branch,
+            )
+        )
     return out
 
 
@@ -145,20 +153,30 @@ def create_revert_branch(
     try:
         subprocess.run(
             ["git", "fetch", "origin", base_branch],
-            cwd=repo_path, check=True, capture_output=True, timeout=60,
+            cwd=repo_path,
+            check=True,
+            capture_output=True,
+            timeout=60,
         )
         subprocess.run(
             ["git", "checkout", "-b", branch, f"origin/{base_branch}"],
-            cwd=repo_path, check=True, capture_output=True, timeout=30,
+            cwd=repo_path,
+            check=True,
+            capture_output=True,
+            timeout=30,
         )
         subprocess.run(
             ["git", "revert", "--no-edit", commit_sha],
-            cwd=repo_path, check=True, capture_output=True, timeout=60,
+            cwd=repo_path,
+            check=True,
+            capture_output=True,
+            timeout=60,
         )
     except subprocess.CalledProcessError as exc:
         logger.warning(
             "create_revert_branch: failed for %s — %s",
-            commit_sha, (exc.stderr.decode() if exc.stderr else str(exc)).strip()[:200],
+            commit_sha,
+            (exc.stderr.decode() if exc.stderr else str(exc)).strip()[:200],
         )
         return None
     except subprocess.TimeoutExpired:
@@ -178,7 +196,7 @@ def _extract_evidence_file_tokens(diff_text: str, *, max_files: int = 10) -> tup
     files: list[str] = []
     for line in diff_text.splitlines():
         if line.startswith("+++ b/"):
-            path = line[len("+++ b/"):].strip()
+            path = line[len("+++ b/") :].strip()
             if path and path != "/dev/null" and path not in files:
                 files.append(path)
                 if len(files) >= max_files:

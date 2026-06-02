@@ -34,7 +34,6 @@ from .models import (
     ValidationRequirement,
 )
 
-
 # ---------------------------------------------------------------------------
 # Sensitive path patterns that trigger review by default
 # ---------------------------------------------------------------------------
@@ -152,7 +151,7 @@ DEFAULT_REPO_POLICY = RepoPolicy(
         require_review_for_task_types=["feature", "refactor"],
         blocked_without_human=False,
     ),
-    allowed_task_types=[],   # all task types allowed by default
+    allowed_task_types=[],  # all task types allowed by default
     blocked_task_types=[],
 )
 

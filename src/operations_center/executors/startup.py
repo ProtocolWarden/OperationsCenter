@@ -10,6 +10,7 @@ that wants to fail-fast on invalid backend artifacts. CLI entrypoints
 should call it during their startup sequence; web servers from their
 lifespan/startup event.
 """
+
 from __future__ import annotations
 
 import logging

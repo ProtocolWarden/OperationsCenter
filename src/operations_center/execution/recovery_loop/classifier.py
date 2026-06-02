@@ -27,8 +27,7 @@ class FailureClassifier(Protocol):
         self,
         result: ExecutionResult,
         context: RecoveryContext,
-    ) -> ExecutionFailureKind:
-        ...
+    ) -> ExecutionFailureKind: ...
 
 
 def _adapter_error_code(result: ExecutionResult) -> AdapterErrorCode | None:
@@ -42,7 +41,7 @@ def _adapter_error_code(result: ExecutionResult) -> AdapterErrorCode | None:
     reason = result.failure_reason or ""
     prefix = "adapter_error_code="
     if reason.startswith(prefix):
-        token = reason[len(prefix):].split(":", 1)[0].strip().lower()
+        token = reason[len(prefix) :].split(":", 1)[0].strip().lower()
         try:
             return AdapterErrorCode(token)
         except ValueError:

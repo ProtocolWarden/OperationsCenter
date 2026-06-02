@@ -117,12 +117,14 @@ def test_unknown_priority_falls_back():
 
 
 def test_target_fields():
-    p = build_proposal(_ctx(
-        repo_key="svc",
-        clone_url="https://git.example.com/svc.git",
-        base_branch="develop",
-        allowed_paths=["src/**", "tests/**"],
-    ))
+    p = build_proposal(
+        _ctx(
+            repo_key="svc",
+            clone_url="https://git.example.com/svc.git",
+            base_branch="develop",
+            allowed_paths=["src/**", "tests/**"],
+        )
+    )
     assert p.target.repo_key == "svc"
     assert p.target.clone_url == "https://git.example.com/svc.git"
     assert p.target.base_branch == "develop"
@@ -140,12 +142,14 @@ def test_allowed_paths_default_empty():
 
 
 def test_constraints_fields():
-    p = build_proposal(_ctx(
-        max_changed_files=10,
-        timeout_seconds=600,
-        require_clean_validation=False,
-        allowed_paths=["src/**"],
-    ))
+    p = build_proposal(
+        _ctx(
+            max_changed_files=10,
+            timeout_seconds=600,
+            require_clean_validation=False,
+            allowed_paths=["src/**"],
+        )
+    )
     assert p.constraints.max_changed_files == 10
     assert p.constraints.timeout_seconds == 600
     assert p.constraints.require_clean_validation is False
@@ -158,10 +162,12 @@ def test_constraints_fields():
 
 
 def test_validation_profile_fields():
-    p = build_proposal(_ctx(
-        validation_profile_name="strict",
-        validation_commands=["ruff check src/", "mypy src/"],
-    ))
+    p = build_proposal(
+        _ctx(
+            validation_profile_name="strict",
+            validation_commands=["ruff check src/", "mypy src/"],
+        )
+    )
     assert p.validation_profile.profile_name == "strict"
     assert p.validation_profile.commands == ["ruff check src/", "mypy src/"]
 

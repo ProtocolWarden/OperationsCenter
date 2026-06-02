@@ -20,8 +20,9 @@ import pytest
 
 from operations_center.backends._capacity_classifier import classify_capacity_exhaustion
 
-
-_FIXTURES_DIR = Path(__file__).resolve().parents[2] / "fixtures" / "backends" / "capacity_exhaustion"
+_FIXTURES_DIR = (
+    Path(__file__).resolve().parents[2] / "fixtures" / "backends" / "capacity_exhaustion"
+)
 
 KNOWN_FIXTURES = [
     ("claude_code_extra_usage.stdout.txt", "out of extra usage"),

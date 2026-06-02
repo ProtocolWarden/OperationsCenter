@@ -18,14 +18,15 @@ Usage:
     # Set a specific tier
     python -m operations_center.entrypoints.autonomy_tiers.main set --family observation_coverage --tier 2 --note "10 accepted proposals, 0% escalation"
 """
+
 from __future__ import annotations
 
 import argparse
 from datetime import UTC, datetime
 
 from operations_center.autonomy_tiers.config import (
-    AutonomyTiersConfig,
     _DEFAULT_FAMILY_TIERS,
+    AutonomyTiersConfig,
     get_family_tier,
     load_tiers_config,
     save_tiers_config,
@@ -46,11 +47,11 @@ def cmd_show(_args: argparse.Namespace) -> None:
         print("  config file:  not present (using defaults)")
     print()
     print(f"  {'Family':<35} {'Tier':<6} {'Source':<12} {'Note'}")
-    print(f"  {'-'*35} {'-'*6} {'-'*12} {'-'*30}")
+    print(f"  {'-' * 35} {'-' * 6} {'-' * 12} {'-' * 30}")
     for family in _ALL_KNOWN_FAMILIES:
         tier = get_family_tier(family, config)
         source = "override" if (config and family in config.overrides) else "default"
-        note = (config.notes.get(family, "") if config else "")
+        note = config.notes.get(family, "") if config else ""
         tier_label = {0: "0 (disabled)", 1: "1 (backlog)", 2: "2 (auto-run)"}.get(tier, str(tier))
         print(f"  {family:<35} {tier_label:<18} {source:<12} {note}")
 
@@ -102,7 +103,9 @@ def _apply_tier(family: str, tier: int, *, note: str | None, reason: str) -> Non
         notes=notes,
     )
     save_tiers_config(updated)
-    tier_label = {0: "disabled (tier 0)", 1: "Backlog (tier 1)", 2: "Ready for AI (tier 2)"}.get(tier, str(tier))
+    tier_label = {0: "disabled (tier 0)", 1: "Backlog (tier 1)", 2: "Ready for AI (tier 2)"}.get(
+        tier, str(tier)
+    )
     print(f"  {family}: {reason} → {tier_label}")
     if note:
         print(f"  note: {note}")

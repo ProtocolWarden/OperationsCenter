@@ -73,7 +73,6 @@ class OpenClawArtifactCapture:
     artifact_type: str  # mirrors ArtifactType values
 
 
-
 @dataclass
 class OpenClawRunCapture:
     """Raw outputs captured from an OpenClaw invocation.
@@ -90,7 +89,7 @@ class OpenClawRunCapture:
     """
 
     run_id: str
-    outcome: str          # "success", "failure", "timeout", "partial"
+    outcome: str  # "success", "failure", "timeout", "partial"
     exit_code: int
     output_text: str
     error_text: str
@@ -121,6 +120,7 @@ class OpenClawRunCapture:
 @dataclass
 class OpenClawFailureInfo:
     """Structured failure detail extracted from an OpenClaw capture."""
+
     outcome: str
     failure_category_value: str  # matches FailureReasonCategory values
     failure_reason: str
@@ -135,7 +135,7 @@ class OpenClawEventDetailRef:
     Retained for observability (BackendDetailRef) without contaminating
     canonical ExecutionResult. Not inlined into canonical telemetry.
     """
+
     event_type: str  # e.g. "tool_use", "tool_result", "message", "step"
     index: int
     summary: str = ""  # brief human-readable description
-

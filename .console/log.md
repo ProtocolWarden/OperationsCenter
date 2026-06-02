@@ -276,6 +276,12 @@ Completed comprehensive analysis of current CI/CD pipeline and code coverage set
 
 ---
 
+## 2026-06-01 — fix(ci): resolve ty type errors and custodian audit failures from PR #213 merge
+
+Fixed type annotation gaps in observer module (metrics_exporter parameter missing from new_observer_context, Optional[dict] annotation, unresolved-attribute guards), moved optional-import suppress comments to from-statement lines (critique/dag/team executor adapters), and resolved custodian C1/C36/C41/C43/T2/D6 findings in observer module. PR #214 now passes all CI checks.
+
+---
+
 ## 2026-05-31 — Stage 5 Complete: Production Deployment & Monitoring Stabilization
 
 **Status**: ✅ **PRODUCTION-READY**
@@ -2845,3 +2851,8 @@ Global claude limits (5h session, weekly) also put opus on cooldown — go strai
 ## 2026-05-30 — Clean up controller opus fallback implementation
 
 parse_rate_limit_reset returns (dt, text) tuple. _handle_backend_limit single read. Tighter global-limit regex.
+
+
+## 2026-06-01 — Fix CI failures from PR #213 merge
+
+Applied ruff format + import sort across all 553 files, fixed G004/F841/DTZ007 lint violations in observer module (alert_channels.py, alert_validation.py, exporters.py), converted async notify() to sync (no await operations), fixed test threshold/assertion errors in test_stage3_observability.py and test_alert_channels.py.

@@ -1,35 +1,36 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Tests for the arch_promotion pipeline: ArchSchedulerDeriver + ArchPromotionRule."""
+
 from __future__ import annotations
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import MagicMock
 
+from operations_center.decision.rules.arch_promotion import ArchPromotionRule
 from operations_center.insights.derivers.arch_scheduler import (
-    ArchSchedulerDeriver,
     _MIN_RUNS,
+    ArchSchedulerDeriver,
 )
 from operations_center.insights.normalizer import InsightNormalizer
-from operations_center.decision.rules.arch_promotion import ArchPromotionRule
 from operations_center.observer.models import (
     BacklogItem,
     BacklogSignal,
+    CheckSignal,
     DependencyDriftSignal,
     ExecutionHealthSignal,
     RepoContextSnapshot,
     RepoSignalsSnapshot,
     RepoStateSnapshot,
-    CheckSignal,
     TodoSignal,
 )
 from operations_center.tuning.models import TuningRecommendation, TuningRunArtifact
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_snapshot(
     *,
@@ -71,21 +72,42 @@ def _stable_tuning_artifact() -> TuningRunArtifact:
         source_command="test",
         window_runs=20,
         recommendations=[
-            TuningRecommendation(family="observation_coverage", action="keep", rationale="healthy", confidence="high"),
-            TuningRecommendation(family="test_visibility", action="keep", rationale="healthy", confidence="high"),
-            TuningRecommendation(family="dependency_drift", action="keep", rationale="healthy", confidence="high"),
+            TuningRecommendation(
+                family="observation_coverage", action="keep", rationale="healthy", confidence="high"
+            ),
+            TuningRecommendation(
+                family="test_visibility", action="keep", rationale="healthy", confidence="high"
+            ),
+            TuningRecommendation(
+                family="dependency_drift", action="keep", rationale="healthy", confidence="high"
+            ),
         ],
     )
 
 
-def _unstable_tuning_artifact(bad_family: str, action: str = "loosen_threshold") -> TuningRunArtifact:
+def _unstable_tuning_artifact(
+    bad_family: str, action: str = "loosen_threshold"
+) -> TuningRunArtifact:
     recs = [
-        TuningRecommendation(family="observation_coverage", action="keep", rationale="ok", confidence="high"),
-        TuningRecommendation(family="test_visibility", action="keep", rationale="ok", confidence="high"),
-        TuningRecommendation(family="dependency_drift", action="keep", rationale="ok", confidence="high"),
+        TuningRecommendation(
+            family="observation_coverage", action="keep", rationale="ok", confidence="high"
+        ),
+        TuningRecommendation(
+            family="test_visibility", action="keep", rationale="ok", confidence="high"
+        ),
+        TuningRecommendation(
+            family="dependency_drift", action="keep", rationale="ok", confidence="high"
+        ),
     ]
     # Replace the bad one
-    recs = [r if r.family != bad_family else TuningRecommendation(family=bad_family, action=action, rationale="unstable", confidence="low") for r in recs]
+    recs = [
+        r
+        if r.family != bad_family
+        else TuningRecommendation(
+            family=bad_family, action=action, rationale="unstable", confidence="low"
+        )
+        for r in recs
+    ]
     return TuningRunArtifact(
         run_id="tuning_test",
         generated_at=datetime.now(UTC),
@@ -101,13 +123,18 @@ def _make_deriver(tuning_artifact: TuningRunArtifact | None = None) -> ArchSched
     return ArchSchedulerDeriver(InsightNormalizer(), tuning_loader=loader)
 
 
-_ARCH_ITEM = BacklogItem(title="Rearchitect the pipeline", item_type="arch", description="Big refactor.")
-_REDESIGN_ITEM = BacklogItem(title="Redesign data model", item_type="redesign", description="New schema.")
+_ARCH_ITEM = BacklogItem(
+    title="Rearchitect the pipeline", item_type="arch", description="Big refactor."
+)
+_REDESIGN_ITEM = BacklogItem(
+    title="Redesign data model", item_type="redesign", description="New schema."
+)
 
 
 # ---------------------------------------------------------------------------
 # Gate: no arch items → no output
 # ---------------------------------------------------------------------------
+
 
 def test_no_arch_items_returns_empty():
     items = [BacklogItem(title="Add CI check", item_type="maintenance")]
@@ -122,6 +149,7 @@ def test_empty_snapshots_returns_empty():
 # ---------------------------------------------------------------------------
 # Gate: all pass → arch_backlog_item insights emitted
 # ---------------------------------------------------------------------------
+
 
 def test_all_gates_pass_emits_arch_insights():
     deriver = _make_deriver(_stable_tuning_artifact())
@@ -141,6 +169,7 @@ def test_emitted_insights_carry_title_and_type():
 # Gate: insufficient runs
 # ---------------------------------------------------------------------------
 
+
 def test_blocked_when_insufficient_runs():
     deriver = _make_deriver(_stable_tuning_artifact())
     insights = deriver.derive([_make_snapshot(arch_items=[_ARCH_ITEM], total_runs=_MIN_RUNS - 1)])
@@ -153,10 +182,13 @@ def test_blocked_when_insufficient_runs():
 # Gate: no-op rate too high
 # ---------------------------------------------------------------------------
 
+
 def test_blocked_when_no_op_rate_too_high():
     # 10/15 = 67% > 30%
     deriver = _make_deriver(_stable_tuning_artifact())
-    insights = deriver.derive([_make_snapshot(arch_items=[_ARCH_ITEM], total_runs=15, no_op_count=10)])
+    insights = deriver.derive(
+        [_make_snapshot(arch_items=[_ARCH_ITEM], total_runs=15, no_op_count=10)]
+    )
     assert insights[0].kind == "arch_schedule_blocked"
     assert any("no-op rate" in r for r in insights[0].evidence["reasons"])
 
@@ -164,13 +196,16 @@ def test_blocked_when_no_op_rate_too_high():
 def test_passes_when_no_op_rate_just_below_threshold():
     # 4/15 = 27% < 30%
     deriver = _make_deriver(_stable_tuning_artifact())
-    insights = deriver.derive([_make_snapshot(arch_items=[_ARCH_ITEM], total_runs=15, no_op_count=4)])
+    insights = deriver.derive(
+        [_make_snapshot(arch_items=[_ARCH_ITEM], total_runs=15, no_op_count=4)]
+    )
     assert all(i.kind == "arch_backlog_item" for i in insights)
 
 
 # ---------------------------------------------------------------------------
 # Gate: validation failures
 # ---------------------------------------------------------------------------
+
 
 def test_blocked_when_validation_failures_present():
     deriver = _make_deriver(_stable_tuning_artifact())
@@ -189,6 +224,7 @@ def test_passes_when_zero_validation_failures():
 # Gate: tuning stability
 # ---------------------------------------------------------------------------
 
+
 def test_blocked_when_no_tuning_artifact():
     deriver = _make_deriver(tuning_artifact=None)
     insights = deriver.derive([_make_snapshot(arch_items=[_ARCH_ITEM])])
@@ -205,9 +241,14 @@ def test_blocked_when_family_not_keep():
 
 def test_blocked_when_family_missing_from_recommendations():
     artifact = TuningRunArtifact(
-        run_id="t", generated_at=datetime.now(UTC), source_command="test", window_runs=5,
+        run_id="t",
+        generated_at=datetime.now(UTC),
+        source_command="test",
+        window_runs=5,
         recommendations=[
-            TuningRecommendation(family="observation_coverage", action="keep", rationale="ok", confidence="high"),
+            TuningRecommendation(
+                family="observation_coverage", action="keep", rationale="ok", confidence="high"
+            ),
             # test_visibility and dependency_drift missing
         ],
     )
@@ -222,14 +263,19 @@ def test_blocked_when_family_missing_from_recommendations():
 # Gate: multiple failures accumulate
 # ---------------------------------------------------------------------------
 
+
 def test_all_failures_accumulate_in_reasons():
     deriver = _make_deriver(_unstable_tuning_artifact("observation_coverage", "tighten_threshold"))
-    insights = deriver.derive([_make_snapshot(
-        arch_items=[_ARCH_ITEM],
-        total_runs=5,          # too few
-        no_op_count=3,         # 60% — too high
-        validation_failed_count=2,  # nonzero
-    )])
+    insights = deriver.derive(
+        [
+            _make_snapshot(
+                arch_items=[_ARCH_ITEM],
+                total_runs=5,  # too few
+                no_op_count=3,  # 60% — too high
+                validation_failed_count=2,  # nonzero
+            )
+        ]
+    )
     assert insights[0].kind == "arch_schedule_blocked"
     reasons = insights[0].evidence["reasons"]
     assert len(reasons) >= 3  # at least: runs, no-op, validation
@@ -238,6 +284,7 @@ def test_all_failures_accumulate_in_reasons():
 # ---------------------------------------------------------------------------
 # blocked insight carries pending items
 # ---------------------------------------------------------------------------
+
 
 def test_blocked_insight_carries_pending_item_titles():
     deriver = _make_deriver(tuning_artifact=None)
@@ -250,6 +297,7 @@ def test_blocked_insight_carries_pending_item_titles():
 # ---------------------------------------------------------------------------
 # Decision rule
 # ---------------------------------------------------------------------------
+
 
 def test_rule_emits_arch_promotion_candidate():
     deriver = _make_deriver(_stable_tuning_artifact())
@@ -270,6 +318,7 @@ def test_rule_ignores_blocked_insights():
 
 def test_rule_ignores_non_arch_insights():
     from operations_center.insights.models import DerivedInsight
+
     other = DerivedInsight(
         insight_id="x",
         kind="backlog_item",
@@ -285,6 +334,7 @@ def test_rule_ignores_non_arch_insights():
 
 def test_arch_promotion_not_in_default_families():
     from operations_center.decision.service import _DEFAULT_ALLOWED_FAMILIES, ALL_FAMILIES
+
     assert "arch_promotion" not in _DEFAULT_ALLOWED_FAMILIES
     assert "arch_promotion" in ALL_FAMILIES
 

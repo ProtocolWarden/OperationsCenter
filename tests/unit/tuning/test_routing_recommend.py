@@ -24,8 +24,6 @@ from operations_center.tuning.routing_models import (
 )
 from operations_center.tuning.routing_recommend import derive_findings, generate_recommendations
 
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -225,7 +223,9 @@ class TestWeakEvidenceBoundary:
 
 
 class TestGenerateRecommendations:
-    def _finding(self, category: str, summary: str, strength: EvidenceStrength, **kw) -> StrategyFinding:
+    def _finding(
+        self, category: str, summary: str, strength: EvidenceStrength, **kw
+    ) -> StrategyFinding:
         return StrategyFinding(
             category=category,
             summary=summary,
@@ -308,8 +308,16 @@ class TestGenerateRecommendations:
 
     def test_all_proposals_require_review(self):
         findings = [
-            self._finding("reliability", "team_executor @ x shows low reliability: 50% success rate across 10 runs.", EvidenceStrength.MODERATE),
-            self._finding("change_evidence", "team_executor @ x produces poor changed-file evidence.", EvidenceStrength.STRONG),
+            self._finding(
+                "reliability",
+                "team_executor @ x shows low reliability: 50% success rate across 10 runs.",
+                EvidenceStrength.MODERATE,
+            ),
+            self._finding(
+                "change_evidence",
+                "team_executor @ x produces poor changed-file evidence.",
+                EvidenceStrength.STRONG,
+            ),
         ]
         proposals = generate_recommendations(findings)
         assert all(p.requires_review is True for p in proposals)
@@ -324,10 +332,15 @@ class TestGenerateRecommendations:
         assert f.finding_id in proposals[0].source_finding_ids
 
     def test_recommendations_are_distinct_from_active_policy(self):
-        f = self._finding("reliability", "team_executor @ x shows high reliability: 90% success rate across 10 runs.", EvidenceStrength.STRONG)
+        f = self._finding(
+            "reliability",
+            "team_executor @ x shows high reliability: 90% success rate across 10 runs.",
+            EvidenceStrength.STRONG,
+        )
         proposals = generate_recommendations([f])
         # Proposals are frozen Pydantic objects — they cannot mutate active policy
         from pydantic import ValidationError
+
         with pytest.raises(ValidationError):
             proposals[0].requires_review = False
 

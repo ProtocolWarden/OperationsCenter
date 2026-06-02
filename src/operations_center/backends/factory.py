@@ -8,6 +8,7 @@ ExecutionRequest and returns ExecutionResult.
 """
 
 from __future__ import annotations
+
 from typing import TYPE_CHECKING, Mapping, Protocol
 
 if TYPE_CHECKING:
@@ -26,8 +27,7 @@ from .team_executor import TeamExecutorBackendAdapter
 
 
 class CanonicalBackendAdapter(Protocol):
-    def execute(self, request: ExecutionRequest) -> ExecutionResult:
-        ...
+    def execute(self, request: ExecutionRequest) -> ExecutionResult: ...
 
 
 class UnsupportedBackendError(RuntimeError):

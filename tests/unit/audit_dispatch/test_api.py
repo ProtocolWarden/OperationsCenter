@@ -139,7 +139,6 @@ class TestDispatchConfigErrors:
             dispatch_managed_audit(req, config_dir=_CONFIG_DIR, log_dir=tmp_path)
 
 
-
 # ---------------------------------------------------------------------------
 # Lock behavior
 # ---------------------------------------------------------------------------
@@ -153,15 +152,19 @@ class TestDispatchLocking:
 
         prepared = _make_fake_invocation(tmp_path)
 
-        with patch(
-            "operations_center.audit_dispatch.api.prepare_managed_audit_invocation",
-            return_value=prepared,
-        ), patch(
-            "operations_center.audit_dispatch.api._resolve_abs_working_dir",
-            return_value=str(tmp_path),
-        ), patch(
-            "operations_center.audit_dispatch.api.acquire_audit_lock",
-            side_effect=registry.acquire,
+        with (
+            patch(
+                "operations_center.audit_dispatch.api.prepare_managed_audit_invocation",
+                return_value=prepared,
+            ),
+            patch(
+                "operations_center.audit_dispatch.api._resolve_abs_working_dir",
+                return_value=str(tmp_path),
+            ),
+            patch(
+                "operations_center.audit_dispatch.api.acquire_audit_lock",
+                side_effect=registry.acquire,
+            ),
         ):
             req = _make_request(cwd_override=str(tmp_path))
             dispatch_managed_audit(req, config_dir=_CONFIG_DIR, log_dir=tmp_path)
@@ -174,15 +177,19 @@ class TestDispatchLocking:
 
         prepared = _make_fake_invocation(tmp_path)
 
-        with patch(
-            "operations_center.audit_dispatch.api.prepare_managed_audit_invocation",
-            return_value=prepared,
-        ), patch(
-            "operations_center.audit_dispatch.api._resolve_abs_working_dir",
-            return_value=str(tmp_path),
-        ), patch(
-            "operations_center.audit_dispatch.api.acquire_audit_lock",
-            side_effect=registry.acquire,
+        with (
+            patch(
+                "operations_center.audit_dispatch.api.prepare_managed_audit_invocation",
+                return_value=prepared,
+            ),
+            patch(
+                "operations_center.audit_dispatch.api._resolve_abs_working_dir",
+                return_value=str(tmp_path),
+            ),
+            patch(
+                "operations_center.audit_dispatch.api.acquire_audit_lock",
+                side_effect=registry.acquire,
+            ),
         ):
             req = _make_request()
             with pytest.raises(RepoLockAlreadyHeldError):
@@ -206,12 +213,15 @@ class TestDispatchProcessBehavior:
         prepared.request.command = command
         prepared.request.expected_output_dir = "output"
 
-        with patch(
-            "operations_center.audit_dispatch.api.prepare_managed_audit_invocation",
-            return_value=prepared,
-        ), patch(
-            "operations_center.audit_dispatch.api._resolve_abs_working_dir",
-            return_value=str(tmp_path),
+        with (
+            patch(
+                "operations_center.audit_dispatch.api.prepare_managed_audit_invocation",
+                return_value=prepared,
+            ),
+            patch(
+                "operations_center.audit_dispatch.api._resolve_abs_working_dir",
+                return_value=str(tmp_path),
+            ),
         ):
             req = _make_request(cwd_override=str(tmp_path))
             return dispatch_managed_audit(req, config_dir=_CONFIG_DIR, log_dir=tmp_path / "logs")
@@ -241,12 +251,15 @@ class TestDispatchProcessBehavior:
         prepared.request.command = f"{sys.executable} -c 'import sys; sys.exit(1)'"
         prepared.request.expected_output_dir = "output"
 
-        with patch(
-            "operations_center.audit_dispatch.api.prepare_managed_audit_invocation",
-            return_value=prepared,
-        ), patch(
-            "operations_center.audit_dispatch.api._resolve_abs_working_dir",
-            return_value=str(tmp_path),
+        with (
+            patch(
+                "operations_center.audit_dispatch.api.prepare_managed_audit_invocation",
+                return_value=prepared,
+            ),
+            patch(
+                "operations_center.audit_dispatch.api._resolve_abs_working_dir",
+                return_value=str(tmp_path),
+            ),
         ):
             req = _make_request(cwd_override=str(tmp_path))
             result = dispatch_managed_audit(req, config_dir=_CONFIG_DIR, log_dir=tmp_path / "logs")
@@ -354,12 +367,15 @@ manifest.write_text(json.dumps({{
         prepared.request.command = self._build_fake_command(tmp_path, run_id)
         prepared.request.expected_output_dir = "output"
 
-        with patch(
-            "operations_center.audit_dispatch.api.prepare_managed_audit_invocation",
-            return_value=prepared,
-        ), patch(
-            "operations_center.audit_dispatch.api._resolve_abs_working_dir",
-            return_value=str(tmp_path),
+        with (
+            patch(
+                "operations_center.audit_dispatch.api.prepare_managed_audit_invocation",
+                return_value=prepared,
+            ),
+            patch(
+                "operations_center.audit_dispatch.api._resolve_abs_working_dir",
+                return_value=str(tmp_path),
+            ),
         ):
             req = _make_request(cwd_override=str(tmp_path))
             result = dispatch_managed_audit(req, config_dir=_CONFIG_DIR, log_dir=tmp_path / "logs")
@@ -378,18 +394,21 @@ manifest.write_text(json.dumps({{
         # Command writes AUDIT_RUN_ID value to a file
         env_dump_path = tmp_path / "env_audit_run_id.txt"
         script = f"import os; open({str(env_dump_path)!r}, 'w').write(os.environ.get('AUDIT_RUN_ID', 'NOT_FOUND'))"
-        command = f"{sys.executable} -c \"{script}\""
+        command = f'{sys.executable} -c "{script}"'
 
         prepared = _make_fake_invocation(tmp_path, run_id)
         prepared.request.command = command
         prepared.request.expected_output_dir = "output"
 
-        with patch(
-            "operations_center.audit_dispatch.api.prepare_managed_audit_invocation",
-            return_value=prepared,
-        ), patch(
-            "operations_center.audit_dispatch.api._resolve_abs_working_dir",
-            return_value=str(tmp_path),
+        with (
+            patch(
+                "operations_center.audit_dispatch.api.prepare_managed_audit_invocation",
+                return_value=prepared,
+            ),
+            patch(
+                "operations_center.audit_dispatch.api._resolve_abs_working_dir",
+                return_value=str(tmp_path),
+            ),
         ):
             req = _make_request(base_env={"AUDIT_RUN_ID": run_id}, cwd_override=str(tmp_path))
             dispatch_managed_audit(req, config_dir=_CONFIG_DIR, log_dir=tmp_path / "logs")
@@ -406,12 +425,15 @@ manifest.write_text(json.dumps({{
         prepared.request.command = f"{sys.executable} -c 'pass'"
         prepared.request.expected_output_dir = "output"
 
-        with patch(
-            "operations_center.audit_dispatch.api.prepare_managed_audit_invocation",
-            return_value=prepared,
-        ), patch(
-            "operations_center.audit_dispatch.api._resolve_abs_working_dir",
-            return_value=str(tmp_path),
+        with (
+            patch(
+                "operations_center.audit_dispatch.api.prepare_managed_audit_invocation",
+                return_value=prepared,
+            ),
+            patch(
+                "operations_center.audit_dispatch.api._resolve_abs_working_dir",
+                return_value=str(tmp_path),
+            ),
         ):
             req = _make_request(cwd_override=str(tmp_path))
             result = dispatch_managed_audit(req, config_dir=_CONFIG_DIR, log_dir=tmp_path / "logs")
@@ -438,7 +460,9 @@ class TestNoBoundaryViolation:
             for node in ast.walk(tree):
                 if isinstance(node, ast.Import):
                     for alias in node.names:
-                        if "example_managed_repo" in alias.name.lower() or alias.name.startswith("tools.audit"):
+                        if "example_managed_repo" in alias.name.lower() or alias.name.startswith(
+                            "tools.audit"
+                        ):
                             violations.append(f"{py_file.name}: import {alias.name}")
                 elif isinstance(node, ast.ImportFrom):
                     mod = node.module or ""

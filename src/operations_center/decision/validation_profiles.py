@@ -15,6 +15,7 @@ CI_GREEN            ci_pattern: identified failing or flaky CI checks must be re
 MANUAL_REVIEW       arch_promotion and tier-0 families: no automated validation gate;
                     human review is the acceptance criterion.
 """
+
 from __future__ import annotations
 
 RUFF_CLEAN = "ruff_clean"

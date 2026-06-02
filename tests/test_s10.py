@@ -7,6 +7,7 @@ S10-5  Calibration time decay (window_days + cleanup_old_events)
 S10-8  Real-time CI webhook (HMAC + trigger file)
 S10-9  Cross-repo synthesis deriver
 """
+
 from __future__ import annotations
 
 import json
@@ -16,11 +17,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
-
 # ---------------------------------------------------------------------------
 # S10-4: CampaignStore
 # ---------------------------------------------------------------------------
+
 
 def test_campaign_store_create_and_retrieve(tmp_path: Path) -> None:
     from operations_center.execution.campaign_store import CampaignStore
@@ -93,6 +93,7 @@ def test_campaign_store_list_filter_by_status(tmp_path: Path) -> None:
 # S10-5: Calibration time decay
 # ---------------------------------------------------------------------------
 
+
 def test_calibration_window_days_filters_old_events(tmp_path: Path) -> None:
     from operations_center.tuning.calibration import ConfidenceCalibrationStore
 
@@ -105,16 +106,66 @@ def test_calibration_window_days_filters_old_events(tmp_path: Path) -> None:
     # Manually write events with mixed dates
     data = {
         "events": [
-            {"recorded_at": old_date, "family": "lint_fix", "confidence": "high", "outcome": "merged"},
-            {"recorded_at": old_date, "family": "lint_fix", "confidence": "high", "outcome": "merged"},
-            {"recorded_at": old_date, "family": "lint_fix", "confidence": "high", "outcome": "merged"},
-            {"recorded_at": old_date, "family": "lint_fix", "confidence": "high", "outcome": "merged"},
-            {"recorded_at": old_date, "family": "lint_fix", "confidence": "high", "outcome": "abandoned"},
-            {"recorded_at": new_date, "family": "lint_fix", "confidence": "high", "outcome": "abandoned"},
-            {"recorded_at": new_date, "family": "lint_fix", "confidence": "high", "outcome": "abandoned"},
-            {"recorded_at": new_date, "family": "lint_fix", "confidence": "high", "outcome": "abandoned"},
-            {"recorded_at": new_date, "family": "lint_fix", "confidence": "high", "outcome": "abandoned"},
-            {"recorded_at": new_date, "family": "lint_fix", "confidence": "high", "outcome": "abandoned"},
+            {
+                "recorded_at": old_date,
+                "family": "lint_fix",
+                "confidence": "high",
+                "outcome": "merged",
+            },
+            {
+                "recorded_at": old_date,
+                "family": "lint_fix",
+                "confidence": "high",
+                "outcome": "merged",
+            },
+            {
+                "recorded_at": old_date,
+                "family": "lint_fix",
+                "confidence": "high",
+                "outcome": "merged",
+            },
+            {
+                "recorded_at": old_date,
+                "family": "lint_fix",
+                "confidence": "high",
+                "outcome": "merged",
+            },
+            {
+                "recorded_at": old_date,
+                "family": "lint_fix",
+                "confidence": "high",
+                "outcome": "abandoned",
+            },
+            {
+                "recorded_at": new_date,
+                "family": "lint_fix",
+                "confidence": "high",
+                "outcome": "abandoned",
+            },
+            {
+                "recorded_at": new_date,
+                "family": "lint_fix",
+                "confidence": "high",
+                "outcome": "abandoned",
+            },
+            {
+                "recorded_at": new_date,
+                "family": "lint_fix",
+                "confidence": "high",
+                "outcome": "abandoned",
+            },
+            {
+                "recorded_at": new_date,
+                "family": "lint_fix",
+                "confidence": "high",
+                "outcome": "abandoned",
+            },
+            {
+                "recorded_at": new_date,
+                "family": "lint_fix",
+                "confidence": "high",
+                "outcome": "abandoned",
+            },
         ]
     }
     (tmp_path / "calibration.json").write_text(json.dumps(data))
@@ -137,9 +188,24 @@ def test_calibration_cleanup_old_events(tmp_path: Path) -> None:
 
     data = {
         "events": [
-            {"recorded_at": old_date, "family": "lint_fix", "confidence": "high", "outcome": "merged"},
-            {"recorded_at": old_date, "family": "lint_fix", "confidence": "high", "outcome": "merged"},
-            {"recorded_at": new_date, "family": "lint_fix", "confidence": "high", "outcome": "merged"},
+            {
+                "recorded_at": old_date,
+                "family": "lint_fix",
+                "confidence": "high",
+                "outcome": "merged",
+            },
+            {
+                "recorded_at": old_date,
+                "family": "lint_fix",
+                "confidence": "high",
+                "outcome": "merged",
+            },
+            {
+                "recorded_at": new_date,
+                "family": "lint_fix",
+                "confidence": "high",
+                "outcome": "merged",
+            },
         ]
     }
     (tmp_path / "calibration.json").write_text(json.dumps(data))
@@ -162,11 +228,25 @@ def test_calibration_report_window_days(tmp_path: Path) -> None:
     data = {
         "events": [
             # Old: 5 merges, 0 abandoned → would look good without window
-            *[{"recorded_at": old_date, "family": "type_fix", "confidence": "high", "outcome": "merged"}
-              for _ in range(5)],
+            *[
+                {
+                    "recorded_at": old_date,
+                    "family": "type_fix",
+                    "confidence": "high",
+                    "outcome": "merged",
+                }
+                for _ in range(5)
+            ],
             # New: 5 abandoned
-            *[{"recorded_at": new_date, "family": "type_fix", "confidence": "high", "outcome": "abandoned"}
-              for _ in range(5)],
+            *[
+                {
+                    "recorded_at": new_date,
+                    "family": "type_fix",
+                    "confidence": "high",
+                    "outcome": "abandoned",
+                }
+                for _ in range(5)
+            ],
         ]
     }
     (tmp_path / "calibration.json").write_text(json.dumps(data))
@@ -182,14 +262,15 @@ def test_calibration_report_window_days(tmp_path: Path) -> None:
     assert records_windowed[0].acceptance_rate == pytest.approx(0.0)
 
 
-
 # ---------------------------------------------------------------------------
 # S10-8: CI webhook
 # ---------------------------------------------------------------------------
 
+
 def test_ci_webhook_verify_signature_valid() -> None:
-    import hmac as _hmac
     import hashlib
+    import hmac as _hmac
+
     from operations_center.entrypoints.ci_webhook.main import _verify_signature
 
     secret = b"mysecret"
@@ -278,6 +359,7 @@ def test_ci_webhook_write_trigger_creates_file(tmp_path: Path) -> None:
 # S10-9: Cross-repo synthesis deriver
 # ---------------------------------------------------------------------------
 
+
 def test_cross_repo_synthesis_no_artifacts_returns_empty(tmp_path: Path) -> None:
     from operations_center.insights.derivers.cross_repo_synthesis import CrossRepoSynthesisDeriver
     from operations_center.insights.normalizer import InsightNormalizer
@@ -294,11 +376,17 @@ def test_cross_repo_synthesis_single_repo_no_insight(tmp_path: Path) -> None:
     root = tmp_path / "insights"
     run_dir = root / "run-001"
     run_dir.mkdir(parents=True)
-    (run_dir / "repo_insights.json").write_text(json.dumps({
-        "repo": {"name": "repo_a"},
-        "generated_at": "2026-04-01T00:00:00+00:00",
-        "insights": [{"kind": "lint_drift", "subject": "violations_high", "status": "present"}],
-    }))
+    (run_dir / "repo_insights.json").write_text(
+        json.dumps(
+            {
+                "repo": {"name": "repo_a"},
+                "generated_at": "2026-04-01T00:00:00+00:00",
+                "insights": [
+                    {"kind": "lint_drift", "subject": "violations_high", "status": "present"}
+                ],
+            }
+        )
+    )
 
     deriver = CrossRepoSynthesisDeriver(InsightNormalizer(), insights_root=root)
     # Only one repo — nothing to synthesise
@@ -315,14 +403,18 @@ def test_cross_repo_synthesis_two_repos_shared_kind(tmp_path: Path) -> None:
     for repo_name, run_id in [("repo_a", "run-001"), ("repo_b", "run-002")]:
         d = root / run_id
         d.mkdir(parents=True)
-        (d / "repo_insights.json").write_text(json.dumps({
-            "repo": {"name": repo_name},
-            "generated_at": "2026-04-01T00:00:00+00:00",
-            "insights": [
-                {"kind": "lint_drift", "subject": "violations_high", "status": "present"},
-                {"kind": "type_health", "subject": "errors_present", "status": "present"},
-            ],
-        }))
+        (d / "repo_insights.json").write_text(
+            json.dumps(
+                {
+                    "repo": {"name": repo_name},
+                    "generated_at": "2026-04-01T00:00:00+00:00",
+                    "insights": [
+                        {"kind": "lint_drift", "subject": "violations_high", "status": "present"},
+                        {"kind": "type_health", "subject": "errors_present", "status": "present"},
+                    ],
+                }
+            )
+        )
 
     deriver = CrossRepoSynthesisDeriver(InsightNormalizer(), insights_root=root)
     result = deriver.derive([MagicMock()])
@@ -353,11 +445,15 @@ def test_cross_repo_synthesis_only_latest_per_repo(tmp_path: Path) -> None:
     ]:
         d = root / run_id
         d.mkdir(parents=True)
-        (d / "repo_insights.json").write_text(json.dumps({
-            "repo": {"name": "repo_a"},
-            "generated_at": ts,
-            "insights": [{"kind": k} for k in kinds],
-        }))
+        (d / "repo_insights.json").write_text(
+            json.dumps(
+                {
+                    "repo": {"name": "repo_a"},
+                    "generated_at": ts,
+                    "insights": [{"kind": k} for k in kinds],
+                }
+            )
+        )
 
     result = _read_latest_insight_kinds(root)
     assert "repo_a" in result
@@ -365,10 +461,10 @@ def test_cross_repo_synthesis_only_latest_per_repo(tmp_path: Path) -> None:
     assert "stale_insight" not in result["repo_a"]
 
 
-
 # ---------------------------------------------------------------------------
 # Campaign-status CLI sanity check
 # ---------------------------------------------------------------------------
+
 
 def test_campaign_status_cli_json_output(tmp_path: Path, capsys) -> None:
     from operations_center.entrypoints.campaign_status.main import main as campaign_main
@@ -377,10 +473,13 @@ def test_campaign_status_cli_json_output(tmp_path: Path, capsys) -> None:
     store = CampaignStore(path=tmp_path / "campaigns.json")
     store.create(source_task_id="cli-test-1", title="CLI test campaign", step_task_ids=["a", "b"])
 
-    with patch(
-        "operations_center.execution.campaign_store.CampaignStore",
-        return_value=store,
-    ), patch("sys.argv", ["campaign-status", "--json"]):
+    with (
+        patch(
+            "operations_center.execution.campaign_store.CampaignStore",
+            return_value=store,
+        ),
+        patch("sys.argv", ["campaign-status", "--json"]),
+    ):
         campaign_main()
 
     captured = capsys.readouterr()

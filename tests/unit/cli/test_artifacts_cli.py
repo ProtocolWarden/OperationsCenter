@@ -26,6 +26,7 @@ _BUILD_INDEX_TARGET = "operations_center.entrypoints.artifacts.main.build_artifa
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_mock_index(
     repo_id: str = "example_managed_repo",
     audit_type: str = "audit_type_1",
@@ -79,6 +80,7 @@ def _make_manifest_file(tmp_path: Path) -> Path:
 # cmd_index
 # ---------------------------------------------------------------------------
 
+
 class TestCmdIndex:
     def test_index_summary_output(self, tmp_path: Path):
         mf = _make_manifest_file(tmp_path)
@@ -91,6 +93,7 @@ class TestCmdIndex:
 
     def test_index_not_found_exits_code_1(self, tmp_path: Path):
         from operations_center.artifact_index import ManifestNotFoundError
+
         with patch(_LOAD_MANIFEST_TARGET, side_effect=ManifestNotFoundError("missing")):
             out = _runner.invoke(app, ["index", "--manifest", "/nonexistent/manifest.json"])
         assert out.exit_code == 1
@@ -98,6 +101,7 @@ class TestCmdIndex:
 
     def test_index_invalid_manifest_exits_code_2(self, tmp_path: Path):
         from operations_center.artifact_index import ManifestInvalidError
+
         mf = _make_manifest_file(tmp_path)
         with patch(_LOAD_MANIFEST_TARGET, side_effect=ManifestInvalidError("bad schema")):
             out = _runner.invoke(app, ["index", "--manifest", str(mf)])
@@ -108,6 +112,7 @@ class TestCmdIndex:
 # ---------------------------------------------------------------------------
 # cmd_list
 # ---------------------------------------------------------------------------
+
 
 class TestCmdList:
     def test_list_empty(self, tmp_path: Path):
@@ -131,6 +136,7 @@ class TestCmdList:
 # ---------------------------------------------------------------------------
 # cmd_get
 # ---------------------------------------------------------------------------
+
 
 class TestCmdGet:
     def test_get_existing_artifact(self, tmp_path: Path):
@@ -163,6 +169,7 @@ class TestCmdGet:
 # cmd_query
 # ---------------------------------------------------------------------------
 
+
 class TestCmdQuery:
     def test_query_no_results(self, tmp_path: Path):
         mf = _make_manifest_file(tmp_path)
@@ -183,7 +190,9 @@ class TestCmdQuery:
         with (
             patch(_LOAD_MANIFEST_TARGET),
             patch(_BUILD_INDEX_TARGET, return_value=index),
-            patch("operations_center.entrypoints.artifacts.main.query_artifacts", return_value=[art]),
+            patch(
+                "operations_center.entrypoints.artifacts.main.query_artifacts", return_value=[art]
+            ),
         ):
             out = _runner.invoke(app, ["query", "--manifest", str(mf)])
         assert out.exit_code == 0
@@ -193,6 +202,8 @@ class TestCmdQuery:
         mf = _make_manifest_file(tmp_path)
         index = _make_mock_index()
         with patch(_LOAD_MANIFEST_TARGET), patch(_BUILD_INDEX_TARGET, return_value=index):
-            out = _runner.invoke(app, ["query", "--manifest", str(mf), "--location", "not_a_real_location"])
+            out = _runner.invoke(
+                app, ["query", "--manifest", str(mf), "--location", "not_a_real_location"]
+            )
         assert out.exit_code == 3
         assert "Invalid location" in out.output

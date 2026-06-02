@@ -21,10 +21,10 @@ from operations_center.slice_replay import (
     write_replay_report,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_request(
     pack_dir: Path,
@@ -42,15 +42,18 @@ def _make_request(
 # Contract 1 — Replay Profile validation
 # ---------------------------------------------------------------------------
 
+
 class TestReplayProfiles:
     def test_all_profiles_have_checks(self) -> None:
         from operations_center.slice_replay.profiles import PROFILE_CHECKS
+
         for profile in SliceReplayProfile:
             assert profile in PROFILE_CHECKS
             assert len(PROFILE_CHECKS[profile]) > 0
 
     def test_invalid_profile_raises_on_get_check_specs(self) -> None:
         from operations_center.slice_replay.profiles import get_check_specs
+
         with pytest.raises(Exception):
             get_check_specs("not_a_profile")  # type: ignore
 
@@ -58,6 +61,7 @@ class TestReplayProfiles:
 # ---------------------------------------------------------------------------
 # Contract 2 — SliceReplayRequest model
 # ---------------------------------------------------------------------------
+
 
 class TestSliceReplayRequest:
     def test_requires_fixture_pack_path(self, pack_with_real_file) -> None:
@@ -102,6 +106,7 @@ class TestSliceReplayRequest:
 # Contract 3/4 — Checks and Results
 # ---------------------------------------------------------------------------
 
+
 class TestFixtureIntegrityProfile:
     def test_fixture_integrity_loads_pack(self, pack_with_real_file) -> None:
         pack, pack_dir = pack_with_real_file
@@ -112,7 +117,8 @@ class TestFixtureIntegrityProfile:
         pack, pack_dir = pack_with_real_file
         report = run_slice_replay(_make_request(pack_dir))
         exists_results = [
-            r for r in report.check_results
+            r
+            for r in report.check_results
             if "Copied file exists" in r.summary or "copied" in r.summary.lower()
         ]
         passed = [r for r in exists_results if r.status == "passed"]
@@ -133,9 +139,7 @@ class TestManifestContractProfile:
         report = run_slice_replay(
             _make_request(pack_dir, profile=SliceReplayProfile.MANIFEST_CONTRACT)
         )
-        manifest_results = [
-            r for r in report.check_results if "manifest" in r.summary.lower()
-        ]
+        manifest_results = [r for r in report.check_results if "manifest" in r.summary.lower()]
         assert any(r.status == "passed" for r in manifest_results)
 
     def test_source_index_summary_loads(self, pack_with_real_file) -> None:
@@ -144,7 +148,9 @@ class TestManifestContractProfile:
             _make_request(pack_dir, profile=SliceReplayProfile.MANIFEST_CONTRACT)
         )
         summary_results = [
-            r for r in report.check_results if "index_summary" in r.summary or "total_artifacts" in r.summary
+            r
+            for r in report.check_results
+            if "index_summary" in r.summary or "total_artifacts" in r.summary
         ]
         assert any(r.status == "passed" for r in summary_results)
 
@@ -167,9 +173,7 @@ class TestArtifactReadabilityProfile:
         report = run_slice_replay(
             _make_request(pack_dir, profile=SliceReplayProfile.ARTIFACT_READABILITY)
         )
-        json_results = [
-            r for r in report.check_results if "JSON artifact readable" in r.summary
-        ]
+        json_results = [r for r in report.check_results if "JSON artifact readable" in r.summary]
         assert len(json_results) >= 1
         assert all(r.status == "passed" for r in json_results)
 
@@ -200,7 +204,8 @@ class TestArtifactReadabilityProfile:
         )
         # All artifacts are metadata-only; content checks should be skipped
         content_results = [
-            r for r in report.check_results
+            r
+            for r in report.check_results
             if "JSON artifact readable" in r.summary or "Text artifact readable" in r.summary
         ]
         assert all(r.status in ("skipped", "passed") for r in content_results)
@@ -209,23 +214,22 @@ class TestArtifactReadabilityProfile:
 class TestFailureSliceProfile:
     def test_detects_failure_limitations_in_pack(self, pack_with_missing_artifact) -> None:
         pack, pack_dir = pack_with_missing_artifact
-        report = run_slice_replay(
-            _make_request(pack_dir, profile=SliceReplayProfile.FAILURE_SLICE)
-        )
+        report = run_slice_replay(_make_request(pack_dir, profile=SliceReplayProfile.FAILURE_SLICE))
         assert report.status != "error"
         limitation_results = [
-            r for r in report.check_results if "failure limitations" in r.summary or "partial" in r.summary.lower()
+            r
+            for r in report.check_results
+            if "failure limitations" in r.summary or "partial" in r.summary.lower()
         ]
         assert any(r.status == "passed" for r in limitation_results)
 
     def test_failure_slice_fails_without_failure_evidence(self, pack_with_real_file) -> None:
         pack, pack_dir = pack_with_real_file
-        report = run_slice_replay(
-            _make_request(pack_dir, profile=SliceReplayProfile.FAILURE_SLICE)
-        )
+        report = run_slice_replay(_make_request(pack_dir, profile=SliceReplayProfile.FAILURE_SLICE))
         # Pack from completed run has no failure limitations — should fail the limitation check
         failure_check_results = [
-            r for r in report.check_results
+            r
+            for r in report.check_results
             if "failure" in r.summary.lower() or "partial" in r.summary.lower()
         ]
         _failed_or_passed = {r.status for r in failure_check_results}
@@ -249,7 +253,8 @@ class TestMetadataOnlySliceProfile:
         )
         # All metadata-only artifacts have copy_error → should pass
         failed = [
-            r for r in report.check_results
+            r
+            for r in report.check_results
             if r.status == "failed" and "no copy_error" in r.summary.lower()
         ]
         assert len(failed) == 0
@@ -284,6 +289,7 @@ class TestStageSliceProfile:
 # Contract 5 — Replay Report
 # ---------------------------------------------------------------------------
 
+
 class TestSliceReplayReport:
     def test_report_serializes_to_json(self, pack_with_real_file) -> None:
         pack, pack_dir = pack_with_real_file
@@ -297,7 +303,10 @@ class TestSliceReplayReport:
         pack, pack_dir = pack_with_real_file
         report = run_slice_replay(_make_request(pack_dir))
         assert report.total_count >= 0
-        assert report.passed_count + report.failed_count + report.error_count + report.skipped_count == report.total_count
+        assert (
+            report.passed_count + report.failed_count + report.error_count + report.skipped_count
+            == report.total_count
+        )
 
     def test_report_records_fixture_pack_id(self, pack_with_real_file) -> None:
         pack, pack_dir = pack_with_real_file
@@ -341,10 +350,9 @@ class TestSliceReplayReport:
 # Contract 6 — Replay Runner behavior
 # ---------------------------------------------------------------------------
 
+
 class TestRunnerBehavior:
-    def test_runner_returns_report_not_raises_on_failed_check(
-        self, pack_with_invalid_json
-    ) -> None:
+    def test_runner_returns_report_not_raises_on_failed_check(self, pack_with_invalid_json) -> None:
         pack, pack_dir = pack_with_invalid_json
         # Even with check failures, runner should return a report
         report = run_slice_replay(
@@ -386,6 +394,7 @@ class TestRunnerBehavior:
 # Report persistence
 # ---------------------------------------------------------------------------
 
+
 class TestReplayReportPersistence:
     def test_write_and_load_roundtrip(self, tmp_path: Path, pack_with_real_file) -> None:
         pack, pack_dir = pack_with_real_file
@@ -399,7 +408,9 @@ class TestReplayReportPersistence:
         pack, pack_dir = pack_with_real_file
         report = run_slice_replay(_make_request(pack_dir))
         report_path = write_replay_report(report, tmp_path)
-        expected = tmp_path / report.source_repo_id / report.fixture_pack_id / f"{report.replay_id}.json"
+        expected = (
+            tmp_path / report.source_repo_id / report.fixture_pack_id / f"{report.replay_id}.json"
+        )
         assert report_path == expected
         assert report_path.exists()
 
@@ -440,9 +451,12 @@ class TestReplayReportPersistence:
 # Isolation guarantees
 # ---------------------------------------------------------------------------
 
+
 class TestIsolation:
     def test_no_managed_repo_imports(self) -> None:
-        pkg_root = Path(__file__).resolve().parents[3] / "src" / "operations_center" / "slice_replay"
+        pkg_root = (
+            Path(__file__).resolve().parents[3] / "src" / "operations_center" / "slice_replay"
+        )
         for py_file in pkg_root.glob("*.py"):
             source = py_file.read_text(encoding="utf-8")
             tree = ast.parse(source, filename=str(py_file))
@@ -453,7 +467,9 @@ class TestIsolation:
                     )
 
     def test_no_dispatch_imports(self) -> None:
-        pkg_root = Path(__file__).resolve().parents[3] / "src" / "operations_center" / "slice_replay"
+        pkg_root = (
+            Path(__file__).resolve().parents[3] / "src" / "operations_center" / "slice_replay"
+        )
         for py_file in pkg_root.glob("*.py"):
             source = py_file.read_text(encoding="utf-8")
             # runner must not import dispatch
@@ -464,15 +480,22 @@ class TestIsolation:
     def test_no_harvest_calls_in_runner(self) -> None:
         runner_src = (
             Path(__file__).resolve().parents[3]
-            / "src" / "operations_center" / "slice_replay" / "runner.py"
+            / "src"
+            / "operations_center"
+            / "slice_replay"
+            / "runner.py"
         ).read_text()
         # runner may import load_fixture_pack from fixture_harvesting, but not harvest_fixtures
         assert "harvest_fixtures" not in runner_src
         assert "HarvestRequest" not in runner_src
 
     def test_no_regression_suite_functions(self) -> None:
-        pkg_root = Path(__file__).resolve().parents[3] / "src" / "operations_center" / "slice_replay"
-        forbidden = frozenset({"run_regression_suite", "create_regression_suite", "orchestrate_regression"})
+        pkg_root = (
+            Path(__file__).resolve().parents[3] / "src" / "operations_center" / "slice_replay"
+        )
+        forbidden = frozenset(
+            {"run_regression_suite", "create_regression_suite", "orchestrate_regression"}
+        )
         for py_file in pkg_root.glob("*.py"):
             source = py_file.read_text(encoding="utf-8")
             tree = ast.parse(source, filename=str(py_file))

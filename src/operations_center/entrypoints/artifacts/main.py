@@ -64,7 +64,9 @@ def _load_index(manifest_path: str, repo_root: str | None = None):
 @app.command("index")
 def cmd_index(
     manifest: str = typer.Option(..., "--manifest", "-m", help="Path to artifact_manifest.json."),
-    repo_root: str | None = typer.Option(None, "--repo-root", help="Override managed repo root for path resolution."),
+    repo_root: str | None = typer.Option(
+        None, "--repo-root", help="Override managed repo root for path resolution."
+    ),
 ) -> None:
     """Summarize the artifact index built from a manifest."""
     index = _load_index(manifest, repo_root)
@@ -89,8 +91,12 @@ def cmd_index(
 @app.command("list")
 def cmd_list(
     manifest: str = typer.Option(..., "--manifest", "-m", help="Path to artifact_manifest.json."),
-    repo_root: str | None = typer.Option(None, "--repo-root", help="Override managed repo root for path resolution."),
-    singletons_only: bool = typer.Option(False, "--singletons", help="List only repo_singleton artifacts."),
+    repo_root: str | None = typer.Option(
+        None, "--repo-root", help="Override managed repo root for path resolution."
+    ),
+    singletons_only: bool = typer.Option(
+        False, "--singletons", help="List only repo_singleton artifacts."
+    ),
 ) -> None:
     """List all indexed artifacts from a manifest."""
     index = _load_index(manifest, repo_root)
@@ -161,9 +167,13 @@ def cmd_query(
     location: str | None = typer.Option(None, "--location", help="Filter by location."),
     stage: str | None = typer.Option(None, "--stage", help="Filter by source_stage."),
     status: str | None = typer.Option(None, "--status", help="Filter by artifact status."),
-    consumer: str | None = typer.Option(None, "--consumer", help="Filter: artifact must include this consumer_type."),
+    consumer: str | None = typer.Option(
+        None, "--consumer", help="Filter: artifact must include this consumer_type."
+    ),
     repo_root: str | None = typer.Option(None, "--repo-root", help="Override managed repo root."),
-    singletons: bool | None = typer.Option(None, "--singletons/--no-singletons", help="Filter by is_repo_singleton."),
+    singletons: bool | None = typer.Option(
+        None, "--singletons/--no-singletons", help="Filter by is_repo_singleton."
+    ),
 ) -> None:
     """Filter and list artifacts from a manifest."""
     index = _load_index(manifest, repo_root)

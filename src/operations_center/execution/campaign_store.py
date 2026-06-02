@@ -24,12 +24,13 @@ Usage::
     for row in store.list_campaigns():
         print(row)
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import threading
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -42,6 +43,7 @@ _DEFAULT_STORE_PATH = Path("state/campaigns.json")
 @dataclass
 class CampaignRecord:
     """Tracks a single multi-step campaign."""
+
     source_task_id: str
     title: str
     step_task_ids: list[str]
@@ -172,7 +174,11 @@ class CampaignStore:
             try:
                 return json.loads(self._path.read_text(encoding="utf-8"))
             except Exception as exc:
-                logger.warning('{"event": "campaign_store_load_failed", "path": "%s", "error": "%s"}', self._path, exc)
+                logger.warning(
+                    '{"event": "campaign_store_load_failed", "path": "%s", "error": "%s"}',
+                    self._path,
+                    exc,
+                )
         return {}
 
     def _save(self, campaigns: dict[str, Any]) -> None:

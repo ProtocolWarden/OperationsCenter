@@ -9,6 +9,7 @@ The gate must:
   - Block when a mix of spec and non-spec PRs exist (non-spec is blocking)
   - Pass through when no PRs are open
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -56,9 +57,7 @@ def _call_claim_next(open_prs: list[dict]) -> dict | None:
 
     settings = _make_settings()
 
-    with patch(
-        "operations_center.adapters.github_pr.GitHubPRClient"
-    ) as MockGH:
+    with patch("operations_center.adapters.github_pr.GitHubPRClient") as MockGH:
         gh_instance = MagicMock()
         gh_instance.list_open_prs.return_value = open_prs
         MockGH.return_value = gh_instance

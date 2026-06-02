@@ -145,7 +145,9 @@ def run_governed_audit(
             cfg.state_dir, request.repo_id, request.audit_type, budget_config
         )
     except Exception as exc:
-        logger.warning("Could not load budget state for %s/%s: %s", request.repo_id, request.audit_type, exc)
+        logger.warning(
+            "Could not load budget state for %s/%s: %s", request.repo_id, request.audit_type, exc
+        )
         budget_state = None
 
     try:
@@ -153,7 +155,9 @@ def run_governed_audit(
             cfg.state_dir, request.repo_id, request.audit_type, cooldown_config
         )
     except Exception as exc:
-        logger.warning("Could not load cooldown state for %s/%s: %s", request.repo_id, request.audit_type, exc)
+        logger.warning(
+            "Could not load cooldown state for %s/%s: %s", request.repo_id, request.audit_type, exc
+        )
         cooldown_state = None
 
     # --- Evaluate policies ---
@@ -205,6 +209,7 @@ def run_governed_audit(
             )
             report_path = _write_report_safe(report, out)
             from .models import AuditGovernanceDecision as _Dec
+
             denied_decision = _Dec(
                 request_id=decision.request_id,
                 repo_id=decision.repo_id,
@@ -318,7 +323,11 @@ def run_governed_audit(
     # Custodian against the consuming repo with --enable-coverage pointed at
     # the coverage.json discovered in the manifest.
     coverage_summary: CoverageAuditSummary | None = None
-    if request.run_coverage_audit and dispatch_result.succeeded and dispatch_result.artifact_manifest_path:
+    if (
+        request.run_coverage_audit
+        and dispatch_result.succeeded
+        and dispatch_result.artifact_manifest_path
+    ):
         try:
             consuming_repo = _resolve_consuming_repo_root(request.repo_id, config_dir)
             coverage_summary = run_post_dispatch_coverage_audit(
@@ -369,6 +378,7 @@ def _resolve_consuming_repo_root(repo_id: str, config_dir: Path | str | None) ->
     relative repo_root against the OpsCenter root.
     """
     from operations_center.managed_repos.loader import load_managed_repo_config
+
     config = load_managed_repo_config(repo_id, config_dir=config_dir)
     return (_OC_ROOT / config.repo_root).resolve()
 

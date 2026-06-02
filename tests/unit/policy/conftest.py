@@ -10,7 +10,6 @@ so test bodies stay focused on the policy dimension being tested.
 
 from __future__ import annotations
 
-
 from operations_center.contracts.common import BranchPolicy, TaskTarget, ValidationProfile
 from operations_center.contracts.enums import (
     BackendName,
@@ -31,7 +30,6 @@ from operations_center.policy.models import (
     ToolGuardrail,
     ValidationRequirement,
 )
-
 
 # ---------------------------------------------------------------------------
 # Proposal factory

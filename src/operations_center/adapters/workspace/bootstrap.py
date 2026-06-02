@@ -65,14 +65,22 @@ class RepoEnvironmentBootstrapper:
 
         env = self.environment_for(repo_path, venv_dir, base_env=base_env)
         if not venv_path.exists():
-            commands.append(self._run([python_binary, "-m", "venv", venv_dir], cwd=repo_path, env=base_env))
+            commands.append(
+                self._run([python_binary, "-m", "venv", venv_dir], cwd=repo_path, env=base_env)
+            )
 
         venv_python = self.python_path(repo_path, venv_dir)
         commands.append(
-            self._run([str(venv_python), "-m", "pip", "install", "--upgrade", "pip"], cwd=repo_path, env=env)
+            self._run(
+                [str(venv_python), "-m", "pip", "install", "--upgrade", "pip"],
+                cwd=repo_path,
+                env=env,
+            )
         )
 
-        install_command = install_dev_command or f"{self.bin_path(repo_path, venv_dir, 'pip')} install -e .[dev]"
+        install_command = (
+            install_dev_command or f"{self.bin_path(repo_path, venv_dir, 'pip')} install -e .[dev]"
+        )
         commands.append(self._run_shell(install_command, cwd=repo_path, env=env))
         return BootstrapResult(venv_path=venv_path, env=env, commands=commands)
 
@@ -100,9 +108,13 @@ class RepoEnvironmentBootstrapper:
     def bin_dir(self, repo_path: Path, venv_dir: str) -> Path:
         return repo_path / venv_dir / "bin"
 
-    def _run(self, command: list[str], *, cwd: Path, env: dict[str, str] | None) -> BootstrapCommandResult:
+    def _run(
+        self, command: list[str], *, cwd: Path, env: dict[str, str] | None
+    ) -> BootstrapCommandResult:
         start = time.monotonic()
-        proc = subprocess.run(command, cwd=cwd, capture_output=True, text=True, env=env, check=False)
+        proc = subprocess.run(
+            command, cwd=cwd, capture_output=True, text=True, env=env, check=False
+        )
         duration_ms = int((time.monotonic() - start) * 1000)
         if proc.returncode != 0:
             raise RuntimeError(f"bootstrap command failed: {' '.join(command)}\n{proc.stderr}")
@@ -114,9 +126,13 @@ class RepoEnvironmentBootstrapper:
             duration_ms=duration_ms,
         )
 
-    def _run_shell(self, command: str, *, cwd: Path, env: dict[str, str] | None) -> BootstrapCommandResult:
+    def _run_shell(
+        self, command: str, *, cwd: Path, env: dict[str, str] | None
+    ) -> BootstrapCommandResult:
         start = time.monotonic()
-        proc = subprocess.run(command, cwd=cwd, shell=True, capture_output=True, text=True, env=env, check=False)
+        proc = subprocess.run(
+            command, cwd=cwd, shell=True, capture_output=True, text=True, env=env, check=False
+        )
         duration_ms = int((time.monotonic() - start) * 1000)
         if proc.returncode != 0:
             raise RuntimeError(f"bootstrap command failed: {command}\n{proc.stderr}")

@@ -19,6 +19,7 @@ Usage in a backend's drift test:
         assert finding is not None
         assert finding.drift_type.value == "runtime"
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

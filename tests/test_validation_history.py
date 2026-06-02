@@ -8,12 +8,12 @@ Covers:
 - ValidationFailureRecord includes the correct failure_rate float value.
 - Edge case: exactly 50% failure rate IS flagged.
 """
+
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass
 from pathlib import Path
-
 
 from operations_center.observer.collectors.validation_history import ValidationHistoryCollector
 from operations_center.observer.models import ValidationFailureRecord
@@ -52,12 +52,8 @@ def _make_run_dir(
             }
         )
     )
-    (run_dir / "request.json").write_text(
-        json.dumps({"task": {"repo_key": repo_key}})
-    )
-    (run_dir / "validation.json").write_text(
-        json.dumps({"passed": validation_passed})
-    )
+    (run_dir / "request.json").write_text(json.dumps({"task": {"repo_key": repo_key}}))
+    (run_dir / "validation.json").write_text(json.dumps({"passed": validation_passed}))
     return run_dir
 
 
@@ -69,7 +65,10 @@ class TestValidationHistoryPatternDetection:
         for i in range(5):
             passed = i >= 2  # first 2 fail, last 3 pass
             _make_run_dir(
-                tmp_path, f"run-{i}", "task-a", "myrepo",
+                tmp_path,
+                f"run-{i}",
+                "task-a",
+                "myrepo",
                 validation_passed=passed,
             )
 
@@ -83,7 +82,10 @@ class TestValidationHistoryPatternDetection:
         """2 runs, 2 failures (100%) — above threshold, should be flagged."""
         for i in range(2):
             _make_run_dir(
-                tmp_path, f"run-{i}", "task-b", "myrepo",
+                tmp_path,
+                f"run-{i}",
+                "task-b",
+                "myrepo",
                 validation_passed=False,
             )
 
@@ -101,7 +103,10 @@ class TestValidationHistoryPatternDetection:
         """Verify ValidationFailureRecord carries the correct failure_rate float."""
         for i in range(3):
             _make_run_dir(
-                tmp_path, f"run-{i}", "task-c", "myrepo",
+                tmp_path,
+                f"run-{i}",
+                "task-c",
+                "myrepo",
                 validation_passed=False,
             )
 
@@ -117,7 +122,10 @@ class TestValidationHistoryPatternDetection:
         for i in range(4):
             passed = i >= 2  # first 2 fail, last 2 pass
             _make_run_dir(
-                tmp_path, f"run-{i}", "task-d", "myrepo",
+                tmp_path,
+                f"run-{i}",
+                "task-d",
+                "myrepo",
                 validation_passed=passed,
             )
 
@@ -137,7 +145,10 @@ class TestValidationHistoryPatternDetection:
         for i in range(100):
             passed = i >= 49  # first 49 fail, last 51 pass
             _make_run_dir(
-                tmp_path, f"run-{i:03d}", "task-e", "myrepo",
+                tmp_path,
+                f"run-{i:03d}",
+                "task-e",
+                "myrepo",
                 validation_passed=passed,
             )
 
@@ -218,21 +229,30 @@ class TestValidationHistoryPatternDetection:
 class TestValidationFailureRecordModel:
     def test_failure_rate_default(self) -> None:
         rec = ValidationFailureRecord(
-            task_id="t", worker_role="w", total_runs=1, validation_failure_count=0,
+            task_id="t",
+            worker_role="w",
+            total_runs=1,
+            validation_failure_count=0,
         )
         assert rec.failure_rate == 0.0
 
     def test_failure_rate_round_trip(self) -> None:
         rec = ValidationFailureRecord(
-            task_id="t", worker_role="w", total_runs=3,
-            validation_failure_count=2, failure_rate=0.667,
+            task_id="t",
+            worker_role="w",
+            total_runs=3,
+            validation_failure_count=2,
+            failure_rate=0.667,
         )
         assert rec.failure_rate == 0.667
 
     def test_failure_rate_boundary_0_499_round_trip(self) -> None:
         """Verify failure_rate=0.499 round-trips correctly (just below 0.5 threshold)."""
         rec = ValidationFailureRecord(
-            task_id="t", worker_role="w", total_runs=1000,
-            validation_failure_count=499, failure_rate=0.499,
+            task_id="t",
+            worker_role="w",
+            total_runs=1000,
+            validation_failure_count=499,
+            failure_rate=0.499,
         )
         assert rec.failure_rate == 0.499

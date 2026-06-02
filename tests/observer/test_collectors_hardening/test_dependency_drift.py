@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Tests for DependencyDriftCollector with hardening."""
+
 import json
 import os
 from unittest.mock import MagicMock
@@ -10,6 +11,7 @@ import pytest
 from operations_center.observer.collectors.dependency_drift import (
     DependencyDriftCollector,
 )
+
 pytestmark = pytest.mark.slow
 
 
@@ -155,7 +157,9 @@ class TestDependencyDriftHardening:
         collector = DependencyDriftCollector()
         collector.collect(context)
 
-        assert any("invalid artifact structure" in record.message.lower() for record in caplog.records)
+        assert any(
+            "invalid artifact structure" in record.message.lower() for record in caplog.records
+        )
 
     def test_unicode_error_handling(self, tmp_artifact_dir):
         """Unicode decode errors are handled gracefully."""

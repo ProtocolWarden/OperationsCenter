@@ -61,6 +61,8 @@ Backend docs:
 - [architecture/policy/anti_collapse_invariant.md](architecture/policy/anti_collapse_invariant.md)
 - [architecture/audit/backend_control_audit.md](architecture/audit/backend_control_audit.md)
 - [architecture/ci/ci_integration_guide.md](architecture/ci/ci_integration_guide.md)
+- [architecture/ci/coverage-gating.md](architecture/ci/coverage-gating.md) — Coverage threshold gating: mechanism, configuration, and gap analysis.
+- [coverage-threshold-configuration.md](coverage-threshold-configuration.md) — Coverage threshold configuration reference: thresholds, developer workflow, and FAQ.
 - [architecture/audit/code_health_audit.md](architecture/audit/code_health_audit.md)
 - [architecture/contracts/contract-map.md](architecture/contracts/contract-map.md)
 - [architecture/contracts/platform_manifest_consumption.md](architecture/contracts/platform_manifest_consumption.md) —

@@ -16,6 +16,7 @@ Output:
     Operators read these to answer "why did/didn't propagation fire?"
     even when no Plane tasks were created.
 """
+
 from __future__ import annotations
 
 import json
@@ -62,10 +63,10 @@ class PropagationOutcome:
 
     consumer_repo_id: str
     consumer_canonical: str
-    decision_action: str       # "skip" | "backlog" | "ready_for_ai"
+    decision_action: str  # "skip" | "backlog" | "ready_for_ai"
     decision_reason: str
     issue_id: str | None = None  # Plane issue when fired; None when skipped
-    error: str | None = None    # populated only if create_issue raised
+    error: str | None = None  # populated only if create_issue raised
 
 
 @dataclass
@@ -255,7 +256,9 @@ class ContractChangePropagator:
         except Exception as exc:  # noqa: BLE001 — defensive: never crash the run
             logger.warning(
                 "propagation task creation failed for %s → %s: %s",
-                target_node.canonical_name, consumer.canonical_name, exc,
+                target_node.canonical_name,
+                consumer.canonical_name,
+                exc,
             )
             return PropagationOutcome(
                 consumer_repo_id=consumer.repo_id,
@@ -284,8 +287,7 @@ class ContractChangePropagator:
             encoding="utf-8",
         )
         logger.info(
-            "propagation record written: %s (target=%s, version=%s, "
-            "impact=%d, outcomes=%d)",
+            "propagation record written: %s (target=%s, version=%s, impact=%d, outcomes=%d)",
             out,
             record.target_canonical,
             record.target_version,

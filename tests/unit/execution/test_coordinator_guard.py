@@ -5,11 +5,11 @@
 The coordinator must return a structured ExecutionResult when an adapter
 raises an unexpected exception, rather than propagating the exception.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
 from unittest.mock import MagicMock
-
 
 from operations_center.backends.factory import CanonicalBackendRegistry
 from operations_center.contracts.enums import (
@@ -24,7 +24,6 @@ from operations_center.execution.coordinator import ExecutionCoordinator
 from operations_center.execution.handoff import ExecutionRuntimeContext
 from operations_center.planning.models import PlanningContext, ProposalDecisionBundle
 from operations_center.planning.proposal_builder import build_proposal
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -54,6 +53,7 @@ def _crashing_adapter(exc: Exception):
     class _Crash:
         def execute(self, request):
             raise exc
+
     return _Crash()
 
 
@@ -136,6 +136,7 @@ class TestAdapterCrashGuard:
 
     def test_result_is_json_serialisable(self, tmp_path):
         import json as _json
+
         bundle = _bundle()
         registry = _registry_for(_crashing_adapter(ValueError("bad value")))
         coordinator = ExecutionCoordinator(adapter_registry=registry)

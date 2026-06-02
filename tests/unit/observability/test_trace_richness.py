@@ -46,7 +46,9 @@ def _result(*, with_ref: bool) -> ExecutionResult:
 
 
 def test_trace_forwards_runtime_invocation_ref() -> None:
-    record = ExecutionRecorder().record(_result(with_ref=True), backend="direct_local", lane="aider_local")
+    record = ExecutionRecorder().record(
+        _result(with_ref=True), backend="direct_local", lane="aider_local"
+    )
     trace = ExecutionObservabilityService.default()._report_builder.build_report(record)
 
     assert trace.runtime_invocation_ref is not None
@@ -56,7 +58,9 @@ def test_trace_forwards_runtime_invocation_ref() -> None:
 
 
 def test_trace_runtime_invocation_ref_is_none_when_absent() -> None:
-    record = ExecutionRecorder().record(_result(with_ref=False), backend="demo_stub", lane="aider_local")
+    record = ExecutionRecorder().record(
+        _result(with_ref=False), backend="demo_stub", lane="aider_local"
+    )
     trace = ExecutionObservabilityService.default()._report_builder.build_report(record)
     assert trace.runtime_invocation_ref is None
 

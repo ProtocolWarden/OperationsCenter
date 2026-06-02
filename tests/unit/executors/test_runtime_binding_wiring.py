@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """R1 — RuntimeBinding wired through OC's ExecutionRequest + CxRP mapper."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -22,9 +23,12 @@ from operations_center.contracts.execution import (
 
 def _request(**overrides) -> ExecutionRequest:
     base = dict(
-        proposal_id="p", decision_id="d",
+        proposal_id="p",
+        decision_id="d",
         goal_text="design auth subsystem",
-        repo_key="r", clone_url="https://x", base_branch="main",
+        repo_key="r",
+        clone_url="https://x",
+        base_branch="main",
         task_branch="feat/x",
         workspace_path=Path("/tmp/ws"),
     )
@@ -39,8 +43,10 @@ class TestRequestCarriesBinding:
 
     def test_request_with_binding_round_trips(self):
         binding = RuntimeBindingSummary(
-            kind="cli_subscription", selection_mode="explicit_request",
-            provider="anthropic", model="opus",
+            kind="cli_subscription",
+            selection_mode="explicit_request",
+            provider="anthropic",
+            model="opus",
         )
         req = _request(runtime_binding=binding)
         assert req.runtime_binding.kind == "cli_subscription"
@@ -53,8 +59,10 @@ class TestRequestCarriesBinding:
 class TestSummaryCxrpRoundTrip:
     def test_summary_to_cxrp_validates(self):
         s = RuntimeBindingSummary(
-            kind="cli_subscription", selection_mode="explicit_request",
-            provider="anthropic", model="opus",
+            kind="cli_subscription",
+            selection_mode="explicit_request",
+            provider="anthropic",
+            model="opus",
         )
         rb = runtime_binding_from_summary(s)
         assert rb.kind == RuntimeKind.CLI_SUBSCRIPTION
@@ -67,14 +75,18 @@ class TestSummaryCxrpRoundTrip:
         # carry the invalid shape further downstream.
         with pytest.raises(ValueError, match="model"):
             RuntimeBindingSummary(
-                kind="human", selection_mode="explicit_request", model="opus",
+                kind="human",
+                selection_mode="explicit_request",
+                model="opus",
             )
 
     def test_cxrp_to_summary_preserves_fields(self):
         rb = CxrpRuntimeBinding(
             kind=RuntimeKind.HOSTED_API,
             selection_mode=SelectionMode.POLICY_SELECTED,
-            provider="anthropic", model="sonnet", endpoint="https://api.anthropic.com",
+            provider="anthropic",
+            model="sonnet",
+            endpoint="https://api.anthropic.com",
         )
         s = runtime_binding_to_summary(rb)
         assert s.kind == "hosted_api"
@@ -85,8 +97,10 @@ class TestSummaryCxrpRoundTrip:
 class TestExecutionRequestMapper:
     def test_oc_request_with_binding_emits_cxrp_with_binding(self):
         binding = RuntimeBindingSummary(
-            kind="cli_subscription", selection_mode="explicit_request",
-            provider="anthropic", model="opus",
+            kind="cli_subscription",
+            selection_mode="explicit_request",
+            provider="anthropic",
+            model="opus",
         )
         oc = _request(runtime_binding=binding)
         cxrp_req = to_cxrp_execution_request(oc, executor="claude_cli", backend="team_executor")

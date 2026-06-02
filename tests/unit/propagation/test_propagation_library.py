@@ -4,12 +4,12 @@
 
 Covers each module independently + end-to-end propagator orchestration.
 """
+
 from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-
 
 from operations_center.propagation import (
     ContractChangePropagator,
@@ -25,7 +25,6 @@ from operations_center.propagation import (
 from operations_center.propagation.policy import _Action, _PairOverride
 from operations_center.repo_graph_factory import build_effective_repo_graph
 
-
 # ---------------------------------------------------------------------------
 # policy.py
 # ---------------------------------------------------------------------------
@@ -34,43 +33,61 @@ from operations_center.repo_graph_factory import build_effective_repo_graph
 class TestPolicy:
     def test_disabled_default_skips_everything(self) -> None:
         pol = PropagationPolicy.disabled()
-        d = pol.decide(target_repo_id="cxrp", consumer_repo_id="oc", edge_type="depends_on_contracts_from")
+        d = pol.decide(
+            target_repo_id="cxrp", consumer_repo_id="oc", edge_type="depends_on_contracts_from"
+        )
         assert not d.fires_task()
         assert "disabled globally" in d.reason
 
     def test_enabled_without_edge_type_opt_in_skips(self) -> None:
         pol = PropagationPolicy(settings=PropagationSettings(enabled=True))
-        d = pol.decide(target_repo_id="cxrp", consumer_repo_id="oc", edge_type="depends_on_contracts_from")
+        d = pol.decide(
+            target_repo_id="cxrp", consumer_repo_id="oc", edge_type="depends_on_contracts_from"
+        )
         assert not d.fires_task()
         assert "not in auto_trigger_edge_types" in d.reason
 
     def test_edge_type_opt_in_fires_to_backlog(self) -> None:
-        pol = PropagationPolicy(settings=PropagationSettings(
-            enabled=True,
-            auto_trigger_edge_types=frozenset({"depends_on_contracts_from"}),
-        ))
-        d = pol.decide(target_repo_id="cxrp", consumer_repo_id="oc", edge_type="depends_on_contracts_from")
+        pol = PropagationPolicy(
+            settings=PropagationSettings(
+                enabled=True,
+                auto_trigger_edge_types=frozenset({"depends_on_contracts_from"}),
+            )
+        )
+        d = pol.decide(
+            target_repo_id="cxrp", consumer_repo_id="oc", edge_type="depends_on_contracts_from"
+        )
         assert d.action is _Action.BACKLOG
         assert d.fires_task()
 
     def test_pair_override_promotes_to_ready(self) -> None:
         override = _PairOverride(action=_Action.READY_FOR_AI, reason="trusted pair")
-        pol = PropagationPolicy(settings=PropagationSettings(
-            enabled=True,
-            auto_trigger_edge_types=frozenset(),
-            pair_overrides=(("cxrp", "oc", override),),
-        ))
-        d = pol.decide(target_repo_id="cxrp", consumer_repo_id="oc", edge_type="depends_on_contracts_from")
+        pol = PropagationPolicy(
+            settings=PropagationSettings(
+                enabled=True,
+                auto_trigger_edge_types=frozenset(),
+                pair_overrides=(("cxrp", "oc", override),),
+            )
+        )
+        d = pol.decide(
+            target_repo_id="cxrp", consumer_repo_id="oc", edge_type="depends_on_contracts_from"
+        )
         assert d.action is _Action.READY_FOR_AI
 
     def test_pair_override_can_suppress(self) -> None:
         override = _PairOverride(action=_Action.SKIP, reason="manual blocklist")
-        pol = PropagationPolicy(settings=PropagationSettings(
-            enabled=True,
-            auto_trigger_edge_types=frozenset({"depends_on_contracts_from"}),
-            pair_overrides=(("cxrp", "switchboard", override),),
-        ))
-        d = pol.decide(target_repo_id="cxrp", consumer_repo_id="switchboard", edge_type="depends_on_contracts_from")
+        pol = PropagationPolicy(
+            settings=PropagationSettings(
+                enabled=True,
+                auto_trigger_edge_types=frozenset({"depends_on_contracts_from"}),
+                pair_overrides=(("cxrp", "switchboard", override),),
+            )
+        )
+        d = pol.decide(
+            target_repo_id="cxrp",
+            consumer_repo_id="switchboard",
+            edge_type="depends_on_contracts_from",
+        )
         assert not d.fires_task()
 
 
@@ -196,23 +213,27 @@ class _RecordingTaskCreator:
         self.fail_with: Exception | None = None
 
     def create_issue(self, *, title, body, labels, promote_to_ready):  # type: ignore[no-untyped-def]
-        self.calls.append({
-            "title": title,
-            "body": body,
-            "labels": labels,
-            "promote_to_ready": promote_to_ready,
-        })
+        self.calls.append(
+            {
+                "title": title,
+                "body": body,
+                "labels": labels,
+                "promote_to_ready": promote_to_ready,
+            }
+        )
         if self.fail_with is not None:
             raise self.fail_with
         return self.next_issue_id
 
 
 def _enabled_policy_with_default_edge() -> PropagationPolicy:
-    return PropagationPolicy(settings=PropagationSettings(
-        enabled=True,
-        auto_trigger_edge_types=frozenset({"depends_on_contracts_from"}),
-        dedup_window_hours=24,
-    ))
+    return PropagationPolicy(
+        settings=PropagationSettings(
+            enabled=True,
+            auto_trigger_edge_types=frozenset({"depends_on_contracts_from"}),
+            dedup_window_hours=24,
+        )
+    )
 
 
 class TestPropagatorEndToEnd:
@@ -236,9 +257,7 @@ class TestPropagatorEndToEnd:
         files = list(records_dir.glob("*.json"))
         assert len(files) == 1
 
-    def test_enabled_policy_creates_tasks_for_contract_consumers(
-        self, tmp_path: Path
-    ) -> None:
+    def test_enabled_policy_creates_tasks_for_contract_consumers(self, tmp_path: Path) -> None:
         creator = _RecordingTaskCreator()
         prop = ContractChangePropagator(
             policy=_enabled_policy_with_default_edge(),
@@ -295,11 +314,13 @@ class TestPropagatorEndToEnd:
     def test_pair_override_promotes(self, tmp_path: Path) -> None:
         creator = _RecordingTaskCreator()
         override = _PairOverride(action=_Action.READY_FOR_AI, reason="trusted pair")
-        policy = PropagationPolicy(settings=PropagationSettings(
-            enabled=True,
-            auto_trigger_edge_types=frozenset(),  # only fires via override
-            pair_overrides=(("cxrp", "operations_center", override),),
-        ))
+        policy = PropagationPolicy(
+            settings=PropagationSettings(
+                enabled=True,
+                auto_trigger_edge_types=frozenset(),  # only fires via override
+                pair_overrides=(("cxrp", "operations_center", override),),
+            )
+        )
         prop = ContractChangePropagator(
             policy=policy,
             registry=PropagationRegistry.from_mapping(),
@@ -342,10 +363,7 @@ class TestPropagatorEndToEnd:
         )
         graph = build_effective_repo_graph()
         record = prop.propagate(target_repo_id="cxrp", target_version="v1", graph=graph)
-        assert all(
-            o.error and "plane API down" in o.error
-            for o in record.outcomes
-        )
+        assert all(o.error and "plane API down" in o.error for o in record.outcomes)
         # Dedup was NOT stamped (so retry can re-fire after fixing Plane)
         store_path = tmp_path / "dedup.json"
         if store_path.exists():

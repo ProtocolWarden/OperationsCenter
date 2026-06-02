@@ -19,7 +19,6 @@ from operations_center.config.settings import AiderSettings
 from operations_center.contracts.enums import ExecutionStatus, FailureReasonCategory
 from operations_center.contracts.execution import ExecutionRequest, ExecutionResult
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -52,15 +51,20 @@ class _FakeRuntime:
     RuntimeResult. The exit_code is auto-derived from status when not
     explicitly set.
     """
-    def __init__(self, *, status: str = "succeeded", stdout: str = "",
-                 stderr: str = "", exit_code: int | None = None,
-                 raise_exc: BaseException | None = None) -> None:
+
+    def __init__(
+        self,
+        *,
+        status: str = "succeeded",
+        stdout: str = "",
+        stderr: str = "",
+        exit_code: int | None = None,
+        raise_exc: BaseException | None = None,
+    ) -> None:
         self.status = status
         self.stdout = stdout
         self.stderr = stderr
-        self.exit_code = exit_code if exit_code is not None else (
-            0 if status == "succeeded" else 1
-        )
+        self.exit_code = exit_code if exit_code is not None else (0 if status == "succeeded" else 1)
         self.raise_exc = raise_exc
 
     def run(self, invocation: RuntimeInvocation) -> RuntimeResult:
@@ -103,6 +107,7 @@ class TestCanonicalResult:
 
     def test_result_is_json_serialisable(self, tmp_path):
         import json
+
         (tmp_path / "repo").mkdir()
         result = _adapter().execute(_request(tmp_path))
         parsed = json.loads(result.model_dump_json())
@@ -179,26 +184,30 @@ class TestMissingBinary:
 class TestTimeout:
     def test_timeout_returns_failed_result(self, tmp_path):
         (tmp_path / "repo").mkdir()
-        result = _adapter(_FakeRuntime(status="timed_out"),
-                          timeout_seconds=30).execute(_request(tmp_path))
+        result = _adapter(_FakeRuntime(status="timed_out"), timeout_seconds=30).execute(
+            _request(tmp_path)
+        )
         assert result.success is False
 
     def test_timeout_sets_timeout_status(self, tmp_path):
         (tmp_path / "repo").mkdir()
-        result = _adapter(_FakeRuntime(status="timed_out"),
-                          timeout_seconds=30).execute(_request(tmp_path))
+        result = _adapter(_FakeRuntime(status="timed_out"), timeout_seconds=30).execute(
+            _request(tmp_path)
+        )
         assert result.status == ExecutionStatus.TIMED_OUT
 
     def test_timeout_sets_timeout_failure_category(self, tmp_path):
         (tmp_path / "repo").mkdir()
-        result = _adapter(_FakeRuntime(status="timed_out"),
-                          timeout_seconds=30).execute(_request(tmp_path))
+        result = _adapter(_FakeRuntime(status="timed_out"), timeout_seconds=30).execute(
+            _request(tmp_path)
+        )
         assert result.failure_category == FailureReasonCategory.TIMEOUT
 
     def test_timeout_failure_reason_mentions_timeout(self, tmp_path):
         (tmp_path / "repo").mkdir()
-        result = _adapter(_FakeRuntime(status="timed_out"),
-                          timeout_seconds=30).execute(_request(tmp_path))
+        result = _adapter(_FakeRuntime(status="timed_out"), timeout_seconds=30).execute(
+            _request(tmp_path)
+        )
         assert "imed out" in (result.failure_reason or "") or "imed out" in (
             result.artifacts[0].content if result.artifacts else ""
         )

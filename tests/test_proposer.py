@@ -14,16 +14,20 @@ from operations_center.decision.models import (
     ProposalCandidatesArtifact,
     ProposalOutline,
 )
+from operations_center.execution import UsageStore
 from operations_center.insights.artifact_writer import InsightArtifactWriter
-from operations_center.insights.models import InsightRepoRef, RepoInsightsArtifact, SourceSnapshotRef
+from operations_center.insights.models import (
+    InsightRepoRef,
+    RepoInsightsArtifact,
+    SourceSnapshotRef,
+)
+from operations_center.proposer.artifact_writer import ProposerArtifactWriter
 from operations_center.proposer.candidate_integration import (
     CandidateProposerIntegrationService,
     new_proposer_integration_context,
 )
-from operations_center.proposer.artifact_writer import ProposerArtifactWriter
 from operations_center.proposer.candidate_loader import ProposalCandidateLoader
 from operations_center.proposer.candidate_mapper import ProposalCandidateMapper
-from operations_center.execution import UsageStore
 from operations_center.proposer.guardrail_adapter import ProposerGuardrailAdapter
 from operations_center.proposer.provenance import build_provenance
 
@@ -85,14 +89,18 @@ def _write_config(tmp_path: Path) -> Path:
     return config_path
 
 
-def _make_decision_artifact(tmp_path: Path) -> tuple[ProposalCandidatesArtifact, RepoInsightsArtifact]:
+def _make_decision_artifact(
+    tmp_path: Path,
+) -> tuple[ProposalCandidatesArtifact, RepoInsightsArtifact]:
     generated_at = datetime(2026, 3, 31, 13, tzinfo=UTC)
     insight = RepoInsightsArtifact(
         run_id="ins_1",
         generated_at=generated_at,
         source_command="operations-center generate-insights",
         repo=InsightRepoRef(name="operations-center", path=tmp_path / "repo"),
-        source_snapshots=[SourceSnapshotRef(run_id="obs_1", observed_at=datetime(2026, 3, 31, 12, tzinfo=UTC))],
+        source_snapshots=[
+            SourceSnapshotRef(run_id="obs_1", observed_at=datetime(2026, 3, 31, 12, tzinfo=UTC))
+        ],
         insights=[],
     )
     decision = ProposalCandidatesArtifact(
@@ -118,8 +126,12 @@ def _make_decision_artifact(tmp_path: Path) -> tuple[ProposalCandidatesArtifact,
         ],
         suppressed=[],
     )
-    InsightArtifactWriter(tmp_path / "tools" / "report" / "operations_center" / "insights").write(insight)
-    DecisionArtifactWriter(tmp_path / "tools" / "report" / "operations_center" / "decision").write(decision)
+    InsightArtifactWriter(tmp_path / "tools" / "report" / "operations_center" / "insights").write(
+        insight
+    )
+    DecisionArtifactWriter(tmp_path / "tools" / "report" / "operations_center" / "decision").write(
+        decision
+    )
     return decision, insight
 
 
@@ -154,7 +166,10 @@ def test_mapper_carries_provenance_into_task_body(tmp_path: Path) -> None:
     )
 
     assert "## Provenance" in draft.description
-    assert "candidate_dedup_key: candidate|test_visibility|test_signal|unknown_persistent" in draft.description
+    assert (
+        "candidate_dedup_key: candidate|test_visibility|test_signal|unknown_persistent"
+        in draft.description
+    )
     assert "insight_run_id: ins_1" in draft.description
     assert "task-kind: goal" in draft.label_names
     assert "source: autonomy" in draft.label_names
@@ -196,8 +211,13 @@ def test_candidate_integration_dry_run_preserves_output_without_plane_write(tmp_
             decision_root=tmp_path / "tools" / "report" / "operations_center" / "decision",
             insights_root=tmp_path / "tools" / "report" / "operations_center" / "insights",
         ),
-        guardrails=ProposerGuardrailAdapter(proposer_root=tmp_path / "tools" / "report" / "operations_center" / "proposer", usage_store=UsageStore(tmp_path / "usage.json")),
-        artifact_writer=ProposerArtifactWriter(tmp_path / "tools" / "report" / "operations_center" / "proposer"),
+        guardrails=ProposerGuardrailAdapter(
+            proposer_root=tmp_path / "tools" / "report" / "operations_center" / "proposer",
+            usage_store=UsageStore(tmp_path / "usage.json"),
+        ),
+        artifact_writer=ProposerArtifactWriter(
+            tmp_path / "tools" / "report" / "operations_center" / "proposer"
+        ),
     )
 
     artifact, paths = service.run(
@@ -237,8 +257,13 @@ def test_candidate_integration_skips_existing_open_equivalent_task(tmp_path: Pat
             decision_root=tmp_path / "tools" / "report" / "operations_center" / "decision",
             insights_root=tmp_path / "tools" / "report" / "operations_center" / "insights",
         ),
-        guardrails=ProposerGuardrailAdapter(proposer_root=tmp_path / "tools" / "report" / "operations_center" / "proposer", usage_store=UsageStore(tmp_path / "usage.json")),
-        artifact_writer=ProposerArtifactWriter(tmp_path / "tools" / "report" / "operations_center" / "proposer"),
+        guardrails=ProposerGuardrailAdapter(
+            proposer_root=tmp_path / "tools" / "report" / "operations_center" / "proposer",
+            usage_store=UsageStore(tmp_path / "usage.json"),
+        ),
+        artifact_writer=ProposerArtifactWriter(
+            tmp_path / "tools" / "report" / "operations_center" / "proposer"
+        ),
     )
 
     artifact, _ = service.run(
@@ -272,7 +297,9 @@ def test_candidate_integration_records_partial_plane_failure(tmp_path: Path) -> 
             ),
         )
     )
-    DecisionArtifactWriter(tmp_path / "tools" / "report" / "operations_center" / "decision").write(decision)
+    DecisionArtifactWriter(tmp_path / "tools" / "report" / "operations_center" / "decision").write(
+        decision
+    )
     settings = load_settings(_write_config(tmp_path))
 
     class FailingSecondCreateClient(FakePlaneClient):
@@ -289,8 +316,13 @@ def test_candidate_integration_records_partial_plane_failure(tmp_path: Path) -> 
             decision_root=tmp_path / "tools" / "report" / "operations_center" / "decision",
             insights_root=tmp_path / "tools" / "report" / "operations_center" / "insights",
         ),
-        guardrails=ProposerGuardrailAdapter(proposer_root=tmp_path / "tools" / "report" / "operations_center" / "proposer", usage_store=UsageStore(tmp_path / "usage.json")),
-        artifact_writer=ProposerArtifactWriter(tmp_path / "tools" / "report" / "operations_center" / "proposer"),
+        guardrails=ProposerGuardrailAdapter(
+            proposer_root=tmp_path / "tools" / "report" / "operations_center" / "proposer",
+            usage_store=UsageStore(tmp_path / "usage.json"),
+        ),
+        artifact_writer=ProposerArtifactWriter(
+            tmp_path / "tools" / "report" / "operations_center" / "proposer"
+        ),
     )
 
     artifact, _ = service.run(
@@ -327,8 +359,9 @@ def _guardrail(
 
 def test_recently_done_task_blocks_reproposal(tmp_path: Path) -> None:
     """A Done task updated within the window suppresses a new proposal."""
-    from operations_center.proposer.guardrail_adapter import ProposerGuardrailAdapter
     from unittest.mock import MagicMock
+
+    from operations_center.proposer.guardrail_adapter import ProposerGuardrailAdapter
 
     now = datetime(2026, 4, 5, 12, 0, 0, tzinfo=UTC)
     client = MagicMock()
@@ -360,8 +393,9 @@ def test_recently_done_task_blocks_reproposal(tmp_path: Path) -> None:
 
 def test_old_done_task_outside_window_does_not_block(tmp_path: Path) -> None:
     """A Done task updated outside the window does not suppress."""
-    from operations_center.proposer.guardrail_adapter import ProposerGuardrailAdapter
     from unittest.mock import MagicMock
+
+    from operations_center.proposer.guardrail_adapter import ProposerGuardrailAdapter
 
     now = datetime(2026, 4, 5, 12, 0, 0, tzinfo=UTC)
     client = MagicMock()
@@ -390,8 +424,9 @@ def test_old_done_task_outside_window_does_not_block(tmp_path: Path) -> None:
 
 def test_recently_done_window_zero_disables_guard(tmp_path: Path) -> None:
     """recently_done_window_days=0 disables the guard entirely."""
-    from operations_center.proposer.guardrail_adapter import ProposerGuardrailAdapter
     from unittest.mock import MagicMock
+
+    from operations_center.proposer.guardrail_adapter import ProposerGuardrailAdapter
 
     now = datetime(2026, 4, 5, 12, 0, 0, tzinfo=UTC)
     client = MagicMock()
@@ -420,8 +455,9 @@ def test_recently_done_window_zero_disables_guard(tmp_path: Path) -> None:
 
 def test_recently_done_matches_by_dedup_key_in_description(tmp_path: Path) -> None:
     """Done task matched by dedup_key in description (not title) also blocks."""
-    from operations_center.proposer.guardrail_adapter import ProposerGuardrailAdapter
     from unittest.mock import MagicMock
+
+    from operations_center.proposer.guardrail_adapter import ProposerGuardrailAdapter
 
     now = datetime(2026, 4, 5, 12, 0, 0, tzinfo=UTC)
     client = MagicMock()

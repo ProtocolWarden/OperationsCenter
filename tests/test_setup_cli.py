@@ -8,16 +8,19 @@ from operations_center.entrypoints.setup.main import (
     SetupAnswers,
     check_command_installed,
     default_orchestrator_for_statuses,
-    infer_repo_key_from_clone_url,
-    prepend_local_bin_to_path,
     github_https_to_ssh,
+    infer_repo_key_from_clone_url,
     parse_remote_branches,
+    prepend_local_bin_to_path,
     provider_default_orchestrator,
     render_env_file,
     render_settings_yaml,
     render_task_template,
 )
-from operations_center.entrypoints.setup.providers import ProviderStatus, summarize_provider_statuses
+from operations_center.entrypoints.setup.providers import (
+    ProviderStatus,
+    summarize_provider_statuses,
+)
 
 
 def test_render_settings_yaml_contains_local_repo_bootstrap_defaults() -> None:
@@ -113,8 +116,14 @@ def test_default_orchestrator_for_statuses_uses_preferred_smart_provider() -> No
             detail="ok",
         ),
     ]
-    assert default_orchestrator_for_statuses(statuses, preferred_smart_provider="claude") == "claude-code:opus"
-    assert default_orchestrator_for_statuses(statuses, preferred_smart_provider="codex") == "codex:gpt-5.4"
+    assert (
+        default_orchestrator_for_statuses(statuses, preferred_smart_provider="claude")
+        == "claude-code:opus"
+    )
+    assert (
+        default_orchestrator_for_statuses(statuses, preferred_smart_provider="codex")
+        == "codex:gpt-5.4"
+    )
 
 
 def test_render_env_file_for_subscription_mode_skips_provider_secret_export() -> None:
@@ -300,7 +309,10 @@ def test_render_task_template_uses_default_repo() -> None:
 
 
 def test_github_https_to_ssh_converts_github_remote() -> None:
-    assert github_https_to_ssh("https://github.com/ProtocolWarden/OperationsCenter.git") == "git@github.com:ProtocolWarden/OperationsCenter.git"
+    assert (
+        github_https_to_ssh("https://github.com/ProtocolWarden/OperationsCenter.git")
+        == "git@github.com:ProtocolWarden/OperationsCenter.git"
+    )
 
 
 def test_github_https_to_ssh_ignores_non_github_remote() -> None:
@@ -319,7 +331,10 @@ def test_parse_remote_branches_extracts_head_names() -> None:
 
 
 def test_infer_repo_key_from_clone_url_prefers_repo_name() -> None:
-    assert infer_repo_key_from_clone_url("git@github.com:ProtocolWarden/OperationsCenter.git") == "OperationsCenter"
+    assert (
+        infer_repo_key_from_clone_url("git@github.com:ProtocolWarden/OperationsCenter.git")
+        == "OperationsCenter"
+    )
 
 
 def test_prepend_local_bin_to_path_adds_home_local_bin(monkeypatch) -> None:
@@ -330,7 +345,12 @@ def test_prepend_local_bin_to_path_adds_home_local_bin(monkeypatch) -> None:
 
 def test_check_command_installed_uses_local_bin_path(monkeypatch) -> None:
     monkeypatch.setenv("PATH", "/usr/bin")
-    monkeypatch.setattr("shutil.which", lambda command: "/home/dev/.local/bin/team-executor" if command == "team-executor" else None)
+    monkeypatch.setattr(
+        "shutil.which",
+        lambda command: (
+            "/home/dev/.local/bin/team-executor" if command == "team-executor" else None
+        ),
+    )
     assert check_command_installed("team-executor") is True
 
 

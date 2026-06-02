@@ -15,7 +15,12 @@ SECTION_PATTERN = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
 class TaskParser:
     REQUIRED_EXEC_FIELDS = ("repo",)
     SUPPORTED_MODES = {"goal", "fix_pr", "test_campaign", "improve_campaign"}
-    _CAMPAIGN_PASSTHROUGH_FIELDS = {"spec_campaign_id", "spec_file", "task_phase", "spec_coverage_hint"}
+    _CAMPAIGN_PASSTHROUGH_FIELDS = {
+        "spec_campaign_id",
+        "spec_file",
+        "task_phase",
+        "spec_coverage_hint",
+    }
 
     def parse(self, description: str, *, labels: list[str] | None = None) -> ParsedTaskBody:
         label_repo = self._repo_from_labels(labels or [])
@@ -56,12 +61,16 @@ class TaskParser:
                 exec_match = re.search(r"##\s+Execution\s*\n", fallback, re.IGNORECASE)
                 if exec_match:
                     # Remove from the ## Execution header to the next ## header or end
-                    remaining = fallback[exec_match.end():]
+                    remaining = fallback[exec_match.end() :]
                     next_header = re.search(r"^##\s+", remaining, re.MULTILINE)
                     if next_header:
-                        fallback = fallback[:exec_match.start()].strip() + "\n" + remaining[next_header.start():].strip()
+                        fallback = (
+                            fallback[: exec_match.start()].strip()
+                            + "\n"
+                            + remaining[next_header.start() :].strip()
+                        )
                     else:
-                        fallback = fallback[:exec_match.start()].strip()
+                        fallback = fallback[: exec_match.start()].strip()
             goal_text = fallback.strip()
         if not goal_text:
             raise ValueError(

@@ -21,7 +21,9 @@ def test_anchor_merges_cl_exports(monkeypatch):
     monkeypatch.setattr(
         controller.subprocess,
         "run",
-        lambda *a, **k: _Result(0, "export CL_ANCHOR=/x/PlatformManifest\nexport CL_SESSION_ID=sid-1\n"),
+        lambda *a, **k: _Result(
+            0, "export CL_ANCHOR=/x/PlatformManifest\nexport CL_SESSION_ID=sid-1\n"
+        ),
     )
     env: dict[str, str] = {}
     controller._anchor_via_cl(env)
@@ -49,6 +51,7 @@ def test_anchor_noop_when_cl_missing(monkeypatch):
 
 # --- session-boundary hydrate/capture (codex/aider; claude uses hooks) ---
 
+
 def test_session_boundary_gating():
     assert controller._cl_session_boundary("claude", {"CL_ANCHOR": "/m"}) is False
     assert controller._cl_session_boundary("codex", {"CL_ANCHOR": "/m"}) is True
@@ -67,8 +70,11 @@ def test_hydrate_noop_for_claude():
 
 def test_capture_runs_for_codex_only(monkeypatch):
     calls = []
-    monkeypatch.setattr(controller.subprocess, "run", lambda *a, **k: calls.append(a[0]) or _Result(0, ""))
+    monkeypatch.setattr(
+        controller.subprocess, "run", lambda *a, **k: calls.append(a[0]) or _Result(0, "")
+    )
     import pathlib
+
     controller._cl_capture("codex", {"CL_ANCHOR": "/m"}, 1, 0, pathlib.Path("/x.log"))
     controller._cl_capture("claude", {"CL_ANCHOR": "/m"}, 1, 0, pathlib.Path("/x.log"))
     assert len(calls) == 1 and "capture" in calls[0]

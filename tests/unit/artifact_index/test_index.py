@@ -7,7 +7,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-
 from operations_center.artifact_index import (
     ManagedArtifactIndex,
     build_artifact_index,
@@ -102,7 +101,9 @@ class TestBuildArtifactIndex:
         index = build_artifact_index(manifest, example_completed_manifest_path)
         assert len(index.excluded_paths) > 0
 
-    def test_excluded_paths_not_indexed_as_artifacts(self, example_completed_manifest_path: Path) -> None:
+    def test_excluded_paths_not_indexed_as_artifacts(
+        self, example_completed_manifest_path: Path
+    ) -> None:
         manifest = load_artifact_manifest(example_completed_manifest_path)
         index = build_artifact_index(manifest, example_completed_manifest_path)
         excluded_artifact_ids = {ep.path for ep in index.excluded_paths}
@@ -221,9 +222,7 @@ class TestIndexPathResolution:
         first = index.run_scoped_artifacts[0]
         assert first.exists_on_disk is False
 
-    def test_is_machine_readable_for_json(
-        self, tmp_path: Path, completed_manifest_payload
-    ) -> None:
+    def test_is_machine_readable_for_json(self, tmp_path: Path, completed_manifest_payload) -> None:
         run_root = completed_manifest_payload["run_root"]
         bucket_dir = tmp_path / run_root
         bucket_dir.mkdir(parents=True, exist_ok=True)

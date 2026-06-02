@@ -36,8 +36,7 @@ class LaneRoutingClient(Protocol):
     The rest of OperationsCenter sees only this interface.
     """
 
-    def select_lane(self, proposal: OcPlanningProposal) -> OcRoutingDecision:
-        ...
+    def select_lane(self, proposal: OcPlanningProposal) -> OcRoutingDecision: ...
 
 
 class HttpLaneRoutingClient:
@@ -73,8 +72,7 @@ class HttpLaneRoutingClient:
             ) from exc
         except httpx.TimeoutException as exc:
             raise SwitchBoardUnavailableError(
-                f"SwitchBoard request timed out at {self.base_url}. "
-                f"Cause: {exc}"
+                f"SwitchBoard request timed out at {self.base_url}. Cause: {exc}"
             ) from exc
         return _decode_route_response(response.json())
 
@@ -110,10 +108,9 @@ def _decode_route_response(payload: dict) -> OcRoutingDecision:
     now that the wire flip is complete; an unrecognised shape raises
     ``ValueError`` rather than silently mis-parsing it.
     """
-    if (
-        payload.get("contract_kind") == "lane_decision"
-        and payload.get("schema_version", "").startswith("0.")
-    ):
+    if payload.get("contract_kind") == "lane_decision" and payload.get(
+        "schema_version", ""
+    ).startswith("0."):
         return from_cxrp_lane_decision(payload)
     raise ValueError(
         "Unexpected /route response shape: expected CxRP LaneDecision "

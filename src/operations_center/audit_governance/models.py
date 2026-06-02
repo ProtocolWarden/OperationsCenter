@@ -51,6 +51,7 @@ def _make_request_id(repo_id: str, audit_type: str) -> str:
 # Policy result (one check)
 # ---------------------------------------------------------------------------
 
+
 class PolicyResult(BaseModel, frozen=True):
     """Result of a single governance policy check."""
 
@@ -63,6 +64,7 @@ class PolicyResult(BaseModel, frozen=True):
 # ---------------------------------------------------------------------------
 # Governance request (serializable — Pydantic for validation)
 # ---------------------------------------------------------------------------
+
 
 class AuditGovernanceRequest(BaseModel, frozen=True):
     """A request to run a full managed audit under governance.
@@ -129,6 +131,7 @@ class AuditGovernanceRequest(BaseModel, frozen=True):
 # Governance decision
 # ---------------------------------------------------------------------------
 
+
 class AuditGovernanceDecision(BaseModel, frozen=True):
     """Result of evaluating a governance request against all policies."""
 
@@ -166,6 +169,7 @@ class AuditGovernanceDecision(BaseModel, frozen=True):
 # Manual approval
 # ---------------------------------------------------------------------------
 
+
 class AuditManualApproval(BaseModel, frozen=True):
     """Human approval record for a governance decision that requires manual sign-off.
 
@@ -192,6 +196,7 @@ class AuditManualApproval(BaseModel, frozen=True):
 # ---------------------------------------------------------------------------
 # Budget and cooldown state (file-backed JSON)
 # ---------------------------------------------------------------------------
+
 
 class AuditBudgetState(BaseModel):
     """Per-repo/audit-type budget tracking state."""
@@ -242,6 +247,7 @@ class AuditCooldownState(BaseModel):
 # Configuration (runtime, non-serializable)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class BudgetConfig:
     """Budget configuration for a repo/audit_type pair."""
@@ -275,19 +281,16 @@ class GovernanceConfig:
     )
 
     def get_budget_config(self, repo_id: str, audit_type: str) -> BudgetConfig:
-        return (
-            self.budget_config.get(repo_id, {}).get(audit_type, BudgetConfig())
-        )
+        return self.budget_config.get(repo_id, {}).get(audit_type, BudgetConfig())
 
     def get_cooldown_config(self, repo_id: str, audit_type: str) -> CooldownConfig:
-        return (
-            self.cooldown_config.get(repo_id, {}).get(audit_type, CooldownConfig())
-        )
+        return self.cooldown_config.get(repo_id, {}).get(audit_type, CooldownConfig())
 
 
 # ---------------------------------------------------------------------------
 # Governed run result
 # ---------------------------------------------------------------------------
+
 
 class AuditGovernedRunResult(BaseModel, frozen=True):
     """Result of a governed audit attempt.
@@ -318,6 +321,7 @@ class AuditGovernedRunResult(BaseModel, frozen=True):
 # ---------------------------------------------------------------------------
 # Governance report
 # ---------------------------------------------------------------------------
+
 
 class DispatchResultSummary(BaseModel, frozen=True):
     """Compact summary of dispatch result for governance report."""

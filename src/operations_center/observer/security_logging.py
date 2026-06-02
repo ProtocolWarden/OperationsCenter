@@ -8,9 +8,11 @@ Defines:
 - Observability metrics for malformed payloads
 - Log validation rules
 """
+
 from __future__ import annotations
 
-from dataclasses import dataclass, field as dataclass_field
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Optional
@@ -209,8 +211,7 @@ def should_trigger_alert(
     recent_errors = [
         e
         for e in metrics.recent_errors
-        if e.normalized_timestamp() >= cutoff_time
-        and e.error_type == condition.category.value
+        if e.normalized_timestamp() >= cutoff_time and e.error_type == condition.category.value
     ]
 
     return len(recent_errors) >= condition.trigger_threshold

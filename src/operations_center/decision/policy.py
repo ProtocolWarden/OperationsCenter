@@ -6,9 +6,12 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from operations_center.decision.candidate_builder import CandidateBuilder, CandidateSpec
-from operations_center.decision.models import ProposalCandidate, ProposalCandidatesArtifact, SuppressedCandidate
+from operations_center.decision.models import (
+    ProposalCandidate,
+    ProposalCandidatesArtifact,
+    SuppressedCandidate,
+)
 from operations_center.decision.suppression import suppressed_candidate
-
 
 _CONFIDENCE_RANK = {"low": 0, "medium": 1, "high": 2}
 
@@ -23,7 +26,9 @@ class DecisionPolicyConfig:
 
 
 class DecisionPolicy:
-    def __init__(self, *, config: DecisionPolicyConfig, builder: CandidateBuilder | None = None) -> None:
+    def __init__(
+        self, *, config: DecisionPolicyConfig, builder: CandidateBuilder | None = None
+    ) -> None:
         self.config = config
         self.builder = builder or CandidateBuilder()
 
@@ -108,7 +113,9 @@ class DecisionPolicy:
                         family=candidate.family,
                         subject=candidate.subject,
                         reason="family_quota_exceeded",
-                        evidence={"max_candidates_per_family": self.config.max_candidates_per_family},
+                        evidence={
+                            "max_candidates_per_family": self.config.max_candidates_per_family
+                        },
                     )
                 )
                 continue

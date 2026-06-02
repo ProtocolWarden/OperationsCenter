@@ -12,17 +12,16 @@ from __future__ import annotations
 from operations_center.contracts.enums import BackendName, LaneName
 from operations_center.contracts.routing import LaneDecision
 from operations_center.execution.coordinator import ExecutionCoordinator
-from operations_center.planning.models import ProposalDecisionBundle
+from operations_center.planning.models import PlanningContext, ProposalDecisionBundle
 from operations_center.planning.proposal_builder import build_proposal
-from operations_center.planning.models import PlanningContext
 from operations_center.policy.models import PolicyDecision, PolicyStatus
 
 # Reuse the existing coordinator test fixtures.
 from tests.unit.execution.test_coordinator import (  # noqa: E402
     _RecordingAdapter,
     _Registry,
-    _StubPolicyEngine,
     _runtime,
+    _StubPolicyEngine,
     _success_result,
 )
 

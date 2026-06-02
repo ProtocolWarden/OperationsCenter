@@ -22,7 +22,13 @@ class ValidationRunner:
             start = time.monotonic()
             try:
                 proc = subprocess.run(
-                    command, cwd=cwd, shell=True, capture_output=True, text=True, env=env, check=False,
+                    command,
+                    cwd=cwd,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                    check=False,
                     timeout=timeout_seconds,
                 )
                 duration_ms = int((time.monotonic() - start) * 1000)
@@ -39,7 +45,9 @@ class ValidationRunner:
                 duration_ms = int((time.monotonic() - start) * 1000)
                 raw_stdout = exc.stdout
                 timeout_stdout = (
-                    raw_stdout.decode(errors="replace") if isinstance(raw_stdout, bytes) else (raw_stdout or "")
+                    raw_stdout.decode(errors="replace")
+                    if isinstance(raw_stdout, bytes)
+                    else (raw_stdout or "")
                 )
                 results.append(
                     ValidationResult(

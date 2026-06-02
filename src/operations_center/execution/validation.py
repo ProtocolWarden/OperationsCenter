@@ -15,6 +15,7 @@ Invariant notes:
   • No imports of behavior_calibration (runtime layer)
   • No routing decisions
 """
+
 from __future__ import annotations
 
 import logging
@@ -26,15 +27,19 @@ logger = logging.getLogger(__name__)
 
 # ── _check_execution_environment ─────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class EnvironmentCheck:
     """Result of a pre-execution environment probe."""
+
     ok: bool
     missing: tuple[str, ...]
     notes: tuple[str, ...]
 
 
-def _check_execution_environment(workspace_path: Path, *, required_files: tuple[str, ...] = ()) -> EnvironmentCheck:
+def _check_execution_environment(
+    workspace_path: Path, *, required_files: tuple[str, ...] = ()
+) -> EnvironmentCheck:
     """Verify the workspace looks ready for the executor to run.
 
     Cheap check — confirms the workspace is a populated git clone, optionally
@@ -58,7 +63,10 @@ def _check_execution_environment(workspace_path: Path, *, required_files: tuple[
 
 # ── _collect_open_pr_files ───────────────────────────────────────────────────
 
-def _collect_open_pr_files(gh_client, owner: str, repo: str, *, exclude_pr: int | None = None) -> dict[int, list[str]]:
+
+def _collect_open_pr_files(
+    gh_client, owner: str, repo: str, *, exclude_pr: int | None = None
+) -> dict[int, list[str]]:
     """Return {pr_number: [file_paths]} for every open PR in the repo.
 
     Caller can use this to surface "another open PR is touching this file"
@@ -85,6 +93,7 @@ def _collect_open_pr_files(gh_client, owner: str, repo: str, *, exclude_pr: int 
 
 
 # ── _has_conflict_with_active_task ───────────────────────────────────────────
+
 
 def _has_conflict_with_active_task(
     candidate_paths: list[str],
@@ -118,6 +127,7 @@ def _has_conflict_with_active_task(
 
 # ── build_improve_triage_result ──────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class ImproveTriageResult:
     """Structured outcome of an improve-mode executor run.
@@ -126,6 +136,7 @@ class ImproveTriageResult:
     at. Carries the executor verdict, any structured suggestions, and the
     bookkeeping needed for follow-up task creation.
     """
+
     success: bool
     summary: str
     suggestions: tuple[dict, ...]

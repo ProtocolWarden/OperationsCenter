@@ -12,6 +12,7 @@ that ``platform_manifest`` exposes via ``load_effective_graph``. It
 walks ``depends_on_contracts_from`` edges and reports affected repos
 split by visibility so private/public mixing is visible at a glance.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

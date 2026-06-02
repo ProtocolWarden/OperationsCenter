@@ -189,9 +189,7 @@ class CiEvaluator:
             elif guardrail == EnforcedGuardrail.NO_LOST_ESCALATIONS:
                 return self._check_no_lost_escalations(spec, eval_output)
             else:
-                logger.warning(
-                    '{"event": "ci_guardrail_unknown", "guardrail": "%s"}', guardrail
-                )
+                logger.warning('{"event": "ci_guardrail_unknown", "guardrail": "%s"}', guardrail)
                 return False
         except Exception as exc:
             logger.error(
@@ -259,15 +257,11 @@ class CiEvaluator:
         for path in ctx.changed_file_paths:
             lower = path.lower()
             if any(pat in lower for pat in _POLICY_FILE_PATTERNS):
-                logger.info(
-                    '{"event": "ci_guardrail_policy_widening", "path": "%s"}', path
-                )
+                logger.info('{"event": "ci_guardrail_policy_widening", "path": "%s"}', path)
                 return False
         return True
 
-    def _check_no_lost_escalations(
-        self, spec: EvaluationSpec, eval_output: dict
-    ) -> bool:
+    def _check_no_lost_escalations(self, spec: EvaluationSpec, eval_output: dict) -> bool:
         # The evaluation command is expected to emit escalation counts.
         # If the output contains `escalations_before` / `escalations_after` keys,
         # compare them. If not present, pass conservatively (eval command is

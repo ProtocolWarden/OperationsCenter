@@ -5,13 +5,13 @@
 The collectors cap top_violations / top_errors at _MAX_ERRORS (20), but distinct_file_count
 must reflect the full violation / error set — not just the sampled top-N.
 """
+
 from __future__ import annotations
 
 import json
 
 from operations_center.observer.collectors.lint_signal import LintSignalCollector
 from operations_center.observer.collectors.type_check import TypeSignalCollector
-
 
 # ── ruff JSON parser ────────────────────────────────────────────────────────
 
@@ -136,8 +136,7 @@ def test_mypy_distinct_file_count_from_full_output() -> None:
 def test_mypy_distinct_file_count_with_notes_excluded() -> None:
     """Note severity lines are excluded from both error_count and distinct_file_count."""
     lines = "\n".join(
-        [_mypy_line("src/a.py", severity="note")]
-        + [_mypy_line("src/b.py") for _ in range(3)]
+        [_mypy_line("src/a.py", severity="note")] + [_mypy_line("src/b.py") for _ in range(3)]
     )
     signal = TypeSignalCollector._parse_mypy_output(lines)
     assert signal.error_count == 3

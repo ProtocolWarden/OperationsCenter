@@ -51,7 +51,7 @@ class BackendDetailRef(BaseModel):
     ref_id: str = Field(default_factory=_new_id)
     detail_type: str = Field(
         description="Category of raw detail: stderr_log, jsonl_stream, workspace_snapshot, "
-                    "stdout_log, event_trace, structured_result, or similar.",
+        "stdout_log, event_trace, structured_result, or similar.",
     )
     path: Optional[str] = Field(
         default=None,

@@ -42,6 +42,7 @@ _CALIBRATION_PKG = "operations_center.behavior_calibration"
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _imports_calibration(py_file: Path) -> list[str]:
     """Return import statements in py_file that reference behavior_calibration."""
     source = py_file.read_text(encoding="utf-8")
@@ -110,20 +111,24 @@ def _make_input(index, profile: AnalysisProfile, **kwargs) -> BehaviorCalibratio
 # Rule 1 — Directionality: runtime modules must not import behavior_calibration
 # ---------------------------------------------------------------------------
 
+
 class TestImportBoundary:
     """AST-level enforcement: runtime packages must not depend on behavior_calibration."""
 
-    @pytest.mark.parametrize("pkg_subdir", [
-        "audit_dispatch",
-        "run_identity",
-        "managed_repos",
-        "config",
-        "routing",
-        "planning",
-        "policy",
-        "execution",
-        "observability",
-    ])
+    @pytest.mark.parametrize(
+        "pkg_subdir",
+        [
+            "audit_dispatch",
+            "run_identity",
+            "managed_repos",
+            "config",
+            "routing",
+            "planning",
+            "policy",
+            "execution",
+            "observability",
+        ],
+    )
     def test_runtime_module_does_not_import_calibration(self, pkg_subdir: str) -> None:
         pkg_path = _SRC_ROOT / pkg_subdir
         if not pkg_path.exists():
@@ -158,6 +163,7 @@ class TestImportBoundary:
 # ---------------------------------------------------------------------------
 # Rule 2 — Findings Are Facts
 # ---------------------------------------------------------------------------
+
 
 class TestFindingsAreFacts:
     def test_finding_references_artifact_ids(self) -> None:
@@ -196,6 +202,7 @@ class TestFindingsAreFacts:
 # ---------------------------------------------------------------------------
 # Rule 3 — Recommendations Are Advisory
 # ---------------------------------------------------------------------------
+
 
 class TestRecommendationsAreAdvisory:
     def test_requires_human_review_always_true(self) -> None:
@@ -247,6 +254,7 @@ class TestRecommendationsAreAdvisory:
 # ---------------------------------------------------------------------------
 # Rule 4 — Promotion Barrier: CalibrationDecision
 # ---------------------------------------------------------------------------
+
 
 class TestCalibrationDecision:
     def test_decision_requires_approved_by(self) -> None:
@@ -306,6 +314,7 @@ class TestCalibrationDecision:
 
     def test_decision_serializes_to_json(self) -> None:
         import json
+
         decision = CalibrationDecision(
             source_recommendation_ids=["rec-1"],
             approved_by="heidi",
@@ -320,14 +329,17 @@ class TestCalibrationDecision:
 # Rule 5 — No Auto-Apply: forbidden function names must not exist
 # ---------------------------------------------------------------------------
 
+
 class TestNoAutoApply:
-    _FORBIDDEN_FUNCTION_NAMES = frozenset({
-        "auto_apply_recommendations",
-        "self_tuning_runtime",
-        "apply_recommendation",
-        "execute_recommendation",
-        "auto_tune",
-    })
+    _FORBIDDEN_FUNCTION_NAMES = frozenset(
+        {
+            "auto_apply_recommendations",
+            "self_tuning_runtime",
+            "apply_recommendation",
+            "execute_recommendation",
+            "auto_tune",
+        }
+    )
 
     def test_no_forbidden_functions_in_calibration_package(self) -> None:
         calibration_dir = _SRC_ROOT / "behavior_calibration"
@@ -345,6 +357,7 @@ class TestNoAutoApply:
 # ---------------------------------------------------------------------------
 # Rule 6 — validate_all_recommendations integration
 # ---------------------------------------------------------------------------
+
 
 class TestValidateAllRecommendations:
     def test_valid_list_passes(self) -> None:
@@ -378,6 +391,7 @@ class TestValidateAllRecommendations:
 # ---------------------------------------------------------------------------
 # Rule 7 — Schema Separation: no shared mutable model
 # ---------------------------------------------------------------------------
+
 
 class TestSchemaSeparation:
     def test_finding_and_recommendation_are_distinct_types(self) -> None:

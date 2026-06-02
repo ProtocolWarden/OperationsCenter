@@ -48,11 +48,16 @@ class GitHubPRClient:
             if remaining_raw is not None:
                 try:
                     if int(remaining_raw) < _GH_RATE_LIMIT_WARN_THRESHOLD:
-                        _logger.warning(json.dumps({
-                            "event": "github_rate_limit_low",
-                            "remaining": int(remaining_raw),
-                            "reset_epoch": resp.headers.get("X-RateLimit-Reset"),
-                        }, ensure_ascii=False))
+                        _logger.warning(
+                            json.dumps(
+                                {
+                                    "event": "github_rate_limit_low",
+                                    "remaining": int(remaining_raw),
+                                    "reset_epoch": resp.headers.get("X-RateLimit-Reset"),
+                                },
+                                ensure_ascii=False,
+                            )
+                        )
                 except (ValueError, TypeError):
                     pass
             if resp.status_code != 429 or attempt >= _GH_RATE_LIMIT_MAX_RETRIES:
@@ -62,12 +67,17 @@ class GitHubPRClient:
                 retry_after = int(retry_after_raw)
             except (ValueError, TypeError):
                 retry_after = _GH_RATE_LIMIT_DEFAULT_BACKOFF_SECONDS
-            _logger.warning(json.dumps({
-                "event": "github_rate_limited",
-                "attempt": attempt + 1,
-                "retry_after_seconds": retry_after,
-                "url": url,
-            }, ensure_ascii=False))
+            _logger.warning(
+                json.dumps(
+                    {
+                        "event": "github_rate_limited",
+                        "attempt": attempt + 1,
+                        "retry_after_seconds": retry_after,
+                        "url": url,
+                    },
+                    ensure_ascii=False,
+                )
+            )
             time.sleep(retry_after)
         if resp is None:
             raise RuntimeError("HTTP retry loop exited without a response")
@@ -111,7 +121,9 @@ class GitHubPRClient:
         resp.raise_for_status()
         return resp.json()
 
-    def merge_pr(self, owner: str, repo: str, pr_number: int, *, merge_method: str = "squash") -> dict:
+    def merge_pr(
+        self, owner: str, repo: str, pr_number: int, *, merge_method: str = "squash"
+    ) -> dict:
         resp = self._request(
             "PUT",
             f"{self._API}/repos/{owner}/{repo}/pulls/{pr_number}/merge",
@@ -256,7 +268,11 @@ class GitHubPRClient:
                 params={"per_page": 100},
             )
             resp.raise_for_status()
-            return [item["filename"] for item in resp.json() if isinstance(item, dict) and "filename" in item]
+            return [
+                item["filename"]
+                for item in resp.json()
+                if isinstance(item, dict) and "filename" in item
+            ]
         except Exception:
             return []
 

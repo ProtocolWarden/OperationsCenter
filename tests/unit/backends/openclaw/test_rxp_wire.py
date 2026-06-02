@@ -6,6 +6,7 @@ OpenClaw is dispatched to an external runner (the abstract
 ``OpenClawRunner`` subclass). These tests pin the RuntimeInvocation/RuntimeResult
 contract and verify the invoker routes through CoreRunner.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -78,31 +79,51 @@ class TestBuildRuntimeResult:
     def test_success_outcome(self, tmp_path):
         inv = _build_invocation(_prepared(tmp_path))
         raw = OpenClawRunResult(outcome="success", exit_code=0)
-        r = _build_runtime_result(invocation=inv, raw=raw, timeout_hit=False,
-                                  started_at=self._now(), finished_at=self._now())
+        r = _build_runtime_result(
+            invocation=inv,
+            raw=raw,
+            timeout_hit=False,
+            started_at=self._now(),
+            finished_at=self._now(),
+        )
         assert r.status == "succeeded"
         assert r.runtime_kind == "manual"
 
     def test_failure_outcome(self, tmp_path):
         inv = _build_invocation(_prepared(tmp_path))
         raw = OpenClawRunResult(outcome="failure", exit_code=1, error_text="boom")
-        r = _build_runtime_result(invocation=inv, raw=raw, timeout_hit=False,
-                                  started_at=self._now(), finished_at=self._now())
+        r = _build_runtime_result(
+            invocation=inv,
+            raw=raw,
+            timeout_hit=False,
+            started_at=self._now(),
+            finished_at=self._now(),
+        )
         assert r.status == "failed"
         assert r.error_summary == "boom"
 
     def test_timeout_overrides_outcome(self, tmp_path):
         inv = _build_invocation(_prepared(tmp_path))
         raw = OpenClawRunResult(outcome="failure", exit_code=124)
-        r = _build_runtime_result(invocation=inv, raw=raw, timeout_hit=True,
-                                  started_at=self._now(), finished_at=self._now())
+        r = _build_runtime_result(
+            invocation=inv,
+            raw=raw,
+            timeout_hit=True,
+            started_at=self._now(),
+            finished_at=self._now(),
+        )
         assert r.status == "timed_out"
 
     def test_partial_maps_to_succeeded(self, tmp_path):
         inv = _build_invocation(_prepared(tmp_path))
         raw = OpenClawRunResult(outcome="partial", exit_code=0)
-        r = _build_runtime_result(invocation=inv, raw=raw, timeout_hit=False,
-                                  started_at=self._now(), finished_at=self._now())
+        r = _build_runtime_result(
+            invocation=inv,
+            raw=raw,
+            timeout_hit=False,
+            started_at=self._now(),
+            finished_at=self._now(),
+        )
         assert r.status == "succeeded"
 
 

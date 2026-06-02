@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """R4 — OC's catalog adapter satisfies the SB ExecutorCatalog port."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -38,6 +39,7 @@ def test_sb_adapter_satisfies_protocol(optional_import):
     OC adapter implements every method SB depends on."""
     optional_import("switchboard.ports.executor_catalog")
     from switchboard.ports.executor_catalog import ExecutorCatalog as SbCatalog
+
     cat = load_catalog(_REAL_DIR)
     sb_cat = SwitchboardCatalogAdapter(cat)
     assert isinstance(sb_cat, SbCatalog)

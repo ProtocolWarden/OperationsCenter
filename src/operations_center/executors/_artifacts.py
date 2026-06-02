@@ -18,6 +18,7 @@ loudly on:
   - upstream_patch_pending without a patch_deadline
   - fork_required without a forked-status gap
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -26,7 +27,6 @@ from pathlib import Path
 from typing import Any, Optional
 
 import yaml
-
 from cxrp.vocabulary.capability import CapabilitySet
 from cxrp.vocabulary.runtime import RuntimeKind, SelectionMode
 
@@ -43,11 +43,11 @@ class AuditArtifactError(ValueError):
 
 
 class GapStatus(str, Enum):
-    OPEN             = "open"
-    MITIGATED        = "mitigated"
+    OPEN = "open"
+    MITIGATED = "mitigated"
     PATCHED_UPSTREAM = "patched_upstream"
-    FORKED           = "forked"
-    UPSTREAM_MERGED  = "upstream_merged"  # spec lifecycle: forked → upstream_merged → mitigated
+    FORKED = "forked"
+    UPSTREAM_MERGED = "upstream_merged"  # spec lifecycle: forked → upstream_merged → mitigated
 
 
 _GAP_REQUIRED = {"id", "gap", "discovered_at", "impact", "workaround", "fork_threshold", "status"}
@@ -83,17 +83,21 @@ def load_contract_gaps(path: Path) -> list[ContractGap]:
             status = GapStatus(entry["status"])
         except ValueError as e:
             raise AuditArtifactError(f"{path}: invalid status {entry['status']!r}") from e
-        out.append(ContractGap(
-            id=str(entry["id"]),
-            gap=str(entry["gap"]),
-            discovered_at=str(entry["discovered_at"]),
-            backend_version=str(entry.get("backend_version", "unknown")),
-            impact=str(entry["impact"]),
-            workaround=str(entry["workaround"]),
-            fork_threshold=str(entry["fork_threshold"]),
-            status=status,
-            patch_deadline=str(entry["patch_deadline"]) if entry.get("patch_deadline") else None,
-        ))
+        out.append(
+            ContractGap(
+                id=str(entry["id"]),
+                gap=str(entry["gap"]),
+                discovered_at=str(entry["discovered_at"]),
+                backend_version=str(entry.get("backend_version", "unknown")),
+                impact=str(entry["impact"]),
+                workaround=str(entry["workaround"]),
+                fork_threshold=str(entry["fork_threshold"]),
+                status=status,
+                patch_deadline=str(entry["patch_deadline"])
+                if entry.get("patch_deadline")
+                else None,
+            )
+        )
     return out
 
 
@@ -175,17 +179,17 @@ def load_runtime_support(path: Path) -> RuntimeSupportCard:
 
 
 class PhaseClassification(str, Enum):
-    PASS    = "PASS"
+    PASS = "PASS"
     PARTIAL = "PARTIAL"
-    FAIL    = "FAIL"
-    NA      = "N/A"
+    FAIL = "FAIL"
+    NA = "N/A"
 
 
 class AuditOutcome(str, Enum):
-    ADAPTER_ONLY            = "adapter_only"
-    ADAPTER_PLUS_WRAPPER    = "adapter_plus_wrapper"
-    UPSTREAM_PATCH_PENDING  = "upstream_patch_pending"
-    FORK_REQUIRED           = "fork_required"
+    ADAPTER_ONLY = "adapter_only"
+    ADAPTER_PLUS_WRAPPER = "adapter_plus_wrapper"
+    UPSTREAM_PATCH_PENDING = "upstream_patch_pending"
+    FORK_REQUIRED = "fork_required"
 
 
 _AUDIT_PHASES = (

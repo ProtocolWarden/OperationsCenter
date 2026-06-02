@@ -19,13 +19,14 @@ from pydantic import BaseModel, Field
 
 from operations_center.behavior_calibration.models import ArtifactIndexSummary
 
-
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
 
+
 class HarvestProfile(str, Enum):
     """Explicit selection strategy for a fixture pack."""
+
     MINIMAL_FAILURE = "minimal_failure"
     PARTIAL_RUN = "partial_run"
     ARTIFACT_HEALTH = "artifact_health"
@@ -38,6 +39,7 @@ class HarvestProfile(str, Enum):
 # ---------------------------------------------------------------------------
 # Serializable output models (Pydantic)
 # ---------------------------------------------------------------------------
+
 
 class FixtureFindingReference(BaseModel, frozen=True):
     """Evidence record linking a fixture pack to calibration findings.
@@ -133,11 +135,13 @@ class FixturePack(BaseModel):
 # Input / intermediate types (dataclasses, not serialized)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CopyPolicy:
     """Controls which artifacts are copied and how much space is used."""
+
     max_artifact_bytes: int = 10 * 1024 * 1024  # 10 MiB
-    max_total_bytes: int = 100 * 1024 * 1024    # 100 MiB
+    max_total_bytes: int = 100 * 1024 * 1024  # 100 MiB
     allowed_content_types: list[str] | None = None  # None = all text/json
     include_binary_artifacts: bool = False
     include_missing_files: bool = True  # record as metadata-only when True
@@ -149,13 +153,14 @@ class HarvestRequest:
 
     Holds the artifact index (non-serializable) plus all selection parameters.
     """
-    index: Any                                  # ManagedArtifactIndex
+
+    index: Any  # ManagedArtifactIndex
     harvest_profile: HarvestProfile
-    artifact_ids: list[str] | None = None       # MANUAL_SELECTION or additional filter
-    finding_ids: list[str] | None = None        # restrict to artifacts in these findings
-    findings: list[Any] | None = None           # CalibrationFinding objects for reference
-    source_stage: str | None = None             # STAGE_SLICE filter
-    artifact_kind: str | None = None            # additional kind filter
+    artifact_ids: list[str] | None = None  # MANUAL_SELECTION or additional filter
+    finding_ids: list[str] | None = None  # restrict to artifacts in these findings
+    findings: list[Any] | None = None  # CalibrationFinding objects for reference
+    source_stage: str | None = None  # STAGE_SLICE filter
+    artifact_kind: str | None = None  # additional kind filter
     include_repo_singletons: bool = False
     include_missing_files: bool = True
     max_artifacts: int | None = None
@@ -168,13 +173,15 @@ class HarvestRequest:
 @dataclass
 class SelectedArtifact:
     """A single artifact chosen for the fixture pack, with rationale."""
-    artifact: Any    # IndexedArtifact
+
+    artifact: Any  # IndexedArtifact
     rationale: str
 
 
 @dataclass
 class FixtureSelection:
     """The result of artifact selection — ordered list with rationale."""
+
     selected: list[SelectedArtifact] = field(default_factory=list)
     skipped_ids: list[str] = field(default_factory=list)  # excluded by policy
 

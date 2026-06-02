@@ -86,7 +86,9 @@ def _compute_summary(
     errored = sum(1 for r in entry_results if r.status == "error")
     skipped = sum(1 for r in entry_results if r.status == "skipped")
     req_failures = sum(1 for r in entry_results if r.required and r.status in ("failed", "error"))
-    opt_failures = sum(1 for r in entry_results if not r.required and r.status in ("failed", "error"))
+    opt_failures = sum(
+        1 for r in entry_results if not r.required and r.status in ("failed", "error")
+    )
     return MiniRegressionSuiteSummary(
         total_entries=total,
         required_entries=required,
@@ -135,15 +137,17 @@ def run_mini_regression_suite(
     for entry in suite.entries:
         # Skip optional entries if not requested
         if not entry.required and not request.include_optional_entries:
-            entry_results.append(MiniRegressionEntryResult(
-                entry_id=entry.entry_id,
-                fixture_pack_id="",
-                fixture_pack_path=entry.fixture_pack_path,
-                replay_profile=entry.replay_profile,
-                required=entry.required,
-                status="skipped",
-                summary="Optional entry skipped (include_optional_entries=False)",
-            ))
+            entry_results.append(
+                MiniRegressionEntryResult(
+                    entry_id=entry.entry_id,
+                    fixture_pack_id="",
+                    fixture_pack_path=entry.fixture_pack_path,
+                    replay_profile=entry.replay_profile,
+                    required=entry.required,
+                    status="skipped",
+                    summary="Optional entry skipped (include_optional_entries=False)",
+                )
+            )
             continue
 
         pack_path = _resolve_pack_path(entry)
@@ -157,10 +161,16 @@ def run_mini_regression_suite(
 
         try:
             replay_report = run_slice_replay(replay_request)
-            entry_status = replay_report.status if replay_report.status in ("passed",) else (
-                "failed" if replay_report.status == "failed" else
-                "error" if replay_report.status == "error" else
-                "passed"  # partial → treat as passed for suite purposes
+            entry_status = (
+                replay_report.status
+                if replay_report.status in ("passed",)
+                else (
+                    "failed"
+                    if replay_report.status == "failed"
+                    else "error"
+                    if replay_report.status == "error"
+                    else "passed"  # partial → treat as passed for suite purposes
+                )
             )
             summary = replay_report.summary
             for lim in replay_report.limitations:
@@ -169,9 +179,11 @@ def run_mini_regression_suite(
 
             # Write the slice replay report
             from .reports import _suite_replay_output_dir
+
             replay_out = _suite_replay_output_dir(request.output_dir, suite_run_id)
             try:
                 from operations_center.slice_replay.reports import write_replay_report
+
                 rpath = write_replay_report(replay_report, replay_out)
                 slice_report_path = str(rpath)
                 report_paths.append(str(rpath))
@@ -187,24 +199,22 @@ def run_mini_regression_suite(
             error_msg = str(exc)
             fixture_pack_id = ""
 
-        entry_results.append(MiniRegressionEntryResult(
-            entry_id=entry.entry_id,
-            fixture_pack_id=fixture_pack_id,
-            fixture_pack_path=entry.fixture_pack_path,
-            replay_profile=entry.replay_profile,
-            required=entry.required,
-            status=entry_status,
-            slice_replay_report_path=slice_report_path,
-            summary=summary,
-            error=error_msg,
-        ))
+        entry_results.append(
+            MiniRegressionEntryResult(
+                entry_id=entry.entry_id,
+                fixture_pack_id=fixture_pack_id,
+                fixture_pack_path=entry.fixture_pack_path,
+                replay_profile=entry.replay_profile,
+                required=entry.required,
+                status=entry_status,
+                slice_replay_report_path=slice_report_path,
+                summary=summary,
+                error=error_msg,
+            )
+        )
 
         # fail_fast: stop after first required failure/error
-        if (
-            request.fail_fast
-            and entry.required
-            and entry_status in ("failed", "error")
-        ):
+        if request.fail_fast and entry.required and entry_status in ("failed", "error"):
             stopped_early = True
             break
 

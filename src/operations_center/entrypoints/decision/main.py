@@ -10,7 +10,9 @@ from operations_center.decision.service import DecisionEngineService, new_decisi
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Decide guarded proposal candidates from retained insight artifacts")
+    parser = argparse.ArgumentParser(
+        description="Decide guarded proposal candidates from retained insight artifacts"
+    )
     parser.add_argument("--insight-run-id")
     parser.add_argument("--history-limit", type=int, default=5)
     parser.add_argument("--max-candidates", type=int, default=3)
@@ -29,7 +31,9 @@ def main() -> None:
         history_limit=args.history_limit,
         max_candidates=args.max_candidates,
         cooldown_minutes=args.cooldown_minutes,
-        source_command="operations-center decide-proposals --dry-run" if args.dry_run else "operations-center decide-proposals",
+        source_command="operations-center decide-proposals --dry-run"
+        if args.dry_run
+        else "operations-center decide-proposals",
         dry_run=args.dry_run,
     )
     artifact, artifacts = service.decide(context)

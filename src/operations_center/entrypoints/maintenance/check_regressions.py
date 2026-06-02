@@ -13,6 +13,7 @@ open PRs by hand — the CLI never auto-pushes).
         [--revert] \\
         [--dry-run]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -32,9 +33,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Scan for post-merge regressions")
     parser.add_argument("--config", required=True, type=Path)
     parser.add_argument("--lookback-hours", type=int, default=24)
-    parser.add_argument("--revert", action="store_true",
-                        help="create local revert branches for each regression "
-                             "(does not push or open PRs)")
+    parser.add_argument(
+        "--revert",
+        action="store_true",
+        help="create local revert branches for each regression (does not push or open PRs)",
+    )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -53,39 +56,42 @@ def main() -> int:
         except ValueError:
             continue
         signals = detect_post_merge_regressions(
-            gh, owner, repo,
+            gh,
+            owner,
+            repo,
             base_branch=repo_cfg.default_branch,
             lookback_hours=args.lookback_hours,
             ignored_checks=tuple(getattr(repo_cfg, "ci_ignored_checks", []) or []),
         )
         for sig in signals:
             entry = {
-                "repo_key":       repo_key,
-                "owner":          owner,
-                "repo":           repo,
-                "pr_number":      sig.pr_number,
-                "merge_sha":      sig.merge_commit_sha,
-                "head_sha":       sig.head_sha,
-                "base_branch":    sig.base_branch,
-                "merged_at":      sig.merged_at,
-                "failed_checks":  list(sig.failed_checks),
+                "repo_key": repo_key,
+                "owner": owner,
+                "repo": repo,
+                "pr_number": sig.pr_number,
+                "merge_sha": sig.merge_commit_sha,
+                "head_sha": sig.head_sha,
+                "base_branch": sig.base_branch,
+                "merged_at": sig.merged_at,
+                "failed_checks": list(sig.failed_checks),
             }
             # Optional revert step — only LOCAL git ops, never push/open
             local_path = getattr(repo_cfg, "local_path", None)
             if args.revert and not args.dry_run and local_path:
                 ws = Path(local_path)
                 branch = create_revert_branch(
-                    ws, commit_sha=sig.merge_commit_sha,
+                    ws,
+                    commit_sha=sig.merge_commit_sha,
                     base_branch=sig.base_branch,
                 )
                 entry["revert_branch"] = branch
             findings.append(entry)
 
     out = {
-        "scanned_at":     now.isoformat(),
+        "scanned_at": now.isoformat(),
         "lookback_hours": args.lookback_hours,
-        "revert_local":   bool(args.revert) and not args.dry_run,
-        "findings":       findings,
+        "revert_local": bool(args.revert) and not args.dry_run,
+        "findings": findings,
     }
     print(json.dumps(out, indent=2, ensure_ascii=False))
     return 0

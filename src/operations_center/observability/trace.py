@@ -16,10 +16,9 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
-
-from typing import Any, Optional
 
 from operations_center.contracts.enums import ExecutionStatus, FailureReasonCategory
 from operations_center.contracts.execution import ExecutionArtifact, RuntimeInvocationRef
@@ -108,9 +107,7 @@ class RunReportBuilder:
             warnings=self._warnings(record),
             backend_detail_refs=list(record.backend_detail_refs),
             runtime_invocation_ref=record.result.runtime_invocation_ref,
-            observed_runtime=(
-                {**observed_runtime} if isinstance(observed_runtime, dict) else {}
-            ),  # type: ignore  # noqa: PGH003
+            observed_runtime=({**observed_runtime} if isinstance(observed_runtime, dict) else {}),  # type: ignore  # noqa: PGH003
             routing={**routing} if isinstance(routing, dict) else {},  # type: ignore  # noqa: PGH003
             provenance={**provenance} if isinstance(provenance, dict) else {},  # type: ignore  # noqa: PGH003
         )

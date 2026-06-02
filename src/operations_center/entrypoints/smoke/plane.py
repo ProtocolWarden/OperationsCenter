@@ -30,7 +30,9 @@ def main() -> None:
     reporter = Reporter(settings.report_root)
     run_id = uuid.uuid4().hex[:12]
     run_dir = reporter.create_run_dir(args.task_id, run_id)
-    artifacts = [reporter.write_request_context(run_dir, args.task_id, run_id, phase="smoke_initialized")]
+    artifacts = [
+        reporter.write_request_context(run_dir, args.task_id, run_id, phase="smoke_initialized")
+    ]
 
     client = PlaneClient(
         base_url=settings.plane.base_url,
@@ -72,7 +74,12 @@ def main() -> None:
             )
         )
 
-        logger.info(json.dumps({"event": "plane_smoke_complete", "run_id": run_id, "task_id": args.task_id}, ensure_ascii=False))
+        logger.info(
+            json.dumps(
+                {"event": "plane_smoke_complete", "run_id": run_id, "task_id": args.task_id},
+                ensure_ascii=False,
+            )
+        )
         print(
             json.dumps(
                 {
@@ -82,12 +89,17 @@ def main() -> None:
                     "artifacts": artifacts,
                 },
                 indent=2,
-            ensure_ascii=False,
+                ensure_ascii=False,
             )
         )
     except Exception:
         reporter.write_failure(run_dir, traceback.format_exc(), phase="smoke")
-        logger.info(json.dumps({"event": "plane_smoke_failed", "run_id": run_id, "task_id": args.task_id}, ensure_ascii=False))
+        logger.info(
+            json.dumps(
+                {"event": "plane_smoke_failed", "run_id": run_id, "task_id": args.task_id},
+                ensure_ascii=False,
+            )
+        )
         raise
     finally:
         client.close()

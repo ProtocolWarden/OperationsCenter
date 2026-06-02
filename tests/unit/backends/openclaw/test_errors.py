@@ -4,10 +4,8 @@
 
 from __future__ import annotations
 
-
 from operations_center.backends.openclaw.errors import build_failure_reason, categorize_failure
 from operations_center.contracts.enums import FailureReasonCategory
-
 
 # ---------------------------------------------------------------------------
 # categorize_failure

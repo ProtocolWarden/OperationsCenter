@@ -29,12 +29,15 @@ class TuningArtifactWriter:
                     "run_id": artifact.run_id,
                     "generated_at": artifact.generated_at.isoformat(),
                     "window_runs": artifact.window_runs,
-                    "window_start": artifact.window_start.isoformat() if artifact.window_start else None,
+                    "window_start": artifact.window_start.isoformat()
+                    if artifact.window_start
+                    else None,
                     "window_end": artifact.window_end.isoformat() if artifact.window_end else None,
                     "family_metrics": [m.model_dump() for m in artifact.family_metrics],
                 }
-            )
-        , encoding="utf-8")
+            ),
+            encoding="utf-8",
+        )
 
         rec_path = run_dir / "tuning_recommendations.json"
         rec_path.write_text(
@@ -44,8 +47,9 @@ class TuningArtifactWriter:
                     "generated_at": artifact.generated_at.isoformat(),
                     "recommendations": [r.model_dump() for r in artifact.recommendations],
                 }
-            )
-        , encoding="utf-8")
+            ),
+            encoding="utf-8",
+        )
 
         changes_path = run_dir / "tuning_changes.json"
         changes_path.write_text(
@@ -57,8 +61,9 @@ class TuningArtifactWriter:
                     "changes_applied": [c.model_dump() for c in artifact.changes_applied],
                     "changes_skipped": [s.model_dump() for s in artifact.changes_skipped],
                 }
-            )
-        , encoding="utf-8")
+            ),
+            encoding="utf-8",
+        )
 
         return [str(run_path), str(summary_path), str(rec_path), str(changes_path)]
 

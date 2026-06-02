@@ -300,4 +300,6 @@ class TestCLISmoke:
         runner = CliRunner()
         result = runner.invoke(app, ["--help"])
         assert result.exit_code == 0, result.output
-        assert "operations-center-audit" in result.output.lower() or "usage" in result.output.lower()
+        assert (
+            "operations-center-audit" in result.output.lower() or "usage" in result.output.lower()
+        )

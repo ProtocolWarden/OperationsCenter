@@ -12,7 +12,6 @@ from operations_center.observability.service import ExecutionObservabilityServic
 from operations_center.observability.trace import ExecutionTrace
 
 
-
 @pytest.fixture
 def svc() -> ExecutionObservabilityService:
     return ExecutionObservabilityService.default()

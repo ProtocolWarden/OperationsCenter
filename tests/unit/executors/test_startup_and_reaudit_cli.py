@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """R5 — startup hook + re-audit CLI tests."""
+
 from __future__ import annotations
 
 import json
@@ -11,7 +12,6 @@ from pathlib import Path
 import pytest
 
 from operations_center.executors.startup import initialize_catalog
-
 
 _REAL_DIR = Path("src/operations_center/executors")
 
@@ -33,8 +33,12 @@ class TestStartupHook:
     def test_fail_fast_false_swallows_errors(self, tmp_path):
         bad = tmp_path / "x"
         bad.mkdir()
-        (bad / "capability_card.yaml").write_text("backend_id: x\nadvertised_capabilities: [made_up_cap]\n")
-        (bad / "runtime_support.yaml").write_text("backend_id: x\nsupported_runtime_kinds: []\nsupported_selection_modes: []\n")
+        (bad / "capability_card.yaml").write_text(
+            "backend_id: x\nadvertised_capabilities: [made_up_cap]\n"
+        )
+        (bad / "runtime_support.yaml").write_text(
+            "backend_id: x\nsupported_runtime_kinds: []\nsupported_selection_modes: []\n"
+        )
         (bad / "contract_gaps.yaml").write_text("[]")
         (bad / "audit_verdict.yaml").write_text(
             "backend_id: x\naudited_at: t\naudited_against_cxrp_version: '0.2'\n"
@@ -53,9 +57,16 @@ class TestStartupHook:
 class TestReauditCLI:
     def test_cli_returns_zero_for_no_triggers(self):
         proc = subprocess.run(
-            [sys.executable, "-m", "operations_center.entrypoints.reaudit_check.main",
-             "--dir", str(_REAL_DIR), "--json"],
-            capture_output=True, text=True,
+            [
+                sys.executable,
+                "-m",
+                "operations_center.entrypoints.reaudit_check.main",
+                "--dir",
+                str(_REAL_DIR),
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
         )
         report = json.loads(proc.stdout)
         # All current verdicts are dated 2026-05-05; no triggers fire today
@@ -64,9 +75,17 @@ class TestReauditCLI:
 
     def test_cli_returns_nonzero_when_runtimebinding_changes(self):
         proc = subprocess.run(
-            [sys.executable, "-m", "operations_center.entrypoints.reaudit_check.main",
-             "--dir", str(_REAL_DIR), "--runtimebinding-changed", "--json"],
-            capture_output=True, text=True,
+            [
+                sys.executable,
+                "-m",
+                "operations_center.entrypoints.reaudit_check.main",
+                "--dir",
+                str(_REAL_DIR),
+                "--runtimebinding-changed",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
         )
         report = json.loads(proc.stdout)
         # Every backend should now need re-audit

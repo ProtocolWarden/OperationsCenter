@@ -8,6 +8,7 @@ honors `promote_to_ready` by calling `transition_issue` to "Ready for
 AI" after creation; otherwise the task stays in the default "Backlog"
 state.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

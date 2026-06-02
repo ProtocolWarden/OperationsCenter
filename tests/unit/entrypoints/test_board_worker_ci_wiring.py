@@ -24,10 +24,10 @@ from operations_center.contracts.ci import (
 from operations_center.contracts.enums import EnforcedGuardrail, RefinementStatus
 from operations_center.execution.ci_coordinator import CiRunResult
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _ci_spec_dict() -> dict:
     spec = ContinuousImprovementSpec(
@@ -86,6 +86,7 @@ def _mock_settings(tmp_path: Path):
 # _run_ci_loop unit tests (via module import)
 # ---------------------------------------------------------------------------
 
+
 class TestRunCiLoop:
     def _call(self, tmp_path, ci_result, settings=None):
         from operations_center.entrypoints.board_worker.outcomes import run_ci_loop as _run_ci_loop
@@ -100,9 +101,7 @@ class TestRunCiLoop:
         config_file = tmp_path / "config.yaml"
         config_file.write_text("{}", encoding="utf-8")
 
-        with patch(
-            "operations_center.execution.ci_coordinator.CiCoordinator"
-        ) as MockCoord:
+        with patch("operations_center.execution.ci_coordinator.CiCoordinator") as MockCoord:
             coord_instance = MagicMock()
             coord_instance.run.return_value = ci_result
             MockCoord.return_value = coord_instance
@@ -182,9 +181,7 @@ class TestRunCiLoop:
             last_decision=None,
             last_score=None,
         )
-        with patch(
-            "operations_center.entrypoints.board_worker.outcomes.fail_task"
-        ) as mock_fail:
+        with patch("operations_center.entrypoints.board_worker.outcomes.fail_task") as mock_fail:
             result, _ = self._call(tmp_path, ci_result)
 
         assert result is False
@@ -222,9 +219,7 @@ class TestRunCiLoop:
         config_file = tmp_path / "config.yaml"
         config_file.write_text("{}", encoding="utf-8")
 
-        with patch(
-            "operations_center.entrypoints.board_worker.outcomes.fail_task"
-        ) as mock_fail:
+        with patch("operations_center.entrypoints.board_worker.outcomes.fail_task") as mock_fail:
             result = _run_ci_loop(
                 ci_spec_raw={"not": "a valid spec"},
                 client=client,

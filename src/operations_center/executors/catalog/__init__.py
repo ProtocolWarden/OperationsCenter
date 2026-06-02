@@ -16,6 +16,7 @@ subjective recommendations as routing input.
 
 See docs/architecture/audit/backend_control_audit.md (Phase 10).
 """
+
 from operations_center.executors.catalog.loader import (
     BackendEntry,
     ExecutorCatalog,

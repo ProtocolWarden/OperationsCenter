@@ -17,7 +17,9 @@ class TestValidationRunnerNormalCompletion:
         mock_proc.stdout = "ok\n"
         mock_proc.stderr = ""
 
-        with patch("operations_center.application.validation.subprocess.run", return_value=mock_proc) as mock_run:
+        with patch(
+            "operations_center.application.validation.subprocess.run", return_value=mock_proc
+        ) as mock_run:
             results = runner.run(["echo hello"], cwd=Path("/tmp"))
 
         assert len(results) == 1
@@ -69,7 +71,9 @@ class TestValidationRunnerNoTimeout:
         mock_proc.stdout = ""
         mock_proc.stderr = ""
 
-        with patch("operations_center.application.validation.subprocess.run", return_value=mock_proc) as mock_run:
+        with patch(
+            "operations_center.application.validation.subprocess.run", return_value=mock_proc
+        ) as mock_run:
             runner.run(["true"], cwd=Path("/tmp"), timeout_seconds=None)
 
         assert mock_run.call_args.kwargs.get("timeout") is None

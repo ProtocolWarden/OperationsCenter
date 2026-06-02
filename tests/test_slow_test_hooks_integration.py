@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Integration tests for slow test hooks with pytest."""
+
 import json
 import subprocess
 import sys
@@ -54,12 +55,14 @@ def test_slow_by_threshold():
             )
 
             # Check output contains warning
-            assert "SLOW TEST THRESHOLD WARNING" in result.stdout, f"Expected warning in output, got: {result.stdout}\nstderr: {result.stderr}"
+            assert "SLOW TEST THRESHOLD WARNING" in result.stdout, (
+                f"Expected warning in output, got: {result.stdout}\nstderr: {result.stderr}"
+            )
             assert "0.05s" in result.stdout or "0.050" in result.stdout
 
     def test_json_output_generation(self):
         """Test JSON output generation."""
-        test_code = '''
+        test_code = """
 import time
 import pytest
 
@@ -68,7 +71,7 @@ def test_fast():
 
 def test_slow():
     time.sleep(0.15)
-'''
+"""
         tests_dir = Path(__file__).parent
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -112,10 +115,10 @@ def test_slow():
 
     def test_silence_when_no_slow_tests(self):
         """Test that output is silent when no slow tests."""
-        test_code = '''
+        test_code = """
 def test_fast():
     pass
-'''
+"""
         tests_dir = Path(__file__).parent
 
         with tempfile.TemporaryDirectory() as tmpdir:

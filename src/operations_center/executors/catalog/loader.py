@@ -12,6 +12,7 @@ Validation runs at load time and fails loudly on:
 Per the spec, this loader is the enforcement chokepoint and must run
 in CI, at OC process startup, and before adapter registration.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -32,7 +33,6 @@ from operations_center.executors._artifacts import (
     load_runtime_support,
 )
 from operations_center.executors.decision import verdict_is_consistent
-
 
 # Default executors directory; tests can pass their own.
 _DEFAULT_EXECUTORS_DIR = Path(__file__).resolve().parents[1]
@@ -70,9 +70,7 @@ def _validate_verdict_against_gaps(
 
     if verdict.outcome == AuditOutcome.FORK_REQUIRED:
         # require at least one referenced gap with status: forked
-        has_forked = any(
-            gaps_by_id[gid].status == GapStatus.FORKED for gid in verdict.gap_refs
-        )
+        has_forked = any(gaps_by_id[gid].status == GapStatus.FORKED for gid in verdict.gap_refs)
         if not has_forked:
             raise CatalogValidationError(
                 f"{backend_id}: outcome=fork_required requires at least one "
@@ -123,8 +121,9 @@ def load_catalog(executors_dir: Path | None = None) -> ExecutorCatalog:
         rs_path = child / "runtime_support.yaml"
         gaps_path = child / "contract_gaps.yaml"
         verdict_path = child / "audit_verdict.yaml"
-        if not (cap_path.exists() and rs_path.exists()
-                and gaps_path.exists() and verdict_path.exists()):
+        if not (
+            cap_path.exists() and rs_path.exists() and gaps_path.exists() and verdict_path.exists()
+        ):
             continue
         cap = load_capability_card(cap_path)
         rs = load_runtime_support(rs_path)

@@ -13,7 +13,6 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
-
 from operations_center.audit_dispatch.executor import ManagedAuditExecutor, ProcessResult
 from operations_center.audit_toolset import ManagedAuditInvocationRequest
 

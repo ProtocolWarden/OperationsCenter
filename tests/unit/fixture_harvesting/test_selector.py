@@ -4,16 +4,14 @@
 
 from __future__ import annotations
 
-
 import pytest
 
 from operations_center.fixture_harvesting import (
+    HarvestInputError,
     HarvestProfile,
     HarvestRequest,
     select_fixture_artifacts,
-    HarvestInputError,
 )
-
 
 
 def _make_request(index, profile: HarvestProfile, **kwargs) -> HarvestRequest:
@@ -34,8 +32,10 @@ class TestManualSelection:
         sel = select_fixture_artifacts(
             completed_index,
             _make_request(
-                completed_index, HarvestProfile.MANUAL_SELECTION,
-                artifact_ids=ids, include_repo_singletons=False,
+                completed_index,
+                HarvestProfile.MANUAL_SELECTION,
+                artifact_ids=ids,
+                include_repo_singletons=False,
             ),
         )
         assert sel.artifact_ids == ids
@@ -45,7 +45,8 @@ class TestManualSelection:
             select_fixture_artifacts(
                 completed_index,
                 _make_request(
-                    completed_index, HarvestProfile.MANUAL_SELECTION,
+                    completed_index,
+                    HarvestProfile.MANUAL_SELECTION,
                     artifact_ids=["nonexistent:id"],
                 ),
             )
@@ -63,7 +64,8 @@ class TestStageSlice:
         sel = select_fixture_artifacts(
             completed_index,
             _make_request(
-                completed_index, HarvestProfile.STAGE_SLICE,
+                completed_index,
+                HarvestProfile.STAGE_SLICE,
                 source_stage="TopicSelectionStage",
             ),
         )
@@ -81,7 +83,8 @@ class TestStageSlice:
         sel = select_fixture_artifacts(
             completed_index,
             _make_request(
-                completed_index, HarvestProfile.STAGE_SLICE,
+                completed_index,
+                HarvestProfile.STAGE_SLICE,
                 source_stage="NonexistentStage",
             ),
         )
@@ -93,7 +96,8 @@ class TestArtifactKindFilter:
         sel = select_fixture_artifacts(
             completed_index,
             _make_request(
-                completed_index, HarvestProfile.FULL_MANIFEST_SNAPSHOT,
+                completed_index,
+                HarvestProfile.FULL_MANIFEST_SNAPSHOT,
                 artifact_kind="stage_report",
                 include_repo_singletons=True,
             ),
@@ -167,7 +171,8 @@ class TestSingletonHandling:
         sel = select_fixture_artifacts(
             completed_index,
             _make_request(
-                completed_index, HarvestProfile.FULL_MANIFEST_SNAPSHOT,
+                completed_index,
+                HarvestProfile.FULL_MANIFEST_SNAPSHOT,
                 include_repo_singletons=True,
             ),
         )
@@ -192,8 +197,10 @@ class TestMaxArtifacts:
         sel = select_fixture_artifacts(
             completed_index,
             _make_request(
-                completed_index, HarvestProfile.FULL_MANIFEST_SNAPSHOT,
-                max_artifacts=1, include_repo_singletons=True,
+                completed_index,
+                HarvestProfile.FULL_MANIFEST_SNAPSHOT,
+                max_artifacts=1,
+                include_repo_singletons=True,
             ),
         )
         assert len(sel.selected) <= 1

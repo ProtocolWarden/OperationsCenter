@@ -15,7 +15,6 @@ import sys
 import textwrap
 from pathlib import Path
 
-
 _SUBPROCESS_SCRIPT = textwrap.dedent(
     """
     import json
@@ -98,6 +97,7 @@ class TestCrossProcessConcurrency:
         proc_a = _run_competitor(tmp_path, "example_managed_repo", 1.5, out_a, oc_src)
         # Brief spin to ensure A wins the race.
         import time as _t
+
         _t.sleep(0.3)
         proc_b = _run_competitor(tmp_path, "example_managed_repo", 0.1, out_b, oc_src)
 

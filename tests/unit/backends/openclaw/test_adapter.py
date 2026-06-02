@@ -7,7 +7,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-
 from operations_center.backends.openclaw.adapter import OpenClawBackendAdapter
 from operations_center.backends.openclaw.models import OpenClawRunCapture
 from operations_center.contracts.enums import ExecutionStatus, FailureReasonCategory
@@ -201,11 +200,9 @@ def test_execute_and_capture_event_stream_source_when_reported(tmp_path):
 
 def test_adapter_does_not_import_openclaw_shell():
     import operations_center.backends.openclaw.adapter as mod
+
     # Confirm openclaw_shell is not in the actual imports (only in docstring comments)
-    imports = [
-        name for name in vars(mod)
-        if not name.startswith("_")
-    ]
+    imports = [name for name in vars(mod) if not name.startswith("_")]
     assert "openclaw_shell" not in imports
     # Also verify no runtime import dependency
     assert "openclaw_shell" not in (mod.__dict__.get("__file__", "") or "")
@@ -213,4 +210,5 @@ def test_adapter_does_not_import_openclaw_shell():
 
 def test_adapter_module_path_is_backends():
     from operations_center.backends.openclaw import OpenClawBackendAdapter as imported
+
     assert "backends.openclaw" in imported.__module__

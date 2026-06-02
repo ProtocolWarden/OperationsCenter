@@ -20,16 +20,17 @@ Usage::
     for row in store.report():
         print(row)
 """
+
 from __future__ import annotations
 
 import json
 import threading
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
 _DEFAULT_STORE_PATH = Path("state/calibration_store.json")
-_MIN_SAMPLE_SIZE = 5    # minimum records before reporting calibration
+_MIN_SAMPLE_SIZE = 5  # minimum records before reporting calibration
 
 
 @dataclass
@@ -40,7 +41,7 @@ class CalibrationRecord:
     merged: int
     escalated: int
     abandoned: int
-    acceptance_rate: float   # merged / (merged + escalated + abandoned)
+    acceptance_rate: float  # merged / (merged + escalated + abandoned)
     # calibration_ratio: acceptance_rate / expected_rate_for_confidence_label
     # expected rates: high=0.8, medium=0.5, low=0.3 (conservative baselines)
     expected_rate: float
@@ -61,7 +62,9 @@ class ConfidenceCalibrationStore:
         self._path = path
         self._lock = threading.RLock()
 
-    def record(self, family: str, confidence: str, outcome: str, *, repo_key: str | None = None) -> None:
+    def record(
+        self, family: str, confidence: str, outcome: str, *, repo_key: str | None = None
+    ) -> None:
         """Append a calibration event.
 
         outcome must be one of: merged, escalated, abandoned.
@@ -105,8 +108,10 @@ class ConfidenceCalibrationStore:
             data = self._load()
         cutoff = self._cutoff(window_days)
         events = [
-            e for e in data.get("events", [])
-            if e.get("family") == family and e.get("confidence") == confidence
+            e
+            for e in data.get("events", [])
+            if e.get("family") == family
+            and e.get("confidence") == confidence
             and (repo_key is None or e.get("repo_key") == repo_key)
             and (cutoff is None or e.get("recorded_at", "") >= cutoff)
         ]
@@ -137,10 +142,13 @@ class ConfidenceCalibrationStore:
         if window_days is None:
             return None
         from datetime import timedelta
+
         cutoff_dt = datetime.now(UTC) - timedelta(days=window_days)
         return cutoff_dt.isoformat()
 
-    def report(self, *, per_repo: bool = False, window_days: int | None = 90) -> list[CalibrationRecord]:
+    def report(
+        self, *, per_repo: bool = False, window_days: int | None = 90
+    ) -> list[CalibrationRecord]:
         """Return calibration records for all (family, confidence[, repo_key]) pairs with enough data.
 
         When per_repo=True, groups by (repo_key, family, confidence).
@@ -153,7 +161,8 @@ class ConfidenceCalibrationStore:
         all_events = data.get("events", [])
         events = (
             [e for e in all_events if e.get("recorded_at", "") >= cutoff]
-            if cutoff is not None else all_events
+            if cutoff is not None
+            else all_events
         )
 
         if per_repo:
@@ -186,18 +195,20 @@ class ConfidenceCalibrationStore:
             acceptance_rate = merged / total if total > 0 else 0.0
             expected_rate = _EXPECTED_RATES[confidence]
             calibration_ratio = acceptance_rate / expected_rate if expected_rate > 0 else 0.0
-            records.append(CalibrationRecord(
-                family=family,
-                confidence=confidence,
-                total=total,
-                merged=merged,
-                escalated=escalated,
-                abandoned=abandoned,
-                acceptance_rate=round(acceptance_rate, 3),
-                expected_rate=expected_rate,
-                calibration_ratio=round(calibration_ratio, 3),
-                repo_key=rk_val or None,
-            ))
+            records.append(
+                CalibrationRecord(
+                    family=family,
+                    confidence=confidence,
+                    total=total,
+                    merged=merged,
+                    escalated=escalated,
+                    abandoned=abandoned,
+                    acceptance_rate=round(acceptance_rate, 3),
+                    expected_rate=expected_rate,
+                    calibration_ratio=round(calibration_ratio, 3),
+                    repo_key=rk_val or None,
+                )
+            )
         return records
 
     def _load(self) -> dict:

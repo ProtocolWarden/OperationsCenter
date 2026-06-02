@@ -34,6 +34,7 @@ _LOAD_TARGET = "operations_center.entrypoints.regression.main.load_mini_regressi
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_suite_def(**kwargs) -> MiniRegressionSuiteDefinition:
     defaults = dict(
         suite_id="test_suite",
@@ -103,16 +104,22 @@ def _write_suite_report_file(tmp_path: Path, status: str = "passed") -> Path:
 # cmd_run
 # ---------------------------------------------------------------------------
 
+
 class TestCmdRun:
     def test_run_passed_suite_exits_zero(self, tmp_path: Path):
         suite_path = _write_suite_def_file(tmp_path)
         mock_report = _make_suite_report("passed")
         with patch(_RUN_TARGET, return_value=mock_report):
-            result = _runner.invoke(app, [
-                "run",
-                "--suite", str(suite_path),
-                "--output-dir", str(tmp_path / "out"),
-            ])
+            result = _runner.invoke(
+                app,
+                [
+                    "run",
+                    "--suite",
+                    str(suite_path),
+                    "--output-dir",
+                    str(tmp_path / "out"),
+                ],
+            )
         assert result.exit_code == 0, result.output
         assert "PASSED" in result.output.upper()
 
@@ -120,53 +127,79 @@ class TestCmdRun:
         suite_path = _write_suite_def_file(tmp_path)
         mock_report = _make_suite_report("failed")
         with patch(_RUN_TARGET, return_value=mock_report):
-            result = _runner.invoke(app, [
-                "run",
-                "--suite", str(suite_path),
-                "--output-dir", str(tmp_path / "out"),
-            ])
+            result = _runner.invoke(
+                app,
+                [
+                    "run",
+                    "--suite",
+                    str(suite_path),
+                    "--output-dir",
+                    str(tmp_path / "out"),
+                ],
+            )
         assert result.exit_code != 0
 
     def test_run_missing_suite_file_exits_nonzero(self, tmp_path: Path):
-        result = _runner.invoke(app, [
-            "run",
-            "--suite", str(tmp_path / "nonexistent.json"),
-            "--output-dir", str(tmp_path / "out"),
-        ])
+        result = _runner.invoke(
+            app,
+            [
+                "run",
+                "--suite",
+                str(tmp_path / "nonexistent.json"),
+                "--output-dir",
+                str(tmp_path / "out"),
+            ],
+        )
         assert result.exit_code != 0
 
     def test_run_suite_prints_entry_results(self, tmp_path: Path):
         suite_path = _write_suite_def_file(tmp_path)
         mock_report = _make_suite_report("passed")
         with patch(_RUN_TARGET, return_value=mock_report):
-            result = _runner.invoke(app, [
-                "run",
-                "--suite", str(suite_path),
-                "--output-dir", str(tmp_path / "out"),
-            ])
+            result = _runner.invoke(
+                app,
+                [
+                    "run",
+                    "--suite",
+                    str(suite_path),
+                    "--output-dir",
+                    str(tmp_path / "out"),
+                ],
+            )
         assert "entry_001" in result.output
 
     def test_run_with_run_id_override(self, tmp_path: Path):
         suite_path = _write_suite_def_file(tmp_path)
         mock_report = _make_suite_report("passed")
         with patch(_RUN_TARGET, return_value=mock_report):
-            result = _runner.invoke(app, [
-                "run",
-                "--suite", str(suite_path),
-                "--output-dir", str(tmp_path / "out"),
-                "--run-id", "custom_run_id",
-            ])
+            result = _runner.invoke(
+                app,
+                [
+                    "run",
+                    "--suite",
+                    str(suite_path),
+                    "--output-dir",
+                    str(tmp_path / "out"),
+                    "--run-id",
+                    "custom_run_id",
+                ],
+            )
         assert result.exit_code == 0
 
     def test_run_error_suite_exits_nonzero(self, tmp_path: Path):
         suite_path = _write_suite_def_file(tmp_path)
         mock_report = _make_suite_report("error")
         with patch(_RUN_TARGET, return_value=mock_report):
-            result = _runner.invoke(app, [
-                "run",
-                "--suite", str(suite_path),
-                "--output-dir", str(tmp_path / "out"),
-            ])
+            result = _runner.invoke(
+                app,
+                [
+                    "run",
+                    "--suite",
+                    str(suite_path),
+                    "--output-dir",
+                    str(tmp_path / "out"),
+                ],
+            )
         assert result.exit_code != 0
 
 
@@ -174,46 +207,67 @@ class TestCmdRun:
 # cmd_inspect
 # ---------------------------------------------------------------------------
 
+
 class TestCmdInspect:
     def test_inspect_written_report_exits_zero(self, tmp_path: Path):
         report_path = _write_suite_report_file(tmp_path, status="passed")
-        result = _runner.invoke(app, [
-            "inspect",
-            "--report", str(report_path),
-        ])
+        result = _runner.invoke(
+            app,
+            [
+                "inspect",
+                "--report",
+                str(report_path),
+            ],
+        )
         assert result.exit_code == 0, result.output
         assert "test_suite" in result.output
 
     def test_inspect_failed_report_exits_zero(self, tmp_path: Path):
         report_path = _write_suite_report_file(tmp_path, status="failed")
-        result = _runner.invoke(app, [
-            "inspect",
-            "--report", str(report_path),
-        ])
+        result = _runner.invoke(
+            app,
+            [
+                "inspect",
+                "--report",
+                str(report_path),
+            ],
+        )
         assert result.exit_code == 0
 
     def test_inspect_missing_report_exits_nonzero(self, tmp_path: Path):
-        result = _runner.invoke(app, [
-            "inspect",
-            "--report", str(tmp_path / "nonexistent.json"),
-        ])
+        result = _runner.invoke(
+            app,
+            [
+                "inspect",
+                "--report",
+                str(tmp_path / "nonexistent.json"),
+            ],
+        )
         assert result.exit_code != 0
 
     def test_inspect_invalid_json_exits_nonzero(self, tmp_path: Path):
         bad = tmp_path / "bad.json"
         bad.write_text("not json at all", encoding="utf-8")
-        result = _runner.invoke(app, [
-            "inspect",
-            "--report", str(bad),
-        ])
+        result = _runner.invoke(
+            app,
+            [
+                "inspect",
+                "--report",
+                str(bad),
+            ],
+        )
         assert result.exit_code != 0
 
     def test_inspect_prints_entry_table(self, tmp_path: Path):
         report_path = _write_suite_report_file(tmp_path)
-        result = _runner.invoke(app, [
-            "inspect",
-            "--report", str(report_path),
-        ])
+        result = _runner.invoke(
+            app,
+            [
+                "inspect",
+                "--report",
+                str(report_path),
+            ],
+        )
         assert "entry_001" in result.output
 
 
@@ -221,35 +275,52 @@ class TestCmdInspect:
 # cmd_list
 # ---------------------------------------------------------------------------
 
+
 class TestCmdList:
     def test_list_suite_entries_exits_zero(self, tmp_path: Path):
         suite_path = _write_suite_def_file(tmp_path)
-        result = _runner.invoke(app, [
-            "list",
-            "--suite", str(suite_path),
-        ])
+        result = _runner.invoke(
+            app,
+            [
+                "list",
+                "--suite",
+                str(suite_path),
+            ],
+        )
         assert result.exit_code == 0, result.output
         assert "entry_001" in result.output
 
     def test_list_prints_suite_name(self, tmp_path: Path):
         suite_path = _write_suite_def_file(tmp_path)
-        result = _runner.invoke(app, [
-            "list",
-            "--suite", str(suite_path),
-        ])
+        result = _runner.invoke(
+            app,
+            [
+                "list",
+                "--suite",
+                str(suite_path),
+            ],
+        )
         assert "Test Suite" in result.output
 
     def test_list_missing_suite_exits_nonzero(self, tmp_path: Path):
-        result = _runner.invoke(app, [
-            "list",
-            "--suite", str(tmp_path / "nonexistent.json"),
-        ])
+        result = _runner.invoke(
+            app,
+            [
+                "list",
+                "--suite",
+                str(tmp_path / "nonexistent.json"),
+            ],
+        )
         assert result.exit_code != 0
 
     def test_list_shows_entry_count(self, tmp_path: Path):
         suite_path = _write_suite_def_file(tmp_path)
-        result = _runner.invoke(app, [
-            "list",
-            "--suite", str(suite_path),
-        ])
+        result = _runner.invoke(
+            app,
+            [
+                "list",
+                "--suite",
+                str(suite_path),
+            ],
+        )
         assert "1 entries" in result.output

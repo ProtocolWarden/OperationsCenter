@@ -20,7 +20,6 @@ import pytest
 # ---------------------------------------------------------------------------
 # S7-1: Process supervisor
 # ---------------------------------------------------------------------------
-
 from operations_center.entrypoints.supervisor.main import (
     ManagedProcess,
     _heartbeat_age_seconds,
@@ -48,6 +47,7 @@ def test_supervisor_terminate_kills_process(tmp_path: Path) -> None:
     assert mp.proc is None
     # pid should no longer exist
     import os
+
     with pytest.raises(ProcessLookupError):
         os.kill(pid, 0)
 
@@ -69,7 +69,9 @@ def test_supervisor_heartbeat_age_returns_seconds(tmp_path: Path) -> None:
 
 
 def test_supervisor_maybe_restart_respects_max(tmp_path: Path) -> None:
-    mp = ManagedProcess(role="test", command=["sleep", "0.01"], restart_max=1, restart_backoff_seconds=0)
+    mp = ManagedProcess(
+        role="test", command=["sleep", "0.01"], restart_max=1, restart_backoff_seconds=0
+    )
     _spawn(mp)
     mp.proc.wait()  # let it exit naturally
     assert _maybe_restart(mp, reason="test") is True
@@ -147,9 +149,19 @@ def test_quiet_diagnosis_fires_escalation_when_quiet(tmp_path: Path) -> None:
     report_dir.mkdir()
     # Write 5 cycle reports all with 0 candidates
     for i in range(5):
-        (report_dir / f"cycle_2024010{i+1}T000000Z.json").write_text(json.dumps({
-            "stages": {"decide": {"candidates_emitted": 0, "suppression_reasons": {"cooldown_active": 3}, "emitted_families": []}},
-        }))
+        (report_dir / f"cycle_2024010{i + 1}T000000Z.json").write_text(
+            json.dumps(
+                {
+                    "stages": {
+                        "decide": {
+                            "candidates_emitted": 0,
+                            "suppression_reasons": {"cooldown_active": 3},
+                            "emitted_families": [],
+                        }
+                    },
+                }
+            )
+        )
 
     escalation_calls: list[dict] = []
 
@@ -157,7 +169,10 @@ def test_quiet_diagnosis_fires_escalation_when_quiet(tmp_path: Path) -> None:
         escalation_calls.append({"url": url, "classification": classification})
 
     with patch("operations_center.adapters.escalation.post_escalation", side_effect=fake_post):
-        with patch("operations_center.execution.usage_store.UsageStore.should_escalate", return_value=(True, [])):
+        with patch(
+            "operations_center.execution.usage_store.UsageStore.should_escalate",
+            return_value=(True, []),
+        ):
             with patch("operations_center.execution.usage_store.UsageStore.record_escalation"):
                 _write_quiet_diagnosis(
                     report_dir,
@@ -174,9 +189,19 @@ def test_quiet_diagnosis_no_escalation_when_below_window(tmp_path: Path) -> None
     report_dir.mkdir()
     # Only 3 reports — not enough for a quiet window of 5
     for i in range(3):
-        (report_dir / f"cycle_2024010{i+1}T000000Z.json").write_text(json.dumps({
-            "stages": {"decide": {"candidates_emitted": 0, "suppression_reasons": {}, "emitted_families": []}},
-        }))
+        (report_dir / f"cycle_2024010{i + 1}T000000Z.json").write_text(
+            json.dumps(
+                {
+                    "stages": {
+                        "decide": {
+                            "candidates_emitted": 0,
+                            "suppression_reasons": {},
+                            "emitted_families": [],
+                        }
+                    },
+                }
+            )
+        )
 
     escalation_calls: list[dict] = []
 
@@ -197,9 +222,19 @@ def test_quiet_diagnosis_no_escalation_when_no_webhook(tmp_path: Path) -> None:
     report_dir = tmp_path / "reports"
     report_dir.mkdir()
     for i in range(5):
-        (report_dir / f"cycle_2024010{i+1}T000000Z.json").write_text(json.dumps({
-            "stages": {"decide": {"candidates_emitted": 0, "suppression_reasons": {}, "emitted_families": []}},
-        }))
+        (report_dir / f"cycle_2024010{i + 1}T000000Z.json").write_text(
+            json.dumps(
+                {
+                    "stages": {
+                        "decide": {
+                            "candidates_emitted": 0,
+                            "suppression_reasons": {},
+                            "emitted_families": [],
+                        }
+                    },
+                }
+            )
+        )
 
     escalation_calls: list[dict] = []
 

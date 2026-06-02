@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Shared fixtures for collector hardening tests."""
+
 from pathlib import Path
 
 import pytest
@@ -36,5 +37,3 @@ def valid_request():
         "priority": 50,
         "run_id": "run-001",
     }
-
-

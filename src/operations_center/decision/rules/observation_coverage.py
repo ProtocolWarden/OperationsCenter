@@ -20,7 +20,8 @@ class ObservationCoverageRule:
                 continue
             if (
                 insight.dedup_key.endswith("persistent_unavailable")
-                and int(insight.evidence.get("consecutive_snapshots", 0)) >= self.min_consecutive_runs
+                and int(insight.evidence.get("consecutive_snapshots", 0))
+                >= self.min_consecutive_runs
             ):
                 signal = str(insight.evidence.get("signal", insight.subject))
                 consecutive = int(insight.evidence.get("consecutive_snapshots", 0))

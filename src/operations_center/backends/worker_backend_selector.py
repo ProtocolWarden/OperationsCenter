@@ -2,9 +2,9 @@
 # Copyright (C) 2026 ProtocolWarden
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-import re
 from typing import Callable, Generic, TypeVar
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -22,9 +22,7 @@ _T = TypeVar("_T")
 _SUPPORTED_WORKER_BACKENDS = ("claude_code", "codex_cli", "aider_local", "direct_local")
 _REMOTE_WORKER_BACKENDS = ("claude_code", "codex_cli")
 _LOCAL_WORKER_BACKENDS = ("aider_local", "direct_local")
-_TIMEZONE_RESET_RE = re.compile(
-    r"resets\s+(\d{1,2}:\d{2}(?:am|pm))\s+\(([^)]+)\)", re.IGNORECASE
-)
+_TIMEZONE_RESET_RE = re.compile(r"resets\s+(\d{1,2}:\d{2}(?:am|pm))\s+\(([^)]+)\)", re.IGNORECASE)
 _ISO_RESET_RE = re.compile(
     r"resets?(?:\s+at)?\s+(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?Z)",
     re.IGNORECASE,
@@ -90,7 +88,11 @@ def worker_backend_candidates(preferred_backend: str) -> tuple[str, ...]:
 
 
 def alternate_worker_backend(worker_backend: str) -> str | None:
-    pool = _REMOTE_WORKER_BACKENDS if worker_backend in _REMOTE_WORKER_BACKENDS else _LOCAL_WORKER_BACKENDS
+    pool = (
+        _REMOTE_WORKER_BACKENDS
+        if worker_backend in _REMOTE_WORKER_BACKENDS
+        else _LOCAL_WORKER_BACKENDS
+    )
     for candidate in pool:
         if candidate != worker_backend:
             return candidate
@@ -186,9 +188,7 @@ def parse_worker_backend_reset(
 
     match = _ISO_RESET_RE.search(combined_output)
     if match:
-        return datetime.fromisoformat(
-            match.group(1).replace("Z", "+00:00")
-        ).astimezone(UTC)
+        return datetime.fromisoformat(match.group(1).replace("Z", "+00:00")).astimezone(UTC)
 
     match = _RELATIVE_RESET_RE.search(combined_output)
     if match:
@@ -244,8 +244,7 @@ def maybe_record_worker_backend_cooldown(
     if logger is not None:
         _suffix = f" ({limit_kind}{f'/{model}' if model else ''})"
         logger(
-            f"worker backend {worker_backend} cooling down until "
-            f"{reset_at.isoformat()}{_suffix}"
+            f"worker backend {worker_backend} cooling down until {reset_at.isoformat()}{_suffix}"
         )
     return reset_at
 

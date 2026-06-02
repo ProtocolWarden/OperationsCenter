@@ -31,10 +31,10 @@ from .enums import (
     RefinementStatus,
 )
 
-
 # ---------------------------------------------------------------------------
 # Strategy
 # ---------------------------------------------------------------------------
+
 
 class ImprovementStrategy(BaseModel):
     """
@@ -69,6 +69,7 @@ class ImprovementStrategy(BaseModel):
 # ---------------------------------------------------------------------------
 # Evaluation
 # ---------------------------------------------------------------------------
+
 
 class ScoringMetric(BaseModel):
     """A single measurable improvement target."""
@@ -142,6 +143,7 @@ class EvaluationSpec(BaseModel):
 # Refinement policy
 # ---------------------------------------------------------------------------
 
+
 class RefinementPolicy(BaseModel):
     """
     Governs retry and refinement behaviour.
@@ -177,6 +179,7 @@ class RefinementPolicy(BaseModel):
 # ---------------------------------------------------------------------------
 # CLP binding
 # ---------------------------------------------------------------------------
+
 
 class ClpBinding(BaseModel):
     """
@@ -220,6 +223,7 @@ class ClpBinding(BaseModel):
 # ---------------------------------------------------------------------------
 # Lineage — per-attempt records
 # ---------------------------------------------------------------------------
+
 
 class EvaluationScore(BaseModel):
     """Scored outcome of a single evaluation run."""
@@ -344,6 +348,7 @@ class ImprovementLineage(BaseModel):
 # Top-level extension block
 # ---------------------------------------------------------------------------
 
+
 class ContinuousImprovementSpec(BaseModel):
     """
     Continuous improvement metadata for a work item.
@@ -369,6 +374,7 @@ class ContinuousImprovementSpec(BaseModel):
 # ---------------------------------------------------------------------------
 # Mutable execution-side state (separate from the frozen proposal)
 # ---------------------------------------------------------------------------
+
 
 class OcContinuousImprovementState(BaseModel):
     """

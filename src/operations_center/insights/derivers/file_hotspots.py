@@ -39,7 +39,11 @@ class FileHotspotsDeriver:
                 )
             )
         for hotspot in hotspots:
-            appearances = [snapshot for snapshot in snapshots if any(item.path == hotspot.path for item in snapshot.signals.file_hotspots)]
+            appearances = [
+                snapshot
+                for snapshot in snapshots
+                if any(item.path == hotspot.path for item in snapshot.signals.file_hotspots)
+            ]
             if len(appearances) < 2:
                 continue
             insights.append(

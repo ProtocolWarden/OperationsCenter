@@ -24,6 +24,7 @@ from .models import (
 # Individual policy checks
 # ---------------------------------------------------------------------------
 
+
 def _check_manual_request_required(request: AuditGovernanceRequest) -> PolicyResult:
     """requested_by must be a non-empty, non-system string."""
     if request.requested_by.strip():
@@ -265,6 +266,7 @@ def _check_recent_success(
 # Aggregate evaluation
 # ---------------------------------------------------------------------------
 
+
 def evaluate_governance_policies(
     request: AuditGovernanceRequest,
     *,
@@ -312,8 +314,7 @@ def make_governance_decision(
         "manual_request_required",
     ]
     hard_failures = [
-        p for p in policy_results
-        if p.policy_name in hard_deny_checks and p.status == "failed"
+        p for p in policy_results if p.policy_name in hard_deny_checks and p.status == "failed"
     ]
     if hard_failures:
         for p in hard_failures:
@@ -332,24 +333,28 @@ def make_governance_decision(
     urgent_result = by_name.get("urgent_override_policy")
     mini_result = by_name.get("mini_regression_first_policy")
 
-    needs_manual = (
-        (urgent_result and urgent_result.status == "warning")
-        or (mini_result and mini_result.status == "failed")
+    needs_manual = (urgent_result and urgent_result.status == "warning") or (
+        mini_result and mini_result.status == "failed"
     )
 
     # Budget/cooldown failures with high/urgent urgency also escalate to manual
     budget_failed = (
-        by_name.get("budget_policy", PolicyResult(
-            policy_name="budget_policy", status="skipped", reason=""
-        )).status == "failed"
+        by_name.get(
+            "budget_policy", PolicyResult(policy_name="budget_policy", status="skipped", reason="")
+        ).status
+        == "failed"
     )
     cooldown_failed = (
-        by_name.get("cooldown_policy", PolicyResult(
-            policy_name="cooldown_policy", status="skipped", reason=""
-        )).status == "failed"
+        by_name.get(
+            "cooldown_policy",
+            PolicyResult(policy_name="cooldown_policy", status="skipped", reason=""),
+        ).status
+        == "failed"
     )
 
-    if needs_manual or (request.urgency in ("high", "urgent") and (budget_failed or cooldown_failed)):
+    if needs_manual or (
+        request.urgency in ("high", "urgent") and (budget_failed or cooldown_failed)
+    ):
         for p in policy_results:
             if p.status in ("failed", "warning"):
                 reasons.append(p.reason)

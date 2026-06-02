@@ -10,6 +10,7 @@ cycle.
 Last-run timestamps persist to a small JSON sidecar so intervals survive
 watchdog restarts. Default location: ``.console/maintenance_state.json``.
 """
+
 from __future__ import annotations
 
 import json

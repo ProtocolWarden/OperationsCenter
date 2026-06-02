@@ -17,6 +17,7 @@ Run:
   python -m operations_center.entrypoints.ghost_audit \\
       --config config/operations_center.local.yaml [--since 24h]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -53,6 +54,7 @@ class AuditContext:
 # too (no drift between OC's own ghost_audit and what Custodian sees).
 try:
     from _custodian.log_scanner import OCLogScanner  # ty:ignore[unresolved-import]
+
     _LOG_SCANNER = OCLogScanner()
 except ImportError:
     _LOG_SCANNER = None
@@ -99,6 +101,7 @@ def _log_events_since(ctx: AuditContext):
 
 # ── detectors ─────────────────────────────────────────────────────────────────
 
+
 def _detect_g4_oversized(ctx: AuditContext) -> tuple[int, list[str]]:
     """Diff cap fired."""
     samples = []
@@ -124,7 +127,9 @@ def _detect_g5_policy_blocked(ctx: AuditContext) -> tuple[int, list[str]]:
                 ts = event.get("ts", "")
                 role = event.get("role", "?")
                 tid = (event.get("task_id") or "")[:36]
-                samples.append(f"{ts} [{role}] task_id={tid} blocked status=skipped category=policy_blocked")
+                samples.append(
+                    f"{ts} [{role}] task_id={tid} blocked status=skipped category=policy_blocked"
+                )
                 if len(samples) >= 5:
                     break
         return len(samples), samples
@@ -148,7 +153,11 @@ def _detect_g8_stale_running(ctx: AuditContext) -> tuple[int, list[str]]:
     """Plane tasks in Running state for an unusual duration."""
     samples = []
     for issue in ctx.plane_issues:
-        state = (issue.get("state") or {}).get("name", "") if isinstance(issue.get("state"), dict) else ""
+        state = (
+            (issue.get("state") or {}).get("name", "")
+            if isinstance(issue.get("state"), dict)
+            else ""
+        )
         if state != "Running":
             continue
         # No good "started_at" field on Plane work-items; updated_at is the
@@ -160,7 +169,7 @@ def _detect_g8_stale_running(ctx: AuditContext) -> tuple[int, list[str]]:
             continue
         age = (datetime.now(UTC) - ts).total_seconds()
         if age > 4 * 3600:
-            samples.append(f"{(issue.get('name') or '')[:60]} (running {int(age/60)}m)")
+            samples.append(f"{(issue.get('name') or '')[:60]} (running {int(age / 60)}m)")
     return len(samples), samples[:5]
 
 
@@ -175,7 +184,11 @@ def _detect_g10_runaway_followups(ctx: AuditContext) -> tuple[int, list[str]]:
         for lab in labels:
             m = re.match(r"retry-count:\s*(\d+)", lab)
             if m and int(m.group(1)) >= 2:
-                state = (issue.get("state") or {}).get("name", "") if isinstance(issue.get("state"), dict) else ""
+                state = (
+                    (issue.get("state") or {}).get("name", "")
+                    if isinstance(issue.get("state"), dict)
+                    else ""
+                )
                 samples.append(f"{(issue.get('name') or '')[:50]} state={state}")
                 break
     return len(samples), samples[:5]
@@ -221,24 +234,25 @@ def _detect_workspace_pollution(ctx: AuditContext) -> tuple[int, list[str]]:
 
 
 _DETECTORS: list[Detector] = [
-    Detector("G1",  "workspace pollution",                "fixed", _detect_workspace_pollution),
-    Detector("G4",  "oversized diff (scope_too_wide)",    "fixed", _detect_g4_oversized),
-    Detector("G5",  "policy-blocked task burned backend time","fixed", _detect_g5_policy_blocked),
-    Detector("G7",  "claim-refused thin goal",            "fixed", _detect_g7_thin_goal),
-    Detector("G8",  "stale Running task",                 "fixed", _detect_g8_stale_running),
-    Detector("G10", "runaway follow-up loop",             "fixed", _detect_g10_runaway_followups),
-    Detector("G12", "rewrite of expanded meta-task",      "fixed", _detect_g12_expanded_rewrite),
+    Detector("G1", "workspace pollution", "fixed", _detect_workspace_pollution),
+    Detector("G4", "oversized diff (scope_too_wide)", "fixed", _detect_g4_oversized),
+    Detector("G5", "policy-blocked task burned backend time", "fixed", _detect_g5_policy_blocked),
+    Detector("G7", "claim-refused thin goal", "fixed", _detect_g7_thin_goal),
+    Detector("G8", "stale Running task", "fixed", _detect_g8_stale_running),
+    Detector("G10", "runaway follow-up loop", "fixed", _detect_g10_runaway_followups),
+    Detector("G12", "rewrite of expanded meta-task", "fixed", _detect_g12_expanded_rewrite),
 ]
 
 
 # ── scan ──────────────────────────────────────────────────────────────────────
 
+
 def scan(ctx: AuditContext) -> dict[str, Any]:
     out: dict[str, Any] = {
         "scanned_at": datetime.now(UTC).isoformat(),
-        "since":      ctx.since.isoformat(),
-        "log_dir":    str(ctx.log_dir),
-        "patterns":   {},
+        "since": ctx.since.isoformat(),
+        "log_dir": str(ctx.log_dir),
+        "patterns": {},
     }
     for det in _DETECTORS:
         try:
@@ -246,15 +260,15 @@ def scan(ctx: AuditContext) -> dict[str, Any]:
         except Exception as exc:
             out["patterns"][det.pattern_id] = {
                 "description": det.description,
-                "status":      det.status,
-                "error":       str(exc),
+                "status": det.status,
+                "error": str(exc),
             }
             continue
         out["patterns"][det.pattern_id] = {
             "description": det.description,
-            "status":      det.status,
-            "count":       count,
-            "samples":     samples,
+            "status": det.status,
+            "count": count,
+            "samples": samples,
         }
     out["total_ghost_events"] = sum(
         v.get("count", 0) for v in out["patterns"].values() if isinstance(v, dict)
@@ -276,10 +290,15 @@ def _parse_since(raw: str) -> datetime:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Ghost-work audit scanner")
     parser.add_argument("--config", required=True, type=Path)
-    parser.add_argument("--since",  default="24h",
-                        help="window for log scanning, e.g. 24h, 7d (default: 24h)")
-    parser.add_argument("--log-dir", type=Path, default=None,
-                        help="override watcher log directory (default: logs/local/watch-all)")
+    parser.add_argument(
+        "--since", default="24h", help="window for log scanning, e.g. 24h, 7d (default: 24h)"
+    )
+    parser.add_argument(
+        "--log-dir",
+        type=Path,
+        default=None,
+        help="override watcher log directory (default: logs/local/watch-all)",
+    )
     args = parser.parse_args()
 
     since = _parse_since(args.since)
@@ -289,6 +308,7 @@ def main() -> None:
     try:
         from operations_center.adapters.plane import PlaneClient
         from operations_center.config import load_settings
+
         settings = load_settings(args.config)
         client = PlaneClient(
             base_url=settings.plane.base_url,

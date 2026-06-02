@@ -4,9 +4,12 @@
 
 from __future__ import annotations
 
-
-from operations_center.entrypoints.board_worker._text import desc_text as _desc_text, extract_goal as _extract_goal
-
+from operations_center.entrypoints.board_worker._text import (
+    desc_text as _desc_text,
+)
+from operations_center.entrypoints.board_worker._text import (
+    extract_goal as _extract_goal,
+)
 
 # ── _desc_text ────────────────────────────────────────────────────────────────
 
@@ -17,7 +20,11 @@ def test_desc_text_prefers_plain_description() -> None:
 
 
 def test_desc_text_prefers_description_stripped() -> None:
-    issue = {"description": None, "description_stripped": "Stripped text.", "description_html": "<p>HTML.</p>"}
+    issue = {
+        "description": None,
+        "description_stripped": "Stripped text.",
+        "description_html": "<p>HTML.</p>",
+    }
     assert _desc_text(issue) == "Stripped text."
 
 

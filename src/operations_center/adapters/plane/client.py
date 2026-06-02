@@ -56,7 +56,9 @@ class PlaneClient:
         if isinstance(payload, dict):
             results = payload.get("results")
             if isinstance(results, list):
-                return [self._hydrate_issue_labels(item) for item in results if isinstance(item, dict)]
+                return [
+                    self._hydrate_issue_labels(item) for item in results if isinstance(item, dict)
+                ]
         return []
 
     def list_states(self) -> list[dict[str, Any]]:
@@ -110,11 +112,15 @@ class PlaneClient:
         """Build the legacy Plane compatibility shape from a Plane work item."""
 
         description = self._issue_description_text(issue)
-        label_names = [label.get("name", "") for label in issue.get("labels", []) if isinstance(label, dict)]
+        label_names = [
+            label.get("name", "") for label in issue.get("labels", []) if isinstance(label, dict)
+        ]
         parsed_body = self.task_parser.parse(description, labels=label_names)
         metadata = parsed_body.execution_metadata
         state = issue.get("state")
-        status_value = state.get("name", "Unknown") if isinstance(state, dict) else str(state or "Unknown")
+        status_value = (
+            state.get("name", "Unknown") if isinstance(state, dict) else str(state or "Unknown")
+        )
         return BoardTask(
             task_id=str(issue["id"]),
             project_id=str(issue.get("project_id", self.project_id)),
@@ -125,9 +131,13 @@ class PlaneClient:
             repo_key=str(metadata["repo"]),
             base_branch=str(metadata["base_branch"]),
             execution_mode=cast("Any", metadata.get("mode", "goal")),
-            allowed_paths=[str(path) for path in cast(list[object], metadata.get("allowed_paths") or [])],
+            allowed_paths=[
+                str(path) for path in cast(list[object], metadata.get("allowed_paths") or [])
+            ],
             validation_profile=(
-                str(metadata.get("validation_profile")) if metadata.get("validation_profile") else None
+                str(metadata.get("validation_profile"))
+                if metadata.get("validation_profile")
+                else None
             ),
             open_pr=bool(metadata.get("open_pr", False)),
             goal_text=parsed_body.goal_text,
@@ -190,7 +200,9 @@ class PlaneClient:
             f"/api/v1/workspaces/{self.workspace_slug}/projects/{self.project_id}/"
             f"work-items/{task_id}/comments/"
         )
-        response = self._request("POST", url, json={"comment_html": self._render_comment_html(comment_markdown)})
+        response = self._request(
+            "POST", url, json={"comment_html": self._render_comment_html(comment_markdown)}
+        )
         response.raise_for_status()
 
     def _resolve_state_value(self, state: str) -> str:
@@ -244,7 +256,9 @@ class PlaneClient:
             }
 
         by_id = label_map()
-        unresolved = [str(raw) for raw in raw_labels if not isinstance(raw, dict) and str(raw) not in by_id]
+        unresolved = [
+            str(raw) for raw in raw_labels if not isinstance(raw, dict) and str(raw) not in by_id
+        ]
         if unresolved:
             by_id = label_map(force_refresh=True)
         hydrated: list[Any] = []
@@ -280,7 +294,9 @@ class PlaneClient:
                 if attempt == attempts:
                     return response
                 retry_after_header = response.headers.get("Retry-After", "").strip()
-                retry_after = int(retry_after_header) if retry_after_header.isdigit() else attempt * 2
+                retry_after = (
+                    int(retry_after_header) if retry_after_header.isdigit() else attempt * 2
+                )
                 time.sleep(retry_after)
                 continue
             # Retry on transient gateway / server errors regardless of HTTP method.
@@ -330,8 +346,15 @@ class PlaneClient:
     @staticmethod
     def _html_to_task_text(html_body: str) -> str:
         text = html.unescape(html_body)
-        text = re.sub(r"<h[1-6][^>]*>\s*(.*?)\s*</h[1-6]>", lambda m: f"\n## {m.group(1)}\n", text, flags=re.I | re.S)
-        text = re.sub(r"<li[^>]*>\s*(.*?)\s*</li>", lambda m: f"- {m.group(1)}\n", text, flags=re.I | re.S)
+        text = re.sub(
+            r"<h[1-6][^>]*>\s*(.*?)\s*</h[1-6]>",
+            lambda m: f"\n## {m.group(1)}\n",
+            text,
+            flags=re.I | re.S,
+        )
+        text = re.sub(
+            r"<li[^>]*>\s*(.*?)\s*</li>", lambda m: f"- {m.group(1)}\n", text, flags=re.I | re.S
+        )
         text = re.sub(r"<br\s*/?>", "\n", text, flags=re.I)
         text = re.sub(r"</?(p|div|ul|ol|pre)[^>]*>", "\n", text, flags=re.I)
         text = re.sub(r"<[^>]+>", "", text)

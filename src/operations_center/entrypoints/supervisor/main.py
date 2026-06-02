@@ -33,6 +33,7 @@ Optional per-entry keys:
   - ``restart_max``: maximum restart attempts (default: unlimited / -1)
   - ``restart_backoff_seconds``: seconds to wait before restarting (default: 10)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -116,12 +117,17 @@ def _is_alive(mp: ManagedProcess) -> bool:
 
 def _spawn(mp: ManagedProcess) -> None:
     """Start the managed process, storing the Popen handle."""
-    _logger.info(json.dumps({
-        "event": "supervisor_spawn",
-        "role": mp.role,
-        "command": mp.command,
-        "restart_count": mp.restart_count,
-    }, ensure_ascii=False))
+    _logger.info(
+        json.dumps(
+            {
+                "event": "supervisor_spawn",
+                "role": mp.role,
+                "command": mp.command,
+                "restart_count": mp.restart_count,
+            },
+            ensure_ascii=False,
+        )
+    )
     mp.proc = subprocess.Popen(mp.command)
     mp.last_restart_at = datetime.now(UTC)
 
@@ -145,21 +151,31 @@ def _terminate(mp: ManagedProcess) -> None:
 def _maybe_restart(mp: ManagedProcess, *, reason: str) -> bool:
     """Restart *mp* if within restart_max.  Returns True if restarted."""
     if mp.restart_max >= 0 and mp.restart_count >= mp.restart_max:
-        _logger.error(json.dumps({
-            "event": "supervisor_restart_limit_reached",
-            "role": mp.role,
-            "restart_count": mp.restart_count,
-            "restart_max": mp.restart_max,
-            "reason": reason,
-        }, ensure_ascii=False))
+        _logger.error(
+            json.dumps(
+                {
+                    "event": "supervisor_restart_limit_reached",
+                    "role": mp.role,
+                    "restart_count": mp.restart_count,
+                    "restart_max": mp.restart_max,
+                    "reason": reason,
+                },
+                ensure_ascii=False,
+            )
+        )
         return False
-    _logger.warning(json.dumps({
-        "event": "supervisor_restarting",
-        "role": mp.role,
-        "reason": reason,
-        "restart_count": mp.restart_count,
-        "backoff_seconds": mp.restart_backoff_seconds,
-    }, ensure_ascii=False))
+    _logger.warning(
+        json.dumps(
+            {
+                "event": "supervisor_restarting",
+                "role": mp.role,
+                "reason": reason,
+                "restart_count": mp.restart_count,
+                "backoff_seconds": mp.restart_backoff_seconds,
+            },
+            ensure_ascii=False,
+        )
+    )
     _terminate(mp)
     time.sleep(mp.restart_backoff_seconds)
     mp.restart_count += 1
@@ -180,7 +196,9 @@ def _write_supervisor_status(log_dir: Path, processes: list[ManagedProcess]) -> 
                     "alive": _is_alive(mp),
                     "pid": mp.proc.pid if mp.proc else None,
                     "restart_count": mp.restart_count,
-                    "last_restart_at": mp.last_restart_at.isoformat() if mp.last_restart_at else None,
+                    "last_restart_at": mp.last_restart_at.isoformat()
+                    if mp.last_restart_at
+                    else None,
                 }
                 for mp in processes
             ],
@@ -205,18 +223,25 @@ def run_supervisor(
        - Stale heartbeat (> _HEARTBEAT_MAX_AGE_SECONDS) → kill + restart.
     3. Writes supervisor.status.json on every iteration.
     """
-    _logger.info(json.dumps({
-        "event": "supervisor_start",
-        "roles": [mp.role for mp in processes],
-        "check_interval_seconds": check_interval_seconds,
-    }, ensure_ascii=False))
+    _logger.info(
+        json.dumps(
+            {
+                "event": "supervisor_start",
+                "roles": [mp.role for mp in processes],
+                "check_interval_seconds": check_interval_seconds,
+            },
+            ensure_ascii=False,
+        )
+    )
 
     # Initial spawn
     for mp in processes:
         _spawn(mp)
 
     def _handle_sigterm(signum: int, _frame: Any) -> NoReturn:  # noqa: ANN001
-        _logger.info(json.dumps({"event": "supervisor_shutdown", "signal": signum}, ensure_ascii=False))
+        _logger.info(
+            json.dumps({"event": "supervisor_shutdown", "signal": signum}, ensure_ascii=False)
+        )
         for mp in processes:
             _terminate(mp)
         sys.exit(0)
@@ -234,21 +259,31 @@ def run_supervisor(
         for mp in processes:
             if not _is_alive(mp):
                 exit_code = mp.proc.returncode if mp.proc else None
-                _logger.warning(json.dumps({
-                    "event": "supervisor_process_exited",
-                    "role": mp.role,
-                    "exit_code": exit_code,
-                }, ensure_ascii=False))
+                _logger.warning(
+                    json.dumps(
+                        {
+                            "event": "supervisor_process_exited",
+                            "role": mp.role,
+                            "exit_code": exit_code,
+                        },
+                        ensure_ascii=False,
+                    )
+                )
                 _maybe_restart(mp, reason=f"process_exited_code_{exit_code}")
                 continue
             # Heartbeat staleness check
             age = _heartbeat_age_seconds(log_dir, mp.role, now)
             if age is not None and age > _HEARTBEAT_MAX_AGE_SECONDS:
-                _logger.warning(json.dumps({
-                    "event": "supervisor_heartbeat_stale",
-                    "role": mp.role,
-                    "heartbeat_age_seconds": round(age, 1),
-                }, ensure_ascii=False))
+                _logger.warning(
+                    json.dumps(
+                        {
+                            "event": "supervisor_heartbeat_stale",
+                            "role": mp.role,
+                            "heartbeat_age_seconds": round(age, 1),
+                        },
+                        ensure_ascii=False,
+                    )
+                )
                 _maybe_restart(mp, reason=f"heartbeat_stale_{round(age)}s")
         _write_supervisor_status(log_dir, processes)
 

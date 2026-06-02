@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Board claim logic — find and atomically claim the next eligible task."""
+
 from __future__ import annotations
 
 import logging
@@ -8,10 +9,10 @@ from datetime import UTC, datetime
 
 from ._text import desc_text, extract_goal
 from .labels import (
+    ROLE_KINDS,
     STATE_BLOCKED,
     STATE_READY,
     STATE_RUNNING,
-    ROLE_KINDS,
     add_label,
     label_value,
 )
@@ -20,8 +21,8 @@ from .spec_author import SPEC_AUTHOR_REPO_KEY
 logger = logging.getLogger(__name__)
 
 _MIN_GOAL_TEXT_CHARS = 40
-_TOUCHED_STATES      = {"running", "in review", "done", "blocked"}
-_PRIORITY_ORDER      = {"urgent": 0, "high": 1, "medium": 2, "low": 3, "none": 4}
+_TOUCHED_STATES = {"running", "in review", "done", "blocked"}
+_PRIORITY_ORDER = {"urgent": 0, "high": 1, "medium": 2, "low": 3, "none": 4}
 
 
 def claim_next(client, role: str, settings) -> dict | None:
@@ -30,7 +31,7 @@ def claim_next(client, role: str, settings) -> dict | None:
 
     Returns the raw Plane issue dict, or None if nothing is available.
     """
-    kinds        = ROLE_KINDS[role]
+    kinds = ROLE_KINDS[role]
     managed_repos = set(settings.repos.keys())
 
     try:
@@ -46,8 +47,8 @@ def claim_next(client, role: str, settings) -> dict | None:
         return None
 
     candidates.sort(key=_sort_key)
-    issue    = candidates[0]
-    task_id  = str(issue["id"])
+    issue = candidates[0]
+    task_id = str(issue["id"])
     task_kind = label_value(issue.get("labels", []), "task-kind")
 
     # Thin-goal guard: refuse tasks whose goal text is too short to act on.
@@ -66,11 +67,16 @@ def claim_next(client, role: str, settings) -> dict | None:
         client.transition_issue(task_id, STATE_RUNNING)
         logger.info(
             "board_worker[%s]: claimed task_id=%s title=%r",
-            role, task_id, issue.get("name", ""),
+            role,
+            task_id,
+            issue.get("name", ""),
         )
     except Exception as exc:
         logger.warning(
-            "board_worker[%s]: failed to claim task_id=%s — %s", role, task_id, exc,
+            "board_worker[%s]: failed to claim task_id=%s — %s",
+            role,
+            task_id,
+            exc,
         )
         return None
 
@@ -78,6 +84,7 @@ def claim_next(client, role: str, settings) -> dict | None:
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
+
 
 def _count_daily_executions(issues: list[dict]) -> dict[str, int]:
     """Count tasks each repo has had active in the last 24 hours."""
@@ -112,14 +119,14 @@ def _build_candidates(
     """Filter issues down to claimable candidates for this role."""
     candidates = []
     for issue in issues:
-        state_obj  = issue.get("state")
+        state_obj = issue.get("state")
         state_name = (
             state_obj.get("name", "") if isinstance(state_obj, dict) else str(state_obj or "")
         ).strip()
         if state_name != STATE_READY:
             continue
 
-        labels    = issue.get("labels", [])
+        labels = issue.get("labels", [])
         task_kind = label_value(labels, "task-kind")
         if task_kind not in kinds:
             continue
@@ -135,7 +142,10 @@ def _build_candidates(
         if cap and exec_today.get(repo_key, 0) >= int(cap):
             logger.info(
                 "board_worker[%s]: skipping repo %s — daily quota %d reached (today=%d)",
-                role, repo_key, cap, exec_today[repo_key],
+                role,
+                repo_key,
+                cap,
+                exec_today[repo_key],
             )
             continue
 
@@ -168,11 +178,15 @@ def _block_thin_task(client, issue: dict, role: str, goal_len: int) -> None:
     except Exception as exc:
         logger.warning(
             "board_worker[%s]: empty-goal block failed task_id=%s — %s",
-            role, issue.get("id"), exc,
+            role,
+            issue.get("id"),
+            exc,
         )
     logger.info(
         "board_worker[%s]: refused thin task_id=%s title=%r",
-        role, task_id, issue.get("name", ""),
+        role,
+        task_id,
+        issue.get("name", ""),
     )
 
 
@@ -181,7 +195,7 @@ def _open_pr_gate_clear(client, issue: dict, settings, task_id: str) -> bool:
 
     Excludes spec-author branches and PRs with mergeable=UNKNOWN (CI in-flight).
     """
-    labels       = issue.get("labels", [])
+    labels = issue.get("labels", [])
     gate_repo_key = label_value(labels, "repo")
     gate_repo_cfg = settings.repos.get(gate_repo_key) if gate_repo_key else None
     gate_clone_url = gate_repo_cfg.clone_url if gate_repo_cfg else None
@@ -192,6 +206,7 @@ def _open_pr_gate_clear(client, issue: dict, settings, task_id: str) -> bool:
 
     try:
         from operations_center.adapters.github_pr import GitHubPRClient
+
         gh = GitHubPRClient(gh_token)
         owner, repo_name = GitHubPRClient.owner_repo_from_clone_url(gate_clone_url)
         open_prs = gh.list_open_prs(owner, repo_name)
@@ -210,15 +225,19 @@ def _open_pr_gate_clear(client, issue: dict, settings, task_id: str) -> bool:
             logger.info(
                 "board_worker[goal]: OPEN_PR_GATE — repo=%s has %d blocking PR(s) %s "
                 "(%d spec-author PRs excluded); skipping task_id=%s until merged",
-                gate_repo_key, len(blocking), pr_nums,
-                len(open_prs) - len(blocking), task_id,
+                gate_repo_key,
+                len(blocking),
+                pr_nums,
+                len(open_prs) - len(blocking),
+                task_id,
             )
             add_label(client, issue, "OPEN_PR_GATE")
             return False
     except Exception as exc:
         logger.warning(
             "board_worker[goal]: OPEN_PR_GATE check failed repo=%s — %s; proceeding",
-            gate_repo_key, exc,
+            gate_repo_key,
+            exc,
         )
 
     return True

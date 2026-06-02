@@ -5,8 +5,16 @@ from operations_center.observer.health_checks import HealthChecker, SystemHealth
 from operations_center.observer.metrics import MetricsCollector
 from operations_center.observer.models import RepoStateSnapshot
 from operations_center.observer.observability import ObservabilityService
-from operations_center.observer.service import ObserverContext, RepoObserverService, new_observer_context
-from operations_center.observer.structured_logging import StructuredLogger, StructuredLogReader, StructuredLogWriter
+from operations_center.observer.service import (
+    ObserverContext,
+    RepoObserverService,
+    new_observer_context,
+)
+from operations_center.observer.structured_logging import (
+    StructuredLogger,
+    StructuredLogReader,
+    StructuredLogWriter,
+)
 
 __all__ = [
     "DashboardProvider",

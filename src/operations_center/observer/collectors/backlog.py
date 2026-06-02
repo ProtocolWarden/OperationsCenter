@@ -35,7 +35,11 @@ def _parse_backlog(text: str) -> BacklogSignal:
 
     section_start = next_match.end()
     next_section = re.search(r"^## ", text[section_start:], re.MULTILINE)
-    section_text = text[section_start: section_start + next_section.start()] if next_section else text[section_start:]
+    section_text = (
+        text[section_start : section_start + next_section.start()]
+        if next_section
+        else text[section_start:]
+    )
 
     items: list[BacklogItem] = []
     # Split on ### headings
@@ -58,11 +62,13 @@ def _parse_backlog(text: str) -> BacklogSignal:
             elif line.strip() and not line.strip().startswith("**"):
                 description_lines.append(line.strip())
 
-        items.append(BacklogItem(
-            title=title,
-            item_type=item_type,
-            description=" ".join(description_lines)[:300],
-        ))
+        items.append(
+            BacklogItem(
+                title=title,
+                item_type=item_type,
+                description=" ".join(description_lines)[:300],
+            )
+        )
 
     return BacklogSignal(items=items)
 

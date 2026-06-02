@@ -192,6 +192,7 @@ class EscalationSettings(BaseModel):
 
 class ErrorIngestLogSource(BaseModel):
     """A log file to tail for ERROR lines and convert to Plane tasks."""
+
     path: str
     repo_key: str
     # Regex pattern that must match the line; default catches lines with ERROR or CRITICAL
@@ -202,6 +203,7 @@ class ErrorIngestLogSource(BaseModel):
 
 class ErrorIngestSettings(BaseModel):
     """Configuration for the runtime error ingestion service (S8-8)."""
+
     # Port for the HTTP webhook receiver (0 = disabled)
     webhook_port: int = 0
     # Log files to tail for error lines
@@ -217,6 +219,7 @@ class SpecAuthorSettings(BaseModel):
     board_worker spec-author task-kind handler. Renamed from SpecDirectorSettings
     in ADR 0007 follow-up to match the post-refactor naming.
     """
+
     enabled: bool = True
     poll_interval_seconds: int = 120
     brainstorm_model: str = "claude-opus-4-6"
@@ -236,6 +239,7 @@ class ScheduledTask(BaseModel):
     item*; it does NOT schedule the autonomy_cycle itself (that runs
     continuously).
     """
+
     # Base interval. Format: ``<num><unit>`` where unit ∈ {m,h,d,w}.
     # Examples: "30m", "6h", "1d", "1w". Required.
     every: str
@@ -265,8 +269,9 @@ class MaintenanceWindow(BaseModel):
         end_hour: 4
         days: [0, 1, 2, 3, 4]
     """
-    start_hour: int   # 0–23
-    end_hour: int     # 0–23 (exclusive); wrap allowed (start > end)
+
+    start_hour: int  # 0–23
+    end_hour: int  # 0–23 (exclusive); wrap allowed (start > end)
     days: list[int] = Field(default_factory=list)  # empty = all days
 
 
@@ -306,7 +311,9 @@ class RepoSettings(BaseModel):
     await_review: bool = False
     propose_enabled: bool = True
     local_path: str | None = None
-    bootstrap_commands: list[str] | None = None  # custom bootstrap (replaces Python venv setup for non-Python repos)
+    bootstrap_commands: list[str] | None = (
+        None  # custom bootstrap (replaces Python venv setup for non-Python repos)
+    )
     validation_timeout_seconds: int = 300
     # Per-repo daily execution cap (None = no per-repo limit, global budget applies).
     # Use this to prevent one repo from exhausting the full day's budget.

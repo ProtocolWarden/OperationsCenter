@@ -22,7 +22,6 @@ from pathlib import Path
 
 from operations_center.audit_contracts.vocabulary import RunStatus
 
-
 _TERMINAL_STATUSES = {
     RunStatus.COMPLETED.value,
     RunStatus.FAILED.value,

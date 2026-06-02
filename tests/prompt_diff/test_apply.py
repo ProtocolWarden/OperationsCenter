@@ -8,6 +8,7 @@ temm1e-labs/promptlabs (MIT). Tests pin the contract the
 phase-advance prompt template depends on: anchor uniqueness,
 required-field validation, ``apply_edits`` skip semantics.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -19,7 +20,6 @@ from operations_center.prompt_diff import (
     apply_edits,
     apply_one,
 )
-
 
 # ----- apply_one ---------------------------------------------------------
 
@@ -46,17 +46,13 @@ def test_replace_missing_anchor_raises():
 
 def test_insert_before_succeeds():
     src = "line1\nline2\nline3"
-    edit = Edit(
-        op="insert_before", anchor="line2\n", new_text="prelude\n", reason="add header"
-    )
+    edit = Edit(op="insert_before", anchor="line2\n", new_text="prelude\n", reason="add header")
     assert apply_one(src, edit) == "line1\nprelude\nline2\nline3"
 
 
 def test_insert_after_succeeds():
     src = "line1\nline2\nline3"
-    edit = Edit(
-        op="insert_after", anchor="line2\n", new_text="extra\n", reason="add body"
-    )
+    edit = Edit(op="insert_after", anchor="line2\n", new_text="extra\n", reason="add body")
     assert apply_one(src, edit) == "line1\nline2\nextra\nline3"
 
 

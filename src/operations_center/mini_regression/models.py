@@ -19,7 +19,6 @@ from pydantic import BaseModel, Field, model_validator
 
 from operations_center.slice_replay.models import SliceReplayProfile
 
-
 # ---------------------------------------------------------------------------
 # Type aliases
 # ---------------------------------------------------------------------------
@@ -38,6 +37,7 @@ def _safe_id(raw: str) -> str:
 # ---------------------------------------------------------------------------
 # Suite definition (serializable — stored in .json files)
 # ---------------------------------------------------------------------------
+
 
 class MiniRegressionSuiteEntry(BaseModel, frozen=True):
     """One replay target inside a suite definition.
@@ -89,6 +89,7 @@ class MiniRegressionSuiteDefinition(BaseModel):
         for entry in self.entries:
             if entry.entry_id in seen:
                 from .errors import SuiteDefinitionError
+
                 raise SuiteDefinitionError(
                     f"Duplicate entry_id {entry.entry_id!r} in suite {self.suite_id!r}"
                 )
@@ -107,6 +108,7 @@ class MiniRegressionSuiteDefinition(BaseModel):
 # ---------------------------------------------------------------------------
 # Entry and suite results (serializable)
 # ---------------------------------------------------------------------------
+
 
 class MiniRegressionEntryResult(BaseModel, frozen=True):
     """The result of executing one suite entry."""
@@ -187,6 +189,7 @@ class MiniRegressionSuiteReport(BaseModel):
 # Runtime input (dataclass — holds non-serializable state)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class MiniRegressionRunRequest:
     """Runtime request for executing a mini regression suite."""
@@ -202,6 +205,7 @@ class MiniRegressionRunRequest:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def make_suite_run_id(suite_id: str) -> str:
     """Generate a stable, path-safe suite run id with a random suffix to avoid second-resolution collisions."""

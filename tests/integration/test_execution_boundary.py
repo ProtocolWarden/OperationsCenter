@@ -28,10 +28,14 @@ import pytest
 
 from operations_center.backends.direct_local.adapter import DirectLocalBackendAdapter
 from operations_center.config.settings import AiderSettings
-from operations_center.contracts.enums import ExecutionStatus, FailureReasonCategory
+from operations_center.contracts.enums import (
+    BackendName,
+    ExecutionStatus,
+    FailureReasonCategory,
+    LaneName,
+)
 from operations_center.contracts.execution import ExecutionResult
 from operations_center.contracts.routing import LaneDecision
-from operations_center.contracts.enums import BackendName, LaneName
 from operations_center.execution.artifact_writer import RunArtifactWriter
 from operations_center.execution.handoff import ExecutionRequestBuilder, ExecutionRuntimeContext
 from operations_center.planning.models import PlanningContext, ProposalDecisionBundle
@@ -67,10 +71,10 @@ def _make_bundle() -> ProposalDecisionBundle:
     return ProposalDecisionBundle(proposal=proposal, decision=decision)
 
 
-def _make_adapter(binary: str = "__nonexistent_binary__", timeout_seconds: int = 10) -> DirectLocalBackendAdapter:
-    return DirectLocalBackendAdapter(
-        AiderSettings(binary=binary, timeout_seconds=timeout_seconds)
-    )
+def _make_adapter(
+    binary: str = "__nonexistent_binary__", timeout_seconds: int = 10
+) -> DirectLocalBackendAdapter:
+    return DirectLocalBackendAdapter(AiderSettings(binary=binary, timeout_seconds=timeout_seconds))
 
 
 # ---------------------------------------------------------------------------
@@ -129,6 +133,7 @@ def test_full_boundary_pipeline_missing_binary(tmp_path: Path) -> None:
 
     # Verify result is fully serialisable (canonical contract)
     import json
+
     payload = json.loads(result.model_dump_json())
     assert payload["success"] is False
     assert payload["failure_category"] == "backend_error"
@@ -204,10 +209,17 @@ def test_artifact_writer_produces_all_files(tmp_path: Path) -> None:
 
     assert len(written) == 5
     run_dir = tmp_path / "runs" / result.run_id
-    for name in ("proposal.json", "decision.json", "execution_request.json", "result.json", "run_metadata.json"):
+    for name in (
+        "proposal.json",
+        "decision.json",
+        "execution_request.json",
+        "result.json",
+        "run_metadata.json",
+    ):
         assert (run_dir / name).exists(), f"{name} missing from run artifacts"
 
     import json
+
     metadata = json.loads((run_dir / "run_metadata.json").read_text())
     assert metadata["run_id"] == result.run_id
     assert metadata["proposal_id"] == bundle.proposal.proposal_id

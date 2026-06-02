@@ -22,6 +22,7 @@ Exit codes:
   1  no matching records
   2  invocation problem
 """
+
 from __future__ import annotations
 
 import argparse
@@ -75,7 +76,11 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     records = _load_all(records_dir)
     if not records:
-        _emit(args, {"error": f"no records found in {records_dir}"}, plain=f"(no records in {records_dir})")
+        _emit(
+            args,
+            {"error": f"no records found in {records_dir}"},
+            plain=f"(no records in {records_dir})",
+        )
         return 1
 
     if args.cmd == "list":
@@ -124,10 +129,12 @@ def _cmd_list(records: list[dict], args) -> int:  # type: ignore[no-untyped-def]
         for r in records:
             outcomes = r.get("outcomes", [])
             fired = [o for o in outcomes if o.get("issue_id")]
-            print(f"{r.get('triggered_at', '?')} {r.get('propagator_run_id', '?')[:12]} "
-                  f"target={r.get('target_canonical', '?')} "
-                  f"version={r.get('target_version', '?')} "
-                  f"fired={len(fired)}/{len(outcomes)}")
+            print(
+                f"{r.get('triggered_at', '?')} {r.get('propagator_run_id', '?')[:12]} "
+                f"target={r.get('target_canonical', '?')} "
+                f"version={r.get('target_version', '?')} "
+                f"fired={len(fired)}/{len(outcomes)}"
+            )
     return 0
 
 
@@ -137,8 +144,11 @@ def _cmd_show(records: list[dict], run_id: str, args) -> int:  # type: ignore[no
         _emit(args, {"error": f"no run matches {run_id!r}"}, plain=f"(no run matches {run_id!r})")
         return 1
     if len(matches) > 1:
-        _emit(args, {"error": f"ambiguous prefix {run_id!r}: {len(matches)} matches"},
-              plain=f"(ambiguous: {len(matches)} matches)")
+        _emit(
+            args,
+            {"error": f"ambiguous prefix {run_id!r}: {len(matches)} matches"},
+            plain=f"(ambiguous: {len(matches)} matches)",
+        )
         return 1
     record = matches[0]
     if args.json_output:
@@ -150,12 +160,17 @@ def _cmd_show(records: list[dict], run_id: str, args) -> int:  # type: ignore[no
 
 def _cmd_latest(records: list[dict], target: str, args) -> int:  # type: ignore[no-untyped-def]
     matches = [
-        r for r in records
+        r
+        for r in records
         if r.get("target_repo_id", "").lower() == target.lower()
         or r.get("target_canonical", "").lower() == target.lower()
     ]
     if not matches:
-        _emit(args, {"error": f"no records for target {target!r}"}, plain=f"(no records for {target!r})")
+        _emit(
+            args,
+            {"error": f"no records for target {target!r}"},
+            plain=f"(no records for {target!r})",
+        )
         return 1
     record = matches[0]  # already sorted newest-first
     if args.json_output:
@@ -178,8 +193,10 @@ def _print_human(record: dict) -> None:
             suffix = f" → issue={o['issue_id']}"
         if o.get("error"):
             suffix += f" (error: {o['error']})"
-        print(f"    [{o.get('decision_action')}] "
-              f"{o.get('consumer_canonical')}: {o.get('decision_reason')}{suffix}")
+        print(
+            f"    [{o.get('decision_action')}] "
+            f"{o.get('consumer_canonical')}: {o.get('decision_reason')}{suffix}"
+        )
 
 
 def _emit(args, payload: dict, *, plain: str) -> None:  # type: ignore[no-untyped-def]

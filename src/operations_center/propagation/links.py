@@ -18,12 +18,12 @@ Format is deliberately stable + line-oriented so a `grep -A 10` works:
     propagator_run_id: 1f9c4a2e-...
     <!-- /propagation:source -->
 """
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from textwrap import dedent
-
 
 PARENT_LINK_TEMPLATE = dedent(
     """\

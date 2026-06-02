@@ -8,6 +8,7 @@ Integrates:
 - Structured logging (StructuredLogger)
 - Dashboard generation (DashboardProvider)
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -17,7 +18,7 @@ from .dashboard import DashboardProvider, DashboardSnapshot
 from .health_checks import HealthChecker, SystemHealthReport
 from .metrics import MetricsCollector
 from .security_logging import AlertCondition, MalformedPayloadMetrics
-from .structured_logging import StructuredLogReader, StructuredLogger, StructuredLogWriter
+from .structured_logging import StructuredLogger, StructuredLogReader, StructuredLogWriter
 
 
 class ObservabilityService:

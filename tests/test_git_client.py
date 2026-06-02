@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from operations_center.adapters.git.client import GitClient, branch_allowed
+
 pytestmark = pytest.mark.slow
 
 
@@ -32,9 +33,7 @@ def test_changed_files_handles_rename_delete_and_untracked_output() -> None:
     client = FakeGitClient(
         {
             ("git", "diff", "--name-status", "-z", "HEAD"): (
-                b"R100\x00old/path.py\x00new/path.py\x00"
-                b"D\x00src/deleted.py\x00"
-                b"M\x00src/main.py\x00"
+                b"R100\x00old/path.py\x00new/path.py\x00D\x00src/deleted.py\x00M\x00src/main.py\x00"
             ),
             ("git", "ls-files", "--others", "--exclude-standard", "-z"): b"tmp/new_file.py\x00",
         }
@@ -73,7 +72,12 @@ def test_diff_stat_returns_empty_when_no_changes() -> None:
 def test_diff_stat_includes_untracked_files() -> None:
     client = FakeGitClient(
         {
-            ("git", "diff", "--stat", "HEAD"): b" src/main.py | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n",
+            (
+                "git",
+                "diff",
+                "--stat",
+                "HEAD",
+            ): b" src/main.py | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n",
             ("git", "ls-files", "--others", "--exclude-standard", "-z"): b"tmp/new_file.py\x00",
         }
     )
@@ -116,6 +120,7 @@ def test_diff_stat_propagates_untracked_error() -> None:
 # _parse_name_status_output
 # ---------------------------------------------------------------------------
 
+
 def test_parse_name_status_output_empty_input() -> None:
     client = GitClient()
     assert client._parse_name_status_output(b"") == []
@@ -149,6 +154,7 @@ def test_parse_name_status_output_truncated_input() -> None:
 # _parse_null_delimited_paths
 # ---------------------------------------------------------------------------
 
+
 def test_parse_null_delimited_paths_empty_input() -> None:
     client = GitClient()
     assert client._parse_null_delimited_paths(b"") == []
@@ -161,7 +167,11 @@ def test_parse_null_delimited_paths_single_path() -> None:
 
 def test_parse_null_delimited_paths_multiple_paths() -> None:
     client = GitClient()
-    assert client._parse_null_delimited_paths(b"a.py\x00b.py\x00c.py\x00") == ["a.py", "b.py", "c.py"]
+    assert client._parse_null_delimited_paths(b"a.py\x00b.py\x00c.py\x00") == [
+        "a.py",
+        "b.py",
+        "c.py",
+    ]
 
 
 def test_parse_null_delimited_paths_trailing_null_no_empty_strings() -> None:
@@ -174,6 +184,7 @@ def test_parse_null_delimited_paths_trailing_null_no_empty_strings() -> None:
 # ---------------------------------------------------------------------------
 # _normalize_repo_relative_path
 # ---------------------------------------------------------------------------
+
 
 def test_normalize_repo_relative_path_leading_dot_slash() -> None:
     client = GitClient()
@@ -193,6 +204,7 @@ def test_normalize_repo_relative_path_clean_passthrough() -> None:
 # ---------------------------------------------------------------------------
 # simple delegations
 # ---------------------------------------------------------------------------
+
 
 def test_checkout_base_delegates_correct_command() -> None:
     client = TrackingGitClient()
@@ -252,6 +264,7 @@ def test_push_branch_delegates_correct_command() -> None:
 # branch_allowed (standalone function)
 # ---------------------------------------------------------------------------
 
+
 def test_branch_allowed_empty_patterns() -> None:
     assert branch_allowed("anything", []) is True
 
@@ -281,6 +294,7 @@ def test_branch_allowed_star_pattern_matches_everything() -> None:
 # ---------------------------------------------------------------------------
 # add_local_exclude
 # ---------------------------------------------------------------------------
+
 
 def test_add_local_exclude_creates_file_when_missing(tmp_path: Path) -> None:
     client = GitClient()
@@ -339,6 +353,7 @@ def test_add_local_exclude_appends_to_existing_empty_file(tmp_path: Path) -> Non
 # ---------------------------------------------------------------------------
 # _run / _run_bytes error paths (monkeypatch subprocess.run)
 # ---------------------------------------------------------------------------
+
 
 def test_run_raises_runtime_error_on_nonzero_exit(monkeypatch: pytest.MonkeyPatch) -> None:
     import subprocess as sp
@@ -427,10 +442,16 @@ def test_run_bytes_returns_raw_stdout(monkeypatch: pytest.MonkeyPatch) -> None:
 # recent_commits
 # ---------------------------------------------------------------------------
 
+
 def test_recent_commits_normal_output() -> None:
     client = FakeGitClient(
         {
-            ("git", "log", "-n5", "--pretty=format:%h %s"): b"abc1234 Initial commit\ndef5678 Add feature\n",
+            (
+                "git",
+                "log",
+                "-n5",
+                "--pretty=format:%h %s",
+            ): b"abc1234 Initial commit\ndef5678 Add feature\n",
         }
     )
     result = client.recent_commits(Path("."))
@@ -460,10 +481,17 @@ def test_recent_commits_custom_max_count() -> None:
 # recent_changed_files
 # ---------------------------------------------------------------------------
 
+
 def test_recent_changed_files_deduplication() -> None:
     client = FakeGitClient(
         {
-            ("git", "log", "-n3", "--name-only", "--pretty=format:"): b"\nsrc/a.py\nsrc/b.py\n\nsrc/a.py\nsrc/c.py\n",
+            (
+                "git",
+                "log",
+                "-n3",
+                "--name-only",
+                "--pretty=format:",
+            ): b"\nsrc/a.py\nsrc/b.py\n\nsrc/a.py\nsrc/c.py\n",
         }
     )
     result = client.recent_changed_files(Path("."))
@@ -503,6 +531,7 @@ def test_recent_changed_files_custom_max_count() -> None:
 # ---------------------------------------------------------------------------
 # commit_all
 # ---------------------------------------------------------------------------
+
 
 def test_commit_all_returns_false_when_no_changes() -> None:
     client = FakeGitClient(
@@ -560,6 +589,7 @@ def test_commit_all_runs_git_add_before_noop_status_check() -> None:
 # create_task_branch
 # ---------------------------------------------------------------------------
 
+
 def test_create_task_branch_remote_exists() -> None:
     """When the branch already exists on the remote, fetch tracking ref then check it out."""
     calls: list[tuple[str, ...]] = []
@@ -597,6 +627,7 @@ def test_create_task_branch_new_branch() -> None:
 
 def test_create_task_branch_returns_true_when_remote_exists() -> None:
     """create_task_branch returns True when the branch already exists on remote."""
+
     class FakeRemoteExists(GitClient):
         def _run(self, args: list[str], cwd: Path | None = None) -> str:
             if args[:4] == ["git", "ls-remote", "--heads", "origin"]:
@@ -609,6 +640,7 @@ def test_create_task_branch_returns_true_when_remote_exists() -> None:
 
 def test_create_task_branch_returns_false_when_new() -> None:
     """create_task_branch returns False when the branch does not exist on remote."""
+
     class FakeNoRemote(GitClient):
         def _run(self, args: list[str], cwd: Path | None = None) -> str:
             return ""
@@ -620,6 +652,7 @@ def test_create_task_branch_returns_false_when_new() -> None:
 # ---------------------------------------------------------------------------
 # verify_remote_branch_exists
 # ---------------------------------------------------------------------------
+
 
 def test_verify_remote_branch_exists_success() -> None:
     client = FakeGitClient(
@@ -647,6 +680,7 @@ def test_verify_remote_branch_exists_raises_value_error() -> None:
 # clone
 # ---------------------------------------------------------------------------
 
+
 def test_clone_returns_correct_path() -> None:
     client = FakeGitClient({})
     result = client.clone("https://github.com/example/repo.git", Path("/workspace"))
@@ -657,10 +691,16 @@ def test_clone_returns_correct_path() -> None:
 # diff_patch
 # ---------------------------------------------------------------------------
 
+
 def test_diff_patch_returns_diff_output() -> None:
     client = FakeGitClient(
         {
-            ("git", "diff", "--binary", "HEAD"): b"diff --git a/f.py b/f.py\n--- a/f.py\n+++ b/f.py\n",
+            (
+                "git",
+                "diff",
+                "--binary",
+                "HEAD",
+            ): b"diff --git a/f.py b/f.py\n--- a/f.py\n+++ b/f.py\n",
         }
     )
     result = client.diff_patch(Path("."))
@@ -670,6 +710,7 @@ def test_diff_patch_returns_diff_output() -> None:
 # ---------------------------------------------------------------------------
 # try_merge_base
 # ---------------------------------------------------------------------------
+
 
 def test_try_merge_base_success(monkeypatch: pytest.MonkeyPatch) -> None:
     import subprocess as sp
@@ -705,7 +746,9 @@ def test_try_merge_base_conflict(monkeypatch: pytest.MonkeyPatch) -> None:
     assert conflicts == ["src/a.py", "src/b.py"]
 
 
-def test_try_merge_base_treats_fatal_merge_error_as_conflict(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_try_merge_base_treats_fatal_merge_error_as_conflict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import subprocess as sp
     from types import SimpleNamespace
 
@@ -1060,6 +1103,7 @@ def test_run_bytes_forwards_cwd_to_subprocess(monkeypatch: pytest.MonkeyPatch) -
 # checkout_base — cwd forwarding
 # ---------------------------------------------------------------------------
 
+
 def test_checkout_base_forwards_cwd_to_run() -> None:
     """checkout_base passes repo_path as cwd to _run."""
     captured_cwd: list[Path | None] = []
@@ -1077,6 +1121,7 @@ def test_checkout_base_forwards_cwd_to_run() -> None:
 # ---------------------------------------------------------------------------
 # try_merge_base — git diff itself fails (returncode != 0)
 # ---------------------------------------------------------------------------
+
 
 def test_try_merge_base_diff_command_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     """When the git diff command itself fails (returncode != 0), the current
@@ -1108,7 +1153,9 @@ def test_try_merge_base_diff_failure_with_partial_stdout(monkeypatch: pytest.Mon
         if args[:2] == ["git", "merge"]:
             return SimpleNamespace(returncode=1, stdout="", stderr="merge conflict")
         if args[:2] == ["git", "diff"]:
-            return SimpleNamespace(returncode=128, stdout="src/partial.py\n", stderr="fatal: bad object")
+            return SimpleNamespace(
+                returncode=128, stdout="src/partial.py\n", stderr="fatal: bad object"
+            )
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(sp, "run", fake_run)
@@ -1121,6 +1168,7 @@ def test_try_merge_base_diff_failure_with_partial_stdout(monkeypatch: pytest.Mon
 # ---------------------------------------------------------------------------
 # try_merge_base — cwd forwarding for both subprocess.run calls
 # ---------------------------------------------------------------------------
+
 
 def test_try_merge_base_forwards_cwd_to_both_subprocess_calls(
     monkeypatch: pytest.MonkeyPatch,
@@ -1147,6 +1195,7 @@ def test_try_merge_base_forwards_cwd_to_both_subprocess_calls(
 # ---------------------------------------------------------------------------
 # try_merge_base — whitespace/blank lines in conflict output
 # ---------------------------------------------------------------------------
+
 
 def test_try_merge_base_filters_blank_lines_from_conflict_output(
     monkeypatch: pytest.MonkeyPatch,
@@ -1177,6 +1226,7 @@ def test_try_merge_base_filters_blank_lines_from_conflict_output(
 # _parse_name_status_output — truncated rename (missing destination)
 # ---------------------------------------------------------------------------
 
+
 def test_parse_name_status_output_truncated_rename_missing_destination() -> None:
     """Rename entry with source but no destination exercises the guard at
     line 149 (idx+1 >= len(parts)), different from the existing truncation
@@ -1189,6 +1239,7 @@ def test_parse_name_status_output_truncated_rename_missing_destination() -> None
 # ---------------------------------------------------------------------------
 # branch_allowed — edge patterns
 # ---------------------------------------------------------------------------
+
 
 def test_branch_allowed_empty_string_branch() -> None:
     """Empty string branch does not match non-wildcard patterns."""
@@ -1209,6 +1260,7 @@ def test_branch_allowed_question_mark_glob() -> None:
 # ---------------------------------------------------------------------------
 # add_local_exclude — edge cases
 # ---------------------------------------------------------------------------
+
 
 def test_add_local_exclude_empty_string_pattern(tmp_path: Path) -> None:
     """Empty string pattern (after stripping) is still written."""
@@ -1232,6 +1284,7 @@ def test_add_local_exclude_pattern_with_newline_chars(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # diff_stat — untracked-only (no tracked changes)
 # ---------------------------------------------------------------------------
+
 
 def test_diff_stat_untracked_only_no_tracked_changes() -> None:
     """When there are no tracked changes but untracked files exist,
@@ -1271,6 +1324,7 @@ def test_diff_stat_normalizes_untracked_paths() -> None:
 # recent_commits — blank lines in output
 # ---------------------------------------------------------------------------
 
+
 def test_recent_commits_filters_blank_lines() -> None:
     """Blank lines interspersed in git log output are filtered out."""
     client = FakeGitClient(
@@ -1288,6 +1342,7 @@ def test_recent_commits_filters_blank_lines() -> None:
 # recent_changed_files — blank lines in output
 # ---------------------------------------------------------------------------
 
+
 def test_recent_changed_files_filters_blank_lines() -> None:
     """Blank lines in git log --name-only output are filtered out."""
     client = FakeGitClient(
@@ -1304,6 +1359,7 @@ def test_recent_changed_files_filters_blank_lines() -> None:
 # ---------------------------------------------------------------------------
 # changed_files — paths needing normalization
 # ---------------------------------------------------------------------------
+
 
 def test_changed_files_normalizes_backslashes_and_dot_prefixes() -> None:
     """Paths with backslashes or leading ./ are normalized in changed_files."""
@@ -1323,6 +1379,7 @@ def test_changed_files_normalizes_backslashes_and_dot_prefixes() -> None:
 # ---------------------------------------------------------------------------
 # Edge-case tests — Stage 3
 # ---------------------------------------------------------------------------
+
 
 def test_add_local_exclude_dedup_with_whitespace_in_existing_file(tmp_path: Path) -> None:
     """When the exclude file already contains a whitespace-padded line,
@@ -1860,7 +1917,9 @@ def test_verify_remote_branch_exists_error_contains_branch_name() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_try_merge_base_diff_filter_fails(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+def test_try_merge_base_diff_filter_fails(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
     """When merge fails AND git diff --diff-filter=U also fails, return (False, []) and log a warning."""
     import subprocess as sp
     from types import SimpleNamespace
@@ -2063,10 +2122,7 @@ def test_diff_stat_filters_whitespace_only_tracked_lines() -> None:
     client = FakeGitClient(
         {
             # Inject blank and tab-only lines between real content lines
-            ("git", "diff", "--stat", "HEAD"): (
-                b" src/main.py | 2 +-\n   \n\t\n 1 file changed\n"
-
-            ),
+            ("git", "diff", "--stat", "HEAD"): (b" src/main.py | 2 +-\n   \n\t\n 1 file changed\n"),
             ("git", "ls-files", "--others", "--exclude-standard", "-z"): b"",
         }
     )
@@ -2165,9 +2221,7 @@ def test_changed_files_result_is_always_sorted() -> None:
     client = FakeGitClient(
         {
             ("git", "diff", "--name-status", "-z", "HEAD"): (
-                b"M\x00z_last.py\x00"
-                b"M\x00m_middle.py\x00"
-                b"M\x00a_first.py\x00"
+                b"M\x00z_last.py\x00M\x00m_middle.py\x00M\x00a_first.py\x00"
             ),
             ("git", "ls-files", "--others", "--exclude-standard", "-z"): b"",
         }
@@ -2294,9 +2348,7 @@ def test_checkout_base_returns_none_even_when_pull_fails() -> None:
 def test_changed_files_copy_status_returns_destination() -> None:
     client = FakeGitClient(
         {
-            ("git", "diff", "--name-status", "-z", "HEAD"): (
-                b"C100\x00original.py\x00copy.py\x00"
-            ),
+            ("git", "diff", "--name-status", "-z", "HEAD"): (b"C100\x00original.py\x00copy.py\x00"),
             ("git", "ls-files", "--others", "--exclude-standard", "-z"): b"",
         }
     )

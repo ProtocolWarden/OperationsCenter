@@ -187,5 +187,7 @@ def cl_dispatch_wrap(work_item: Any) -> Iterator[dict[str, Any]]:
             capture(lineage_id, payload)
         except Exception as cap_exc:  # noqa: BLE001 - capture must not mask dispatch
             logger.warning(
-                "CL capture failed for lineage=%s: %s", lineage_id, cap_exc,
+                "CL capture failed for lineage=%s: %s",
+                lineage_id,
+                cap_exc,
             )

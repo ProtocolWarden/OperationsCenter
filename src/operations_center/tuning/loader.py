@@ -18,9 +18,9 @@ class TuningArtifactLoader:
         """Load the most recent N tuning run artifacts (for cooldown/quota checks)."""
         if not self.tuning_root.exists():
             return []
-        run_dirs = sorted(
-            [d for d in self.tuning_root.iterdir() if d.is_dir()], reverse=True
-        )[:limit]
+        run_dirs = sorted([d for d in self.tuning_root.iterdir() if d.is_dir()], reverse=True)[
+            :limit
+        ]
         results: list[TuningRunArtifact] = []
         for d in run_dirs:
             path = d / "tuning_run.json"

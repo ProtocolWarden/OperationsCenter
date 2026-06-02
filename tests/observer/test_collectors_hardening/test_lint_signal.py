@@ -4,12 +4,14 @@
 
 Note: Tests are written using the actual ruff output format (location.row/column).
 """
+
 import json
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from operations_center.observer.collectors.lint_signal import LintSignalCollector
+
 pytestmark = pytest.mark.slow
 
 
@@ -19,10 +21,7 @@ def _valid_lint_item():
         "filename": "test.py",
         "code": "E501",
         "message": "Line too long",
-        "location": {
-            "row": 1,
-            "column": 0
-        }
+        "location": {"row": 1, "column": 0},
     }
 
 
@@ -123,7 +122,7 @@ class TestLintSignalStructureErrors:
 
     def test_structure_error_wrong_root_type_number(self):
         """S2: Wrong root type (number instead of array)."""
-        malformed = '123'
+        malformed = "123"
         signal = LintSignalCollector._parse_ruff_output(malformed)
         assert signal.status == "unavailable"
         assert signal.source == "ruff_unexpected_format"
@@ -154,12 +153,14 @@ class TestLintSignalStructureErrors:
 
     def test_structure_error_type_mismatch_filename_not_string(self):
         """S5: Type mismatch (filename should be string)."""
-        payload = [{
-            "filename": 123,  # Should be string, not int
-            "code": "E501",
-            "message": "error",
-            "location": {"row": 1, "column": 0}
-        }]
+        payload = [
+            {
+                "filename": 123,  # Should be string, not int
+                "code": "E501",
+                "message": "error",
+                "location": {"row": 1, "column": 0},
+            }
+        ]
         signal = LintSignalCollector._parse_ruff_output(json.dumps(payload))
         # Invalid item should be skipped
         assert signal.violation_count == 1
@@ -167,71 +168,83 @@ class TestLintSignalStructureErrors:
 
     def test_structure_error_type_mismatch_code_not_string(self):
         """S5: Type mismatch (code should be string)."""
-        payload = [{
-            "filename": "test.py",
-            "code": 123,  # Should be string
-            "message": "error",
-            "location": {"row": 1, "column": 0}
-        }]
+        payload = [
+            {
+                "filename": "test.py",
+                "code": 123,  # Should be string
+                "message": "error",
+                "location": {"row": 1, "column": 0},
+            }
+        ]
         signal = LintSignalCollector._parse_ruff_output(json.dumps(payload))
         assert signal.violation_count == 1
 
     def test_structure_error_null_in_required_field(self):
         """S6: Null in required field."""
-        payload = [{
-            "filename": None,  # Should not be null
-            "code": "E501",
-            "message": "error",
-            "location": {"row": 1, "column": 0}
-        }]
+        payload = [
+            {
+                "filename": None,  # Should not be null
+                "code": "E501",
+                "message": "error",
+                "location": {"row": 1, "column": 0},
+            }
+        ]
         signal = LintSignalCollector._parse_ruff_output(json.dumps(payload))
         assert signal.violation_count == 1
         # Should be skipped due to null filename
 
     def test_structure_error_invalid_location_type(self):
         """S2: Wrong type for location (should be object)."""
-        payload = [{
-            "filename": "test.py",
-            "code": "E501",
-            "message": "error",
-            "location": "not_an_object"  # Should be object with row/column
-        }]
+        payload = [
+            {
+                "filename": "test.py",
+                "code": "E501",
+                "message": "error",
+                "location": "not_an_object",  # Should be object with row/column
+            }
+        ]
         signal = LintSignalCollector._parse_ruff_output(json.dumps(payload))
         # Should still process but with defaults
         assert signal.violation_count == 1
 
     def test_structure_error_empty_filename_string(self):
         """S8: Empty required string (filename)."""
-        payload = [{
-            "filename": "",  # Empty string
-            "code": "E501",
-            "message": "error",
-            "location": {"row": 1, "column": 0}
-        }]
+        payload = [
+            {
+                "filename": "",  # Empty string
+                "code": "E501",
+                "message": "error",
+                "location": {"row": 1, "column": 0},
+            }
+        ]
         signal = LintSignalCollector._parse_ruff_output(json.dumps(payload))
         # Empty filename is accepted but might produce invalid violation
         assert signal.violation_count == 1
 
     def test_structure_error_negative_row_value(self):
         """S7: Out-of-range value (row should be >= 1)."""
-        payload = [{
-            "filename": "test.py",
-            "code": "E501",
-            "message": "error",
-            "location": {"row": -1, "column": 0}  # Negative row
-        }]
+        payload = [
+            {
+                "filename": "test.py",
+                "code": "E501",
+                "message": "error",
+                "location": {"row": -1, "column": 0},  # Negative row
+            }
+        ]
         signal = LintSignalCollector._parse_ruff_output(json.dumps(payload))
         assert signal.violation_count == 1
         # Should be accepted but with negative value (graceful degradation)
 
     def test_structure_error_missing_message_field(self):
         """S1: Missing optional message field (handled gracefully)."""
-        payload = [{
-            "filename": "test.py",
-            "code": "E501",
-            "location": {"row": 1, "column": 0}
-            # Missing message field - but validator doesn't require it
-        }]
+        payload = [
+            {
+                "filename": "test.py",
+                "code": "E501",
+                "location": {"row": 1, "column": 0},
+                # Missing message field - but validator doesn't require it
+            }
+        ]
         signal = LintSignalCollector._parse_ruff_output(json.dumps(payload))
         assert signal.violation_count == 1
         # Item is valid according to validator
@@ -259,12 +272,14 @@ class TestLintSignalEdgeCases:
         # Create a large payload with many items
         items = []
         for i in range(100):
-            items.append({
-                "filename": f"test{i}.py",
-                "code": f"E{i:03d}",
-                "message": f"error {i}",
-                "location": {"row": i + 1, "column": 0}
-            })
+            items.append(
+                {
+                    "filename": f"test{i}.py",
+                    "code": f"E{i:03d}",
+                    "message": f"error {i}",
+                    "location": {"row": i + 1, "column": 0},
+                }
+            )
         signal = LintSignalCollector._parse_ruff_output(json.dumps(items))
         assert signal.violation_count == 100
         # But only top _MAX_VIOLATIONS are returned (default 20)
@@ -272,22 +287,14 @@ class TestLintSignalEdgeCases:
 
     def test_deeply_nested_location(self):
         """E2: Deeply nested location object with extra fields."""
-        items = [{
-            "filename": "test.py",
-            "code": "E501",
-            "message": "error",
-            "location": {
-                "row": 1,
-                "column": 0,
-                "nested": {
-                    "deep": {
-                        "path": {
-                            "value": 42
-                        }
-                    }
-                }
+        items = [
+            {
+                "filename": "test.py",
+                "code": "E501",
+                "message": "error",
+                "location": {"row": 1, "column": 0, "nested": {"deep": {"path": {"value": 42}}}},
             }
-        }]
+        ]
         signal = LintSignalCollector._parse_ruff_output(json.dumps(items))
         assert signal.violation_count == 1
         assert signal.status == "violations"
@@ -296,9 +303,19 @@ class TestLintSignalEdgeCases:
     def test_mixed_valid_and_invalid_items(self):
         """Mixed valid/invalid items in output."""
         items = [
-            {"filename": "test1.py", "code": "E501", "message": "error", "location": {"row": 1, "column": 0}},  # Valid
+            {
+                "filename": "test1.py",
+                "code": "E501",
+                "message": "error",
+                "location": {"row": 1, "column": 0},
+            },  # Valid
             {"filename": "test2.py"},  # Missing code and location
-            {"filename": "test3.py", "code": "E502", "message": "error", "location": {"row": 3, "column": 0}},  # Valid
+            {
+                "filename": "test3.py",
+                "code": "E502",
+                "message": "error",
+                "location": {"row": 3, "column": 0},
+            },  # Valid
         ]
         signal = LintSignalCollector._parse_ruff_output(json.dumps(items))
         assert signal.violation_count == 3
@@ -308,12 +325,14 @@ class TestLintSignalEdgeCases:
     def test_very_long_field_values(self):
         """E5: Very long string values."""
         long_message = "x" * 10000
-        items = [{
-            "filename": "test.py",
-            "code": "E501",
-            "message": long_message,
-            "location": {"row": 1, "column": 0}
-        }]
+        items = [
+            {
+                "filename": "test.py",
+                "code": "E501",
+                "message": long_message,
+                "location": {"row": 1, "column": 0},
+            }
+        ]
         signal = LintSignalCollector._parse_ruff_output(json.dumps(items))
         assert signal.violation_count == 1
         assert signal.status == "violations"
@@ -321,15 +340,17 @@ class TestLintSignalEdgeCases:
 
     def test_extra_unknown_fields(self):
         """S10: Extra unknown fields (should be ignored)."""
-        items = [{
-            "filename": "test.py",
-            "code": "E501",
-            "message": "error",
-            "location": {"row": 1, "column": 0},
-            "extra_field_1": "ignored",
-            "extra_field_2": 123,
-            "extra_field_3": {"nested": "value"}
-        }]
+        items = [
+            {
+                "filename": "test.py",
+                "code": "E501",
+                "message": "error",
+                "location": {"row": 1, "column": 0},
+                "extra_field_1": "ignored",
+                "extra_field_2": 123,
+                "extra_field_3": {"nested": "value"},
+            }
+        ]
         signal = LintSignalCollector._parse_ruff_output(json.dumps(items))
         assert signal.violation_count == 1
         assert signal.status == "violations"
@@ -337,12 +358,14 @@ class TestLintSignalEdgeCases:
 
     def test_unicode_in_message(self):
         """E4: Unicode characters in message."""
-        items = [{
-            "filename": "test.py",
-            "code": "E501",
-            "message": "Error: émojis 🎉 and special chars: ñ, é, ü",
-            "location": {"row": 1, "column": 0}
-        }]
+        items = [
+            {
+                "filename": "test.py",
+                "code": "E501",
+                "message": "Error: émojis 🎉 and special chars: ñ, é, ü",
+                "location": {"row": 1, "column": 0},
+            }
+        ]
         signal = LintSignalCollector._parse_ruff_output(json.dumps(items))
         assert signal.violation_count == 1
         assert len(signal.top_violations) == 1
@@ -355,7 +378,7 @@ class TestLintSignalEdgeCases:
                 "filename": "test.py",
                 "code": "E501",
                 "message": "error",
-                "location": {"row": 1, "column": 0}
+                "location": {"row": 1, "column": 0},
             }
         ]
         # Pretty-printed JSON
@@ -367,12 +390,14 @@ class TestLintSignalEdgeCases:
 
     def test_zero_values(self):
         """Boundary: Zero row is out of range; column can be 0."""
-        items = [{
-            "filename": "test.py",
-            "code": "E501",
-            "message": "error",
-            "location": {"row": 0, "column": 0}  # row must be 1-1000000
-        }]
+        items = [
+            {
+                "filename": "test.py",
+                "code": "E501",
+                "message": "error",
+                "location": {"row": 0, "column": 0},  # row must be 1-1000000
+            }
+        ]
         signal = LintSignalCollector._parse_ruff_output(json.dumps(items))
         assert signal.violation_count == 1
         # Row 0 is out of range; item is rejected by validator
@@ -382,10 +407,29 @@ class TestLintSignalEdgeCases:
     def test_distinct_file_count_calculation(self):
         """Distinct file count correctly calculated."""
         items = [
-            {"filename": "test1.py", "code": "E501", "message": "error", "location": {"row": 1, "column": 0}},
-            {"filename": "test1.py", "code": "E502", "message": "error", "location": {"row": 2, "column": 0}},
-            {"filename": "test2.py", "code": "E503", "message": "error", "location": {"row": 1, "column": 0}},
-            {"code": "E504", "message": "error", "location": {"row": 1, "column": 0}},  # No filename - rejected by validator
+            {
+                "filename": "test1.py",
+                "code": "E501",
+                "message": "error",
+                "location": {"row": 1, "column": 0},
+            },
+            {
+                "filename": "test1.py",
+                "code": "E502",
+                "message": "error",
+                "location": {"row": 2, "column": 0},
+            },
+            {
+                "filename": "test2.py",
+                "code": "E503",
+                "message": "error",
+                "location": {"row": 1, "column": 0},
+            },
+            {
+                "code": "E504",
+                "message": "error",
+                "location": {"row": 1, "column": 0},
+            },  # No filename - rejected by validator
         ]
         signal = LintSignalCollector._parse_ruff_output(json.dumps(items))
         # Should have 2 distinct files (test1.py, test2.py; item without filename is excluded)
@@ -415,7 +459,9 @@ class TestLintSignalCollectorIntegration:
         context = MagicMock()
         context.repo_path = "/tmp/test"
 
-        with patch("subprocess.run", side_effect=__import__("subprocess").TimeoutExpired("ruff", 60)):
+        with patch(
+            "subprocess.run", side_effect=__import__("subprocess").TimeoutExpired("ruff", 60)
+        ):
             collector = LintSignalCollector()
             signal = collector.collect(context)
 
@@ -456,8 +502,18 @@ class TestLintSignalCollectorIntegration:
 
         # Use validator-compatible format with location.start
         violations_data = [
-            {"filename": "test.py", "code": "E501", "message": "Line too long", "location": {"row": 1, "column": 88}},
-            {"filename": "test.py", "code": "F841", "message": "Unused variable", "location": {"row": 5, "column": 0}},
+            {
+                "filename": "test.py",
+                "code": "E501",
+                "message": "Line too long",
+                "location": {"row": 1, "column": 88},
+            },
+            {
+                "filename": "test.py",
+                "code": "F841",
+                "message": "Unused variable",
+                "location": {"row": 5, "column": 0},
+            },
         ]
 
         mock_result = MagicMock()

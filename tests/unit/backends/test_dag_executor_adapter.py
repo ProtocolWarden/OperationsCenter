@@ -2,10 +2,10 @@
 # Copyright (C) 2026 ProtocolWarden
 from __future__ import annotations
 
+import sys
 from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
-import sys
 
 from cxrp.contracts.runtime_binding import RuntimeBinding
 from cxrp.vocabulary.runtime import RuntimeKind, SelectionMode
@@ -78,7 +78,9 @@ def test_adapter_applies_tier_defaults_to_fallback_agent(monkeypatch) -> None:
             self.nodes = nodes
 
     fake_executor = SimpleNamespace(DAGExecutorRunner=FakeRunner)
-    fake_models = SimpleNamespace(GraphSpec=FakeGraphSpec, NodeSpec=FakeNodeSpec, NodeType=FakeNodeType)
+    fake_models = SimpleNamespace(
+        GraphSpec=FakeGraphSpec, NodeSpec=FakeNodeSpec, NodeType=FakeNodeType
+    )
     fake_loader = SimpleNamespace(load_graph_file=lambda path, goal_text="": None)
     monkeypatch.setitem(sys.modules, "dag_executor.executor", fake_executor)
     monkeypatch.setitem(sys.modules, "dag_executor.models", fake_models)
@@ -125,7 +127,9 @@ def test_adapter_downgrades_tier_under_budget_pressure(monkeypatch) -> None:
             self.nodes = nodes
 
     fake_executor = SimpleNamespace(DAGExecutorRunner=FakeRunner)
-    fake_models = SimpleNamespace(GraphSpec=FakeGraphSpec, NodeSpec=FakeNodeSpec, NodeType=FakeNodeType)
+    fake_models = SimpleNamespace(
+        GraphSpec=FakeGraphSpec, NodeSpec=FakeNodeSpec, NodeType=FakeNodeType
+    )
     fake_loader = SimpleNamespace(load_graph_file=lambda path, goal_text="": None)
     monkeypatch.setitem(sys.modules, "dag_executor.executor", fake_executor)
     monkeypatch.setitem(sys.modules, "dag_executor.models", fake_models)
@@ -171,7 +175,9 @@ def test_adapter_falls_back_to_codex_when_claude_backend_is_cooling_down(monkeyp
             self.nodes = nodes
 
     fake_executor = SimpleNamespace(DAGExecutorRunner=FakeRunner)
-    fake_models = SimpleNamespace(GraphSpec=FakeGraphSpec, NodeSpec=FakeNodeSpec, NodeType=FakeNodeType)
+    fake_models = SimpleNamespace(
+        GraphSpec=FakeGraphSpec, NodeSpec=FakeNodeSpec, NodeType=FakeNodeType
+    )
     fake_loader = SimpleNamespace(load_graph_file=lambda path, goal_text="": None)
     monkeypatch.setitem(sys.modules, "dag_executor.executor", fake_executor)
     monkeypatch.setitem(sys.modules, "dag_executor.models", fake_models)
@@ -219,7 +225,9 @@ def test_adapter_execute_and_capture_reports_fallback_usage(monkeypatch) -> None
             self.nodes = nodes
 
     fake_executor = SimpleNamespace(DAGExecutorRunner=FakeRunner)
-    fake_models = SimpleNamespace(GraphSpec=FakeGraphSpec, NodeSpec=FakeNodeSpec, NodeType=FakeNodeType)
+    fake_models = SimpleNamespace(
+        GraphSpec=FakeGraphSpec, NodeSpec=FakeNodeSpec, NodeType=FakeNodeType
+    )
     fake_loader = SimpleNamespace(load_graph_file=lambda path, goal_text="": None)
     monkeypatch.setitem(sys.modules, "dag_executor.executor", fake_executor)
     monkeypatch.setitem(sys.modules, "dag_executor.models", fake_models)

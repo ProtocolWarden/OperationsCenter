@@ -4,10 +4,15 @@
 
 from __future__ import annotations
 
-
 import pytest
 
-from operations_center.contracts.enums import ExecutionStatus, ValidationStatus
+from operations_center.contracts.enums import (
+    ExecutionStatus,
+    FailureReasonCategory,
+    ValidationStatus,
+)
+from operations_center.observability.recorder import ExecutionRecorder
+from operations_center.observability.trace import RunReportBuilder
 from operations_center.openclaw_shell.bridge import OpenClawBridge
 from operations_center.openclaw_shell.models import (
     OperatorContext,
@@ -21,10 +26,6 @@ from ..observability.conftest import (
     make_changed_file,
     make_result,
 )
-from operations_center.contracts.enums import FailureReasonCategory
-from operations_center.observability.recorder import ExecutionRecorder
-from operations_center.observability.trace import RunReportBuilder
-
 
 # ---------------------------------------------------------------------------
 # Helpers

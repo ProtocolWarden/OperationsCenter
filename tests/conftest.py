@@ -60,7 +60,7 @@ def optional_import(request: pytest.FixtureRequest) -> Callable | types.ModuleTy
         except (ImportError, ModuleNotFoundError) as e:
             pytest.skip(f"Module '{module_path}' import failed: {type(e).__name__}: {e}")
 
-    if hasattr(request, 'param') and request.param is not None:
+    if hasattr(request, "param") and request.param is not None:
         return _import_optional(request.param)
     return _import_optional
 
@@ -84,9 +84,11 @@ def require_module(request: pytest.FixtureRequest) -> Callable | types.ModuleTyp
         try:
             return importlib.import_module(module_path)
         except (ImportError, ModuleNotFoundError) as e:
-            raise AssertionError(f"Required module '{module_path}' could not be imported: {type(e).__name__}: {e}")
+            raise AssertionError(
+                f"Required module '{module_path}' could not be imported: {type(e).__name__}: {e}"
+            )
 
-    if hasattr(request, 'param') and request.param is not None:
+    if hasattr(request, "param") and request.param is not None:
         return _import_required(request.param)
     return _import_required
 
@@ -150,10 +152,11 @@ def assert_module_unavailable(request: pytest.FixtureRequest) -> Callable:
             importlib.import_module(module_path)
         except (ImportError, ModuleNotFoundError):
             return
-        raise AssertionError(f"Expected ModuleNotFoundError, but '{module_path}' imported successfully")
+        raise AssertionError(
+            f"Expected ModuleNotFoundError, but '{module_path}' imported successfully"
+        )
 
     return _assert_unavailable
-
 
 
 class SlowTestTracker:
@@ -224,7 +227,9 @@ class SlowTestTracker:
                 "max_duration": round(stats["max_duration"], 3),
             },
             "slow_tests": {
-                "threshold_exceeded": sorted(threshold_slow, key=lambda x: x["duration"], reverse=True),
+                "threshold_exceeded": sorted(
+                    threshold_slow, key=lambda x: x["duration"], reverse=True
+                ),
                 "marked_slow": sorted(marked_slow, key=lambda x: x["duration"], reverse=True),
             },
         }
@@ -252,7 +257,9 @@ def pytest_configure(config: Any) -> None:
     global _slow_test_tracker
     threshold = config.option.slow_threshold if hasattr(config.option, "slow_threshold") else 1.0
     json_report = config.option.slow_report if hasattr(config.option, "slow_report") else None
-    _slow_test_tracker = SlowTestTracker(threshold_seconds=float(threshold), json_report_path=json_report)
+    _slow_test_tracker = SlowTestTracker(
+        threshold_seconds=float(threshold), json_report_path=json_report
+    )
 
 
 def pytest_addoption(parser: Any) -> None:
@@ -350,9 +357,7 @@ def report_fixture_dir(tmp_path: Path) -> Path:
     return report_dir
 
 
-def _write_report_to_disk(
-    report_root: Path, data: dict[str, Any]
-) -> Path:
+def _write_report_to_disk(report_root: Path, data: dict[str, Any]) -> Path:
     """Write dependency report data to disk as JSON."""
     from uuid import uuid4
 

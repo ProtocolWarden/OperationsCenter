@@ -65,7 +65,9 @@ def main() -> None:
 
     if artifact.family_metrics:
         print("\n  Family metrics:")
-        print(f"  {'family':<30} {'emitted':>8} {'suppressed':>10} {'created':>8} {'sup%':>6} {'create%':>8}")
+        print(
+            f"  {'family':<30} {'emitted':>8} {'suppressed':>10} {'created':>8} {'sup%':>6} {'create%':>8}"
+        )
         for m in artifact.family_metrics:
             print(
                 f"  {m.family:<30} {m.candidates_emitted:>8} {m.candidates_suppressed:>10} "
@@ -97,19 +99,31 @@ def main() -> None:
 
     # S8-10: Confidence calibration report
     try:
-        from operations_center.tuning.calibration import ConfidenceCalibrationStore, _MIN_SAMPLE_SIZE
+        from operations_center.tuning.calibration import (
+            _MIN_SAMPLE_SIZE,
+            ConfidenceCalibrationStore,
+        )
+
         cal_records = ConfidenceCalibrationStore().report()
         if cal_records:
             print("\n  Confidence calibration:")
-            print(f"  {'family':<28} {'conf':<8} {'n':>5} {'accept%':>9} {'expected':>9} {'ratio':>7}")
+            print(
+                f"  {'family':<28} {'conf':<8} {'n':>5} {'accept%':>9} {'expected':>9} {'ratio':>7}"
+            )
             for r in cal_records:
-                flag = "⚠" if r.calibration_ratio < 0.6 else (" ✓" if r.calibration_ratio >= 0.9 else "  ")
+                flag = (
+                    "⚠"
+                    if r.calibration_ratio < 0.6
+                    else (" ✓" if r.calibration_ratio >= 0.9 else "  ")
+                )
                 print(
                     f"  {r.family:<28} {r.confidence:<8} {r.total:>5} "
                     f"{r.acceptance_rate:>8.0%} {r.expected_rate:>8.0%} {r.calibration_ratio:>6.2f}{flag}"
                 )
         else:
-            print(f"\n  Confidence calibration: no data yet (need ≥{_MIN_SAMPLE_SIZE} records per family/confidence).")
+            print(
+                f"\n  Confidence calibration: no data yet (need ≥{_MIN_SAMPLE_SIZE} records per family/confidence)."
+            )
     except Exception:
         pass
 

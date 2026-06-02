@@ -133,6 +133,7 @@ class TestCalibrationRecommendation:
 class TestBehaviorCalibrationReport:
     def test_report_serializes_to_json(self, completed_index) -> None:
         from operations_center.behavior_calibration import analyze_artifacts
+
         inp = _make_input(completed_index, AnalysisProfile.SUMMARY)
         report = analyze_artifacts(inp)
         json_str = report.model_dump_json()
@@ -142,10 +143,18 @@ class TestBehaviorCalibrationReport:
 
     def test_report_has_errors_detects_error_findings(self) -> None:
         summary = ArtifactIndexSummary(
-            total_artifacts=1, by_kind={}, by_location={}, by_status={},
-            singleton_count=0, partial_count=0, excluded_path_count=0,
-            unresolved_path_count=0, missing_file_count=0,
-            machine_readable_count=0, warnings_count=0, errors_count=0,
+            total_artifacts=1,
+            by_kind={},
+            by_location={},
+            by_status={},
+            singleton_count=0,
+            partial_count=0,
+            excluded_path_count=0,
+            unresolved_path_count=0,
+            missing_file_count=0,
+            machine_readable_count=0,
+            warnings_count=0,
+            errors_count=0,
             manifest_limitations=[],
         )
         report = BehaviorCalibrationReport(
@@ -167,10 +176,18 @@ class TestBehaviorCalibrationReport:
 
     def test_report_has_errors_false_for_info_only(self) -> None:
         summary = ArtifactIndexSummary(
-            total_artifacts=1, by_kind={}, by_location={}, by_status={},
-            singleton_count=0, partial_count=0, excluded_path_count=0,
-            unresolved_path_count=0, missing_file_count=0,
-            machine_readable_count=0, warnings_count=0, errors_count=0,
+            total_artifacts=1,
+            by_kind={},
+            by_location={},
+            by_status={},
+            singleton_count=0,
+            partial_count=0,
+            excluded_path_count=0,
+            unresolved_path_count=0,
+            missing_file_count=0,
+            machine_readable_count=0,
+            warnings_count=0,
+            errors_count=0,
             manifest_limitations=[],
         )
         report = BehaviorCalibrationReport(

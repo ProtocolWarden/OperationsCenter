@@ -10,14 +10,13 @@ Tests cover:
 - Error handling for I/O failures
 - Factory method for creating metrics from errors
 """
+
 from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from operations_center.observer.exporters import (
     ValidationFailureMetric,
@@ -88,7 +87,7 @@ class TestValidationMetricsExporter:
     def test_exporter_creates_directory(self, tmp_path: Path) -> None:
         """Test that exporter creates export directory if it doesn't exist."""
         export_dir = tmp_path / "metrics" / "new"
-        exporter = ValidationMetricsExporter(export_dir=export_dir)
+        ValidationMetricsExporter(export_dir=export_dir)
         assert export_dir.exists()
 
     def test_export_failure_to_file(self, tmp_path: Path) -> None:
@@ -231,9 +230,9 @@ class TestValidationMetricsExporter:
         # Create files with various dates
         dates = [
             (datetime.now(UTC) - timedelta(days=10)).strftime("%Y-%m-%d"),  # Too old
-            (datetime.now(UTC) - timedelta(days=5)).strftime("%Y-%m-%d"),   # Keep
-            (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d"),   # Keep
-            datetime.now(UTC).strftime("%Y-%m-%d"),                         # Keep
+            (datetime.now(UTC) - timedelta(days=5)).strftime("%Y-%m-%d"),  # Keep
+            (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d"),  # Keep
+            datetime.now(UTC).strftime("%Y-%m-%d"),  # Keep
         ]
 
         for date_str in dates:
@@ -469,9 +468,7 @@ class TestValidationMetricsExporter:
 
     def test_auto_rotate_configuration(self, tmp_path: Path) -> None:
         """Test auto_rotate can be disabled."""
-        exporter = ValidationMetricsExporter(
-            export_dir=tmp_path, auto_rotate=False
-        )
+        exporter = ValidationMetricsExporter(export_dir=tmp_path, auto_rotate=False)
         assert exporter.auto_rotate is False
 
         # _rotate_if_needed should be a no-op

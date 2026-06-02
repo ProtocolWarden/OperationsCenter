@@ -22,6 +22,7 @@ The function is deliberately conservative — it only reports top-level and
 one level of nested keys that are *entirely absent* from the deployed config.
 It does not validate types or values (Pydantic does that at load time).
 """
+
 from __future__ import annotations
 
 from pathlib import Path

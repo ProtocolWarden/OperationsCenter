@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 """Tests for the Phase 11 decision matrix + Phase 13 re-audit triggers."""
+
 from __future__ import annotations
 
 from datetime import date, timedelta
@@ -24,7 +25,6 @@ from operations_center.executors.reaudit import (
     ReauditReason,
     needs_reaudit,
 )
-
 
 # ── Phase 11 decision matrix ────────────────────────────────────────────
 
@@ -57,10 +57,12 @@ class TestDecisionMatrix:
 
     def test_partial_and_fail_picks_fail(self):
         """FAIL dominates PARTIAL — outcome is determined by the worst phase."""
-        d = compute_expected_outcome(self._phases(
-            runtime_control=PhaseClassification.PARTIAL,
-            capability_control=PhaseClassification.FAIL,
-        ))
+        d = compute_expected_outcome(
+            self._phases(
+                runtime_control=PhaseClassification.PARTIAL,
+                capability_control=PhaseClassification.FAIL,
+            )
+        )
         assert d.expected == ExpectedOutcome.UPSTREAM_PATCH_PENDING_OR_FORK
 
 
@@ -76,9 +78,13 @@ class TestVerdictConsistency:
         for k, v in phase_overrides.items():
             per_phase[k] = v
         return AuditVerdict(
-            backend_id="x", audited_at="2026-05-05",
-            audited_against_cxrp_version="0.2", backend_version="u",
-            per_phase=per_phase, outcome=outcome, gap_refs=[],
+            backend_id="x",
+            audited_at="2026-05-05",
+            audited_against_cxrp_version="0.2",
+            backend_version="u",
+            per_phase=per_phase,
+            outcome=outcome,
+            gap_refs=[],
         )
 
     def test_adapter_only_with_all_pass_consistent(self):
@@ -86,24 +92,30 @@ class TestVerdictConsistency:
         assert ok
 
     def test_adapter_only_with_partial_inconsistent(self):
-        ok, reason = verdict_is_consistent(self._verdict(
-            outcome=AuditOutcome.ADAPTER_ONLY,
-            runtime_control=PhaseClassification.PARTIAL,
-        ))
+        ok, reason = verdict_is_consistent(
+            self._verdict(
+                outcome=AuditOutcome.ADAPTER_ONLY,
+                runtime_control=PhaseClassification.PARTIAL,
+            )
+        )
         assert not ok and "adapter_plus_wrapper" in reason
 
     def test_fork_with_fail_consistent(self):
-        ok, _ = verdict_is_consistent(self._verdict(
-            outcome=AuditOutcome.FORK_REQUIRED,
-            runtime_control=PhaseClassification.FAIL,
-        ))
+        ok, _ = verdict_is_consistent(
+            self._verdict(
+                outcome=AuditOutcome.FORK_REQUIRED,
+                runtime_control=PhaseClassification.FAIL,
+            )
+        )
         assert ok
 
     def test_upstream_patch_with_fail_consistent(self):
-        ok, _ = verdict_is_consistent(self._verdict(
-            outcome=AuditOutcome.UPSTREAM_PATCH_PENDING,
-            runtime_control=PhaseClassification.FAIL,
-        ))
+        ok, _ = verdict_is_consistent(
+            self._verdict(
+                outcome=AuditOutcome.UPSTREAM_PATCH_PENDING,
+                runtime_control=PhaseClassification.FAIL,
+            )
+        )
         assert ok
 
 
@@ -133,7 +145,10 @@ def _seed_inconsistent_backend(base: Path) -> None:
 
 def test_catalog_rejects_matrix_inconsistent_verdict(tmp_path):
     _seed_inconsistent_backend(tmp_path)
-    with pytest.raises(CatalogValidationError, match="expected upstream_patch_pending or fork_required|expected adapter_only"):
+    with pytest.raises(
+        CatalogValidationError,
+        match="expected upstream_patch_pending or fork_required|expected adapter_only",
+    ):
         load_catalog(tmp_path)
 
 
@@ -142,8 +157,10 @@ def test_catalog_rejects_matrix_inconsistent_verdict(tmp_path):
 
 def _verdict(audited_at="2026-05-05", backend_version="2.0", cxrp="0.2") -> AuditVerdict:
     return AuditVerdict(
-        backend_id="x", audited_at=audited_at,
-        audited_against_cxrp_version=cxrp, backend_version=backend_version,
+        backend_id="x",
+        audited_at=audited_at,
+        audited_against_cxrp_version=cxrp,
+        backend_version=backend_version,
         per_phase={
             "runtime_control": PhaseClassification.PASS,
             "capability_control": PhaseClassification.PASS,
@@ -151,7 +168,8 @@ def _verdict(audited_at="2026-05-05", backend_version="2.0", cxrp="0.2") -> Audi
             "failure_observability": PhaseClassification.PASS,
             "internal_routing": PhaseClassification.NA,
         },
-        outcome=AuditOutcome.ADAPTER_ONLY, gap_refs=[],
+        outcome=AuditOutcome.ADAPTER_ONLY,
+        gap_refs=[],
     )
 
 
