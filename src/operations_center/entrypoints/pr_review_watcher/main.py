@@ -783,10 +783,13 @@ def _phase1(
     state_key = state["state_key"]
     reviewer = settings.reviewer
 
-    # ── auto-merge-on-CI-green (fast path) ───────────────────────────────────
-    # For autonomy PRs on repos that opt in, skip the self-review pipeline
-    # entirely and merge the moment CI is green.  Self-review is expensive and
-    # fragile; CI + ci_fix phase is the primary quality gate.
+    # ── CI-green precondition ────────────────────────────────────────────────
+    # For autonomy PRs on repos that opt in, green CI is a PRECONDITION for
+    # merge — not a merge trigger. While CI is red we defer (ci_fix / CI will
+    # resolve it) rather than burning an expensive self-review. Once CI is
+    # green we fall through to the verdict-gated self-review below: LGTM is the
+    # only thing that merges, so a PR is never shipped on green CI alone (green
+    # CI does not prove the issue is complete — e.g. missing docs pass CI).
     repo_cfg = settings.repos.get(repo_key)
     if repo_cfg and getattr(repo_cfg, "auto_merge_on_ci_green", False):
         head_ref = ((pr_data.get("head") or {}).get("ref") or "").lower()
@@ -801,27 +804,19 @@ def _phase1(
                     pr_data=pr_data,
                     ignored_checks=ignored,
                 )
-                if not failed:
+                if failed:
                     logger.info(
-                        "pr_review_watcher: PR #%d auto-merging — CI green, "
-                        "auto_merge_on_ci_green=True",
+                        "pr_review_watcher: PR #%d CI not green (%d failed) — deferring "
+                        "self-review until CI is green",
                         pr_number,
+                        len(failed),
                     )
-                    _merge_and_done(
-                        state,
-                        state_path,
-                        pr_data,
-                        gh_client,
-                        owner,
-                        repo,
-                        settings,
-                        reason="auto_merge_on_ci_green",
-                    )
+                    _save_state(state_path, state)
                     return
-                logger.debug(
-                    "pr_review_watcher: PR #%d CI not green (%d failed) — proceeding to self-review",
+                logger.info(
+                    "pr_review_watcher: PR #%d CI green — proceeding to verdict-gated "
+                    "self-review (LGTM required to merge)",
                     pr_number,
-                    len(failed),
                 )
             except Exception as exc:
                 logger.debug("pr_review_watcher: CI check failed PR #%d — %s", pr_number, exc)

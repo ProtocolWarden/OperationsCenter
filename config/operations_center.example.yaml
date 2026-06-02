@@ -108,13 +108,19 @@ repos:
 #     # Per-repo GitHub token override (must match token_env in this block):
 #     token_env: GITHUB_TOKEN_FRONTEND
 #
-#     # PR review loop: create PR and enter a two-phase review loop before merging.
-#     # Phase 1 (automatic): executor self-reviews its own diff. LGTM → merge.
-#     # CONCERNS → executor revises and re-reviews (up to reviewer.max_self_review_loops times).
-#     # Phase 2 (escalated): if self-review can't resolve, posts a comment for human review.
-#     # Human 👍 on PR or bot reply → merge. Human comment → executor revision pass (max 3).
-#     # No action after 1 day → merge automatically (timeout fallback).
+#     # PR review loop: open a PR and run a verdict-gated self-review before merge.
+#     # Self-review emits LGTM or CONCERNS.
+#     #   LGTM     → merge. This is the ONLY merge path.
+#     #   CONCERNS → a fix pass resolves the concerns on the PR branch and pushes,
+#     #              then re-reviews; up to reviewer.max_fix_attempts cycles.
+#     #   Exhausted (or no parseable verdict) → close the PR and re-queue the
+#     #              issue for a fresh attempt. A PR is never merged half-finished.
 #     await_review: true
+#
+#     # Green CI is a PRECONDITION for merge, not a merge trigger: while CI is red
+#     # the PR waits; once green it still must pass the verdict-gated self-review
+#     # above (green CI alone does not prove the issue is complete).
+#     auto_merge_on_ci_green: true
 #
 #     # Include this repo in idle-board proposer scans (default: true).
 #     propose_enabled: true
@@ -134,10 +140,14 @@ repos:
 # reviewer:
 #   # GitHub logins whose comments are always ignored (CI bots, integration accounts, etc.)
 #   bot_logins: []
-#   # If non-empty, only comments from these logins trigger human-phase revisions.
-#   # Leave empty to accept comments from any non-bot login.
+#   # If non-empty, only comments from these logins are honored. Empty = any non-bot.
 #   allowed_reviewer_logins: []
-#   # Max executor self-review + revision cycles before escalating to human review (default: 2).
+#   # Max fix→review cycles on a CONCERNS verdict before the PR is closed and the
+#   # issue re-queued for a fresh attempt (default: 6). Never a merge cap — only
+#   # an LGTM verdict merges.
+#   max_fix_attempts: 6
+#   # Retry cap for passes that produce NO parseable verdict (crash/timeout); after
+#   # this many the PR is closed + re-queued rather than merged blind (default: 2).
 #   max_self_review_loops: 2
 #   # HTML marker appended to every bot-posted comment — prevents re-processing own comments.
 #   bot_comment_marker: "<!-- operations-center:bot -->"
