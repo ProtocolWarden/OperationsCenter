@@ -1,0 +1,64 @@
+.console/*
+!.console/task.md
+!.console/backlog.md
+!.console/guidelines.md
+!.console/log.md
+!.console/validation/
+!.console/validation/**
+# P3: OC-local operational config and runtime state (migrated from .context/)
+!.console/workers.yaml
+CLAUDE.md
+.custodian/tmp*.yaml
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.env.operations-center.local
+config/operations_center.local.yaml
+config/plane_task_template.local.md
+logs/
+deployment/plane/runtime/
+deployment/plane/logs/
+tools/report/kodo_plane/
+tools/report/operations_center/
+state/
+.review/
+.worktrees/
+.kodo/
+.claude/scheduled_tasks.lock
+tools/loop/loop_schedule.json
+.operations_center/
+.codex
+.coverage
+coverage.xml
+coverage_html_report/
+uv.lock
+scripts/audit_*.py
+scripts/debug_*.py
+scripts/tmp_*.py
+
+# Warehouse data (generated artifacts gitignored via .warehouse/yard/*/.gitignore)
+.warehouse/yard/
+
+# Operator-private managed-repo bindings. The public repo ships only the
+# tracked example template; real bindings (which name specific private
+# managed repos) live untracked under config/managed_repos/local/.
+config/managed_repos/local/
+
+# (Per ADR 0002 P3, OC's .context/ is removed — cognition is hosted by
+# the anchoring manifest. Former scratch-state ignores deleted.)
+
+# Goal-worker scratchpad artifacts — never commit these
+STAGE_*.md
+STAGE[0-9]*.md
+DERIVER_AUDIT*.md
+LOOP_START.md
+*_COVERAGE_ANALYSIS.md
+*_ANALYSIS.md
+=*.*/
+test_output.log

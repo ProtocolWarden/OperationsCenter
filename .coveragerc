@@ -1,0 +1,39 @@
+[run]
+source = src
+branch = True
+omit =
+    */tests/*
+    */test_*.py
+    setup.py
+
+[report]
+precision = 2
+show_missing = True
+skip_covered = False
+fail_under = 90
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    @overload
+    @abstractmethod
+    class .*\bProtocol\):
+    @(abc\.)?abstractmethod
+    logging\.
+    def __getattribute__
+    def __setattr__
+    def __delattr__
+
+[html]
+directory = coverage_html_report
+
+[xml]
+output = coverage.xml
+
+[paths]
+source =
+    src
+    */site-packages

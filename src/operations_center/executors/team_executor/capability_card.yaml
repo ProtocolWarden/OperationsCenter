@@ -1,0 +1,8 @@
+backend_id: team_executor
+backend_version: "0.1.0"
+advertised_capabilities:
+  - repo_read
+  - repo_patch
+  - test_run
+  - shell_read
+  - shell_write

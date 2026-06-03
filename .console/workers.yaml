@@ -1,0 +1,37 @@
+# OperationsCenter — worker and watcher definitions
+#
+# Migrated from .context/config.yaml (P3 of work order
+# PlatformDeployment/docs/architecture/adr/0002-work-order-manifest-cognition.md).
+# CL guard flags moved to the anchoring manifest's .context/config.yaml;
+# OC-specific operational config (worker scopes, watchdog cycle, dispatch
+# wiring) lives here in .console/ — OC's operational truth surface.
+
+clp_version: "0.2"
+repo: "OperationsCenter"
+
+loop:
+  relaunch_command: "python tools/loop/controller.py"
+  relaunch_args: []
+  max_cycle_minutes: 60
+  checkpoint_on_stop: true
+
+workers:
+  - id: "investigation-worker"
+    task: "bounded investigation of a failing invariant or blocker"
+    max_minutes: 30
+    max_tool_calls: 75
+    allowed_paths:
+      - ".console/"
+      - "src/"
+      - "tests/"
+    forbidden_paths:
+      - ".console/tmp/"
+    allowed_subagents: 1
+    mutation_policy: "write_allowed"
+
+watchers:
+  - id: "invariant-watcher"
+    description: "watches for failing invariants or execution boundary violations"
+    watch_path: ".console/"
+    trigger_on: "failure"
+    dispatch_worker: "investigation-worker"

@@ -1,0 +1,29 @@
+{
+  "description": "High-complexity tasks where premium (dag_executor) backend outperforms local (team_executor @ aider_local)",
+  "scenario": "refactor + feature tasks — dag_executor shows higher success; local shows lower success for same tasks",
+  "records": [
+    {"backend": "dag_executor", "lane": "claude_cli", "task_type": "refactor", "risk_level": "medium", "outcome": "success"},
+    {"backend": "dag_executor", "lane": "claude_cli", "task_type": "refactor", "risk_level": "medium", "outcome": "success"},
+    {"backend": "dag_executor", "lane": "claude_cli", "task_type": "refactor", "risk_level": "medium", "outcome": "success"},
+    {"backend": "dag_executor", "lane": "claude_cli", "task_type": "refactor", "risk_level": "medium", "outcome": "success"},
+    {"backend": "dag_executor", "lane": "claude_cli", "task_type": "refactor", "risk_level": "medium", "outcome": "success"},
+    {"backend": "dag_executor", "lane": "claude_cli", "task_type": "refactor", "risk_level": "medium", "outcome": "failure"},
+    {"backend": "dag_executor", "lane": "claude_cli", "task_type": "refactor", "risk_level": "medium", "outcome": "success"},
+    {"backend": "dag_executor", "lane": "claude_cli", "task_type": "refactor", "risk_level": "medium", "outcome": "success"},
+    {"backend": "team_executor", "lane": "aider_local", "task_type": "refactor", "risk_level": "medium", "outcome": "failure"},
+    {"backend": "team_executor", "lane": "aider_local", "task_type": "refactor", "risk_level": "medium", "outcome": "failure"},
+    {"backend": "team_executor", "lane": "aider_local", "task_type": "refactor", "risk_level": "medium", "outcome": "success"},
+    {"backend": "team_executor", "lane": "aider_local", "task_type": "refactor", "risk_level": "medium", "outcome": "failure"},
+    {"backend": "team_executor", "lane": "aider_local", "task_type": "refactor", "risk_level": "medium", "outcome": "failure"},
+    {"backend": "team_executor", "lane": "aider_local", "task_type": "refactor", "risk_level": "medium", "outcome": "failure"},
+    {"backend": "team_executor", "lane": "aider_local", "task_type": "refactor", "risk_level": "medium", "outcome": "failure"},
+    {"backend": "team_executor", "lane": "aider_local", "task_type": "refactor", "risk_level": "medium", "outcome": "failure"}
+  ],
+  "expected": {
+    "dag_executor_success_rate": 0.875,
+    "team_executor_success_rate": 0.125,
+    "dag_executor_reliability_class": "high",
+    "team_executor_reliability_class": "low",
+    "finding_categories": ["reliability"]
+  }
+}

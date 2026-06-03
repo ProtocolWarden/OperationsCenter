@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install ruff
+        run: pip install "ruff>=0.5"
+      - name: Run ruff
+        run: ruff check .
+
+  typecheck:
+    name: Type check (ty)
+    runs-on: ubuntu-latest
+    # Was advisory (continue-on-error) while 21 pre-existing diagnostics
+    # were unresolved. Cleared on 2026-05-07 — now blocking.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -e .[dev]
+      - name: Run ty
+        run: ty check src/
+
+  custodian:
+    name: Custodian doctor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -e .[dev]
+      - name: Verify .custodian.yaml is well-formed
+        run: custodian-doctor --strict --repo .
+
+  license-check:
+    name: License headers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check SPDX headers
+        run: |
+          missing=$(git ls-files "*.py" | xargs grep -L "SPDX-License-Identifier" 2>/dev/null || true)
+          if [ -n "$missing" ]; then
+            echo "Missing SPDX-License-Identifier header in:"
+            echo "$missing"
+            exit 1
+          fi
+
+  test:
+    name: Test (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -e .[dev]
+      - name: Run unit tests excluding slow (PR validation)
+        if: github.event_name == 'pull_request'
+        # Unit suite only — integration tests under tests/integration/ need
+        # live external services (SwitchBoard, Plane, Archon) and run on
+        # demand, not in CI. PRs exclude slow tests for quick validation.
+        # Coverage threshold of 85% is the design target from Stage 0.
+        # CI will fail until coverage improves to meet this target.
+        run: pytest -q tests/unit -m "not slow" --cov=src --cov-report=html --cov-report=xml --cov-report=term-missing --cov-fail-under=90
+      - name: Run full unit test suite including slow (main/merge)
+        if: github.event_name == 'push'
+        # Unit suite only — integration tests under tests/integration/ need
+        # live external services (SwitchBoard, Plane, Archon) and run on
+        # demand, not in CI. Pushes run full suite including slow tests.
+        # Coverage threshold of 85% is the design target from Stage 0.
+        # CI will fail until coverage improves to meet this target.
+        run: pytest -q tests/unit --cov=src --cov-report=html --cov-report=xml --cov-report=term-missing --cov-fail-under=90
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload coverage reports as artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports-${{ github.event_name }}
+          path: |
+            coverage_html_report/
+            coverage.xml
+          retention-days: 30
+
+  performance:
+    name: Performance regression tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -e .[dev]
+      - name: Run performance regression tests
+        # Dedicated job surfaces timing-bound failures as a labelled CI check.
+        # All bounds are <50ms per scenario; actual measurements are ~0.1–0.2ms.
+        # A failure here means collection time regressed by >250x vs baseline.
+        run: pytest -q tests/unit -m "performance" --no-header -rN
