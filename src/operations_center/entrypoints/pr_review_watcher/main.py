@@ -815,7 +815,12 @@ def _phase0_ci_fix(
     venv_bin = local_path / (getattr(repo_cfg, "venv_dir", ".venv") or ".venv") / "bin"
     ruff_bin = venv_bin / "ruff"
     if not ruff_bin.exists():
-        ruff_bin = Path(shutil.which("ruff") or "ruff")
+        system_ruff = shutil.which("ruff")
+        if system_ruff:
+            ruff_bin = Path(system_ruff)
+        else:
+            oc_ruff = oc_root / ".venv" / "bin" / "ruff"
+            ruff_bin = oc_ruff if oc_ruff.exists() else Path("ruff")
 
     git_env = dict(os.environ)
     git_token = settings.git_token()
