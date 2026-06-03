@@ -240,12 +240,22 @@ def test_write_artifact_stat_oserror(tmp_path: Path, monkeypatch: pytest.MonkeyP
     art = _make_artifact(resolved_path=src)
 
     real_stat = Path.stat
+    real_exists = Path.exists
 
     def _boom(self: Path, *a: Any, **k: Any) -> Any:
         if self == src:
             raise OSError("nope")
         return real_stat(self, *a, **k)
 
+    # exists() routes through Path.stat on some Python versions (3.11 re-raises
+    # an errno-less OSError there) — keep the existence probe truthful so only
+    # the targeted size-stat call exercises the error path under test.
+    def _exists(self: Path, *a: Any, **k: Any) -> bool:
+        if self == src:
+            return True
+        return real_exists(self, *a, **k)
+
+    monkeypatch.setattr(Path, "exists", _exists)
     monkeypatch.setattr(Path, "stat", _boom)
     fa, written = _write_fixture_artifact(art, artifacts_dir, CopyPolicy(), 0)
     assert written == 0

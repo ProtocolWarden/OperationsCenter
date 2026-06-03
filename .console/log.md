@@ -3103,3 +3103,9 @@ Applied ruff format + import sort across all 553 files, fixed G004/F841/DTZ007 l
 ## 2026-06-03 — Raise unit coverage past a 90% gate (waves 3+4)
 
 Added ~46 hermetic `*_cov.py` test files (~700 new tests across waves 3+4) lifting unit coverage 86.9% → 95.75%, then bumped `--cov-fail-under` 85 → 90 (ci.yml:82/90, .coveragerc:13). Fixed two failures surfaced by the full-suite run: (1) openclaw `test_normalize_passes_branch_and_invocation_ref` passed a bare string where the model requires a `RuntimeInvocationRef`; (2) caplog test-pollution — `graph_doctor/test_main_cov.py::test_logger_level_restored_after_run` forced the `repo_graph_factory` logger to ERROR without restoring it, silencing later caplog-based warning assertions; now restores via try/finally. Custodian clean (fixed 3 T2 no-assert findings), ruff clean.
+
+---
+
+## 2026-06-03 — Fix Python-version-sensitive writer coverage test
+
+`fixture_harvesting/test_writer_cov.py::test_write_artifact_stat_oserror` patched `Path.stat` globally to raise an errno-less `OSError`. On 3.13+ `Path.exists()` uses `os.stat` directly so only the targeted size-stat raised (passed locally); on CI's 3.11 `exists()` routes through `Path.stat` and re-raises errno-less OSErrors, so it failed before reaching the code path under test. Now also stub `Path.exists` to return True for the source so only the intended stat call errors.
