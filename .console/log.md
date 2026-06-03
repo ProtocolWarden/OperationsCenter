@@ -1,3 +1,14 @@
+## 2026-06-03 — Reapply OC-venv ruff fallback lost in PR #236 merge
+
+Root cause: PR #236 (coverage 95.75% → 90% gate) overwrote commit 554b55bd which
+added the three-tier ruff lookup (target venv → system PATH → OC root .venv/bin/ruff).
+Without it, _phase0_ci_fix falls back to bare "ruff" causing FileNotFoundError for
+repos without their own ruff binary (e.g. PlatformManifest). Re-applied on
+oc-watchdog/20260603-0647-reapply-ruff-fallback.
+
+Also this cycle: resolved PR #235 merge conflict + custodian T4/T8 violations
+(goal/ba5d9a46) to unblock OPEN_PR_GATE holding task #192.
+
 ## 2026-06-02 — Raise unit coverage past the 85% gate (operator-directed)
 
 **Status**: ✅ On `test/coverage-climb-1`. The #215 `--cov-fail-under=85` gate had
