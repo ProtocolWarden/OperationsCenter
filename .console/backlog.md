@@ -13,6 +13,8 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## In Progress
 
+- [x] **Unit coverage climb to a 90% gate — COMPLETE ✅ (2026-06-03)**: Waves 3+4 added ~46 hermetic `*_cov.py` test files (~700 tests), lifting unit coverage 86.9% → 95.75%. Bumped `--cov-fail-under` 85 → 90 in ci.yml (lines 82/90) and .coveragerc (line 13). Custodian + ruff clean. Shipped via PR off `test/coverage-climb-2`.
+
 - [x] **Spec Authoring: Observer Test Coverage Campaign — COMPLETE ✅ (2026-06-02)**:
   - **Objective:** Create focused queue-drain spec for OperationsCenter observer module test coverage hardening
   - **Stage 0 (2026-06-02):** ✅ COMPLETE — Research domain context and review existing spec templates
