@@ -1,6 +1,6 @@
 # PlatformManifest Consumption
 
-OperationsCenter consumes RepoGraph-backed PlatformManifest and PrivateManifest
+OperationsCenter consumes RepoGraph-backed PlatformManifest and private-manifest
 data as topology and visibility metadata. It does not own canonical graph
 semantics, and it does not redefine public/private disclosure policy.
 
@@ -9,7 +9,7 @@ semantics, and it does not redefine public/private disclosure policy.
 ```text
 RepoGraph owns what exists and what may be disclosed.
 PlatformManifest publishes the public graph instance.
-PrivateManifest publishes the private graph instance and boundary artifact.
+The private-manifest repo publishes the private graph instance and boundary artifact.
 CxRP owns execution/routing contract semantics.
 RxP owns runtime invocation semantics.
 OperationsCenter owns governance and orchestration implementation.

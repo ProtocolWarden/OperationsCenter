@@ -8,7 +8,6 @@ workspace_root="$(cd "$repo_root/.." && pwd)"
 if [ -z "${REPOGRAPH_BOUNDARY_ARTIFACT_FILE:-}" ]; then
     shopt -s nullglob
     for candidate in \
-        "$workspace_root"/PrivateManifest/dist/boundary_disclosure_artifact.json \
         "$workspace_root"/*/dist/boundary_disclosure_artifact.json \
         "$workspace_root"/*/policy/boundary_disclosure_artifact.json
     do
@@ -22,7 +21,7 @@ fi
 
 if [ -z "${REPOGRAPH_BOUNDARY_ARTIFACT_FILE:-}" ] || [ ! -f "$REPOGRAPH_BOUNDARY_ARTIFACT_FILE" ]; then
     echo "[custodian-pre-push] missing REPOGRAPH_BOUNDARY_ARTIFACT_FILE; failing closed"
-    echo "  Generate artifact from PrivateManifest first:"
+    echo "  Generate artifact from your private-manifest repo first:"
     echo "  python -m private_manifest.export_boundary_artifact --graph-root graph --out dist/boundary_disclosure_artifact.json"
     exit 1
 fi

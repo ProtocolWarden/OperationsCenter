@@ -22,7 +22,7 @@ Do not edit `.console/.context` directly — it is regenerated at each launch.
 
 ## Cognition Lifecycle
 
-OC uses [ContextLifecycle](https://github.com/ProtocolWarden/ContextLifecycle) for bounded, resumable agent sessions. **Cognition is hosted by the anchoring manifest** — OC carries no `.context/` of its own. Per P3 of `PlatformDeployment/docs/architecture/adr/0002-work-order-manifest-cognition.md`, every Claude Code session targeting OC must first run `eval $(cl session start PlatformManifest)` (or `PrivateManifest` for private work). All capsules, checkpoints, and handoffs land under the anchor's `.context/sessions/<CL_SESSION_ID>/` subtree.
+OC uses [ContextLifecycle](https://github.com/ProtocolWarden/ContextLifecycle) for bounded, resumable agent sessions. **Cognition is hosted by the anchoring manifest** — OC carries no `.context/` of its own. Per P3 of `PlatformDeployment/docs/architecture/adr/0002-work-order-manifest-cognition.md`, every Claude Code session targeting OC must first run `eval $(cl session start PlatformManifest)` (or your private-manifest repo for private work). All capsules, checkpoints, and handoffs land under the anchor's `.context/sessions/<CL_SESSION_ID>/` subtree.
 
 | Surface                                | Purpose                                                              |
 |----------------------------------------|----------------------------------------------------------------------|
