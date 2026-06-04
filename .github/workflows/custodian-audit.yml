@@ -29,44 +29,21 @@ jobs:
           fi
 
       - name: Materialize boundary artifact file
+        # Decode the boundary disclosure artifact from the base64 CONTENT secret
+        # REPOGRAPH_BOUNDARY_ARTIFACT_B64 (the older *_FILE path secret cannot resolve
+        # on a CI runner). Graceful: skip if absent (B2 flags it if required).
         env:
-          REPOGRAPH_BOUNDARY_ARTIFACT_SOURCE: ${{ secrets.REPOGRAPH_BOUNDARY_ARTIFACT_FILE }}
-          REPOGRAPH_BOUNDARY_ARTIFACT_AUTH_TOKEN: ${{ secrets.PRIVATEMANIFEST_READ_TOKEN }}
+          REPOGRAPH_BOUNDARY_ARTIFACT_B64: ${{ secrets.REPOGRAPH_BOUNDARY_ARTIFACT_B64 }}
         run: |
-          if [ -z "${REPOGRAPH_BOUNDARY_ARTIFACT_SOURCE:-}" ]; then
-            echo "::warning::REPOGRAPH_BOUNDARY_ARTIFACT_FILE secret unset — skipping custodian audit"
+          if [ -z "${REPOGRAPH_BOUNDARY_ARTIFACT_B64:-}" ]; then
+            echo "REPOGRAPH_BOUNDARY_ARTIFACT_B64 not set — skipping (B2 flags if required)."
             exit 0
           fi
-          tmp_file="$(mktemp "${RUNNER_TEMP:-/tmp}/repograph-boundary-XXXXXX.json")"
-          python - "$REPOGRAPH_BOUNDARY_ARTIFACT_SOURCE" "$tmp_file" <<'PY'
-          import json
-          import os
-          import shutil
-          import sys
-          import urllib.request
-          from pathlib import Path
-
-          source = sys.argv[1]
-          dest = Path(sys.argv[2])
-          src_path = Path(source)
-          if src_path.is_file():
-              shutil.copyfile(src_path, dest)
-          elif source.startswith(("http://", "https://")):
-              req = urllib.request.Request(source)
-              token = os.environ.get("REPOGRAPH_BOUNDARY_ARTIFACT_AUTH_TOKEN", "").strip()
-              if token:
-                  req.add_header("Authorization", f"token {token}")
-                  req.add_header("Accept", "application/vnd.github.raw")
-              with urllib.request.urlopen(req) as response, dest.open("wb") as fh:
-                  shutil.copyfileobj(response, fh)
-          else:
-              raise SystemExit(f"Unsupported boundary artifact source: {source}")
-          data = json.loads(dest.read_text(encoding="utf-8"))
-          print(f"boundary_provenance={data.get('source_graph_id')}@{data.get('source_ref_or_commit')}")
-          PY
-          echo "REPOGRAPH_BOUNDARY_ARTIFACT_FILE=$tmp_file" >> "$GITHUB_ENV"
+          dest="$(mktemp "${RUNNER_TEMP:-/tmp}/repograph-boundary-XXXXXX.json")"
+          printf '%s' "$REPOGRAPH_BOUNDARY_ARTIFACT_B64" | base64 -d > "$dest"
+          echo "REPOGRAPH_BOUNDARY_ARTIFACT_FILE=$dest" >> "$GITHUB_ENV"
 
       - name: Run Custodian audit
-        if: env.REPOGRAPH_BOUNDARY_ARTIFACT_FILE != ''
         run: |
+          git config core.hooksPath .hooks
           custodian-multi --repos . --fail-on-findings --no-color
