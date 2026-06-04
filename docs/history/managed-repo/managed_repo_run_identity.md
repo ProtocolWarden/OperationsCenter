@@ -8,7 +8,7 @@
 
 ## Purpose
 
-Phase 4 defines how OperationsCenter generates, validates, and propagates a unique identity for each managed audit run. A `run_id` is the anchor for lifecycle tracking: it ties the invocation request, the VF audit process, and the output files together.
+Phase 4 defines how OperationsCenter generates, validates, and propagates a unique identity for each managed audit run. A `run_id` is the anchor for lifecycle tracking: it ties the invocation request, the a private downstream repo audit process, and the output files together.
 
 This phase does not execute commands. It does not write manifests. It makes managed audit invocations traceable before Phase 6 dispatch runs them.
 
@@ -83,7 +83,7 @@ managed-private-project_enrichment_20260426T164233Z_c9d0e1f2
 
 The format is validated by `is_valid_run_id(run_id)` and enforced by the `ManagedRunIdentity` Pydantic field validator.
 
-**Format decision:** The recommended format from the Phase 4 spec was adopted verbatim. The uppercase `T` and `Z` are ISO 8601 timestamp separators and are path-safe (no shell or filesystem special meaning). The suffix uses `secrets.token_hex(4)` for cryptographic randomness without dependencies on VF internals.
+**Format decision:** The recommended format from the Phase 4 spec was adopted verbatim. The uppercase `T` and `Z` are ISO 8601 timestamp separators and are path-safe (no shell or filesystem special meaning). The suffix uses `secrets.token_hex(4)` for cryptographic randomness without dependencies on a private downstream repo internals.
 
 ---
 
@@ -188,7 +188,7 @@ For managed runs initiated by OpsCenter:
     OpsCenter reads run_id from run_status.json and verifies it matches.
 
 For local/dev runs outside OpsCenter:
-    VF may generate its own id.
+    a private downstream repo may generate its own id.
     These runs are not OpsCenter-managed.
     OpsCenter does not ingest these without a reconciliation step (future phase).
 ```

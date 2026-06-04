@@ -28,6 +28,7 @@ from .labels import (
 logger = logging.getLogger(__name__)
 
 _MAX_FOLLOW_UP_RETRIES = 3
+_TERMINAL_STATE_NAMES = {"cancelled", "done"}
 
 
 # ── Atomic failure transition ─────────────────────────────────────────────────
@@ -35,6 +36,24 @@ _MAX_FOLLOW_UP_RETRIES = 3
 
 def fail_task(client, task_id: str, role: str, reason: str) -> None:
     try:
+        # Don't overwrite a terminal state (Cancelled/Done) set externally while
+        # the executor was running — that would restart a dead-remediation loop.
+        try:
+            issue = client.fetch_issue(task_id)
+            state = issue.get("state") or {}
+            state_name = (
+                state.get("name", "") if isinstance(state, dict) else str(state)
+            ).lower()
+            if state_name in _TERMINAL_STATE_NAMES:
+                logger.info(
+                    "board_worker[%s]: task_id=%s already %r — skipping fail transition",
+                    role,
+                    task_id,
+                    state_name,
+                )
+                return
+        except Exception:
+            pass  # If fetch fails, fall through to the normal transition
         client.transition_issue(task_id, STATE_BLOCKED)
         client.comment_issue(task_id, f"board_worker[{role}] blocked — {reason}")
     except Exception as exc:

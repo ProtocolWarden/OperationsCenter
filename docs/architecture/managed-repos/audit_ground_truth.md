@@ -17,7 +17,7 @@ No schemas were created. No implementation was changed. No contracts were design
 ## Repositories Inspected
 
 - `the managed repo` — audit runner, artifact producer
-- `OperationsCenter` — contract owner (no VF code imported; only files read)
+- `OperationsCenter` — contract owner (no a private downstream repo code imported; only files read)
 
 ---
 
@@ -207,7 +207,7 @@ tools/audit/report/architecture_invariants/warning_triage.md
   "summary": { "pass": 41, "warn": 190, "fail": 0, "known_legacy": 7 },
   "findings": [
     {
-      "id": "VF-ARCH-LAYER-001",
+      "id": "MANAGED-ARCH-LAYER-001",
       "family": "layer_direction",
       "severity": "warn",
       "status": "known_legacy",

@@ -3,6 +3,8 @@ src_root: src/operations_center
 tests_root: tests
 
 audit:
+  # .console/ reconciled (reconcile/console) — R1/R2 reconcile detectors active.
+  reconcile_enforce: true
   # W2 (core.hooksPath must be set): developer-machine setup check, not applicable
   # in CI where the repo is freshly cloned and git config is not persisted.
   ignore_rules:

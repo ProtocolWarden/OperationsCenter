@@ -9,7 +9,7 @@
 
 ## Purpose
 
-This document defines the artifact contract between OperationsCenter and the managed repo for audit runs. OperationsCenter invokes the managed repo audit commands and reads the outputs; it never imports the managed repo Python code. The contract specifies exactly what files VF must produce, in what shape, so OpsCenter can ingest them without knowing VF internals.
+This document defines the artifact contract between OperationsCenter and the managed repo for audit runs. OperationsCenter invokes the managed repo audit commands and reads the outputs; it never imports the managed repo Python code. The contract specifies exactly what files a private downstream repo must produce, in what shape, so OpsCenter can ingest them without knowing a private downstream repo internals.
 
 ---
 
@@ -20,7 +20,7 @@ OperationsCenter                the managed repo
 ─────────────────────────       ─────────────────────────
 Defines contract schemas        Implements contract schemas
 Generates run_id (uuid4.hex)    Receives run_id via $AUDIT_RUN_ID
-Invokes VF commands             Runs audit, writes contract files
+Invokes a private downstream repo commands             Runs audit, writes contract files
 Reads run_status.json           Writes run_status.json
 Reads artifact_manifest.json    Writes artifact_manifest.json
 ```
@@ -34,8 +34,8 @@ OpsCenter may only invoke commands and read files. No Python imports across the 
 The contract reflects findings from Phase 0 discovery (`<repo_id>_audit_ground_truth.md`):
 
 - **Only one audit type (representative) has run_status finalization.** The five others (`enrichment`, `ideation`, `render`, `segmentation`, `stack_authoring`) write an initial `in_progress` status via `prepare_audit_bucket()` but never finalize it. Phase 5 must add finalization to all six.
-- **No `artifact_manifest.json` exists yet.** The field `artifact_manifest_path` is absent from all current VF run_status files. The contract makes it `Optional[str]` to accept legacy files, but `is_compliant` returns `False` unless it is present.
-- **Legacy status value:** VF currently emits `"in_progress"`. The contract canonicalizes running state as `"running"`. The enum value `IN_PROGRESS_LEGACY = "in_progress"` is accepted and marked non-compliant.
+- **No `artifact_manifest.json` exists yet.** The field `artifact_manifest_path` is absent from all current a private downstream repo run_status files. The contract makes it `Optional[str]` to accept legacy files, but `is_compliant` returns `False` unless it is present.
+- **Legacy status value:** a private downstream repo currently emits `"in_progress"`. The contract canonicalizes running state as `"running"`. The enum value `IN_PROGRESS_LEGACY = "in_progress"` is accepted and marked non-compliant.
 - **stack_authoring output dir:** `tools/audit/report/authoring`, not `tools/audit/report/stack_authoring`. Phase 0 discovered this quirk.
 - **Architecture invariants** are written to a fixed repo path, not per-run buckets.
 
@@ -43,7 +43,7 @@ The contract reflects findings from Phase 0 discovery (`<repo_id>_audit_ground_t
 
 ## Phase 1 Managed Repo Relationship
 
-The managed-repo config (`config/managed_repos/<repo_id>.yaml`, loaded by `managed_repos.loader`) tells OpsCenter how to invoke VF commands. This artifact contract defines what those commands produce. The two are complementary:
+The managed-repo config (`config/managed_repos/<repo_id>.yaml`, loaded by `managed_repos.loader`) tells OpsCenter how to invoke a private downstream repo commands. This artifact contract defines what those commands produce. The two are complementary:
 
 - Phase 1 config → how to invoke, where to look for outputs
 - Phase 2 contract (this document) → what the output files must contain
@@ -57,7 +57,7 @@ The managed-repo config (`config/managed_repos/<repo_id>.yaml`, loaded by `manag
 | Controlled vocabulary | `src/operations_center/audit_contracts/vocabulary.py` | `audit_contracts.vocabulary` |
 | Run status model | `src/operations_center/audit_contracts/run_status.py` | `audit_contracts.run_status` |
 | Artifact manifest model | `src/operations_center/audit_contracts/artifact_manifest.py` | `audit_contracts.artifact_manifest` |
-| VF producer profile | `src/operations_center/audit_contracts/profiles/<repo_id>.py` | `audit_contracts.profiles` |
+| managed-repo producer profile | `src/operations_center/audit_contracts/profiles/<repo_id>.py` | `audit_contracts.profiles` |
 | JSON schemas | `schemas/audit_contracts/` | generated from Pydantic |
 | Examples | `examples/audit_contracts/` | validated against models |
 
@@ -82,7 +82,7 @@ The vocabulary is split into two explicit layers:
 | `ValidFor` | `current_run_only`, `cross_run_comparison`, `latest_snapshot`, `historical_record`, `partial_run_analysis`, `unknown` |
 | `Limitation` | `partial_run`, `missing_downstream_artifacts`, `producer_not_finalized`, `non_representative_audit_unverified`, `repo_singleton_overwritten`, `infrastructure_noise_excluded`, `path_layout_non_uniform`, `unknown` |
 
-**the managed repo profile enums** (VF-specific, in `VIDEOFOUNDRY_PROFILE_ENUMS`):
+**the managed repo profile enums** (managed-repo-specific, in `MANAGED_PROFILE_ENUMS`):
 
 | Enum | Description |
 |------|-------------|
@@ -90,7 +90,7 @@ The vocabulary is split into two explicit layers:
 | `the managed repoSourceStage` | Known stage names from Phase 0 (TopicSelectionStage, etc.) |
 | `the managed repoArtifactKind` | Artifact kinds: `run_status`, `stage_report`, `audit_report`, `architecture_invariant`, etc. |
 
-`GENERIC_ENUMS` and `VIDEOFOUNDRY_PROFILE_ENUMS` are disjoint tuples enforced by tests.
+`GENERIC_ENUMS` and `MANAGED_PROFILE_ENUMS` are disjoint tuples enforced by tests.
 
 ---
 
@@ -107,7 +107,7 @@ Required fields:
 | `producer` | `str` | e.g. `"<repo_id>"` |
 | `repo_id` | `str` | e.g. `"<repo_id>"` |
 | `run_id` | `str` | uuid4().hex, injected by OpsCenter via `$AUDIT_RUN_ID` |
-| `audit_type` | `str` | one of the six VF audit types |
+| `audit_type` | `str` | one of the six a private downstream repo audit types |
 | `status` | `RunStatus` | current run state |
 
 Optional but contract-required for compliance:
@@ -270,7 +270,7 @@ the managed repo must implement these changes for `is_compliant` to return `True
 5. **Populate `excluded_paths`** in each manifest with the known infrastructure noise patterns.
 6. **Include the repo singleton** in the manifest for representative runs.
 
-Until Phase 5, OpsCenter treats all VF run_status files as legacy (`is_compliant = False`) and reads them in read-only diagnostic mode.
+Until Phase 5, OpsCenter treats all a private downstream repo run_status files as legacy (`is_compliant = False`) and reads them in read-only diagnostic mode.
 
 ---
 
@@ -289,7 +289,7 @@ OTHER_PROFILE = the managed repoProducerProfile(
 )
 ```
 
-The generic contract models (ManagedRunStatus, ManagedArtifactManifest) are unchanged. The boundary enforcement test (`TestBoundaryEnforcement`) uses Python AST to verify the audit_contracts package never imports VF code.
+The generic contract models (ManagedRunStatus, ManagedArtifactManifest) are unchanged. The boundary enforcement test (`TestBoundaryEnforcement`) uses Python AST to verify the audit_contracts package never imports a private downstream repo code.
 
 ---
 
@@ -298,15 +298,15 @@ The generic contract models (ManagedRunStatus, ManagedArtifactManifest) are unch
 | Layer | What it contains | Who can use it |
 |-------|-----------------|----------------|
 | Generic contract | RunStatus, ManifestStatus, Location, ManagedRunStatus, ManagedArtifactManifest | Any managed repo |
-| VF producer profile | the managed repoAuditType, the managed repoAuditTypeSpec, VIDEOFOUNDRY_PROFILE | the managed repo only |
+| managed-repo producer profile | the managed repoAuditType, the managed repoAuditTypeSpec, MANAGED_PROFILE | the managed repo only |
 
-`GENERIC_ENUMS` and `VIDEOFOUNDRY_PROFILE_ENUMS` tuples are exported from `vocabulary.py` to allow tests to assert the layers are disjoint.
+`GENERIC_ENUMS` and `MANAGED_PROFILE_ENUMS` tuples are exported from `vocabulary.py` to allow tests to assert the layers are disjoint.
 
 ---
 
 ## Non-Goals
 
 - OpsCenter does not validate artifact file contents — only the manifest metadata.
-- OpsCenter does not write `run_status.json` or `artifact_manifest.json` — VF writes them.
-- The contract does not specify how VF internally structures its stages or pipeline.
+- OpsCenter does not write `run_status.json` or `artifact_manifest.json` — a private downstream repo writes them.
+- The contract does not specify how a private downstream repo internally structures its stages or pipeline.
 - OpsCenter does not import any the managed repo Python code at any point.

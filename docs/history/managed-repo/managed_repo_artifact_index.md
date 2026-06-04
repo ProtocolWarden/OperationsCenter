@@ -99,7 +99,7 @@ Artifact paths in the manifest may be absolute or relative. Phase 7 resolves the
 | Relative path, no `repo_root` | Derive root from manifest position + `run_root` depth. |
 | Derivation fails | `resolved_path = None`. |
 
-**Derivation heuristic**: the manifest file lives at `{repo_root}/{run_root}/artifact_manifest.json`. The builder steps up `len(run_root.parts)` parent directories from `manifest_dir` to obtain `repo_root`. This works for standard VF bucket layouts.
+**Derivation heuristic**: the manifest file lives at `{repo_root}/{run_root}/artifact_manifest.json`. The builder steps up `len(run_root.parts)` parent directories from `manifest_dir` to obtain `repo_root`. This works for standard a private downstream repo bucket layouts.
 
 If a path cannot be safely resolved, it is marked `resolved_path = None` and `exists_on_disk = None`. The caller receives a clear signal rather than a guess.
 

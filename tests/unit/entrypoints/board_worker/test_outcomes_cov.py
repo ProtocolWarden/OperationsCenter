@@ -63,6 +63,29 @@ def test_fail_task_swallows_exception(caplog):
     client.comment_issue.assert_not_called()
 
 
+@pytest.mark.parametrize("state_name", ["Cancelled", "Done", "cancelled", "done"])
+def test_fail_task_skips_terminal_state(state_name):
+    client = _make_client()
+    client.fetch_issue.return_value = {"state": {"name": state_name}}
+    outcomes.fail_task(client, "t1", "improve", "executor killed")
+    client.transition_issue.assert_not_called()
+    client.comment_issue.assert_not_called()
+
+
+def test_fail_task_proceeds_when_fetch_raises():
+    client = _make_client()
+    client.fetch_issue.side_effect = RuntimeError("plane down")
+    outcomes.fail_task(client, "t1", "goal", "boom")
+    client.transition_issue.assert_called_once_with("t1", STATE_BLOCKED)
+
+
+def test_fail_task_proceeds_when_state_not_terminal():
+    client = _make_client()
+    client.fetch_issue.return_value = {"state": {"name": "Blocked"}}
+    outcomes.fail_task(client, "t1", "goal", "boom")
+    client.transition_issue.assert_called_once_with("t1", STATE_BLOCKED)
+
+
 # ── read_improve_output ───────────────────────────────────────────────────────
 
 
