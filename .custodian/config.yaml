@@ -682,6 +682,7 @@ audit:
     - known_values
     - oc1_exempt
     - oc7_exempt
+    - reconcile_enforce
 
   # Additional well-known string values for OC9 to recognise without
   # requiring a string-literal anchor in src/.
