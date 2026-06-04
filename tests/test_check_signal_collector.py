@@ -6,7 +6,7 @@ import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import call, patch
+from unittest.mock import patch
 
 from operations_center.observer.collectors.check_signal import CheckSignalCollector
 from operations_center.observer.service import ObserverContext
