@@ -1,3 +1,9 @@
+## 2026-06-04 — fix(board_worker): skip Blocked transition when task already Cancelled/Done (watchdog direct fix)
+
+Root cause: `fail_task()` overwrote any external Cancelled state with Blocked, creating a loop with SELF_MODIFY_REQUEUE Rule 4. Fix: fetch current state before writing Blocked; if already terminal (Cancelled/Done), skip transition. Observed on task a0409885 — root cause was 930c79a7 but task kept bouncing. Added 6 tests; improve watcher restarted.
+
+---
+
 ## 2026-06-04 — Fix CheckSignalCollector fallback: use repo-local venv pytest (watchdog direct fix)
 
 Root cause (deeper): `_fallback_discovery()` ran bare `["pytest", ...]` as subprocess.
