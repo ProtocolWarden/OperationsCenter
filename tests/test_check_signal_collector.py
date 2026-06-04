@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from operations_center.observer.collectors.check_signal import CheckSignalCollector
 from operations_center.observer.service import ObserverContext
@@ -332,6 +333,54 @@ def test_guard_uses_captured_mtime_not_new_stat(tmp_path: Path) -> None:
 
     expected_time = datetime.fromtimestamp(1000, tz=UTC)
     assert sig.observed_at == expected_time
+
+
+# ------------------------------------------------------------------
+# 9. Pytest command selection: repo-local venv vs sys.executable
+# ------------------------------------------------------------------
+
+
+def test_uses_repo_venv_pytest_when_present(tmp_path: Path) -> None:
+    """When .venv/bin/pytest exists in the repo root, it is used directly."""
+    ctx = _make_context(tmp_path)
+    (ctx.repo_path / "pytest.ini").write_text("[pytest]\n")
+    venv_pytest = ctx.repo_path / ".venv" / "bin" / "pytest"
+    venv_pytest.parent.mkdir(parents=True)
+    venv_pytest.touch()
+
+    collect_stdout = "tests/test_x.py::test_a\n\n1 test collected\n"
+    fake_result = subprocess.CompletedProcess(args=[], returncode=0, stdout=collect_stdout, stderr="")
+
+    with patch(
+        "operations_center.observer.collectors.check_signal.subprocess.run",
+        return_value=fake_result,
+    ) as mock_run:
+        CheckSignalCollector()._fallback_discovery(ctx)
+
+    called_cmd = mock_run.call_args[0][0]
+    assert called_cmd[0] == str(venv_pytest), "should use repo-local venv pytest"
+    assert "--collect-only" in called_cmd
+
+
+def test_falls_back_to_sys_executable_when_no_venv(tmp_path: Path) -> None:
+    """When no .venv/bin/pytest in repo root, fall back to sys.executable -m pytest."""
+    ctx = _make_context(tmp_path)
+    (ctx.repo_path / "pytest.ini").write_text("[pytest]\n")
+    # No .venv/bin/pytest created
+
+    collect_stdout = "tests/test_x.py::test_a\n\n1 test collected\n"
+    fake_result = subprocess.CompletedProcess(args=[], returncode=0, stdout=collect_stdout, stderr="")
+
+    with patch(
+        "operations_center.observer.collectors.check_signal.subprocess.run",
+        return_value=fake_result,
+    ) as mock_run:
+        CheckSignalCollector()._fallback_discovery(ctx)
+
+    called_cmd = mock_run.call_args[0][0]
+    assert called_cmd[0] == sys.executable
+    assert called_cmd[1] == "-m"
+    assert called_cmd[2] == "pytest"
 
 
 def test_guard_oserror_also_skipped(tmp_path: Path) -> None:

@@ -7,6 +7,7 @@ import itertools
 import logging
 import re
 import subprocess
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -56,9 +57,17 @@ class CheckSignalCollector:
         if not has_config:
             return CheckSignal(status="no_config", source="fallback:no_pytest_config")
 
+        # Prefer repo-local venv pytest; fall back to current interpreter's pytest.
+        # Bare "pytest" is not reliable — the subprocess does not inherit venv PATH.
+        repo_pytest = repo_root / ".venv" / "bin" / "pytest"
+        if repo_pytest.is_file():
+            pytest_cmd = [str(repo_pytest)]
+        else:
+            pytest_cmd = [sys.executable, "-m", "pytest"]
+
         try:
             result = subprocess.run(
-                ["pytest", "--collect-only", "-q", "--no-header"],
+                [*pytest_cmd, "--collect-only", "-q", "--no-header"],
                 capture_output=True,
                 text=True,
                 timeout=30,

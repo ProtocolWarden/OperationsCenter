@@ -1,3 +1,11 @@
+## 2026-06-04 — Fix CheckSignalCollector fallback: use repo-local venv pytest (watchdog direct fix)
+
+Root cause (deeper): `_fallback_discovery()` ran bare `["pytest", ...]` as subprocess.
+`pytest` is not on PATH in subprocesses (venv PATH is shell-only). This caused `OSError`
+→ `status=unknown` on every fallback call, making the timeout fix irrelevant. Fix: use
+`.venv/bin/pytest` relative to repo_root when present; fall back to `sys.executable -m pytest`.
+Two new tests added covering both paths. 16/16 tests pass, golden suite 15/15 pass.
+
 ## 2026-06-04 — Fix CheckSignalCollector fallback timeout (watchdog direct fix)
 
 Root cause: `_fallback_discovery()` in `check_signal.py` used `timeout=5` for
