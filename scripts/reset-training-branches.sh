@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONFIG="$REPO_ROOT/config/operations_center.local.yaml"
 TRAINING_BRANCH="operations-center-testing-branch"
-BOUNDARY_ARTIFACT="/home/dev/Documents/GitHub/PrivateManifest/dist/boundary_disclosure_artifact.json"
+BOUNDARY_ARTIFACT="${BOUNDARY_ARTIFACT:-<private-manifest-repo>/dist/boundary_disclosure_artifact.json}"
 DRY_RUN=0
 
 [[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1

@@ -20,7 +20,7 @@ Local planning, execution, policy, and evidence service for the coding platform.
 - CoreRunner — runtime mechanics (subprocess/manual/HTTP) live there
 - CxRP / RxP — canonical contracts live there; OC consumes them via `cxrp_mapper.py`
 - PlatformDeployment — service compose, Dockerfiles, lifecycle scripts live there
-- RepoGraph / PlatformManifest / PrivateManifest — canonical graph semantics and graph truth live there
+- RepoGraph / PlatformManifest / the private-manifest repo — canonical graph semantics and graph truth live there
 - A scheduler, queue system, or model host
 
 ## Primary Operator Model
