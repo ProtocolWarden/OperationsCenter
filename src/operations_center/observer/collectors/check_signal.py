@@ -61,7 +61,7 @@ class CheckSignalCollector:
                 ["pytest", "--collect-only", "-q", "--no-header"],
                 capture_output=True,
                 text=True,
-                timeout=5,
+                timeout=30,
                 cwd=repo_root,
             )
             if result.returncode not in (0, 5):

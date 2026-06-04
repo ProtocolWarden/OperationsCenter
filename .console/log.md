@@ -1,3 +1,11 @@
+## 2026-06-04 — Fix CheckSignalCollector fallback timeout (watchdog direct fix)
+
+Root cause: `_fallback_discovery()` in `check_signal.py` used `timeout=5` for
+`pytest --collect-only`. OC's test suite takes 4–8s to collect, causing intermittent
+`TimeoutExpired → status=unknown`. ObservationCoverageDeriver read this as a persistent
+signal gap and kept proposing "Restore repeated missing test_signal coverage" (task a0409885).
+Improve worker failed 3× before watchdog identified root cause. Fix: raise timeout 5→30s.
+
 ## 2026-06-03 — Reapply OC-venv ruff fallback lost in PR #236 merge
 
 Root cause: PR #236 (coverage 95.75% → 90% gate) overwrote commit 554b55bd which
