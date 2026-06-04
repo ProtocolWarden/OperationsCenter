@@ -71,7 +71,7 @@ managed private project (Phase 5) writes contract files to the audit bucket:
 - `run_status.json` — Phase 2 schema, includes `artifact_manifest_path`.
 - `artifact_manifest.json` — Phase 2 schema, lists all artifacts.
 
-Phase 6 reads these files after process exit. The `artifact_manifest_path` field in `run_status.json` is a path relative to the VF repo root. Phase 6 resolves it using `base_dir=working_dir_abs` (the VF repo root).
+Phase 6 reads these files after process exit. The `artifact_manifest_path` field in `run_status.json` is a path relative to the a private downstream repo repo root. Phase 6 resolves it using `base_dir=working_dir_abs` (the a private downstream repo repo root).
 
 ---
 

@@ -96,8 +96,8 @@ OpsCenter is the source of truth for `run_id`. The injection flow:
 OpsCenter generates:  run_id = uuid4().hex
 resolve_invocation_request sets:  env["AUDIT_RUN_ID"] = run_id
 Phase 6 passes env to subprocess
-VF reads: os.environ["AUDIT_RUN_ID"]
-VF writes run_id into run_status.json
+a private downstream repo reads: os.environ["AUDIT_RUN_ID"]
+a private downstream repo writes run_id into run_status.json
 OpsCenter reads run_status.json and verifies run_id matches
 ```
 
@@ -146,7 +146,7 @@ manifest_path = resolve_artifact_manifest_path(rs, base_dir="/path/to/vf/repo")
 - For absolute paths: returns as-is
 - Returns an absolute `Path` — the file is not read or validated at this stage
 
-The `artifact_manifest_path` in managed private project run_status files is relative to the VF repo root (e.g. `tools/audit/report/representative/{bucket}/artifact_manifest.json`).
+The `artifact_manifest_path` in managed private project run_status files is relative to the a private downstream repo repo root (e.g. `tools/audit/report/representative/{bucket}/artifact_manifest.json`).
 
 ---
 
@@ -165,9 +165,9 @@ There is no fallback. No glob. No directory listing. No path inference from buck
 If `artifact_manifest_path` is absent, `ArtifactManifestPathMissingError` is raised. The caller must surface this as a contract violation, not attempt to find the file another way.
 
 This rule exists because:
-1. OpsCenter must not know VF internals (bucket naming, directory shapes)
+1. OpsCenter must not know a private downstream repo internals (bucket naming, directory shapes)
 2. Discovery by scanning would silently accept stale or wrong manifests
-3. Phase 5 must add `artifact_manifest_path` to VF — not knowing the path is a Phase 5 signal, not a Phase 3 workaround
+3. Phase 5 must add `artifact_manifest_path` to a private downstream repo — not knowing the path is a Phase 5 signal, not a Phase 3 workaround
 
 ---
 
@@ -221,4 +221,4 @@ Thin read-only CLI wrappers may be added if consistent with the existing `entryp
 - Phase 3 does not implement dispatch orchestration (Phase 6).
 - Phase 3 does not scan directories or infer paths from bucket naming.
 - Phase 3 does not import managed private project Python code.
-- Phase 3 does not add `artifact_manifest_path` to VF (Phase 5 job).
+- Phase 3 does not add `artifact_manifest_path` to a private downstream repo (Phase 5 job).
