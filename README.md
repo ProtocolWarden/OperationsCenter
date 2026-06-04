@@ -435,8 +435,25 @@ The naming is intentionally close because the second is the board adapter for th
 ### Core Workflow
 
 - Single-task execution from a Plane work item.
-- Background watchers for `goal`, `test`, `improve`, `propose`, and `review`.
-- `watch-all` to launch all five local watcher lanes together.
+- Background watchers for `intake`, `goal`, `test`, `improve`, `propose`, `review`, and `spec`.
+- `watch-all` to launch all the local watcher lanes (+ a watchdog) together.
+
+> **Two independent loops — don't conflate them.** OperationsCenter has two
+> separate background mechanisms with separate controls:
+>
+> 1. **`watch-all` — the OC pipeline lanes.** The in-process board watchers
+>    (`intake`/`goal`/`test`/`improve`/`propose`/`review`/`spec`) + a `watchdog`
+>    supervisor that processes Plane work items. Controlled by
+>    `watch-all` / `watch-all-status` / `watch-all-stop`; PIDs/logs under
+>    `logs/local/watch-all/`.
+> 2. **`tools/loop/controller.py` — the external dev-loop controller.** A
+>    separate watchdog that drives session-level dev cycles and backend
+>    cooldown/selection. Controlled by `loop-start` / `loop-stop` /
+>    `loop-status` / `loop-log`; lock at `logs/local/loop_controller.lock`.
+>
+> They run, start, and stop **independently** — stopping one does not stop the
+> other, and `loop-status` only reports the controller (not the watch-all lanes).
+> To fully pause OC: `watch-all-stop` **and** `loop-stop`.
 - Structured task parsing from `## Execution`, `## Goal`, and optional `## Constraints`.
 - Isolated ephemeral clone + task branch workflow.
 - Repo-local bootstrap and validation execution.
@@ -663,9 +680,13 @@ Top-level config options added in the autonomy hardening phase:
 ./scripts/operations-center.sh watch --role improve
 ./scripts/operations-center.sh watch --role propose
 ./scripts/operations-center.sh watch --role review
-./scripts/operations-center.sh watch-all
+./scripts/operations-center.sh watch-all          # OC pipeline lanes (see "Two independent loops")
 ./scripts/operations-center.sh watch-all-status
 ./scripts/operations-center.sh watch-all-stop
+./scripts/operations-center.sh loop-start         # external dev-loop controller (tools/loop) — separate from watch-all
+./scripts/operations-center.sh loop-status
+./scripts/operations-center.sh loop-stop
+./scripts/operations-center.sh loop-log
 ./scripts/operations-center.sh dev-up
 ./scripts/operations-center.sh dev-down
 ./scripts/operations-center.sh dev-restart

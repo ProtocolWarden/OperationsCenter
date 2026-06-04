@@ -1,3 +1,13 @@
+## 2026-06-04 — Docs: clarify watch-all vs the external tools/loop controller
+
+README conflated two independent background mechanisms (the source of an operator
+mix-up during the .console reconciliation). Added a "Two independent loops" note +
+listed the `loop-start/stop/status/log` commands in the command reference, and
+corrected the stale "five watcher lanes" wording to the actual set
+(intake/goal/test/improve/propose/review/spec + watchdog). `watch-all` = the OC
+pipeline lanes; `tools/loop/controller.py` (loop-*) = the separate external
+dev-loop controller. They start/stop independently; full pause needs both.
+
 ## 2026-06-04 — Reconcile `.console/` (reconcile/console branch)
 
 Ran the `.console/` reconciliation pass (PlatformManifest console-reconciliation-spec).
