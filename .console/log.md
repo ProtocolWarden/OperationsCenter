@@ -1,3 +1,18 @@
+## 2026-06-06 — Spec Review: Resolve Goal 3 ambiguity (queue-drain-20260606T223739.md)
+
+**Status**: ✅ COMPLETE. Self-review of queue-drain spec identified and resolved Goal 3 range ambiguity.
+
+**Issue**: Goal 3 stated "Create 5–7 synthetic fixture repositories" (a range), conflicting with Success Criteria 2's deterministic requirement of "7 fixture categories". Spec was not implementable without clarification.
+
+**Resolution**: Changed Goal 3 to "Create 7 synthetic fixture repositories" (exact count), eliminating ambiguity and aligning with measurable success criteria.
+
+**Validation**:
+- ✅ Spec file updated: `docs/specs/queue-drain-20260606T223739.md` (commit cae3f80)
+- ✅ Test suite: 7543 passed, 7 skipped (no regressions)
+- ✅ All changes committed to branch `spec-author/966912a5`
+
+---
+
 ## 2026-06-04 — Docs: clarify watch-all vs the external tools/loop controller
 
 README conflated two independent background mechanisms (the source of an operator
