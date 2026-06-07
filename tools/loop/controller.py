@@ -425,6 +425,16 @@ def _alternate_backend(backend: str) -> str:
         return _BACKEND_PRIORITY[0]
 
 
+def _fallback_backend_after_limit(cooldowns: dict[str, datetime | None]) -> str | None:
+    """Return the next runnable backend after applying new cooldown state.
+
+    This intentionally re-runs the full selector instead of only checking the
+    immediate alternate. A global Claude limit cools both sonnet and opus, so
+    the next valid backend is codex.
+    """
+    return _select_backend(cooldowns)
+
+
 def handle_signal(signum, frame) -> None:
     global _stop
     _stop = True
@@ -956,16 +966,16 @@ def main() -> None:
             if rc != 0:
                 if _handle_backend_limit(backend, session_log, cooldowns, cooldown_meta):
                     write_runtime_state(cooldowns, None, limit_meta=cooldown_meta)
-                    alternate = _alternate_backend(backend)
-                    if _backend_available(alternate, cooldowns):
+                    fallback = _fallback_backend_after_limit(cooldowns)
+                    if fallback is not None:
                         _log(
                             f"{backend.capitalize()} is cooling down; "
-                            f"running immediate {alternate.capitalize()} fallback."
+                            f"running immediate {fallback.capitalize()} fallback."
                         )
-                        write_runtime_state(cooldowns, alternate, limit_meta=cooldown_meta)
-                        rc, session_log = run_session(iteration, alternate, anchor_vars)
-                        backend = alternate
-                        _log(f"{alternate.capitalize()} fallback session exited rc={rc}")
+                        write_runtime_state(cooldowns, fallback, limit_meta=cooldown_meta)
+                        rc, session_log = run_session(iteration, fallback, anchor_vars)
+                        backend = fallback
+                        _log(f"{fallback.capitalize()} fallback session exited rc={rc}")
                         if _stop or STOP_FLAG.exists():
                             break
                         if rc != 0 and _handle_backend_limit(
