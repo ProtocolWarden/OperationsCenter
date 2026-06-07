@@ -320,10 +320,11 @@ class SnapshotValidator:
             status = getattr(signals.dependency_drift, "status", None)
             critical_issues = getattr(signals.dependency_drift, "critical_issues", None)
             if status == "healthy" and critical_issues and critical_issues > 0:
+                msg = f"Dependency status 'healthy' but has {critical_issues} critical issues"
                 error = ValidationError(
                     layer=3,
                     category=ValidationFailureCategory.STRUCTURAL,
-                    message=f"Dependency status 'healthy' but has {critical_issues} critical issues",
+                    message=msg,
                     details={"critical_issues": critical_issues, "status": status},
                     is_retryable=False,
                 )
@@ -446,10 +447,14 @@ class SnapshotValidator:
             and current_coverage < baseline_coverage - 2.0
         ):
             drop = baseline_coverage - current_coverage
+            msg = (
+                f"Coverage regressed by {drop:.1f}pp "
+                f"({baseline_coverage}% → {current_coverage}%)"
+            )
             error = ValidationError(
                 layer=5,
                 category=ValidationFailureCategory.STRUCTURAL,
-                message=f"Coverage regressed by {drop:.1f}pp ({baseline_coverage}% → {current_coverage}%)",
+                message=msg,
                 details={
                     "baseline_coverage": baseline_coverage,
                     "current_coverage": current_coverage,
