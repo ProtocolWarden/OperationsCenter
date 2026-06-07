@@ -5,14 +5,16 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-✅ ALL STAGES COMPLETE — PR #250 outcome naming alignment (Stage 3) applied and ready for merge
+Stage 2: Fix documentation links, create missing architecture files, standardize prose
+Current Status: Stage 2 COMPLETE ✅
 
 ## Overall Plan — PR #250 Resurrection Campaign
 
 - **Stage 0**: ✅ COMPLETE — Investigate current state and document all issues (2026-06-07)
 - **Stage 1**: ✅ COMPLETE — Fix specification compliance (merge→approved, remove escalate) (2026-06-07)
-- **Stage 2**: ✅ COMPLETE — Fix documentation and mathematical operators (2026-06-07)
+- **Stage 2**: ✅ COMPLETE — Fix documentation links, create architecture files, standardize prose (2026-06-07)
 - **Stage 3**: ✅ COMPLETE — Update tests and commit changes (2026-06-07)
+- **Stage 4**: IN PROGRESS — Run tests and linters, commit, push to branch
 
 ## Definition of Done — Stage 0 (Investigation)
 
