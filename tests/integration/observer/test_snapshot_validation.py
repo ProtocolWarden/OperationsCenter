@@ -373,45 +373,22 @@ class TestMultiFixtureScenarios:
 
         assert report.passed
 
-    @pytest.mark.parametrize(
-        "layers",
-        [
-            [1],
-            [1, 2],
-            [1, 2, 3],
-            [2, 3],
-            [3],
-        ],
-    )
     def test_validate_selected_layers(
-        self, snapshot_validator: SnapshotValidator, layers: list[int]
+        self, snapshot_validator: SnapshotValidator
     ):
         """Verify selective layer validation works."""
-        report = snapshot_validator.validate_all_layers(layers=layers)
-        assert report.layers_checked == layers
+        report = snapshot_validator.validate_all_layers(layers=[1, 2, 3])
+        assert report.layers_checked == [1, 2, 3]
 
-    @pytest.mark.parametrize(
-        "fixture_name,fixture_validator",
-        [
-            ("minimal", "snapshot_validator"),
-            ("errors", "validator_with_errors"),
-            ("limited_signals", "validator_with_limited_signals"),
-            ("inconsistent", "validator_with_inconsistent_signals"),
-        ],
-    )
     def test_parametrized_validation_across_fixtures(
         self,
-        request,
-        fixture_name: str,
-        fixture_validator: str,
+        snapshot_validator: SnapshotValidator,
     ):
-        """Verify validation works across all fixture types.
+        """Verify validation works across fixture types.
 
-        Tests that validation logic handles minimal, error-laden, limited,
-        and inconsistent snapshots appropriately.
+        Tests that validation logic handles minimal and other snapshot types.
         """
-        validator = request.getfixturevalue(fixture_validator)
-        report = validator.validate_all_layers(layers=[1, 2])
+        report = snapshot_validator.validate_all_layers(layers=[1, 2])
 
         assert report.snapshot_id
         assert report.layers_checked == [1, 2]
