@@ -106,6 +106,10 @@ markers = [
   "slow: marks tests as slow-running and typically excluded from quick validation runs",
   "smoke: marks tests as smoke tests for quick validation of core functionality",
   "performance: marks tests as performance regression tests (timing + memory bounds; run with: pytest -m performance)",
+  "snapshot_slow: marks snapshot validation tests that run actual tools and are slow",
+  "snapshot_baseline: marks snapshot validation tests that compare against baselines",
+  "snapshot: marks snapshot validation integration tests",
+  "snapshot_performance: marks snapshot performance tests for scaling and efficiency",
 ]
 # xdist configuration for parallel test execution
 # Distribution strategy: loadscope (groups tests by class/module to respect fixture boundaries)

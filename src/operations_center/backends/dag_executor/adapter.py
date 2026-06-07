@@ -95,7 +95,7 @@ class DAGExecutorBackendAdapter:
                 artifacts_dir=artifacts_dir,
                 working_directory=str(workspace),
                 timeout_seconds=self._settings.timeout_seconds or None,
-                worker_backend=worker_backend,  # ty: ignore[invalid-argument-type]
+                worker_backend=worker_backend,
             )
             if workflow_path.exists():
                 spec = load_graph_file(str(workflow_path), goal_text=request.goal_text)
