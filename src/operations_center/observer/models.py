@@ -81,23 +81,10 @@ class FileHotspot(BaseModel):
 class TestSignal(BaseModel):
     """Test execution results with breakdown metrics and coverage integration.
 
-    Represents comprehensive test execution state including granular test counts,
-    execution performance, failure categorization, and code coverage metrics.
-
-    Attributes:
-        status: Overall test execution state (passing, failing, flaky, partial, unavailable)
-        test_count: Total number of tests collected or executed
-        passed_count: Number of tests with PASSED result
-        failed_count: Number of tests with FAILED result
-        skip_count: Number of tests with SKIPPED result
-        xfailed_count: Number of tests with XFAILED result
-        error_count: Number of tests with ERROR result
-        execution_time_ms: Total test execution time in milliseconds
-        coverage_percent: Overall code coverage percentage (0-100)
-        failure_category: Primary failure type (assertion, timeout, collection_error, etc.)
-        source: Tool/file that produced signal (e.g., "pytest", "unit_test.log")
-        observed_at: When test execution completed (None if tests haven't run)
-        summary: Human-readable summary of test results
+    Granular test counts, execution performance, failure categorization, and
+    code coverage. Fields are self-documenting via their annotations below;
+    `status` is one of passing/failing/flaky/partial/unavailable and
+    `failure_category` is the primary failure type (assertion, timeout, …).
     """
 
     status: str
