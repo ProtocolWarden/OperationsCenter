@@ -259,7 +259,8 @@ class TestFlakyTestAlertManager:
                     "category": "structural",
                     "first_seen": "2026-06-07T10:00:00+00:00",
                 },
-            ] + [
+            ]
+            + [
                 {
                     "test_name": f"tests/problematic/test_{i}.py::test_{i}",
                     "failure_rate": 0.3,
@@ -268,9 +269,7 @@ class TestFlakyTestAlertManager:
                 }
                 for i in range(1, 4)
             ],
-            by_module={
-                "tests/problematic": {"flaky_count": 3, "total_count": 15}
-            },
+            by_module={"tests/problematic": {"flaky_count": 3, "total_count": 15}},
         )
 
         alerts = FlakyTestAlertManager.check_alerts(current, previous)

@@ -18,9 +18,9 @@ The plugin is opt-in (disabled by default) to avoid overhead in normal test runs
 from __future__ import annotations
 
 import json
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -38,7 +38,8 @@ class FlakyTestDetectionPlugin:
         self.flaky_storage_path.mkdir(parents=True, exist_ok=True)
 
         self.test_outcomes: dict[str, dict] = {}
-        self.session_start_time = None
+        self.session_start_time: datetime | None = None
+        self._log = logging.getLogger(__name__)
 
     def pytest_sessionstart(self, session: pytest.Session) -> None:
         """Hook into test session start.
@@ -69,11 +70,13 @@ class FlakyTestDetectionPlugin:
                 }
             else:
                 # Update with actual result
-                self.test_outcomes[test_name].update({
-                    "outcome": outcome,
-                    "duration": call.duration or 0,
-                    "exception": str(call.excinfo.value) if call.excinfo else None,
-                })
+                self.test_outcomes[test_name].update(
+                    {
+                        "outcome": outcome,
+                        "duration": call.duration or 0,
+                        "exception": str(call.excinfo.value) if call.excinfo else None,
+                    }
+                )
 
     def pytest_sessionfinish(self, session: pytest.Session, exitstatus: int) -> None:
         """Hook into test session end - analyze and save results.
@@ -98,24 +101,28 @@ class FlakyTestDetectionPlugin:
                 # Extract module from test name
                 module = test_name.split("::")[0] if "::" in test_name else ""
 
-                flaky_candidates.append({
-                    "test_name": test_name,
-                    "module": module,
-                    "failure_rate": 1.0,  # Single run shows as 100% failure
-                    "run_count": 1,
-                    "category": "unknown",
-                    "first_seen": datetime.now(UTC).isoformat(),
-                })
+                flaky_candidates.append(
+                    {
+                        "test_name": test_name,
+                        "module": module,
+                        "failure_rate": 1.0,  # Single run shows as 100% failure
+                        "run_count": 1,
+                        "category": "unknown",
+                        "first_seen": datetime.now(UTC).isoformat(),
+                    }
+                )
 
         # Build session report
         session_report = {
             "session_id": session.name or "default",
             "timestamp": datetime.now(UTC).isoformat(),
-            "duration": (datetime.now(UTC) - self.session_start_time).total_seconds(),
+            "duration": (datetime.now(UTC) - (self.session_start_time or datetime.now(UTC))).total_seconds(),
             "session_count": len(self.test_outcomes),
             "passed_count": passed_count,
             "failed_count": failed_count,
-            "skipped_count": sum(1 for t in self.test_outcomes.values() if t["outcome"] == "skipped"),
+            "skipped_count": sum(
+                1 for t in self.test_outcomes.values() if t["outcome"] == "skipped"
+            ),
             "flaky_candidates": flaky_candidates,
             "unstable_candidates": unstable_candidates,
             "test_outcomes": list(self.test_outcomes.values()),
@@ -141,8 +148,7 @@ class FlakyTestDetectionPlugin:
             with open(filepath, "w") as f:
                 json.dump(report, f, indent=2)
         except IOError as e:
-            # Silently fail - don't interrupt test execution
-            print(f"Warning: Failed to save flaky test metrics: {e}")
+            self._log.warning("Failed to save flaky test metrics: %s", e)
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:

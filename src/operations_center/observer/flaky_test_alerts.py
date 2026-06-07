@@ -174,7 +174,7 @@ class FlakyTestAlertManager:
             alert = FlakyTestAlert(
                 alert_type="REGRESSION_SPIKE",
                 severity=AlertSeverity.HIGH,
-                description=f"Flaky test count increased by {increase_pct*100:.0f}% "
+                description=f"Flaky test count increased by {increase_pct * 100:.0f}% "
                 f"({prev_count} → {curr_count})",
                 details={
                     "previous_count": prev_count,
@@ -200,9 +200,7 @@ class FlakyTestAlertManager:
             List of critical flakiness alerts
         """
         alerts = []
-        critical_tests = [
-            t for t in agg_report.flaky_tests if t.get("failure_rate", 0) > 0.3
-        ]
+        critical_tests = [t for t in agg_report.flaky_tests if t.get("failure_rate", 0) > 0.3]
 
         if critical_tests:
             alert = FlakyTestAlert(

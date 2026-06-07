@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 ProtocolWarden
 """Stage 3 Verification Script - Verify all implementation components exist and are syntactically correct."""
 
 import ast
-import json
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import List, Tuple
+
 
 def check_file_exists(path: str) -> Tuple[bool, str]:
     """Check if a file exists."""
@@ -13,6 +15,7 @@ def check_file_exists(path: str) -> Tuple[bool, str]:
     if p.exists():
         return True, f"✓ {path} exists"
     return False, f"✗ {path} MISSING"
+
 
 def check_syntax(path: str) -> Tuple[bool, str]:
     """Check if a Python file has valid syntax."""
@@ -25,6 +28,7 @@ def check_syntax(path: str) -> Tuple[bool, str]:
     except Exception as e:
         return False, f"✗ {path} read error: {e}"
 
+
 def count_tests(test_file: str) -> Tuple[int, List[str]]:
     """Count test functions in a test file."""
     try:
@@ -33,12 +37,13 @@ def count_tests(test_file: str) -> Tuple[int, List[str]]:
 
         tests = []
         for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and node.name.startswith('test_'):
+            if isinstance(node, ast.FunctionDef) and node.name.startswith("test_"):
                 tests.append(node.name)
 
         return len(tests), tests
-    except Exception as e:
+    except Exception:
         return 0, []
+
 
 def main():
     print("=" * 70)
@@ -156,6 +161,7 @@ def main():
     else:
         print("\n✗ STAGE 3 INCOMPLETE - See details above")
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

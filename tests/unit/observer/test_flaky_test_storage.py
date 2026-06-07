@@ -83,7 +83,7 @@ class TestFlakyTestStorageManager:
         assert len(sessions_7d) >= 1
 
         # Load sessions from last 0 days (should not include old sessions)
-        sessions_0d = storage.load_recent_sessions(days=0)
+        storage.load_recent_sessions(days=0)
         # Depending on timing, might be 0 or 1
 
     def test_save_aggregation_report(self, tmp_path):
@@ -115,7 +115,7 @@ class TestFlakyTestStorageManager:
         # Save multiple aggregations
         for i in range(2):
             report = FlakyTestAggregationReport(
-                date=f"2026-06-0{7-i}",
+                date=f"2026-06-0{7 - i}",
                 period_days=7,
                 total_test_executions=100,
                 flaky_test_count=i + 1,
@@ -146,7 +146,7 @@ class TestFlakyTestStorageManager:
         today_file.write_text("{}")
 
         # Run cleanup
-        deleted_count = storage.cleanup_old_sessions()
+        storage.cleanup_old_sessions()
 
         # Old file should be deleted
         assert not old_file.exists()
@@ -166,7 +166,7 @@ class TestFlakyTestStorageManager:
         recent_agg.write_text("{}")
 
         # Run cleanup
-        deleted_count = storage.cleanup_old_aggregations()
+        storage.cleanup_old_aggregations()
 
         # Old file should be deleted
         assert not old_agg.exists()

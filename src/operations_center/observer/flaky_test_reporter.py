@@ -79,9 +79,7 @@ class FlakyTestMetric:
             "pattern_entropy": round(self.pattern_entropy, 4),
             "streak_length": self.streak_length,
             "recovery_time_days": (
-                round(self.recovery_time_days, 2)
-                if self.recovery_time_days is not None
-                else None
+                round(self.recovery_time_days, 2) if self.recovery_time_days is not None else None
             ),
             "suspected_category": self.suspected_category.value,
             "markers": self.markers,
@@ -118,9 +116,7 @@ class FlakyTestResult:
         return {
             "nodeid": self.nodeid,
             "outcome": (
-                self.outcome.value
-                if isinstance(self.outcome, TestOutcome)
-                else self.outcome
+                self.outcome.value if isinstance(self.outcome, TestOutcome) else self.outcome
             ),
             "duration": round(self.duration, 4),
             "markers": self.markers,
@@ -277,9 +273,7 @@ class FlakyTestReporter:
             unstable_candidates=unstable_candidates,
         )
 
-    def _analyze_test_runs(
-        self, nodeid: str, runs: list[FlakyTestResult]
-    ) -> FlakyTestMetric:
+    def _analyze_test_runs(self, nodeid: str, runs: list[FlakyTestResult]) -> FlakyTestMetric:
         """Analyze all runs of a single test to produce metrics.
 
         Args:
@@ -294,20 +288,14 @@ class FlakyTestReporter:
         run_count = len(runs)
         failure_rate = failure_count / run_count if run_count > 0 else 0.0
 
-        confidence = min(
-            1.0, run_count / self.MAX_CONFIDENCE_RUNS
-        )  # Capped at 5 runs
+        confidence = min(1.0, run_count / self.MAX_CONFIDENCE_RUNS)  # Capped at 5 runs
 
-        flakiness_score = self._compute_flakiness_score(
-            failure_rate, runs, run_count
-        )
+        flakiness_score = self._compute_flakiness_score(failure_rate, runs, run_count)
 
         suspected_category = self._categorize_flakiness(failure_rate, runs)
 
         duration_mean = sum(r.duration for r in runs) / run_count if run_count > 0 else 0.0
-        duration_variance = self._compute_variance(
-            [r.duration for r in runs], duration_mean
-        )
+        duration_variance = self._compute_variance([r.duration for r in runs], duration_mean)
 
         pattern_entropy = self._compute_pattern_entropy(runs)
         streak_length = self._compute_streak_length(runs)
@@ -534,7 +522,11 @@ class FlakyTestReporter:
             Path where report was saved, or None if storage not available.
         """
         storage_str = str(self.storage_root)
-        if not self.storage_root or storage_str.startswith("s3:/") or storage_str.startswith("http:/"):
+        if (
+            not self.storage_root
+            or storage_str.startswith("s3:/")
+            or storage_str.startswith("http:/")
+        ):
             return None
 
         reports_dir = self.storage_root / "reports"
@@ -553,7 +545,11 @@ class FlakyTestReporter:
             Path where results were saved, or None if storage not available.
         """
         storage_str = str(self.storage_root)
-        if not self.storage_root or storage_str.startswith("s3:/") or storage_str.startswith("http:/"):
+        if (
+            not self.storage_root
+            or storage_str.startswith("s3:/")
+            or storage_str.startswith("http:/")
+        ):
             return None
 
         results_dir = self.storage_root / "runs"

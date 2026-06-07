@@ -8,7 +8,6 @@ import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import pytest
 
 from operations_center.config import Settings
 from operations_center.observer.collectors.flaky_test_collector import FlakyTestCollector

@@ -18,7 +18,7 @@ from operations_center.observer.flaky_test_reporter import (
     FlakyTestMetric,
     FlakynessCategory,
 )
-from operations_center.observer.models import FlakyTestSignal, RepoStateSnapshot, RepoSignalsSnapshot
+from operations_center.observer.models import FlakyTestSignal
 from operations_center.observer.service import ObserverContext, RepoObserverService
 
 

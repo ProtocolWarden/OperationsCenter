@@ -32,7 +32,7 @@ class FlakyTestAggregationReport:
     unstable_test_count: int
     flaky_tests: list[dict] = field(default_factory=list)
     by_module: dict[str, dict] = field(default_factory=dict)
-    by_category: dict[str, dict] = field(default_factory=dict)
+    by_category: dict[str, int] = field(default_factory=dict)
     recommendations: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -179,9 +179,7 @@ class FlakyTestStorageManager:
 
             # Parse directory name as date
             try:
-                date_obj = datetime.strptime(date_dir.name, "%Y-%m-%d").replace(
-                    tzinfo=UTC
-                )
+                date_obj = datetime.strptime(date_dir.name, "%Y-%m-%d").replace(tzinfo=UTC)
                 if date_obj < cutoff:
                     continue
             except ValueError:
@@ -247,9 +245,7 @@ class FlakyTestStorageManager:
                 continue
 
             try:
-                date_obj = datetime.strptime(date_dir.name, "%Y-%m-%d").replace(
-                    tzinfo=UTC
-                )
+                date_obj = datetime.strptime(date_dir.name, "%Y-%m-%d").replace(tzinfo=UTC)
                 if date_obj < cutoff:
                     deleted_count += len(list(date_dir.glob("*.json")))
                     shutil.rmtree(date_dir)

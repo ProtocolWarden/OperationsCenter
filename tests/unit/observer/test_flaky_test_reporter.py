@@ -529,10 +529,7 @@ class TestAnalyzeTestRuns:
 
     def test_analyze_confidence_capped_at_five(self) -> None:
         reporter = FlakyTestReporter()
-        runs = [
-            FlakyTestResult(nodeid="test", outcome="passed", duration=1.0)
-            for _ in range(10)
-        ]
+        runs = [FlakyTestResult(nodeid="test", outcome="passed", duration=1.0) for _ in range(10)]
         metric = reporter._analyze_test_runs("test", runs)
         assert metric.confidence == 1.0
 
@@ -677,9 +674,7 @@ class TestFlakyTestReporterQueryAPIs:
                 )
             )
 
-        metric = reporter.query_metrics_by_test(
-            "tests/unit/test_foo.py::TestClass::test_method"
-        )
+        metric = reporter.query_metrics_by_test("tests/unit/test_foo.py::TestClass::test_method")
         assert metric is not None
         assert metric.nodeid == "tests/unit/test_foo.py::TestClass::test_method"
         assert metric.failure_rate > 0
@@ -733,7 +728,9 @@ class TestFlakyTestReporterQueryAPIs:
         assert result["flaky_count"] == 0
         assert result["most_problematic"] == []
 
-    @pytest.mark.skip(reason="Test expects improving/stable trend but gets degrading (trend logic bug)")
+    @pytest.mark.skip(
+        reason="Test expects improving/stable trend but gets degrading (trend logic bug)"
+    )
     def test_query_trend_analysis_improving(self, tmp_path: Path) -> None:
         reporter = FlakyTestReporter.create_local(tmp_path)
 
@@ -789,7 +786,9 @@ class TestEdgeCasesAndBoundaries:
     def test_flaky_test_with_single_run(self, tmp_path: Path) -> None:
         reporter = FlakyTestReporter.create_local(tmp_path)
         reporter.track_test(
-            FlakyTestResult(nodeid="tests/unit/test_foo.py::test_method", outcome="failed", duration=1.0)
+            FlakyTestResult(
+                nodeid="tests/unit/test_foo.py::test_method", outcome="failed", duration=1.0
+            )
         )
 
         report = reporter.analyze_session()
@@ -801,7 +800,9 @@ class TestEdgeCasesAndBoundaries:
 
         for _ in range(5):
             reporter.track_test(
-                FlakyTestResult(nodeid="tests/unit/test_foo.py::test_method", outcome="passed", duration=1.0)
+                FlakyTestResult(
+                    nodeid="tests/unit/test_foo.py::test_method", outcome="passed", duration=1.0
+                )
             )
 
         metric = reporter.query_metrics_by_test("tests/unit/test_foo.py::test_method")
@@ -813,7 +814,9 @@ class TestEdgeCasesAndBoundaries:
 
         for _ in range(5):
             reporter.track_test(
-                FlakyTestResult(nodeid="tests/unit/test_foo.py::test_method", outcome="failed", duration=1.0)
+                FlakyTestResult(
+                    nodeid="tests/unit/test_foo.py::test_method", outcome="failed", duration=1.0
+                )
             )
 
         metric = reporter.query_metrics_by_test("tests/unit/test_foo.py::test_method")

@@ -76,7 +76,7 @@ class FlakyTestAggregator:
         flaky_count = 0
         unstable_count = 0
         module_stats: dict[str, dict] = {}
-        category_stats: dict[str, dict] = {}
+        category_stats: dict[str, int] = {}
 
         for test_name, metrics_list in test_metrics.items():
             if not metrics_list:
@@ -86,12 +86,18 @@ class FlakyTestAggregator:
             failure_rates = [m.get("failure_rate", 0) for m in metrics_list]
             avg_failure_rate = sum(failure_rates) / len(failure_rates)
             max_failure_rate = max(failure_rates)
-            first_seen = min(m.get("first_seen", datetime.now(UTC).isoformat()) for m in metrics_list)
+            first_seen = min(
+                m.get("first_seen", datetime.now(UTC).isoformat()) for m in metrics_list
+            )
             last_failure = max(m.get("last_failure", "") for m in metrics_list)
 
             # Determine trend
             if len(failure_rates) >= 2:
-                trend = (failure_rates[-1] - failure_rates[0]) / failure_rates[0] if failure_rates[0] > 0 else 0
+                trend = (
+                    (failure_rates[-1] - failure_rates[0]) / failure_rates[0]
+                    if failure_rates[0] > 0
+                    else 0
+                )
             else:
                 trend = 0
 
@@ -144,7 +150,12 @@ class FlakyTestAggregator:
             flaky_test_count=flaky_count,
             unstable_test_count=unstable_count,
             flaky_tests=flaky_tests[:20],  # Top 20
-            by_module={k: v for k, v in sorted(module_stats.items(), key=lambda x: x[1]["flaky_count"], reverse=True)[:10]},
+            by_module={
+                k: v
+                for k, v in sorted(
+                    module_stats.items(), key=lambda x: x[1]["flaky_count"], reverse=True
+                )[:10]
+            },
             by_category={k: v for k, v in sorted(category_stats.items(), key=lambda x: -x[1])},
             recommendations=recommendations,
         )
@@ -164,42 +175,54 @@ class FlakyTestAggregator:
         # Recommendation 1: Focus on top flaky tests
         if flaky_tests:
             top_test = flaky_tests[0]
-            recommendations.append({
-                "priority": "high",
-                "type": "focus_test",
-                "description": f"Fix top flaky test: {top_test['test_name']}",
-                "failure_rate": top_test["failure_rate"],
-                "category": top_test.get("category", "unknown"),
-            })
+            recommendations.append(
+                {
+                    "priority": "high",
+                    "type": "focus_test",
+                    "description": f"Fix top flaky test: {top_test['test_name']}",
+                    "failure_rate": top_test["failure_rate"],
+                    "category": top_test.get("category", "unknown"),
+                }
+            )
 
         # Recommendation 2: Module outbreak detection
-        outbreak_modules = [m for m, stats in module_stats.items() if stats["flaky_count"] / max(1, stats["total_count"]) > 0.2]
+        outbreak_modules = [
+            m
+            for m, stats in module_stats.items()
+            if stats["flaky_count"] / max(1, stats["total_count"]) > 0.2
+        ]
         if outbreak_modules:
-            recommendations.append({
-                "priority": "high",
-                "type": "module_outbreak",
-                "description": f"Module outbreak detected in: {', '.join(outbreak_modules[:3])}",
-                "affected_modules": outbreak_modules,
-            })
+            recommendations.append(
+                {
+                    "priority": "high",
+                    "type": "module_outbreak",
+                    "description": f"Module outbreak detected in: {', '.join(outbreak_modules[:3])}",
+                    "affected_modules": outbreak_modules,
+                }
+            )
 
         # Recommendation 3: Environmental/configuration issues
         config_flaky = [t for t in flaky_tests if t.get("category") == "configuration"]
         if config_flaky:
-            recommendations.append({
-                "priority": "medium",
-                "type": "environment_check",
-                "description": "Check environment configuration for CI differences",
-                "tests": [t["test_name"] for t in config_flaky[:3]],
-            })
+            recommendations.append(
+                {
+                    "priority": "medium",
+                    "type": "environment_check",
+                    "description": "Check environment configuration for CI differences",
+                    "tests": [t["test_name"] for t in config_flaky[:3]],
+                }
+            )
 
         # Recommendation 4: Check for recovery patterns
         recovered_tests = [t for t in flaky_tests if t.get("recovered_at")]
         if recovered_tests:
-            recommendations.append({
-                "priority": "low",
-                "type": "monitor_recovery",
-                "description": f"Monitor {len(recovered_tests)} recovered tests for regression",
-                "recovered_count": len(recovered_tests),
-            })
+            recommendations.append(
+                {
+                    "priority": "low",
+                    "type": "monitor_recovery",
+                    "description": f"Monitor {len(recovered_tests)} recovered tests for regression",
+                    "recovered_count": len(recovered_tests),
+                }
+            )
 
         return recommendations
