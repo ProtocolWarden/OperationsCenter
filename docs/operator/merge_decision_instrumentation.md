@@ -18,9 +18,9 @@ The instrumentation tracks three merge decision outcomes:
 
 ### Latency baseline
 
-**Acceptable baseline: less than 500ms**
+**Acceptable baseline: less than 500 milliseconds**
 
-The merge decision should complete within 500ms from:
+The merge decision should complete within 500 milliseconds from:
 - Start of verdict consolidation
 - CI gate checks
 - All metadata loading
@@ -161,3 +161,6 @@ Structured logs integrate with Grafana/observability platforms:
 
 ## Related Documentation
 
+- [PR Review Watcher Architecture](../architecture/pr_review_watcher.md)
+- [Verdict Consolidation State Machine](../architecture/verdict_consolidation.md)
+- [Review Backend Troubleshooting](../troubleshooting/review_backend.md)

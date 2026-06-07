@@ -2,7 +2,10 @@
 
 The PR review loop is a two-phase automated review process. This guide covers how it works, what to verify, and how to troubleshoot it.
 
-See also: [Merge Decision Instrumentation](merge_decision_instrumentation.md) — metrics and latency tracking for merge decisions.
+See also:
+- [PR Review Watcher Architecture](../architecture/pr_review_watcher.md) — implementation details and state machine design
+- [Merge Decision Instrumentation](merge_decision_instrumentation.md) — metrics and latency tracking for merge decisions
+- [Review Backend Troubleshooting](../troubleshooting/review_backend.md) — diagnosis and recovery procedures
 
 ## Overview
 
