@@ -50,6 +50,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from operations_center.close_invariants import close_without_receipt_allowed
+
 logger = logging.getLogger(__name__)
 
 _STATE_SUBDIR = Path("state") / "pr_reviews"
@@ -684,16 +686,21 @@ def _close_and_requeue(
         return
 
     marker = settings.reviewer.bot_comment_marker
-    try:
-        gh_client.post_comment(
-            owner,
-            repo,
+    close_comment = (
+        f"{marker}\n**Closing without merge** (reason=`{reason}`). A PR is never "
+        f"merged with unresolved review concerns — the issue has been re-queued for "
+        f"a fresh attempt. Durable receipt recorded on Plane task `{plane_task_id}` "
+        f"for `{_durable_pr_head_ref(pr_number)}` and `{spec_file}`.\n\n{detail}"
+    )
+    if not close_without_receipt_allowed(comment=close_comment, durable_receipt_recorded=True):
+        logger.error(
+            "pr_review_watcher: invariant rejected close for PR #%d despite recorded receipt",
             pr_number,
-            f"{marker}\n**Closing without merge** (reason=`{reason}`). A PR is never "
-            f"merged with unresolved review concerns — the issue has been re-queued for "
-            f"a fresh attempt. Durable receipt recorded on Plane task `{plane_task_id}` "
-            f"for `{_durable_pr_head_ref(pr_number)}` and `{spec_file}`.\n\n{detail}",
         )
+        _save_state(state_path, state)
+        return
+    try:
+        gh_client.post_comment(owner, repo, pr_number, close_comment)
     except Exception as exc:
         logger.warning(
             "pr_review_watcher: failed to comment before close PR #%d — %s", pr_number, exc

@@ -25,6 +25,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from operations_center.adapters.github_pr import GitHubPRClient
+from operations_center.close_invariants import close_without_receipt_allowed
 from operations_center.config import load_settings
 
 _AUTONOMY_PREFIXES = ("goal/", "test/", "improve/", "plane/")
@@ -115,15 +116,19 @@ def main() -> int:
                 closed.append(entry)
                 continue
             try:
-                gh.post_comment(
-                    owner,
-                    repo,
-                    pr["number"],
-                    _no_salvage_close_comment(
-                        age_days=age_days,
-                        threshold_days=threshold_days,
-                    ),
+                comment = _no_salvage_close_comment(
+                    age_days=age_days,
+                    threshold_days=threshold_days,
                 )
+                if not close_without_receipt_allowed(
+                    comment=comment,
+                    durable_receipt_recorded=False,
+                ):
+                    entry["action"] = "blocked"
+                    entry["error"] = "close_invariant_blocked_missing_receipt_or_no_salvage_comment"
+                    skipped.append(entry)
+                    continue
+                gh.post_comment(owner, repo, pr["number"], comment)
                 gh.close_pr(owner, repo, pr["number"])
                 entry["action"] = "closed"
                 closed.append(entry)
