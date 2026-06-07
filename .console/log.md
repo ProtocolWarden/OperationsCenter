@@ -1,3 +1,18 @@
+## 2026-06-07 — Watchdog: Fix custodian-audit CI failure (R1 detector ID collision)
+
+**Decision**: Set `audit.r1_enabled: false` in `.custodian/config.yaml`.
+
+Root cause: The built-in R1 reconcile detector and the custom plugin R1 share
+detector ID "R1". `run_audit()` accumulates `total_findings` from both, but the
+plugin R1 overwrites the pattern entry — causing `.console/log.md` (1920 ln) and
+`.console/backlog.md` (442 ln) to be counted in `total_findings` but absent from
+`findings[]`. CI showed 2 phantom findings. Disabling the built-in R1 resolves the
+ID collision; the custom plugin R1 continues to handle `.console/` structural checks.
+
+Branch: `oc-watchdog/20260607-1430-fix-r1-reconcile-id-collision`
+
+---
+
 ## 2026-06-07 — STAGE 2: Run Full Test Suite and Linters to Verify All Fixes ✅
 
 **Objective**: Run comprehensive test suite, verify code quality, and confirm campaign readiness for merge.
@@ -1918,3 +1933,8 @@ _Archived completed history → `/home/dev/Documents/GitHub/PrivateManifest/arch
 - Renamed inner `_fixture` to `_generated` in dynamic fixture loop
 - Added T4 exclusion for `tests/fixtures/console_malformed/conftest.py`
 - Linked `console-reconciliation-test-strategy.md` from detectors.md (DC7)
+
+## 2026-06-07 — watchdog: bump Custodian pin for r1_enabled doctor fix
+
+Custodian doctor --strict rejected r1_enabled (valid reconcile config key) as unknown.
+Fixed upstream in Custodian@4a1a0ae; bumped pyproject.toml pin to pick up the fix.
