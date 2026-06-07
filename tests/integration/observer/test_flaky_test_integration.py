@@ -342,6 +342,113 @@ class TestSnapshotValidation:
         assert signal.observed_at is not None
 
 
+class TestEdgeCasesIntegration:
+    """Integration tests for edge cases and failure scenarios."""
+
+    def test_collector_with_empty_metrics_directory(self, tmp_path: Path) -> None:
+        """Test collector behavior with empty metrics directory."""
+        metrics_dir = tmp_path / "metrics"
+        metrics_dir.mkdir()
+
+        config = FlakyTestConfig(storage_root=tmp_path)
+        collector = FlakyTestCollector(config)
+        signal = collector.collect(_make_observer_context())
+
+        assert signal.status == "measured"
+        assert signal.flaky_test_count == 0
+        assert len(signal.most_problematic_tests) == 0
+
+    def test_collector_with_corrupted_metrics_file(self, tmp_path: Path) -> None:
+        """Test collector gracefully handles corrupted JSON."""
+        metrics_dir = tmp_path / "metrics"
+        metrics_dir.mkdir()
+
+        metrics_file = metrics_dir / "metrics.jsonl"
+        metrics_file.write_text("invalid json{]\n")
+
+        config = FlakyTestConfig(storage_root=tmp_path)
+        collector = FlakyTestCollector(config)
+        signal = collector.collect(_make_observer_context())
+
+        assert signal.status in ["measured", "partial", "unavailable"]
+
+    def test_collector_with_custom_thresholds(self, tmp_path: Path) -> None:
+        """Test collector respects custom threshold configuration."""
+        metrics_dir = tmp_path / "metrics"
+        metrics_dir.mkdir()
+
+        metrics_file = metrics_dir / "metrics.jsonl"
+        metrics_data = [
+            FlakyTestMetric(
+                nodeid="tests/unit/test_1.py::test_1",
+                failure_rate=0.12,
+                run_count=10,
+            ),
+            FlakyTestMetric(
+                nodeid="tests/unit/test_2.py::test_2",
+                failure_rate=0.20,
+                run_count=10,
+            ),
+        ]
+        with metrics_file.open("w") as f:
+            for metric in metrics_data:
+                f.write(json.dumps(metric.to_dict()) + "\n")
+
+        config = FlakyTestConfig(storage_root=tmp_path, flakiness_threshold=0.15)
+        collector = FlakyTestCollector(config)
+        signal = collector.collect(_make_observer_context())
+
+        assert signal.flaky_test_count == 1
+
+    def test_signal_computed_from_large_metrics_set(self, tmp_path: Path) -> None:
+        """Test collector handles large metrics datasets efficiently."""
+        metrics_dir = tmp_path / "metrics"
+        metrics_dir.mkdir()
+
+        metrics_file = metrics_dir / "metrics.jsonl"
+        with metrics_file.open("w") as f:
+            for i in range(50):
+                metric = FlakyTestMetric(
+                    nodeid=f"tests/unit/test_{i}.py::test_{i}",
+                    failure_rate=0.05 + (i % 10) * 0.02,
+                    run_count=20 + i,
+                    flakiness_score=0.3 + (i % 10) * 0.05,
+                )
+                f.write(json.dumps(metric.to_dict()) + "\n")
+
+        config = FlakyTestConfig(storage_root=tmp_path, flakiness_threshold=0.10)
+        collector = FlakyTestCollector(config)
+        signal = collector.collect(_make_observer_context())
+
+        assert signal.flaky_test_count > 0
+        assert len(signal.most_problematic_tests) <= 5
+        assert signal.status == "measured"
+
+    def test_collector_respects_most_problematic_limit(self, tmp_path: Path) -> None:
+        """Test that most_problematic_tests is limited to top 5."""
+        metrics_dir = tmp_path / "metrics"
+        metrics_dir.mkdir()
+
+        metrics_file = metrics_dir / "metrics.jsonl"
+        with metrics_file.open("w") as f:
+            for i in range(20):
+                metric = FlakyTestMetric(
+                    nodeid=f"tests/unit/test_{i}.py::test_{i}",
+                    failure_rate=0.50,
+                    run_count=10,
+                    flakiness_score=0.8 - (i * 0.01),
+                )
+                f.write(json.dumps(metric.to_dict()) + "\n")
+
+        config = FlakyTestConfig(storage_root=tmp_path)
+        collector = FlakyTestCollector(config)
+        signal = collector.collect(_make_observer_context())
+
+        assert len(signal.most_problematic_tests) == 5
+        for i, test in enumerate(signal.most_problematic_tests):
+            assert test["flakiness_score"] >= signal.most_problematic_tests[-1]["flakiness_score"]
+
+
 def _make_observer_context(repo_path: Path | None = None) -> ObserverContext:
     """Create a mock ObserverContext for testing."""
     return ObserverContext(

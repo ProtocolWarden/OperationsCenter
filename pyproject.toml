@@ -110,6 +110,9 @@ markers = [
   "snapshot_baseline: marks snapshot validation tests that compare against baselines",
   "snapshot: marks snapshot validation integration tests",
   "snapshot_performance: marks snapshot performance tests for scaling and efficiency",
+  "flaky: marks tests that exercise flaky test detection logic",
+  "flaky_historical: marks tests for flaky test historical aggregation and trends",
+  "flaky_integration: marks flaky test integration tests with observer service",
 ]
 # xdist configuration for parallel test execution
 # Distribution strategy: loadscope (groups tests by class/module to respect fixture boundaries)

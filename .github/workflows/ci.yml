@@ -171,3 +171,54 @@ jobs:
           retention-days: 30
     strategy:
       fail-fast: true
+
+  flaky-test-detection:
+    name: Flaky test detection
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'  # Run on merges (not PRs) to detect trends
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -e .[dev]
+      - name: Run unit tests with flaky detection
+        # Runs all unit tests with flaky detection plugin enabled.
+        # Captures test outcomes, analyzes patterns, and saves metrics.
+        # This provides baseline data for historical trend detection.
+        run: pytest -q tests/unit --flaky-detection --flaky-storage=.flaky-tests -v --tb=short
+      - name: Aggregate flakiness history
+        if: always()
+        # Aggregates session reports from past 7 days into daily summaries.
+        # Computes failure rates, trends, and generates recommendations.
+        # Output: .flaky-tests/aggregations/YYYY-MM-DD-aggregation.json
+        run: |
+          python -c "
+          from pathlib import Path
+          from operations_center.observer import FlakyTestStorageManager, FlakyTestAggregator, FlakyTestAlertManager
+          storage = FlakyTestStorageManager.create_local('.flaky-tests')
+          agg = FlakyTestAggregator(storage)
+          report = agg.aggregate(days=7)
+          storage.save_aggregation(report)
+          alerts = FlakyTestAlertManager.check_alerts(report)
+          print('Aggregation complete: ' + str(report.flaky_test_count) + ' flaky tests')
+          for alert in alerts:
+              print('  [' + alert.severity.value.upper() + '] ' + alert.alert_type + ': ' + alert.description)
+          "
+      - name: Upload flaky test metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flaky-test-metrics-${{ github.run_id }}
+          path: |
+            .flaky-tests/runs/
+            .flaky-tests/aggregations/
+          retention-days: 90
+      - name: Report aggregation status
+        if: always()
+        run: |
+          echo "Flaky test aggregation completed"
+          ls -la .flaky-tests/aggregations/ 2>/dev/null || echo "No aggregation files created"
+    strategy:
+      fail-fast: false

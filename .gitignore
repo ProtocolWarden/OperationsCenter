@@ -71,3 +71,6 @@ test_output.log
 
 # Tooling validation artifacts
 .baseline-validation.json
+
+# Flaky test detection metrics and artifacts (local + CI storage)
+.flaky-tests/
