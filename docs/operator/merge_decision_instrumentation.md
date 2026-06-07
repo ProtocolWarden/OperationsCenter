@@ -161,6 +161,3 @@ Structured logs integrate with Grafana/observability platforms:
 
 ## Related Documentation
 
-- [PR Review Watcher Architecture](../architecture/pr_review_watcher.md)
-- [Verdict Consolidation State Machine](../architecture/verdict_consolidation.md)
-- [Review Backend Troubleshooting](../troubleshooting/review_backend.md)
