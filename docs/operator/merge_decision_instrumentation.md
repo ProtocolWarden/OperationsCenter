@@ -64,7 +64,7 @@ All merge decisions are logged with structured format for dashboard integration:
 
 ### Retry rate anomaly
 
-**Threshold: exceeding 20% of decisions are retries**
+**Threshold: more than 20 percent of decisions are retries**
 
 High retry rates indicate:
 - Review verdicts unstable (varying across runs)
@@ -86,7 +86,7 @@ Indicates:
 
 ## Debugging Decision Failures
 
-### Decision latency exceeds 500ms
+### Decision latency exceeds 500 milliseconds
 
 **Steps:**
 1. Check latency histogram — is this isolated or trend?
@@ -144,8 +144,8 @@ Metrics can be exported as JSON via `export_metrics_json()` for external dashboa
 
 | Metric | Healthy | Degraded | Critical |
 |--------|---------|----------|----------|
-| Avg latency | less than 300ms | 300-500ms | exceeding 500ms |
-| Retry rate | less than 10% | 10-20% | exceeding 20% |
+| Avg latency | less than 300 milliseconds | 300-500 milliseconds | exceeding 500 milliseconds |
+| Retry rate | less than 10 percent | 10-20 percent | exceeding 20 percent |
 | Recent decisions (1h) | exceeding 10 | 5-10 | less than 5 |
 
 ## Integration with Dashboards
@@ -153,7 +153,7 @@ Metrics can be exported as JSON via `export_metrics_json()` for external dashboa
 Structured logs integrate with Grafana/observability platforms:
 
 1. **Metric query:** `merge_decision_outcome{repo_key="repo"}`
-2. **Alert rule:** Latency exceeding 1000ms for 5 minutes
+2. **Alert rule:** Latency exceeding 1000 milliseconds for 5 minutes
 3. **Dashboard panels:**
    - Decision outcome pie chart
    - Latency trend (line graph with 500ms baseline)

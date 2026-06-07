@@ -242,6 +242,31 @@ class MergeDecisionInstrumenter:
             },
         )
 
+    def record_escalation(
+        self,
+        pr_number: int,
+        repo_key: str,
+        reason: str,
+        detail: str = "",
+    ) -> None:
+        """Record escalation to human (maps to blocked outcome per spec)."""
+        self.metrics_collector.record_decision(
+            outcome="blocked",
+            latency_ms=(time.time() - self._decision_start_time) * 1000
+            if self._decision_start_time
+            else 0,
+            reason=reason,
+        )
+        logger.warning(
+            "decision_escalation",
+            extra={
+                "pr_number": pr_number,
+                "repo_key": repo_key,
+                "reason": reason,
+                "detail": detail[:200],
+            },
+        )
+
     def get_metrics_summary(self) -> dict:
         """Get aggregated decision metrics."""
         return self.metrics_collector.get_metrics_summary()
