@@ -450,6 +450,9 @@ class RepoSignalsSnapshot(BaseModel):
     coverage_signal: CoverageSignal = Field(
         default_factory=lambda: CoverageSignal(status="unavailable")
     )
+    flaky_test_signal: FlakyTestSignal = Field(
+        default_factory=lambda: FlakyTestSignal(status="unavailable")
+    )
 
 
 class RepoStateSnapshot(BaseModel):

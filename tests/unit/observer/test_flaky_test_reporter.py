@@ -660,3 +660,241 @@ class TestIntegration:
         ]
         assert metric.flakiness_score > 0.0
         assert metric.confidence > 0.0
+
+
+class TestFlakyTestReporterQueryAPIs:
+    """Tests for flaky test query API methods."""
+
+    def test_query_metrics_by_test_found(self, tmp_path: Path) -> None:
+        reporter = FlakyTestReporter.create_local(tmp_path)
+
+        for outcome in ["passed", "failed", "passed"]:
+            reporter.track_test(
+                FlakyTestResult(
+                    nodeid="tests/unit/test_foo.py::TestClass::test_method",
+                    outcome=outcome,
+                    duration=1.0,
+                )
+            )
+
+        metric = reporter.query_metrics_by_test(
+            "tests/unit/test_foo.py::TestClass::test_method"
+        )
+        assert metric is not None
+        assert metric.nodeid == "tests/unit/test_foo.py::TestClass::test_method"
+        assert metric.failure_rate > 0
+        assert metric.run_count == 3
+
+    def test_query_metrics_by_test_not_found(self, tmp_path: Path) -> None:
+        reporter = FlakyTestReporter.create_local(tmp_path)
+        metric = reporter.query_metrics_by_test("nonexistent/test.py::test_method")
+        assert metric is None
+
+    def test_query_module_flakiness_single_test(self, tmp_path: Path) -> None:
+        reporter = FlakyTestReporter.create_local(tmp_path)
+
+        for outcome in ["passed", "failed", "failed"]:
+            reporter.track_test(
+                FlakyTestResult(
+                    nodeid="tests/unit/test_foo.py::TestClass::test_method",
+                    outcome=outcome,
+                    duration=1.0,
+                )
+            )
+
+        result = reporter.query_module_flakiness("tests/unit")
+        assert result["module"] == "tests/unit"
+        assert result["test_count"] == 1
+        assert result["flaky_count"] == 1
+        assert result["avg_failure_rate"] > 0
+
+    def test_query_module_flakiness_multiple_tests(self, tmp_path: Path) -> None:
+        reporter = FlakyTestReporter.create_local(tmp_path)
+
+        outcomes_per_test = {
+            "tests/unit/test_foo.py::test_1": ["passed", "failed"],
+            "tests/unit/test_foo.py::test_2": ["passed", "passed"],
+            "tests/unit/test_bar.py::test_3": ["failed", "failed"],
+        }
+
+        for nodeid, outcomes in outcomes_per_test.items():
+            for outcome in outcomes:
+                reporter.track_test(FlakyTestResult(nodeid=nodeid, outcome=outcome, duration=1.0))
+
+        result = reporter.query_module_flakiness("tests/unit")
+        assert result["test_count"] == 3
+        assert result["flaky_count"] == 2
+        assert result["avg_failure_rate"] > 0
+
+    def test_query_module_flakiness_nonexistent_module(self, tmp_path: Path) -> None:
+        reporter = FlakyTestReporter.create_local(tmp_path)
+        result = reporter.query_module_flakiness("nonexistent/module")
+        assert result["test_count"] == 0
+        assert result["flaky_count"] == 0
+        assert result["most_problematic"] == []
+
+    def test_query_trend_analysis_improving(self, tmp_path: Path) -> None:
+        reporter = FlakyTestReporter.create_local(tmp_path)
+
+        now = datetime.now(UTC)
+
+        for outcome in ["failed", "failed", "passed", "passed"]:
+            reporter.track_test(
+                FlakyTestResult(
+                    nodeid="tests/unit/test_foo.py::test_method",
+                    outcome=outcome,
+                    duration=1.0,
+                    timestamp=now - timedelta(days=2),
+                )
+            )
+
+        trend = reporter.query_trend_analysis(days=7)
+        assert trend["trend"] in ["improving", "stable"]
+        assert "recovered_tests" in trend
+        assert "newly_flaky_tests" in trend
+
+    def test_query_trend_analysis_degrading(self, tmp_path: Path) -> None:
+        reporter = FlakyTestReporter.create_local(tmp_path)
+
+        now = datetime.now(UTC)
+
+        for outcome in ["passed", "passed"]:
+            reporter.track_test(
+                FlakyTestResult(
+                    nodeid="tests/unit/test_foo.py::test_method",
+                    outcome=outcome,
+                    duration=1.0,
+                    timestamp=now - timedelta(days=2),
+                )
+            )
+
+        for outcome in ["failed", "failed", "failed"]:
+            reporter.track_test(
+                FlakyTestResult(
+                    nodeid="tests/unit/test_foo.py::test_method",
+                    outcome=outcome,
+                    duration=1.0,
+                    timestamp=now,
+                )
+            )
+
+        trend = reporter.query_trend_analysis(days=1)
+        assert "newly_flaky_tests" in trend
+
+
+class TestEdgeCasesAndBoundaries:
+    """Tests for edge cases and boundary conditions."""
+
+    def test_flaky_test_with_single_run(self, tmp_path: Path) -> None:
+        reporter = FlakyTestReporter.create_local(tmp_path)
+        reporter.track_test(
+            FlakyTestResult(nodeid="tests/unit/test_foo.py::test_method", outcome="failed", duration=1.0)
+        )
+
+        report = reporter.analyze_session()
+        assert len(report.flaky_candidates) == 0
+        assert len(report.unstable_candidates) == 0
+
+    def test_flaky_test_with_extreme_failure_rate_zero(self, tmp_path: Path) -> None:
+        reporter = FlakyTestReporter.create_local(tmp_path)
+
+        for _ in range(5):
+            reporter.track_test(
+                FlakyTestResult(nodeid="tests/unit/test_foo.py::test_method", outcome="passed", duration=1.0)
+            )
+
+        metric = reporter.query_metrics_by_test("tests/unit/test_foo.py::test_method")
+        assert metric is not None
+        assert metric.failure_rate == 0.0
+
+    def test_flaky_test_with_extreme_failure_rate_100_percent(self, tmp_path: Path) -> None:
+        reporter = FlakyTestReporter.create_local(tmp_path)
+
+        for _ in range(5):
+            reporter.track_test(
+                FlakyTestResult(nodeid="tests/unit/test_foo.py::test_method", outcome="failed", duration=1.0)
+            )
+
+        metric = reporter.query_metrics_by_test("tests/unit/test_foo.py::test_method")
+        assert metric is not None
+        assert metric.failure_rate == 1.0
+
+    def test_flaky_test_with_very_long_nodeid(self, tmp_path: Path) -> None:
+        long_nodeid = "tests/very/deeply/nested/package/with/many/parts/test_file.py::VeryLongClassName::test_method_with_long_name"
+
+        reporter = FlakyTestReporter.create_local(tmp_path)
+        for outcome in ["passed", "failed"]:
+            reporter.track_test(FlakyTestResult(nodeid=long_nodeid, outcome=outcome, duration=1.0))
+
+        metric = reporter.query_metrics_by_test(long_nodeid)
+        assert metric is not None
+        assert metric.nodeid == long_nodeid
+
+    def test_metric_serialization_with_none_values(self, tmp_path: Path) -> None:
+        metric = FlakyTestMetric(
+            nodeid="tests/unit/test_foo.py::test_method",
+            failure_rate=0.5,
+            run_count=10,
+            recovery_time_days=None,
+        )
+
+        data = metric.to_dict()
+        assert data["recovery_time_days"] is None
+        assert data["failure_rate"] == 0.5
+
+    def test_empty_module_flakiness_query(self, tmp_path: Path) -> None:
+        reporter = FlakyTestReporter.create_local(tmp_path)
+        result = reporter.query_module_flakiness("")
+        assert result["test_count"] == 0
+        assert result["most_problematic"] == []
+
+    def test_query_with_no_test_runs(self, tmp_path: Path) -> None:
+        reporter = FlakyTestReporter.create_local(tmp_path)
+        metric = reporter.query_metrics_by_test("tests/unit/test_foo.py::test_method")
+        assert metric is None
+
+    def test_trend_analysis_with_clock_skew(self, tmp_path: Path) -> None:
+        reporter = FlakyTestReporter.create_local(tmp_path)
+
+        now = datetime.now(UTC)
+        future = now + timedelta(days=10)
+
+        for outcome in ["passed"]:
+            reporter.track_test(
+                FlakyTestResult(
+                    nodeid="tests/unit/test_foo.py::test_method",
+                    outcome=outcome,
+                    duration=1.0,
+                    timestamp=future,
+                )
+            )
+
+        trend = reporter.query_trend_analysis(days=7)
+        assert "trend" in trend
+
+    def test_config_initialization_with_path_string(self) -> None:
+        from operations_center.observer.flaky_test_reporter import FlakyTestConfig
+
+        config = FlakyTestConfig(storage_root="/tmp/metrics")
+        assert isinstance(config.storage_root, Path)
+        assert config.storage_root == Path("/tmp/metrics")
+
+    def test_config_initialization_with_s3_uri(self) -> None:
+        from operations_center.observer.flaky_test_reporter import FlakyTestConfig
+
+        config = FlakyTestConfig(storage_root="s3://bucket/prefix")
+        assert isinstance(config.storage_root, str)
+        assert config.storage_root == "s3://bucket/prefix"
+
+    def test_config_to_dict(self) -> None:
+        from operations_center.observer.flaky_test_reporter import FlakyTestConfig
+
+        config = FlakyTestConfig(
+            storage_root="/tmp/metrics",
+            min_run_count=5,
+            historical_window_days=60,
+        )
+        data = config.to_dict()
+        assert data["min_run_count"] == 5
+        assert data["historical_window_days"] == 60
+        assert data["storage_root"] == "/tmp/metrics"

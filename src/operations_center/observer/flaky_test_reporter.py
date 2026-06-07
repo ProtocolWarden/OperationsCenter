@@ -22,7 +22,7 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -567,3 +567,159 @@ class FlakyTestReporter:
                 f.write(json.dumps(result.to_dict()) + "\n")
 
         return results_path
+
+    def query_metrics_by_test(self, nodeid: str) -> FlakyTestMetric | None:
+        """Get metrics for a specific test by name.
+
+        Args:
+            nodeid: Test node ID (e.g., 'tests/unit/test_foo.py::TestClass::test_method')
+
+        Returns:
+            FlakyTestMetric if test has been analyzed, None otherwise.
+        """
+        if nodeid not in self.test_runs:
+            return None
+
+        runs = self.test_runs[nodeid]
+        if not runs:
+            return None
+
+        return self._analyze_test_runs(nodeid, runs)
+
+    def query_module_flakiness(self, module_path: str) -> dict[str, Any]:
+        """Get aggregated flakiness metrics for all tests in a module.
+
+        Args:
+            module_path: Module path (e.g., 'tests/unit' or 'tests/integration')
+
+        Returns:
+            Dictionary with aggregated metrics for all matching tests.
+        """
+        matching_tests = [
+            nodeid for nodeid in self.test_runs.keys() if nodeid.startswith(module_path)
+        ]
+
+        if not matching_tests:
+            return {
+                "module": module_path,
+                "test_count": 0,
+                "flaky_count": 0,
+                "unstable_count": 0,
+                "avg_failure_rate": 0.0,
+                "most_problematic": [],
+            }
+
+        metrics = []
+        flaky_count = 0
+        unstable_count = 0
+
+        for nodeid in matching_tests:
+            runs = self.test_runs[nodeid]
+            metric = self._analyze_test_runs(nodeid, runs)
+            metrics.append(metric)
+
+            if metric.failure_rate > 0.10:
+                flaky_count += 1
+            elif 0.05 <= metric.failure_rate <= 0.10:
+                unstable_count += 1
+
+        avg_failure_rate = sum(m.failure_rate for m in metrics) / len(metrics) if metrics else 0.0
+        most_problematic = sorted(metrics, key=lambda m: m.flakiness_score, reverse=True)[:5]
+
+        return {
+            "module": module_path,
+            "test_count": len(matching_tests),
+            "flaky_count": flaky_count,
+            "unstable_count": unstable_count,
+            "avg_failure_rate": round(avg_failure_rate, 4),
+            "most_problematic": [m.to_dict() for m in most_problematic],
+        }
+
+    def query_trend_analysis(self, days: int = 7) -> dict[str, Any]:
+        """Analyze test flakiness trend over a time window.
+
+        Args:
+            days: Number of days to look back in history.
+
+        Returns:
+            Dictionary with trend analysis including newly flaky and recovered tests.
+        """
+        cutoff_date = datetime.now(UTC).replace(microsecond=0) - timedelta(days=days)
+
+        current_flaky = set()
+        historical_flaky = set()
+
+        for nodeid, runs in self.test_runs.items():
+            if not runs:
+                continue
+
+            recent_runs = [r for r in runs if r.timestamp >= cutoff_date]
+            older_runs = [r for r in runs if r.timestamp < cutoff_date]
+
+            if recent_runs:
+                recent_failures = sum(1 for r in recent_runs if r.outcome == TestOutcome.FAILED)
+                recent_rate = recent_failures / len(recent_runs) if recent_runs else 0.0
+                if recent_rate > 0.10:
+                    current_flaky.add(nodeid)
+
+            if older_runs:
+                older_failures = sum(1 for r in older_runs if r.outcome == TestOutcome.FAILED)
+                older_rate = older_failures / len(older_runs) if older_runs else 0.0
+                if older_rate > 0.10:
+                    historical_flaky.add(nodeid)
+
+        newly_flaky = list(current_flaky - historical_flaky)
+        recovered = list(historical_flaky - current_flaky)
+
+        trend = "stable"
+        if len(newly_flaky) > len(recovered):
+            trend = "degrading"
+        elif len(recovered) > len(newly_flaky) and recovered:
+            trend = "improving"
+
+        return {
+            "period_days": days,
+            "start_date": cutoff_date.isoformat(),
+            "end_date": datetime.now(UTC).isoformat(),
+            "current_flaky_count": len(current_flaky),
+            "recovered_tests": recovered,
+            "newly_flaky_tests": newly_flaky,
+            "trend": trend,
+        }
+
+
+@dataclass
+class FlakyTestConfig:
+    """Configuration for flaky test collection and analysis.
+
+    Attributes:
+        storage_root: Path or URI for historical metrics storage (e.g., '/tmp/metrics', 's3://bucket/prefix')
+        min_run_count: Minimum number of test runs required for analysis (default: 3)
+        historical_window_days: Number of days of historical data to retain (default: 30)
+        flakiness_threshold: Failure rate threshold for marking tests as flaky (default: 0.10 = 10%)
+        unstable_threshold: Failure rate threshold for marking tests as unstable (default: 0.05 = 5%)
+        recovery_rate_threshold: Target percentage of tests that should be stable (default: 0.80 = 80%)
+    """
+
+    storage_root: Path | str
+    min_run_count: int = 3
+    historical_window_days: int = 30
+    flakiness_threshold: float = 0.10
+    unstable_threshold: float = 0.05
+    recovery_rate_threshold: float = 0.80
+
+    def __post_init__(self) -> None:
+        if isinstance(self.storage_root, str):
+            if not self.storage_root.startswith(("s3://", "http://")):
+                self.storage_root = Path(self.storage_root)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert config to dictionary for JSON serialization."""
+        return {
+            "storage_root": str(self.storage_root),
+            "min_run_count": self.min_run_count,
+            "historical_window_days": self.historical_window_days,
+            "flakiness_threshold": self.flakiness_threshold,
+            "unstable_threshold": self.unstable_threshold,
+            "recovery_rate_threshold": self.recovery_rate_threshold,
+        }

@@ -1,13 +1,24 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
 from operations_center.observer.dashboard import DashboardProvider, DashboardSnapshot
+from operations_center.observer.flaky_test_aggregator import FlakyTestAggregator
+from operations_center.observer.flaky_test_alerts import (
+    AlertSeverity,
+    FlakyTestAlert,
+    FlakyTestAlertManager,
+)
 from operations_center.observer.flaky_test_reporter import (
+    FlakyTestConfig,
     FlakyTestMetric,
     FlakyTestReporter,
     FlakyTestResult,
     FlakyTestSessionReport,
     FlakynessCategory,
     TestOutcome,
+)
+from operations_center.observer.flaky_test_storage import (
+    FlakyTestAggregationReport,
+    FlakyTestStorageManager,
 )
 from operations_center.observer.health_checks import HealthChecker, SystemHealthReport
 from operations_center.observer.metrics import MetricsCollector
@@ -37,13 +48,20 @@ from operations_center.observer.structured_logging import (
 )
 
 __all__ = [
+    "AlertSeverity",
     "DashboardProvider",
     "DashboardSnapshot",
+    "FlakyTestAggregationReport",
+    "FlakyTestAggregator",
+    "FlakyTestAlert",
+    "FlakyTestAlertManager",
+    "FlakyTestConfig",
     "FlakyTestMetric",
     "FlakyTestReporter",
     "FlakyTestResult",
     "FlakyTestSessionReport",
     "FlakyTestSignal",
+    "FlakyTestStorageManager",
     "FlakynessCategory",
     "HealthChecker",
     "HTTPSnapshotRepository",
