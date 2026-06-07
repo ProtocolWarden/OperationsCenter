@@ -4,7 +4,7 @@
 
 The merge-decision instrumentation system provides structured metrics and logging for operator monitoring of the PR review automation. This document covers baseline metrics, anomaly detection triggers, and debugging procedures.
 
-## Metrics Collection
+## Metrics collection
 
 ### Decision outcomes
 
@@ -159,7 +159,7 @@ Structured logs integrate with Grafana/observability platforms:
    - Latency trend (line graph with 500 milliseconds baseline)
    - Retry rate trend
 
-## Related Documentation
+## Related documentation
 
 - [PR Review Watcher Architecture](../architecture/pr_review_watcher.md)
 - [Verdict Consolidation State Machine](../architecture/verdict_consolidation.md)
