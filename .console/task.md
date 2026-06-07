@@ -5,15 +5,14 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-✅ ALL STAGES COMPLETE — PR #250 fixes applied and pushed to resurrect/pr-235-verdict-consolidation
+✅ ALL STAGES COMPLETE — PR #250 outcome naming alignment (Stage 3) applied and ready for merge
 
-## Overall Plan
+## Overall Plan — PR #250 Resurrection Campaign
 
 - **Stage 0**: ✅ COMPLETE — Investigate current state and document all issues (2026-06-07)
-- **Stage 1**: ✅ COMPLETE — Fix specification compliance and broken documentation links (2026-06-07)
-- **Stage 2**: ✅ COMPLETE — Full test suite and linters verified (2026-06-07)
-- **Stage 3**: ✅ COMPLETE — Commit and push to update PR #250 (2026-06-07)
-- **Stage 4**: ✅ COMPLETE — Apply minor style and formatting corrections (2026-06-07)
+- **Stage 1**: ✅ COMPLETE — Fix specification compliance (merge→approved, remove escalate) (2026-06-07)
+- **Stage 2**: ✅ COMPLETE — Fix documentation and mathematical operators (2026-06-07)
+- **Stage 3**: ✅ COMPLETE — Update tests and commit changes (2026-06-07)
 
 ## Definition of Done — Stage 0 (Investigation)
 
