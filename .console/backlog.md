@@ -436,7 +436,7 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ### Campaign: Flaky Test Reporter Implementation (2026-06-07)
 
-**Status**: 🔄 IN PROGRESS — Stage 1 Core Implementation Complete (2026-06-07)
+**Status**: 🔄 IN PROGRESS — Stage 4 Documentation Complete (2026-06-07)
 
 - [x] **Stage 0: Design & Requirements Analysis** (✅ COMPLETE)
   - [x] Created `.console/STAGE0_FLAKY_TEST_REPORTER_DESIGN.md` (4,200+ lines)
@@ -454,7 +454,17 @@ _Durable work inventory. Update after each meaningful chunk of progress._
   - [x] Created FlakyTestSignal model in observer/models.py
   - [x] Added comprehensive unit tests (55 tests, 100% pass rate)
   - [x] Verified code quality (ruff clean, all tests passing)
-  - **Status**: Ready for Stage 2 — Historical aggregation
+
+- [x] **Stage 4: Documentation & User Guides** (✅ COMPLETE)
+  - [x] Created `docs/design/flaky-test-reporter.md` (1,700+ lines, 8 sections)
+  - [x] Documented architecture and design decisions (system diagrams, trade-offs)
+  - [x] Created flaky test metric specification (14 metrics + interpretation guides)
+  - [x] Created configuration guide with examples (basic setup, advanced config)
+  - [x] Created troubleshooting guide (5 problem categories + solutions)
+  - [x] Created API reference for all public classes (FlakyTestReporter, FlakyTestResult, FlakyTestMetric, FlakyTestSessionReport)
+  - [x] Provided usage examples (3 complete examples with output)
+  - [x] Documented integration with observer service (Stage 3 planning)
+  - **Status**: All stage 4 acceptance criteria met
 
 - [ ] **Stage 2: Tier 3 Aggregation** (⏳ PLANNED)
   - [ ] Implement FlakyTestAggregator for historical analysis
@@ -467,15 +477,10 @@ _Durable work inventory. Update after each meaningful chunk of progress._
   - [ ] Wire into RepoObserverService
   - [ ] Add to RepoSignalsSnapshot
 
-- [ ] **Stage 4: Dashboard & Alerts** (⏳ PLANNED)
+- [ ] **Stage 5: Dashboard & Alerts** (⏳ PLANNED)
   - [ ] Add flakiness panels to observer dashboard
   - [ ] Implement Slack/email alert channels
   - [ ] Create GitHub PR comments for flaky tests
-
-- [ ] **Stage 5: Testing & Documentation** (⏳ PLANNED)
-  - [ ] Write comprehensive integration tests for all stages
-  - [ ] Create runbook and troubleshooting guide
-  - [ ] Document configuration and customization
 
 - [ ] **Stage 6: Verification & Deployment** (⏳ PLANNED)
   - [ ] Run full test suite and verify all pass

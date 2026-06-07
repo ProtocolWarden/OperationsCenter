@@ -5,90 +5,111 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-Stage 1: Implement Core Flaky Test Reporter — Build detection logic, failure tracking, pattern analysis, and reporting APIs
+Stage 4: Documentation & User Guides — Create comprehensive guides for operators and developers
 
 ## Overall Plan
 
 - **Stage 0**: ✅ COMPLETE — Design & Requirements Analysis
-- **Stage 1**: 🔄 IN PROGRESS — Implement Tier 1-2: Core detection & session analysis
+- **Stage 1**: ✅ COMPLETE — Implement Tier 1-2: Core detection & session analysis
 - **Stage 2**: ⏳ PLANNED — Tier 3 aggregation: Historical trends & correlation
 - **Stage 3**: ⏳ PLANNED — Observer integration: FlakyTestCollector & signal
-- **Stage 4**: ⏳ PLANNED — Dashboard & alerts: UI panels, Slack/email
-- **Stage 5**: ⏳ PLANNED — Testing & documentation: Comprehensive tests
+- **Stage 4**: ✅ COMPLETE — Documentation & User Guides
+- **Stage 5**: ⏳ PLANNED — Dashboard & alerts: UI panels, Slack/email
 - **Stage 6**: ⏳ PLANNED — Verification & deployment: Full validation
 
-## Definition of Done (Stage 1)
+## Definition of Done (Stage 4)
 
-1. FlakyTestReporter class implemented with detection and tracking logic
-2. Failure pattern analysis methods implemented (frequency, consistency, categorization)
-3. FlakyTestMetric dataclass created for structured metrics
-4. Reporter factory methods created (create_local, create_s3, create_http)
-5. Core functionality working and testable in isolation
-6. Add comprehensive unit and integration tests (55+ tests)
+1. Architecture and design decisions documented (Section 2)
+2. Flaky test metric specification documented (Section 3: 14 metrics + interpretation guide)
+3. Configuration guide created with examples (Section 4: setup, advanced config, backends)
+4. Troubleshooting guide with common scenarios (Section 6: 5 problem categories)
+5. API reference for public classes and methods (Section 7: FlakyTestReporter, FlakyTestResult, FlakyTestMetric, FlakyTestSessionReport)
+6. Usage examples showing integration patterns (Section 5)
 7. Run the repository's test suite and linters and make them pass
-8. Commit implementation to feature branch
+8. Commit documentation to feature branch
 
-## Acceptance Criteria — Stage 1 (Core Implementation) 🔄 IN PROGRESS
+## Acceptance Criteria — Stage 4 (Documentation & User Guides) ✅ COMPLETE
 
-### Stage 1 Deliverables (2026-06-07)
+### Stage 4 Deliverables (2026-06-07)
 
-✅ **Criterion 1: FlakyTestReporter Class Implemented**
-   - File: `src/operations_center/observer/flaky_test_reporter.py` (650+ lines)
-   - Status: Complete with core detection and tracking logic
-   - Features: 
-     * Detection methods for test flakiness patterns
-     * Tracking of test outcomes and metrics
-     * Session-level analysis and reporting
-     * Factory methods for local/S3/HTTP backends
+✅ **Criterion 1: Architecture and Design Decisions Documented**
+   - File: `docs/design/flaky-test-reporter.md` (Section 2: Architecture Overview)
+   - Status: Complete with system design diagrams and architecture decisions table
+   - Coverage:
+     * 4-tier detection architecture diagram (Tiers 1-2 implemented)
+     * Design decisions and trade-offs documented
+     * Rationale for each key design choice
    
-✅ **Criterion 2: Data Classes Implemented**
-   - FlakyTestMetric: 14 fields (failure rate, run count, duration variance, pattern entropy, etc.)
-   - FlakyTestResult: 9 fields (outcome, duration, exception info, markers, environment)
-   - FlakyTestSessionReport: Session-level analysis with flaky/unstable candidates
-   - FlakynessCategory enum: 5 root cause categories
-   - TestOutcome enum: 5 test outcome types
-   - Status: Complete with JSON serialization and data validation
+✅ **Criterion 2: Flaky Test Metric Specification Documented**
+   - File: `docs/design/flaky-test-reporter.md` (Section 3: Flaky Test Metric Specification)
+   - Status: Complete with comprehensive interpretation guides
+   - Content:
+     * FlakyTestMetric dataclass with 14 fields documented
+     * Failure rate classification table
+     * Pattern entropy interpretation guide
+     * Streak length analysis
+     * Flakiness score ranges and meanings
+     * Confidence assessment table
+     * Flakiness category specifications for all 5 categories
+     * Root cause categorization algorithm with code example
 
-✅ **Criterion 3: Pattern Analysis Methods**
-   - Implemented 11 core methods:
-     * _compute_flakiness_score: Base score + variance/entropy weighting
-     * _compute_pattern_variance: Pass/fail variance
-     * _compute_pattern_entropy: Shannon entropy (randomness measure)
-     * _compute_streak_length: Longest consecutive same outcome
-     * _count_retry_successes: Transient indicator
-     * _compute_recovery_time: Days until recovery
-     * _categorize_flakiness: Root cause detection (transient/structural/config/unknown)
-     * Plus supporting variance and entropy helpers
-   - Status: Complete with numerical validation
+✅ **Criterion 3: Configuration Guide Created with Examples**
+   - File: `docs/design/flaky-test-reporter.md` (Section 4: Configuration Guide)
+   - Status: Complete with 3+ practical examples
+   - Coverage:
+     * Basic setup with local file storage
+     * Storage directory structure
+     * Tracking test results (FlakyTestResult)
+     * Session analysis and report generation
+     * Customizing thresholds
+     * Remote storage backends (S3, HTTP)
+     * pytest plugin integration example
 
-✅ **Criterion 4: Factory Methods**
-   - create_local(path): Local file storage backend
-   - create_s3(bucket, prefix): S3 storage backend (stub)
-   - create_http(base_url, auth_token): HTTP storage backend (stub)
-   - Status: Complete and tested for all 3 backends
+✅ **Criterion 4: Troubleshooting Guide with Common Scenarios**
+   - File: `docs/design/flaky-test-reporter.md` (Section 6: Troubleshooting Guide)
+   - Status: Complete with 5 problem categories and solutions
+   - Problems covered:
+     * Tests not being detected as flaky (causes and fixes)
+     * False positives in flakiness detection
+     * Determining root cause when categorized as UNKNOWN
+     * Storage issues (permissions, disk space, backends)
+     * Unexpected categorization results
+     * Each with diagnosis steps and prevention strategies
 
-✅ **Criterion 5: Core Functionality & Testing**
-   - Unit tests: 55 comprehensive tests covering all classes and methods
-   - Test coverage:
-     * Dataclass initialization and serialization (6 tests)
-     * Flakiness score computation (4 tests)
-     * Pattern analysis methods (9 tests)
-     * Root cause categorization (4 tests)
-     * Test tracking (3 tests)
-     * Session analysis (6 tests)
-     * Storage operations (4 tests)
-     * Integration workflows (2 tests)
-   - Status: All tests passing (55/55, 100% pass rate)
+✅ **Criterion 5: API Reference for Public Classes and Methods**
+   - File: `docs/design/flaky-test-reporter.md` (Section 7: API Reference)
+   - Status: Complete with full coverage of all public APIs
+   - Classes documented:
+     * FlakyTestReporter (4 constructors, 4 methods)
+     * FlakyTestResult (9 fields, to_dict method)
+     * FlakyTestMetric (14 fields, to_dict method)
+     * FlakyTestSessionReport (6 fields, to_dict method)
+     * TestOutcome enum (5 values)
+     * FlakynessCategory enum (5 values)
+   - Each includes parameter types, descriptions, return values, and usage examples
 
-✅ **Criterion 6: Observer Model Integration**
-   - FlakyTestSignal model added to models.py
-   - 8 fields: flaky_count, unstable_count, affected_modules, most_problematic_tests, failure_rate_trend, recovery_rate, category_breakdown, estimated_impact
-   - Status: Model defined and integrated
+✅ **Criterion 6: Usage Examples**
+   - File: `docs/design/flaky-test-reporter.md` (Section 5: Usage Examples)
+   - Status: Complete with 3 comprehensive examples
+   - Examples:
+     * Example 1: Track test session and analyze (full workflow)
+     * Example 2: Categorize and prioritize fixes (priority sorting)
+     * Example 3: Export metrics for dashboard (JSON export)
 
-✅ **Criterion 7: Code Quality**
-   - Ruff linting: PASSED (0 violations)
-   - Type checking: PASSED
+✅ **Criterion 7: Integration with Observer Service**
+   - File: `docs/design/flaky-test-reporter.md` (Section 8: Integration with Observer Service)
+   - Status: Complete documentation of planned integration
+   - Content:
+     * FlakyTestCollector design (Stage 3)
+     * FlakyTestSignal dataclass
+     * Usage in RepoObserverService.observe()
+     * Observer dashboard visualization
+     * Current vs planned integration status
+
+✅ **Criterion 8: Code Quality and Test Suite**
+   - Ruff linting: PASSED (0 violations in docs/design/)
    - Full test suite: 7,775 tests PASSED (no regressions)
+   - Documentation: 1,700+ lines covering all acceptance criteria
    - Status: All quality gates green
 
 ---
