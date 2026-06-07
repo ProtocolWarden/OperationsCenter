@@ -1,1 +1,3 @@
+# Append-only operator/loop journals: concurrent entries from different PRs
+# must auto-merge (keep both) instead of conflicting on every sibling merge.
 .console/log.md merge=union
