@@ -683,3 +683,107 @@ def test_cli_accepts_all_flags(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
     assert "--watch" in proc.stdout
     assert "--poll-interval-seconds" in proc.stdout
     assert "--status-dir" in proc.stdout
+
+
+# ── OC source-tree cleanliness guard (2026-06-07 reviewer-outage hardening) ───
+
+
+def _git_init_repo(root: Path) -> None:
+    import subprocess
+
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=root, check=True)
+
+
+def test_conflict_markers_clean_tree(tmp_path: Path) -> None:
+    _git_init_repo(tmp_path)
+    src = tmp_path / "src" / "pkg"
+    src.mkdir(parents=True)
+    (src / "mod.py").write_text("x = 1\n")
+    import subprocess
+
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    assert watcher._oc_source_conflict_markers(tmp_path) == []
+
+
+def test_conflict_markers_detected_in_tracked_py(tmp_path: Path) -> None:
+    _git_init_repo(tmp_path)
+    src = tmp_path / "src" / "pkg"
+    src.mkdir(parents=True)
+    (src / "mod.py").write_text(
+        "def f():\n<<<<<<< Updated upstream\n    return 1\n=======\n    return 2\n>>>>>>> Stashed changes\n"
+    )
+    import subprocess
+
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    hits = watcher._oc_source_conflict_markers(tmp_path)
+    assert hits == ["src/pkg/mod.py"]
+
+
+def test_conflict_markers_ignores_non_py(tmp_path: Path) -> None:
+    _git_init_repo(tmp_path)
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "notes.md").write_text("<<<<<<< Updated upstream\nfoo\n=======\nbar\n>>>>>>> x\n")
+    import subprocess
+
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    # A markdown conflict does not crash a Python import — must not trip the guard.
+    assert watcher._oc_source_conflict_markers(tmp_path) == []
+
+
+def test_conflict_markers_fail_open_without_git(tmp_path: Path) -> None:
+    # No git repo here → git grep errors → guard returns [] (never wedges reviewer).
+    assert watcher._oc_source_conflict_markers(tmp_path) == []
+
+
+def test_run_pipeline_raises_on_unclean_tree(tmp_path: Path) -> None:
+    settings = MagicMock(repos={REPO_KEY: MagicMock(clone_url="u", default_branch="main")})
+    with patch.object(watcher, "_oc_source_conflict_markers", return_value=["src/pkg/bad.py"]):
+        with pytest.raises(watcher.OCSourceTreeUncleanError) as ei:
+            watcher._run_pipeline(
+                tmp_path,
+                tmp_path / "cfg.yaml",
+                REPO_KEY,
+                "goal",
+                settings,
+                source="reviewer_self",
+                state_key=STATE_KEY,
+                branch_suffix="abc",
+            )
+    assert "src/pkg/bad.py" in str(ei.value)
+
+
+def test_unclean_tree_does_not_burn_no_verdict_budget(tmp_path: Path) -> None:
+    # An unclean tree must increment env_unclean_passes, NOT no_verdict_passes,
+    # and must not escalate on the first pass (max_self_review_loops=2).
+    state, sp = _make_state(tmp_path, phase="self_review", no_verdict_passes=0)
+    gh = _make_gh()
+    with (
+        patch.object(watcher, "_run_pipeline", side_effect=watcher.OCSourceTreeUncleanError("dirty")),
+        patch.object(watcher, "_escalate_needs_human") as esc,
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+    assert state["no_verdict_passes"] == 0
+    assert state["env_unclean_passes"] == 1
+    esc.assert_not_called()
+
+
+def test_unclean_tree_escalates_with_specific_reason_after_budget(tmp_path: Path) -> None:
+    # After max_self_review_loops unclean passes, escalate — and with the
+    # source-tree reason, never a misleading "no verdict / reviewer unavailable".
+    state, sp = _make_state(tmp_path, phase="self_review", env_unclean_passes=1)  # max=2
+    gh = _make_gh()
+    with (
+        patch.object(watcher, "_run_pipeline", side_effect=watcher.OCSourceTreeUncleanError("dirty")),
+        patch.object(watcher, "_escalate_needs_human") as esc,
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+    esc.assert_called_once()
+    assert esc.call_args.kwargs.get("reason") == "oc_source_tree_unclean"
+    assert state["no_verdict_passes"] == 0
