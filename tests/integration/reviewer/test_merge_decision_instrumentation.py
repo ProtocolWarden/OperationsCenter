@@ -6,8 +6,8 @@ Tests that verdict consolidation, merge-decision outcomes, and CI-green gate che
 are instrumented with structured logging and metrics for operator monitoring.
 
 Scenarios covered:
-- Decision outcome metrics (approved/blocked/retry/escalate counts)
-- Decision latency measurements (<500ms baseline)
+- Decision outcome metrics (approved/blocked/retry counts)
+- Decision latency measurements (less than 500ms baseline)
 - Structured decision chain logging
 - Anomaly detection triggers (unusual retry rates, CI-green delays)
 """
@@ -95,7 +95,7 @@ def metrics_collector() -> DecisionMetricsCollector:
 class TestMergeDecisionMetrics:
     """Test merge-decision outcome metrics collection."""
 
-    def test_decision_outcome_merge_counted(
+    def test_decision_outcome_approved_counted(
         self,
         tmp_path: Path,
         audit_verdict_builder: AuditVerdictBuilder,
@@ -103,9 +103,9 @@ class TestMergeDecisionMetrics:
         merge_decision_builder: MergeDecisionBuilder,
         metrics_collector: DecisionMetricsCollector,
     ):
-        """Test: Unanimous LGTM → merge decision counted in metrics.
+        """Test: Unanimous LGTM → approved decision counted in metrics.
 
-        Acceptance: Decision outcome counter incremented for 'merge'.
+        Acceptance: Decision outcome counter incremented for 'approved'.
         """
         settings = mock_settings()
         gh = mock_github_client()
@@ -559,4 +559,4 @@ class TestMetricsAggregation:
         assert "avg_latency_ms" in summary
         assert "max_latency_ms" in summary
         assert "decision_log" in summary
-        assert all(key in summary["outcomes"] for key in ["approved", "blocked", "retry", "escalate"])
+        assert all(key in summary["outcomes"] for key in ["approved", "blocked", "retry"])
