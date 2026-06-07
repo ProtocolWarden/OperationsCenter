@@ -1,3 +1,9 @@
+## 2026-06-07 — fix(custodian-sweep): add total_violations/all_zero to --emit output
+
+Root cause: sweep JSON lacked top-level total_violations/all_zero fields → consumers got None for 5+ cycles. Fix: compute and emit aggregates after all repo sweeps complete.
+
+---
+
 ## 2026-06-07 — TEST SIGNAL VISIBILITY API: Stage 3 Complete ✅
 
 **Objective**: Add test signal visibility APIs for autonomy consumption

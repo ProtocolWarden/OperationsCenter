@@ -241,6 +241,8 @@ def main() -> int:
     summary: dict[str, Any] = {
         "scanned_at": datetime.now(UTC).isoformat(),
         "repos_swept": len(sweeps),
+        "total_violations": None,  # computed after sweeps complete
+        "all_zero": None,  # computed after sweeps complete
         "results": {},
     }
     try:
@@ -257,6 +259,12 @@ def main() -> int:
     finally:
         if plane is not None:
             plane.close()
+
+    total_violations = sum(
+        r["total_findings"] for r in summary["results"].values() if not r.get("error")
+    )
+    summary["total_violations"] = total_violations
+    summary["all_zero"] = total_violations == 0
 
     args.history.parent.mkdir(parents=True, exist_ok=True)
     args.history.write_text(
