@@ -144,6 +144,37 @@ def _build_env(oc_root: Path) -> dict:
     return env
 
 
+class OCSourceTreeUncleanError(RuntimeError):
+    """The OC source tree used to RUN the reviewer is broken — e.g. a concurrent
+    session (watchdog merge, fix pass) left git conflict markers in a tracked
+    source file. This is an ENVIRONMENT failure, not a PR-quality failure: the
+    planning subprocess imports the ``operations_center`` package from
+    ``oc_root/src`` and would crash with SyntaxError at import time *for every
+    PR*, regardless of the diff under review. Surfaced distinctly so it never
+    burns a PR's review budget or reads as "no verdict"."""
+
+
+def _oc_source_conflict_markers(oc_root: Path) -> list[str]:
+    """Tracked ``src/`` Python files containing git conflict markers.
+
+    Empty list means the import path is clean. A non-empty result means the
+    reviewer cannot run until the tree is repaired — see OCSourceTreeUncleanError.
+    Cheap (single ``git grep``); fail-open (returns [] if git is unavailable)
+    so this guard can never itself wedge the reviewer."""
+    try:
+        out = subprocess.run(
+            ["git", "grep", "-lE", r"^(<<<<<<< |>>>>>>> |=======$)", "--", "src/"],
+            cwd=oc_root,
+            capture_output=True,
+            text=True,
+        )
+    except Exception:  # noqa: BLE001 — guard must never raise from detection
+        return []
+    if out.returncode not in (0, 1):  # 1 = no matches (clean); >1 = git error
+        return []
+    return [line for line in out.stdout.splitlines() if line.strip().endswith(".py")]
+
+
 def _label_value(labels: list, prefix: str) -> str:
     for lab in labels:
         name = (lab.get("name", "") if isinstance(lab, dict) else str(lab)).strip()
@@ -206,6 +237,23 @@ def _run_pipeline(
             "--task-id",
             state_key,
         ]
+        # Pre-flight: the planning subprocess imports operations_center from
+        # oc_root/src. If a concurrent session left conflict markers there, the
+        # import crashes with SyntaxError → "produced no JSON" for every PR.
+        # Detect it here and surface it as a distinct ENVIRONMENT failure so the
+        # caller skips the review (retry next sweep) instead of charging it to
+        # the PR's no-verdict budget. (Root cause of the 2026-06-07 reviewer
+        # outage: a marker in cxrp_mapper.py blocked all verdicts for ~4h.)
+        conflicted = _oc_source_conflict_markers(oc_root)
+        if conflicted:
+            raise OCSourceTreeUncleanError(
+                f"OC source tree at {oc_root} has git conflict markers in "
+                f"{len(conflicted)} tracked file(s) "
+                f"({', '.join(conflicted[:3])}{'…' if len(conflicted) > 3 else ''}) "
+                "— a concurrent session left the shared checkout dirty; refusing "
+                "to run the reviewer (it would crash at import)."
+            )
+
         plan_proc = subprocess.run(plan_cmd, cwd=oc_root, env=env, capture_output=True, text=True)
 
         try:
@@ -396,18 +444,23 @@ def _run_fix_pass(
         "the repository's tests and linters and make sure they pass.\n\n"
         f"## Review concerns to resolve\n\n{concerns}"
     )
-    outcome = _run_pipeline(
-        oc_root,
-        config_path,
-        repo_key,
-        goal_text,
-        settings,
-        source="reviewer_fix",
-        state_key=state_key,
-        branch_suffix=f"{state_key[:12]}",
-        task_branch=head_ref,
-        return_result=True,
-    )
+    try:
+        outcome = _run_pipeline(
+            oc_root,
+            config_path,
+            repo_key,
+            goal_text,
+            settings,
+            source="reviewer_fix",
+            state_key=state_key,
+            branch_suffix=f"{state_key[:12]}",
+            task_branch=head_ref,
+            return_result=True,
+        )
+    except OCSourceTreeUncleanError as exc:
+        # Environment problem, not a fix-pass failure — skip this sweep, no churn.
+        logger.error("pr_review_watcher: fix pass skipped — %s", exc)
+        return False
     if not isinstance(outcome, dict):
         return False
     result = outcome.get("result")
@@ -1036,20 +1089,53 @@ def _phase1(
         state["self_review_loops"],
     )
 
-    verdict = _run_pipeline(
-        oc_root,
-        config_path,
-        repo_key,
-        goal_text,
-        settings,
-        source="reviewer_self",
-        state_key=state_key,
-        branch_suffix=f"{state_key[:12]}",
-    )
-
-    state["self_review_loops"] += 1
     state.setdefault("fix_attempts", 0)
     state.setdefault("no_verdict_passes", 0)
+    state.setdefault("env_unclean_passes", 0)
+
+    try:
+        verdict = _run_pipeline(
+            oc_root,
+            config_path,
+            repo_key,
+            goal_text,
+            settings,
+            source="reviewer_self",
+            state_key=state_key,
+            branch_suffix=f"{state_key[:12]}",
+        )
+    except OCSourceTreeUncleanError as exc:
+        # The reviewer's own source tree is broken — this would crash for EVERY
+        # PR, so it is not charged against this PR's review budget. Skip the
+        # sweep loudly; a clean tree next cycle resumes review automatically.
+        # Only after persistent uncleanliness do we escalate — and then with the
+        # specific cause, not a misleading "no verdict / reviewer unavailable".
+        state["env_unclean_passes"] += 1
+        logger.error(
+            "pr_review_watcher: PR #%d review SKIPPED (not budget-charged) — %s "
+            "(env_unclean_pass=%d/%d)",
+            pr_number,
+            exc,
+            state["env_unclean_passes"],
+            reviewer.max_self_review_loops,
+        )
+        if state["env_unclean_passes"] >= reviewer.max_self_review_loops:
+            _escalate_needs_human(
+                state,
+                state_path,
+                gh_client,
+                owner,
+                repo,
+                settings,
+                reason="oc_source_tree_unclean",
+                detail=str(exc),
+            )
+            state["env_unclean_passes"] = 0
+        _save_state(state_path, state)
+        return
+
+    state["self_review_loops"] += 1
+    state["env_unclean_passes"] = 0  # a pipeline ran — tree is clean
 
     if verdict is None:
         # Pipeline produced no verdict (crash/timeout/rate-limit). This is a

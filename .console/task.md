@@ -82,9 +82,30 @@ Evidence: oc-watchdog/20260607-0340-t8 (~2,089 lines, no PR — recovered as
       specs for the same target (7 queue-drain specs minted on 2026-06-02
       alone; 14 spec-author PRs closed unmerged)
 
+### WO-6: Reviewer planning isolation (partially shipped)
+
+The reviewer's planning subprocess imports `operations_center` from
+`oc_root/src` — the shared, mutable live checkout. A concurrent session leaving
+a dirty/conflicted tree crashes planning at import for EVERY PR (2026-06-07
+~4h outage; root cause of #245/#246 hand-merges + #247 stuck-green).
+
+- [x] Pre-flight conflict-marker guard + distinct ENVIRONMENT classification
+      (OCSourceTreeUncleanError) so it doesn't burn the no-verdict budget and
+      escalates with the specific cause — shipped (fix/reviewer-clean-tree-guard)
+- [ ] Deeper isolation: run planning/execute against a clean dedicated git
+      worktree pinned at the merge ref, NOT the shared mutable checkout. Needs
+      the live pipeline (SwitchBoard + backends) to validate — can't be tested
+      offline. This removes the shared-tree fragility class entirely.
+- [ ] Distinguish crash-from-verdict in the retry budget generally (a transient
+      backend/rate-limit no-verdict should retry later, not exhaust the budget
+      and park a good PR — same principle as the env-unclean path)
+- [ ] Stuck-green escalation: a PR green on CI but unmerged for >N sweeps with
+      repeated reviewer failures should raise a loud, specific alarm (ties to
+      WO-1's close-with-receipt and WO-3's self-retracting verdicts)
+
 ## Definition of Done
 
-- All five items implemented, tested, merged to green main
+- All six items implemented, tested, merged to green main
 - Each lands via its own branch + PR through the review gate
 - Backfill sweeps (WO-1, WO-4) documented in the cycle summary
 - .console/log.md gets one line per completed item

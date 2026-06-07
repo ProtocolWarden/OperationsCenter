@@ -1,3 +1,23 @@
+## 2026-06-07 — Reviewer hardening: refuse to review against an unclean OC source tree
+
+**Decision**: the pr_review_watcher planning subprocess now pre-flights the OC
+source tree for git conflict markers (OCSourceTreeUncleanError) and surfaces an
+unclean tree as a distinct ENVIRONMENT failure — it does NOT burn a PR's
+no-verdict budget, and escalates with the specific cause after persistent
+uncleanliness instead of the misleading "no verdict / reviewer unavailable".
+
+Root cause (today's ~4h reviewer outage): a merge-conflict marker in the shared
+live checkout's `cxrp_mapper.py` made the planning subprocess crash with
+SyntaxError at import time — for EVERY PR, since planning imports
+operations_center from oc_root/src. Verdicts silently failed 11:00–15:15 UTC;
+#245/#246 needed hand-merging, #247 stuck green-but-unmerged. Marker was
+transient working-tree pollution from a concurrent session (not committed).
+
+Deeper isolation (planning against a clean dedicated worktree, not the shared
+mutable checkout) filed as WO-6 in task.md — needs the live pipeline to validate.
+
+---
+
 ## 2026-06-07 — Operator: full PR-history audit (243 PRs) + flow-hygiene work order
 
 **Decision**: replaced task.md with a 5-item flow-hygiene work order (WO-1..5):
