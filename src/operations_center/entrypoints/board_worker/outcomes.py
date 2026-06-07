@@ -41,9 +41,7 @@ def fail_task(client, task_id: str, role: str, reason: str) -> None:
         try:
             issue = client.fetch_issue(task_id)
             state = issue.get("state") or {}
-            state_name = (
-                state.get("name", "") if isinstance(state, dict) else str(state)
-            ).lower()
+            state_name = (state.get("name", "") if isinstance(state, dict) else str(state)).lower()
             if state_name in _TERMINAL_STATE_NAMES:
                 logger.info(
                     "board_worker[%s]: task_id=%s already %r — skipping fail transition",

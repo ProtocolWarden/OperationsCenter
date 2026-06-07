@@ -14,11 +14,12 @@ Remaining OC-specific detectors (cannot be expressed by native Custodian config)
                                reducing false positives for DTO field references in docs.
                                Migrates fully once K1 gains field-def awareness.
 
-  OC10 team_executor max_concurrent must be 1 — reads config/operations_center.local.yaml
-                               (if present) and confirms backend_caps.team_executor.max_concurrent == 1.
-                               Prevents inadvertent concurrency widening from the watchdog
-                               loop or autonomy-cycle. Silently passes when the local config
-                               is absent (CI / fresh clone).
+  OC10 team_executor max_concurrent must be 1 — reads
+                               config/operations_center.local.yaml (if present) and confirms
+                               backend_caps.team_executor.max_concurrent == 1. Prevents
+                               inadvertent concurrency widening from the watchdog loop or
+                               autonomy-cycle. Silently passes when the local config is
+                               absent (CI / fresh clone).
 
 Superseded and removed (native Custodian covers them):
   OC1  → U1–U3 (stub/unimplemented detector family)
@@ -37,92 +38,6 @@ from pathlib import Path
 
 from custodian.audit_kit.detector import LOW, MEDIUM, AuditContext, Detector, DetectorResult
 
-# ── R1: .console/ directory presence ─────────────────────────────────────────
-
-_CONSOLE_REQUIRED_FILES = ["task.md", "guidelines.md", "backlog.md", "log.md", "workers.yaml"]
-
-
-def _detect_r1_console_presence(ctx: AuditContext) -> DetectorResult:
-    """Verify .console/ directory exists and contains all required files."""
-    console = ctx.repo_root / ".console"
-
-    if not console.exists():
-        return DetectorResult(count=1, samples=[".console/ directory does not exist"])
-
-    if not console.is_dir():
-        return DetectorResult(count=1, samples=[".console exists but is not a directory"])
-
-    samples: list[str] = []
-    for filename in _CONSOLE_REQUIRED_FILES:
-        path = console / filename
-        if not path.exists():
-            samples.append(f".console/{filename} is missing")
-        elif not path.is_file():
-            samples.append(f".console/{filename} is not a file")
-
-    return DetectorResult(count=len(samples), samples=samples)
-
-
-# ── R2: .console/ file budget and structure ───────────────────────────────────
-
-_CONSOLE_SIZE_LIMIT = 100 * 1024  # 100 KB
-_TASK_REQUIRED_SECTIONS = ["## Objective", "## Overall Plan", "## Current Stage"]
-_BACKLOG_STANDARD_SECTIONS = ["## In Progress", "## Up Next", "## Done"]
-
-
-def _detect_r2_console_budget(ctx: AuditContext) -> DetectorResult:
-    """Verify .console/ files respect size/encoding budgets and structural invariants.
-
-    Silently passes when .console/ is absent — R1 owns presence enforcement.
-    """
-    import yaml as _yaml  # optional dep — only in dev venv
-
-    console = ctx.repo_root / ".console"
-    if not console.exists() or not console.is_dir():
-        return DetectorResult(count=0, samples=[])
-
-    samples: list[str] = []
-    file_texts: dict[str, str | None] = {}
-
-    for filename in _CONSOLE_REQUIRED_FILES:
-        path = console / filename
-        if not path.exists() or not path.is_file():
-            file_texts[filename] = None
-            continue
-
-        if path.stat().st_size > _CONSOLE_SIZE_LIMIT:
-            samples.append(
-                f".console/{filename} exceeds 100KB budget ({path.stat().st_size} bytes)"
-            )
-
-        try:
-            file_texts[filename] = path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            samples.append(f".console/{filename} cannot be read as UTF-8 (corrupted)")
-            file_texts[filename] = None
-
-    task_text = file_texts.get("task.md")
-    if task_text is not None:
-        for section in _TASK_REQUIRED_SECTIONS:
-            if section not in task_text:
-                samples.append(f".console/task.md is missing required section '{section}'")
-
-    workers_text = file_texts.get("workers.yaml")
-    if workers_text is not None:
-        try:
-            _yaml.safe_load(workers_text)
-        except Exception as exc:
-            samples.append(f".console/workers.yaml has invalid YAML syntax: {exc}")
-
-    backlog_text = file_texts.get("backlog.md")
-    if backlog_text is not None:
-        if not any(s in backlog_text for s in _BACKLOG_STANDARD_SECTIONS):
-            samples.append(
-                ".console/backlog.md is missing standard sections (In Progress/Up Next/Done)"
-            )
-
-    return DetectorResult(count=len(samples), samples=samples)
-
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 
@@ -130,6 +45,144 @@ def _py_files(root: Path) -> list[Path]:
     if not root.exists():
         return []
     return [p for p in root.rglob("*.py") if "__pycache__" not in p.parts]
+
+
+# ── R1: .console/ directory presence validator ───────────────────────────────
+
+
+def _detect_r1_console_presence(ctx: AuditContext) -> DetectorResult:
+    """Validate .console/ directory and required core files exist.
+
+    R1 is the presence validator for .console/ reconciliation — verifies that
+    the .console/ directory exists and contains all required core files:
+    task.md, guidelines.md, backlog.md, log.md, and workers.yaml.
+    """
+    console_root = ctx.repo_root / ".console"
+    required_files = {"task.md", "guidelines.md", "backlog.md", "log.md", "workers.yaml"}
+
+    # Check if .console/ directory exists
+    if not console_root.exists():
+        return DetectorResult(
+            count=1,
+            samples=[".console/ directory does not exist (CRITICAL)"],
+        )
+
+    if not console_root.is_dir():
+        return DetectorResult(
+            count=1,
+            samples=[".console/ exists but is not a directory (CRITICAL)"],
+        )
+
+    # Check for missing required files
+    missing_files = []
+    for filename in sorted(required_files):
+        file_path = console_root / filename
+        if not file_path.exists():
+            missing_files.append(filename)
+        elif not file_path.is_file():
+            missing_files.append(f"{filename} (not a file)")
+
+    if missing_files:
+        samples = [f".console/ missing required file: {f}" for f in missing_files]
+        return DetectorResult(count=len(missing_files), samples=samples)
+
+    return DetectorResult(count=0, samples=[])
+
+
+# ── R2: .console/ budget and structure validator ─────────────────────────────
+
+
+def _detect_r2_console_budget(ctx: AuditContext) -> DetectorResult:
+    """Validate .console/ files have proper structure, size, and content.
+
+    R2 is the budget validator for .console/ reconciliation — verifies that
+    .console/ files have valid structure, required sections, and reasonable
+    sizes. Complements R1 (which just checks presence).
+
+    Validates:
+    - File sizes within budget (each <100KB)
+    - Files are valid UTF-8 (not corrupted)
+    - task.md has required sections (Objective, Overall Plan, Current Stage)
+    - backlog.md has required sections
+    - workers.yaml is valid YAML
+    """
+    import yaml as _yaml
+
+    console_root = ctx.repo_root / ".console"
+    samples: list[str] = []
+
+    if not console_root.exists() or not console_root.is_dir():
+        return DetectorResult(count=0, samples=[])
+
+    # Budget: 100KB max per file
+    max_size_bytes = 100 * 1024
+    for filename in ["task.md", "guidelines.md", "backlog.md", "log.md"]:
+        filepath = console_root / filename
+        if not filepath.exists():
+            continue
+        try:
+            size = filepath.stat().st_size
+            if size > max_size_bytes:
+                samples.append(f".console/{filename} exceeds 100KB budget ({size} bytes)")
+        except OSError:
+            samples.append(f".console/{filename} cannot be read (permission denied)")
+
+    # Validate UTF-8 encoding for all markdown files
+    for filename in ["task.md", "guidelines.md", "backlog.md", "log.md"]:
+        filepath = console_root / filename
+        if not filepath.exists():
+            continue
+        try:
+            filepath.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            samples.append(f".console/{filename} is not valid UTF-8 (corrupted)")
+        except OSError:
+            samples.append(f".console/{filename} cannot be read (permission denied)")
+
+    # Validate task.md structure
+    task_md = console_root / "task.md"
+    if task_md.exists():
+        try:
+            content = task_md.read_text(encoding="utf-8")
+            required_sections = ["Objective", "Overall Plan", "Current Stage"]
+            missing_sections = []
+            for section in required_sections:
+                if f"## {section}" not in content:
+                    missing_sections.append(section)
+            if missing_sections:
+                for section in missing_sections:
+                    samples.append(f".console/task.md missing required section: ## {section}")
+        except (OSError, UnicodeDecodeError):
+            pass  # Already caught above
+
+    # Validate backlog.md structure (at least one required section)
+    backlog_md = console_root / "backlog.md"
+    if backlog_md.exists():
+        try:
+            content = backlog_md.read_text(encoding="utf-8")
+            # Must have at least one of the standard sections
+            has_section = any(
+                f"## {s}" in content for s in ["In Progress", "Up Next", "Done", "Backlog"]
+            )
+            if not has_section:
+                samples.append(
+                    ".console/backlog.md has no standard sections (In Progress/Up Next/Done)"
+                )
+        except (OSError, UnicodeDecodeError):
+            pass  # Already caught above
+
+    # Validate workers.yaml is valid YAML
+    workers_yaml = console_root / "workers.yaml"
+    if workers_yaml.exists():
+        try:
+            content = workers_yaml.read_text(encoding="utf-8")
+            _yaml.safe_load(content)
+        except _yaml.YAMLError:
+            samples.append(".console/workers.yaml has YAML syntax error")
+        except (OSError, UnicodeDecodeError):
+            pass  # Already caught above
+
+    return DetectorResult(count=len(samples), samples=samples[:10])
 
 
 # ── OC3: orphaned entrypoints ─────────────────────────────────────────────────
@@ -389,8 +442,14 @@ def _detect_oc11_schema_sync(ctx: AuditContext) -> DetectorResult:
 
 def build_oc_detectors() -> list[Detector]:
     return [
-        Detector("R1", ".console/ directory presence", "open", _detect_r1_console_presence, MEDIUM),
-        Detector("R2", ".console/ file budget and structure", "open", _detect_r2_console_budget, LOW),
+        Detector("R1", ".console/ presence validator", "open", _detect_r1_console_presence, MEDIUM),
+        Detector(
+            "R2",
+            ".console/ budget and structure validator",
+            "open",
+            _detect_r2_console_budget,
+            MEDIUM,
+        ),
         Detector("OC3", "orphaned entrypoints", "open", _detect_oc3_orphaned_entrypoints, MEDIUM),
         Detector(
             "OC8",

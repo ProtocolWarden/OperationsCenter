@@ -73,7 +73,7 @@ class TeamExecutorBackendAdapter:
             runner = TeamExecutorRunner(
                 team_name=team_name,
                 working_dir=working_dir,
-                worker_backend=worker_backend,  # ty: ignore[invalid-argument-type]
+                worker_backend=worker_backend,
             )
             return runner.run(
                 goal_text=request.goal_text,

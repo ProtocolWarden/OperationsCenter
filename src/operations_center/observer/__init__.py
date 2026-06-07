@@ -10,6 +10,18 @@ from operations_center.observer.service import (
     RepoObserverService,
     new_observer_context,
 )
+from operations_center.observer.snapshot_manager import SnapshotManager
+from operations_center.observer.snapshot_repository import (
+    HTTPSnapshotRepository,
+    LocalSnapshotRepository,
+    S3SnapshotRepository,
+    SnapshotRepository,
+)
+from operations_center.observer.snapshot_validator import (
+    SnapshotValidator,
+    SnapshotValidationReport,
+    ValidationFailureCategory,
+)
 from operations_center.observer.structured_logging import (
     StructuredLogger,
     StructuredLogReader,
@@ -20,14 +32,22 @@ __all__ = [
     "DashboardProvider",
     "DashboardSnapshot",
     "HealthChecker",
+    "HTTPSnapshotRepository",
+    "LocalSnapshotRepository",
     "MetricsCollector",
     "ObservabilityService",
     "ObserverContext",
     "RepoObserverService",
     "RepoStateSnapshot",
+    "S3SnapshotRepository",
+    "SnapshotManager",
+    "SnapshotRepository",
+    "SnapshotValidator",
+    "SnapshotValidationReport",
     "StructuredLogger",
     "StructuredLogReader",
     "StructuredLogWriter",
     "SystemHealthReport",
+    "ValidationFailureCategory",
     "new_observer_context",
 ]

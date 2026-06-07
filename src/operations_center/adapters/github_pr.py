@@ -310,9 +310,7 @@ class GitHubPRClient:
             )
             resp.raise_for_status()
             files = resp.json()
-            lines = [
-                f"[DIFF_TOO_LARGE — showing {len(files)} changed files only]\n"
-            ]
+            lines = [f"[DIFF_TOO_LARGE — showing {len(files)} changed files only]\n"]
             for f in files:
                 if not isinstance(f, dict):
                     continue
