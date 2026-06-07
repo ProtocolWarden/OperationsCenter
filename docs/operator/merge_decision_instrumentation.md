@@ -6,7 +6,7 @@ The merge-decision instrumentation system provides structured metrics and loggin
 
 ## Metrics Collection
 
-### Decision Outcomes
+### Decision outcomes
 
 The instrumentation tracks three merge decision outcomes:
 
@@ -18,7 +18,7 @@ The instrumentation tracks three merge decision outcomes:
 
 ### Latency baseline
 
-**Acceptable baseline: less than 500 milliseconds**
+**Acceptable baseline:** Less than 500 milliseconds
 
 The merge decision should complete within 500 milliseconds from:
 - Start of verdict consolidation
@@ -30,14 +30,14 @@ Latencies exceeding 500 milliseconds typically indicate:
 - GitHub API rate-limiting
 - Review pipeline backend unavailability (more than 2 consecutive timeouts)
 
-### Latency Histogram
+### Latency histogram
 
 Tracked latencies across all decisions enable:
 - Min/max/average latency trending
 - Percentile analysis (p50, p95, p99)
 - Baseline drift detection
 
-## Structured Logging
+## Structured logging
 
 All merge decisions are logged with structured format for dashboard integration:
 
@@ -60,7 +60,7 @@ All merge decisions are logged with structured format for dashboard integration:
 
 **Note:** PR number and repository key are logged separately via structured logger context (not in the structured_logs dict). Latency SLA compliance (latency less than 500 milliseconds) can be derived from the `latency_ms` field by comparison with the baseline threshold.
 
-## Anomaly Detection
+## Anomaly detection
 
 ### Retry rate anomaly
 
@@ -84,7 +84,7 @@ Indicates:
 
 **Action:** Check CI logs; validate required checks; investigate backend issues if exceeding 10 cycles.
 
-## Debugging Decision Failures
+## Debugging decision failures
 
 ### Decision latency exceeds 500 milliseconds
 
@@ -113,9 +113,9 @@ Indicates:
 - Flaky verdict pipeline (transient errors)
 - Review backend version mismatch
 
-## Metrics Export
+## Metrics export
 
-Metrics are aggregated in memory and accessible via the `MergeDecisionInstrumenter.get_metrics_summary()` method:
+Metrics are aggregated in memory and accessible via the `get_instrumenter()` function and `MergeDecisionInstrumenter.get_metrics_summary()` method (defined in `src/operations_center/reviewer/instrumentation.py`):
 
 ```python
 from operations_center.reviewer.instrumentation import get_instrumenter
