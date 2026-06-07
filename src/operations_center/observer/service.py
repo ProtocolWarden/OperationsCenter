@@ -25,11 +25,11 @@ from operations_center.observer.models import (
     RepoSignalsSnapshot,
     RepoStateSnapshot,
     SecuritySignal,
-    TestSignal,
     TodoSignal,
     TypeSignal,
     ValidationHistorySignal,
 )
+from operations_center.observer.query import TestSignalQuery
 from operations_center.observer.snapshot_builder import SnapshotBuilder
 
 logger = logging.getLogger(__name__)
@@ -269,6 +269,23 @@ class RepoObserverService:
         )
         artifacts = self.artifact_writer.write(snapshot)
         return snapshot, artifacts
+
+    def query(self, root: Path | None = None) -> TestSignalQuery:
+        """Create a query API for test signal visibility.
+
+        Returns a TestSignalQuery instance that can be used to:
+        - Retrieve individual test signals by run_id or recency
+        - Analyze coverage trends over time
+        - Summarize failure reasons across snapshots
+        - Detect test status stability and regression
+
+        Args:
+            root: Override snapshot root directory (default uses artifact_writer root)
+
+        Returns:
+            TestSignalQuery instance ready for autonomy consumption
+        """
+        return TestSignalQuery(root=root or self.artifact_writer.root)
 
     def _collect_required(
         self,
