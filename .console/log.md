@@ -1,3 +1,15 @@
+## 2026-06-07 — .console/log.md uses git union merge (conflict-magnet fix)
+
+**Decision**: added `.gitattributes` with `.console/log.md merge=union`. Every
+OC PR appends a log entry at the top of log.md, so each sibling merge made all
+concurrent PRs CONFLICTING on log.md (observed: #247/#249/#250 all conflicting
+after #248/#251 merged). The union driver auto-keeps both sides' added lines —
+no conflict — for all local merges/rebases the loop performs. Reviewer
+auto-rebase (so it clears CONFLICTING itself rather than parking) filed as a
+WO-6 item; this removes the most common cause.
+
+---
+
 ## 2026-06-07 — Reviewer hardening: refuse to review against an unclean OC source tree
 
 **Decision**: the pr_review_watcher planning subprocess now pre-flights the OC
