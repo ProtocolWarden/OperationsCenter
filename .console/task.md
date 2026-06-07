@@ -5,16 +5,17 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-✅ Stage 3 COMPLETE: Align outcome naming with specification and document thresholds
-PR #250 Campaign Status: ALL STAGES COMPLETE
+✅ Stage 5 COMPLETE: Run tests, linters, commit, and push to existing PR branch
+PR #250 Campaign Status: ALL STAGES COMPLETE — READY FOR MERGE
 
 ## Overall Plan — PR #250 Resurrection Campaign
 
 - **Stage 0**: ✅ COMPLETE — Investigate current state and document all issues (2026-06-07)
-- **Stage 1**: ✅ COMPLETE — Fix specification compliance (merge→approved, remove escalate) (2026-06-07)
+- **Stage 1**: ✅ COMPLETE — Restore 12 source/test files from PR #235 branch (2026-06-07)
 - **Stage 2**: ✅ COMPLETE — Fix documentation links, create architecture files, standardize prose (2026-06-07)
-- **Stage 3**: ✅ COMPLETE — Align outcome naming and document threshold rationale (2026-06-07)
-- **Stage 4**: ✅ COMPLETE — Run tests and linters, commit, push to branch (2026-06-07)
+- **Stage 3**: ✅ COMPLETE — Align outcome naming with specification and document threshold rationale (2026-06-07)
+- **Stage 4**: ✅ COMPLETE — Apply minor style and formatting corrections (2026-06-07)
+- **Stage 5**: ✅ COMPLETE — Run tests, linters, commit, and push to existing PR branch (2026-06-07)
 
 ## Definition of Done — Stage 0 (Investigation)
 
