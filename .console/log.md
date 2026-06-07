@@ -1,3 +1,16 @@
+## 2026-06-07 — Resurrect PR #235: verdict consolidation + merge-decision instrumentation
+
+**Decision**: recovered the closed-without-requeue PR #235 work
+(refs/pull/235/head) onto `resurrect/pr-235-verdict-consolidation` off
+current main — reviewer instrumentation, verdict/state-machine integration
+tests (incl. test_ci_green_gate.py), timeout recovery, verdict override.
+Found in the 2026-06-07 full PR-history audit: bot closed it 2h after
+promising "work preserved / re-queued"; no successor existed. Excluded from
+the resurrection: .console/* snapshots, .team_executor checkpoints,
+verify_stage3.py. Unit tests 12/12; spec docs/specs/queue-drain-20260602T234758.md.
+
+---
+
 ## 2026-06-07 — Loop controller: global-limit fallback reselects across full backend priority
 
 **Decision**: After a backend limit, `_fallback_backend_after_limit()` re-runs

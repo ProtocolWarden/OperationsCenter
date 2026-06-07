@@ -2,6 +2,8 @@
 
 The PR review loop is a two-phase automated review process. This guide covers how it works, what to verify, and how to troubleshoot it.
 
+See also: [Merge Decision Instrumentation](merge_decision_instrumentation.md) — metrics and latency tracking for merge decisions.
+
 ## Overview
 
 When a task completes with a branch push and `await_review: true` is set for the repo:
