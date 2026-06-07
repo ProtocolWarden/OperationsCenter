@@ -7,7 +7,19 @@ tests (incl. test_ci_green_gate.py), timeout recovery, verdict override.
 Found in the 2026-06-07 full PR-history audit: bot closed it 2h after
 promising "work preserved / re-queued"; no successor existed. Excluded from
 the resurrection: .console/* snapshots, .team_executor checkpoints,
-verify_stage3.py. Unit tests 12/12; spec docs/specs/queue-drain-20260602T234758.md.
+verify_stage3.py. **Tests: 12 unit + 76 integration = 88 total tests**; spec docs/specs/queue-drain-20260602T234758.md.
+
+Test breakdown:
+- Unit tests: 12 (test_instrumentation.py)
+- Integration tests: 76 total across 8 test modules
+  - test_ci_green_gate.py: 7 tests
+  - test_boundary_conditions.py: 7 tests
+  - test_state_transitions.py: 28 tests
+  - test_happy_path.py: 9 tests
+  - test_merge_decision_instrumentation.py: 12 tests
+  - test_safety_paths.py: 6 tests
+  - test_timeout_recovery.py: 4 tests
+  - test_verdict_override.py: 3 tests
 
 ---
 

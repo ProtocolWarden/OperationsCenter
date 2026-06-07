@@ -44,24 +44,22 @@ All merge decisions are logged with structured format for dashboard integration:
 
 ```json
 {
-  "event": "merge_decision_outcome",
-  "pr_number": 42,
-  "repo_key": "TestRepo",
-  "outcome": "merge",
-  "reason": "self_review_lgtm",
+  "decision": "merge",
   "latency_ms": 245.5,
+  "reason": "self_review_lgtm",
   "lanes": 1,
-  "timestamp": 1717426800.5,
-  "baseline_ok": true
+  "timestamp": 1717426800.5
 }
 ```
 
 **Key fields:**
-- `outcome`: Decision type (merge/blocked/retry/escalate)
+- `decision`: Decision type (merge/blocked/retry/escalate)
 - `reason`: Decision rationale (e.g., "self_review_lgtm", "fix_attempts_exhausted")
 - `latency_ms`: Decision latency in milliseconds
-- `baseline_ok`: Boolean indicating <500ms baseline compliance
-- `timestamp`: ISO 8601 or Unix timestamp
+- `lanes`: Number of parallel verdict lanes processed
+- `timestamp`: Unix timestamp of decision recording
+
+**Note:** PR number and repository key are logged separately via structured logger context (not in the structured_logs dict). Baseline compliance (latency < 500ms) can be derived from the `latency_ms` field by comparison with the baseline threshold.
 
 ## Anomaly Detection
 
@@ -137,11 +135,13 @@ Escalations indicate:
 
 ## Metrics Export
 
-Metrics are exported in JSON format for external dashboards:
+Metrics are aggregated in memory and accessible via the `MergeDecisionInstrumenter.get_metrics_summary()` method:
 
-```bash
+```python
+from operations_center.reviewer.instrumentation import get_instrumenter
+
 # Get current metrics snapshot
-curl http://localhost:8080/metrics/merge-decision
+summary = get_instrumenter().get_metrics_summary()
 
 # Response structure:
 {
@@ -158,6 +158,8 @@ curl http://localhost:8080/metrics/merge-decision
   "decision_log": [...]
 }
 ```
+
+Metrics can be exported as JSON via `export_metrics_json()` for external dashboards.
 
 ## Health Status Indicators
 
