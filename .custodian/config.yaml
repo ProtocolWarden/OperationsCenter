@@ -259,6 +259,12 @@ audit:
       - tests/unit/execution/test_coordinator_cl_wrap.py
       # Exporter tests verify graceful no-op / no-raise behavior — absence of exception is the assertion.
       - tests/unit/observer/test_validation_metrics_exporter.py
+      # Snapshot test files define @pytest.fixture named test_snapshot — T2 false positive
+      # (fixtures returning data are not test functions; no assertion needed in the fixture body).
+      - tests/unit/observer/test_remote_snapshot_repositories.py
+      - tests/unit/observer/test_snapshot_edge_cases.py
+      - tests/unit/observer/test_snapshot_manager.py
+      - tests/unit/observer/test_snapshot_repository.py
     D6:
       # MetricUnit is an Enum — values are accessed as MetricUnit.X, not via constructor.
       # D6 is a false positive for Enum classes used only in type annotations and method signatures.
@@ -312,6 +318,10 @@ audit:
       # the inner function name (_generated) is not the fixture's request name.
       # Static T4 analysis cannot follow runtime name= redirection.
       - tests/fixtures/console_malformed/conftest.py
+    N2:
+      # create_snapshot is a factory helper for performance tests — intentionally
+      # not prefixed test_ so pytest doesn't collect it as a test case.
+      - tests/unit/observer/test_snapshot_performance.py
     T8:
       # Architecture-guard + lock-store-concurrency tests don't import the
       # code under audit — they probe via subprocess + filesystem.
@@ -443,6 +453,13 @@ audit:
       # Entrypoint main files are necessarily large — they wire together the full
       # worker lifecycle (arg parsing, signal handling, retry loops, artifact
       # writes). Splitting them would fragment cohesion without adding clarity.
+      # snapshot_repository: implements 3 distinct backend adapters (local, S3, HTTP)
+      # behind a unified abstract interface — splitting would fragment the cohesive
+      # interface pattern without architectural benefit.
+      - src/operations_center/observer/snapshot_repository.py
+      # snapshot_validator: implements the full validation pipeline across many
+      # signal categories — single responsibility, cannot cleanly split.
+      - src/operations_center/observer/snapshot_validator.py
       - src/operations_center/entrypoints/board_worker/main.py
       - src/operations_center/entrypoints/setup/main.py
       - src/operations_center/entrypoints/autonomy_cycle/main.py

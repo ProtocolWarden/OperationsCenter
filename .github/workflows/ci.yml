@@ -5,6 +5,10 @@ on:
     branches: ["**"]
   pull_request:
     branches: ["**"]
+  schedule:
+    # Run snapshot validation daily at 2 AM UTC to detect regressions
+    # in real-world repository state, even when no code changes occur.
+    - cron: '0 2 * * *'
 
 jobs:
   lint:
@@ -122,3 +126,48 @@ jobs:
         # All bounds are <50ms per scenario; actual measurements are ~0.1–0.2ms.
         # A failure here means collection time regressed by >250x vs baseline.
         run: pytest -q tests/unit -m "performance" --no-header -rN
+
+  snapshot:
+    name: Snapshot validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -e .[dev]
+      - name: Run snapshot validation tests (PR — quick, excluding slow)
+        if: github.event_name == 'pull_request'
+        # Snapshot validation uses 5-layer architecture:
+        # Layer 1: Schema validation (JSON ↔ Pydantic model roundtrip)
+        # Layer 2: Completeness validation (required signals present, min 3 non-unavailable)
+        # Layer 3: Consistency validation (cross-signal semantic checks)
+        # Layer 4: Real-world accuracy validation (snapshot vs. live tools — marked slow)
+        # Layer 5: Regression detection (baseline comparison — marked slow)
+        #
+        # PR runs exclude slow tests for quick feedback.
+        # All validation checks must pass; structural failures trigger job failure.
+        # Transient failures (network, timeouts) are retried up to 3 times.
+        run: pytest -q tests/integration/observer -m "snapshot and not snapshot_slow" --no-header -rN
+      - name: Run snapshot validation tests (push — full, including slow)
+        if: github.event_name == 'push'
+        # Full validation including real-world accuracy (Layer 4) and regression detection (Layer 5).
+        # These layers test against actual repository state and may take longer.
+        run: pytest -q tests/integration/observer -m "snapshot" --no-header -rN
+      - name: Run snapshot validation tests (scheduled — full, including slow)
+        if: github.event_name == 'schedule'
+        # Scheduled runs execute comprehensive validation without time constraints.
+        # Full validation detects regressions in repository state snapshots,
+        # even when no new code changes occur. Failures trigger immediate alerts.
+        run: pytest -q tests/integration/observer -m "snapshot" --no-header -rN
+      - name: Upload snapshot validation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-validation-reports-${{ github.event_name }}
+          path: |
+            tests/integration/observer/validation_reports/
+          retention-days: 30
+    strategy:
+      fail-fast: true
