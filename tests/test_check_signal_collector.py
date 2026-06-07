@@ -349,7 +349,9 @@ def test_uses_repo_venv_pytest_when_present(tmp_path: Path) -> None:
     venv_pytest.touch()
 
     collect_stdout = "tests/test_x.py::test_a\n\n1 test collected\n"
-    fake_result = subprocess.CompletedProcess(args=[], returncode=0, stdout=collect_stdout, stderr="")
+    fake_result = subprocess.CompletedProcess(
+        args=[], returncode=0, stdout=collect_stdout, stderr=""
+    )
 
     with patch(
         "operations_center.observer.collectors.check_signal.subprocess.run",
@@ -369,7 +371,9 @@ def test_falls_back_to_sys_executable_when_no_venv(tmp_path: Path) -> None:
     # No .venv/bin/pytest created
 
     collect_stdout = "tests/test_x.py::test_a\n\n1 test collected\n"
-    fake_result = subprocess.CompletedProcess(args=[], returncode=0, stdout=collect_stdout, stderr="")
+    fake_result = subprocess.CompletedProcess(
+        args=[], returncode=0, stdout=collect_stdout, stderr=""
+    )
 
     with patch(
         "operations_center.observer.collectors.check_signal.subprocess.run",

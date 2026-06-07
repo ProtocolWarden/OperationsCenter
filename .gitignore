@@ -65,3 +65,9 @@ LOOP_START.md
 *_ANALYSIS.md
 =*.*/
 test_output.log
+
+# Team executor automation artifacts
+.team_executor/checkpoint-*.json
+
+# Tooling validation artifacts
+.baseline-validation.json

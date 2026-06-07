@@ -71,9 +71,7 @@ class SpecFrontMatter(BaseModel):
 
     # Executor prepends a run-ID comment to every committed file; strip it before
     # looking for the YAML front matter so parsing works regardless of that prefix.
-    _LEADING_COMMENT_RE: ClassVar[re.Pattern] = re.compile(
-        r"^<!--.*?-->\s*", re.DOTALL
-    )
+    _LEADING_COMMENT_RE: ClassVar[re.Pattern] = re.compile(r"^<!--.*?-->\s*", re.DOTALL)
 
     @classmethod
     def from_spec_text(cls, text: str) -> "SpecFrontMatter":

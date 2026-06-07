@@ -83,9 +83,7 @@ def test_normalize_passes_branch_and_invocation_ref() -> None:
         runtime_kind="subprocess",
     )
     cap = _capture(invocation_ref=ref)
-    result = norm.normalize(
-        cap, proposal_id="p", decision_id="d", branch_name="feat/x"
-    )
+    result = norm.normalize(cap, proposal_id="p", decision_id="d", branch_name="feat/x")
     assert result.branch_name == "feat/x"
     assert result.runtime_invocation_ref.invocation_id == "inv-ref-123"
 
@@ -162,9 +160,7 @@ def test_resolve_empty_workspace_string_skips_git() -> None:
 
 def test_resolve_falls_back_to_event_stream_when_git_returns_none() -> None:
     cap = _capture(reported_changed_files=[{"path": "b.py", "change_type": "deleted"}])
-    with mock.patch.object(
-        norm, "_discover_changed_files_via_git", return_value=None
-    ):
+    with mock.patch.object(norm, "_discover_changed_files_via_git", return_value=None):
         files, source = norm._resolve_changed_files(cap, Path("/ws"))
     assert source == "event_stream"
     assert files[0].change_type == "deleted"
@@ -311,17 +307,13 @@ def test_changed_files_confidence(source: str, expected: float) -> None:
 
 
 def test_validation_not_ran_skipped() -> None:
-    vs = norm._build_validation_summary(
-        ran=False, passed=None, excerpt=None, duration_ms=None
-    )
+    vs = norm._build_validation_summary(ran=False, passed=None, excerpt=None, duration_ms=None)
     assert vs.status == ValidationStatus.SKIPPED
     assert vs.commands_run == 0
 
 
 def test_validation_passed() -> None:
-    vs = norm._build_validation_summary(
-        ran=True, passed=True, excerpt=None, duration_ms=1200
-    )
+    vs = norm._build_validation_summary(ran=True, passed=True, excerpt=None, duration_ms=1200)
     assert vs.status == ValidationStatus.PASSED
     assert vs.commands_run == 1
     assert vs.commands_passed == 1
@@ -341,9 +333,7 @@ def test_validation_failed_with_excerpt() -> None:
 
 
 def test_validation_ran_but_passed_none_skipped() -> None:
-    vs = norm._build_validation_summary(
-        ran=True, passed=None, excerpt="ignored", duration_ms=10
-    )
+    vs = norm._build_validation_summary(ran=True, passed=None, excerpt="ignored", duration_ms=10)
     assert vs.status == ValidationStatus.SKIPPED
 
 
@@ -371,9 +361,7 @@ def test_normalize_threads_validation_through() -> None:
 def test_map_artifacts_known_type() -> None:
     cap = _capture(
         artifacts=[
-            OpenClawArtifactCapture(
-                label="diff", content="patch text", artifact_type="diff"
-            )
+            OpenClawArtifactCapture(label="diff", content="patch text", artifact_type="diff")
         ]
     )
     arts = norm._map_artifacts(cap)
@@ -386,9 +374,7 @@ def test_map_artifacts_known_type() -> None:
 def test_map_artifacts_unknown_type_falls_back_to_log_excerpt() -> None:
     cap = _capture(
         artifacts=[
-            OpenClawArtifactCapture(
-                label="weird", content="data", artifact_type="not_a_real_type"
-            )
+            OpenClawArtifactCapture(label="weird", content="data", artifact_type="not_a_real_type")
         ]
     )
     arts = norm._map_artifacts(cap)
@@ -397,9 +383,7 @@ def test_map_artifacts_unknown_type_falls_back_to_log_excerpt() -> None:
 
 def test_map_artifacts_empty_content_becomes_none() -> None:
     cap = _capture(
-        artifacts=[
-            OpenClawArtifactCapture(label="empty", content="", artifact_type="diff")
-        ]
+        artifacts=[OpenClawArtifactCapture(label="empty", content="", artifact_type="diff")]
     )
     arts = norm._map_artifacts(cap)
     assert arts[0].content is None
@@ -468,9 +452,7 @@ def test_normalize_full_failure_with_git_diff_and_validation_signals() -> None:
         output_text="tests failed in suite",
         error_text="",
         artifacts=[
-            OpenClawArtifactCapture(
-                label="log", content="trace", artifact_type="log_excerpt"
-            )
+            OpenClawArtifactCapture(label="log", content="trace", artifact_type="log_excerpt")
         ],
     )
     proc = _FakeProc(0, "M\tsrc/a.py\nA\tsrc/b.py\n")
