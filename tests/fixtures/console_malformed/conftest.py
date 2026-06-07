@@ -14,29 +14,19 @@ import pytest
 from tests.fixtures.console_malformed import FIXTURES
 
 
-@pytest.fixture
-def console_fixture_dir(request: pytest.FixtureRequest) -> Path:
-    """Provide access to a console fixture directory.
-
-    Usage: request a fixture parameter matching a fixture name:
-        def test_r1_detector(fixture_r1_missing_console_dir):
-            # fixture_r1_missing_console_dir is the Path to that fixture
-            assert not (fixture_r1_missing_console_dir / ".console").exists()
-    """
-    # This is a helper; actual fixtures are auto-generated below
-
-
-# Auto-generate pytest fixtures for each fixture repository
+# Auto-generate pytest fixtures for each fixture repository.
+# T4 exclusion: dynamic fixture generation — fixture names are resolved at
+# runtime via FIXTURES dict; static analysis cannot see them as "requested".
 for _fixture_name, _fixture_path in FIXTURES.items():
 
     def _make_fixture(_name: str, _path: Path):
         @pytest.fixture(name=_name)
-        def _fixture() -> Path:
+        def _generated() -> Path:
             """Provide access to a console fixture repository."""
             assert _path.exists(), f"Fixture not found: {_path}"
             return _path
 
-        return _fixture
+        return _generated
 
     # Register the fixture with pytest
     globals()[_fixture_name] = _make_fixture(_fixture_name, _fixture_path)

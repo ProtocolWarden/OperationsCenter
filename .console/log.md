@@ -925,3 +925,10 @@ controller resolves it and anchors at PlatformManifest.
 
 _Archived completed history → `/home/dev/Documents/GitHub/PrivateManifest/archive/console/OperationsCenter/log-2026-06-04.md`_
 
+
+## 2026-06-07 — Watchdog: fix T4/DC7 custodian findings blocking PR #244 audit CI
+
+- Removed dead `console_fixture_dir` stub (no return, never used)
+- Renamed inner `_fixture` to `_generated` in dynamic fixture loop
+- Added T4 exclusion for `tests/fixtures/console_malformed/conftest.py`
+- Linked `console-reconciliation-test-strategy.md` from detectors.md (DC7)
