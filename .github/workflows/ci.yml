@@ -83,7 +83,11 @@ jobs:
         # demand, not in CI. PRs exclude slow tests for quick validation.
         # Coverage threshold of 85% is the design target from Stage 0.
         # CI will fail until coverage improves to meet this target.
-        run: pytest -q tests/unit -m "not slow" --cov=src --cov-report=html --cov-report=xml --cov-report=term-missing --cov-fail-under=90
+        # -p no:flaky-detection — the pytest11 entry point imports the whole
+        # observer package at pytest startup, BEFORE coverage instrumentation,
+        # marking every module-level line uncovered. The plugin is opt-in by
+        # design; coverage jobs don't need it loaded.
+        run: pytest -q tests/unit -m "not slow" -p no:flaky-detection --cov=src --cov-report=html --cov-report=xml --cov-report=term-missing --cov-fail-under=90
       - name: Run full unit test suite including slow (main/merge)
         if: github.event_name == 'push'
         # Unit suite only — integration tests under tests/integration/ need
@@ -91,7 +95,8 @@ jobs:
         # demand, not in CI. Pushes run full suite including slow tests.
         # Coverage threshold of 85% is the design target from Stage 0.
         # CI will fail until coverage improves to meet this target.
-        run: pytest -q tests/unit --cov=src --cov-report=html --cov-report=xml --cov-report=term-missing --cov-fail-under=90
+        # -p no:flaky-detection — see PR-validation step above.
+        run: pytest -q tests/unit -p no:flaky-detection --cov=src --cov-report=html --cov-report=xml --cov-report=term-missing --cov-fail-under=90
       - name: Upload coverage to Codecov
         if: always()
         uses: codecov/codecov-action@v4

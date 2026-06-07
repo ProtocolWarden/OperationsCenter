@@ -1,3 +1,17 @@
+## 2026-06-07 — PR #247: coverage gate root cause — pytest11 entry point pre-coverage import
+
+**Decision**: coverage-gated CI jobs run with `-p no:flaky-detection`; added
+unit tests for the plugin itself (previously zero).
+
+Root cause: the pytest11 entry point imports the whole observer package at
+pytest startup, before coverage instrumentation — every module-level line in
+the package read as uncovered, dropping total 94%→89.41% and failing the 90%
+gate. The plugin is opt-in by design; coverage jobs don't need it loaded.
+Local verify: 94.16%, 6406 passed. Also merged origin/main into the goal
+branch (resolves PR #247 CONFLICTING; lands controller fallback fix on disk).
+
+---
+
 ## 2026-06-07 — Loop controller: global-limit fallback reselects across full backend priority
 
 **Decision**: After a backend limit, `_fallback_backend_after_limit()` re-runs
