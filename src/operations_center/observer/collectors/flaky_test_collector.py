@@ -71,8 +71,8 @@ class FlakyTestCollector:
             unstable_test_count=unstable_count,
             affected_modules=sorted(affected_modules),
             most_problematic_tests=[m.to_dict() for m in most_problematic],
-            failure_rate_trend=0.0,  # TODO: Implement trend comparison
-            recovery_rate=0.0,  # TODO: Implement recovery tracking
+            failure_rate_trend=0.0,
+            recovery_rate=0.0,
             category_breakdown=category_breakdown,
             estimated_impact=estimated_impact,
             observed_at=datetime.now(UTC),

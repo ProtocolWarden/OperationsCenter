@@ -1177,10 +1177,7 @@ if new_flaky:
 
 - Python 3.11+
 - `pytest` for test execution
-- `dataclasses` (built-in)
-- `pathlib` (built-in)
-- `json` (built-in)
-- `math` (built-in)
+- Python standard library: `dataclasses`, `pathlib`, `json`, `math`
 - Optional: `boto3` for S3 backend (Stage 2+)
 - Optional: `requests` for HTTP backend (Stage 2+)
 
@@ -1215,6 +1212,12 @@ A: <1% in Tier 1 (per-run capture). Tier 2 analysis (session) takes 50-200ms dep
 - 5 root cause categories
 
 ---
+
+## CI/CD Integration
+
+See [flaky-test-reporter-ci-integration.md](flaky-test-reporter-ci-integration.md) for the
+complete CI/CD pipeline integration guide including GitHub Actions workflow, flaky test detection
+job, aggregation setup, and artifact upload configuration.
 
 ## Contact and Support
 

@@ -728,8 +728,9 @@ class TestFlakyTestReporterQueryAPIs:
         assert result["flaky_count"] == 0
         assert result["most_problematic"] == []
 
-    @pytest.mark.skip(
-        reason="Test expects improving/stable trend but gets degrading (trend logic bug)"
+    @pytest.mark.xfail(
+        strict=False,
+        reason="Test expects improving/stable trend but gets degrading (trend logic bug)",
     )
     def test_query_trend_analysis_improving(self, tmp_path: Path) -> None:
         reporter = FlakyTestReporter.create_local(tmp_path)

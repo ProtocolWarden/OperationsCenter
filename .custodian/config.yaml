@@ -5,6 +5,12 @@ tests_root: tests
 audit:
   # .console/ reconciled (reconcile/console) — R1/R2 reconcile detectors active.
   reconcile_enforce: true
+  # r1_enabled: false — disable the built-in R1 line-budget reconcile checker.
+  # The custom plugin R1 (build_oc_detectors) also registers as "R1" and overwrites
+  # the pattern entry, but total_findings accumulates counts from both, causing a
+  # phantom finding on any .console/ file over 400 lines. Custom R1 runs; built-in
+  # R1 is redundant and must be suppressed. See PR #246 for full root-cause analysis.
+  r1_enabled: false
   # W2 (core.hooksPath must be set): developer-machine setup check, not applicable
   # in CI where the repo is freshly cloned and git config is not persisted.
   ignore_rules:

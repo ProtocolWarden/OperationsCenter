@@ -3,8 +3,7 @@
 """FlakyTestReporter — Core flaky test detection and analysis system.
 
 Implements Tier 1 (per-run observation) and Tier 2 (session analysis) of the
-flaky test detection architecture. Provides detection logic, pattern analysis,
-and structured metrics for flakiness tracking.
+flaky test detection architecture.
 
 Usage:
     reporter = FlakyTestReporter.create_local("/tmp/flaky-tests")
@@ -21,138 +20,28 @@ from __future__ import annotations
 
 import json
 import math
-from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from .flaky_test_models import (
+    FlakynessCategory,
+    FlakyTestConfig,
+    FlakyTestMetric,
+    FlakyTestResult,
+    FlakyTestSessionReport,
+    TestOutcome,
+)
 
-class FlakynessCategory(Enum):
-    """Root cause categories for flaky tests."""
-
-    TRANSIENT = "transient"
-    STRUCTURAL = "structural"
-    CONFIGURATION = "configuration"
-    INTERMITTENT_STRUCTURAL = "intermittent_structural"
-    UNKNOWN = "unknown"
-
-
-class TestOutcome(Enum):
-    """Test outcome values from pytest."""
-
-    PASSED = "passed"
-    FAILED = "failed"
-    SKIPPED = "skipped"
-    XFAILED = "xfailed"
-    XPASSED = "xpassed"
-
-
-@dataclass
-class FlakyTestMetric:
-    """Structured metrics for a single flaky test."""
-
-    nodeid: str
-    failure_rate: float
-    run_count: int
-    retry_success_count: int = 0
-    duration_mean: float = 0.0
-    duration_variance: float = 0.0
-    pattern_entropy: float = 0.0
-    streak_length: int = 0
-    recovery_time_days: float | None = None
-    suspected_category: FlakynessCategory = FlakynessCategory.UNKNOWN
-    markers: list[str] = field(default_factory=list)
-    last_failure_reason: str = ""
-    flakiness_score: float = 0.0
-    confidence: float = 0.0
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert metric to dictionary for JSON serialization."""
-        return {
-            "nodeid": self.nodeid,
-            "failure_rate": round(self.failure_rate, 4),
-            "run_count": self.run_count,
-            "retry_success_count": self.retry_success_count,
-            "duration_mean": round(self.duration_mean, 4),
-            "duration_variance": round(self.duration_variance, 4),
-            "pattern_entropy": round(self.pattern_entropy, 4),
-            "streak_length": self.streak_length,
-            "recovery_time_days": (
-                round(self.recovery_time_days, 2) if self.recovery_time_days is not None else None
-            ),
-            "suspected_category": self.suspected_category.value,
-            "markers": self.markers,
-            "last_failure_reason": self.last_failure_reason,
-            "flakiness_score": round(self.flakiness_score, 4),
-            "confidence": round(self.confidence, 4),
-        }
-
-
-@dataclass
-class FlakyTestResult:
-    """Result of a single test execution (Tier 1 observation)."""
-
-    nodeid: str
-    outcome: TestOutcome | str
-    duration: float
-    markers: list[str] = field(default_factory=list)
-    exception_type: str = ""
-    exception_message: str = ""
-    output_lines: list[str] = field(default_factory=list)
-    run_id: str = ""
-    environment: str = "local"
-    python_version: str = ""
-    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
-
-    def __post_init__(self) -> None:
-        if isinstance(self.outcome, str):
-            self.outcome = TestOutcome(self.outcome)
-        if not self.run_id:
-            self.run_id = self.timestamp.isoformat()
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert result to dictionary for JSONL output."""
-        return {
-            "nodeid": self.nodeid,
-            "outcome": (
-                self.outcome.value if isinstance(self.outcome, TestOutcome) else self.outcome
-            ),
-            "duration": round(self.duration, 4),
-            "markers": self.markers,
-            "exception_type": self.exception_type,
-            "exception_message": self.exception_message,
-            "output_lines": self.output_lines,
-            "run_id": self.run_id,
-            "environment": self.environment,
-            "python_version": self.python_version,
-            "timestamp": self.timestamp.isoformat(),
-        }
-
-
-@dataclass
-class FlakyTestSessionReport:
-    """Session-level analysis report (Tier 2)."""
-
-    session_id: str
-    timestamp: datetime
-    run_count: int
-    total_tests: int
-    flaky_candidates: list[FlakyTestMetric] = field(default_factory=list)
-    unstable_candidates: list[FlakyTestMetric] = field(default_factory=list)
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert report to dictionary for JSON serialization."""
-        return {
-            "session": self.session_id,
-            "timestamp": self.timestamp.isoformat(),
-            "run_count": self.run_count,
-            "total_tests": self.total_tests,
-            "flaky_count": len(self.flaky_candidates),
-            "unstable_count": len(self.unstable_candidates),
-            "flaky_candidates": [m.to_dict() for m in self.flaky_candidates],
-            "unstable_candidates": [m.to_dict() for m in self.unstable_candidates],
-        }
+__all__ = [
+    "FlakynessCategory",
+    "FlakyTestConfig",
+    "FlakyTestMetric",
+    "FlakyTestReporter",
+    "FlakyTestResult",
+    "FlakyTestSessionReport",
+    "TestOutcome",
+]
 
 
 class FlakyTestReporter:
@@ -171,85 +60,37 @@ class FlakyTestReporter:
     MAX_CONFIDENCE_RUNS = 5
 
     def __init__(self, storage_root: Path | None = None) -> None:
-        """Initialize the reporter.
-
-        Args:
-            storage_root: Optional root directory for storing test results and reports.
-        """
         self.storage_root = storage_root or Path("/tmp/flaky-tests")
         self.session_id = datetime.now(UTC).isoformat()
-
         self.test_runs: dict[str, list[FlakyTestResult]] = {}
         self.all_results: list[FlakyTestResult] = []
 
     @classmethod
     def create_local(cls, storage_root: str | Path) -> FlakyTestReporter:
-        """Create a reporter with local file storage.
-
-        Args:
-            storage_root: Path to directory for storing reports and results.
-
-        Returns:
-            Configured FlakyTestReporter instance.
-        """
+        """Create a reporter with local file storage."""
         path = Path(storage_root)
         path.mkdir(parents=True, exist_ok=True)
         return cls(storage_root=path)
 
     @classmethod
-    def create_s3(
-        cls,
-        bucket: str,
-        prefix: str = "flaky-tests",
-    ) -> FlakyTestReporter:
-        """Create a reporter with S3 storage backend (stub for Stage 2+).
-
-        Args:
-            bucket: S3 bucket name.
-            prefix: Key prefix for storing reports.
-
-        Returns:
-            Configured FlakyTestReporter instance.
-        """
-        # Stub: full S3 support in Stage 2-3
-        path_str = f"s3://{bucket}/{prefix}"
-        return cls(storage_root=Path(path_str))
+    def create_s3(cls, bucket: str, prefix: str = "flaky-tests") -> FlakyTestReporter:
+        """Create a reporter with S3 storage backend (stub for Stage 2+)."""
+        return cls(storage_root=Path(f"s3://{bucket}/{prefix}"))
 
     @classmethod
-    def create_http(
-        cls,
-        base_url: str,
-        auth_token: str | None = None,
-    ) -> FlakyTestReporter:
-        """Create a reporter with HTTP backend (stub for Stage 2+).
-
-        Args:
-            base_url: Base URL for HTTP API.
-            auth_token: Optional bearer token for authentication.
-
-        Returns:
-            Configured FlakyTestReporter instance.
-        """
-        # Stub: full HTTP support in Stage 2-3
+    def create_http(cls, base_url: str, auth_token: str | None = None) -> FlakyTestReporter:
+        """Create a reporter with HTTP backend (stub for Stage 2+)."""
         return cls(storage_root=Path(f"http://{base_url}"))
 
     def track_test(self, result: FlakyTestResult) -> None:
-        """Record a test execution result (Tier 1).
-
-        Args:
-            result: Test execution result to track.
-        """
+        """Record a test execution result (Tier 1)."""
         if result.nodeid not in self.test_runs:
             self.test_runs[result.nodeid] = []
         self.test_runs[result.nodeid].append(result)
         self.all_results.append(result)
 
     def analyze_session(self) -> FlakyTestSessionReport:
-        """Analyze all tracked test runs and produce session report (Tier 2).
-
-        Returns:
-            Session analysis report with flakiness metrics.
-        """
+        """Analyze all tracked test runs and produce session report (Tier 2)."""
         flaky_candidates = []
         unstable_candidates = []
 
@@ -274,29 +115,15 @@ class FlakyTestReporter:
         )
 
     def _analyze_test_runs(self, nodeid: str, runs: list[FlakyTestResult]) -> FlakyTestMetric:
-        """Analyze all runs of a single test to produce metrics.
-
-        Args:
-            nodeid: Fully qualified test name.
-            runs: List of all execution results for this test.
-
-        Returns:
-            Computed metrics for the test.
-        """
+        """Analyze all runs of a single test to produce metrics."""
         failure_count = sum(1 for r in runs if r.outcome == TestOutcome.FAILED)
-
         run_count = len(runs)
         failure_rate = failure_count / run_count if run_count > 0 else 0.0
-
-        confidence = min(1.0, run_count / self.MAX_CONFIDENCE_RUNS)  # Capped at 5 runs
-
+        confidence = min(1.0, run_count / self.MAX_CONFIDENCE_RUNS)
         flakiness_score = self._compute_flakiness_score(failure_rate, runs, run_count)
-
         suspected_category = self._categorize_flakiness(failure_rate, runs)
-
         duration_mean = sum(r.duration for r in runs) / run_count if run_count > 0 else 0.0
         duration_variance = self._compute_variance([r.duration for r in runs], duration_mean)
-
         pattern_entropy = self._compute_pattern_entropy(runs)
         streak_length = self._compute_streak_length(runs)
         retry_success_count = self._count_retry_successes(runs)
@@ -328,26 +155,11 @@ class FlakyTestReporter:
     def _compute_flakiness_score(
         self, failure_rate: float, runs: list[FlakyTestResult], run_count: int
     ) -> float:
-        """Compute overall flakiness score (0.0 to 1.0).
-
-        Score combines failure rate and variance:
-        - High failure rate + consistent = structural (high score)
-        - Low failure rate + high variance = transient (moderate score)
-        - High variance pattern = erratic (moderate-high score)
-
-        Args:
-            failure_rate: Proportion of failed runs.
-            runs: List of test execution results.
-            run_count: Total number of runs.
-
-        Returns:
-            Flakiness score from 0.0 (stable) to 1.0 (completely unreliable).
-        """
+        """Compute overall flakiness score (0.0 to 1.0)."""
         if run_count < 2:
             return 0.0
 
         base_score = max(0.5 * failure_rate, 0.0)
-
         variance = self._compute_pattern_variance(runs)
         entropy = self._compute_pattern_entropy(runs)
 
@@ -359,17 +171,12 @@ class FlakyTestReporter:
         return min(1.0, score)
 
     def _compute_pattern_variance(self, runs: list[FlakyTestResult]) -> float:
-        """Compute variance of pass/fail pattern.
-
-        Returns:
-            Variance value from 0.0 (all same) to 1.0 (maximally random).
-        """
+        """Compute variance of pass/fail pattern (0.0 = all same, 1.0 = maximally random)."""
         if len(runs) < 2:
             return 0.0
 
         outcomes = [1.0 if r.outcome == TestOutcome.FAILED else 0.0 for r in runs]
         mean = sum(outcomes) / len(outcomes)
-
         variance = sum((x - mean) ** 2 for x in outcomes) / len(outcomes)
         return min(1.0, variance)
 
@@ -381,13 +188,7 @@ class FlakyTestReporter:
         return sum(squared_diffs) / len(squared_diffs)
 
     def _compute_pattern_entropy(self, runs: list[FlakyTestResult]) -> float:
-        """Compute Shannon entropy of pass/fail pattern.
-
-        Higher entropy = more random/unpredictable pass/fail sequence.
-
-        Returns:
-            Entropy in nats (0.0 = deterministic, ~0.693 = max for binary).
-        """
+        """Compute Shannon entropy of pass/fail pattern (higher = more unpredictable)."""
         if len(runs) < 2:
             return 0.0
 
@@ -400,18 +201,10 @@ class FlakyTestReporter:
 
         p_pass = pass_count / total
         p_fail = fail_count / total
-
-        entropy = -(p_pass * math.log(p_pass) + p_fail * math.log(p_fail))
-        return entropy
+        return -(p_pass * math.log(p_pass) + p_fail * math.log(p_fail))
 
     def _compute_streak_length(self, runs: list[FlakyTestResult]) -> int:
-        """Compute longest consecutive sequence of same outcome.
-
-        Higher = more deterministic (all passes or all failures in a row).
-
-        Returns:
-            Length of longest streak (1 if alternating).
-        """
+        """Compute longest consecutive sequence of same outcome."""
         if not runs:
             return 0
 
@@ -430,14 +223,7 @@ class FlakyTestReporter:
         return max_streak
 
     def _count_retry_successes(self, runs: list[FlakyTestResult]) -> int:
-        """Count how many times a test passed on retry (transient indicator).
-
-        For each failed run, check if next run(s) pass within 1 hour.
-        This is approximate without detailed retry timing metadata.
-
-        Returns:
-            Count of suspected retry successes.
-        """
+        """Count how many times a test passed immediately after a failure (retry indicator)."""
         if len(runs) < 2:
             return 0
 
@@ -451,13 +237,7 @@ class FlakyTestReporter:
         return retry_successes
 
     def _compute_recovery_time(self, runs: list[FlakyTestResult]) -> float | None:
-        """Compute time until test recovers after failure.
-
-        Measures days from last failure to first subsequent pass.
-
-        Returns:
-            Days until recovery, or None if never recovered.
-        """
+        """Compute days from last failure to first subsequent pass, or None if never recovered."""
         if not runs:
             return None
 
@@ -479,21 +259,7 @@ class FlakyTestReporter:
     def _categorize_flakiness(
         self, failure_rate: float, runs: list[FlakyTestResult]
     ) -> FlakynessCategory:
-        """Categorize suspected root cause of flakiness.
-
-        Uses failure rate, variance, and retry patterns to infer root cause:
-        - Transient: Low failure rate, high variance, passes on retry
-        - Structural: High failure rate, consistent, consistent failures
-        - Configuration: Environment-specific (detected via markers/env)
-        - Intermittent-Structural: Newly flaky (requires historical context)
-
-        Args:
-            failure_rate: Proportion of failed runs.
-            runs: List of test execution results.
-
-        Returns:
-            Most likely flakiness category.
-        """
+        """Categorize suspected root cause using failure rate, variance, and markers."""
         variance = self._compute_pattern_variance(runs)
 
         if 0.05 <= failure_rate <= 0.40 and variance > 0.1:
@@ -513,14 +279,7 @@ class FlakyTestReporter:
         return FlakynessCategory.UNKNOWN
 
     def save_session_report(self, report: FlakyTestSessionReport) -> Path | None:
-        """Save session report to storage.
-
-        Args:
-            report: Session analysis report to save.
-
-        Returns:
-            Path where report was saved, or None if storage not available.
-        """
+        """Save session report to local storage; returns path or None for remote backends."""
         storage_str = str(self.storage_root)
         if (
             not self.storage_root
@@ -535,15 +294,13 @@ class FlakyTestReporter:
         timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
         report_path = reports_dir / f"session-{timestamp}.json"
 
-        report_path.write_text(json.dumps(report.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
+        report_path.write_text(
+            json.dumps(report.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8"
+        )
         return report_path
 
     def save_test_results(self) -> Path | None:
-        """Save all tracked test results to JSONL storage.
-
-        Returns:
-            Path where results were saved, or None if storage not available.
-        """
+        """Save all tracked test results to JSONL; returns path or None for remote backends."""
         storage_str = str(self.storage_root)
         if (
             not self.storage_root
@@ -565,14 +322,7 @@ class FlakyTestReporter:
         return results_path
 
     def query_metrics_by_test(self, nodeid: str) -> FlakyTestMetric | None:
-        """Get metrics for a specific test by name.
-
-        Args:
-            nodeid: Test node ID (e.g., 'tests/unit/test_foo.py::TestClass::test_method')
-
-        Returns:
-            FlakyTestMetric if test has been analyzed, None otherwise.
-        """
+        """Get metrics for a specific test by node ID; None if not yet analyzed."""
         if nodeid not in self.test_runs:
             return None
 
@@ -583,14 +333,7 @@ class FlakyTestReporter:
         return self._analyze_test_runs(nodeid, runs)
 
     def query_module_flakiness(self, module_path: str) -> dict[str, Any]:
-        """Get aggregated flakiness metrics for all tests in a module.
-
-        Args:
-            module_path: Module path (e.g., 'tests/unit' or 'tests/integration')
-
-        Returns:
-            Dictionary with aggregated metrics for all matching tests.
-        """
+        """Get aggregated flakiness metrics for all tests matching the given module path."""
         matching_tests = [
             nodeid for nodeid in self.test_runs.keys() if nodeid.startswith(module_path)
         ]
@@ -632,14 +375,7 @@ class FlakyTestReporter:
         }
 
     def query_trend_analysis(self, days: int = 7) -> dict[str, Any]:
-        """Analyze test flakiness trend over a time window.
-
-        Args:
-            days: Number of days to look back in history.
-
-        Returns:
-            Dictionary with trend analysis including newly flaky and recovered tests.
-        """
+        """Analyze test flakiness trend over the given number of days."""
         cutoff_date = datetime.now(UTC).replace(microsecond=0) - timedelta(days=days)
 
         current_flaky = set()
@@ -681,41 +417,4 @@ class FlakyTestReporter:
             "recovered_tests": recovered,
             "newly_flaky_tests": newly_flaky,
             "trend": trend,
-        }
-
-
-@dataclass
-class FlakyTestConfig:
-    """Configuration for flaky test collection and analysis.
-
-    Attributes:
-        storage_root: Path or URI for historical metrics storage (e.g., '/tmp/metrics', 's3://bucket/prefix')
-        min_run_count: Minimum number of test runs required for analysis (default: 3)
-        historical_window_days: Number of days of historical data to retain (default: 30)
-        flakiness_threshold: Failure rate threshold for marking tests as flaky (default: 0.10 = 10%)
-        unstable_threshold: Failure rate threshold for marking tests as unstable (default: 0.05 = 5%)
-        recovery_rate_threshold: Target percentage of tests that should be stable (default: 0.80 = 80%)
-    """
-
-    storage_root: Path | str
-    min_run_count: int = 3
-    historical_window_days: int = 30
-    flakiness_threshold: float = 0.10
-    unstable_threshold: float = 0.05
-    recovery_rate_threshold: float = 0.80
-
-    def __post_init__(self) -> None:
-        if isinstance(self.storage_root, str):
-            if not self.storage_root.startswith(("s3://", "http://")):
-                self.storage_root = Path(self.storage_root)
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert config to dictionary for JSON serialization."""
-        return {
-            "storage_root": str(self.storage_root),
-            "min_run_count": self.min_run_count,
-            "historical_window_days": self.historical_window_days,
-            "flakiness_threshold": self.flakiness_threshold,
-            "unstable_threshold": self.unstable_threshold,
-            "recovery_rate_threshold": self.recovery_rate_threshold,
         }
