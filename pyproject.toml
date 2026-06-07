@@ -82,6 +82,9 @@ operations-center-worker-backend-probe = "operations_center.entrypoints.worker_b
 # state/campaigns/active.json.
 operations-center-spec-hygiene      = "operations_center.entrypoints.spec_hygiene.main:main"
 
+[project.entry-points."pytest11"]
+flaky-detection = "operations_center.observer.pytest_flaky_plugin"
+
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0",
@@ -110,6 +113,9 @@ markers = [
   "snapshot_baseline: marks snapshot validation tests that compare against baselines",
   "snapshot: marks snapshot validation integration tests",
   "snapshot_performance: marks snapshot performance tests for scaling and efficiency",
+  "flaky: marks tests that exercise flaky test detection logic",
+  "flaky_historical: marks tests for flaky test historical aggregation and trends",
+  "flaky_integration: marks flaky test integration tests with observer service",
 ]
 # xdist configuration for parallel test execution
 # Distribution strategy: loadscope (groups tests by class/module to respect fixture boundaries)
@@ -171,6 +177,8 @@ extend-select = [
 # Tools / one-shots (test_*.py files use assert like tests/)
 "tools/**/*.py" = ["T201", "BLE001"]
 "tools/**/test_*.py" = ["S101"]
+# Root-level verification scripts
+"verify_stage3.py" = ["T201"]
 
 [tool.ty.environment]
 python-version = "3.11"

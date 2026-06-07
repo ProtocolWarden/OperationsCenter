@@ -373,9 +373,7 @@ class TestMultiFixtureScenarios:
 
         assert report.passed
 
-    def test_validate_selected_layers(
-        self, snapshot_validator: SnapshotValidator
-    ):
+    def test_validate_selected_layers(self, snapshot_validator: SnapshotValidator):
         """Verify selective layer validation works."""
         report = snapshot_validator.validate_all_layers(layers=[1, 2, 3])
         assert report.layers_checked == [1, 2, 3]
