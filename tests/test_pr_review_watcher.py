@@ -436,8 +436,20 @@ def test_close_and_requeue_requeues_then_closes_and_deletes_branch(tmp_path: Pat
     # Re-queue succeeds → close PR (no merge) + delete head branch + drop state.
     state, sp = _make_state(tmp_path, plane_task_id="task-abc")
     gh = _make_gh()
+    mock_client = MagicMock()
+    mock_client.fetch_issue.return_value = {
+        "id": "task-abc",
+        "description_stripped": (
+            "## Goal\nFinish the queue drain fix.\n\n"
+            "## Execution\nrepo: MyRepo\nspec_file: docs/specs/queue-drain.md\n"
+        ),
+        "labels": [],
+    }
 
-    with patch.object(watcher, "_requeue_plane_task", return_value=True) as mock_rq:
+    with (
+        patch.object(watcher, "_requeue_plane_task", return_value=True) as mock_rq,
+        patch.object(watcher, "_plane_client", return_value=mock_client),
+    ):
         watcher._close_and_requeue(
             state,
             sp,
@@ -451,6 +463,10 @@ def test_close_and_requeue_requeues_then_closes_and_deletes_branch(tmp_path: Pat
         )
 
     mock_rq.assert_called_once()
+    mock_client.comment_issue.assert_called_once()
+    receipt_body = mock_client.comment_issue.call_args.args[1]
+    assert "refs/pull/42/head" in receipt_body
+    assert "docs/specs/queue-drain.md" in receipt_body
     gh.close_pr.assert_called_once_with("owner", "repo", PR_NUMBER)
     gh.delete_branch.assert_called_once_with("owner", "repo", f"goal/{PR_NUMBER}")
     gh.merge_pr.assert_not_called()
@@ -477,6 +493,33 @@ def test_close_and_requeue_keeps_pr_open_when_requeue_fails(tmp_path: Path) -> N
 
     gh.close_pr.assert_not_called()
     assert sp.exists()  # state preserved → retried next cycle
+
+
+def test_close_and_requeue_keeps_pr_open_when_receipt_cannot_be_recorded(tmp_path: Path) -> None:
+    state, sp = _make_state(tmp_path, plane_task_id="task-abc")
+    gh = _make_gh()
+    mock_client = MagicMock()
+    mock_client.fetch_issue.return_value = {"id": "task-abc", "description_stripped": "", "labels": []}
+
+    with (
+        patch.object(watcher, "_requeue_plane_task", return_value=True),
+        patch.object(watcher, "_plane_client", return_value=mock_client),
+    ):
+        watcher._close_and_requeue(
+            state,
+            sp,
+            _pr_data(),
+            gh,
+            "owner",
+            "repo",
+            SETTINGS,
+            reason="fix_attempts_exhausted",
+            detail="nope",
+        )
+
+    gh.close_pr.assert_not_called()
+    mock_client.comment_issue.assert_not_called()
+    assert sp.exists()
 
 
 def test_close_and_requeue_no_task_escalates_not_closes(tmp_path: Path) -> None:

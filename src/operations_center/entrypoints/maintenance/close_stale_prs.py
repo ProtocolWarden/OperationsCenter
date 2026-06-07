@@ -40,6 +40,14 @@ def _parse_iso(s: str | None) -> datetime | None:
         return None
 
 
+def _no_salvage_close_comment(*, age_days: float, threshold_days: int) -> str:
+    return (
+        f"Auto-closing with no salvage value: PR has been inactive for {round(age_days, 1)}d, "
+        f"which exceeds the {threshold_days}d stale autonomy threshold "
+        f"(RepoSettings.stale_pr_days)."
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Close stale autonomy PRs")
     parser.add_argument("--config", required=True, type=Path)
@@ -111,9 +119,10 @@ def main() -> int:
                     owner,
                     repo,
                     pr["number"],
-                    f"Auto-closing — PR has been open {round(age_days, 1)}d, "
-                    f"threshold is {threshold_days}d (RepoSettings.stale_pr_days). "
-                    f"Branch `{head_ref}` is preserved on origin if you want to re-open.",
+                    _no_salvage_close_comment(
+                        age_days=age_days,
+                        threshold_days=threshold_days,
+                    ),
                 )
                 gh.close_pr(owner, repo, pr["number"])
                 entry["action"] = "closed"

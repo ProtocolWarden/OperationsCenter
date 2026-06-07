@@ -189,6 +189,68 @@ def _label_value(labels: list, prefix: str) -> str:
     return ""
 
 
+def _durable_pr_head_ref(pr_number: int) -> str:
+    return f"refs/pull/{pr_number}/head"
+
+
+def _spec_file_from_plane_issue(issue: dict[str, Any]) -> str:
+    labels = issue.get("labels", []) or []
+    desc = str(issue.get("description") or issue.get("description_stripped") or "").strip()
+    if desc:
+        try:
+            from operations_center.application.task_parser import TaskParser
+
+            parsed = TaskParser().parse(desc, labels=_label_names(labels))
+            spec_file = str(parsed.execution_metadata.get("spec_file") or "").strip()
+            if spec_file:
+                return spec_file
+        except Exception:
+            pass
+
+    campaign_id = _label_value(labels, "campaign-id")
+    if not campaign_id:
+        return ""
+    try:
+        from operations_center.spec_author.state import CampaignStateManager
+
+        campaigns_state = CampaignStateManager().load()
+        for campaign in campaigns_state.campaigns:
+            if campaign.campaign_id == campaign_id:
+                return str(campaign.spec_file).strip()
+    except Exception:
+        pass
+    return ""
+
+
+def _record_close_receipt(
+    settings,
+    plane_task_id: str,
+    *,
+    pr_number: int,
+    pr_data: dict[str, Any],
+    reason: str,
+) -> str:
+    """Record a durable salvage receipt on the Plane task before closing."""
+    client = _plane_client(settings)
+    try:
+        issue = client.fetch_issue(plane_task_id)
+        spec_file = _spec_file_from_plane_issue(issue)
+        if not spec_file:
+            return ""
+        branch_ref = str(((pr_data.get("head") or {}).get("ref") or "")).strip()
+        lines = [
+            f"Close receipt for PR #{pr_number} (`{reason}`)",
+            f"durable_head_ref: `{_durable_pr_head_ref(pr_number)}`",
+            f"spec_file: `{spec_file}`",
+        ]
+        if branch_ref:
+            lines.append(f"closed_branch: `{branch_ref}`")
+        client.comment_issue(plane_task_id, "\n".join(lines))
+        return spec_file
+    finally:
+        client.close()
+
+
 # ── pr review pipeline ────────────────────────────────────────────────────────
 
 
@@ -597,6 +659,30 @@ def _close_and_requeue(
         _save_state(state_path, state)
         return
 
+    try:
+        spec_file = _record_close_receipt(
+            settings,
+            plane_task_id,
+            pr_number=pr_number,
+            pr_data=pr_data,
+            reason=reason,
+        )
+    except Exception as exc:
+        logger.warning(
+            "pr_review_watcher: failed to record close receipt for PR #%d — %s",
+            pr_number,
+            exc,
+        )
+        _save_state(state_path, state)
+        return
+    if not spec_file:
+        logger.warning(
+            "pr_review_watcher: PR #%d missing spec linkage for close receipt — leaving PR open",
+            pr_number,
+        )
+        _save_state(state_path, state)
+        return
+
     marker = settings.reviewer.bot_comment_marker
     try:
         gh_client.post_comment(
@@ -605,7 +691,8 @@ def _close_and_requeue(
             pr_number,
             f"{marker}\n**Closing without merge** (reason=`{reason}`). A PR is never "
             f"merged with unresolved review concerns — the issue has been re-queued for "
-            f"a fresh attempt.\n\n{detail}",
+            f"a fresh attempt. Durable receipt recorded on Plane task `{plane_task_id}` "
+            f"for `{_durable_pr_head_ref(pr_number)}` and `{spec_file}`.\n\n{detail}",
         )
     except Exception as exc:
         logger.warning(
