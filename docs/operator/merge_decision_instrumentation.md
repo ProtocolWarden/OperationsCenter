@@ -58,7 +58,7 @@ All merge decisions are logged with structured format for dashboard integration:
 - `lanes`: Number of parallel verdict lanes processed
 - `timestamp`: Unix timestamp of decision recording
 
-**Note:** PR number and repository key are logged separately via structured logger context (not in the structured_logs dict). Latency SLA compliance (latency less than 500ms) can be derived from the `latency_ms` field by comparison with the baseline threshold.
+**Note:** PR number and repository key are logged separately via structured logger context (not in the structured_logs dict). Latency SLA compliance (latency less than 500 milliseconds) can be derived from the `latency_ms` field by comparison with the baseline threshold.
 
 ## Anomaly Detection
 
@@ -156,7 +156,7 @@ Structured logs integrate with Grafana/observability platforms:
 2. **Alert rule:** Latency exceeding 1000 milliseconds for 5 minutes
 3. **Dashboard panels:**
    - Decision outcome pie chart
-   - Latency trend (line graph with 500ms baseline)
+   - Latency trend (line graph with 500 milliseconds baseline)
    - Retry rate trend
 
 ## Related Documentation
