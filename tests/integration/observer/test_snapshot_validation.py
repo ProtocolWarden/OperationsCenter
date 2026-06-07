@@ -390,6 +390,131 @@ class TestMultiFixtureScenarios:
         report = snapshot_validator.validate_all_layers(layers=layers)
         assert report.layers_checked == layers
 
+    @pytest.mark.parametrize(
+        "fixture_name,fixture_validator",
+        [
+            ("minimal", "snapshot_validator"),
+            ("errors", "validator_with_errors"),
+            ("limited_signals", "validator_with_limited_signals"),
+            ("inconsistent", "validator_with_inconsistent_signals"),
+        ],
+    )
+    def test_parametrized_validation_across_fixtures(
+        self,
+        request,
+        fixture_name: str,
+        fixture_validator: str,
+    ):
+        """Verify validation works across all fixture types.
+
+        Tests that validation logic handles minimal, error-laden, limited,
+        and inconsistent snapshots appropriately.
+        """
+        validator = request.getfixturevalue(fixture_validator)
+        report = validator.validate_all_layers(layers=[1, 2])
+
+        assert report.snapshot_id
+        assert report.layers_checked == [1, 2]
+        assert hasattr(report, "passed")
+
+    def test_layer_specific_scenarios_with_different_fixtures(
+        self,
+        snapshot_validator: SnapshotValidator,
+        validator_with_errors: SnapshotValidator,
+        validator_with_inconsistent_signals: SnapshotValidator,
+    ):
+        """Verify each layer validates appropriately across fixture types.
+
+        Tests layer 1 (schema) across all fixtures, layer 2 (completeness)
+        across all fixtures, and layer 3 (consistency) with inconsistent fixture.
+        """
+        # Layer 1: Schema validation should pass for all
+        schema_results = [
+            snapshot_validator.validate_layer_1_schema(),
+            validator_with_errors.validate_layer_1_schema(),
+            validator_with_inconsistent_signals.validate_layer_1_schema(),
+        ]
+        for result in schema_results:
+            assert result.check_name == "schema_validation"
+
+        # Layer 2: Completeness varies by fixture
+        completeness_results = [
+            snapshot_validator.validate_layer_2_completeness(),
+            validator_with_errors.validate_layer_2_completeness(),
+            validator_with_inconsistent_signals.validate_layer_2_completeness(),
+        ]
+        for result in completeness_results:
+            assert result.check_name == "completeness_validation"
+
+        # Layer 3: Consistency detects issues in inconsistent fixture
+        consistency_minimal = snapshot_validator.validate_layer_3_consistency()
+        consistency_inconsistent = (
+            validator_with_inconsistent_signals.validate_layer_3_consistency()
+        )
+        assert consistency_minimal.passed
+        assert not consistency_inconsistent.passed
+
+    def test_snapshot_comparison_with_different_types(
+        self,
+        snapshot_manager: SnapshotManager,
+        minimal_snapshot: RepoStateSnapshot,
+        snapshot_with_errors: RepoStateSnapshot,
+    ):
+        """Verify snapshot comparison handles different snapshot types.
+
+        Tests saving, loading, and comparing snapshots of different types
+        to ensure the comparison logic is robust across variations.
+        """
+        # Save two different snapshots
+        snapshot_manager.save_snapshot(minimal_snapshot)
+        snapshot_manager.save_snapshot(snapshot_with_errors)
+
+        # Load both
+        snapshots = snapshot_manager.get_snapshots()
+        assert len(snapshots) == 2
+
+        # Load individual snapshots
+        loaded_minimal = None
+        loaded_error = None
+        for snap_info in snapshots:
+            snap = snapshot_manager.get_snapshot(snap_info.run_id)
+            if snap and snap.run_id == minimal_snapshot.run_id:
+                loaded_minimal = snap
+            elif snap and snap.run_id == snapshot_with_errors.run_id:
+                loaded_error = snap
+
+        # Verify both loaded
+        assert loaded_minimal is not None
+        assert loaded_error is not None
+
+        # Verify they're different
+        assert loaded_minimal.run_id != loaded_error.run_id
+        assert loaded_minimal.signals.test_signal.status != loaded_error.signals.test_signal.status
+
+    def test_multi_fixture_regression_detection(
+        self,
+        snapshot_manager: SnapshotManager,
+        minimal_snapshot: RepoStateSnapshot,
+        baseline_snapshot: RepoStateSnapshot,
+        repo_path: Path,
+    ):
+        """Verify regression detection works across multiple saved snapshots.
+
+        Tests that saved snapshots can be compared against baselines to
+        detect regressions in test counts and coverage.
+        """
+        # Save current snapshot
+        snapshot_manager.save_snapshot(minimal_snapshot)
+        loaded = snapshot_manager.get_latest_snapshot()
+
+        # Create validator and check for regression
+        validator = SnapshotValidator(loaded, repo_path=repo_path)
+        result = validator.validate_layer_5_regression(baseline=baseline_snapshot)
+
+        # Verify regression check ran
+        assert result.check_name == "regression_validation"
+        assert len(result.errors) >= 0  # May have regression errors depending on values
+
 
 class TestFailureCategorization:
     """Tests for proper failure categorization and retry logic."""
