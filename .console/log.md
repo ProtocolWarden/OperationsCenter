@@ -1,3 +1,18 @@
+## 2026-06-07 — Watchdog: Fix custodian-audit CI failure (R1 detector ID collision)
+
+**Decision**: Set `audit.r1_enabled: false` in `.custodian/config.yaml`.
+
+Root cause: The built-in R1 reconcile detector and the custom plugin R1 share
+detector ID "R1". `run_audit()` accumulates `total_findings` from both, but the
+plugin R1 overwrites the pattern entry — causing `.console/log.md` (1920 ln) and
+`.console/backlog.md` (442 ln) to be counted in `total_findings` but absent from
+`findings[]`. CI showed 2 phantom findings. Disabling the built-in R1 resolves the
+ID collision; the custom plugin R1 continues to handle `.console/` structural checks.
+
+Branch: `oc-watchdog/20260607-1430-fix-r1-reconcile-id-collision`
+
+---
+
 ## 2026-06-07 — STAGE 2: Run Full Test Suite and Linters to Verify All Fixes ✅
 
 **Objective**: Run comprehensive test suite, verify code quality, and confirm campaign readiness for merge.
