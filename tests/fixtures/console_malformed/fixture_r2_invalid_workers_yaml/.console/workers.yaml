@@ -1,0 +1,9 @@
+workers:
+  - name: worker1
+    enabled: true
+    config:
+      key1: value1
+      key2: [unclosed list
+      key3: value3
+  - name: worker2
+    enabled: maybe (invalid boolean)
