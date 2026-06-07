@@ -46,6 +46,7 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 from operations_center.observer.models import RepoStateSnapshot, TestSignal
 
@@ -107,7 +108,7 @@ class StatusTrend:
         """Most frequently occurring status."""
         if not self.status_history:
             return None
-        return max(self.status_history, key=lambda k: self.status_history[k])
+        return max(self.status_history, key=self.status_history.get)
 
 
 @dataclass
@@ -161,8 +162,8 @@ class FailureSummary:
 
     @property
     def is_concerning(self) -> bool:
-        """True if 20% or more of runs are failing."""
-        return self.failing_rate >= 0.2
+        """True if more than 20% of runs are failing."""
+        return self.failing_rate > 0.2
 
 
 class TestSignalQuery:
@@ -207,10 +208,7 @@ class TestSignalQuery:
         latest_snapshot = self._get_latest_snapshot()
         if not latest_snapshot:
             return None
-        signal = latest_snapshot.signals.test_signal
-        if signal.status == "unavailable":
-            return None
-        return signal
+        return latest_snapshot.signals.test_signal
 
     def get_signal_by_run_id(self, run_id: str) -> TestSignal | None:
         """Get test signal for a specific snapshot run.
@@ -229,10 +227,7 @@ class TestSignalQuery:
         snapshot = self._load_snapshot(run_id)
         if not snapshot:
             return None
-        signal = snapshot.signals.test_signal
-        if signal.status == "unavailable":
-            return None
-        return signal
+        return snapshot.signals.test_signal
 
     def list_test_signal_history(self, timerange: TimeRange) -> list[tuple[str, TestSignal]]:
         """Get test signals within a time window, ordered oldest to newest.
@@ -384,7 +379,7 @@ class TestSignalQuery:
         if not failure_counts:
             return None
 
-        most_common = max(failure_counts, key=lambda k: failure_counts[k])
+        most_common = max(failure_counts, key=failure_counts.get)
         failing_rate = total_failing / total_with_signal if total_with_signal > 0 else 0.0
 
         return FailureSummary(
@@ -455,7 +450,7 @@ class TestSignalQuery:
             return []
 
         snapshots = []
-        for run_dir in sorted(self.root.glob("*")):
+        for run_dir in sorted(self.root.glob("obs_*")):
             snapshot = self._load_snapshot(run_dir.name)
             if snapshot and timerange.contains(snapshot.observed_at):
                 snapshots.append(snapshot)
