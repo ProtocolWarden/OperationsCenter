@@ -25,6 +25,7 @@ from operations_center.observer.models import (
     RepoSignalsSnapshot,
     RepoStateSnapshot,
     SecuritySignal,
+    TestSignal,
     TodoSignal,
     TypeSignal,
     ValidationHistorySignal,

@@ -78,34 +78,45 @@ class FileHotspot(BaseModel):
     touch_count: int
 
 
-class CheckSignal(BaseModel):
-    """Test execution results and status.
+class TestSignal(BaseModel):
+    """Test execution results with breakdown metrics and coverage integration.
 
-    Represents the outcome of test runs (unit, integration, or end-to-end tests)
-    from an external testing framework or CI system.
+    Represents comprehensive test execution state including granular test counts,
+    execution performance, failure categorization, and code coverage metrics.
 
     Attributes:
-        status: Overall test status ("passing", "failing", "flaky", "unavailable", etc.)
-        test_count: Total number of tests executed, or None if not available
-        source: Name of the tool/framework that ran tests (e.g., "pytest", "jest", "cargo test")
-        observed_at: Timestamp when the test execution completed. Optional because:
-            - Test runs may not provide timing information
-            - Tests may not have run yet (deferred)
-            - Status may be inferred from snapshot state rather than from live execution
-            If None, use snapshot.observed_at as fallback: `signal.observed_at or snapshot.observed_at`
-        summary: Human-readable summary of test results (e.g., "5 passed, 2 failed")
-
-    When observed_at is used in derivers, prefer the signal-level value over snapshot-level:
-
-        # In derivers that access test_signal
-        observed_at = signal.test_signal.observed_at or snapshots[0].observed_at
+        status: Overall test execution state (passing, failing, flaky, partial, unavailable)
+        test_count: Total number of tests collected or executed
+        passed_count: Number of tests with PASSED result
+        failed_count: Number of tests with FAILED result
+        skip_count: Number of tests with SKIPPED result
+        xfailed_count: Number of tests with XFAILED result
+        error_count: Number of tests with ERROR result
+        execution_time_ms: Total test execution time in milliseconds
+        coverage_percent: Overall code coverage percentage (0-100)
+        failure_category: Primary failure type (assertion, timeout, collection_error, etc.)
+        source: Tool/file that produced signal (e.g., "pytest", "unit_test.log")
+        observed_at: When test execution completed (None if tests haven't run)
+        summary: Human-readable summary of test results
     """
 
     status: str
     test_count: int | None = None
+    passed_count: int = 0
+    failed_count: int = 0
+    skip_count: int = 0
+    xfailed_count: int = 0
+    error_count: int = 0
+    execution_time_ms: int | None = None
+    coverage_percent: float | None = None
+    failure_category: str | None = None
     source: str | None = None
     observed_at: datetime | None = None
     summary: str | None = None
+
+
+# Backwards compatibility alias
+CheckSignal = TestSignal
 
 
 class DependencyDriftSignal(BaseModel):
