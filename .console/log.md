@@ -1,3 +1,9 @@
+## 2026-06-07 — WO-1 cleanup: remove improve-output.json executor artifact
+
+Removed `improve-output.json` from branch and added to `.gitignore`. File was accidentally committed during orphan-branch recovery (stage3 observer). Also closed PR #249 (superseded by PR #253 which contains all its commits plus WO-1 receipt work).
+
+---
+
 ## 2026-06-07 — PR #249 CI fixes (orphan-recovery branch)
 
 **Decision**: cleared the 6 ruff + 2 ty failures blocking #249 (the recovered
