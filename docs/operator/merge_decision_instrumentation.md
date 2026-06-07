@@ -120,7 +120,7 @@ Metrics are aggregated in memory and accessible via the `get_instrumenter()` fun
 ```python
 from operations_center.reviewer.instrumentation import get_instrumenter
 
-# Get current metrics snapshot
+# Get current metrics snapshot (get_instrumenter defined at src/operations_center/reviewer/instrumentation.py:284)
 summary = get_instrumenter().get_metrics_summary()
 
 # Response structure:
@@ -138,9 +138,9 @@ summary = get_instrumenter().get_metrics_summary()
 }
 ```
 
-Metrics can be exported as JSON via `export_metrics_json()` for external dashboards.
+Metrics can be exported as JSON via `MergeDecisionInstrumenter.export_metrics_json()` method (defined in `src/operations_center/reviewer/instrumentation.py:274`) for external dashboards.
 
-## Health Status Indicators
+## Health status indicators
 
 | Metric | Healthy | Degraded | Critical |
 |--------|---------|----------|----------|
@@ -148,7 +148,7 @@ Metrics can be exported as JSON via `export_metrics_json()` for external dashboa
 | Retry rate | less than 10 percent | 10-20 percent | exceeding 20 percent |
 | Recent decisions (1h) | exceeding 10 | 5-10 | less than 5 |
 
-## Integration with Dashboards
+## Integration with dashboards
 
 Structured logs integrate with Grafana/observability platforms:
 

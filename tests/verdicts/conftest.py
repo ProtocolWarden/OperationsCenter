@@ -192,7 +192,7 @@ class MergeDecisionBuilder:
         return self
 
     def escalate(self) -> MergeDecisionBuilder:
-        self.decision = "escalate"
+        self.decision = "blocked"
         self.reason = "backend_unavailable"
         return self
 
