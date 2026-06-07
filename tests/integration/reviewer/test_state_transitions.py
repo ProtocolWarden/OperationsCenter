@@ -44,8 +44,8 @@ class TestMergeDecisionTransitions:
         lane_verdict = lane_verdict_builder.with_lane_id("default").lgtm().build()
         merge_decision = merge_decision_builder.merge().add_lane_verdict(lane_verdict).build()
 
-        assert_verdict_consolidated(merge_decision, "merge", "unanimous_lgtm", 1)
-        assert merge_decision.decision == "merge"
+        assert_verdict_consolidated(merge_decision, "approved", "unanimous_lgtm", 1)
+        assert merge_decision.decision == "approved"
 
     def test_blocked_state_transition_unresolved_concerns(
         self,
@@ -107,8 +107,8 @@ class TestMergeDecisionTransitions:
             .build()
         )
 
-        assert_verdict_consolidated(merge_decision, "escalate", "backend_unavailable", 1)
-        assert merge_decision.decision == "escalate"
+        assert_verdict_consolidated(merge_decision, "blocked", "backend_unavailable", 1)
+        assert merge_decision.decision == "blocked"
         assert merge_decision.lane_verdicts[0].verdict.result is None
 
 
@@ -356,7 +356,7 @@ class TestCompleteStateGraph:
         merge_decision = merge_decision_builder.merge().build()
 
         assert state["phase"] == "self_review"
-        assert merge_decision.decision == "merge"
+        assert merge_decision.decision == "approved"
 
     def test_state_graph_concerns_retry_loop(
         self, tmp_path: Path, merge_decision_builder: MergeDecisionBuilder
@@ -390,7 +390,7 @@ class TestCompleteStateGraph:
         merge_decision = merge_decision_builder.escalate().build()
 
         assert state["escalated_needs_human"] is True
-        assert merge_decision.decision == "escalate"
+        assert merge_decision.decision == "blocked"
 
 
 @pytest.mark.integration
@@ -413,7 +413,7 @@ class TestVerdictTransitionSequences:
         merge_decision = merge_decision_builder.merge().build()
 
         assert state["phase"] == "self_review"
-        assert merge_decision.decision == "merge"
+        assert merge_decision.decision == "approved"
 
     def test_sequence_concerns_then_lgtm(
         self, tmp_path: Path, merge_decision_builder: MergeDecisionBuilder
@@ -433,7 +433,7 @@ class TestVerdictTransitionSequences:
 
         assert merge_decision1.decision == "retry"
         assert state["fix_attempts"] > 0
-        assert merge_decision2.decision == "merge"
+        assert merge_decision2.decision == "approved"
 
     def test_sequence_escalation_and_recovery(
         self, tmp_path: Path, merge_decision_builder: MergeDecisionBuilder
@@ -451,9 +451,9 @@ class TestVerdictTransitionSequences:
         state["no_verdict_passes"] = 2
         merge_decision2 = MergeDecisionBuilder().merge().build()
 
-        assert merge_decision1.decision == "escalate"
+        assert merge_decision1.decision == "blocked"
         assert state["escalated_needs_human"] is True
-        assert merge_decision2.decision == "merge"
+        assert merge_decision2.decision == "approved"
 
     def test_sequence_max_fix_attempts_then_blocked(
         self, tmp_path: Path, merge_decision_builder: MergeDecisionBuilder

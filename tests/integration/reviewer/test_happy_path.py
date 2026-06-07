@@ -58,7 +58,7 @@ class TestHappyPathVerdictFlow:
         merge_decision = merge_decision_builder.merge().add_lane_verdict(lane_verdict).build()
 
         # Verify: Merge decision is "merge" with "unanimous_lgtm" reason
-        assert_verdict_consolidated(merge_decision, "merge", "unanimous_lgtm", 1)
+        assert_verdict_consolidated(merge_decision, "approved", "unanimous_lgtm", 1)
 
         # Setup: Mock GitHub client
         gh = mock_github_client()
@@ -120,7 +120,7 @@ class TestHappyPathVerdictFlow:
         )
 
         # Verify: All lanes unanimous, decision is merge
-        assert_verdict_consolidated(merge_decision, "merge", "unanimous_lgtm", 3)
+        assert_verdict_consolidated(merge_decision, "approved", "unanimous_lgtm", 3)
         assert all(v.verdict.result == "LGTM" for v in merge_decision.lane_verdicts), (
             "All lanes must have LGTM verdict"
         )
@@ -236,7 +236,7 @@ class TestHappyPathVerdictFlow:
 
         # Phase 3: Decision - Consolidate across lanes and make merge decision
         merge_decision = merge_decision_builder.merge().add_lane_verdict(lane_verdict).build()
-        assert_verdict_consolidated(merge_decision, "merge", "unanimous_lgtm", 1)
+        assert_verdict_consolidated(merge_decision, "approved", "unanimous_lgtm", 1)
 
         # Execute: Full state transition test through review phases
         state = create_pr_state(
@@ -358,7 +358,7 @@ class TestHappyPathBuilders:
             merge_decision_builder.merge().add_lane_verdict(lane1).add_lane_verdict(lane2).build()
         )
 
-        assert decision.decision == "merge"
+        assert decision.decision == "approved"
         assert decision.reason == "unanimous_lgtm"
         assert len(decision.lane_verdicts) == 2
         assert all(v.verdict.result == "LGTM" for v in decision.lane_verdicts)
@@ -376,6 +376,6 @@ class TestHappyPathBuilders:
 
         final_decision = decision.build()
 
-        assert final_decision.decision == "merge"
+        assert final_decision.decision == "approved"
         assert len(final_decision.lane_verdicts) == 3
         assert all(v.verdict.result == "LGTM" for v in final_decision.lane_verdicts)

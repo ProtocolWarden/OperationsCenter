@@ -102,7 +102,7 @@ class TestMixedVerdictOverrideLogic:
         merge_decision = merge_decision_builder.merge().add_lane_verdict(lgtm_lane).build()
 
         # Verify loop 2 decision is merge
-        assert_verdict_consolidated(merge_decision, "merge", "unanimous_lgtm")
+        assert_verdict_consolidated(merge_decision, "approved", "unanimous_lgtm")
 
         # Execute loop 2: LGTM → merge
         gh_loop2 = mock_github_client()
@@ -150,7 +150,7 @@ class TestMixedVerdictOverrideLogic:
         lgtm_verdict = audit_verdict_builder.lgtm().build()
         lgtm_lane = lane_verdict_builder.with_lane_id("lint").with_verdict(lgtm_verdict).build()
         merge_decision = merge_decision_builder.merge().add_lane_verdict(lgtm_lane).build()
-        assert_verdict_consolidated(merge_decision, "merge")
+        assert_verdict_consolidated(merge_decision, "approved")
 
         # Simulate PR diff changed after first review
         # Second review: CONCERNS (on new diff)
