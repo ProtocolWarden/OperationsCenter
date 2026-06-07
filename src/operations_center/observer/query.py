@@ -107,7 +107,7 @@ class StatusTrend:
         """Most frequently occurring status."""
         if not self.status_history:
             return None
-        return max(self.status_history, key=self.status_history.get)
+        return max(self.status_history, key=lambda k: self.status_history[k])
 
 
 @dataclass
@@ -384,7 +384,7 @@ class TestSignalQuery:
         if not failure_counts:
             return None
 
-        most_common = max(failure_counts, key=failure_counts.get)
+        most_common = max(failure_counts, key=lambda k: failure_counts[k])
         failing_rate = total_failing / total_with_signal if total_with_signal > 0 else 0.0
 
         return FailureSummary(

@@ -1,3 +1,13 @@
+## 2026-06-07 — PR #249 CI fixes (orphan-recovery branch)
+
+**Decision**: cleared the 6 ruff + 2 ty failures blocking #249 (the recovered
+t8 orphan branch). ruff: unused imports/vars in test_signal_query.py. ty:
+`max(d, key=d.get)` → `max(d, key=lambda k: d[k])` in query.py (dict.get's
+`T | None` return is unorderable; direct indexing is total). 38 query tests pass.
+Fixed by operator to unblock landing while the reviewer was occupied on #250.
+
+---
+
 ## 2026-06-07 — fix(custodian-sweep): add total_violations/all_zero to --emit output
 
 Root cause: sweep JSON lacked top-level total_violations/all_zero fields → consumers got None for 5+ cycles. Fix: compute and emit aggregates after all repo sweeps complete.

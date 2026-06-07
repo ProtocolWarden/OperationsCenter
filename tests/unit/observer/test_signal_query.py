@@ -1,13 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
 from operations_center.observer.models import (
-    CoverageSignal,
     DependencyDriftSignal,
     RepoContextSnapshot,
     RepoSignalsSnapshot,
@@ -16,9 +14,6 @@ from operations_center.observer.models import (
     TodoSignal,
 )
 from operations_center.observer.query import (
-    CoverageTrend,
-    FailureSummary,
-    StatusTrend,
     TestSignalQuery,
     TimeRange,
 )
@@ -88,7 +83,6 @@ def _make_snapshot(
 
 class TestTimeRange:
     def test_last_hours(self) -> None:
-        now = datetime.now(UTC)
         tr = TimeRange.last_hours(24)
         assert tr.end - tr.start == timedelta(hours=24)
 
