@@ -1048,3 +1048,7 @@ manager = SnapshotManager.create_s3(bucket_name="org-snapshots")
 ```bash
 ./scripts/snapshot-promote-baseline.sh
 ```
+
+## 5. Related Documentation
+
+- [Snapshot Validation CI Runner](snapshot-validation-ci-runner.md) — complete operational runbook, snapshot format specification, API reference, and troubleshooting guide

@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 
 # Optional imports for remote backends
 if TYPE_CHECKING:
-    import boto3
-    import requests
+    import boto3  # type: ignore[import-untyped]  # ty: ignore[unresolved-import]
+    import requests  # type: ignore[import-untyped]  # ty: ignore[unresolved-import]
 else:
     try:
         import boto3
@@ -288,7 +288,7 @@ class LocalSnapshotRepository(SnapshotRepository):
 
         existing = {}
         if index_path.exists():
-            for line in index_path.read_text().strip().split("\n"):
+            for line in index_path.read_text(encoding="utf-8").strip().split("\n"):
                 if line:
                     entry = json.loads(line)
                     existing[entry["run_id"]] = entry
@@ -297,7 +297,7 @@ class LocalSnapshotRepository(SnapshotRepository):
 
         with index_path.open("w") as f:
             for run_id in sorted(existing.keys()):
-                f.write(json.dumps(existing[run_id]) + "\n")
+                f.write(json.dumps(existing[run_id], ensure_ascii=False) + "\n")
 
 
 class S3SnapshotRepository(SnapshotRepository):
@@ -324,8 +324,6 @@ class S3SnapshotRepository(SnapshotRepository):
         """
         if boto3 is None:
             raise ImportError("boto3 is required for S3 support. Install with: pip install boto3")
-
-        assert boto3 is not None
 
         self.bucket_name = bucket_name
         self.prefix = prefix
@@ -517,7 +515,7 @@ class S3SnapshotRepository(SnapshotRepository):
         }
 
         index_content = "\n".join(
-            json.dumps(existing[run_id]) for run_id in sorted(existing.keys())
+            json.dumps(existing[run_id], ensure_ascii=False) for run_id in sorted(existing.keys())
         )
 
         self.s3_client.put_object(
@@ -550,8 +548,6 @@ class HTTPSnapshotRepository(SnapshotRepository):
             raise ImportError(
                 "requests is required for HTTP support. Install with: pip install requests"
             )
-
-        assert requests is not None
 
         self.base_url = base_url.rstrip("/")
         self.auth_token = auth_token

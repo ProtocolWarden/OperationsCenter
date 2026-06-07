@@ -1900,6 +1900,18 @@ controller resolves it and anchors at PlatformManifest.
 _Archived completed history → `/home/dev/Documents/GitHub/PrivateManifest/archive/console/OperationsCenter/log-2026-06-04.md`_
 
 
+## 2026-06-07 — Watchdog: fix ruff/ty/custodian CI failures blocking PR #245
+
+- Removed redundant `assert boto3/requests is not None` after if-None-raise guards (ruff S101)
+- Replaced `# type: ignore[import]` with dual-suppress `# type: ignore[import-untyped]  # ty: ignore[unresolved-import]`
+  so both ruff PGH003 and ty 0.0.40 are satisfied for optional boto3/requests imports
+- Added C29 exemptions for snapshot_repository.py and snapshot_validator.py (both > 500 lines, single-responsibility)
+- Added T2 exemptions for 4 snapshot unit test files (`test_snapshot` is a `@pytest.fixture`, not a test function)
+- Added N2 exemption for test_snapshot_performance.py (`create_snapshot` is a factory helper, not a test)
+- Removed unused `saved_snapshot` fixture from tests/integration/observer/conftest.py (T4 fix)
+- Added `## Overall Plan` section to .console/task.md (R2 fix)
+- Linked snapshot-validation-ci-runner.md from snapshot-validation-ci-integration.md (DC7)
+
 ## 2026-06-07 — Watchdog: fix T4/DC7 custodian findings blocking PR #244 audit CI
 
 - Removed dead `console_fixture_dir` stub (no return, never used)

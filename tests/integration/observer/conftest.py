@@ -234,15 +234,6 @@ def validator_with_inconsistent_signals(
 
 
 @pytest.fixture
-def saved_snapshot(
-    snapshot_manager: SnapshotManager, minimal_snapshot: RepoStateSnapshot
-) -> tuple[SnapshotManager, RepoStateSnapshot]:
-    """Save a minimal snapshot and return manager and snapshot."""
-    snapshot_manager.save_snapshot(minimal_snapshot)
-    return snapshot_manager, minimal_snapshot
-
-
-@pytest.fixture
 def baseline_snapshot() -> RepoStateSnapshot:
     """Create a baseline snapshot for regression testing."""
     now = datetime.now(timezone.utc)
