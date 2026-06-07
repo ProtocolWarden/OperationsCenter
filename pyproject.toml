@@ -82,6 +82,9 @@ operations-center-worker-backend-probe = "operations_center.entrypoints.worker_b
 # state/campaigns/active.json.
 operations-center-spec-hygiene      = "operations_center.entrypoints.spec_hygiene.main:main"
 
+[project.entry-points."pytest11"]
+flaky-detection = "operations_center.observer.pytest_flaky_plugin"
+
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0",

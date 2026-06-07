@@ -535,7 +535,7 @@ class FlakyTestReporter:
         timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
         report_path = reports_dir / f"session-{timestamp}.json"
 
-        report_path.write_text(json.dumps(report.to_dict(), indent=2))
+        report_path.write_text(json.dumps(report.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
         return report_path
 
     def save_test_results(self) -> Path | None:
@@ -558,9 +558,9 @@ class FlakyTestReporter:
         timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
         results_path = results_dir / f"results-{timestamp}.jsonl"
 
-        with results_path.open("w") as f:
+        with results_path.open("w", encoding="utf-8") as f:
             for result in self.all_results:
-                f.write(json.dumps(result.to_dict()) + "\n")
+                f.write(json.dumps(result.to_dict(), ensure_ascii=False) + "\n")
 
         return results_path
 

@@ -1,3 +1,8 @@
+---
+status: implemented
+stage: 6
+---
+
 # Flaky Test Reporter — Architecture, Metrics, and User Guide
 
 **Version**: 1.0  

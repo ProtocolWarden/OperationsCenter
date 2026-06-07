@@ -145,8 +145,8 @@ class FlakyTestDetectionPlugin:
         filepath = date_dir / filename
 
         try:
-            with open(filepath, "w") as f:
-                json.dump(report, f, indent=2)
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(report, f, indent=2, ensure_ascii=False)
         except IOError as e:
             self._log.warning("Failed to save flaky test metrics: %s", e)
 

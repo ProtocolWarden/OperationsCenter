@@ -155,7 +155,7 @@ class FlakyTestCollector:
                 duration_variance=float(data.get("duration_variance", 0.0)),
                 pattern_entropy=float(data.get("pattern_entropy", 0.0)),
                 streak_length=int(data.get("streak_length", 0)),
-                recovery_time_days=float(data.get("recovery_time_days"))
+                recovery_time_days=float(data["recovery_time_days"])
                 if "recovery_time_days" in data and data["recovery_time_days"] is not None
                 else None,
                 suspected_category=FlakynessCategory(data.get("suspected_category", "unknown")),

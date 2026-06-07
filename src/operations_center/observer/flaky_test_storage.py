@@ -136,8 +136,8 @@ class FlakyTestStorageManager:
         filepath = hour_dir / filename
 
         # Write JSONL format (one record per session)
-        with open(filepath, "w") as f:
-            json.dump(session_data, f)
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(session_data, f, ensure_ascii=False)
 
         return filepath
 
@@ -153,8 +153,8 @@ class FlakyTestStorageManager:
         filename = f"{agg_report.date}-aggregation.json"
         filepath = self.aggregation_dir / filename
 
-        with open(filepath, "w") as f:
-            json.dump(agg_report.to_dict(), f, indent=2)
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(agg_report.to_dict(), f, indent=2, ensure_ascii=False)
 
         return filepath
 
@@ -188,7 +188,7 @@ class FlakyTestStorageManager:
             # Load all session files in this directory
             for session_file in sorted(date_dir.glob("*-session.json")):
                 try:
-                    with open(session_file) as f:
+                    with open(session_file, encoding="utf-8") as f:
                         sessions.append(json.load(f))
                 except (json.JSONDecodeError, IOError):
                     # Skip corrupted files
@@ -220,7 +220,7 @@ class FlakyTestStorageManager:
                 if date_obj < cutoff:
                     continue
 
-                with open(agg_file) as f:
+                with open(agg_file, encoding="utf-8") as f:
                     data = json.load(f)
                     aggregations.append(FlakyTestAggregationReport.from_dict(data))
             except (json.JSONDecodeError, IOError, ValueError):

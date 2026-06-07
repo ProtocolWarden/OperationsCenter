@@ -1,3 +1,10 @@
+## 2026-06-07 — PR #247 CI fixes: pytest11 entry point, type error, encoding
+
+Watchdog resolved 5 CI failures on PR #247 goal/3476567d:
+- Added pytest11 entry point so --flaky-detection flag registers without -p
+- Fixed ty type error: data["key"] not data.get("key") in already-guarded branch
+- Added encoding="utf-8" to all JSON file writes in flaky observer modules
+
 ## 2026-06-07 — Campaign: Flaky Test Reporter, Stage 6: Final Verification & PR ✅ COMPLETE
 
 **Status**: ✅ **COMPLETE** — All acceptance criteria met with verified coverage metrics
