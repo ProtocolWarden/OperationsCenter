@@ -433,8 +433,9 @@ class TestModuleExtraction:
 
 def _make_observer_context(repo_path: Path | None = None) -> ObserverContext:
     """Create a mock ObserverContext for testing."""
-    from pathlib import Path
+    from unittest.mock import MagicMock
 
+    mock_settings = MagicMock(spec=Settings)
     return ObserverContext(
         repo_path=repo_path or Path("/tmp/repo"),
         repo_name="test_repo",
@@ -442,7 +443,7 @@ def _make_observer_context(repo_path: Path | None = None) -> ObserverContext:
         run_id="test_run_123",
         observed_at=datetime.now(UTC),
         source_command="observer test",
-        settings=Settings(),
+        settings=mock_settings,
         commit_limit=100,
         hotspot_window=7,
         todo_limit=100,

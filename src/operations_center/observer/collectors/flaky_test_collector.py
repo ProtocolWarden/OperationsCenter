@@ -158,6 +158,7 @@ class FlakyTestCollector:
                 recovery_time_days=float(data.get("recovery_time_days"))
                 if "recovery_time_days" in data and data["recovery_time_days"] is not None
                 else None,
+                suspected_category=FlakynessCategory(data.get("suspected_category", "unknown")),
                 flakiness_score=float(data.get("flakiness_score", 0.0)),
                 confidence=float(data.get("confidence", 0.0)),
                 markers=data.get("markers", []),
@@ -176,16 +177,22 @@ class FlakyTestCollector:
         Returns:
             Module path (e.g., 'tests/unit') or None if not extractable.
         """
+        if not nodeid:
+            return None
+
         parts = nodeid.split("::")
         if not parts:
             return None
 
         path_part = parts[0]
+        if not path_part:
+            return None
+
         path_components = path_part.split("/")
 
         if len(path_components) >= 2:
             return "/".join(path_components[:2])
-        elif path_components:
+        elif path_components and path_components[0]:
             return path_components[0]
 
         return None
