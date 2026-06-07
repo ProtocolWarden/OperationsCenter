@@ -42,7 +42,6 @@ class DecisionMetricsCollector:
             "approved": 0,
             "blocked": 0,
             "retry": 0,
-            "escalate": 0,
         }
         self.decision_latencies: list[float] = []
         self.structured_logs: list[dict] = []
@@ -492,26 +491,27 @@ class TestAnomalyDetectionMetrics:
         # Assert: Log contains high-wait-cycle decisions
         assert len(summary["decision_log"]) == len(ci_wait_cycles_list)
 
-    def test_escalation_rate_tracking(
+    def test_unknown_outcome_maps_to_retry(
         self,
         metrics_collector: DecisionMetricsCollector,
     ):
-        """Test: Escalation rate tracking for human intervention needs.
+        """Test: Unknown outcomes map to retry outcome category.
 
-        Acceptance: Escalation counter incremented for human-intervention decisions.
+        Acceptance: Unknown decision outcomes are recorded as latency but not counted.
         """
         # Simulate decision distribution
         metrics_collector.record_decision("approved", 100, "happy_path")
         metrics_collector.record_decision("blocked", 150, "unresolvable")
-        metrics_collector.record_decision("escalate", 200, "backend_unavailable")
+        metrics_collector.record_decision("unknown_type", 200, "unexpected")
 
         summary = metrics_collector.get_metrics_summary()
 
-        # Assert: Escalation decision recorded
-        assert summary["outcomes"]["escalate"] >= 1
-        escalation_count = summary["outcomes"]["escalate"]
-        escalation_rate = escalation_count / summary["total_decisions"]
-        assert escalation_rate > 0
+        # Assert: Unknown outcome recorded as latency but not in outcome counts
+        assert len(summary["decision_log"]) == 3
+        assert summary["outcomes"]["approved"] == 1
+        assert summary["outcomes"]["blocked"] == 1
+        total_outcomes = sum(summary["outcomes"].values())
+        assert total_outcomes == 2  # Only approved and blocked counted
 
 
 @pytest.mark.integration

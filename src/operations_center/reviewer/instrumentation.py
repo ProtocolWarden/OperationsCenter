@@ -321,3 +321,18 @@ def record_ci_gate_defer(
         max_cycles=max_cycles,
         failed_checks=failed_checks,
     )
+
+
+def record_escalation(
+    pr_number: int,
+    repo_key: str,
+    reason: str,
+    detail: str = "",
+) -> None:
+    """Record escalation to human (maps to blocked outcome per spec)."""
+    get_instrumenter().record_escalation(
+        pr_number=pr_number,
+        repo_key=repo_key,
+        reason=reason,
+        detail=detail,
+    )
