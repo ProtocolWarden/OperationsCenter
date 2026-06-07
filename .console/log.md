@@ -1,3 +1,22 @@
+## 2026-06-07 — Operator: full PR-history audit (243 PRs) + flow-hygiene work order
+
+**Decision**: replaced task.md with a 5-item flow-hygiene work order (WO-1..5):
+close-with-receipt invariant, drive resurrected PRs #249/#250 green,
+self-retracting reviewer verdicts, orphan-branch detector, spec-author
+title/dedup hygiene.
+
+Audit findings: 208 merged / 34 closed / 1 open. Main structurally red
+2026-05-13→06-02 (era-bound, fixed by fleet-green train); post-green reds
+all traced to the R1 ID collision (#246). Worst gap: bot closes lose work —
+#235 (verdict consolidation, ironically the green-gate machinery) closed 2h
+after "work preserved / re-queued" with no requeue → resurrected as #250;
+orphan branch oc-watchdog/...-t8 (~2k lines, no PR) → recovered as #249.
+5 stale "needs human attention" flags on merged PRs retracted manually
+(#234, #243–#246). Prior campaign (flaky reporter, #247) is feature-complete;
+its merge is with the review watcher.
+
+---
+
 ## 2026-06-07 — Loop controller: global-limit fallback reselects across full backend priority
 
 **Decision**: After a backend limit, `_fallback_backend_after_limit()` re-runs
