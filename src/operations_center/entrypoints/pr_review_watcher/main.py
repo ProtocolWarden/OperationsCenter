@@ -1333,6 +1333,29 @@ def _write_heartbeat(status_dir: Path) -> None:
 # ── Poll cycle ────────────────────────────────────────────────────────────────
 
 
+def _review_priority(state: dict) -> tuple[int, int, int]:
+    """Sort key for the per-repo review worklist — lower sorts (and runs) first.
+
+    Proactive ordering: a PR that may reach a terminal decision on this pass —
+    a fresh self-review that could merge — must not be starved behind a PR
+    already sunk into a multi-pass fix battle (each fix pass is a slow LLM run).
+    Tiers:
+      0  self_review, no fix attempts yet  — the quick-merge candidates
+      1  ci_fix                            — bounded automated CI repair
+      2  self_review already iterating     — slow fix loops, run last
+    Within a tier: fewer consumed fix passes first, then PR number for a
+    stable, deterministic order."""
+    phase = state.get("phase", "ci_fix")
+    fix_attempts = int(state.get("fix_attempts", 0))
+    if phase == "self_review" and fix_attempts == 0:
+        tier = 0
+    elif phase == "ci_fix":
+        tier = 1
+    else:
+        tier = 2
+    return (tier, fix_attempts, int(state.get("pr_number", 0)))
+
+
 def _poll_once(oc_root: Path, config_path: Path, settings) -> None:
     gh_client = _github_client(settings)
 
@@ -1355,6 +1378,11 @@ def _poll_once(oc_root: Path, config_path: Path, settings) -> None:
             logger.warning("pr_review_watcher: failed to list PRs %s/%s — %s", owner, repo, exc)
             continue
 
+        # Build the worklist (discover + load state) before processing, so the
+        # sweep can be ordered. A single slow PR (a multi-pass fix battle) must
+        # not push a merge-ready PR to the back of the sweep — or off it entirely
+        # if the watcher restarts mid-cycle.
+        worklist: list[tuple[dict, dict, Path]] = []
         for pr_data in open_prs:
             if pr_data.get("draft"):
                 continue
@@ -1371,7 +1399,12 @@ def _poll_once(oc_root: Path, config_path: Path, settings) -> None:
             state = _load_state(sp)
             if not state:
                 continue
+            worklist.append((pr_data, state, sp))
 
+        # Proactive ordering: quick-merge candidates before slow fix loops.
+        worklist.sort(key=lambda item: _review_priority(item[1]))
+
+        for pr_data, state, sp in worklist:
             phase = state.get("phase", "ci_fix")
 
             # human_review is removed — any state files left over from the old

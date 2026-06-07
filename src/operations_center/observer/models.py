@@ -398,6 +398,41 @@ class CoverageSignal(BaseModel):
     summary: str | None = None
 
 
+class FlakyTestSignal(BaseModel):
+    """Flaky test detection and analysis results.
+
+    Summarizes test flakiness patterns and trends detected across multiple test runs.
+    This signal synthesizes Tier 1-3 flakiness observations into actionable metrics.
+
+    Attributes:
+        status: Flakiness measurement status ("measured", "partial", "unavailable")
+        flaky_test_count: Number of tests with failure_rate > 10%
+        unstable_test_count: Number of tests with 5-10% failure rate
+        affected_modules: List of modules/packages containing flaky tests
+        most_problematic_tests: Top N (up to 5) flakiest tests with metrics
+        failure_rate_trend: Week-over-week change in overall failure rate (%)
+        recovery_rate: Percentage of previously flaky tests now stable
+        category_breakdown: Count of tests by flakiness category (transient, structural, etc.)
+        estimated_impact: Estimated impact metrics (CI slowdown %, dev time hours)
+        source: Name of the flakiness detection system (always "flaky-test-reporter")
+        observed_at: Timestamp when flakiness analysis was performed
+        summary: Human-readable summary of flakiness status
+    """
+
+    status: str = "unavailable"
+    flaky_test_count: int = 0
+    unstable_test_count: int = 0
+    affected_modules: list[str] = Field(default_factory=list)
+    most_problematic_tests: list[dict] = Field(default_factory=list)
+    failure_rate_trend: float = 0.0
+    recovery_rate: float = 0.0
+    category_breakdown: dict[str, int] = Field(default_factory=dict)
+    estimated_impact: dict[str, float] = Field(default_factory=dict)
+    source: str = "flaky-test-reporter"
+    observed_at: datetime | None = None
+    summary: str | None = None
+
+
 class RepoSignalsSnapshot(BaseModel):
     recent_commits: list[CommitMetadata] = Field(default_factory=list)
     file_hotspots: list[FileHotspot] = Field(default_factory=list)
@@ -425,6 +460,9 @@ class RepoSignalsSnapshot(BaseModel):
     )
     coverage_signal: CoverageSignal = Field(
         default_factory=lambda: CoverageSignal(status="unavailable")
+    )
+    flaky_test_signal: FlakyTestSignal = Field(
+        default_factory=lambda: FlakyTestSignal(status="unavailable")
     )
 
 

@@ -20,6 +20,7 @@ from operations_center.observer.models import (
     CoverageSignal,
     DependencyDriftSignal,
     ExecutionHealthSignal,
+    FlakyTestSignal,
     LintSignal,
     RepoContextSnapshot,
     RepoSignalsSnapshot,
@@ -75,6 +76,7 @@ class RepoObserverService:
         benchmark_signal_collector: RepoSignalCollector | None = None,
         security_signal_collector: RepoSignalCollector | None = None,
         coverage_signal_collector: RepoSignalCollector | None = None,
+        flaky_test_collector: RepoSignalCollector | None = None,
         snapshot_builder: SnapshotBuilder | None = None,
         artifact_writer: ObserverArtifactWriter | None = None,
         metrics_exporter: ValidationMetricsExporter | None = None,
@@ -95,6 +97,7 @@ class RepoObserverService:
         self.benchmark_signal_collector = benchmark_signal_collector
         self.security_signal_collector = security_signal_collector
         self.coverage_signal_collector = coverage_signal_collector
+        self.flaky_test_collector = flaky_test_collector
         self.snapshot_builder = snapshot_builder or SnapshotBuilder()
         self.artifact_writer = artifact_writer or ObserverArtifactWriter()
         self.metrics_exporter = metrics_exporter
@@ -241,6 +244,17 @@ class RepoObserverService:
             if self.coverage_signal_collector is not None
             else CoverageSignal(status="unavailable")
         )
+        flaky_test_signal = (
+            self._collect_optional(
+                self.flaky_test_collector,
+                context,
+                "flaky_test_signal",
+                collector_errors,
+                default=FlakyTestSignal(status="unavailable"),
+            )
+            if self.flaky_test_collector is not None
+            else FlakyTestSignal(status="unavailable")
+        )
 
         signals = RepoSignalsSnapshot(
             recent_commits=recent_commits,
@@ -258,6 +272,7 @@ class RepoObserverService:
             benchmark_signal=benchmark_signal,
             security_signal=security_signal,
             coverage_signal=coverage_signal,
+            flaky_test_signal=flaky_test_signal,
         )
         snapshot = self.snapshot_builder.build(
             run_id=context.run_id,

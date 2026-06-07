@@ -91,7 +91,17 @@ a dirty/conflicted tree crashes planning at import for EVERY PR (2026-06-07
 
 - [x] Pre-flight conflict-marker guard + distinct ENVIRONMENT classification
       (OCSourceTreeUncleanError) so it doesn't burn the no-verdict budget and
-      escalates with the specific cause — shipped (fix/reviewer-clean-tree-guard)
+      escalates with the specific cause — shipped (fix/reviewer-clean-tree-guard, #251)
+- [x] Proactive sweep ordering: merge-ready PRs before slow fix loops so a
+      quick LGTM isn't starved behind a multi-pass battle — shipped (#252)
+- [x] Conflict-magnet fix: `.console/log.md merge=union` so concurrent PRs
+      don't all go CONFLICTING on every sibling merge — shipped (on main)
+- [ ] Reviewer auto-rebase: when a PR is CONFLICTING (mergeable=False), the
+      reviewer currently just parks ("branch must be rebased") and the PR never
+      lands autonomously — a human had to clear #247/#249 this session. It
+      should merge origin/main into the PR branch (union driver resolves
+      log.md; real code conflicts → CONCERNS-style escalation) and re-review.
+      Needs the live pipeline to validate the git push path.
 - [ ] Deeper isolation: run planning/execute against a clean dedicated git
       worktree pinned at the merge ref, NOT the shared mutable checkout. Needs
       the live pipeline (SwitchBoard + backends) to validate — can't be tested

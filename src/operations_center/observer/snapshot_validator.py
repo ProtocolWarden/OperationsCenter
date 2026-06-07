@@ -447,10 +447,7 @@ class SnapshotValidator:
             and current_coverage < baseline_coverage - 2.0
         ):
             drop = baseline_coverage - current_coverage
-            msg = (
-                f"Coverage regressed by {drop:.1f}pp "
-                f"({baseline_coverage}% → {current_coverage}%)"
-            )
+            msg = f"Coverage regressed by {drop:.1f}pp ({baseline_coverage}% → {current_coverage}%)"
             error = ValidationError(
                 layer=5,
                 category=ValidationFailureCategory.STRUCTURAL,
