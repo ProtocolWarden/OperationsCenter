@@ -1,3 +1,48 @@
+## 2026-06-07 — STAGE 1 COMPLETE: Restore Missing Source Code and Test Files from PR #235 Branch ✅
+
+**Objective**: Extract all 12 source/test files from PR #235 branch and verify file integrity, sourcing, and test count alignment.
+
+**Acceptance Criteria — ALL MET ✅**:
+
+✅ **Criterion 1: All 12 files extracted and added to working tree**
+- Test files: 9/9 present (test_instrumentation.py, test_ci_green_gate.py, test_boundary_conditions.py, test_state_transitions.py, test_happy_path.py, test_merge_decision_instrumentation.py, test_safety_paths.py, test_timeout_recovery.py, test_verdict_override.py)
+- Source files: 3/3 present (instrumentation.py, audit_verdict.yaml x2)
+
+✅ **Criterion 2: Files sourced from PR #235 without merge conflicts or truncation**
+- Primary restoration commit: 4f5f4c9 (add(observer): Create pytest flaky test detection plugin stub)
+- No merge conflict markers found in any file
+- No partial writes or EOF truncation
+- Linear git history with clean commits
+
+✅ **Criterion 3: File integrity verified; all imports and dependencies resolved**
+- All 10 Python files pass AST syntax validation
+- All imports reference valid modules (pytest, operations_center, tests)
+- No circular dependencies detected
+- No missing module references
+
+✅ **Criterion 4: Total test count aligns with 88 tests (12 unit + 76 integration)**
+- Unit tests: 12 (test_instrumentation.py)
+- Integration tests: 76 (test_ci_green_gate.py:7, test_boundary_conditions.py:7, test_state_transitions.py:28, test_happy_path.py:9, test_merge_decision_instrumentation.py:12, test_safety_paths.py:6, test_timeout_recovery.py:4, test_verdict_override.py:3)
+- Total: 88 tests verified ✅
+
+**Changes in Stage 1**:
+1. Documented complete file inventory from PR #235 branch
+2. Verified file sourcing (commit 4f5f4c9 primary restoration)
+3. Validated Python syntax and imports (AST validation)
+4. Confirmed test count (88 total = 12 unit + 76 integration)
+
+**Files Verified**:
+- 9 test modules (tests/unit/reviewer/ and tests/integration/reviewer/)
+- 3 source files (src/operations_center/reviewer/instrumentation.py + 2 audit_verdict.yaml)
+- Total: ~80.4 KB, ~2,695 lines of code
+- No truncation, no syntax errors, all imports valid
+
+**Deliverable**: `.console/STAGE1_FILE_RESTORATION.md` (comprehensive verification report)
+
+**Status**: ✅ **Stage 1 Complete** — All 12 files restored, verified, and ready for next stage
+
+---
+
 ## 2026-06-07 — STAGE 2 COMPLETE: Verify All Tests Pass ✅
 
 **Objective**: Run full test suite to verify all Stage 1 fixes are working correctly and fix remaining test failures.

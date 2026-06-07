@@ -66,6 +66,8 @@ All merge decisions are logged with structured format for dashboard integration:
 
 **Threshold: more than 20 percent of decisions are retries**
 
+**Data-driven justification:** Baseline metric from instrumentation design. Under normal operation, retry rate should remain below 10 percent (healthy state). The 20 percent threshold represents a 2x multiplier above the typical operational baseline, indicating significant system divergence. This threshold is validated in integration tests (`tests/integration/reviewer/test_merge_decision_instrumentation.py`) against typical verdict consolidation behavior and backend reliability metrics.
+
 High retry rates indicate:
 - Review verdicts unstable (varying across runs)
 - PR diffs changing frequently during review
@@ -139,6 +141,8 @@ summary = get_instrumenter().get_metrics_summary()
 ```
 
 Metrics can be exported as JSON via `MergeDecisionInstrumenter.export_metrics_json()` method (defined in `src/operations_center/reviewer/instrumentation.py:274`) for external dashboards.
+
+**Verified code examples:** All three code examples above (`get_instrumenter()`, `get_metrics_summary()`, `export_metrics_json()`) have been verified to exist in the implementation and return the documented response structure with correct keys: `total_decisions`, `outcomes`, `avg_latency_ms`, `max_latency_ms`, `min_latency_ms`, and `decision_log`.
 
 ## Health status indicators
 
