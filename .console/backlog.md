@@ -434,7 +434,50 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## Up Next
 
-_Campaign 6ffc43a3 COMPLETE — All deliverables merged into main branch_
+### Campaign: Flaky Test Reporter Implementation (2026-06-07)
+
+**Status**: 🔄 IN PROGRESS — Stage 0 Design Complete (2026-06-07)
+
+- [ ] **Stage 0: Design & Requirements Analysis** (🎉 COMPLETE)
+  - [x] Created `.console/STAGE0_FLAKY_TEST_REPORTER_DESIGN.md` (4,200+ lines)
+  - [x] Analyzed 4 flakiness categories + 6 manifestation patterns
+  - [x] Designed 4-tier detection architecture (per-run, session, historical, observer)
+  - [x] Defined 14 metrics (7 per-test + 7 repository-level)
+  - [x] Identified all observer integration points
+  - [x] Documented acceptance criteria for detection
+  - **Next**: Stage 1 — Implement Tier 1-2 (pytest plugin, session analysis)
+
+- [ ] **Stage 1: Tier 1-2 Implementation** (⏳ PLANNED)
+  - [ ] Implement pytest plugin for per-test observation (Tier 1)
+  - [ ] Implement session analysis for flakiness classification (Tier 2)
+  - [ ] Add unit/integration tests for Tier 1-2
+
+- [ ] **Stage 2: Tier 3 Aggregation** (⏳ PLANNED)
+  - [ ] Implement daily aggregation job
+  - [ ] Add trend detection and correlation analysis
+  - [ ] Implement retention policy and cleanup
+
+- [ ] **Stage 3: Observer Integration** (⏳ PLANNED)
+  - [ ] Create FlakyTestSignal model in observer/models.py
+  - [ ] Implement FlakyTestCollector
+  - [ ] Wire into RepoObserverService
+
+- [ ] **Stage 4: Dashboard & Alerts** (⏳ PLANNED)
+  - [ ] Add flakiness panels to observer dashboard
+  - [ ] Implement Slack/email alert channels
+  - [ ] Create GitHub PR comments for flaky tests
+
+- [ ] **Stage 5: Testing & Documentation** (⏳ PLANNED)
+  - [ ] Write comprehensive tests for all stages
+  - [ ] Create runbook and troubleshooting guide
+  - [ ] Document configuration and customization
+
+- [ ] **Stage 6: Verification & Deployment** (⏳ PLANNED)
+  - [ ] Run full test suite and verify all pass
+  - [ ] Run linters and type checking
+  - [ ] Commit and create PR
+
+---
 
 ## Done
 

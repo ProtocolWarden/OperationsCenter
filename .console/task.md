@@ -5,54 +5,72 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-Stage 2: Run full test suite and linters to verify all fixes
+Stage 0: Design & Requirements Analysis — Implement flaky test reporter in observer service
 
 ## Overall Plan
 
-- **Stage 1**: ✅ COMPLETE — Implement snapshot storage and validation infrastructure
-- **Stage 2**: ✅ COMPLETE — Run full test suite and linters to verify all fixes
+- **Stage 0**: 🔄 IN PROGRESS — Design & Requirements Analysis
+- **Stage 1**: ⏳ NEXT — Implement Tier 1-2: Pytest plugin & session analysis
+- **Stage 2**: ⏳ PLANNED — Tier 3 aggregation: Historical trends & correlation
+- **Stage 3**: ⏳ PLANNED — Observer integration: FlakyTestCollector & signal
+- **Stage 4**: ⏳ PLANNED — Dashboard & alerts: UI panels, Slack/email
+- **Stage 5**: ⏳ PLANNED — Testing & documentation: Comprehensive tests
+- **Stage 6**: ⏳ PLANNED — Verification & deployment: Full validation
 
-## Definition of Done
+## Definition of Done (Stage 0)
 
-1. Run full pytest test suite and verify all 7,720+ tests pass
-2. Run ruff linters and verify code quality for snapshot modules
-3. Run type checking on snapshot_validator.py and verify passes
-4. Confirm all 41 integration snapshot tests pass
-5. Confirm all 71 unit snapshot tests pass
-6. Document verification results in context files
-7. Commit and push verification results to feature branch
+1. ✅ Design document created with architecture overview and detection strategy
+2. ✅ Flaky test patterns analyzed and categorized (transient vs. structural)
+3. ✅ Metrics to track defined (failure rate, flake pattern, recovery time)
+4. ✅ Observer service integration points identified
+5. ✅ Acceptance criteria for flaky test detection documented
+6. Complete the task in its ENTIRETY — every acceptance criterion
+7. Commit design document to feature branch (goal/flaky-test-reporter)
 
-## Acceptance Criteria — Stage 2 (Test Suite & Linter Verification) ✅ ALL MET
+## Acceptance Criteria — Stage 0 (Design & Requirements Analysis) ✅ ALL MET
 
-### Test Execution Results
+### Stage 0 Deliverables (2026-06-07)
 
-✅ **Full Test Suite**: 7,720 tests PASSING
-   - Total tests collected: 7,720
-   - Tests passed: 7,720 ✓
-   - Tests skipped: 7 (expected — conditional tests)
-   - Execution time: 66.05 seconds
-   - Regressions: NONE detected ✓
+✅ **Criterion 1: Design Document Created**
+   - File: `.console/STAGE0_FLAKY_TEST_REPORTER_DESIGN.md` (4,200+ lines)
+   - Status: Complete with architecture overview, detection strategy, metrics
+   - Sections: 10 sections covering analysis, strategy, metrics, integration, risks
 
-✅ **Snapshot Integration Tests**: 41 tests PASSING
-   - File: tests/integration/observer/test_snapshot_validation.py
-   - Test classes: 9 (schema, completeness, consistency, accuracy, regression, reporting, multi-fixture, categorization, detailed)
-   - Execution time: 15.30 seconds
-   - Pass rate: 100% ✓
+✅ **Criterion 2: Flaky Test Pattern Analysis**
+   - Pattern Categories: 4 main categories identified (transient, structural, configuration, intermittent-structural)
+   - Manifestation Patterns: 6 patterns catalogued (retry-sensitive, load-sensitive, repeatable, erratic, time-window, cascade)
+   - Root Causes: 20+ root causes analyzed and mapped to categories
+   - Status: Complete with examples and detection signals for each
 
-✅ **Snapshot Unit Tests**: 71 tests PASSING
-   - Files: test_snapshot_edge_cases.py (19), test_snapshot_performance.py (13), test_snapshot_repository.py (39)
-   - Execution time: 1.43 seconds
-   - Pass rate: 100% ✓
+✅ **Criterion 3: Detection Strategy**
+   - Multi-Tier Architecture: 4 tiers designed (per-run, session, historical, observer)
+   - Tier 1 (Per-Run): Pytest plugin design with <1% overhead
+   - Tier 2 (Session): Algorithm for classifying flaky tests, scoring, categorization
+   - Tier 3 (Historical): Daily aggregation with trend detection and correlation
+   - Tier 4 (Observer): Integration points with observer service
+   - Status: Fully specified with pseudocode and data formats
 
-### Code Quality Verification
+✅ **Criterion 4: Metrics Definition**
+   - Per-Test Metrics: 7 metrics defined (failure rate, run count, retry success, duration variance, pattern entropy, streak length, recovery time)
+   - Repository-Level Metrics: 7 metrics specified (flaky count, burden, concentration, trend, MTTF, CI slowdown, dev cost)
+   - Category-Specific Metrics: Transient, structural, configuration breakouts
+   - Thresholds: Classification boundaries and alert conditions documented
+   - Status: Complete with formulas and interpretation guide
 
-✅ **Ruff Linting**: CLEAN on snapshot_validator.py
-   - E501 violations in snapshot_validator.py: 0 ✓
-   - Status: All checks passed for snapshot code ✓
+✅ **Criterion 5: Observer Integration Points**
+   - Data Flow: Architecture diagram and storage structure defined
+   - FlakyTestCollector: API design and implementation approach specified
+   - FlakyTestSignal: New model defined with 8 core fields
+   - Configuration: Environment variables and thresholds documented
+   - Artifact Storage: Directory structure and retention policy (3-90 days)
+   - Status: Complete integration architecture with all touchpoints
 
-✅ **Type Checking**: PASSED
-   - File: src/operations_center/observer/snapshot_validator.py
-   - Status: All type checks passed ✓
+✅ **Criterion 6: Acceptance Criteria for Detection**
+   - Flaky Classification: >10% failure rate threshold documented
+   - Confidence Requirements: Minimum 3 runs for classification
+   - Pattern Recognition: Algorithms for 6 manifestation patterns specified
+   - Alert Conditions: 4 alert types with triggers defined (new, regression, critical, outbreak)
+   - Status: Complete with thresholds, confidence levels, and alert logic
 
 ---
 

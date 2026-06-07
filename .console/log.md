@@ -1,3 +1,79 @@
+## 2026-06-07 — Campaign: Flaky Test Reporter, Stage 0: Design & Requirements Analysis ✅
+
+**Status**: ✅ **COMPLETE** — Design & Requirements Analysis
+
+**Objective**: Design flaky test reporter architecture, define detection strategy, metrics, and observer integration points
+
+**Deliverables**:
+1. ✅ Design document: `.console/STAGE0_FLAKY_TEST_REPORTER_DESIGN.md` (4,200+ lines, 10 sections)
+   - Section 1: Executive summary (overview and scope)
+   - Section 2: Flakiness pattern analysis (4 categories, 6 manifestation patterns, 20+ root causes)
+   - Section 3: Detection strategy (4-tier architecture with pseudocode)
+   - Section 4: Metrics definition (14 metrics with formulas)
+   - Section 5: Observer integration (FlakyTestCollector, FlakyTestSignal, data flow)
+   - Section 6: Risk analysis (4 risks, mitigations)
+   - Section 7: Future enhancements (5 planned features)
+   - Section 8: Implementation roadmap (6 stages)
+   - Section 9: References (related components, patterns)
+   - Section 10: Appendix with example flakiness report
+
+2. ✅ Flakiness patterns catalogued and categorized:
+   - **4 Main Categories**: Transient (5-40% failure), Structural (>50% failure), Configuration (env-dependent), Intermittent-Structural (regression-triggered)
+   - **6 Manifestation Patterns**: Retry-sensitive, Load-sensitive, Repeatable-deterministic, Erratic, Time-window, Cascade
+   - **20+ Root Causes**: Timing, race conditions, resource contention, external dependencies, test ordering, random data, assertions, state init, concurrency, env assumptions, etc.
+
+3. ✅ Detection strategy fully specified:
+   - **Tier 1 (Per-Run)**: Pytest plugin captures test exit code, duration, exception, markers (JSONL output, <1% overhead)
+   - **Tier 2 (Session)**: Classifies tests as flaky, calculates failure rate, scores flakiness, categorizes root cause
+   - **Tier 3 (Historical)**: Daily aggregation with trend detection, correlation with code changes
+   - **Tier 4 (Observer)**: FlakyTestCollector synthesizes into FlakyTestSignal, alerts on thresholds
+
+4. ✅ Metrics defined with thresholds:
+   - **Per-Test**: Failure rate, Run count, Retry success rate, Duration variance, Pattern entropy, Streak length, Recovery time
+   - **Repository-Level**: Flaky test count, Flakiness burden, Module concentration, Trend direction, MTTF, CI slowdown, Developer time cost
+   - **Thresholds**: >10% = flaky, 5-10% = unstable, 15%+ = alert, 3+ runs = confidence
+
+5. ✅ Observer integration points identified:
+   - New model: `FlakyTestSignal` (8 fields: flaky_count, unstable_count, affected_modules, most_problematic_tests, failure_rate_trend, recovery_rate, category_breakdown, estimated_impact)
+   - New collector: `FlakyTestCollector` (reads Tier 3 aggregation, produces FlakyTestSignal)
+   - Storage: `$OBSERVER_DATA_ROOT/flakiness/flakiness-history-YYYY-MM-DD.jsonl`
+   - Retention: Tier 1 (3d), Tier 2 (14d), Tier 3 (90d)
+
+6. ✅ Acceptance criteria documented:
+   - Classification: >10% failure rate threshold, ≥3 runs for confidence
+   - Patterns: 6 manifestation patterns with detection algorithms
+   - Alerts: 4 conditions (new_flaky_test, regression_spike, critical_flakiness, module_outbreak)
+   - Recommendations: Actionable fixes with priority levels
+
+**Design Decisions**:
+- **4-Tier Separation**: Observation (per-run), analysis (per-session), aggregation (historical), synthesis (repository-wide) — allows independent scaling and fault isolation
+- **>10% Failure Rate Threshold**: Balances sensitivity vs false positives; 5-10% flagged as "unstable" for monitoring
+- **3-Run Minimum Confidence**: Prevents single-run noise from triggering alerts; 100% confidence at 5+ runs
+- **7-Day Aggregation Window**: Captures weekly patterns (timing/schedule-based failures) without losing recent trends
+- **Pytest Plugin (Tier 1)**: Low overhead (<1%), captures at source, integrates with CI naturally
+- **Category-Based Root Cause**: Transient (retry), Structural (code), Configuration (env), Intermittent-Structural (regression) — each has distinct mitigation strategy
+
+**Risk Mitigations**:
+1. **False Positives**: 3-run confidence minimum, separate transient/structural, manual review for alerts, 1-day grace period for new flaky tests
+2. **Performance**: <1% overhead (Tier 1), async processing (Tier 2-3), daily aggregation (off-peak)
+3. **Storage**: JSONL format (compact), 3-day retention for Tier 1, 90-day cap on Tier 3, aggregation reduces data by 99%
+4. **Correlation False Positives**: Use correlation only as hint, require code review, surface confidence values (Spearman ρ)
+
+**Context Files Updated**:
+- ✅ `.console/task.md` — Updated objective, overall plan, definition of done, acceptance criteria (Stage 0)
+- ✅ `.console/backlog.md` — Added campaign with 6 planned stages, Stage 0 marked complete
+- ✅ `.console/log.md` — Added this entry
+
+**Implementation Roadmap** (out of scope for Stage 0):
+- Stage 1: Pytest plugin (Tier 1) + session analysis (Tier 2)
+- Stage 2: Historical aggregation (Tier 3)
+- Stage 3: Observer integration (FlakyTestCollector + FlakyTestSignal)
+- Stage 4: Dashboard & alerts
+- Stage 5: Testing & documentation
+- Stage 6: Verification & deployment
+
+---
+
 ## 2026-06-07 — STAGE 2: Run Full Test Suite and Linters to Verify All Fixes ✅
 
 **Objective**: Run comprehensive test suite, verify code quality, and confirm campaign readiness for merge.
