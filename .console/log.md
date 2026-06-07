@@ -1,3 +1,18 @@
+## 2026-06-07 — Reviewer proactivity: prioritize merge-ready PRs over slow fix loops
+
+**Decision**: the pr_review_watcher sweep now builds its worklist and sorts by
+_review_priority before processing — quick-merge candidates (fresh self_review,
+CI-green) run before PRs sunk into multi-pass fix battles. Previously PRs were
+processed in GitHub discovery order (descending number), so a slow PR could
+starve a merge-ready one each cycle, or drop it entirely on a mid-sweep restart.
+
+Live trigger: #247 (green, mergeable) was starved behind #250 (resurrected #235,
+in a legitimate multi-pass fix loop over a spec-overdelivery CONCERNS). Tiers:
+0 fresh self_review, 1 ci_fix, 2 self_review-in-fix-loop; within tier by
+fix_attempts then PR number. 4 new tests. Part of WO-6 (proactivity).
+
+---
+
 ## 2026-06-07 — Reviewer hardening: refuse to review against an unclean OC source tree
 
 **Decision**: the pr_review_watcher planning subprocess now pre-flights the OC

@@ -787,3 +787,37 @@ def test_unclean_tree_escalates_with_specific_reason_after_budget(tmp_path: Path
     esc.assert_called_once()
     assert esc.call_args.kwargs.get("reason") == "oc_source_tree_unclean"
     assert state["no_verdict_passes"] == 0
+
+
+# ── proactive review-queue ordering (2026-06-07 starvation fix) ───────────────
+
+
+def test_review_priority_tiers() -> None:
+    # Fresh self_review (tier 0) < ci_fix (tier 1) < self_review-in-fix-loop (tier 2)
+    fresh = {"phase": "self_review", "fix_attempts": 0, "pr_number": 100}
+    ci = {"phase": "ci_fix", "fix_attempts": 0, "pr_number": 100}
+    battling = {"phase": "self_review", "fix_attempts": 3, "pr_number": 100}
+    assert watcher._review_priority(fresh) < watcher._review_priority(ci)
+    assert watcher._review_priority(ci) < watcher._review_priority(battling)
+
+
+def test_review_priority_merge_ready_beats_higher_numbered_fix_battle() -> None:
+    # The live case: #247 (green, fresh self_review) must sort before #250
+    # (self_review sunk into a fix loop) even though 250 > 247.
+    pr247 = {"phase": "self_review", "fix_attempts": 0, "pr_number": 247}
+    pr250 = {"phase": "self_review", "fix_attempts": 2, "pr_number": 250}
+    assert watcher._review_priority(pr247) < watcher._review_priority(pr250)
+
+
+def test_review_priority_within_tier_orders_by_attempts_then_number() -> None:
+    a = {"phase": "self_review", "fix_attempts": 1, "pr_number": 300}
+    b = {"phase": "self_review", "fix_attempts": 2, "pr_number": 200}
+    c = {"phase": "self_review", "fix_attempts": 1, "pr_number": 400}
+    ordered = sorted([b, c, a], key=watcher._review_priority)
+    assert ordered == [a, c, b]  # fix_attempts asc, then pr_number asc
+
+
+def test_review_priority_defaults_safe_on_empty_state() -> None:
+    # Missing keys must not crash; defaults to ci_fix tier.
+    key = watcher._review_priority({})
+    assert key == (1, 0, 0)
