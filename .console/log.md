@@ -1,3 +1,34 @@
+## 2026-06-07 — Loop controller: global-limit fallback reselects across full backend priority
+
+**Decision**: After a backend limit, `_fallback_backend_after_limit()` re-runs
+`_select_backend()` over the full priority list instead of checking only the
+immediate alternate.
+
+Root cause: a global Claude limit cools both `claude` and `opus`, but the old
+fallback checked only `_alternate_backend("claude")` → `opus` → cooled → slept
+until Claude reset instead of falling through to `codex`. Observed live
+2026-06-07 15:56Z: controller logged "using codex" then slept 125m with codex
+cooldown null. Regression test covers global-limit → codex selection.
+
+Branch: `fix/controller-global-limit-fallback` (fix authored by Codex session,
+verified + landed via worktree off main; live checkout on goal/3476567d untouched)
+
+---
+
+## 2026-06-07 — Watchdog: Fix custodian-audit CI failure (R1 detector ID collision)
+
+**Decision**: Set `audit.r1_enabled: false` in `.custodian/config.yaml`.
+
+Root cause: The built-in R1 reconcile detector and the custom plugin R1 share
+detector ID "R1". `run_audit()` accumulates `total_findings` from both, but the
+plugin R1 overwrites the pattern entry — causing `.console/log.md` (1920 ln) and
+`.console/backlog.md` (442 ln) to be counted in `total_findings` but absent from
+`findings[]`. CI showed 2 phantom findings. Disabling the built-in R1 resolves the
+ID collision; the custom plugin R1 continues to handle `.console/` structural checks.
+
+Branch: `oc-watchdog/20260607-1430-fix-r1-reconcile-id-collision`
+
+---
 ## 2026-06-07 — PR #247 CI fixes: pytest11 entry point, type error, encoding
 
 Watchdog resolved 5 CI failures on PR #247 goal/3476567d:

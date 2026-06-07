@@ -369,6 +369,32 @@ def test_handle_backend_limit_global_claude_limit_cools_opus_too(
     assert cooldowns["opus"] == reset
 
 
+def test_global_claude_limit_fallback_selects_codex(monkeypatch, tmp_path: Path) -> None:
+    frozen_now = datetime(2026, 5, 25, 15, 0, tzinfo=timezone.utc)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):  # type: ignore[override]
+            if tz is None:
+                return frozen_now.replace(tzinfo=None)
+            return frozen_now.astimezone(tz)
+
+    monkeypatch.setattr(controller, "datetime", FrozenDateTime)
+    monkeypatch.setattr(controller, "_log", lambda *a, **k: None)
+    monkeypatch.setattr(
+        controller,
+        "_command_available",
+        lambda command: command in {"claude", "codex"},
+    )
+
+    log_path = tmp_path / "session.log"
+    log_path.write_text("You've reached your 5-hour session limit; resets 5:15pm (UTC)\n")
+    cooldowns: dict = {"claude": None, "opus": None, "codex": None}
+
+    assert controller._handle_backend_limit("claude", log_path, cooldowns) is True
+    assert controller._fallback_backend_after_limit(cooldowns) == "codex"
+
+
 def test_classify_limit_kind_model_weekly_for_sonnet() -> None:
     kind, model = controller._classify_limit_kind(
         "claude", "You've hit your Sonnet limit · resets Jun 3, 9am (America/New_York)"
