@@ -39,7 +39,7 @@ class DecisionMetricsCollector:
 
     def __init__(self):
         self.decision_outcomes: dict[str, int] = {
-            "merge": 0,
+            "approved": 0,
             "blocked": 0,
             "retry": 0,
             "escalate": 0,
@@ -145,7 +145,7 @@ class TestMergeDecisionMetrics:
 
         # Record decision metrics
         metrics_collector.record_decision(
-            outcome="merge",
+            outcome="approved",
             latency_ms=latency_ms,
             reason="unanimous_lgtm",
             lanes=1,
@@ -153,7 +153,7 @@ class TestMergeDecisionMetrics:
 
         # Assert: Decision outcome metric recorded
         summary = metrics_collector.get_metrics_summary()
-        assert summary["outcomes"]["merge"] == 1
+        assert summary["outcomes"]["approved"] == 1
         assert summary["total_decisions"] == 1
         assert summary["max_latency_ms"] < 500  # Baseline <500ms
 
@@ -334,7 +334,7 @@ class TestDecisionLatencyMetrics:
         for i in range(5):
             latency_ms = 100 + (i * 50)  # 100, 150, 200, 250, 300ms
             metrics_collector.record_decision(
-                outcome="merge" if i % 2 == 0 else "retry",
+                outcome="approved" if i % 2 == 0 else "retry",
                 latency_ms=latency_ms,
                 reason="test",
             )
@@ -459,7 +459,7 @@ class TestAnomalyDetectionMetrics:
         """
         # Simulate 10 decisions: 8 merges, 2 retries → 20% retry rate
         for _ in range(8):
-            metrics_collector.record_decision("merge", 100, "normal")
+            metrics_collector.record_decision("approved", 100, "normal")
         for _ in range(2):
             metrics_collector.record_decision("retry", 150, "mixed_verdicts")
 
@@ -485,7 +485,7 @@ class TestAnomalyDetectionMetrics:
 
         for cycles in ci_wait_cycles_list:
             latency = 100 + (cycles * 10)  # More waits = higher latency
-            metrics_collector.record_decision("merge", latency, "ci_green_delay")
+            metrics_collector.record_decision("approved", latency, "ci_green_delay")
 
         summary = metrics_collector.get_metrics_summary()
 
@@ -501,7 +501,7 @@ class TestAnomalyDetectionMetrics:
         Acceptance: Escalation counter incremented for human-intervention decisions.
         """
         # Simulate decision distribution
-        metrics_collector.record_decision("merge", 100, "happy_path")
+        metrics_collector.record_decision("approved", 100, "happy_path")
         metrics_collector.record_decision("blocked", 150, "unresolvable")
         metrics_collector.record_decision("escalate", 200, "backend_unavailable")
 
@@ -527,7 +527,7 @@ class TestMetricsAggregation:
         Acceptance: Metrics serializable to JSON, ready for external consumption.
         """
         # Populate metrics
-        metrics_collector.record_decision("merge", 100, "unanimous")
+        metrics_collector.record_decision("approved", 100, "unanimous")
         metrics_collector.record_decision("blocked", 150, "concerns")
         metrics_collector.record_decision("retry", 120, "mixed")
 
@@ -538,7 +538,7 @@ class TestMetricsAggregation:
         assert json_str  # Non-empty
         parsed = json.loads(json_str)
         assert parsed["total_decisions"] == 3
-        assert parsed["outcomes"]["merge"] == 1
+        assert parsed["outcomes"]["approved"] == 1
         assert parsed["outcomes"]["blocked"] == 1
         assert parsed["outcomes"]["retry"] == 1
 
@@ -550,7 +550,7 @@ class TestMetricsAggregation:
 
         Acceptance: Summary includes total decisions, outcomes, latency stats.
         """
-        metrics_collector.record_decision("merge", 100, "test")
+        metrics_collector.record_decision("approved", 100, "test")
         summary = metrics_collector.get_metrics_summary()
 
         # Assert: All required fields present
@@ -559,4 +559,4 @@ class TestMetricsAggregation:
         assert "avg_latency_ms" in summary
         assert "max_latency_ms" in summary
         assert "decision_log" in summary
-        assert all(key in summary["outcomes"] for key in ["merge", "blocked", "retry", "escalate"])
+        assert all(key in summary["outcomes"] for key in ["approved", "blocked", "retry", "escalate"])

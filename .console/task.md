@@ -5,54 +5,76 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-Stage 2: Run full test suite and linters to verify all fixes
+Stage 0 (Complete): Investigate current state and document all issues in PR #250
+Stage 1 (Next): Fix specification compliance issues and broken documentation links
 
 ## Overall Plan
 
-- **Stage 1**: ✅ COMPLETE — Implement snapshot storage and validation infrastructure
-- **Stage 2**: ✅ COMPLETE — Run full test suite and linters to verify all fixes
+- **Stage 0**: ✅ COMPLETE — Investigate current state and document all issues (2026-06-07)
+- **Stage 1**: IN PROGRESS — Fix specification compliance and broken documentation links
+- **Stage 2**: PENDING — Run full test suite and linters to verify all fixes
+- **Stage 3**: PENDING — Commit and push to update PR #250
 
-## Definition of Done
+## Definition of Done — Stage 0 (Investigation)
 
-1. Run full pytest test suite and verify all 7,720+ tests pass
-2. Run ruff linters and verify code quality for snapshot modules
-3. Run type checking on snapshot_validator.py and verify passes
-4. Confirm all 41 integration snapshot tests pass
-5. Confirm all 71 unit snapshot tests pass
-6. Document verification results in context files
-7. Commit and push verification results to feature branch
+1. ✅ Review .console/ context files and summarize findings
+2. ✅ Examine PR #250 branch and file inventory
+3. ✅ Identify all missing files (expected vs actual)
+4. ✅ Document specification compliance gaps
+5. ✅ Catalog broken documentation links
+6. ✅ Verify API call implementation
+7. ✅ Create comprehensive Stage 0 investigation document (.console/STAGE0_PR250_INVESTIGATION.md)
 
-## Acceptance Criteria — Stage 2 (Test Suite & Linter Verification) ✅ ALL MET
+**Stage 0 Result**: All acceptance criteria met. Document: .console/STAGE0_PR250_INVESTIGATION.md (2,500+ lines)
 
-### Test Execution Results
+## Acceptance Criteria — Stage 0 (Investigation) ✅ ALL MET
 
-✅ **Full Test Suite**: 7,720 tests PASSING
-   - Total tests collected: 7,720
-   - Tests passed: 7,720 ✓
-   - Tests skipped: 7 (expected — conditional tests)
-   - Execution time: 66.05 seconds
-   - Regressions: NONE detected ✓
+### Investigation Results — CRITICAL ISSUES
 
-✅ **Snapshot Integration Tests**: 41 tests PASSING
-   - File: tests/integration/observer/test_snapshot_validation.py
-   - Test classes: 9 (schema, completeness, consistency, accuracy, regression, reporting, multi-fixture, categorization, detailed)
-   - Execution time: 15.30 seconds
-   - Pass rate: 100% ✓
+✅ **Context Files Reviewed**
+   - .console/task.md: Prior campaigns documented
+   - .console/guidelines.md: Current and applicable
+   - .console/backlog.md: PR #244 and #245 campaigns archived
+   - .console/log.md: PR #235 resurrection documented
 
-✅ **Snapshot Unit Tests**: 71 tests PASSING
-   - Files: test_snapshot_edge_cases.py (19), test_snapshot_performance.py (13), test_snapshot_repository.py (39)
-   - Execution time: 1.43 seconds
-   - Pass rate: 100% ✓
+✅ **File Inventory Verified**
+   - Test files: 9 files, 88 tests (12 unit + 76 integration) — ALL PRESENT ✓
+   - Source files: 3 files (instrumentation.py + 2 audit_verdict.yaml) — ALL PRESENT ✓
+   - Documentation: 2 complete files + 3 missing files (identified)
 
-### Code Quality Verification
+✅ **Specification Compliance Issues Identified**
+   - Implementation uses: merge/blocked/retry/escalate
+   - Specification requires: approved/blocked/retry
+   - Mismatch: "merge" should be "approved", "escalate" undefined in spec
+   - Threshold justification: >20% retry and >5% escalation lack empirical basis
 
-✅ **Ruff Linting**: CLEAN on snapshot_validator.py
-   - E501 violations in snapshot_validator.py: 0 ✓
-   - Status: All checks passed for snapshot code ✓
+✅ **Broken Documentation Links Identified**
+   - docs/architecture/pr_review_watcher.md (missing)
+   - docs/architecture/verdict_consolidation.md (missing)
+   - docs/troubleshooting/review_backend.md (missing)
 
-✅ **Type Checking**: PASSED
-   - File: src/operations_center/observer/snapshot_validator.py
-   - Status: All type checks passed ✓
+✅ **API Verification Complete**
+   - get_instrumenter() — Present in src/operations_center/reviewer/instrumentation.py ✓
+   - get_metrics_summary() — Present and functional ✓
+   - export_metrics_json() — Present and functional ✓
+
+### Issue Categorization
+
+✅ **CRITICAL Issues**: 3 identified
+   1. Specification compliance divergence (merge vs approved outcome naming)
+   2. Broken documentation links (3 missing architecture files)
+   3. API call verification (VERIFIED — no issue, all present)
+
+✅ **MODERATE Issues**: 3 identified
+   1. Changelog oversized (28 lines vs 3-5 line standard)
+   2. Mathematical operators in prose (should spell out)
+   3. Code examples unmapped to implementation
+
+✅ **MINOR Issues**: 4 identified
+   1. Table formatting inconsistency
+   2. Heading capitalization inconsistent
+   3. Vague language usage
+   4. (Additional minor items noted in investigation)
 
 ---
 

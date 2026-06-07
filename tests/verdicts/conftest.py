@@ -51,7 +51,7 @@ class LaneVerdict:
 class MergeDecision:
     """Represents the final merge decision from verdict consolidation."""
 
-    decision: str  # "merge" | "blocked" | "retry" | "escalate"
+    decision: str  # "approved" | "blocked" | "retry"
     reason: str
     consolidated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     lane_verdicts: list[LaneVerdict] = field(default_factory=list)
@@ -159,7 +159,7 @@ class MergeDecisionBuilder:
     """Builder for creating merge decision fixtures."""
 
     def __init__(self):
-        self.decision = "merge"
+        self.decision = "approved"
         self.reason = "unanimous_lgtm"
         self.consolidated_at = datetime.now(UTC).isoformat()
         self.lane_verdicts = []
@@ -177,7 +177,7 @@ class MergeDecisionBuilder:
         return self
 
     def merge(self) -> MergeDecisionBuilder:
-        self.decision = "merge"
+        self.decision = "approved"
         self.reason = "unanimous_lgtm"
         return self
 

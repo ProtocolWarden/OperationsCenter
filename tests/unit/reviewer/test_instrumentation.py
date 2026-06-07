@@ -18,9 +18,9 @@ from operations_center.reviewer.instrumentation import (
 
 class TestDecisionMetric:
     def test_to_dict_round_trips(self):
-        m = DecisionMetric(outcome="merge", latency_ms=42.5, reason="ok", lanes=2)
+        m = DecisionMetric(outcome="approved", latency_ms=42.5, reason="ok", lanes=2)
         d = m.to_dict()
-        assert d["outcome"] == "merge"
+        assert d["outcome"] == "approved"
         assert d["latency_ms"] == 42.5
         assert d["reason"] == "ok"
         assert d["lanes"] == 2
@@ -35,13 +35,13 @@ class TestDecisionMetric:
 class TestDecisionMetricsCollector:
     def test_initial_state(self):
         c = DecisionMetricsCollector()
-        assert c.decision_outcomes["merge"] == 0
+        assert c.decision_outcomes["approved"] == 0
         assert c.decision_latencies == []
 
     def test_record_decision_increments_outcome(self):
         c = DecisionMetricsCollector()
-        c.record_decision(outcome="merge", latency_ms=50.0, reason="ci_green", lanes=1)
-        assert c.decision_outcomes["merge"] == 1
+        c.record_decision(outcome="approved", latency_ms=50.0, reason="ci_green", lanes=1)
+        assert c.decision_outcomes["approved"] == 1
         assert c.decision_latencies == [50.0]
 
     def test_record_decision_unknown_outcome_still_records_latency(self):
@@ -58,7 +58,7 @@ class TestDecisionMetricsCollector:
 
     def test_get_metrics_summary_with_data(self):
         c = DecisionMetricsCollector()
-        c.record_decision(outcome="merge", latency_ms=100.0)
+        c.record_decision(outcome="approved", latency_ms=100.0)
         c.record_decision(outcome="blocked", latency_ms=200.0)
         s = c.get_metrics_summary()
         assert s["total_decisions"] == 2
@@ -89,13 +89,13 @@ class TestMergeDecisionInstrumenter:
 
     def test_record_decision_outcome_auto_starts_timer(self):
         inst = MergeDecisionInstrumenter()
-        inst.record_decision_outcome(pr_number=1, repo_key="OC", outcome="merge")
+        inst.record_decision_outcome(pr_number=1, repo_key="OC", outcome="approved")
         s = inst.get_metrics_summary()
         assert s["total_decisions"] == 1
 
     def test_export_metrics_json_is_valid_json(self):
         inst = MergeDecisionInstrumenter()
-        inst.record_decision_outcome(pr_number=1, repo_key="OC", outcome="merge")
+        inst.record_decision_outcome(pr_number=1, repo_key="OC", outcome="approved")
         raw = inst.export_metrics_json()
         parsed = json.loads(raw)
         assert "total_decisions" in parsed

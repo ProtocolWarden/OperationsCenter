@@ -42,10 +42,9 @@ class DecisionMetricsCollector:
 
     def __init__(self):
         self.decision_outcomes: dict[str, int] = {
-            "merge": 0,
+            "approved": 0,
             "blocked": 0,
             "retry": 0,
-            "escalate": 0,
         }
         self.decision_latencies: list[float] = []
         self.structured_logs: list[dict] = []
@@ -105,7 +104,7 @@ class MergeDecisionInstrumenter:
 
     Provides structured logging, metrics collection, and baseline tracking for:
     - Verdict consolidation latency
-    - Merge decision outcomes (approved/blocked/retry/escalate counts)
+    - Merge decision outcomes (approved/blocked/retry counts)
     - Decision latency histogram (baseline <500ms)
     - Anomaly detection triggers (unusual retry rates, CI-green delays)
     """
@@ -149,7 +148,7 @@ class MergeDecisionInstrumenter:
         reason: str = "",
         lanes: int = 1,
     ) -> None:
-        """Record a merge decision outcome (merge/blocked/retry/escalate)."""
+        """Record a merge decision outcome (approved/blocked/retry)."""
         if self._decision_start_time is None:
             self._decision_start_time = time.time()
         latency_ms = (time.time() - self._decision_start_time) * 1000
@@ -243,31 +242,6 @@ class MergeDecisionInstrumenter:
             },
         )
 
-    def record_escalation(
-        self,
-        pr_number: int,
-        repo_key: str,
-        reason: str,
-        detail: str = "",
-    ) -> None:
-        """Record escalation to human (decision cannot be auto-resolved)."""
-        self.metrics_collector.record_decision(
-            outcome="escalate",
-            latency_ms=(time.time() - self._decision_start_time) * 1000
-            if self._decision_start_time
-            else 0,
-            reason=reason,
-        )
-        logger.warning(
-            "decision_escalation",
-            extra={
-                "pr_number": pr_number,
-                "repo_key": repo_key,
-                "reason": reason,
-                "detail": detail[:200],
-            },
-        )
-
     def get_metrics_summary(self) -> dict:
         """Get aggregated decision metrics."""
         return self.metrics_collector.get_metrics_summary()
@@ -321,19 +295,4 @@ def record_ci_gate_defer(
         wait_cycle=wait_cycle,
         max_cycles=max_cycles,
         failed_checks=failed_checks,
-    )
-
-
-def record_escalation(
-    pr_number: int,
-    repo_key: str,
-    reason: str,
-    detail: str = "",
-) -> None:
-    """Record escalation to the global instrumenter."""
-    get_instrumenter().record_escalation(
-        pr_number=pr_number,
-        repo_key=repo_key,
-        reason=reason,
-        detail=detail,
     )
