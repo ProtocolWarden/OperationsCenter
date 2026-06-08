@@ -239,7 +239,7 @@ def build_spec_author_goal_text(payload: dict, run_id_placeholder: str) -> str:
 
     parts: list[str] = []
     parts.append(
-        f"# Spec authoring task\n\n"
+        f"# Spec: {spec_slug}\n\n"
         f"Write a focused improvement-campaign spec at `{target_path}` in this "
         f"repository (`OperationsCenter`). The spec drives a multi-task Plane "
         f"campaign; keep its goals concrete and bounded."

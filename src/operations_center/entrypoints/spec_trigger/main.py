@@ -21,7 +21,7 @@ import logging
 import re
 import subprocess
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -127,6 +127,42 @@ def _any_queued_spec_author(issues: list[dict[str, Any]]) -> str | None:
         if src in names and kind in names:
             return str(issue.get("id", ""))
     return None
+
+
+_SPEC_AUTHOR_TERMINAL_STATES = frozenset({"done", "cancelled"})
+_QUEUE_DRAIN_COOLDOWN_HOURS = 6
+
+
+def _spec_author_recently_completed(
+    issues: list[dict[str, Any]],
+    cooldown_hours: int = _QUEUE_DRAIN_COOLDOWN_HOURS,
+) -> bool:
+    """Return True if a spec-author task completed within the cooldown window.
+
+    Prevents the queue-drain trigger from re-firing immediately after a
+    spec-author task finishes, which caused 7+ specs to be minted in one day.
+    Drop-file triggers bypass this check (operator intent wins).
+    """
+    src = _LABEL_SOURCE.lower()
+    kind = _LABEL_TASK_KIND.lower()
+    cutoff = datetime.now(UTC) - timedelta(hours=cooldown_hours)
+    for issue in issues:
+        state_name = str((issue.get("state") or {}).get("name", "")).lower()
+        if state_name not in _SPEC_AUTHOR_TERMINAL_STATES:
+            continue
+        names = _spec_author_label_names(issue)
+        if src not in names or kind not in names:
+            continue
+        raw_ts = issue.get("updated_at") or issue.get("created_at") or ""
+        if not raw_ts:
+            continue
+        try:
+            ts = datetime.fromisoformat(raw_ts.replace("Z", "+00:00"))
+            if ts > cutoff:
+                return True
+        except ValueError:
+            continue
+    return False
 
 
 def _slugify(text: str, fallback: str) -> str:
@@ -258,6 +294,19 @@ def run_once(settings: Any, client: PlaneClient) -> None:
             logger.info(
                 json.dumps(
                     {"event": "spec_trigger_skip_queued", "issue_id": queued},
+                    ensure_ascii=False,
+                )
+            )
+            return
+        # Cooldown: suppress if a spec-author task completed recently to prevent
+        # re-triggering immediately after each completion (root cause: 7 specs/day).
+        if _spec_author_recently_completed(all_issues):
+            logger.info(
+                json.dumps(
+                    {
+                        "event": "spec_trigger_skip_cooldown",
+                        "cooldown_hours": _QUEUE_DRAIN_COOLDOWN_HOURS,
+                    },
                     ensure_ascii=False,
                 )
             )
