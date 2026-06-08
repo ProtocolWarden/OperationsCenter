@@ -304,7 +304,7 @@ def main(argv: list[str] | None = None) -> int:
             ],
             "errors": [{"repo_key": r.repo_key, "error": r.error} for r in errors],
         }
-        print(json.dumps(out, indent=2))
+        print(json.dumps(out, indent=2, ensure_ascii=False))
     else:
         if all_orphans:
             print(f"ORPHAN BRANCHES ({len(all_orphans)}):")
