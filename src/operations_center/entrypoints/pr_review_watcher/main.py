@@ -1341,7 +1341,17 @@ def _phase1(
     # new push changes the PR head SHA.
     if state.get("escalated_needs_human"):
         escalated_head_sha = str(state.get("escalated_head_sha") or "").strip()
-        if current_head_sha and escalated_head_sha and current_head_sha != escalated_head_sha:
+        if not escalated_head_sha:
+            # Escalated with no recorded SHA (e.g. state was reset after a
+            # rebase or manual clear). Can't compare — clear and retry.
+            state["escalated_needs_human"] = False
+            state["no_verdict_passes"] = 0
+            logger.info(
+                "pr_review_watcher: PR #%d escalated with no recorded SHA; clearing for retry",
+                pr_number,
+            )
+            _save_state(state_path, state)
+        elif current_head_sha and current_head_sha != escalated_head_sha:
             state["escalated_needs_human"] = False
             state.pop("escalated_head_sha", None)
             state["no_verdict_passes"] = 0
