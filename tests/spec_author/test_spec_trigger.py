@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -14,13 +15,17 @@ def _make_issue(
     state_name: str,
     labels: list[str],
     title: str = "Test",
+    updated_at: str | None = None,
 ) -> dict[str, Any]:
-    return {
+    issue: dict[str, Any] = {
         "id": issue_id,
         "name": title,
         "state": {"name": state_name},
         "labels": [{"name": lbl} for lbl in labels],
     }
+    if updated_at is not None:
+        issue["updated_at"] = updated_at
+    return issue
 
 
 _SPEC_LABELS = ["source: spec-director", "task-kind: spec-author"]
@@ -174,6 +179,119 @@ def test_run_once_drop_file_fires_even_with_queued_spec_tasks(tmp_path):
         patch(
             "operations_center.entrypoints.spec_trigger.main.create_spec_author_task",
             return_value="new-issue-id",
+        ) as mock_create,
+    ):
+        run_once(mock_settings, mock_client)
+
+    mock_create.assert_called_once()
+
+
+# ── _spec_author_recently_completed cooldown tests ────────────────────────────
+
+
+def test_recently_completed_detects_done_within_window():
+    from operations_center.entrypoints.spec_trigger.main import _spec_author_recently_completed
+
+    recent_ts = (datetime.now(UTC) - timedelta(hours=2)).isoformat()
+    issue = _make_issue("d1", "Done", _SPEC_LABELS, updated_at=recent_ts)
+    assert _spec_author_recently_completed([issue], cooldown_hours=6) is True
+
+
+def test_recently_completed_detects_cancelled_within_window():
+    from operations_center.entrypoints.spec_trigger.main import _spec_author_recently_completed
+
+    recent_ts = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+    issue = _make_issue("c1", "Cancelled", _SPEC_LABELS, updated_at=recent_ts)
+    assert _spec_author_recently_completed([issue], cooldown_hours=6) is True
+
+
+def test_recently_completed_ignores_old_terminal_task():
+    from operations_center.entrypoints.spec_trigger.main import _spec_author_recently_completed
+
+    old_ts = (datetime.now(UTC) - timedelta(hours=10)).isoformat()
+    issue = _make_issue("d2", "Done", _SPEC_LABELS, updated_at=old_ts)
+    assert _spec_author_recently_completed([issue], cooldown_hours=6) is False
+
+
+def test_recently_completed_ignores_non_spec_author_labels():
+    from operations_center.entrypoints.spec_trigger.main import _spec_author_recently_completed
+
+    recent_ts = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+    issue = _make_issue("g1", "Done", ["task-kind: goal"], updated_at=recent_ts)
+    assert _spec_author_recently_completed([issue], cooldown_hours=6) is False
+
+
+def test_recently_completed_ignores_active_states():
+    from operations_center.entrypoints.spec_trigger.main import _spec_author_recently_completed
+
+    recent_ts = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+    issue = _make_issue("r1", "Ready for AI", _SPEC_LABELS, updated_at=recent_ts)
+    assert _spec_author_recently_completed([issue], cooldown_hours=6) is False
+
+
+def test_run_once_suppresses_queue_drain_within_cooldown(tmp_path):
+    """run_once must not create a new task when a spec-author finished recently."""
+    from operations_center.entrypoints.spec_trigger.main import run_once
+
+    recent_ts = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+    done_issue = _make_issue("done-spec", "Done", _SPEC_LABELS, updated_at=recent_ts)
+
+    mock_client = MagicMock()
+    mock_client.list_issues.return_value = [done_issue]
+
+    mock_sd = MagicMock()
+    mock_sd.enabled = True
+    mock_sd.drop_file_path = str(tmp_path / "nonexistent.md")
+    mock_sd.poll_interval_seconds = 60
+
+    mock_settings = MagicMock()
+    mock_settings.spec_author = mock_sd
+    mock_settings.repos = {}
+
+    with (
+        patch(
+            "operations_center.entrypoints.spec_trigger.main._has_active_campaign",
+            return_value=False,
+        ),
+        patch(
+            "operations_center.entrypoints.spec_trigger.main.create_spec_author_task",
+        ) as mock_create,
+    ):
+        run_once(mock_settings, mock_client)
+
+    mock_create.assert_not_called()
+
+
+def test_run_once_drop_file_bypasses_cooldown(tmp_path):
+    """Drop-file triggers bypass the cooldown — operator intent wins."""
+    from operations_center.entrypoints.spec_trigger.main import run_once
+
+    drop_file = tmp_path / "spec_direction.md"
+    drop_file.write_text("override idea")
+
+    recent_ts = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+    done_issue = _make_issue("done-spec", "Done", _SPEC_LABELS, updated_at=recent_ts)
+
+    mock_client = MagicMock()
+    mock_client.list_issues.return_value = [done_issue]
+
+    mock_sd = MagicMock()
+    mock_sd.enabled = True
+    mock_sd.drop_file_path = str(drop_file)
+    mock_sd.poll_interval_seconds = 60
+
+    mock_settings = MagicMock()
+    mock_settings.spec_author = mock_sd
+    mock_settings.repos = {}
+
+    with (
+        patch(
+            "operations_center.entrypoints.spec_trigger.main._has_active_campaign",
+            return_value=False,
+        ),
+        patch(
+            "operations_center.entrypoints.spec_trigger.main.create_spec_author_task",
+            return_value="new-id",
         ) as mock_create,
     ):
         run_once(mock_settings, mock_client)

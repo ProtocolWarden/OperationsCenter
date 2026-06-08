@@ -1,3 +1,5 @@
+## 2026-06-08 — WO-5: spec-author PR title + dedup gate implemented
+
 ## 2026-06-08 — WO-3: self-retracting reviewer verdicts implemented
 
 Added `_retract_flag()` to the review watcher: when a PR merges, is closed with receipt,

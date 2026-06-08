@@ -437,6 +437,7 @@ class WorkspaceManager:
 
         text = (request.goal_text or "").strip()
         first_line = text.splitlines()[0].strip() if text else ""
+        first_line = re.sub(r"^#+\s*", "", first_line)  # strip markdown heading markers
         first_line = re.sub(r"^\[\w+\]\s*", "", first_line)  # strip [Impl]/[Test]/[Improve]
         first_line = re.sub(r"\*\*([^*]+)\*\*", r"\1", first_line)  # **bold** → bold
         first_line = re.sub(r"`([^`]+)`", r"\1", first_line)  # `code` → code

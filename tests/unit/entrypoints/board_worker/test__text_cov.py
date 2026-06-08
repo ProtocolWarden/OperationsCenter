@@ -298,7 +298,7 @@ def test_build_spec_author_full_authoring():
         },
     }
     out = _text.build_spec_author_goal_text(payload, "RUN9")
-    assert "Spec authoring task" in out
+    assert "Spec: newslug" in out
     assert "specs/new.md" in out
     assert "RUN9" in out
     assert "slug: newslug" in out
@@ -317,7 +317,7 @@ def test_build_spec_author_full_authoring():
 def test_build_spec_author_minimal_no_optionals():
     payload = {"spec_slug": "s", "target_path": "t.md"}
     out = _text.build_spec_author_goal_text(payload, "R")
-    assert "Spec authoring task" in out
+    assert "Spec: s" in out
     assert "## Available Repos" not in out
     assert "## Operator Direction" not in out
     assert "Existing Specs" not in out
@@ -360,4 +360,4 @@ def test_build_spec_author_board_snapshot_missing_keys():
 def test_build_spec_author_context_bundle_missing_uses_empty():
     payload = {"spec_slug": "s", "target_path": "t.md", "context_bundle": None}
     out = _text.build_spec_author_goal_text(payload, "R")
-    assert "Spec authoring task" in out
+    assert "Spec: s" in out

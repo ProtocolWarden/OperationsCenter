@@ -500,6 +500,18 @@ def test_commit_message_truncates_to_72(tmp_path):
     assert mgr._commit_message(req) == "x" * 72
 
 
+def test_commit_message_strips_heading_marker(tmp_path):
+    mgr = WorkspaceManager()
+    req = _make_request(tmp_path / "ws", goal_text="# Spec: queue-drain-20260602\nmore lines")
+    assert mgr._commit_message(req) == "Spec: queue-drain-20260602"
+
+
+def test_commit_message_strips_multi_hash_heading(tmp_path):
+    mgr = WorkspaceManager()
+    req = _make_request(tmp_path / "ws", goal_text="## Some heading\ndetails")
+    assert mgr._commit_message(req) == "Some heading"
+
+
 # ── _maybe_create_pr ─────────────────────────────────────────────────────────
 
 
