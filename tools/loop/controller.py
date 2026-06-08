@@ -757,6 +757,70 @@ def _handle_backend_limit(
     return True
 
 
+def _seed_cooldowns_from_usage_store(
+    cooldowns: dict[str, datetime | None],
+    limit_meta: dict[str, dict[str, object]],
+) -> None:
+    """Seed controller cooldowns from the persisted executor usage ledger.
+
+    The controller keeps in-memory cooldowns, but restarts must remember limits
+    already discovered by previous runs. The usage store is model-aware; map its
+    worker-backend model names onto the controller backend names.
+    """
+    try:
+        src = str(REPO_ROOT / "src")
+        if src not in sys.path:
+            sys.path.insert(0, src)
+        from operations_center.execution.usage_store import UsageStore  # type: ignore[import-not-found]
+
+        now = datetime.now(timezone.utc)
+        snapshot = UsageStore().current_worker_backend_cooldowns(now=now)
+    except Exception as exc:  # pragma: no cover - best-effort startup state
+        _log(f"usage-store cooldown seed skipped: {exc}")
+        return
+
+    def apply_cooldown(
+        backend: str,
+        reset_raw: object,
+        limit_kind: object,
+        model: object,
+    ) -> None:
+        if not isinstance(reset_raw, str):
+            return
+        try:
+            reset_at = datetime.fromisoformat(reset_raw.replace("Z", "+00:00")).astimezone(
+                timezone.utc
+            )
+        except ValueError:
+            return
+        if reset_at <= now:
+            return
+        current = cooldowns.get(backend)
+        if current is None or reset_at > current:
+            cooldowns[backend] = reset_at
+            limit_meta[backend] = {
+                "limit_kind": str(limit_kind) if limit_kind is not None else "unknown",
+                "model": model if isinstance(model, str) else None,
+                "reset_at": reset_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            }
+
+    for detail in snapshot.get("claude_code", {}).get("cooldowns", []):
+        if not isinstance(detail, dict):
+            continue
+        model = detail.get("model")
+        if detail.get("limit_kind") == "model_weekly" and model == "sonnet":
+            apply_cooldown("claude", detail.get("reset_at"), detail.get("limit_kind"), model)
+        elif detail.get("limit_kind") == "model_weekly" and model == "opus":
+            apply_cooldown("opus", detail.get("reset_at"), detail.get("limit_kind"), model)
+        elif detail.get("limit_kind") != "model_weekly":
+            apply_cooldown("claude", detail.get("reset_at"), detail.get("limit_kind"), model)
+            apply_cooldown("opus", detail.get("reset_at"), detail.get("limit_kind"), model)
+
+    for detail in snapshot.get("codex_cli", {}).get("cooldowns", []):
+        if isinstance(detail, dict):
+            apply_cooldown("codex", detail.get("reset_at"), detail.get("limit_kind"), "codex")
+
+
 def get_delay() -> int:
     """Read delay from schedule file written by the session at STEP 10."""
     try:
@@ -914,6 +978,7 @@ def main() -> None:
     iteration = 0
     cooldowns: dict[str, datetime | None] = {"claude": None, "opus": None, "codex": None}
     cooldown_meta: dict[str, dict[str, object]] = {}
+    _seed_cooldowns_from_usage_store(cooldowns, cooldown_meta)
     _last_known_sha: str = subprocess.run(
         ["git", "rev-parse", "HEAD"],
         cwd=REPO_ROOT,
@@ -982,6 +1047,26 @@ def main() -> None:
                             backend, session_log, cooldowns, cooldown_meta
                         ):
                             write_runtime_state(cooldowns, None, limit_meta=cooldown_meta)
+                            fallback = _fallback_backend_after_limit(cooldowns)
+                            if fallback is not None:
+                                _log(
+                                    f"{backend.capitalize()} is cooling down; "
+                                    f"running immediate {fallback.capitalize()} fallback."
+                                )
+                                write_runtime_state(cooldowns, fallback, limit_meta=cooldown_meta)
+                                rc, session_log = run_session(iteration, fallback, anchor_vars)
+                                backend = fallback
+                                _log(f"{fallback.capitalize()} fallback session exited rc={rc}")
+                                if _stop or STOP_FLAG.exists():
+                                    break
+                                if rc == 0:
+                                    break
+                                if _handle_backend_limit(
+                                    backend, session_log, cooldowns, cooldown_meta
+                                ):
+                                    write_runtime_state(
+                                        cooldowns, None, limit_meta=cooldown_meta
+                                    )
                             if _sleep_until_backend_reset(cooldowns):
                                 continue
                     else:

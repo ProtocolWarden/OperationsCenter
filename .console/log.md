@@ -306,3 +306,9 @@ Flaky CI failure: 0.1s limit failed with 0.177s on shared runners.
 Raised to 1.0s — still catches catastrophic regression (10x+).
 
 ## 2026-06-08 — WO-1 close-with-receipt invariant hardened
+
+## 2026-06-08 — fix(controller): persisted Claude cooldowns fall through to Codex
+
+Loop controller now seeds Sonnet/Opus/Codex cooldowns from the persisted usage
+ledger on restart and reselects after chained backend limits, so exhausted
+Claude weekly quotas fall through to Codex instead of sleeping until reset.

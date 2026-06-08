@@ -2,9 +2,10 @@
 # Copyright (C) 2026 ProtocolWarden
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from operations_center.execution.usage_store import UsageStore
 from tools.loop import controller
 
 
@@ -393,6 +394,47 @@ def test_global_claude_limit_fallback_selects_codex(monkeypatch, tmp_path: Path)
 
     assert controller._handle_backend_limit("claude", log_path, cooldowns) is True
     assert controller._fallback_backend_after_limit(cooldowns) == "codex"
+
+
+def test_seed_cooldowns_from_usage_store_selects_codex(monkeypatch, tmp_path: Path) -> None:
+    frozen_now = datetime(2026, 5, 25, 15, 0, tzinfo=timezone.utc)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):  # type: ignore[override]
+            if tz is None:
+                return frozen_now.replace(tzinfo=None)
+            return frozen_now.astimezone(tz)
+
+    monkeypatch.setattr(controller, "datetime", FrozenDateTime)
+    monkeypatch.setattr(controller, "_log", lambda *a, **k: None)
+    monkeypatch.setattr(
+        controller,
+        "_command_available",
+        lambda command: command in {"claude", "codex"},
+    )
+    monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
+
+    store = UsageStore()
+    reset_at = frozen_now + timedelta(days=2)
+    for model in ("sonnet", "opus"):
+        store.record_worker_backend_cooldown(
+            worker_backend="claude_code",
+            reset_at=reset_at,
+            now=frozen_now,
+            limit_kind="model_weekly",
+            model=model,
+        )
+
+    cooldowns: dict = {"claude": None, "opus": None, "codex": None}
+    meta: dict = {}
+    controller._seed_cooldowns_from_usage_store(cooldowns, meta)
+
+    assert cooldowns["claude"] == reset_at
+    assert cooldowns["opus"] == reset_at
+    assert meta["claude"]["model"] == "sonnet"
+    assert meta["opus"]["model"] == "opus"
+    assert controller._select_backend(cooldowns) == "codex"
 
 
 def test_classify_limit_kind_model_weekly_for_sonnet() -> None:
