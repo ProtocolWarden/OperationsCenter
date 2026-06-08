@@ -1,3 +1,28 @@
+## 2026-06-08 — Reviewer auto-rebase (WO-6): LAZY, CI-backstopped, adversarially designed
+
+**Decision**: when an LGTM PR is CONFLICTING, the reviewer now auto-rebases the
+base into the PR branch (in the repo's persistent clone, never oc_root) and
+pushes — instead of parking. Design settled by 3 adversarial critics:
+
+- **LAZY, not eager**: fires only in _merge_and_done when verdict is already
+  LGTM + mergeable=False — never per-poll on every conflicting PR (which storms
+  CI / thrashes priority / starves the queue when main moves).
+- **CI is the backstop**: after a clean rebase, DON'T merge that cycle — push
+  the merge commit, let CI re-run + next review re-validate. Catches the
+  textually-clean-but-wrong merge (broken import, budget overflow like the live
+  #249 C29, silent hunk loss) the bot's ephemeral clone won't catch locally.
+- **Never force-push**: merge commit only (branch moves forward); rejected push
+  → reset, retry. Real (non-log) conflict → escalate rebase_conflict, never auto-resolved.
+- **rebase_attempts orthogonal to fix_attempts** (never closes a good PR);
+  bounded (3) → escalate; 120s grace so a fast-moving base can't thrash.
+- log.md union via .git/info/attributes (works even when the PR branch predates
+  the committed .gitattributes). 11 new tests incl. real-git union + conflict.
+
+Closes the last autonomous-landing gap: the loop can now clear CONFLICTING PRs
+itself (the treadmill that made me hand-merge #247/#249 today).
+
+---
+
 ## 2026-06-07 — PR #249 CI fixes (orphan-recovery branch)
 
 **Decision**: cleared the 6 ruff + 2 ty failures blocking #249 (the recovered
