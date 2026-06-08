@@ -1020,6 +1020,182 @@ def test_unclean_tree_escalates_with_specific_reason_after_budget(tmp_path: Path
     assert state["no_verdict_passes"] == 0
 
 
+# ── WO-6 item 2: backend crash vs genuine no-verdict budget separation ────────
+
+
+def test_run_direct_review_raises_backend_error_on_nonzero_exit(tmp_path: Path) -> None:
+    # Non-zero exit code = backend crash/rate-limit → ReviewerBackendError, not None.
+    import subprocess as _sp
+
+    def _fake_run(cmd, cwd, capture_output, text, timeout):
+        return _sp.CompletedProcess(cmd, returncode=1, stdout="rate limit exceeded", stderr="")
+
+    with (
+        patch.object(watcher, "_oc_source_conflict_markers", return_value=[]),
+        patch("operations_center.entrypoints.pr_review_watcher.main.subprocess.run", side_effect=_fake_run),
+    ):
+        with pytest.raises(watcher.ReviewerBackendError) as ei:
+            watcher._run_direct_review(tmp_path, "review this diff", STATE_KEY)
+    assert "rc=1" in str(ei.value)
+
+
+def test_run_direct_review_raises_backend_error_on_timeout(tmp_path: Path) -> None:
+    import subprocess as _sp
+
+    def _fake_run(cmd, cwd, capture_output, text, timeout):
+        raise _sp.TimeoutExpired(cmd, timeout)
+
+    with (
+        patch.object(watcher, "_oc_source_conflict_markers", return_value=[]),
+        patch("operations_center.entrypoints.pr_review_watcher.main.subprocess.run", side_effect=_fake_run),
+    ):
+        with pytest.raises(watcher.ReviewerBackendError) as ei:
+            watcher._run_direct_review(tmp_path, "review this diff", STATE_KEY)
+    assert "timed out" in str(ei.value)
+
+
+def test_run_direct_review_returns_none_on_clean_exit_no_verdict(tmp_path: Path) -> None:
+    # Exit 0 + no verdict.json = genuine no-verdict (charged to budget), not a crash.
+    import subprocess as _sp
+
+    def _fake_run(cmd, cwd, capture_output, text, timeout):
+        return _sp.CompletedProcess(cmd, returncode=0, stdout="", stderr="")
+
+    with (
+        patch.object(watcher, "_oc_source_conflict_markers", return_value=[]),
+        patch("operations_center.entrypoints.pr_review_watcher.main.subprocess.run", side_effect=_fake_run),
+    ):
+        result = watcher._run_direct_review(tmp_path, "review this diff", STATE_KEY)
+    assert result is None  # charged against no_verdict budget
+
+
+def test_backend_crash_does_not_burn_no_verdict_budget(tmp_path: Path) -> None:
+    # ReviewerBackendError must increment backend_error_passes, NOT no_verdict_passes,
+    # and must not escalate on the first pass (max_self_review_loops=2).
+    state, sp = _make_state(tmp_path, phase="self_review", no_verdict_passes=0)
+    gh = _make_gh()
+    with (
+        patch.object(watcher, "_run_direct_review", side_effect=watcher.ReviewerBackendError("rc=1")),
+        patch.object(watcher, "_escalate_needs_human") as esc,
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+    assert state["no_verdict_passes"] == 0
+    assert state["backend_error_passes"] == 1
+    esc.assert_not_called()
+
+
+def test_backend_crash_escalates_with_specific_reason_after_budget(tmp_path: Path) -> None:
+    # After max_self_review_loops backend errors, escalate with reviewer_backend_unavailable.
+    state, sp = _make_state(tmp_path, phase="self_review", backend_error_passes=1)  # max=2
+    gh = _make_gh()
+    with (
+        patch.object(watcher, "_run_direct_review", side_effect=watcher.ReviewerBackendError("timeout")),
+        patch.object(watcher, "_escalate_needs_human") as esc,
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+    esc.assert_called_once()
+    assert esc.call_args.kwargs.get("reason") == "reviewer_backend_unavailable"
+    assert state["no_verdict_passes"] == 0
+    assert state["backend_error_passes"] == 0  # reset after escalation
+
+
+def test_clean_exit_no_verdict_charges_budget(tmp_path: Path) -> None:
+    # returncode=0 but no verdict.json = genuine no-verdict, must charge no_verdict_passes.
+    state, sp = _make_state(tmp_path, phase="self_review", no_verdict_passes=0)
+    gh = _make_gh()
+    with patch.object(watcher, "_run_direct_review", return_value=None):
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+    assert state["no_verdict_passes"] == 1
+    assert state["backend_error_passes"] == 0
+
+
+# ── WO-6 item 3: stuck-green escalation ──────────────────────────────────────
+
+
+def test_stuck_green_escalation_fires_after_repeated_no_verdict_cycles(tmp_path: Path) -> None:
+    # After 3 no-verdict escalation cycles (no_verdict_escalation_count >= 3),
+    # the detail message must include the stuck-green warning.
+    # Seed state at the threshold: 2 escalations already, about to trigger the 3rd.
+    state, sp = _make_state(
+        tmp_path,
+        phase="self_review",
+        no_verdict_passes=1,  # one more will hit max=2
+        no_verdict_escalation_count=2,  # 3rd escalation → stuck-green
+    )
+    gh = _make_gh()
+    captured_detail: list[str] = []
+
+    def _esc(s, sp, gh, o, r, settings, *, reason, detail):
+        captured_detail.append(detail)
+        s["escalated_needs_human"] = True
+
+    with (
+        patch.object(watcher, "_run_direct_review", return_value=None),
+        patch.object(watcher, "_escalate_needs_human", side_effect=_esc),
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+
+    assert len(captured_detail) == 1
+    assert "stuck_green_repeated_failures" in captured_detail[0]
+    assert state["no_verdict_escalation_count"] == 3
+
+
+def test_stuck_green_not_triggered_on_first_two_escalations(tmp_path: Path) -> None:
+    # Stuck-green alarm must NOT fire before the 3rd escalation.
+    state, sp = _make_state(
+        tmp_path,
+        phase="self_review",
+        no_verdict_passes=1,  # hits max=2
+        no_verdict_escalation_count=0,  # 1st escalation — not stuck yet
+    )
+    gh = _make_gh()
+    captured_detail: list[str] = []
+
+    def _esc(s, sp, gh, o, r, settings, *, reason, detail):
+        captured_detail.append(detail)
+        s["escalated_needs_human"] = True
+
+    with (
+        patch.object(watcher, "_run_direct_review", return_value=None),
+        patch.object(watcher, "_escalate_needs_human", side_effect=_esc),
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+
+    assert len(captured_detail) == 1
+    assert "stuck_green_repeated_failures" not in captured_detail[0]
+    assert state["no_verdict_escalation_count"] == 1
+
+
+def test_no_verdict_escalation_count_persisted(tmp_path: Path) -> None:
+    # no_verdict_escalation_count must survive save/load cycles.
+    state, sp = _make_state(
+        tmp_path,
+        phase="self_review",
+        no_verdict_passes=1,
+        no_verdict_escalation_count=1,
+    )
+    gh = _make_gh()
+    with (
+        patch.object(watcher, "_run_direct_review", return_value=None),
+        patch.object(watcher, "_escalate_needs_human"),
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+    loaded = watcher._load_state(sp)
+    assert loaded["no_verdict_escalation_count"] == 2
+
+
 # ── proactive review-queue ordering (2026-06-07 starvation fix) ───────────────
 
 

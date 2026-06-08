@@ -1,3 +1,7 @@
+## 2026-06-08 — WO-6 (items 2+3): backend-crash budget separation + stuck-green escalation
+
+## 2026-06-08 — WO-1 backfill: all 20 closed-unmerged PRs audited; 14 historical close-receipts posted
+
 ## 2026-06-08 — WO-5: spec-author PR title + dedup gate implemented
 
 ## 2026-06-08 — WO-3: self-retracting reviewer verdicts implemented
