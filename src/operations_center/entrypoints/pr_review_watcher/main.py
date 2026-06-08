@@ -171,6 +171,16 @@ class OCSourceTreeUncleanError(RuntimeError):
     burns a PR's review budget or reads as "no verdict"."""
 
 
+class ReviewerBackendError(RuntimeError):
+    """The reviewer backend (``claude`` CLI) crashed, was killed, or timed out.
+
+    This is an INFRA failure, not a PR-quality failure.  The PR may be perfectly
+    good; the backend just can't review it right now (e.g. a transient rate-limit,
+    OOM kill, or process timeout).  Surfaced distinctly so crashes never burn the
+    PR's ``no_verdict_passes`` budget — only a clean exit with no verdict.json
+    written counts against that budget."""
+
+
 def _oc_source_conflict_markers(oc_root: Path) -> list[str]:
     """Tracked ``src/`` Python files containing git conflict markers.
 
@@ -306,10 +316,9 @@ def _run_direct_review(
                 timeout=300,
             )
         except subprocess.TimeoutExpired:
-            logger.warning(
-                "pr_review_watcher: direct review timed out for state_key=%s", state_key
+            raise ReviewerBackendError(
+                f"direct review timed out (300s) for state_key={state_key}"
             )
-            return None
         if verdict_path.exists():
             try:
                 return json.loads(verdict_path.read_text(encoding="utf-8"))
@@ -318,17 +327,25 @@ def _run_direct_review(
                     "pr_review_watcher: malformed verdict.json from direct review for %s",
                     state_key,
                 )
-        else:
-            # Log stdout tail — helps diagnose if Claude is writing to stdout
-            # instead of disk when --output-format json was previously set.
+                return None  # clean exit, bad JSON — genuine no-verdict
+        # No verdict.json written.
+        if proc.returncode != 0:
+            # Non-zero exit = crash, signal kill, or rate-limit — infra failure,
+            # not a PR quality problem.  Don't charge the no_verdict budget.
             stdout_tail = (proc.stdout or "").strip()[-500:]
-            logger.warning(
-                "pr_review_watcher: no verdict.json from direct review for %s "
-                "(rc=%d, stdout_tail=%r)",
-                state_key,
-                proc.returncode,
-                stdout_tail,
+            raise ReviewerBackendError(
+                f"reviewer process exited with rc={proc.returncode} "
+                f"for state_key={state_key} (stdout_tail={stdout_tail!r})"
             )
+        # returncode == 0, no verdict.json — the reviewer ran cleanly but chose
+        # not to write a file.  Genuine no-verdict; charge the budget.
+        stdout_tail = (proc.stdout or "").strip()[-500:]
+        logger.warning(
+            "pr_review_watcher: no verdict.json from direct review for %s "
+            "(rc=0, stdout_tail=%r)",
+            state_key,
+            stdout_tail,
+        )
         return None
 
 
@@ -1567,6 +1584,8 @@ def _phase1(
     state.setdefault("fix_attempts", 0)
     state.setdefault("no_verdict_passes", 0)
     state.setdefault("env_unclean_passes", 0)
+    state.setdefault("backend_error_passes", 0)
+    state.setdefault("no_verdict_escalation_count", 0)
 
     try:
         verdict = _run_direct_review(oc_root, goal_text, state_key)
@@ -1599,32 +1618,78 @@ def _phase1(
             state["env_unclean_passes"] = 0
         _save_state(state_path, state)
         return
+    except ReviewerBackendError as exc:
+        # The claude backend crashed, was killed, or timed out — INFRA failure,
+        # not a PR quality problem.  Do NOT charge no_verdict_passes (that budget
+        # measures genuine "reviewer ran but emitted no verdict", not crashes).
+        state["backend_error_passes"] += 1
+        logger.warning(
+            "pr_review_watcher: PR #%d review SKIPPED (not budget-charged) — backend error: %s "
+            "(backend_error_pass=%d/%d)",
+            pr_number,
+            exc,
+            state["backend_error_passes"],
+            reviewer.max_self_review_loops,
+        )
+        if state["backend_error_passes"] >= reviewer.max_self_review_loops:
+            _escalate_needs_human(
+                state,
+                state_path,
+                gh_client,
+                owner,
+                repo,
+                settings,
+                reason="reviewer_backend_unavailable",
+                detail=str(exc),
+            )
+            state["backend_error_passes"] = 0
+        _save_state(state_path, state)
+        return
 
     state["self_review_loops"] += 1
     state["env_unclean_passes"] = 0  # a pipeline ran — tree is clean
+    state["backend_error_passes"] = 0  # backend is reachable
 
     if verdict is None:
-        # Pipeline produced no verdict (crash/timeout/rate-limit). This is a
-        # REVIEWER failure, not a PR-quality failure — the PR may be perfectly
-        # good, we just can't review it right now (often a transient backend
-        # rate-limit). Never merge blind; but also never close/destroy a good
-        # PR over infra flakiness. Retry a few times, then leave the PR open and
-        # escalate for a human, and keep polling (a recovered backend will
-        # review it next cycle).
+        # Reviewer ran cleanly (exit 0) but did not write verdict.json — a genuine
+        # no-verdict (prompt or model failure).  Count against the budget.
         state["no_verdict_passes"] += 1
         if state["no_verdict_passes"] >= reviewer.max_self_review_loops:
+            state["no_verdict_escalation_count"] += 1
+            escalation_count = state["no_verdict_escalation_count"]
             logger.warning(
                 "pr_review_watcher: PR #%d produced no verdict after %d passes — "
-                "escalating (leaving open; reviewer unavailable, work preserved)",
+                "escalating (leaving open; reviewer unavailable, work preserved) "
+                "[no_verdict_escalation_count=%d]",
                 pr_number,
                 state["no_verdict_passes"],
+                escalation_count,
             )
+            # Stuck-green detection: a PR that repeatedly reaches the no-verdict
+            # escalation threshold without ever merging is likely stuck.  Emit a
+            # distinct alarm so the operator (and watchdog) can see it clearly.
+            _STUCK_GREEN_ESCALATION_THRESHOLD = 3
+            if escalation_count >= _STUCK_GREEN_ESCALATION_THRESHOLD:
+                logger.error(
+                    "pr_review_watcher: STUCK-GREEN PR #%d repo=%s — green on CI but "
+                    "unmerged after %d no-verdict escalation cycles "
+                    "(reason=stuck_green_repeated_failures); human review required",
+                    pr_number,
+                    repo_key,
+                    escalation_count,
+                )
             detail = (
                 "Self-review produced no parseable verdict after repeated passes "
-                "(likely a transient backend/rate-limit issue, or a diff too large "
-                "to review). The PR is left open for human attention; automated "
+                "(reviewer ran but emitted no verdict.json — possible prompt or model "
+                "issue). The PR is left open for human attention; automated "
                 "review will retry."
             )
+            if escalation_count >= _STUCK_GREEN_ESCALATION_THRESHOLD:
+                detail += (
+                    f" WARNING: this is the {escalation_count}th no-verdict escalation "
+                    f"for this PR (stuck-green — green on CI but review never converges). "
+                    f"Reason code: stuck_green_repeated_failures."
+                )
             record_escalation(
                 pr_number=pr_number,
                 repo_key=repo_key,
