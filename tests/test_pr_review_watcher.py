@@ -302,6 +302,31 @@ def test_phase1_skips_escalated_pr_without_new_head(tmp_path: Path) -> None:
     assert loaded["escalated_head_sha"] == "abc123"
 
 
+def test_phase1_resumes_escalated_pr_with_null_sha(tmp_path: Path) -> None:
+    # When escalated with escalated_head_sha=None (e.g. after a manual state
+    # reset or rebase), the watcher must clear the escalation and retry rather
+    # than deadlocking in a permanent skip.
+    state, sp = _make_state(
+        tmp_path,
+        phase="self_review",
+        escalated_needs_human=True,
+        escalated_head_sha=None,
+        no_verdict_passes=0,
+    )
+    gh = _make_gh()
+
+    with patch.object(
+        watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}
+    ) as mock_review, patch.object(watcher, "_merge_and_done"):
+        watcher._phase1(
+            state, sp, _pr_data(head_sha="abc123"), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+
+    mock_review.assert_called_once()
+    loaded = watcher._load_state(sp)
+    assert loaded["escalated_needs_human"] is False
+
+
 def test_phase1_resumes_escalated_pr_after_new_head(tmp_path: Path) -> None:
     state, sp = _make_state(
         tmp_path,
