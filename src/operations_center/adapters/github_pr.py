@@ -254,6 +254,15 @@ class GitHubPRClient:
         resp.raise_for_status()
         return resp.json()
 
+    def list_closed_prs(self, owner: str, repo: str) -> list[dict]:
+        resp = self._request(
+            "GET",
+            f"{self._API}/repos/{owner}/{repo}/pulls",
+            params={"state": "closed", "per_page": 100},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
     def list_pr_files(self, owner: str, repo: str, pr_number: int) -> list[str]:
         """Return the list of filenames changed in a pull request.
 

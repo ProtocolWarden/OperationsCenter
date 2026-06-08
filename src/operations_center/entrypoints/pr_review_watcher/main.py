@@ -50,6 +50,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from operations_center.close_invariants import (
+    branch_delete_allowed_after_close,
+    close_without_receipt_allowed,
+)
 from operations_center.reviewer.instrumentation import (
     record_decision_outcome,
     record_ci_gate_defer,
@@ -195,7 +199,136 @@ def _label_value(labels: list, prefix: str) -> str:
     return ""
 
 
+def _durable_pr_head_ref(pr_number: int) -> str:
+    return f"refs/pull/{pr_number}/head"
+
+
+def _spec_file_from_plane_issue(issue: dict[str, Any]) -> str:
+    labels = issue.get("labels", []) or []
+    desc = str(issue.get("description") or issue.get("description_stripped") or "").strip()
+    if desc:
+        try:
+            from operations_center.application.task_parser import TaskParser
+
+            parsed = TaskParser().parse(desc, labels=_label_names(labels))
+            spec_file = str(parsed.execution_metadata.get("spec_file") or "").strip()
+            if spec_file:
+                return spec_file
+        except Exception:
+            pass
+
+    campaign_id = _label_value(labels, "campaign-id")
+    if not campaign_id:
+        return ""
+    try:
+        from operations_center.spec_author.state import CampaignStateManager
+
+        campaigns_state = CampaignStateManager().load()
+        for campaign in campaigns_state.campaigns:
+            if campaign.campaign_id == campaign_id:
+                return str(campaign.spec_file).strip()
+    except Exception:
+        pass
+    return ""
+
+
+def _record_close_receipt(
+    settings,
+    plane_task_id: str,
+    *,
+    pr_number: int,
+    pr_data: dict[str, Any],
+    reason: str,
+) -> str:
+    """Record a durable salvage receipt on the Plane task before closing."""
+    client = _plane_client(settings)
+    try:
+        issue = client.fetch_issue(plane_task_id)
+        spec_file = _spec_file_from_plane_issue(issue)
+        if not spec_file:
+            return ""
+        branch_ref = str(((pr_data.get("head") or {}).get("ref") or "")).strip()
+        lines = [
+            f"Close receipt for PR #{pr_number} (`{reason}`)",
+            f"durable_head_ref: `{_durable_pr_head_ref(pr_number)}`",
+            f"spec_file: `{spec_file}`",
+        ]
+        if branch_ref:
+            lines.append(f"closed_branch: `{branch_ref}`")
+        client.comment_issue(plane_task_id, "\n".join(lines))
+        return spec_file
+    finally:
+        client.close()
+
+
 # ── pr review pipeline ────────────────────────────────────────────────────────
+
+
+def _run_direct_review(
+    oc_root: Path,
+    goal_text: str,
+    state_key: str,
+) -> dict | None:
+    """Run a self-review via a direct ``claude -p`` call in an empty temp directory.
+
+    Bypasses the TeamExecutor pipeline so the workspace's CLAUDE.md cannot
+    override the review goal.  The diff is already embedded in ``goal_text``
+    so no repo clone is needed.  Returns the parsed verdict dict or None.
+    """
+    conflicted = _oc_source_conflict_markers(oc_root)
+    if conflicted:
+        raise OCSourceTreeUncleanError(
+            f"OC source tree at {oc_root} has git conflict markers in "
+            f"{len(conflicted)} tracked file(s) "
+            f"({', '.join(conflicted[:3])}{'…' if len(conflicted) > 3 else ''}) "
+            "— a concurrent session left the shared checkout dirty; refusing "
+            "to run the reviewer (it would crash at import)."
+        )
+
+    with tempfile.TemporaryDirectory(prefix="oc-review-direct-") as tmpdir:
+        tmp = Path(tmpdir)
+        verdict_path = tmp / "verdict.json"
+        try:
+            proc = subprocess.run(
+                [
+                    "claude",
+                    "--model",
+                    "claude-haiku-4-5-20251001",
+                    "-p",
+                    "--effort",
+                    "low",
+                    goal_text,
+                ],
+                cwd=str(tmp),
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+        except subprocess.TimeoutExpired:
+            logger.warning(
+                "pr_review_watcher: direct review timed out for state_key=%s", state_key
+            )
+            return None
+        if verdict_path.exists():
+            try:
+                return json.loads(verdict_path.read_text(encoding="utf-8"))
+            except Exception:
+                logger.warning(
+                    "pr_review_watcher: malformed verdict.json from direct review for %s",
+                    state_key,
+                )
+        else:
+            # Log stdout tail — helps diagnose if Claude is writing to stdout
+            # instead of disk when --output-format json was previously set.
+            stdout_tail = (proc.stdout or "").strip()[-500:]
+            logger.warning(
+                "pr_review_watcher: no verdict.json from direct review for %s "
+                "(rc=%d, stdout_tail=%r)",
+                state_key,
+                proc.returncode,
+                stdout_tail,
+            )
+        return None
 
 
 def _run_pipeline(
@@ -781,16 +914,46 @@ def _close_and_requeue(
         _save_state(state_path, state)
         return
 
-    marker = settings.reviewer.bot_comment_marker
     try:
-        gh_client.post_comment(
-            owner,
-            repo,
-            pr_number,
-            f"{marker}\n**Closing without merge** (reason=`{reason}`). A PR is never "
-            f"merged with unresolved review concerns — the issue has been re-queued for "
-            f"a fresh attempt.\n\n{detail}",
+        spec_file = _record_close_receipt(
+            settings,
+            plane_task_id,
+            pr_number=pr_number,
+            pr_data=pr_data,
+            reason=reason,
         )
+    except Exception as exc:
+        logger.warning(
+            "pr_review_watcher: failed to record close receipt for PR #%d — %s",
+            pr_number,
+            exc,
+        )
+        _save_state(state_path, state)
+        return
+    if not spec_file:
+        logger.warning(
+            "pr_review_watcher: PR #%d missing spec linkage for close receipt — leaving PR open",
+            pr_number,
+        )
+        _save_state(state_path, state)
+        return
+
+    marker = settings.reviewer.bot_comment_marker
+    close_comment = (
+        f"{marker}\n**Closing without merge** (reason=`{reason}`). A PR is never "
+        f"merged with unresolved review concerns — the issue has been re-queued for "
+        f"a fresh attempt. Durable receipt recorded on Plane task `{plane_task_id}` "
+        f"for `{_durable_pr_head_ref(pr_number)}` and `{spec_file}`.\n\n{detail}"
+    )
+    if not close_without_receipt_allowed(comment=close_comment, durable_receipt_recorded=True):
+        logger.error(
+            "pr_review_watcher: invariant rejected close for PR #%d despite recorded receipt",
+            pr_number,
+        )
+        _save_state(state_path, state)
+        return
+    try:
+        gh_client.post_comment(owner, repo, pr_number, close_comment)
     except Exception as exc:
         logger.warning(
             "pr_review_watcher: failed to comment before close PR #%d — %s", pr_number, exc
@@ -807,7 +970,10 @@ def _close_and_requeue(
 
     # Delete the head branch so closed-PR branches don't accumulate as orphans.
     head_ref = (pr_data.get("head") or {}).get("ref") or ""
-    if head_ref:
+    if head_ref and branch_delete_allowed_after_close(
+        comment=close_comment,
+        durable_receipt_recorded=True,
+    ):
         try:
             gh_client.delete_branch(owner, repo, head_ref)
         except Exception as exc:
@@ -817,6 +983,13 @@ def _close_and_requeue(
                 pr_number,
                 exc,
             )
+    elif head_ref:
+        logger.warning(
+            "pr_review_watcher: retained branch %s for PR #%d because close comment "
+            "still claims preserved work",
+            head_ref,
+            pr_number,
+        )
 
     state_path.unlink(missing_ok=True)
 
@@ -1272,7 +1445,13 @@ def _phase1(
             pr_number,
         )
 
-    diff_excerpt = diff[:8000] + ("\n...[diff truncated]" if len(diff) > 8000 else "")
+    _DIFF_LIMIT = 60_000
+    diff_excerpt = diff[:_DIFF_LIMIT] + (
+        f"\n...[diff truncated at {_DIFF_LIMIT} chars — read the changed files "
+        "directly in the workspace to review the remainder]"
+        if len(diff) > _DIFF_LIMIT
+        else ""
+    )
     title = pr_data.get("title", "")
 
     # Load optional campaign spec and Custodian findings for spec-aware review
@@ -1289,6 +1468,8 @@ def _phase1(
     )
 
     goal_text = (
+        "## TASK TYPE: Read-only code review\n"
+        "## SINGLE REQUIRED ACTION: Write verdict.json — no other file changes allowed\n\n"
         f"Review the following pull-request diff for correctness, style, and spec compliance.\n\n"
         f"PR #{pr_number}: {title}\n\n"
         f"```diff\n{diff_excerpt}\n```"
@@ -1306,7 +1487,9 @@ def _phase1(
         f'{{"result": "CONCERNS", "summary": "bullet list of specific issues"}}\n\n'
         "Use LGTM only if ALL checklist items pass. "
         "Use CONCERNS when anything fails — be specific and actionable. "
-        "Do NOT push any code changes to the repository."
+        "CRITICAL: Do NOT modify any source files in the repository. "
+        "Do NOT run tests, build, or push. "
+        "Your ONLY permitted action is writing verdict.json to the current directory."
     )
 
     logger.info(
@@ -1321,16 +1504,7 @@ def _phase1(
     state.setdefault("env_unclean_passes", 0)
 
     try:
-        verdict = _run_pipeline(
-            oc_root,
-            config_path,
-            repo_key,
-            goal_text,
-            settings,
-            source="reviewer_self",
-            state_key=state_key,
-            branch_suffix=f"{state_key[:12]}",
-        )
+        verdict = _run_direct_review(oc_root, goal_text, state_key)
     except OCSourceTreeUncleanError as exc:
         # The reviewer's own source tree is broken — this would crash for EVERY
         # PR, so it is not charged against this PR's review budget. Skip the

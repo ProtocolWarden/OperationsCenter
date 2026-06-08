@@ -25,6 +25,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from operations_center.adapters.github_pr import GitHubPRClient
+from operations_center.close_invariants import close_without_receipt_allowed
 from operations_center.config import load_settings
 
 _AUTONOMY_PREFIXES = ("goal/", "test/", "improve/", "plane/")
@@ -38,6 +39,14 @@ def _parse_iso(s: str | None) -> datetime | None:
         return datetime.fromisoformat(s.replace("Z", "+00:00"))
     except Exception:
         return None
+
+
+def _no_salvage_close_comment(*, age_days: float, threshold_days: int) -> str:
+    return (
+        f"Auto-closing with no salvage value: PR has been inactive for {round(age_days, 1)}d, "
+        f"which exceeds the {threshold_days}d stale autonomy threshold "
+        f"(RepoSettings.stale_pr_days)."
+    )
 
 
 def main() -> int:
@@ -107,14 +116,19 @@ def main() -> int:
                 closed.append(entry)
                 continue
             try:
-                gh.post_comment(
-                    owner,
-                    repo,
-                    pr["number"],
-                    f"Auto-closing — PR has been open {round(age_days, 1)}d, "
-                    f"threshold is {threshold_days}d (RepoSettings.stale_pr_days). "
-                    f"Branch `{head_ref}` is preserved on origin if you want to re-open.",
+                comment = _no_salvage_close_comment(
+                    age_days=age_days,
+                    threshold_days=threshold_days,
                 )
+                if not close_without_receipt_allowed(
+                    comment=comment,
+                    durable_receipt_recorded=False,
+                ):
+                    entry["action"] = "blocked"
+                    entry["error"] = "close_invariant_blocked_missing_receipt_or_no_salvage_comment"
+                    skipped.append(entry)
+                    continue
+                gh.post_comment(owner, repo, pr["number"], comment)
                 gh.close_pr(owner, repo, pr["number"])
                 entry["action"] = "closed"
                 closed.append(entry)

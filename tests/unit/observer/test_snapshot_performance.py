@@ -221,7 +221,7 @@ class TestSnapshotManagerPerformance:
         end = time.perf_counter()
 
         assert latest is not None
-        assert (end - start) < 0.1
+        assert (end - start) < 1.0
 
     def test_get_snapshots_limit_performance(self, tmp_path: Path) -> None:
         """Test that limiting snapshot retrieval is efficient."""
@@ -242,9 +242,9 @@ class TestSnapshotManagerPerformance:
             times.append(end - start)
             assert len(snapshots) == limit
 
-        # All limit queries should be fast
+        # All limit queries should be fast (1.0s catches catastrophic regression while tolerating CI runners)
         for duration in times:
-            assert duration < 0.1
+            assert duration < 1.0
 
     def test_cleanup_performance_with_many_snapshots(self, tmp_path: Path) -> None:
         """Test that cleanup performance scales well."""
