@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Security
-- **Fixed TOCTOU race condition in Collector** — `CheckSignalCollector` and `DependencyDriftCollector` are now guarded against file deletion during discovery. Files are no longer stat'd twice, eliminating the race window where files could be deleted between metadata check and use. Files deleted during discovery are now skipped gracefully instead of crashing the observer.
+- **Fixed TOCTOU race condition in Collector** — Eliminated file deletion race by capturing mtime at discovery time. Files deleted during discovery are now skipped gracefully instead of crashing.
 
 ### Changed
 - `CheckSignalCollector.latest_matching_file()` now returns `tuple[Path, float] | None` (was `Path | None`), where the float is the captured mtime at discovery time.

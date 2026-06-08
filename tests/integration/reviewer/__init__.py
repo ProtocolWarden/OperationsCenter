@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 ProtocolWarden
+"""Integration tests for verdict consolidation and merge-decision state machine."""
