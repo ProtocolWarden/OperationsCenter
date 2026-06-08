@@ -57,14 +57,15 @@ def _make_state(tmp_path: Path, **overrides: Any) -> tuple[dict, Path]:
     return state, sp
 
 
-def _make_gh() -> MagicMock:
+def _make_gh(*, comment_id: int = 0) -> MagicMock:
     gh = MagicMock()
     gh.get_pr_diff.return_value = "diff --git a/foo.py\n+print('hello')"
     gh.list_pr_comments.return_value = []
     gh.get_pr_reactions.return_value = []
     gh.has_thumbs_up.return_value = False
-    gh.post_comment.return_value = {}
+    gh.post_comment.return_value = {"id": comment_id} if comment_id else {}
     gh.merge_pr.return_value = {}
+    gh.update_comment.return_value = {}
     return gh
 
 
@@ -1244,3 +1245,162 @@ def test_mergeable_clears_rebase_attempts(tmp_path: Path) -> None:
     )
     gh.merge_pr.assert_called_once()
     assert not sp_.exists()  # merged, state cleaned
+
+
+# ── WO-3: Self-retracting verdicts ───────────────────────────────────────────
+
+
+def test_escalate_stores_comment_id(tmp_path: Path) -> None:
+    """_escalate_needs_human stores the posted comment's ID in state."""
+    state, sp_ = _make_state(tmp_path)
+    gh = _make_gh(comment_id=9001)
+    watcher._escalate_needs_human(
+        state, sp_, gh, "owner", "repo", SETTINGS,
+        reason="no_verdict_unreviewable", detail="details",
+    )
+    assert state["escalated_needs_human"] is True
+    assert state["escalation_comment_id"] == 9001
+
+
+def test_escalate_no_comment_id_when_post_fails(tmp_path: Path) -> None:
+    """If post_comment raises, escalation still sets the flag but no id stored."""
+    state, sp_ = _make_state(tmp_path)
+    gh = _make_gh()
+    gh.post_comment.side_effect = RuntimeError("API down")
+    watcher._escalate_needs_human(
+        state, sp_, gh, "owner", "repo", SETTINGS,
+        reason="no_verdict_unreviewable", detail="details",
+    )
+    assert state["escalated_needs_human"] is True
+    assert state.get("escalation_comment_id") is None
+
+
+def test_retract_flag_strikes_through_needs_human(tmp_path: Path) -> None:
+    """_retract_flag edits the escalation comment with a strikethrough and resolution note."""
+    state, sp_ = _make_state(
+        tmp_path, escalation_comment_id=9001
+    )
+    gh = _make_gh()
+    original_body = (
+        "<!-- operations-center:bot -->\n"
+        "**Needs human attention** (reason=`no_verdict_unreviewable`). Left open — "
+        "not merged (unresolved) and not closed (work preserved).\n\nSome detail."
+    )
+    gh.list_pr_comments.return_value = [{"id": 9001, "body": original_body}]
+    watcher._retract_flag(state, gh, "owner", "repo", resolution="PR merged")
+    gh.update_comment.assert_called_once()
+    edited_body = gh.update_comment.call_args[0][3]
+    assert "~~**Needs human attention**~~" in edited_body
+    assert "**Resolved**: PR merged" in edited_body
+    assert state.get("escalation_comment_id") is None  # popped
+
+
+def test_retract_flag_strikes_through_self_review_concerns(tmp_path: Path) -> None:
+    """_retract_flag edits the concerns comment with a strikethrough."""
+    state, sp_ = _make_state(tmp_path, concerns_comment_id=8888)
+    gh = _make_gh()
+    gh.list_pr_comments.return_value = [
+        {"id": 8888, "body": "<!-- bot -->\n**Self-review concerns** — auto-fixing:\n\nconcerns"},
+    ]
+    watcher._retract_flag(state, gh, "owner", "repo", resolution="PR merged")
+    gh.update_comment.assert_called_once()
+    edited = gh.update_comment.call_args[0][3]
+    assert "~~**Self-review concerns**~~" in edited
+    assert "**Resolved**: PR merged" in edited
+    assert state.get("concerns_comment_id") is None
+
+
+def test_retract_flag_skips_missing_comment(tmp_path: Path) -> None:
+    """If the comment is no longer found on the PR, _retract_flag does not crash."""
+    state, sp_ = _make_state(tmp_path, escalation_comment_id=9999)
+    gh = _make_gh()
+    gh.list_pr_comments.return_value = []  # comment not found
+    watcher._retract_flag(state, gh, "owner", "repo", resolution="PR merged")
+    gh.update_comment.assert_not_called()
+
+
+def test_retract_flag_skips_when_no_ids(tmp_path: Path) -> None:
+    """_retract_flag is a no-op when no comment IDs are stored."""
+    state, sp_ = _make_state(tmp_path)
+    gh = _make_gh()
+    watcher._retract_flag(state, gh, "owner", "repo", resolution="PR merged")
+    gh.list_pr_comments.assert_not_called()
+    gh.update_comment.assert_not_called()
+
+
+def test_merge_and_done_retracts_flag(tmp_path: Path) -> None:
+    """_merge_and_done calls _retract_flag before cleaning up state."""
+    state, sp_ = _make_state(
+        tmp_path, phase="self_review", escalation_comment_id=9001, concerns_comment_id=8888
+    )
+    gh = _make_gh()
+    gh.get_mergeable.return_value = True
+    original_esc = "<!-- bot -->\n**Needs human attention** (reason=`ci_persistently_red`)."
+    original_con = "<!-- bot -->\n**Self-review concerns** — auto-fixing:\n\nconcerns"
+    gh.list_pr_comments.return_value = [
+        {"id": 9001, "body": original_esc},
+        {"id": 8888, "body": original_con},
+    ]
+    watcher._merge_and_done(
+        state, sp_, _pr_data(), gh, "owner", "repo", SETTINGS, reason="self_review_lgtm"
+    )
+    assert gh.update_comment.call_count == 2
+    bodies = {c[0][2]: c[0][3] for c in gh.update_comment.call_args_list}
+    assert "~~**Needs human attention**~~" in bodies[9001]
+    assert "~~**Self-review concerns**~~" in bodies[8888]
+    assert not sp_.exists()
+
+
+def test_escalation_cleared_on_head_change_retracts_flag(tmp_path: Path) -> None:
+    """When escalation clears due to new push, _retract_flag is called."""
+    state, sp_ = _make_state(
+        tmp_path,
+        phase="self_review",
+        escalated_needs_human=True,
+        escalated_head_sha="old_sha",
+        escalation_comment_id=7777,
+        no_verdict_passes=3,
+        plane_task_id=None,
+    )
+    gh = _make_gh()
+    original_body = "<!-- bot -->\n**Needs human attention** (reason=`no_verdict_unreviewable`)."
+    gh.list_pr_comments.return_value = [{"id": 7777, "body": original_body}]
+
+    with (
+        patch.object(watcher, "_run_direct_review", return_value=None),
+        patch.object(watcher, "_run_pipeline", return_value=(0, None)),
+    ):
+        watcher._phase1(
+            state, sp_, _pr_data(head_sha="new_sha"), gh, "owner", "repo",
+            Path("/oc"), Path("/cfg"), SETTINGS,
+        )
+
+    gh.update_comment.assert_called_once()
+    edited = gh.update_comment.call_args[0][3]
+    assert "~~**Needs human attention**~~" in edited
+    assert "new push — automated review resumed" in edited
+
+
+def test_concerns_comment_id_tracked(tmp_path: Path) -> None:
+    """When the first CONCERNS verdict posts the flag, its comment ID is stored in state."""
+    state, sp_ = _make_state(
+        tmp_path, phase="self_review", plane_task_id="task-1",
+        fix_attempts=0, self_review_loops=0,
+    )
+    gh = _make_gh(comment_id=5555)
+
+    with (
+        patch.object(
+            watcher, "_run_direct_review",
+            return_value={"result": "CONCERNS", "summary": "issues found"},
+        ),
+        patch.object(watcher, "_run_fix_pass", return_value=True),
+        patch.object(watcher, "_merge_and_done"),
+    ):
+        watcher._phase1(
+            state, sp_, _pr_data(), gh, "owner", "repo",
+            tmp_path, tmp_path / "cfg.yaml", SETTINGS,
+        )
+
+    loaded = watcher._load_state(sp_)
+    assert loaded.get("concerns_comment_id") == 5555

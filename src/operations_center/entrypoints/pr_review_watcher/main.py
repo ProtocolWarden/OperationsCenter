@@ -41,6 +41,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -621,6 +622,8 @@ def _merge_and_done(
         logger.error("pr_review_watcher: merge failed PR #%d — %s", pr_number, exc)
         return  # leave state file — operator must inspect
 
+    _retract_flag(state, gh_client, owner, repo, resolution="PR merged")
+
     plane_task_id = state.get("plane_task_id")
     if plane_task_id:
         try:
@@ -828,6 +831,53 @@ def _labels_with_requeue_count(
     return kept + [f"{_REQUEUE_LABEL_PREFIX}: {count}", *(extra or [])]
 
 
+def _retract_flag(
+    state: dict,
+    gh_client,
+    owner: str,
+    repo: str,
+    *,
+    resolution: str,
+) -> None:
+    """Strike-through any open escalation or self-review flag comments.
+
+    Edits the stored comment in-place so operators can see the flag was
+    automatically cleared and why, rather than it silently persisting on a
+    merged or resumed PR.
+    """
+    pr_number = state["pr_number"]
+    for key in ("escalation_comment_id", "concerns_comment_id"):
+        comment_id = state.pop(key, None)
+        if not comment_id:
+            continue
+        try:
+            comments = gh_client.list_pr_comments(owner, repo, pr_number)
+            body = next((c["body"] for c in comments if c.get("id") == comment_id), None)
+            if body is None:
+                continue
+            new_body = re.sub(
+                r"\*\*(Needs human attention|Self-review concerns)\*\*",
+                r"~~**\1**~~",
+                body,
+                count=1,
+            )
+            new_body = f"> **Resolved**: {resolution}\n\n" + new_body
+            gh_client.update_comment(owner, repo, comment_id, new_body)
+            logger.info(
+                "pr_review_watcher: retracted flag comment %d for PR #%d (%s)",
+                comment_id,
+                pr_number,
+                resolution,
+            )
+        except Exception as exc:
+            logger.warning(
+                "pr_review_watcher: failed to retract flag comment %d for PR #%d — %s",
+                comment_id,
+                pr_number,
+                exc,
+            )
+
+
 def _escalate_needs_human(
     state: dict,
     state_path: Path,
@@ -847,13 +897,14 @@ def _escalate_needs_human(
     if not state.get("escalated_needs_human"):
         marker = settings.reviewer.bot_comment_marker
         try:
-            gh_client.post_comment(
+            resp = gh_client.post_comment(
                 owner,
                 repo,
                 pr_number,
                 f"{marker}\n**Needs human attention** (reason=`{reason}`). Left open — "
                 f"not merged (unresolved) and not closed (work preserved).\n\n{detail}",
             )
+            state["escalation_comment_id"] = (resp or {}).get("id")
         except Exception as exc:
             logger.warning(
                 "pr_review_watcher: failed to post needs-human comment PR #%d — %s", pr_number, exc
@@ -991,6 +1042,7 @@ def _close_and_requeue(
             pr_number,
         )
 
+    _retract_flag(state, gh_client, owner, repo, resolution="PR closed and re-queued")
     state_path.unlink(missing_ok=True)
 
 
@@ -1352,6 +1404,9 @@ def _phase1(
             )
             _save_state(state_path, state)
         elif current_head_sha and current_head_sha != escalated_head_sha:
+            _retract_flag(
+                state, gh_client, owner, repo, resolution="new push — automated review resumed"
+            )
             state["escalated_needs_human"] = False
             state.pop("escalated_head_sha", None)
             state["no_verdict_passes"] = 0
@@ -1662,7 +1717,8 @@ def _phase1(
             f"attempts; re-queued if still unresolved):\n\n{summary}"
         )
         try:
-            gh_client.post_comment(owner, repo, pr_number, concern_body)
+            resp = gh_client.post_comment(owner, repo, pr_number, concern_body)
+            state["concerns_comment_id"] = (resp or {}).get("id")
         except Exception as exc:
             logger.warning(
                 "pr_review_watcher: failed to post concern comment PR #%d — %s", pr_number, exc

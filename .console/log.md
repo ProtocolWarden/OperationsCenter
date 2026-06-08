@@ -1,3 +1,11 @@
+## 2026-06-08 — WO-3: self-retracting reviewer verdicts implemented
+
+Added `_retract_flag()` to the review watcher: when a PR merges, is closed with receipt,
+or resumes after escalation cleared by a new push, any open "Needs human attention" or
+"Self-review concerns" comment is struck through and annotated with the resolution reason.
+Added `update_comment()` to GitHubPRClient. Both comment IDs are stored in per-PR state.
+8 new tests; 73/73 reviewer tests pass.
+
 ## 2026-06-08 — WO-4: fix PlaneClient args in orphan_branch_check (_emit_plane_task)
 
 token→api_token, added project_id, title→name, labels→label_names. CI was failing ty check.
