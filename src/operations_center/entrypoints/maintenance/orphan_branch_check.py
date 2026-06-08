@@ -237,8 +237,9 @@ def _emit_plane_task(settings: Any, orphan: OrphanBranch) -> None:
 
     plane = PlaneClient(
         base_url=settings.plane.base_url,
-        token=settings.plane.token,
+        api_token=settings.plane_token(),
         workspace_slug=settings.plane.workspace_slug,
+        project_id=settings.plane.project_id,
     )
     title = f"Orphan branch: {orphan.repo_key}/{orphan.branch} ({orphan.commits_ahead} commits ahead)"
     body = (
@@ -248,12 +249,10 @@ def _emit_plane_task(settings: Any, orphan: OrphanBranch) -> None:
         "Action: open a PR, merge the commits, or delete the branch after confirming "
         "no salvage value per the WO-1 close-with-receipt invariant."
     )
-    project_id = settings.plane.project_id
     plane.create_issue(
-        project_id=project_id,
-        title=title,
+        name=title,
         description=body,
-        labels=["orphan-branch", f"repo:{orphan.repo_key}"],
+        label_names=["orphan-branch", f"repo:{orphan.repo_key}"],
     )
     logger.info("created Plane task for %s/%s", orphan.repo_key, orphan.branch)
 

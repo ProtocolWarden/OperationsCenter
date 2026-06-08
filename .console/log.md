@@ -1,3 +1,7 @@
+## 2026-06-08 — WO-4: fix PlaneClient args in orphan_branch_check (_emit_plane_task)
+
+token→api_token, added project_id, title→name, labels→label_names. CI was failing ty check.
+
 ## 2026-06-08 — WO-4: orphan-branch detector implemented (ensure_ascii fix)
 
 Custodian C? finding: json.dumps without ensure_ascii=False. Fixed.
