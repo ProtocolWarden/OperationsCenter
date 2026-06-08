@@ -3,7 +3,8 @@
 """Tests for pr_review_watcher — three-phase autonomous PR review state machine.
 
 All GitHub API calls are intercepted via monkeypatching GitHubPRClient methods.
-The pipeline (_run_pipeline) is stubbed to return controlled verdicts.
+_run_direct_review is stubbed to return controlled verdicts for self-review tests.
+_run_pipeline is stubbed for fix-pass tests (return_result=True path).
 State files use tmp_path so no real disk state is left behind.
 """
 
@@ -110,7 +111,7 @@ def test_phase1_lgtm_merges_and_removes_state(tmp_path: Path) -> None:
 
     with (
         patch.object(
-            watcher, "_run_pipeline", return_value={"result": "LGTM", "summary": "all good"}
+            watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "all good"}
         ),
         patch.object(watcher, "_plane_client") as mock_pc,
     ):
@@ -132,7 +133,7 @@ def test_phase1_lgtm_increments_loop_count(tmp_path: Path) -> None:
     gh = _make_gh()
 
     with (
-        patch.object(watcher, "_run_pipeline", return_value={"result": "LGTM", "summary": "ok"}),
+        patch.object(watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}),
         patch.object(watcher, "_merge_and_done") as mock_merge,
     ):
         watcher._phase1(
@@ -153,7 +154,7 @@ def test_phase1_concerns_posts_comment(tmp_path: Path) -> None:
     gh = _make_gh()
 
     with patch.object(
-        watcher, "_run_pipeline", return_value={"result": "CONCERNS", "summary": "fix the bug"}
+        watcher, "_run_direct_review", return_value={"result": "CONCERNS", "summary": "fix the bug"}
     ):
         watcher._phase1(
             state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
@@ -170,7 +171,7 @@ def test_phase1_concerns_stays_in_phase1_below_max_loops(tmp_path: Path) -> None
     gh = _make_gh()
 
     with patch.object(
-        watcher, "_run_pipeline", return_value={"result": "CONCERNS", "summary": "issues"}
+        watcher, "_run_direct_review", return_value={"result": "CONCERNS", "summary": "issues"}
     ):
         watcher._phase1(
             state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
@@ -188,7 +189,7 @@ def test_phase1_concerns_dispatches_fix_pass_below_cap(tmp_path: Path) -> None:
 
     with (
         patch.object(
-            watcher, "_run_pipeline", return_value={"result": "CONCERNS", "summary": "issues"}
+            watcher, "_run_direct_review", return_value={"result": "CONCERNS", "summary": "issues"}
         ),
         patch.object(watcher, "_run_fix_pass", return_value=True) as mock_fix,
         patch.object(watcher, "_merge_and_done") as mock_merge,
@@ -210,7 +211,7 @@ def test_phase1_concerns_closes_and_requeues_at_fix_cap(tmp_path: Path) -> None:
 
     with (
         patch.object(
-            watcher, "_run_pipeline", return_value={"result": "CONCERNS", "summary": "still broken"}
+            watcher, "_run_direct_review", return_value={"result": "CONCERNS", "summary": "still broken"}
         ),
         patch.object(watcher, "_merge_and_done") as mock_merge,
         patch.object(watcher, "_close_and_requeue") as mock_requeue,
@@ -228,7 +229,7 @@ def test_phase1_no_verdict_retries_next_poll(tmp_path: Path) -> None:
     state, sp = _make_state(tmp_path, phase="self_review", self_review_loops=0)
     gh = _make_gh()
 
-    with patch.object(watcher, "_run_pipeline", return_value=None):
+    with patch.object(watcher, "_run_direct_review", return_value=None):
         watcher._phase1(
             state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
         )
@@ -248,7 +249,7 @@ def test_phase1_no_verdict_escalates_keeps_pr_open(tmp_path: Path) -> None:
     gh = _make_gh()
 
     with (
-        patch.object(watcher, "_run_pipeline", return_value=None),
+        patch.object(watcher, "_run_direct_review", return_value=None),
         patch.object(watcher, "_merge_and_done") as mock_merge,
         patch.object(watcher, "_close_and_requeue") as mock_close,
     ):
@@ -271,12 +272,12 @@ def test_phase1_skips_empty_diff(tmp_path: Path) -> None:
     gh = _make_gh()
     gh.get_pr_diff.return_value = ""
 
-    with patch.object(watcher, "_run_pipeline") as mock_pipeline:
+    with patch.object(watcher, "_run_direct_review") as mock_review:
         watcher._phase1(
             state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
         )
 
-    mock_pipeline.assert_not_called()
+    mock_review.assert_not_called()
     gh.merge_pr.assert_not_called()
 
 
@@ -290,12 +291,12 @@ def test_phase1_skips_escalated_pr_without_new_head(tmp_path: Path) -> None:
     )
     gh = _make_gh()
 
-    with patch.object(watcher, "_run_pipeline") as mock_pipeline:
+    with patch.object(watcher, "_run_direct_review") as mock_review:
         watcher._phase1(
             state, sp, _pr_data(head_sha="abc123"), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
         )
 
-    mock_pipeline.assert_not_called()
+    mock_review.assert_not_called()
     loaded = watcher._load_state(sp)
     assert loaded["escalated_needs_human"] is True
     assert loaded["escalated_head_sha"] == "abc123"
@@ -312,13 +313,13 @@ def test_phase1_resumes_escalated_pr_after_new_head(tmp_path: Path) -> None:
     gh = _make_gh()
 
     with patch.object(
-        watcher, "_run_pipeline", return_value={"result": "LGTM", "summary": "ok"}
-    ) as mock_pipeline, patch.object(watcher, "_merge_and_done") as mock_merge:
+        watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}
+    ) as mock_review, patch.object(watcher, "_merge_and_done") as mock_merge:
         watcher._phase1(
             state, sp, _pr_data(head_sha="def456"), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
         )
 
-    mock_pipeline.assert_called_once()
+    mock_review.assert_called_once()
     mock_merge.assert_called_once()
 
 
@@ -349,15 +350,15 @@ def test_phase1_ci_green_requires_lgtm_not_automerge(tmp_path: Path) -> None:
 
     with (
         patch.object(
-            watcher, "_run_pipeline", return_value={"result": "LGTM", "summary": "ok"}
-        ) as mock_pipeline,
+            watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}
+        ) as mock_review,
         patch.object(watcher, "_merge_and_done") as mock_merge,
     ):
         watcher._phase1(
             state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", settings
         )
 
-    mock_pipeline.assert_called_once()  # the verdict gate ran
+    mock_review.assert_called_once()  # the verdict gate ran
     mock_merge.assert_called_once()
     assert mock_merge.call_args[1]["reason"] == "self_review_lgtm"  # not auto_merge_on_ci_green
 
@@ -369,12 +370,12 @@ def test_phase1_ci_red_defers_without_review(tmp_path: Path) -> None:
     gh.get_failed_checks.return_value = ["Lint (ruff): failure"]  # CI red
     settings = _settings_with_ci_green_repo()
 
-    with patch.object(watcher, "_run_pipeline") as mock_pipeline:
+    with patch.object(watcher, "_run_direct_review") as mock_review:
         watcher._phase1(
             state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", settings
         )
 
-    mock_pipeline.assert_not_called()
+    mock_review.assert_not_called()
     gh.merge_pr.assert_not_called()
     # the wait counter advances so the deferral is bounded
     assert watcher._load_state(sp)["ci_wait_cycles"] == 1
@@ -390,12 +391,12 @@ def test_phase1_ci_persistently_red_escalates(tmp_path: Path) -> None:
     gh.get_failed_checks.return_value = ["Test (pytest): fail"]  # persistently red
     settings = _settings_with_ci_green_repo()
 
-    with patch.object(watcher, "_run_pipeline") as mock_pipeline:
+    with patch.object(watcher, "_run_direct_review") as mock_review:
         watcher._phase1(
             state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", settings
         )
 
-    mock_pipeline.assert_not_called()
+    mock_review.assert_not_called()
     gh.merge_pr.assert_not_called()
     gh.close_pr.assert_not_called()  # work preserved, not closed
     gh.post_comment.assert_called_once()  # needs-human escalation
@@ -859,6 +860,50 @@ def test_conflict_markers_fail_open_without_git(tmp_path: Path) -> None:
     assert watcher._oc_source_conflict_markers(tmp_path) == []
 
 
+def test_run_direct_review_raises_on_unclean_tree(tmp_path: Path) -> None:
+    with patch.object(watcher, "_oc_source_conflict_markers", return_value=["src/pkg/bad.py"]):
+        with pytest.raises(watcher.OCSourceTreeUncleanError) as ei:
+            watcher._run_direct_review(tmp_path, "goal text", STATE_KEY)
+    assert "src/pkg/bad.py" in str(ei.value)
+
+
+def test_run_direct_review_returns_verdict_from_file(tmp_path: Path) -> None:
+    # Verify _run_direct_review reads verdict.json written by the subprocess.
+    import subprocess as _sp
+
+    verdict = {"result": "LGTM", "summary": "looks good"}
+
+    def _fake_run(cmd, cwd, capture_output, text, timeout):
+        # Simulate claude writing verdict.json to the temp cwd.
+        (Path(cwd) / "verdict.json").write_text(
+            json.dumps(verdict), encoding="utf-8"
+        )
+        return _sp.CompletedProcess(cmd, returncode=0, stdout="", stderr="")
+
+    with (
+        patch.object(watcher, "_oc_source_conflict_markers", return_value=[]),
+        patch("operations_center.entrypoints.pr_review_watcher.main.subprocess.run", side_effect=_fake_run),
+    ):
+        result = watcher._run_direct_review(tmp_path, "review this diff", STATE_KEY)
+
+    assert result == verdict
+
+
+def test_run_direct_review_returns_none_when_no_verdict_file(tmp_path: Path) -> None:
+    import subprocess as _sp
+
+    def _fake_run(cmd, cwd, capture_output, text, timeout):
+        return _sp.CompletedProcess(cmd, returncode=0, stdout="", stderr="")
+
+    with (
+        patch.object(watcher, "_oc_source_conflict_markers", return_value=[]),
+        patch("operations_center.entrypoints.pr_review_watcher.main.subprocess.run", side_effect=_fake_run),
+    ):
+        result = watcher._run_direct_review(tmp_path, "review this diff", STATE_KEY)
+
+    assert result is None
+
+
 def test_run_pipeline_raises_on_unclean_tree(tmp_path: Path) -> None:
     settings = MagicMock(repos={REPO_KEY: MagicMock(clone_url="u", default_branch="main")})
     with patch.object(watcher, "_oc_source_conflict_markers", return_value=["src/pkg/bad.py"]):
@@ -882,7 +927,7 @@ def test_unclean_tree_does_not_burn_no_verdict_budget(tmp_path: Path) -> None:
     state, sp = _make_state(tmp_path, phase="self_review", no_verdict_passes=0)
     gh = _make_gh()
     with (
-        patch.object(watcher, "_run_pipeline", side_effect=watcher.OCSourceTreeUncleanError("dirty")),
+        patch.object(watcher, "_run_direct_review", side_effect=watcher.OCSourceTreeUncleanError("dirty")),
         patch.object(watcher, "_escalate_needs_human") as esc,
     ):
         watcher._phase1(
@@ -899,7 +944,7 @@ def test_unclean_tree_escalates_with_specific_reason_after_budget(tmp_path: Path
     state, sp = _make_state(tmp_path, phase="self_review", env_unclean_passes=1)  # max=2
     gh = _make_gh()
     with (
-        patch.object(watcher, "_run_pipeline", side_effect=watcher.OCSourceTreeUncleanError("dirty")),
+        patch.object(watcher, "_run_direct_review", side_effect=watcher.OCSourceTreeUncleanError("dirty")),
         patch.object(watcher, "_escalate_needs_human") as esc,
     ):
         watcher._phase1(

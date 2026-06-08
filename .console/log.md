@@ -1,3 +1,14 @@
+## 2026-06-08 — fix(review-watcher): bypass TeamExecutor for self-review (_run_direct_review)
+
+Root cause of persistent no_verdict for PR #253 (10+ consecutive failures): _run_pipeline
+cloned oc_root into the workspace, placing CLAUDE.md there. When the TeamExecutor coordinator
+ran claude -p in that workspace, CLAUDE.md overrode the review goal — claude tried to run
+the watchdog cycle instead of writing verdict.json. Fixed with _run_direct_review() that
+runs claude -p in an empty temp directory (no CLAUDE.md). Fix pass (_run_pipeline with
+return_result=True) unchanged.
+
+---
+
 ## 2026-06-08 — fix(review-watcher): raise diff excerpt limit 8k→60k chars
 
 Root cause of persistent no_verdict for PR #253: diff was 29,920 chars, truncated to 8,000 (27%). Reviewer saw a mid-file incomplete diff and exited without writing verdict.json. PRs ≤8,000 chars (e.g. PR #252 at 6,673) got LGTM on first pass. Increased limit to 60,000 chars; added workspace-read hint for cases still over limit.

@@ -256,6 +256,70 @@ def _record_close_receipt(
 # ── pr review pipeline ────────────────────────────────────────────────────────
 
 
+def _run_direct_review(
+    oc_root: Path,
+    goal_text: str,
+    state_key: str,
+) -> dict | None:
+    """Run a self-review via a direct ``claude -p`` call in an empty temp directory.
+
+    Bypasses the TeamExecutor pipeline so the workspace's CLAUDE.md cannot
+    override the review goal.  The diff is already embedded in ``goal_text``
+    so no repo clone is needed.  Returns the parsed verdict dict or None.
+    """
+    conflicted = _oc_source_conflict_markers(oc_root)
+    if conflicted:
+        raise OCSourceTreeUncleanError(
+            f"OC source tree at {oc_root} has git conflict markers in "
+            f"{len(conflicted)} tracked file(s) "
+            f"({', '.join(conflicted[:3])}{'…' if len(conflicted) > 3 else ''}) "
+            "— a concurrent session left the shared checkout dirty; refusing "
+            "to run the reviewer (it would crash at import)."
+        )
+
+    with tempfile.TemporaryDirectory(prefix="oc-review-direct-") as tmpdir:
+        tmp = Path(tmpdir)
+        verdict_path = tmp / "verdict.json"
+        try:
+            proc = subprocess.run(
+                [
+                    "claude",
+                    "--model",
+                    "claude-haiku-4-5-20251001",
+                    "-p",
+                    "--output-format",
+                    "json",
+                    "--effort",
+                    "low",
+                    goal_text,
+                ],
+                cwd=str(tmp),
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+        except subprocess.TimeoutExpired:
+            logger.warning(
+                "pr_review_watcher: direct review timed out for state_key=%s", state_key
+            )
+            return None
+        if verdict_path.exists():
+            try:
+                return json.loads(verdict_path.read_text(encoding="utf-8"))
+            except Exception:
+                logger.warning(
+                    "pr_review_watcher: malformed verdict.json from direct review for %s",
+                    state_key,
+                )
+        else:
+            logger.warning(
+                "pr_review_watcher: no verdict.json from direct review for %s (rc=%d)",
+                state_key,
+                proc.returncode,
+            )
+        return None
+
+
 def _run_pipeline(
     oc_root: Path,
     config_path: Path,
@@ -1405,16 +1469,7 @@ def _phase1(
     state.setdefault("env_unclean_passes", 0)
 
     try:
-        verdict = _run_pipeline(
-            oc_root,
-            config_path,
-            repo_key,
-            goal_text,
-            settings,
-            source="reviewer_self",
-            state_key=state_key,
-            branch_suffix=f"{state_key[:12]}",
-        )
+        verdict = _run_direct_review(oc_root, goal_text, state_key)
     except OCSourceTreeUncleanError as exc:
         # The reviewer's own source tree is broken — this would crash for EVERY
         # PR, so it is not charged against this PR's review budget. Skip the
