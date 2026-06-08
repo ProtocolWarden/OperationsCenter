@@ -48,6 +48,7 @@ import tempfile
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,11 @@ def _save_state(path: Path, state: dict) -> None:
     state["updated_at"] = datetime.now(UTC).isoformat()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _pr_head_sha(pr_data: dict[str, Any]) -> str:
+    """Return the PR head SHA when GitHub provided one, else empty string."""
+    return str(((pr_data.get("head") or {}).get("sha") or "")).strip()
 
 
 def _new_state(repo_key: str, pr_number: int) -> dict:
@@ -971,6 +977,29 @@ def _phase1(
     repo_key = state["repo_key"]
     state_key = state["state_key"]
     reviewer = settings.reviewer
+    current_head_sha = _pr_head_sha(pr_data)
+
+    # Once a PR is escalated for human attention, do not keep burning review
+    # passes on the same unchanged head. Resume autonomous review only after a
+    # new push changes the PR head SHA.
+    if state.get("escalated_needs_human"):
+        escalated_head_sha = str(state.get("escalated_head_sha") or "").strip()
+        if current_head_sha and escalated_head_sha and current_head_sha != escalated_head_sha:
+            state["escalated_needs_human"] = False
+            state.pop("escalated_head_sha", None)
+            state["no_verdict_passes"] = 0
+            logger.info(
+                "pr_review_watcher: PR #%d head changed after escalation; resuming automated review",
+                pr_number,
+            )
+            _save_state(state_path, state)
+        else:
+            logger.info(
+                "pr_review_watcher: PR #%d awaiting human attention or new push; "
+                "skipping automated self-review",
+                pr_number,
+            )
+            return
 
     # ── CI-green precondition ────────────────────────────────────────────────
     # For autonomy PRs on repos that opt in, green CI is a PRECONDITION for
@@ -1153,6 +1182,7 @@ def _phase1(
                 pr_number,
                 state["no_verdict_passes"],
             )
+            state["escalated_head_sha"] = current_head_sha or state.get("escalated_head_sha")
             _escalate_needs_human(
                 state,
                 state_path,

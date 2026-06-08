@@ -78,34 +78,32 @@ class FileHotspot(BaseModel):
     touch_count: int
 
 
-class CheckSignal(BaseModel):
-    """Test execution results and status.
+class TestSignal(BaseModel):
+    """Test execution results with breakdown metrics and coverage integration.
 
-    Represents the outcome of test runs (unit, integration, or end-to-end tests)
-    from an external testing framework or CI system.
-
-    Attributes:
-        status: Overall test status ("passing", "failing", "flaky", "unavailable", etc.)
-        test_count: Total number of tests executed, or None if not available
-        source: Name of the tool/framework that ran tests (e.g., "pytest", "jest", "cargo test")
-        observed_at: Timestamp when the test execution completed. Optional because:
-            - Test runs may not provide timing information
-            - Tests may not have run yet (deferred)
-            - Status may be inferred from snapshot state rather than from live execution
-            If None, use snapshot.observed_at as fallback: `signal.observed_at or snapshot.observed_at`
-        summary: Human-readable summary of test results (e.g., "5 passed, 2 failed")
-
-    When observed_at is used in derivers, prefer the signal-level value over snapshot-level:
-
-        # In derivers that access test_signal
-        observed_at = signal.test_signal.observed_at or snapshots[0].observed_at
+    Granular test counts, execution performance, failure categorization, and
+    code coverage. Fields are self-documenting via their annotations below;
+    `status` is one of passing/failing/flaky/partial/unavailable and
+    `failure_category` is the primary failure type (assertion, timeout, …).
     """
 
     status: str
     test_count: int | None = None
+    passed_count: int = 0
+    failed_count: int = 0
+    skip_count: int = 0
+    xfailed_count: int = 0
+    error_count: int = 0
+    execution_time_ms: int | None = None
+    coverage_percent: float | None = None
+    failure_category: str | None = None
     source: str | None = None
     observed_at: datetime | None = None
     summary: str | None = None
+
+
+# Backwards compatibility alias
+CheckSignal = TestSignal
 
 
 class DependencyDriftSignal(BaseModel):

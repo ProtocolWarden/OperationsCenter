@@ -39,12 +39,12 @@ SETTINGS = MagicMock(
 )
 
 
-def _pr_data(*, draft: bool = False, title: str = "My PR") -> dict[str, Any]:
+def _pr_data(*, draft: bool = False, title: str = "My PR", head_sha: str = "abc123") -> dict[str, Any]:
     return {
         "number": PR_NUMBER,
         "title": title,
         "draft": draft,
-        "head": {"ref": f"goal/{PR_NUMBER}"},
+        "head": {"ref": f"goal/{PR_NUMBER}", "sha": head_sha},
     }
 
 
@@ -262,6 +262,7 @@ def test_phase1_no_verdict_escalates_keeps_pr_open(tmp_path: Path) -> None:
     gh.post_comment.assert_called_once()  # one needs-human escalation comment
     loaded = watcher._load_state(sp)
     assert loaded["escalated_needs_human"] is True
+    assert loaded["escalated_head_sha"] == "abc123"
     assert loaded["no_verdict_passes"] == 0  # reset to keep retrying
 
 
@@ -277,6 +278,48 @@ def test_phase1_skips_empty_diff(tmp_path: Path) -> None:
 
     mock_pipeline.assert_not_called()
     gh.merge_pr.assert_not_called()
+
+
+def test_phase1_skips_escalated_pr_without_new_head(tmp_path: Path) -> None:
+    state, sp = _make_state(
+        tmp_path,
+        phase="self_review",
+        escalated_needs_human=True,
+        escalated_head_sha="abc123",
+        no_verdict_passes=0,
+    )
+    gh = _make_gh()
+
+    with patch.object(watcher, "_run_pipeline") as mock_pipeline:
+        watcher._phase1(
+            state, sp, _pr_data(head_sha="abc123"), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+
+    mock_pipeline.assert_not_called()
+    loaded = watcher._load_state(sp)
+    assert loaded["escalated_needs_human"] is True
+    assert loaded["escalated_head_sha"] == "abc123"
+
+
+def test_phase1_resumes_escalated_pr_after_new_head(tmp_path: Path) -> None:
+    state, sp = _make_state(
+        tmp_path,
+        phase="self_review",
+        escalated_needs_human=True,
+        escalated_head_sha="abc123",
+        no_verdict_passes=1,
+    )
+    gh = _make_gh()
+
+    with patch.object(
+        watcher, "_run_pipeline", return_value={"result": "LGTM", "summary": "ok"}
+    ) as mock_pipeline, patch.object(watcher, "_merge_and_done") as mock_merge:
+        watcher._phase1(
+            state, sp, _pr_data(head_sha="def456"), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+
+    mock_pipeline.assert_called_once()
+    mock_merge.assert_called_once()
 
 
 # ── CI-green precondition (not an auto-merge trigger) ──────────────────────────

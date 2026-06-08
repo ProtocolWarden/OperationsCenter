@@ -708,6 +708,10 @@ audit:
     # via model_dump(); never accessed as Python attributes at callsites.
     - diff
     - task_constraints
+    # TestSignal fields — populated by snapshot serialisation; consumed by
+    # TestSignalQuery readers via model_validate_json(), not attribute access.
+    - skip_count
+    - xfailed_count
 
   # Plugin-defined audit config keys — suppresses unknown-key warnings in doctor.
   plugin_audit_keys:
