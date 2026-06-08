@@ -1185,6 +1185,8 @@ def _phase1(
     )
 
     goal_text = (
+        "## TASK TYPE: Read-only code review\n"
+        "## SINGLE REQUIRED ACTION: Write verdict.json — no other file changes allowed\n\n"
         f"Review the following pull-request diff for correctness, style, and spec compliance.\n\n"
         f"PR #{pr_number}: {title}\n\n"
         f"```diff\n{diff_excerpt}\n```"
@@ -1202,7 +1204,9 @@ def _phase1(
         f'{{"result": "CONCERNS", "summary": "bullet list of specific issues"}}\n\n'
         "Use LGTM only if ALL checklist items pass. "
         "Use CONCERNS when anything fails — be specific and actionable. "
-        "Do NOT push any code changes to the repository."
+        "CRITICAL: Do NOT modify any source files in the repository. "
+        "Do NOT run tests, build, or push. "
+        "Your ONLY permitted action is writing verdict.json to the current directory."
     )
 
     logger.info(

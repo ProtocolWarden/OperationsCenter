@@ -236,3 +236,12 @@ controller resolves it and anchors at PlatformManifest.
 
 _Archived completed history → `/home/dev/Documents/GitHub/PrivateManifest/archive/console/OperationsCenter/log-2026-06-04.md`_
 
+
+## 2026-06-08 — Review goal-text: explicit read-only constraint
+
+Added "TASK TYPE: Read-only code review / SINGLE REQUIRED ACTION: Write verdict.json" 
+header to review goal_text. Root cause: budget team coordinator (Haiku effort=low) was
+decomposing the review task into implementation sub-stages that tried to modify source
+files rather than just writing verdict.json. PR #253 had 7 consecutive no_verdict failures.
+New phrasing prevents the coordinator from creating non-verdict-writing stages.
+Also cleared PR #253 escalation for one more retry cycle.
