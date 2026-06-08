@@ -176,21 +176,48 @@ def _find_open_sweep_task(plane, repo_key: str) -> dict[str, Any] | None:
     return None
 
 
-def _emit(sweep: _RepoSweep, deltas: dict[str, int], plane, *, dry_run: bool) -> str:
+def _index_open_sweep_tasks(plane) -> dict[str, dict[str, Any]]:
+    """Return the current open sweep task for each repo keyed by repo_key."""
+    indexed: dict[str, dict[str, Any]] = {}
+    for issue in plane.list_issues():
+        state = issue.get("state")
+        state_name = (state.get("name") if isinstance(state, dict) else str(state or "")).lower()
+        if state_name in {"done", "cancelled"}:
+            continue
+        for lab in issue.get("labels", []) or []:
+            name = (lab.get("name") if isinstance(lab, dict) else str(lab)).strip()
+            if not name.lower().startswith(_DEDUP_LABEL_PREFIX):
+                continue
+            repo_key = name[len(_DEDUP_LABEL_PREFIX) :].strip()
+            if repo_key and repo_key not in indexed:
+                indexed[repo_key] = issue
+    return indexed
+
+
+def _emit(
+    sweep: _RepoSweep,
+    deltas: dict[str, int],
+    plane,
+    *,
+    existing_tasks: dict[str, dict[str, Any]],
+    dry_run: bool,
+) -> str:
     """Create-or-comment one Plane task per repo. Returns action label."""
     title = f"[{sweep.repo_key}] custodian sweep: {sweep.total} findings"
     body = _render_body(sweep, deltas)
-    existing = _find_open_sweep_task(plane, sweep.repo_key)
+    existing = existing_tasks.get(sweep.repo_key)
     if dry_run:
         return "would-comment" if existing else "would-create"
     if existing:
         plane.comment_issue(str(existing["id"]), body)
         return "commented"
-    plane.create_issue(
+    created = plane.create_issue(
         name=title,
         description=body,
         label_names=[f"{_DEDUP_LABEL_PREFIX}{sweep.repo_key}", "custodian-sweep"],
     )
+    if isinstance(created, dict):
+        existing_tasks[sweep.repo_key] = created
     return "created"
 
 
@@ -228,6 +255,7 @@ def main() -> int:
     sweeps: list[_RepoSweep] = [_run_custodian_audit(t) for t in targets]
 
     plane = None
+    existing_tasks: dict[str, dict[str, Any]] = {}
     if args.emit:
         from operations_center.adapters.plane import PlaneClient
 
@@ -237,6 +265,7 @@ def main() -> int:
             workspace_slug=settings.plane.workspace_slug,
             project_id=settings.plane.project_id,
         )
+        existing_tasks = _index_open_sweep_tasks(plane)
 
     summary: dict[str, Any] = {
         "scanned_at": datetime.now(UTC).isoformat(),
@@ -254,7 +283,13 @@ def main() -> int:
                 "error": sweep.error,
             }
             if args.emit:
-                entry["plane"] = _emit(sweep, deltas, plane, dry_run=args.dry_run)
+                entry["plane"] = _emit(
+                    sweep,
+                    deltas,
+                    plane,
+                    existing_tasks=existing_tasks,
+                    dry_run=args.dry_run,
+                )
             summary["results"][sweep.repo_key] = entry
     finally:
         if plane is not None:

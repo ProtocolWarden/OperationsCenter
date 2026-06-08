@@ -50,7 +50,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from operations_center.close_invariants import close_without_receipt_allowed
+from operations_center.close_invariants import (
+    branch_delete_allowed_after_close,
+    close_without_receipt_allowed,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -959,7 +962,10 @@ def _close_and_requeue(
 
     # Delete the head branch so closed-PR branches don't accumulate as orphans.
     head_ref = (pr_data.get("head") or {}).get("ref") or ""
-    if head_ref:
+    if head_ref and branch_delete_allowed_after_close(
+        comment=close_comment,
+        durable_receipt_recorded=True,
+    ):
         try:
             gh_client.delete_branch(owner, repo, head_ref)
         except Exception as exc:
@@ -969,6 +975,13 @@ def _close_and_requeue(
                 pr_number,
                 exc,
             )
+    elif head_ref:
+        logger.warning(
+            "pr_review_watcher: retained branch %s for PR #%d because close comment "
+            "still claims preserved work",
+            head_ref,
+            pr_number,
+        )
 
     state_path.unlink(missing_ok=True)
 

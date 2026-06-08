@@ -262,3 +262,5 @@ decomposing the review task into implementation sub-stages that tried to modify 
 files rather than just writing verdict.json. PR #253 had 7 consecutive no_verdict failures.
 New phrasing prevents the coordinator from creating non-verdict-writing stages.
 Also cleared PR #253 escalation for one more retry cycle.
+
+## 2026-06-08 — WO-1 close-with-receipt invariant hardened

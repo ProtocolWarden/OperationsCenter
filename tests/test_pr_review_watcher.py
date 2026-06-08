@@ -509,6 +509,45 @@ def test_close_and_requeue_records_receipt_comment_before_close(tmp_path: Path) 
     assert "docs/specs/queue-drain.md" in posted
 
 
+def test_close_and_requeue_keeps_branch_when_comment_claims_preserved_work(tmp_path: Path) -> None:
+    state, sp = _make_state(tmp_path, plane_task_id="task-abc")
+    gh = _make_gh()
+    mock_client = MagicMock()
+    mock_client.fetch_issue.return_value = {
+        "id": "task-abc",
+        "description_stripped": (
+            "## Goal\nFinish the queue drain fix.\n\n"
+            "## Execution\nrepo: MyRepo\nspec_file: docs/specs/queue-drain.md\n"
+        ),
+        "labels": [],
+    }
+
+    with (
+        patch.object(watcher, "_requeue_plane_task", return_value=True),
+        patch.object(watcher, "_plane_client", return_value=mock_client),
+        patch.object(
+            watcher,
+            "branch_delete_allowed_after_close",
+            return_value=False,
+        ),
+    ):
+        watcher._close_and_requeue(
+            state,
+            sp,
+            _pr_data(),
+            gh,
+            "owner",
+            "repo",
+            SETTINGS,
+            reason="fix_attempts_exhausted",
+            detail="nope",
+        )
+
+    gh.close_pr.assert_called_once_with("owner", "repo", PR_NUMBER)
+    gh.delete_branch.assert_not_called()
+    assert not sp.exists()
+
+
 def test_close_and_requeue_keeps_pr_open_when_requeue_fails(tmp_path: Path) -> None:
     # Plane down → re-queue fails → DON'T close (work would be lost); retry later.
     state, sp = _make_state(tmp_path, plane_task_id="task-abc")
