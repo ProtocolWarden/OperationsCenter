@@ -263,4 +263,9 @@ files rather than just writing verdict.json. PR #253 had 7 consecutive no_verdic
 New phrasing prevents the coordinator from creating non-verdict-writing stages.
 Also cleared PR #253 escalation for one more retry cycle.
 
+## 2026-06-08 — fix(tests): loosen snapshot performance timing bounds
+
+Flaky CI failure: 0.1s limit failed with 0.177s on shared runners.
+Raised to 1.0s — still catches catastrophic regression (10x+).
+
 ## 2026-06-08 — WO-1 close-with-receipt invariant hardened
