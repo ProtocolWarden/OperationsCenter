@@ -20,6 +20,7 @@ from operations_center.observer.models import (
     CoverageSignal,
     DependencyDriftSignal,
     ExecutionHealthSignal,
+    FlakyTestSignal,
     LintSignal,
     RepoContextSnapshot,
     RepoSignalsSnapshot,
@@ -29,6 +30,7 @@ from operations_center.observer.models import (
     TypeSignal,
     ValidationHistorySignal,
 )
+from operations_center.observer.query import TestSignalQuery
 from operations_center.observer.snapshot_builder import SnapshotBuilder
 
 logger = logging.getLogger(__name__)
@@ -74,6 +76,7 @@ class RepoObserverService:
         benchmark_signal_collector: RepoSignalCollector | None = None,
         security_signal_collector: RepoSignalCollector | None = None,
         coverage_signal_collector: RepoSignalCollector | None = None,
+        flaky_test_collector: RepoSignalCollector | None = None,
         snapshot_builder: SnapshotBuilder | None = None,
         artifact_writer: ObserverArtifactWriter | None = None,
         metrics_exporter: ValidationMetricsExporter | None = None,
@@ -94,6 +97,7 @@ class RepoObserverService:
         self.benchmark_signal_collector = benchmark_signal_collector
         self.security_signal_collector = security_signal_collector
         self.coverage_signal_collector = coverage_signal_collector
+        self.flaky_test_collector = flaky_test_collector
         self.snapshot_builder = snapshot_builder or SnapshotBuilder()
         self.artifact_writer = artifact_writer or ObserverArtifactWriter()
         self.metrics_exporter = metrics_exporter
@@ -240,6 +244,17 @@ class RepoObserverService:
             if self.coverage_signal_collector is not None
             else CoverageSignal(status="unavailable")
         )
+        flaky_test_signal = (
+            self._collect_optional(
+                self.flaky_test_collector,
+                context,
+                "flaky_test_signal",
+                collector_errors,
+                default=FlakyTestSignal(status="unavailable"),
+            )
+            if self.flaky_test_collector is not None
+            else FlakyTestSignal(status="unavailable")
+        )
 
         signals = RepoSignalsSnapshot(
             recent_commits=recent_commits,
@@ -257,6 +272,7 @@ class RepoObserverService:
             benchmark_signal=benchmark_signal,
             security_signal=security_signal,
             coverage_signal=coverage_signal,
+            flaky_test_signal=flaky_test_signal,
         )
         snapshot = self.snapshot_builder.build(
             run_id=context.run_id,
@@ -268,6 +284,23 @@ class RepoObserverService:
         )
         artifacts = self.artifact_writer.write(snapshot)
         return snapshot, artifacts
+
+    def query(self, root: Path | None = None) -> TestSignalQuery:
+        """Create a query API for test signal visibility.
+
+        Returns a TestSignalQuery instance that can be used to:
+        - Retrieve individual test signals by run_id or recency
+        - Analyze coverage trends over time
+        - Summarize failure reasons across snapshots
+        - Detect test status stability and regression
+
+        Args:
+            root: Override snapshot root directory (default uses artifact_writer root)
+
+        Returns:
+            TestSignalQuery instance ready for autonomy consumption
+        """
+        return TestSignalQuery(root=root or self.artifact_writer.root)
 
     def _collect_required(
         self,

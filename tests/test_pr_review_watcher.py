@@ -39,12 +39,12 @@ SETTINGS = MagicMock(
 )
 
 
-def _pr_data(*, draft: bool = False, title: str = "My PR") -> dict[str, Any]:
+def _pr_data(*, draft: bool = False, title: str = "My PR", head_sha: str = "abc123") -> dict[str, Any]:
     return {
         "number": PR_NUMBER,
         "title": title,
         "draft": draft,
-        "head": {"ref": f"goal/{PR_NUMBER}"},
+        "head": {"ref": f"goal/{PR_NUMBER}", "sha": head_sha},
     }
 
 
@@ -262,6 +262,7 @@ def test_phase1_no_verdict_escalates_keeps_pr_open(tmp_path: Path) -> None:
     gh.post_comment.assert_called_once()  # one needs-human escalation comment
     loaded = watcher._load_state(sp)
     assert loaded["escalated_needs_human"] is True
+    assert loaded["escalated_head_sha"] == "abc123"
     assert loaded["no_verdict_passes"] == 0  # reset to keep retrying
 
 
@@ -277,6 +278,48 @@ def test_phase1_skips_empty_diff(tmp_path: Path) -> None:
 
     mock_pipeline.assert_not_called()
     gh.merge_pr.assert_not_called()
+
+
+def test_phase1_skips_escalated_pr_without_new_head(tmp_path: Path) -> None:
+    state, sp = _make_state(
+        tmp_path,
+        phase="self_review",
+        escalated_needs_human=True,
+        escalated_head_sha="abc123",
+        no_verdict_passes=0,
+    )
+    gh = _make_gh()
+
+    with patch.object(watcher, "_run_pipeline") as mock_pipeline:
+        watcher._phase1(
+            state, sp, _pr_data(head_sha="abc123"), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+
+    mock_pipeline.assert_not_called()
+    loaded = watcher._load_state(sp)
+    assert loaded["escalated_needs_human"] is True
+    assert loaded["escalated_head_sha"] == "abc123"
+
+
+def test_phase1_resumes_escalated_pr_after_new_head(tmp_path: Path) -> None:
+    state, sp = _make_state(
+        tmp_path,
+        phase="self_review",
+        escalated_needs_human=True,
+        escalated_head_sha="abc123",
+        no_verdict_passes=1,
+    )
+    gh = _make_gh()
+
+    with patch.object(
+        watcher, "_run_pipeline", return_value={"result": "LGTM", "summary": "ok"}
+    ) as mock_pipeline, patch.object(watcher, "_merge_and_done") as mock_merge:
+        watcher._phase1(
+            state, sp, _pr_data(head_sha="def456"), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+
+    mock_pipeline.assert_called_once()
+    mock_merge.assert_called_once()
 
 
 # ── CI-green precondition (not an auto-merge trigger) ──────────────────────────
@@ -683,3 +726,334 @@ def test_cli_accepts_all_flags(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
     assert "--watch" in proc.stdout
     assert "--poll-interval-seconds" in proc.stdout
     assert "--status-dir" in proc.stdout
+
+
+# ── OC source-tree cleanliness guard (2026-06-07 reviewer-outage hardening) ───
+
+
+def _git_init_repo(root: Path) -> None:
+    import subprocess
+
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=root, check=True)
+
+
+def test_conflict_markers_clean_tree(tmp_path: Path) -> None:
+    _git_init_repo(tmp_path)
+    src = tmp_path / "src" / "pkg"
+    src.mkdir(parents=True)
+    (src / "mod.py").write_text("x = 1\n")
+    import subprocess
+
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    assert watcher._oc_source_conflict_markers(tmp_path) == []
+
+
+def test_conflict_markers_detected_in_tracked_py(tmp_path: Path) -> None:
+    _git_init_repo(tmp_path)
+    src = tmp_path / "src" / "pkg"
+    src.mkdir(parents=True)
+    (src / "mod.py").write_text(
+        "def f():\n<<<<<<< Updated upstream\n    return 1\n=======\n    return 2\n>>>>>>> Stashed changes\n"
+    )
+    import subprocess
+
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    hits = watcher._oc_source_conflict_markers(tmp_path)
+    assert hits == ["src/pkg/mod.py"]
+
+
+def test_conflict_markers_ignores_non_py(tmp_path: Path) -> None:
+    _git_init_repo(tmp_path)
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "notes.md").write_text("<<<<<<< Updated upstream\nfoo\n=======\nbar\n>>>>>>> x\n")
+    import subprocess
+
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    # A markdown conflict does not crash a Python import — must not trip the guard.
+    assert watcher._oc_source_conflict_markers(tmp_path) == []
+
+
+def test_conflict_markers_fail_open_without_git(tmp_path: Path) -> None:
+    # No git repo here → git grep errors → guard returns [] (never wedges reviewer).
+    assert watcher._oc_source_conflict_markers(tmp_path) == []
+
+
+def test_run_pipeline_raises_on_unclean_tree(tmp_path: Path) -> None:
+    settings = MagicMock(repos={REPO_KEY: MagicMock(clone_url="u", default_branch="main")})
+    with patch.object(watcher, "_oc_source_conflict_markers", return_value=["src/pkg/bad.py"]):
+        with pytest.raises(watcher.OCSourceTreeUncleanError) as ei:
+            watcher._run_pipeline(
+                tmp_path,
+                tmp_path / "cfg.yaml",
+                REPO_KEY,
+                "goal",
+                settings,
+                source="reviewer_self",
+                state_key=STATE_KEY,
+                branch_suffix="abc",
+            )
+    assert "src/pkg/bad.py" in str(ei.value)
+
+
+def test_unclean_tree_does_not_burn_no_verdict_budget(tmp_path: Path) -> None:
+    # An unclean tree must increment env_unclean_passes, NOT no_verdict_passes,
+    # and must not escalate on the first pass (max_self_review_loops=2).
+    state, sp = _make_state(tmp_path, phase="self_review", no_verdict_passes=0)
+    gh = _make_gh()
+    with (
+        patch.object(watcher, "_run_pipeline", side_effect=watcher.OCSourceTreeUncleanError("dirty")),
+        patch.object(watcher, "_escalate_needs_human") as esc,
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+    assert state["no_verdict_passes"] == 0
+    assert state["env_unclean_passes"] == 1
+    esc.assert_not_called()
+
+
+def test_unclean_tree_escalates_with_specific_reason_after_budget(tmp_path: Path) -> None:
+    # After max_self_review_loops unclean passes, escalate — and with the
+    # source-tree reason, never a misleading "no verdict / reviewer unavailable".
+    state, sp = _make_state(tmp_path, phase="self_review", env_unclean_passes=1)  # max=2
+    gh = _make_gh()
+    with (
+        patch.object(watcher, "_run_pipeline", side_effect=watcher.OCSourceTreeUncleanError("dirty")),
+        patch.object(watcher, "_escalate_needs_human") as esc,
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+    esc.assert_called_once()
+    assert esc.call_args.kwargs.get("reason") == "oc_source_tree_unclean"
+    assert state["no_verdict_passes"] == 0
+
+
+# ── proactive review-queue ordering (2026-06-07 starvation fix) ───────────────
+
+
+def test_review_priority_tiers() -> None:
+    # Fresh self_review (tier 0) < ci_fix (tier 1) < self_review-in-fix-loop (tier 2)
+    fresh = {"phase": "self_review", "fix_attempts": 0, "pr_number": 100}
+    ci = {"phase": "ci_fix", "fix_attempts": 0, "pr_number": 100}
+    battling = {"phase": "self_review", "fix_attempts": 3, "pr_number": 100}
+    assert watcher._review_priority(fresh) < watcher._review_priority(ci)
+    assert watcher._review_priority(ci) < watcher._review_priority(battling)
+
+
+def test_review_priority_merge_ready_beats_higher_numbered_fix_battle() -> None:
+    # The live case: #247 (green, fresh self_review) must sort before #250
+    # (self_review sunk into a fix loop) even though 250 > 247.
+    pr247 = {"phase": "self_review", "fix_attempts": 0, "pr_number": 247}
+    pr250 = {"phase": "self_review", "fix_attempts": 2, "pr_number": 250}
+    assert watcher._review_priority(pr247) < watcher._review_priority(pr250)
+
+
+def test_review_priority_within_tier_orders_by_attempts_then_number() -> None:
+    a = {"phase": "self_review", "fix_attempts": 1, "pr_number": 300}
+    b = {"phase": "self_review", "fix_attempts": 2, "pr_number": 200}
+    c = {"phase": "self_review", "fix_attempts": 1, "pr_number": 400}
+    ordered = sorted([b, c, a], key=watcher._review_priority)
+    assert ordered == [a, c, b]  # fix_attempts asc, then pr_number asc
+
+
+def test_review_priority_defaults_safe_on_empty_state() -> None:
+    # Missing keys must not crash; defaults to ci_fix tier.
+    key = watcher._review_priority({})
+    assert key == (1, 0, 0)
+
+
+# ── auto-rebase: real-git conflict classification (2026-06-08 WO-6) ────────────
+
+
+def _make_repo_with_pr_branch(tmp_path: Path):
+    """Build origin + a clone with a PR branch behind main. Returns (clone, repo_cfg)."""
+    import subprocess as sp
+
+    origin = tmp_path / "origin.git"
+    sp.run(["git", "init", "--bare", "-q", str(origin)], check=True)
+    seed = tmp_path / "seed"
+    sp.run(["git", "clone", "-q", str(origin), str(seed)], check=True)
+    sp.run(["git", "-C", str(seed), "config", "user.email", "t@t"], check=True)
+    sp.run(["git", "-C", str(seed), "config", "user.name", "t"], check=True)
+    (seed / "app.py").write_text("VALUE = 1\n")
+    (seed / ".console").mkdir()
+    (seed / ".console" / "log.md").write_text("## base\n")
+    sp.run(["git", "-C", str(seed), "add", "-A"], check=True)
+    sp.run(["git", "-C", str(seed), "commit", "-qm", "base"], check=True)
+    sp.run(["git", "-C", str(seed), "branch", "-M", "main"], check=True)
+    sp.run(["git", "-C", str(seed), "push", "-q", "origin", "main"], check=True)
+    # PR branch off this base
+    sp.run(["git", "-C", str(seed), "checkout", "-qb", "pr"], check=True)
+    (seed / "feature.py").write_text("FEATURE = True\n")
+    (seed / ".console" / "log.md").write_text("## pr entry\n## base\n")
+    sp.run(["git", "-C", str(seed), "add", "-A"], check=True)
+    sp.run(["git", "-C", str(seed), "commit", "-qm", "pr work"], check=True)
+    sp.run(["git", "-C", str(seed), "push", "-q", "origin", "pr"], check=True)
+    # main moves forward (sibling merge) — appends to log.md (the conflict magnet)
+    sp.run(["git", "-C", str(seed), "checkout", "-q", "main"], check=True)
+    (seed / ".console" / "log.md").write_text("## main entry\n## base\n")
+    sp.run(["git", "-C", str(seed), "add", "-A"], check=True)
+    sp.run(["git", "-C", str(seed), "commit", "-qm", "main moves"], check=True)
+    sp.run(["git", "-C", str(seed), "push", "-q", "origin", "main"], check=True)
+
+    clone = tmp_path / "clone"
+    sp.run(["git", "clone", "-q", str(origin), str(clone)], check=True)
+    sp.run(["git", "-C", str(clone), "config", "user.email", "t@t"], check=True)
+    sp.run(["git", "-C", str(clone), "config", "user.name", "t"], check=True)
+    repo_cfg = MagicMock(local_path=str(clone), default_branch="main")
+    return clone, repo_cfg, origin
+
+
+def _rebase_settings():
+    s = MagicMock()
+    s.git_token.return_value = ""
+    s.git = MagicMock(author_name="t", author_email="t@t")
+    return s
+
+
+def test_auto_rebase_clean_resolves_log_via_union_and_pushes(tmp_path: Path) -> None:
+    import subprocess as sp
+
+    clone, repo_cfg, origin = _make_repo_with_pr_branch(tmp_path)
+    # log.md conflicts (both edited line 1) but union must auto-resolve → clean.
+    outcome = watcher._attempt_auto_rebase(repo_cfg, "pr", _rebase_settings(), 1)
+    assert outcome == "clean"
+    # origin/pr now contains main's commit (merged) and both log entries survive.
+    merged_log = sp.run(
+        ["git", "-C", str(clone), "show", "origin/pr:.console/log.md"],
+        capture_output=True, text=True,
+    ).stdout
+    assert "main entry" in merged_log and "pr entry" in merged_log
+
+
+def test_auto_rebase_real_code_conflict_aborts(tmp_path: Path) -> None:
+    import subprocess as sp
+
+    clone, repo_cfg, origin = _make_repo_with_pr_branch(tmp_path)
+    # Introduce a REAL conflict: main and pr both change app.py's VALUE line.
+    work = tmp_path / "work"
+    sp.run(["git", "clone", "-q", str(origin), str(work)], check=True)
+    sp.run(["git", "-C", str(work), "config", "user.email", "t@t"], check=True)
+    sp.run(["git", "-C", str(work), "config", "user.name", "t"], check=True)
+    sp.run(["git", "-C", str(work), "checkout", "-q", "pr"], check=True)
+    (work / "app.py").write_text("VALUE = 999\n")
+    sp.run(["git", "-C", str(work), "commit", "-qam", "pr edits app"], check=True)
+    sp.run(["git", "-C", str(work), "push", "-q", "origin", "pr"], check=True)
+    sp.run(["git", "-C", str(work), "checkout", "-q", "main"], check=True)
+    (work / "app.py").write_text("VALUE = 2\n")
+    sp.run(["git", "-C", str(work), "commit", "-qam", "main edits app"], check=True)
+    sp.run(["git", "-C", str(work), "push", "-q", "origin", "main"], check=True)
+
+    outcome = watcher._attempt_auto_rebase(repo_cfg, "pr", _rebase_settings(), 1)
+    assert outcome == "conflict"
+    # The conflicting merge must NOT have been pushed — origin/pr is unchanged.
+    head = sp.run(
+        ["git", "-C", str(clone), "ls-remote", str(origin), "refs/heads/pr"],
+        capture_output=True, text=True,
+    ).stdout
+    assert head.strip()  # branch still exists, not corrupted
+
+
+def test_auto_rebase_unavailable_without_clone() -> None:
+    repo_cfg = MagicMock(local_path=None, default_branch="main")
+    assert watcher._attempt_auto_rebase(repo_cfg, "pr", _rebase_settings(), 1) == "unavailable"
+
+
+# ── auto-rebase orchestration: grace, bounding, budget orthogonality ──────────
+
+
+def _conflicting_gh() -> MagicMock:
+    gh = _make_gh()
+    gh.get_mergeable.return_value = False  # CONFLICTING
+    return gh
+
+
+def test_merge_and_done_conflicting_triggers_lazy_rebase(tmp_path: Path) -> None:
+    state, sp_ = _make_state(tmp_path, phase="self_review", head_ref="pr", fix_attempts=2)
+    gh = _conflicting_gh()
+    with (
+        patch.object(watcher, "_attempt_auto_rebase", return_value="clean") as reb,
+        patch.object(watcher, "_escalate_needs_human") as esc,
+    ):
+        watcher._merge_and_done(
+            state, sp_, _pr_data(), gh, "owner", "repo", SETTINGS, reason="self_review_lgtm"
+        )
+    reb.assert_called_once()
+    gh.merge_pr.assert_not_called()  # do NOT merge the freshly-rebased tree this cycle
+    esc.assert_not_called()
+    loaded = watcher._load_state(sp_)
+    assert loaded["rebase_attempts"] == 1
+    assert loaded["fix_attempts"] == 2  # rebase MUST NOT touch the fix budget
+    assert loaded.get("last_rebase_at")
+
+
+def test_rebase_real_conflict_escalates(tmp_path: Path) -> None:
+    state, sp_ = _make_state(tmp_path, phase="self_review", head_ref="pr")
+    gh = _conflicting_gh()
+    with (
+        patch.object(watcher, "_attempt_auto_rebase", return_value="conflict"),
+        patch.object(watcher, "_escalate_needs_human") as esc,
+    ):
+        watcher._merge_and_done(
+            state, sp_, _pr_data(), gh, "owner", "repo", SETTINGS, reason="self_review_lgtm"
+        )
+    esc.assert_called_once()
+    assert esc.call_args.kwargs.get("reason") == "rebase_conflict"
+
+
+def test_rebase_grace_window_defers(tmp_path: Path) -> None:
+    from datetime import UTC, datetime
+
+    recent = datetime.now(UTC).isoformat()
+    state, sp_ = _make_state(
+        tmp_path, phase="self_review", head_ref="pr", last_rebase_at=recent, rebase_attempts=1
+    )
+    gh = _conflicting_gh()
+    with patch.object(watcher, "_attempt_auto_rebase") as reb:
+        watcher._merge_and_done(
+            state, sp_, _pr_data(), gh, "owner", "repo", SETTINGS, reason="self_review_lgtm"
+        )
+    reb.assert_not_called()  # within grace window → no rebase, just defer
+
+
+def test_rebase_attempts_exhausted_escalates(tmp_path: Path) -> None:
+    state, sp_ = _make_state(
+        tmp_path, phase="self_review", head_ref="pr", rebase_attempts=watcher._MAX_REBASE_ATTEMPTS
+    )
+    gh = _conflicting_gh()
+    with (
+        patch.object(watcher, "_attempt_auto_rebase") as reb,
+        patch.object(watcher, "_escalate_needs_human") as esc,
+    ):
+        watcher._merge_and_done(
+            state, sp_, _pr_data(), gh, "owner", "repo", SETTINGS, reason="self_review_lgtm"
+        )
+    reb.assert_not_called()
+    esc.assert_called_once()
+    assert esc.call_args.kwargs.get("reason") == "rebase_attempts_exhausted"
+
+
+def test_rebase_transient_outcome_not_charged(tmp_path: Path) -> None:
+    # push_rejected/noop/error: no merge commit landed → must NOT consume an attempt.
+    state, sp_ = _make_state(tmp_path, phase="self_review", head_ref="pr", rebase_attempts=0)
+    gh = _conflicting_gh()
+    with patch.object(watcher, "_attempt_auto_rebase", return_value="push_rejected"):
+        watcher._merge_and_done(
+            state, sp_, _pr_data(), gh, "owner", "repo", SETTINGS, reason="self_review_lgtm"
+        )
+    assert watcher._load_state(sp_)["rebase_attempts"] == 0
+
+
+def test_mergeable_clears_rebase_attempts(tmp_path: Path) -> None:
+    state, sp_ = _make_state(tmp_path, phase="self_review", head_ref="pr", rebase_attempts=2)
+    gh = _make_gh()
+    gh.get_mergeable.return_value = True  # now mergeable
+    watcher._merge_and_done(
+        state, sp_, _pr_data(), gh, "owner", "repo", SETTINGS, reason="self_review_lgtm"
+    )
+    gh.merge_pr.assert_called_once()
+    assert not sp_.exists()  # merged, state cleaned
