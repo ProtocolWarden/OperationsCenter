@@ -106,12 +106,14 @@ a dirty/conflicted tree crashes planning at import for EVERY PR (2026-06-07
       worktree pinned at the merge ref, NOT the shared mutable checkout. Needs
       the live pipeline (SwitchBoard + backends) to validate — can't be tested
       offline. This removes the shared-tree fragility class entirely.
-- [ ] Distinguish crash-from-verdict in the retry budget generally (a transient
+- [x] Distinguish crash-from-verdict in the retry budget generally (a transient
       backend/rate-limit no-verdict should retry later, not exhaust the budget
       and park a good PR — same principle as the env-unclean path)
-- [ ] Stuck-green escalation: a PR green on CI but unmerged for >N sweeps with
+      — shipped (#259, 2026-06-08)
+- [x] Stuck-green escalation: a PR green on CI but unmerged for >N sweeps with
       repeated reviewer failures should raise a loud, specific alarm (ties to
       WO-1's close-with-receipt and WO-3's self-retracting verdicts)
+      — shipped (#259, 2026-06-08)
 
 ## Definition of Done
 
