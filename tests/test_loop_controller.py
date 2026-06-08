@@ -456,8 +456,10 @@ def test_seed_cooldowns_from_usage_store_selects_codex(monkeypatch, tmp_path: Pa
 
     assert cooldowns["claude"] == reset_at
     assert cooldowns["opus"] == reset_at
-    assert meta["claude"]["model"] == "sonnet"
-    assert meta["opus"]["model"] == "opus"
+    assert meta["claude"]["limit_kind"] == "global_weekly"
+    assert meta["claude"]["model"] is None
+    assert meta["opus"]["limit_kind"] == "global_weekly"
+    assert meta["opus"]["model"] is None
     assert controller._select_backend(cooldowns) == "codex"
 
 

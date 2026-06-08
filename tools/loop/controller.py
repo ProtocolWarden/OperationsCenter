@@ -822,6 +822,23 @@ def _seed_cooldowns_from_usage_store(
         if isinstance(detail, dict):
             apply_cooldown("codex", detail.get("reset_at"), detail.get("limit_kind"), "codex")
 
+    claude_meta = limit_meta.get("claude")
+    opus_meta = limit_meta.get("opus")
+    if (
+        cooldowns.get("claude") is not None
+        and cooldowns.get("claude") == cooldowns.get("opus")
+        and claude_meta
+        and opus_meta
+        and claude_meta.get("limit_kind") == "model_weekly"
+        and opus_meta.get("limit_kind") == "model_weekly"
+    ):
+        for backend in ("claude", "opus"):
+            limit_meta[backend] = {
+                **limit_meta[backend],
+                "limit_kind": "global_weekly",
+                "model": None,
+            }
+
 
 def get_delay() -> int:
     """Read delay from schedule file written by the session at STEP 10."""

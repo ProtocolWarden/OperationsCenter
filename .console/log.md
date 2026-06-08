@@ -317,3 +317,6 @@ Claude weekly quotas fall through to Codex instead of sleeping until reset.
 
 Bare Claude Code weekly-limit messages now classify as `global_weekly` and cool
 both Claude controller lanes so status surfaces do not leave Haiku looking runnable.
+
+Controller startup also normalizes matching persisted Sonnet+Opus weekly resets
+to account-wide metadata so `loop_controller_state.json` reports the same scope.
