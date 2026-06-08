@@ -191,6 +191,16 @@ class GitHubPRClient:
         resp.raise_for_status()
         return resp.json()
 
+    def update_comment(self, owner: str, repo: str, comment_id: int, body: str) -> dict:
+        """Edit an existing issue comment body."""
+        resp = self._request(
+            "PATCH",
+            f"{self._API}/repos/{owner}/{repo}/issues/comments/{comment_id}",
+            json={"body": body},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
     def get_check_runs(self, owner: str, repo: str, ref: str) -> list[dict]:
         """Return all check-runs for a given commit SHA or ref."""
         resp = self._request(
