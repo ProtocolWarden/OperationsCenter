@@ -74,3 +74,4 @@ test_output.log
 
 # Flaky test detection metrics and artifacts (local + CI storage)
 .flaky-tests/
+improve-output.json

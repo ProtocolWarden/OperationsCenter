@@ -50,6 +50,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from operations_center.reviewer.instrumentation import (
+    record_decision_outcome,
+    record_ci_gate_defer,
+    record_escalation,
+)
+
 logger = logging.getLogger(__name__)
 
 _STATE_SUBDIR = Path("state") / "pr_reviews"
@@ -1207,6 +1213,18 @@ def _phase1(
                     # stall the loop) and don't merge red — escalate for a human.
                     state["ci_wait_cycles"] = state.get("ci_wait_cycles", 0) + 1
                     if state["ci_wait_cycles"] >= _MAX_CI_WAIT_CYCLES:
+                        detail = (
+                            f"CI has not gone green after {state['ci_wait_cycles']} "
+                            f"checks ({len(failed)} failing: "
+                            f"{', '.join(failed[:5])}). Not merged (red CI) and not "
+                            f"closed (work preserved) — needs a human to fix CI."
+                        )
+                        record_escalation(
+                            pr_number=pr_number,
+                            repo_key=repo_key,
+                            reason="ci_persistently_red",
+                            detail=detail,
+                        )
                         _escalate_needs_human(
                             state,
                             state_path,
@@ -1215,12 +1233,7 @@ def _phase1(
                             repo,
                             settings,
                             reason="ci_persistently_red",
-                            detail=(
-                                f"CI has not gone green after {state['ci_wait_cycles']} "
-                                f"checks ({len(failed)} failing: "
-                                f"{', '.join(failed[:5])}). Not merged (red CI) and not "
-                                f"closed (work preserved) — needs a human to fix CI."
-                            ),
+                            detail=detail,
                         )
                         return
                     logger.info(
@@ -1230,6 +1243,13 @@ def _phase1(
                         len(failed),
                         state["ci_wait_cycles"],
                         _MAX_CI_WAIT_CYCLES,
+                    )
+                    record_ci_gate_defer(
+                        pr_number=pr_number,
+                        repo_key=repo_key,
+                        wait_cycle=state["ci_wait_cycles"],
+                        max_cycles=_MAX_CI_WAIT_CYCLES,
+                        failed_checks=failed,
                     )
                     _save_state(state_path, state)
                     return
@@ -1360,6 +1380,18 @@ def _phase1(
                 pr_number,
                 state["no_verdict_passes"],
             )
+            detail = (
+                "Self-review produced no parseable verdict after repeated passes "
+                "(likely a transient backend/rate-limit issue, or a diff too large "
+                "to review). The PR is left open for human attention; automated "
+                "review will retry."
+            )
+            record_escalation(
+                pr_number=pr_number,
+                repo_key=repo_key,
+                reason="no_verdict_unreviewable",
+                detail=detail,
+            )
             state["escalated_head_sha"] = current_head_sha or state.get("escalated_head_sha")
             _escalate_needs_human(
                 state,
@@ -1369,12 +1401,7 @@ def _phase1(
                 repo,
                 settings,
                 reason="no_verdict_unreviewable",
-                detail=(
-                    "Self-review produced no parseable verdict after repeated passes "
-                    "(likely a transient backend/rate-limit issue, or a diff too large "
-                    "to review). The PR is left open for human attention; automated "
-                    "review will retry."
-                ),
+                detail=detail,
             )
             state["no_verdict_passes"] = 0  # keep retrying in case it was transient
             _save_state(state_path, state)
@@ -1396,6 +1423,13 @@ def _phase1(
 
     if result == "LGTM":
         # The ONLY merge path on the self-review track — verdict-gated.
+        record_decision_outcome(
+            pr_number=pr_number,
+            repo_key=repo_key,
+            outcome="merge",
+            reason="self_review_lgtm",
+            lanes=1,
+        )
         _merge_and_done(
             state, state_path, pr_data, gh_client, owner, repo, settings, reason="self_review_lgtm"
         )
@@ -1412,6 +1446,17 @@ def _phase1(
             pr_number,
             state["fix_attempts"],
         )
+        detail = (
+            f"Could not resolve review concerns after {state['fix_attempts']} "
+            f"fix attempts. Last concerns:\n\n{summary}"
+        )
+        record_decision_outcome(
+            pr_number=pr_number,
+            repo_key=repo_key,
+            outcome="blocked",
+            reason="fix_attempts_exhausted",
+            lanes=1,
+        )
         _close_and_requeue(
             state,
             state_path,
@@ -1421,10 +1466,7 @@ def _phase1(
             repo,
             settings,
             reason="fix_attempts_exhausted",
-            detail=(
-                f"Could not resolve review concerns after {state['fix_attempts']} "
-                f"fix attempts. Last concerns:\n\n{summary}"
-            ),
+            detail=detail,
         )
         return
 
@@ -1449,6 +1491,13 @@ def _phase1(
             "closing and re-queuing",
             pr_number,
         )
+        record_decision_outcome(
+            pr_number=pr_number,
+            repo_key=repo_key,
+            outcome="blocked",
+            reason="no_head_ref",
+            lanes=1,
+        )
         _close_and_requeue(
             state,
             state_path,
@@ -1468,6 +1517,13 @@ def _phase1(
         state["fix_attempts"] + 1,
         reviewer.max_fix_attempts,
         head_ref,
+    )
+    record_decision_outcome(
+        pr_number=pr_number,
+        repo_key=repo_key,
+        outcome="retry",
+        reason="mixed_verdicts",
+        lanes=1,
     )
     pushed = _run_fix_pass(
         oc_root,
