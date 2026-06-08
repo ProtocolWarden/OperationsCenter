@@ -426,6 +426,93 @@ def _run_pipeline(
 # ── Merge + Plane done ────────────────────────────────────────────────────────
 
 
+# How many auto-rebase attempts before a CONFLICTING PR is escalated for a human.
+# Orthogonal to fix_attempts — a rebase is infrastructure work, not a fix, and must
+# never consume the fix budget (that would wrongly close a good PR).
+_MAX_REBASE_ATTEMPTS = 3
+# Grace window after a rebase push: main moves constantly, so re-rebasing within
+# this window would thrash (rebase → push → main moves → rebase …). Defer instead.
+_REBASE_GRACE_SECONDS = 120
+
+
+def _attempt_auto_rebase(repo_cfg, head_ref: str, settings, pr_number: int) -> str:
+    """Merge the base branch into a CONFLICTING PR's branch and push, in the
+    repo's persistent clone (never oc_root).
+
+    Returns one of:
+      "clean"         — base merged with no real conflict; merge commit pushed.
+      "conflict"      — real (non-log) conflict remained; merge aborted, nothing pushed.
+      "push_rejected" — push lost a race (branch moved); reset, nothing landed.
+      "noop"          — branch already current with base; nothing to do.
+      "unavailable"   — no local clone / token configured; cannot rebase here.
+      "error"         — anything else; defensive, never raises.
+
+    Safety: only ever creates a *merge commit* (branch moves forward only — no
+    force-push, no history rewrite). `.console/log.md` auto-resolves via a
+    union driver injected through .git/info/attributes (works even when the PR
+    branch predates the committed .gitattributes). A textually-clean-but-wrong
+    merge is NOT trusted here — the caller does not merge the result this cycle;
+    CI re-runs on the pushed commit and the next review re-validates it."""
+    local_path = getattr(repo_cfg, "local_path", None) if repo_cfg else None
+    if not local_path or not Path(local_path).exists():
+        return "unavailable"
+    local_path = Path(local_path)
+    default_branch = getattr(repo_cfg, "default_branch", "main") or "main"
+
+    git_env = dict(os.environ)
+    git_token = settings.git_token()
+    author_name = getattr(settings.git, "author_name", "Operations Center Bot")
+    author_email = getattr(settings.git, "author_email", "operations-center-bot@example.com")
+    git_env["GIT_AUTHOR_NAME"] = author_name
+    git_env["GIT_AUTHOR_EMAIL"] = author_email
+    git_env["GIT_COMMITTER_NAME"] = author_name
+    git_env["GIT_COMMITTER_EMAIL"] = author_email
+    if git_token:
+        git_env["GH_TOKEN"] = git_token
+
+    def _git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            ["git", *args], cwd=local_path, env=git_env, capture_output=True, text=True
+        )
+
+    try:
+        # Inject the union driver for the append-only journal so concurrent log
+        # entries auto-keep-both instead of conflicting. .git/info/attributes is
+        # local and always applied — no dependency on the branch's committed copy.
+        info_dir = local_path / ".git" / "info"
+        info_dir.mkdir(parents=True, exist_ok=True)
+        (info_dir / "attributes").write_text(".console/log.md merge=union\n", encoding="utf-8")
+
+        _git("stash", "--include-untracked")
+        _git("fetch", "origin", head_ref, default_branch)
+        if _git("checkout", "-B", head_ref, f"origin/{head_ref}").returncode != 0:
+            return "error"
+
+        merge = _git("merge", "--no-edit", f"origin/{default_branch}")
+        if merge.returncode == 0:
+            if "Already up to date" in (merge.stdout or ""):
+                return "noop"
+            # Merged cleanly per git — but a real (non-log) conflict path would
+            # have left the merge unfinished; double-check there are none.
+            if _git("diff", "--diff-filter=U", "--name-only").stdout.strip():
+                _git("merge", "--abort")
+                return "conflict"
+            push = _git("push", "origin", f"HEAD:{head_ref}")
+            if push.returncode == 0:
+                return "clean"
+            _git("reset", "--hard", f"origin/{head_ref}")
+            return "push_rejected"
+
+        # Non-zero merge: conflicts. If every unmerged path is the log (union
+        # should have handled it but be defensive), there are none here → real
+        # conflict. Abort; never force a resolution.
+        _git("merge", "--abort")
+        return "conflict"
+    except Exception as exc:  # noqa: BLE001 — rebase must never crash the watcher
+        logger.warning("pr_review_watcher: auto-rebase PR #%d errored — %s", pr_number, exc)
+        return "error"
+
+
 def _merge_and_done(
     state: dict,
     state_path: Path,
@@ -438,17 +525,15 @@ def _merge_and_done(
     reason: str,
 ) -> None:
     pr_number = state["pr_number"]
-    # Guard: skip merge when GitHub reports a conflict — avoids 405 spam every cycle.
     # get_mergeable() returns None while GitHub is still computing; treat that as
     # "unknown, try anyway" so we don't hold up clean PRs during GitHub's lazy eval.
+    # False means a real conflict with the base — LAZY auto-rebase fires here, and
+    # ONLY here (verdict is already LGTM): never eagerly per-poll, which would storm
+    # every conflicting PR each time main moves.
     if gh_client.get_mergeable(owner, repo, pr_number) is False:
-        logger.warning(
-            "pr_review_watcher: PR #%d has merge conflicts — skipping merge (reason=%s); "
-            "branch must be rebased before auto-merge will proceed",
-            pr_number,
-            reason,
-        )
+        _auto_rebase_or_escalate(state, state_path, gh_client, owner, repo, settings, reason)
         return
+    state["rebase_attempts"] = 0  # mergeable — clear any rebase bookkeeping
     try:
         gh_client.merge_pr(owner, repo, pr_number, merge_method="squash")
         logger.info(
@@ -476,6 +561,99 @@ def _merge_and_done(
             )
 
     state_path.unlink(missing_ok=True)
+
+
+def _auto_rebase_or_escalate(
+    state: dict,
+    state_path: Path,
+    gh_client,
+    owner: str,
+    repo: str,
+    settings,
+    reason: str,
+) -> None:
+    """LGTM PR is CONFLICTING — try one bounded, grace-gated auto-rebase.
+
+    On a clean rebase we push the merge commit and STOP for this cycle: CI
+    re-runs on the merged tree and the next review re-validates it before any
+    merge to main. This is the backstop for a textually-clean-but-semantically
+    -wrong merge (broken import, budget overflow, silent hunk loss) that the
+    bot's ephemeral clone would not catch via local pre-push hooks. A real
+    conflict escalates for a human; we never force a resolution."""
+    pr_number = state["pr_number"]
+    state.setdefault("rebase_attempts", 0)
+
+    # Grace: main moves constantly; re-rebasing within the window thrashes.
+    last = state.get("last_rebase_at")
+    if last:
+        try:
+            elapsed = (datetime.now(UTC) - datetime.fromisoformat(last)).total_seconds()
+            if elapsed < _REBASE_GRACE_SECONDS:
+                logger.info(
+                    "pr_review_watcher: PR #%d CONFLICTING but rebased %ds ago — "
+                    "deferring (main may be moving)",
+                    pr_number,
+                    int(elapsed),
+                )
+                return
+        except ValueError:
+            pass
+
+    if state["rebase_attempts"] >= _MAX_REBASE_ATTEMPTS:
+        _escalate_needs_human(
+            state, state_path, gh_client, owner, repo, settings,
+            reason="rebase_attempts_exhausted",
+            detail=(
+                f"PR is CONFLICTING and {_MAX_REBASE_ATTEMPTS} auto-rebase attempts did "
+                "not yield a mergeable branch (base may be moving faster than CI/review, "
+                "or the conflict recurs). Needs a manual rebase."
+            ),
+        )
+        return
+
+    head_ref = (state.get("head_ref") or "").strip()
+    if not head_ref:
+        logger.warning(
+            "pr_review_watcher: PR #%d CONFLICTING but no head_ref recorded — cannot rebase",
+            pr_number,
+        )
+        return
+
+    repo_cfg = settings.repos.get(state["repo_key"])
+    outcome = _attempt_auto_rebase(repo_cfg, head_ref, settings, pr_number)
+    # last_rebase_at gates the grace window on every *attempt* (success or not),
+    # so a fast-moving base cannot trigger back-to-back rebases.
+    state["last_rebase_at"] = datetime.now(UTC).isoformat()
+
+    if outcome == "clean":
+        state["rebase_attempts"] += 1
+        logger.info(
+            "pr_review_watcher: PR #%d auto-rebased onto base (attempt %d/%d) — pushed; "
+            "CI will re-run and review re-validates next cycle before merge",
+            pr_number,
+            state["rebase_attempts"],
+            _MAX_REBASE_ATTEMPTS,
+        )
+        _save_state(state_path, state)
+    elif outcome == "conflict":
+        _escalate_needs_human(
+            state, state_path, gh_client, owner, repo, settings,
+            reason="rebase_conflict",
+            detail=(
+                "Auto-rebase onto the base branch hit a real code conflict "
+                "(beyond the union-merged journal). Manual rebase required."
+            ),
+        )
+    else:
+        # noop / push_rejected / unavailable / error — log and retry next cycle
+        # (grace window throttles). Not charged against rebase_attempts: no merge
+        # commit landed, so it is not a consumed attempt.
+        logger.info(
+            "pr_review_watcher: PR #%d auto-rebase outcome=%s — will retry next cycle",
+            pr_number,
+            outcome,
+        )
+        _save_state(state_path, state)
 
 
 # ── Fix pass + close/re-queue ─────────────────────────────────────────────────
@@ -1533,6 +1711,11 @@ def _poll_once(oc_root: Path, config_path: Path, settings) -> None:
             state = _load_state(sp)
             if not state:
                 continue
+            # Record the live head ref each poll (it changes across pushes) so the
+            # auto-rebase path knows which branch to merge the base into.
+            head_ref = (pr_data.get("head") or {}).get("ref")
+            if head_ref:
+                state["head_ref"] = head_ref
             worklist.append((pr_data, state, sp))
 
         # Proactive ordering: quick-merge candidates before slow fix loops.
