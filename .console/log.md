@@ -312,3 +312,8 @@ Raised to 1.0s — still catches catastrophic regression (10x+).
 Loop controller now seeds Sonnet/Opus/Codex cooldowns from the persisted usage
 ledger on restart and reselects after chained backend limits, so exhausted
 Claude weekly quotas fall through to Codex instead of sleeping until reset.
+
+## 2026-06-08 — fix(controller): Claude weekly cooldown is account-wide
+
+Bare Claude Code weekly-limit messages now classify as `global_weekly` and cool
+both Claude controller lanes so status surfaces do not leave Haiku looking runnable.

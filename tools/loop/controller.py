@@ -577,15 +577,11 @@ _LIMIT_SIGNAL_RE = re.compile(
     r"|hit your[^\n]{0,40}limit|sonnet limit|opus limit|claude limit",
     re.IGNORECASE,
 )
-# Signals a global Claude session/account limit — applies to all claude models,
-# so opus won't help. Opus is only useful for sonnet-specific model rate limits.
-_GLOBAL_CLAUDE_LIMIT_RE = re.compile(
-    r"5.hour|five.hour|session.limit|session.usage|account.limit|organization.limit",
-    re.IGNORECASE,
-)
 # Split the global signal into the two operator-meaningful kinds for display.
 _SESSION_LIMIT_RE = re.compile(r"5.hour|five.hour|session.limit|session.usage", re.IGNORECASE)
 _ACCOUNT_LIMIT_RE = re.compile(r"account.limit|organi[sz]ation.limit", re.IGNORECASE)
+_WEEKLY_LIMIT_RE = re.compile(r"weekly\s+limit|weekly\s+usage", re.IGNORECASE)
+_EXPLICIT_MODEL_RE = re.compile(r"\b(sonnet|opus|haiku)\b", re.IGNORECASE)
 
 
 def _classify_limit_kind(backend: str, log_text: str | None) -> tuple[str, str | None]:
@@ -600,6 +596,12 @@ def _classify_limit_kind(backend: str, log_text: str | None) -> tuple[str, str |
         if _SESSION_LIMIT_RE.search(log_text):
             return ("session_5h", None)
         if _ACCOUNT_LIMIT_RE.search(log_text):
+            return ("global_weekly", None)
+        if (
+            _WEEKLY_LIMIT_RE.search(log_text)
+            and not _EXPLICIT_MODEL_RE.search(log_text)
+            and not _DATE_TIMEZONE_RESET_RE.search(log_text)
+        ):
             return ("global_weekly", None)
     return ("model_weekly", model)
 
@@ -739,7 +741,7 @@ def _handle_backend_limit(
     _bridge_cooldown_to_usage_store(backend, reset_dt, limit_kind, model)
     # Global claude limits (5h session cap, account limit) apply to all claude
     # models — put opus on the same cooldown so we skip straight to codex.
-    if backend == "claude" and log_text and _GLOBAL_CLAUDE_LIMIT_RE.search(log_text):
+    if backend == "claude" and limit_kind in {"session_5h", "global_weekly", "generic"}:
         cooldowns["opus"] = reset_dt
         if limit_meta is not None:
             limit_meta["opus"] = {

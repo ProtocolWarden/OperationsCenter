@@ -321,7 +321,7 @@ def test_alternate_backend_follows_priority_order() -> None:
     assert controller._alternate_backend("codex") == "claude"
 
 
-def test_handle_backend_limit_sonnet_model_limit_leaves_opus_runnable(
+def test_handle_backend_limit_bare_weekly_limit_cools_opus_too(
     monkeypatch, tmp_path: Path
 ) -> None:
     frozen_now = datetime(2026, 5, 25, 15, 0, tzinfo=timezone.utc)
@@ -337,7 +337,31 @@ def test_handle_backend_limit_sonnet_model_limit_leaves_opus_runnable(
     monkeypatch.setattr(controller, "_log", lambda *a, **k: None)
 
     log_path = tmp_path / "session.log"
-    log_path.write_text("rate limit hit; resets 5:15pm (UTC)\n")
+    log_path.write_text("weekly limit hit; resets 5:15pm (UTC)\n")
+    cooldowns: dict = {"claude": None, "opus": None, "codex": None}
+
+    assert controller._handle_backend_limit("claude", log_path, cooldowns) is True
+    assert cooldowns["claude"] == datetime(2026, 5, 25, 17, 15, tzinfo=timezone.utc)
+    assert cooldowns["opus"] == datetime(2026, 5, 25, 17, 15, tzinfo=timezone.utc)
+
+
+def test_handle_backend_limit_explicit_sonnet_limit_leaves_opus_runnable(
+    monkeypatch, tmp_path: Path
+) -> None:
+    frozen_now = datetime(2026, 5, 25, 15, 0, tzinfo=timezone.utc)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):  # type: ignore[override]
+            if tz is None:
+                return frozen_now.replace(tzinfo=None)
+            return frozen_now.astimezone(tz)
+
+    monkeypatch.setattr(controller, "datetime", FrozenDateTime)
+    monkeypatch.setattr(controller, "_log", lambda *a, **k: None)
+
+    log_path = tmp_path / "session.log"
+    log_path.write_text("Sonnet rate limit hit; resets 5:15pm (UTC)\n")
     cooldowns: dict = {"claude": None, "opus": None, "codex": None}
 
     assert controller._handle_backend_limit("claude", log_path, cooldowns) is True
@@ -452,10 +476,15 @@ def test_classify_limit_kind_session_is_account_wide() -> None:
 
 
 def test_classify_limit_kind_opus_backend_maps_to_opus_model() -> None:
-    kind, model = controller._classify_limit_kind("opus", "weekly limit, resets soon")
-    # No session/account signal → model-weekly scoped to the backend's model.
+    kind, model = controller._classify_limit_kind("opus", "Opus weekly limit, resets soon")
     assert kind == "model_weekly"
     assert model == "opus"
+
+
+def test_classify_limit_kind_bare_weekly_is_account_wide() -> None:
+    kind, model = controller._classify_limit_kind("claude", "weekly limit, resets soon")
+    assert kind == "global_weekly"
+    assert model is None
 
 
 def test_write_runtime_state_emits_limit_kinds(tmp_path, monkeypatch) -> None:
