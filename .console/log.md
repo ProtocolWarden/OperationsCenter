@@ -1,3 +1,9 @@
+## 2026-06-08 — fix(review-watcher): raise diff excerpt limit 8k→60k chars
+
+Root cause of persistent no_verdict for PR #253: diff was 29,920 chars, truncated to 8,000 (27%). Reviewer saw a mid-file incomplete diff and exited without writing verdict.json. PRs ≤8,000 chars (e.g. PR #252 at 6,673) got LGTM on first pass. Increased limit to 60,000 chars; added workspace-read hint for cases still over limit.
+
+---
+
 ## 2026-06-07 — WO-1 cleanup: remove improve-output.json executor artifact
 
 Removed `improve-output.json` from branch and added to `.gitignore`. File was accidentally committed during orphan-branch recovery (stage3 observer). Also closed PR #249 (superseded by PR #253 which contains all its commits plus WO-1 receipt work).

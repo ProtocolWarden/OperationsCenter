@@ -1168,7 +1168,13 @@ def _phase1(
             pr_number,
         )
 
-    diff_excerpt = diff[:8000] + ("\n...[diff truncated]" if len(diff) > 8000 else "")
+    _DIFF_LIMIT = 60_000
+    diff_excerpt = diff[:_DIFF_LIMIT] + (
+        f"\n...[diff truncated at {_DIFF_LIMIT} chars — read the changed files "
+        "directly in the workspace to review the remainder]"
+        if len(diff) > _DIFF_LIMIT
+        else ""
+    )
     title = pr_data.get("title", "")
 
     # Load optional campaign spec and Custodian findings for spec-aware review
