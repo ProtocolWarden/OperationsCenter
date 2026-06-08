@@ -81,6 +81,9 @@ operations-center-worker-backend-probe = "operations_center.entrypoints.worker_b
 # projection rebuild extracted from spec_director. Single writer of
 # state/campaigns/active.json.
 operations-center-spec-hygiene      = "operations_center.entrypoints.spec_hygiene.main:main"
+# WO-4 orphan-branch detector — remote branches with commits ahead of main,
+# no open PR, older than 24 h. Run in watchdog STEP-2 or as a one-shot sweep.
+operations-center-orphan-branch-check = "operations_center.entrypoints.maintenance.orphan_branch_check:main"
 
 [project.entry-points."pytest11"]
 flaky-detection = "operations_center.observer.pytest_flaky_plugin"

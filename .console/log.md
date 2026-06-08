@@ -1,3 +1,10 @@
+## 2026-06-08 — WO-4: orphan-branch detector implemented
+
+`operations-center-orphan-branch-check` CLI added. Detects remote branches with
+commits ahead of default branch + no open PR + older than 24h. Protected set:
+main, master, gh-pages, prod, staging, operations-center-testing-branch, and
+per-repo sandbox_base_branch. First sweep clean (0 orphans). 17 unit tests.
+
 ## 2026-06-08 — fix(review-watcher): clear escalation deadlock when escalated_head_sha is null
 
 `_phase1` null SHA deadlock: when `escalated_needs_human: true` AND `escalated_head_sha: null`,
