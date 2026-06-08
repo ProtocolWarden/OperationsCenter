@@ -1,3 +1,11 @@
+## 2026-06-08 — fix(review-watcher): clear escalation deadlock when escalated_head_sha is null
+
+`_phase1` null SHA deadlock: when `escalated_needs_human: true` AND `escalated_head_sha: null`,
+the three-way `and` condition always evaluated falsy → PR permanently skipped. New branch: if
+`escalated_head_sha` is null, clear escalation and retry instead of skipping. Test added:
+`test_phase1_resumes_escalated_pr_with_null_sha`. Separate root cause from the `--output-format
+json` fix (which prevented verdict.json from being written to disk).
+
 ## 2026-06-08 — fix(review-watcher): bypass TeamExecutor for self-review (_run_direct_review)
 
 Root cause of persistent no_verdict for PR #253 (10+ consecutive failures): _run_pipeline
