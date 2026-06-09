@@ -717,11 +717,12 @@ Top-level config options added in the autonomy hardening phase:
 
 ## CI and Local Validation
 
-Three checks run on every push and PR (`.github/workflows/ci.yml`):
+Four checks run on every push and PR (`.github/workflows/ci.yml`):
 
 - **ruff** — lint and style
 - **ty** — type checking (`ty check src/`)
 - **pytest** — tests
+- **snapshot** — real-world snapshot validation (5-layer pipeline)
 
 Local equivalent:
 
@@ -732,6 +733,40 @@ pytest -q
 ```
 
 `ty` is the active type-checking tool. `mypy` is not used or required.
+
+### Real-World Snapshot Validation
+
+The **snapshot** job validates repository state snapshots using a 5-layer pipeline:
+
+**Quick mode (PR trigger):**
+```bash
+pytest tests/integration/observer/test_snapshot_validation.py \
+  -v -m "snapshot and not snapshot_slow"
+```
+**Layers**: 1-3 (schema, completeness, consistency) • **Time**: ~30s
+
+**Full mode (push trigger):**
+```bash
+pytest tests/integration/observer/test_snapshot_validation.py \
+  -v -m snapshot
+```
+**Layers**: 1-5 (all layers including accuracy and regression) • **Time**: ~5m
+
+**Scheduled validation (daily at 2 AM UTC):**
+- Detects regressions without code changes
+- Validates repository state consistency
+- Generates 30-day retention reports
+
+**Test Organization** (41 integration tests):
+- Layer 1: Schema validation (JSON ↔ Pydantic)
+- Layer 2: Completeness (≥3 required signals)
+- Layer 3: Consistency (cross-signal semantic checks)
+- Layer 4: Accuracy (snapshot vs. live tools)
+- Layer 5: Regression detection (baseline comparison)
+
+**Plus:** 32 additional tests for edge cases and performance
+
+For complete testing guide see: [docs/design/STAGE5_DOCUMENTATION_AND_FINAL_REVIEW.md](docs/design/STAGE5_DOCUMENTATION_AND_FINAL_REVIEW.md)
 
 ---
 
