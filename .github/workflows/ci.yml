@@ -130,7 +130,7 @@ jobs:
         # Dedicated job surfaces timing-bound failures as a labelled CI check.
         # All bounds are <50ms per scenario; actual measurements are ~0.1–0.2ms.
         # A failure here means collection time regressed by >250x vs baseline.
-        run: pytest -q tests/unit -m "performance" --no-header -rN
+        run: pytest -q tests/unit -m "perf" --no-header -rN
 
   snapshot:
     name: Snapshot validation
@@ -154,18 +154,18 @@ jobs:
         # PR runs exclude slow tests for quick feedback.
         # All validation checks must pass; structural failures trigger job failure.
         # Transient failures (network, timeouts) are retried up to 3 times.
-        run: pytest -q tests/integration/observer -m "snapshot and not snapshot_slow" --no-header -rN
+        run: pytest -q tests/integration/observer -m "integration and not slow" --no-header -rN
       - name: Run snapshot validation tests (push — full, including slow)
         if: github.event_name == 'push'
         # Full validation including real-world accuracy (Layer 4) and regression detection (Layer 5).
         # These layers test against actual repository state and may take longer.
-        run: pytest -q tests/integration/observer -m "snapshot" --no-header -rN
+        run: pytest -q tests/integration/observer -m "integration" --no-header -rN
       - name: Run snapshot validation tests (scheduled — full, including slow)
         if: github.event_name == 'schedule'
         # Scheduled runs execute comprehensive validation without time constraints.
         # Full validation detects regressions in repository state snapshots,
         # even when no new code changes occur. Failures trigger immediate alerts.
-        run: pytest -q tests/integration/observer -m "snapshot" --no-header -rN
+        run: pytest -q tests/integration/observer -m "integration" --no-header -rN
       - name: Upload snapshot validation reports
         if: always()
         uses: actions/upload-artifact@v4

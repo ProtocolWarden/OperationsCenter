@@ -28,6 +28,8 @@ from operations_center.observer.snapshot_repository import (
 )
 from operations_center.observer.snapshot_manager import SnapshotManager
 
+pytestmark = pytest.mark.edge_case
+
 
 @pytest.fixture
 def test_snapshot() -> RepoStateSnapshot:
