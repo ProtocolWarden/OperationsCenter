@@ -96,6 +96,11 @@ def _pr_head_sha(pr_data: dict[str, Any]) -> str:
     return str(((pr_data.get("head") or {}).get("sha") or "")).strip()
 
 
+def _normalize_concerns_summary(summary: str) -> str:
+    """Normalize a reviewer summary for stable no-progress comparisons."""
+    return " ".join(str(summary).split())
+
+
 def _new_state(repo_key: str, pr_number: int) -> dict:
     now = datetime.now(UTC).isoformat()
     return {
@@ -1722,6 +1727,7 @@ def _phase1(
     state["no_verdict_passes"] = 0  # a verdict was produced
     result = (verdict.get("result") or "CONCERNS").upper()
     summary = verdict.get("summary", "(no summary)")
+    normalized_summary = _normalize_concerns_summary(summary)
 
     logger.info("pr_review_watcher: PR #%d self-review verdict=%s", pr_number, result)
 
@@ -1736,6 +1742,33 @@ def _phase1(
         )
         _merge_and_done(
             state, state_path, pr_data, gh_client, owner, repo, settings, reason="self_review_lgtm"
+        )
+        return
+
+    repeated_no_progress = (
+        state.get("fix_attempts", 0) > 0
+        and state.get("last_fix_pass_pushed") is False
+        and current_head_sha
+        and current_head_sha == str(state.get("last_concerns_head_sha") or "").strip()
+        and normalized_summary == str(state.get("last_concerns_summary") or "").strip()
+    )
+    if repeated_no_progress:
+        detail = (
+            "The previous automated fix pass pushed no changes, and a fresh self-review on the "
+            "same PR head produced the same concerns. Further autonomous retries would repeat "
+            "without changing the branch.\n\nLatest concerns:\n\n"
+            f"{summary}"
+        )
+        state["escalated_head_sha"] = current_head_sha or state.get("escalated_head_sha")
+        _escalate_needs_human(
+            state,
+            state_path,
+            gh_client,
+            owner,
+            repo,
+            settings,
+            reason="fix_pass_no_progress",
+            detail=detail,
         )
         return
 
@@ -1839,6 +1872,9 @@ def _phase1(
         settings,
         state_key=state_key,
     )
+    state["last_concerns_summary"] = normalized_summary
+    state["last_concerns_head_sha"] = current_head_sha
+    state["last_fix_pass_pushed"] = pushed
     state["fix_attempts"] += 1
     if not pushed:
         logger.warning(

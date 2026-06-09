@@ -205,6 +205,58 @@ def test_phase1_concerns_dispatches_fix_pass_below_cap(tmp_path: Path) -> None:
     assert loaded["fix_attempts"] == 1
 
 
+def test_phase1_concerns_records_no_progress_signature(tmp_path: Path) -> None:
+    state, sp = _make_state(tmp_path, phase="self_review", self_review_loops=0, fix_attempts=0)
+    gh = _make_gh()
+
+    with (
+        patch.object(
+            watcher, "_run_direct_review", return_value={"result": "CONCERNS", "summary": "issues"}
+        ),
+        patch.object(watcher, "_run_fix_pass", return_value=False),
+        patch.object(watcher, "_merge_and_done"),
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(head_sha="abc123"), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+
+    loaded = watcher._load_state(sp)
+    assert loaded["fix_attempts"] == 1
+    assert loaded["last_fix_pass_pushed"] is False
+    assert loaded["last_concerns_head_sha"] == "abc123"
+    assert loaded["last_concerns_summary"] == "issues"
+
+
+def test_phase1_repeated_concerns_after_noop_fix_escalates(tmp_path: Path) -> None:
+    state, sp = _make_state(
+        tmp_path,
+        phase="self_review",
+        self_review_loops=1,
+        fix_attempts=1,
+        last_fix_pass_pushed=False,
+        last_concerns_head_sha="abc123",
+        last_concerns_summary="same issues",
+    )
+    gh = _make_gh()
+
+    with (
+        patch.object(
+            watcher,
+            "_run_direct_review",
+            return_value={"result": "CONCERNS", "summary": "same issues"},
+        ),
+        patch.object(watcher, "_run_fix_pass") as mock_fix,
+        patch.object(watcher, "_escalate_needs_human") as mock_escalate,
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(head_sha="abc123"), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+
+    mock_fix.assert_not_called()
+    mock_escalate.assert_called_once()
+    assert state["escalated_head_sha"] == "abc123"
+
+
 def test_phase1_concerns_closes_and_requeues_at_fix_cap(tmp_path: Path) -> None:
     # max_fix_attempts=2, already at 2 — CONCERNS must close+requeue, NOT merge.
     state, sp = _make_state(tmp_path, phase="self_review", self_review_loops=1, fix_attempts=2)
