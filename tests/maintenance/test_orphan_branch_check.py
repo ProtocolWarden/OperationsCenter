@@ -146,6 +146,10 @@ def test_scan_repo_detects_orphan(tmp_path: Path) -> None:
             0,
         ),
         ("rev-list", "--count", "origin/main..origin/feature/orphan"): ("3", 0),
+        ("cherry", "origin/main", "origin/feature/orphan"): (
+            "+ abc123\n+ def456\n+ fedcba",
+            0,
+        ),
         ("log", "-1", "--format=%cI", "origin/feature/orphan"): (
             _OLD.isoformat(),
             0,
@@ -177,6 +181,83 @@ def test_scan_repo_detects_orphan(tmp_path: Path) -> None:
     assert len(result.orphans) == 1
     assert result.orphans[0].branch == "feature/orphan"
     assert result.orphans[0].commits_ahead == 3
+
+
+def test_scan_repo_skips_branch_when_patch_already_merged(tmp_path: Path) -> None:
+    (tmp_path / ".git").mkdir()
+    git_responses = {
+        ("fetch", "origin", "--prune", "--quiet"): ("", 0),
+        ("branch", "-r", "--format=%(refname:short)"): (
+            "origin/main\norigin/feat/squash-merged",
+            0,
+        ),
+        ("rev-list", "--count", "origin/main..origin/feat/squash-merged"): ("2", 0),
+        ("cherry", "origin/main", "origin/feat/squash-merged"): (
+            "- deadbeef\n- cafe1234",
+            0,
+        ),
+    }
+    client = MagicMock()
+    client.list_open_prs.return_value = []
+
+    with (
+        patch(
+            "operations_center.entrypoints.maintenance.orphan_branch_check._git",
+            side_effect=lambda args, cwd: git_responses.get(tuple(args), ("", 0)),
+        ),
+        patch(
+            "operations_center.entrypoints.maintenance.orphan_branch_check.GitHubPRClient.owner_repo_from_clone_url",
+            return_value=("owner", "repo"),
+        ),
+    ):
+        result = _scan_repo(
+            repo_key="test",
+            local_path=tmp_path,
+            clone_url="https://github.com/owner/repo.git",
+            sandbox_base_branch=None,
+            github_client=client,
+            min_age_hours=24.0,
+            default_branch="main",
+        )
+
+    assert result.orphans == []
+
+
+def test_scan_repo_skips_branch_when_git_cherry_fails(tmp_path: Path) -> None:
+    (tmp_path / ".git").mkdir()
+    git_responses = {
+        ("fetch", "origin", "--prune", "--quiet"): ("", 0),
+        ("branch", "-r", "--format=%(refname:short)"): (
+            "origin/main\norigin/feat/orphan",
+            0,
+        ),
+        ("rev-list", "--count", "origin/main..origin/feat/orphan"): ("2", 0),
+        ("cherry", "origin/main", "origin/feat/orphan"): ("", 1),
+    }
+    client = MagicMock()
+    client.list_open_prs.return_value = []
+
+    with (
+        patch(
+            "operations_center.entrypoints.maintenance.orphan_branch_check._git",
+            side_effect=lambda args, cwd: git_responses.get(tuple(args), ("", 0)),
+        ),
+        patch(
+            "operations_center.entrypoints.maintenance.orphan_branch_check.GitHubPRClient.owner_repo_from_clone_url",
+            return_value=("owner", "repo"),
+        ),
+    ):
+        result = _scan_repo(
+            repo_key="test",
+            local_path=tmp_path,
+            clone_url="https://github.com/owner/repo.git",
+            sandbox_base_branch=None,
+            github_client=client,
+            min_age_hours=24.0,
+            default_branch="main",
+        )
+
+    assert result.orphans == []
 
 
 def test_scan_repo_skips_branch_with_open_pr(tmp_path: Path) -> None:
@@ -259,8 +340,12 @@ def test_scan_repo_skips_recent_branch(tmp_path: Path) -> None:
             0,
         ),
         ("rev-list", "--count", "origin/main..origin/feat/new"): ("5", 0),
+        ("cherry", "origin/main", "origin/feat/new"): (
+            "+ abc123\n+ def456\n+ fedcba\n+ 123abc\n+ 456def",
+            0,
+        ),
         ("log", "-1", "--format=%cI", "origin/feat/new"): (
-            _RECENT.isoformat(),
+            (datetime.now(UTC) - timedelta(hours=6)).isoformat(),
             0,
         ),
     }

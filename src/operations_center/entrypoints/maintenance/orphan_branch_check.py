@@ -98,6 +98,17 @@ def _open_pr_head_branches(github_client: GitHubPRClient, clone_url: str) -> set
         return set()
 
 
+def _unique_patch_commits(local_path: Path, default_branch: str, branch: str) -> int | None:
+    """Return the count of branch commits whose patch is not already on default."""
+    cherry_raw, rc = _git(
+        ["cherry", f"origin/{default_branch}", f"origin/{branch}"],
+        local_path,
+    )
+    if rc != 0:
+        return None
+    return sum(1 for line in cherry_raw.splitlines() if line.startswith("+"))
+
+
 def _scan_repo(
     repo_key: str,
     local_path: Path,
@@ -167,6 +178,13 @@ def _scan_repo(
         if commits_ahead == 0:
             continue
 
+        unique_patch_commits = _unique_patch_commits(local_path, default_branch, branch)
+        if unique_patch_commits is None:
+            logger.debug("%s:%s — git cherry failed, skipping", repo_key, branch)
+            continue
+        if unique_patch_commits == 0:
+            continue
+
         # Last commit timestamp on the branch.
         ts_raw, rc = _git(
             ["log", "-1", "--format=%cI", f"origin/{branch}"],
@@ -189,7 +207,7 @@ def _scan_repo(
             OrphanBranch(
                 repo_key=repo_key,
                 branch=branch,
-                commits_ahead=commits_ahead,
+                commits_ahead=unique_patch_commits,
                 last_commit_at=last_commit_at,
                 age_hours=age_hours,
             )
