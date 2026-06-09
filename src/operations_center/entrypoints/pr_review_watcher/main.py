@@ -1410,6 +1410,26 @@ def _phase1(
     reviewer = settings.reviewer
     current_head_sha = _pr_head_sha(pr_data)
 
+    previous_concerns_head_sha = str(state.get("last_concerns_head_sha") or "").strip()
+    if (
+        state.get("concerns_comment_id")
+        and current_head_sha
+        and previous_concerns_head_sha
+        and current_head_sha != previous_concerns_head_sha
+    ):
+        _retract_flag(
+            state, gh_client, owner, repo, resolution="superseded by new push — re-review resumed"
+        )
+        state["fix_attempts"] = 0
+        state.pop("last_concerns_summary", None)
+        state.pop("last_concerns_head_sha", None)
+        state.pop("last_fix_pass_pushed", None)
+        logger.info(
+            "pr_review_watcher: PR #%d head changed after concerns; resetting fix state",
+            pr_number,
+        )
+        _save_state(state_path, state)
+
     # Once a PR is escalated for human attention, do not keep burning review
     # passes on the same unchanged head. Resume autonomous review only after a
     # new push changes the PR head SHA.

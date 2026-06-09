@@ -1632,3 +1632,46 @@ def test_concerns_comment_id_tracked(tmp_path: Path) -> None:
 
     loaded = watcher._load_state(sp_)
     assert loaded.get("concerns_comment_id") == 5555
+
+
+def test_new_push_retracts_stale_concerns_and_reposts_for_new_head(tmp_path: Path) -> None:
+    """A new PR head retracts the old concerns comment and resets fix state."""
+    state, sp_ = _make_state(
+        tmp_path,
+        phase="self_review",
+        plane_task_id="task-1",
+        fix_attempts=2,
+        concerns_comment_id=8888,
+        last_concerns_head_sha="old_sha",
+        last_concerns_summary="old concerns",
+        last_fix_pass_pushed=False,
+    )
+    gh = _make_gh(comment_id=5555)
+    gh.list_pr_comments.return_value = [
+        {"id": 8888, "body": "<!-- bot -->\n**Self-review concerns** — auto-fixing:\n\nold concerns"},
+    ]
+
+    with (
+        patch.object(
+            watcher, "_run_direct_review",
+            return_value={"result": "CONCERNS", "summary": "new concerns"},
+        ),
+        patch.object(watcher, "_run_fix_pass", return_value=True),
+        patch.object(watcher, "_merge_and_done"),
+    ):
+        watcher._phase1(
+            state, sp_, _pr_data(head_sha="new_sha"), gh, "owner", "repo",
+            tmp_path, tmp_path / "cfg.yaml", SETTINGS,
+        )
+
+    assert gh.update_comment.call_count == 1
+    retracted = gh.update_comment.call_args[0][3]
+    assert "~~**Self-review concerns**~~" in retracted
+    assert "superseded by new push — re-review resumed" in retracted
+    assert gh.post_comment.call_count == 1
+    loaded = watcher._load_state(sp_)
+    assert loaded["fix_attempts"] == 1
+    assert loaded["concerns_comment_id"] == 5555
+    assert loaded["last_concerns_head_sha"] == "new_sha"
+    assert loaded["last_concerns_summary"] == "new concerns"
+    assert loaded["last_fix_pass_pushed"] is True
