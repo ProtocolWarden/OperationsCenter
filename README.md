@@ -58,6 +58,74 @@ Then:
 ./scripts/operations-center.sh dev-status
 ```
 
+## Snapshot Validation Testing
+
+OperationsCenter includes a comprehensive **snapshot validation test runner** that validates repository state through a 5-layer pipeline. This system validates real-world snapshots in CI/CD pipelines and during local development.
+
+### Quick Snapshot Validation
+
+**Quick mode** (Layers 1-3, ~30 seconds) — validates schema, completeness, and consistency:
+```bash
+python -m pytest tests/integration/observer/test_snapshot_validation.py \
+  -m "snapshot and not snapshot_slow" \
+  -v --tb=short
+```
+
+**Full mode** (All 5 layers, ~5 minutes) — includes accuracy validation against live services and regression detection:
+```bash
+python -m pytest tests/integration/observer/test_snapshot_validation.py \
+  -m "snapshot" \
+  -v --tb=short
+```
+
+**Complete snapshot test suite** (41 integration + 32 unit tests):
+```bash
+python -m pytest tests/ -k "snapshot" -v --tb=short
+```
+
+### The 5-Layer Validation Pipeline
+
+| Layer | Name | Speed | Purpose |
+|-------|------|-------|---------|
+| 1 | **Schema Validation** | Fast | Validates JSON structure and Pydantic model conformance |
+| 2 | **Completeness Validation** | Fast | Ensures required signals are present (minimum 3 non-unavailable) |
+| 3 | **Consistency Validation** | Fast | Checks cross-signal semantic consistency (status matches counts, dependencies) |
+| 4 | **Accuracy Validation** | Slow | Compares snapshot data against live external services |
+| 5 | **Regression Detection** | Slow | Detects changes from baseline snapshot with configurable tolerances |
+
+### Test Organization
+
+The snapshot validation suite includes:
+- **41 integration tests** — Layer 1-5 coverage, multi-fixture scenarios, failure categorization
+- **19 edge case tests** — Corrupted data, permission errors, format conversion, large snapshots
+- **13 performance tests** — Scaling and memory efficiency validation
+
+### CI/CD Integration
+
+The snapshot validation system integrates into GitHub Actions with three trigger modes:
+
+| Trigger | Layer Coverage | Execution Time | Use Case |
+|---------|---|---|---|
+| **Pull Request** | Layers 1-3 (fast) | ~30s | Rapid PR feedback, quick validation |
+| **Push to main** | All 5 layers | ~5m | Complete validation on merge |
+| **Daily Schedule** | All 5 layers | ~5m | Regression detection without code changes |
+
+### Configuration
+
+Configure snapshot validation with environment variables:
+```bash
+export SNAPSHOT_ROOT=/tmp/snapshots              # Storage directory
+export SNAPSHOT_RETENTION_DAYS=30                # Cleanup threshold (days)
+export SNAPSHOT_TOLERANCE=0.05                   # Variance tolerance (5%)
+```
+
+### Documentation
+
+For comprehensive testing and integration guidance, see:
+- **[STAGE1_CI_INTEGRATION_TEST_RUNNER_DESIGN.md](docs/design/STAGE1_CI_INTEGRATION_TEST_RUNNER_DESIGN.md)** — Architecture and design
+- **[STAGE4_LOCAL_TESTING_AND_VERIFICATION.md](docs/design/STAGE4_LOCAL_TESTING_AND_VERIFICATION.md)** — Test results and verification
+- **[STAGE5_DOCUMENTATION_AND_FINAL_REVIEW.md](docs/design/STAGE5_DOCUMENTATION_AND_FINAL_REVIEW.md)** — Complete usage guide, procedures, and troubleshooting
+
 ## Overview
 
 - **Plane** is the board and source of truth for tasks, states, comments, and labels.
