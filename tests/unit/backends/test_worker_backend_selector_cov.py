@@ -198,6 +198,14 @@ def test_parse_timezone_reset_rolls_to_next_day() -> None:
     assert result - NOW >= timedelta(hours=23)
 
 
+def test_parse_timezone_reset_hour_only() -> None:
+    out = "You've hit your weekly limit · resets 9am (America/New_York)"
+    result = parse_worker_backend_reset(out, "claude_code", now=NOW)
+    assert result is not None
+    local = result.astimezone(__import__("zoneinfo").ZoneInfo("America/New_York"))
+    assert (local.hour, local.minute) == (9, 0)
+
+
 def test_parse_timezone_unknown_zone_returns_none() -> None:
     out = "resets 4:20am (Not/AZone)"
     assert parse_worker_backend_reset(out, "claude_code", now=NOW) is None
@@ -297,6 +305,31 @@ def test_maybe_record_calls_recorder_and_logger() -> None:
     assert calls["kwargs"]["model"] == "sonnet"
     assert logs and "cooling down until" in logs[0]
     assert "(model_weekly/sonnet)" in logs[0]
+
+
+def test_maybe_record_global_weekly_hour_only_timezone_reset() -> None:
+    captured = {}
+
+    def recorder(*, worker_backend, reset_at, now, limit_kind, model):
+        captured["worker_backend"] = worker_backend
+        captured["reset_at"] = reset_at
+        captured["limit_kind"] = limit_kind
+        captured["model"] = model
+
+    store = SimpleNamespace(record_worker_backend_cooldown=recorder)
+    out = "You've hit your weekly limit · resets 9am (America/New_York)"
+    reset = maybe_record_worker_backend_cooldown(
+        usage_store=store,
+        worker_backend="claude_code",
+        combined_output=out,
+        now=NOW,
+    )
+    assert reset is not None
+    assert captured["worker_backend"] == "claude_code"
+    assert captured["limit_kind"] == "global_weekly"
+    assert captured["model"] is None
+    local = reset.astimezone(__import__("zoneinfo").ZoneInfo("America/New_York"))
+    assert (local.hour, local.minute) == (9, 0)
 
 
 def test_maybe_record_generic_limit_kind_when_unclassified() -> None:
