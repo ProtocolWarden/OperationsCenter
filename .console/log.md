@@ -1,3 +1,5 @@
+## 2026-06-09 — fix(custodian-sweep): bound per-repo audit time and parallelize sweep for watchdog use
+
 ## 2026-06-08 — WO-6 (items 2+3): backend-crash budget separation + stuck-green escalation
 
 ## 2026-06-08 — WO-1 backfill: all 20 closed-unmerged PRs audited; 14 historical close-receipts posted

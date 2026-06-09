@@ -20,8 +20,8 @@ flow, one PR per item where practical.
 
 ## Current Stage
 
-WO-1 — not started. Items are independent; WO-2 can proceed in parallel
-whenever review-watcher capacity allows.
+WO-1 through WO-5 are complete on main. WO-6 deeper isolation remains pending
+live-pipeline validation once the running watchers are executing current main.
 
 ## Work Items
 
@@ -37,10 +37,10 @@ Evidence: #235 closed 2h after "work preserved / re-queued" with no requeue
 (implementation recovered by operator as PR #250); #227–#233 closed with
 "spec file preserved in the branch" then the branches were deleted.
 
-- [ ] Implement in the watchdog/review close paths (wherever `gh pr close`
+- [x] Implement in the watchdog/review close paths (wherever `gh pr close`
       or close decisions are emitted)
-- [ ] Unit-test: close without receipt is rejected/blocked
-- [ ] Backfill: audit the 34 closed-unmerged PRs for unreceipted salvage
+- [x] Unit-test: close without receipt is rejected/blocked
+- [x] Backfill: audit the 34 closed-unmerged PRs for unreceipted salvage
       (operator already recovered #235 and the t8 orphan branch → #249/#250)
 
 ### WO-2: Drive the resurrected PRs to green

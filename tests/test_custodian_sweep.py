@@ -8,18 +8,25 @@ _discover_targets — without invoking custodian-audit or hitting Plane.
 
 from __future__ import annotations
 
+import threading
+from collections import deque
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from operations_center.entrypoints.custodian_sweep.main import (
+    _DEFAULT_AUDIT_TIMEOUT_SECONDS,
     _DEDUP_LABEL_PREFIX,
     _delta,
     _discover_targets,
     _find_open_sweep_task,
     _index_open_sweep_tasks,
     _render_body,
+    _run_custodian_audit,
+    _run_custodian_audits,
     _RepoSweep,
     _RepoTarget,
+    _sweep_max_workers,
 )
 
 
@@ -133,3 +140,59 @@ def test_discover_targets_filters_to_repos_with_custodian_yaml(tmp_path: Path) -
     targets = _discover_targets(settings)
     assert [t.repo_key for t in targets] == ["WithYaml"]
     assert isinstance(targets[0], _RepoTarget)
+
+
+def test_sweep_max_workers_is_bounded() -> None:
+    assert _sweep_max_workers(0) == 1
+    assert _sweep_max_workers(1) == 1
+    assert 2 <= _sweep_max_workers(4) <= 4
+    assert _sweep_max_workers(99) <= 8
+
+
+def test_run_custodian_audits_overlaps_slow_repos(monkeypatch) -> None:
+    targets = [
+        _RepoTarget(repo_key="A", local_path=Path("/tmp/A")),
+        _RepoTarget(repo_key="B", local_path=Path("/tmp/B")),
+    ]
+    started: deque[str] = deque()
+    lock = threading.Lock()
+    release = threading.Event()
+    both_started = threading.Event()
+
+    def fake_run(target: _RepoTarget, *, timeout_seconds: int) -> _RepoSweep:
+        with lock:
+            started.append(target.repo_key)
+            if len(started) == 2:
+                both_started.set()
+        both_started.wait(timeout=1)
+        if target.repo_key == "A":
+            release.wait(timeout=1)
+        else:
+            release.set()
+        return _RepoSweep(repo_key=target.repo_key, envelope=_envelope(C1=1))
+
+    monkeypatch.setattr(
+        "operations_center.entrypoints.custodian_sweep.main._run_custodian_audit",
+        fake_run,
+    )
+
+    sweeps = _run_custodian_audits(targets)
+
+    assert list(started) == ["A", "B"]
+    assert [s.repo_key for s in sweeps] == ["A", "B"]
+
+
+def test_run_custodian_audit_uses_bounded_default_timeout(monkeypatch) -> None:
+    target = _RepoTarget(repo_key="Demo", local_path=Path("/tmp/Demo"))
+
+    monkeypatch.setattr(
+        "operations_center.entrypoints.custodian_sweep.main._resolve_custodian_audit",
+        lambda: "/tmp/custodian-audit",
+    )
+
+    with patch("operations_center.entrypoints.custodian_sweep.main.subprocess.run") as run:
+        run.return_value = SimpleNamespace(returncode=0, stdout='{"total_findings": 0}', stderr="")
+        sweep = _run_custodian_audit(target)
+
+    assert sweep.error is None
+    assert run.call_args.kwargs["timeout"] == _DEFAULT_AUDIT_TIMEOUT_SECONDS
