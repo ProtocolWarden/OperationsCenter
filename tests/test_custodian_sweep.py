@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
+from operations_center.entrypoints.custodian_sweep import main as sweep_module
 from operations_center.entrypoints.custodian_sweep.main import (
     _DEDUP_LABEL_PREFIX,
     _delta,
@@ -20,6 +21,7 @@ from operations_center.entrypoints.custodian_sweep.main import (
     _render_body,
     _RepoSweep,
     _RepoTarget,
+    _run_custodian_audits,
 )
 
 
@@ -133,3 +135,58 @@ def test_discover_targets_filters_to_repos_with_custodian_yaml(tmp_path: Path) -
     targets = _discover_targets(settings)
     assert [t.repo_key for t in targets] == ["WithYaml"]
     assert isinstance(targets[0], _RepoTarget)
+
+
+def test_run_custodian_audits_uses_bounded_parallelism(monkeypatch) -> None:
+    targets = [
+        _RepoTarget("A", Path("/tmp/a")),
+        _RepoTarget("B", Path("/tmp/b")),
+        _RepoTarget("C", Path("/tmp/c")),
+    ]
+    seen: dict[str, object] = {}
+
+    class FakeExecutor:
+        def __init__(self, *, max_workers: int) -> None:
+            seen["max_workers"] = max_workers
+
+        def __enter__(self) -> "FakeExecutor":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        def map(self, fn, iterable):
+            items = list(iterable)
+            seen["repo_keys"] = [item.repo_key for item in items]
+            return [fn(item) for item in items]
+
+    monkeypatch.setattr(sweep_module, "ThreadPoolExecutor", FakeExecutor)
+    monkeypatch.setattr(
+        sweep_module,
+        "_run_custodian_audit",
+        lambda target, *, timeout_seconds: _RepoSweep(
+            repo_key=target.repo_key, envelope=_envelope(C1=1)
+        ),
+    )
+
+    sweeps = _run_custodian_audits(targets, jobs=8, timeout_seconds=20)
+
+    assert seen == {"max_workers": 3, "repo_keys": ["A", "B", "C"]}
+    assert [sweep.repo_key for sweep in sweeps] == ["A", "B", "C"]
+
+
+def test_run_custodian_audits_falls_back_to_serial_when_jobs_is_one(monkeypatch) -> None:
+    targets = [_RepoTarget("A", Path("/tmp/a")), _RepoTarget("B", Path("/tmp/b"))]
+    calls: list[str] = []
+
+    monkeypatch.setattr(
+        sweep_module,
+        "_run_custodian_audit",
+        lambda target, *, timeout_seconds: calls.append(target.repo_key)
+        or _RepoSweep(repo_key=target.repo_key),
+    )
+
+    sweeps = _run_custodian_audits(targets, jobs=1, timeout_seconds=20)
+
+    assert calls == ["A", "B"]
+    assert [sweep.repo_key for sweep in sweeps] == ["A", "B"]
