@@ -257,6 +257,74 @@ def test_phase1_repeated_concerns_after_noop_fix_escalates(tmp_path: Path) -> No
     assert state["escalated_head_sha"] == "abc123"
 
 
+def test_phase1_repeated_concerns_different_text_still_escalates(tmp_path: Path) -> None:
+    """No-progress escalation fires even when LLM produces different concern text."""
+    state, sp = _make_state(
+        tmp_path,
+        phase="self_review",
+        self_review_loops=1,
+        fix_attempts=1,
+        last_fix_pass_pushed=False,
+        last_concerns_head_sha="abc123",
+        last_concerns_summary="old concern wording from prior loop",
+    )
+    gh = _make_gh()
+
+    with (
+        patch.object(
+            watcher,
+            "_run_direct_review",
+            return_value={"result": "CONCERNS", "summary": "slightly different wording same issue"},
+        ),
+        patch.object(watcher, "_run_fix_pass") as mock_fix,
+        patch.object(watcher, "_escalate_needs_human") as mock_escalate,
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(head_sha="abc123"), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+
+    mock_fix.assert_not_called()
+    mock_escalate.assert_called_once()
+
+
+def test_phase1_fix_pass_preserves_external_escalation(tmp_path: Path) -> None:
+    """External escalation written to disk during fix pass is not overwritten on save."""
+    state, sp = _make_state(
+        tmp_path,
+        phase="self_review",
+        self_review_loops=0,
+        fix_attempts=0,
+    )
+    gh = _make_gh()
+
+    def _fix_pass_writes_escalation(*_args, **_kwargs):
+        # Simulate watchdog writing escalated_needs_human=True while fix pass runs
+        import json
+        disk = json.loads(sp.read_text())
+        disk["escalated_needs_human"] = True
+        disk["escalated_head_sha"] = "headsha"
+        sp.write_text(json.dumps(disk))
+        return False  # pushed=False
+
+    with (
+        patch.object(
+            watcher,
+            "_run_direct_review",
+            return_value={"result": "CONCERNS", "summary": "some concerns"},
+        ),
+        patch.object(watcher, "_run_fix_pass", side_effect=_fix_pass_writes_escalation),
+        patch.object(watcher, "_escalate_needs_human") as mock_escalate,
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(head_sha="headsha"), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+
+    import json
+    saved = json.loads(sp.read_text())
+    assert saved["escalated_needs_human"] is True, "external escalation must survive save"
+    mock_escalate.assert_not_called()
+
+
 def test_phase1_concerns_closes_and_requeues_at_fix_cap(tmp_path: Path) -> None:
     # max_fix_attempts=2, already at 2 — CONCERNS must close+requeue, NOT merge.
     state, sp = _make_state(tmp_path, phase="self_review", self_review_loops=1, fix_attempts=2)

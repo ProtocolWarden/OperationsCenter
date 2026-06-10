@@ -320,3 +320,13 @@ both Claude controller lanes so status surfaces do not leave Haiku looking runna
 
 Controller startup also normalizes matching persisted Sonnet+Opus weekly resets
 to account-wide metadata so `loop_controller_state.json` reports the same scope.
+
+## 2026-06-10 — fix(reviewer): make no-progress detection reliable + preserve external escalation
+
+Root cause: no-progress check required AI concern summaries to match exactly (text comparison),
+but LLM output varies. Also: TOCTOU race where reviewer overwrote watchdog's escalation after
+fix pass. Fixed both; 88 reviewer tests pass.
+
+## 2026-06-10 — fix(tests): use dynamic dates in flaky storage cleanup tests
+
+Hardcoded 2026-06-07 "recent" date fell behind the 3-day retention window causing CI failures.
