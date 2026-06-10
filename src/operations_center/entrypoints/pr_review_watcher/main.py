@@ -1785,17 +1785,21 @@ def _phase1(
         )
         return
 
+    # Trigger on the second no-change pass at the same head — no text comparison
+    # needed.  LLM-generated summaries are not bit-identical across loops even
+    # when the root issue is unchanged, so requiring text equality was
+    # unreliable and caused the reviewer to spin through all max_fix_attempts
+    # before escalating.
     repeated_no_progress = (
         state.get("fix_attempts", 0) > 0
         and state.get("last_fix_pass_pushed") is False
         and current_head_sha
         and current_head_sha == str(state.get("last_concerns_head_sha") or "").strip()
-        and normalized_summary == str(state.get("last_concerns_summary") or "").strip()
     )
     if repeated_no_progress:
         detail = (
-            "The previous automated fix pass pushed no changes, and a fresh self-review on the "
-            "same PR head produced the same concerns. Further autonomous retries would repeat "
+            "The previous automated fix pass pushed no changes; a fresh self-review on the "
+            "same PR head still finds concerns. Further autonomous retries would repeat "
             "without changing the branch.\n\nLatest concerns:\n\n"
             f"{summary}"
         )
@@ -1924,6 +1928,23 @@ def _phase1(
             state["fix_attempts"],
             reviewer.max_fix_attempts,
         )
+    # The fix pass executor can run for minutes.  An external process (e.g. the
+    # watchdog) may have updated escalated_needs_human on disk while we waited.
+    # Re-read the escalation flag so we don't overwrite it on save.
+    try:
+        disk = _load_state(state_path)
+        if disk.get("escalated_needs_human") and not state.get("escalated_needs_human"):
+            state["escalated_needs_human"] = True
+            state["escalated_head_sha"] = disk.get("escalated_head_sha") or state.get(
+                "escalated_head_sha"
+            )
+            logger.info(
+                "pr_review_watcher: PR #%d external escalation detected after fix pass; "
+                "preserving escalated_needs_human=True",
+                pr_number,
+            )
+    except Exception:
+        pass
     _save_state(state_path, state)
 
 
