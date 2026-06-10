@@ -3,6 +3,7 @@
 """Unit tests for flaky test storage manager."""
 
 import json
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -133,14 +134,18 @@ class TestFlakyTestStorageManager:
         """Test cleanup of old session reports."""
         storage = FlakyTestStorageManager(tmp_path, session_retention_days=3)
 
+        today = datetime.now(UTC)
+        old_date = (today - timedelta(days=10)).strftime("%Y-%m-%d")
+        recent_date = today.strftime("%Y-%m-%d")
+
         # Manually create old session files
-        old_date_dir = storage.session_dir / "2026-06-01"
+        old_date_dir = storage.session_dir / old_date
         old_date_dir.mkdir(parents=True, exist_ok=True)
         old_file = old_date_dir / "10-00-00-session.json"
         old_file.write_text("{}")
 
         # Create recent session file
-        today_date_dir = storage.session_dir / "2026-06-07"
+        today_date_dir = storage.session_dir / recent_date
         today_date_dir.mkdir(parents=True, exist_ok=True)
         today_file = today_date_dir / "10-00-00-session.json"
         today_file.write_text("{}")
@@ -157,12 +162,16 @@ class TestFlakyTestStorageManager:
         """Test cleanup of old aggregation reports."""
         storage = FlakyTestStorageManager(tmp_path, aggregation_retention_days=30)
 
+        today = datetime.now(UTC)
+        old_date = (today - timedelta(days=60)).strftime("%Y-%m-%d")
+        recent_date = today.strftime("%Y-%m-%d")
+
         # Manually create old aggregation file
-        old_agg = storage.aggregation_dir / "2026-05-01-aggregation.json"
+        old_agg = storage.aggregation_dir / f"{old_date}-aggregation.json"
         old_agg.write_text("{}")
 
         # Create recent aggregation file
-        recent_agg = storage.aggregation_dir / "2026-06-07-aggregation.json"
+        recent_agg = storage.aggregation_dir / f"{recent_date}-aggregation.json"
         recent_agg.write_text("{}")
 
         # Run cleanup
