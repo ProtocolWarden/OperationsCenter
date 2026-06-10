@@ -311,10 +311,10 @@ jobs:
 ```toml
 [tool.pytest.ini_options]
 markers = [
-    "snapshot: Integration test for snapshot validation",
-    "snapshot_slow: Accuracy and regression tests (layers 4-5)",
-    "snapshot_baseline: Baseline comparison tests (future)",
-    "snapshot_performance: Performance and scaling tests",
+    "integration: marks integration tests that require external services",
+    "slow: marks tests as slow-running and typically excluded from quick validation runs",
+    "perf: marks tests as performance regression tests (timing + memory bounds)",
+    "smoke: marks tests as smoke tests for quick validation of core functionality",
 ]
 ```
 
@@ -322,9 +322,9 @@ markers = [
 
 | Trigger | Layers Executed | Tests Included | Duration | Use Case |
 |---------|-----------------|----------------|-----------|----|
-| **Pull Request** | 1-3 (quick) | `@pytest.mark.snapshot and not snapshot_slow` | ~30s | Per-commit validation |
-| **Push to Main** | 1-5 (full) | All `@pytest.mark.snapshot` tests | ~5m | Pre-merge regression detection |
-| **Daily Schedule** | 1-5 (full) | All `@pytest.mark.snapshot` tests (nightly) | ~5m | No-code regressions (environmental) |
+| **Pull Request** | 1-3 (quick) | `@pytest.mark.integration and not slow` | ~30s | Per-commit validation |
+| **Push to Main** | 1-5 (full) | All `@pytest.mark.integration` tests | ~5m | Pre-merge regression detection |
+| **Daily Schedule** | 1-5 (full) | All `@pytest.mark.integration` tests (nightly) | ~5m | No-code regressions (environmental) |
 
 ### 4.4 Environment Variables
 
@@ -424,7 +424,7 @@ docs/design/
 
 pyproject.toml
 └── [tool.pytest.ini_options]
-    └── markers: snapshot, snapshot_slow, snapshot_baseline, snapshot_performance
+    └── markers: integration, slow, perf, smoke
 
 .console/
 ├── task.md                              # Current task definition
@@ -643,7 +643,7 @@ class RepoObserverService:
 import pytest
 
 # Module-level marker (applies to all tests in file)
-pytestmark = pytest.mark.snapshot
+pytestmark = pytest.mark.integration
 
 class TestSnapshotSchemaValidation:
     """Layer 1: Schema validation tests"""
@@ -660,12 +660,12 @@ class TestSnapshotConsistencyValidation:
 
 class TestSnapshotAccuracyValidation:
     """Layer 4: Accuracy validation (slow)"""
-    @pytest.mark.snapshot_slow
+    @pytest.mark.slow
     def test_snapshot_vs_live_tools(self): ...
 
 class TestSnapshotRegressionDetection:
     """Layer 5: Regression detection (slow)"""
-    @pytest.mark.snapshot_slow
+    @pytest.mark.slow
     def test_coverage_regression_detection(self): ...
 ```
 
@@ -693,7 +693,7 @@ class FlakyTestCollector:
 **Quick Mode** (PR trigger):
 ```bash
 pytest tests/integration/observer/test_snapshot_validation.py \
-  -m "snapshot and not snapshot_slow" \
+  -m "integration and not slow" \
   -v --tb=short
 # Duration: ~30s
 # Executes: Layers 1-3 (41 tests)
@@ -702,16 +702,16 @@ pytest tests/integration/observer/test_snapshot_validation.py \
 **Full Mode** (Push/Schedule trigger):
 ```bash
 pytest tests/integration/observer/test_snapshot_validation.py \
-  -m snapshot \
+  -m integration \
   -v --tb=short
 # Duration: ~5m
-# Executes: Layers 1-5 (41 tests, including snapshot_slow)
+# Executes: Layers 1-5 (41 tests, including slow)
 ```
 
 **Performance Mode** (Unit tests):
 ```bash
 pytest tests/unit/observer/test_snapshot_*.py \
-  -m snapshot_performance \
+  -m perf \
   -v --tb=short
 # Duration: ~0.5s
 # Executes: Scaling and memory tests (13 tests)
@@ -745,7 +745,7 @@ ${{ runner.temp }}/snapshots/
    ↓
 3. Setup environment: SNAPSHOT_ROOT, SNAPSHOT_TOLERANCE
    ↓
-4. pytest runs: -m "snapshot and not snapshot_slow"
+4. pytest runs: -m "integration and not slow"
    ├─ RepoObserverService collects signals (test, build, coverage, etc.)
    ├─ SnapshotValidator.validate() executes layers 1-3
    │  ├─ Layer 1: JSON schema → Pydantic model (5s)
@@ -766,7 +766,7 @@ ${{ runner.temp }}/snapshots/
    ↓
 2. Setup environment + load baseline snapshot
    ↓
-3. pytest runs: -m snapshot (all tests)
+3. pytest runs: -m integration (all tests)
    ├─ Layers 1-3: Fast validation (15s)
    ├─ Layer 4: Accuracy check vs. live tools (90s)
    │  └─ Query SwitchBoard, Plane, Archon

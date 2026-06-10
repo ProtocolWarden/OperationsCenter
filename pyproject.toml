@@ -112,6 +112,7 @@ markers = [
   "slow: marks tests as slow-running and typically excluded from quick validation runs",
   "perf: marks tests as performance regression tests (timing + memory bounds; run with: pytest -m perf)",
   "smoke: marks tests as smoke tests for quick validation of core functionality",
+  "edge_case: marks tests that exercise edge cases or unusual scenarios",
   "flaky: marks tests that exercise flaky test detection logic",
   "flaky_historical: marks tests for flaky test historical aggregation and trends",
   "flaky_integration: marks flaky test integration tests with observer service",
