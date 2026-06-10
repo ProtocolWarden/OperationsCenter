@@ -910,12 +910,15 @@ def _escalate_needs_human(
     *,
     reason: str,
     detail: str,
+    current_head_sha: str | None = None,
 ) -> None:
     """Leave the PR OPEN and flag it for a human. Used when the PR must not be
     merged (unresolved) but also must not be closed (work would be lost) — e.g.
     the review pipeline is persistently unavailable, or there is no Plane task
     to re-queue. Comments exactly once, then keeps polling."""
     pr_number = state["pr_number"]
+    if current_head_sha:
+        state["escalated_head_sha"] = current_head_sha
     if not state.get("escalated_needs_human"):
         marker = settings.reviewer.bot_comment_marker
         try:
@@ -1436,15 +1439,28 @@ def _phase1(
     if state.get("escalated_needs_human"):
         escalated_head_sha = str(state.get("escalated_head_sha") or "").strip()
         if not escalated_head_sha:
-            # Escalated with no recorded SHA (e.g. state was reset after a
-            # rebase or manual clear). Can't compare — clear and retry.
-            state["escalated_needs_human"] = False
-            state["no_verdict_passes"] = 0
-            logger.info(
-                "pr_review_watcher: PR #%d escalated with no recorded SHA; clearing for retry",
-                pr_number,
-            )
-            _save_state(state_path, state)
+            if current_head_sha:
+                # Self-heal older/corrupted state files by pinning the
+                # escalation to the current head instead of re-posting the same
+                # needs-human comment every sweep.
+                state["escalated_head_sha"] = current_head_sha
+                logger.info(
+                    "pr_review_watcher: PR #%d escalated with no recorded SHA; "
+                    "backfilled current head and will await change",
+                    pr_number,
+                )
+                _save_state(state_path, state)
+                return
+            else:
+                # No head SHA means we cannot tell whether anything changed.
+                # Clear and retry once fresh PR data is available.
+                state["escalated_needs_human"] = False
+                state["no_verdict_passes"] = 0
+                logger.info(
+                    "pr_review_watcher: PR #%d escalated with no recorded SHA; clearing for retry",
+                    pr_number,
+                )
+                _save_state(state_path, state)
         elif current_head_sha and current_head_sha != escalated_head_sha:
             _retract_flag(
                 state, gh_client, owner, repo, resolution="new push — automated review resumed"
@@ -1514,6 +1530,7 @@ def _phase1(
                             settings,
                             reason="ci_persistently_red",
                             detail=detail,
+                            current_head_sha=current_head_sha,
                         )
                         return
                     logger.info(
@@ -1639,6 +1656,7 @@ def _phase1(
                 settings,
                 reason="oc_source_tree_unclean",
                 detail=str(exc),
+                current_head_sha=current_head_sha,
             )
             state["env_unclean_passes"] = 0
         _save_state(state_path, state)
@@ -1666,6 +1684,7 @@ def _phase1(
                 settings,
                 reason="reviewer_backend_unavailable",
                 detail=str(exc),
+                current_head_sha=current_head_sha,
             )
             state["backend_error_passes"] = 0
         _save_state(state_path, state)
@@ -1731,6 +1750,7 @@ def _phase1(
                 settings,
                 reason="no_verdict_unreviewable",
                 detail=detail,
+                current_head_sha=current_head_sha,
             )
             state["no_verdict_passes"] = 0  # keep retrying in case it was transient
             _save_state(state_path, state)
@@ -1789,6 +1809,7 @@ def _phase1(
             settings,
             reason="fix_pass_no_progress",
             detail=detail,
+            current_head_sha=current_head_sha,
         )
         return
 
