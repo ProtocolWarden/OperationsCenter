@@ -123,6 +123,8 @@ export SNAPSHOT_TOLERANCE=0.05                   # Variance tolerance (5%)
 
 For comprehensive testing and integration guidance, see:
 - **[STAGE1_CI_INTEGRATION_TEST_RUNNER_DESIGN.md](docs/design/STAGE1_CI_INTEGRATION_TEST_RUNNER_DESIGN.md)** — Architecture and design
+- **[STAGE2_CI_INTEGRATION_TEST_RUNNER_IMPLEMENTATION.md](docs/design/STAGE2_CI_INTEGRATION_TEST_RUNNER_IMPLEMENTATION.md)** — Implementation details and component integration
+- **[STAGE3_REAL_WORLD_SNAPSHOT_VALIDATION_TESTS.md](docs/design/STAGE3_REAL_WORLD_SNAPSHOT_VALIDATION_TESTS.md)** — Real-world snapshot validation test suite
 - **[STAGE4_LOCAL_TESTING_AND_VERIFICATION.md](docs/design/STAGE4_LOCAL_TESTING_AND_VERIFICATION.md)** — Test results and verification
 - **[STAGE5_DOCUMENTATION_AND_FINAL_REVIEW.md](docs/design/STAGE5_DOCUMENTATION_AND_FINAL_REVIEW.md)** — Complete usage guide, procedures, and troubleshooting
 

@@ -1,3 +1,8 @@
+---
+status: designed
+stage: 1
+---
+
 # Stage 1: CI Integration Test Runner Architecture Design
 
 **Date**: 2026-06-09  
