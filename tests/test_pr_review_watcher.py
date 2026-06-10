@@ -205,6 +205,58 @@ def test_phase1_concerns_dispatches_fix_pass_below_cap(tmp_path: Path) -> None:
     assert loaded["fix_attempts"] == 1
 
 
+def test_phase1_concerns_records_no_progress_signature(tmp_path: Path) -> None:
+    state, sp = _make_state(tmp_path, phase="self_review", self_review_loops=0, fix_attempts=0)
+    gh = _make_gh()
+
+    with (
+        patch.object(
+            watcher, "_run_direct_review", return_value={"result": "CONCERNS", "summary": "issues"}
+        ),
+        patch.object(watcher, "_run_fix_pass", return_value=False),
+        patch.object(watcher, "_merge_and_done"),
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(head_sha="abc123"), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+
+    loaded = watcher._load_state(sp)
+    assert loaded["fix_attempts"] == 1
+    assert loaded["last_fix_pass_pushed"] is False
+    assert loaded["last_concerns_head_sha"] == "abc123"
+    assert loaded["last_concerns_summary"] == "issues"
+
+
+def test_phase1_repeated_concerns_after_noop_fix_escalates(tmp_path: Path) -> None:
+    state, sp = _make_state(
+        tmp_path,
+        phase="self_review",
+        self_review_loops=1,
+        fix_attempts=1,
+        last_fix_pass_pushed=False,
+        last_concerns_head_sha="abc123",
+        last_concerns_summary="same issues",
+    )
+    gh = _make_gh()
+
+    with (
+        patch.object(
+            watcher,
+            "_run_direct_review",
+            return_value={"result": "CONCERNS", "summary": "same issues"},
+        ),
+        patch.object(watcher, "_run_fix_pass") as mock_fix,
+        patch.object(watcher, "_escalate_needs_human") as mock_escalate,
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(head_sha="abc123"), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+
+    mock_fix.assert_not_called()
+    mock_escalate.assert_called_once()
+    assert state["escalated_head_sha"] == "abc123"
+
+
 def test_phase1_concerns_closes_and_requeues_at_fix_cap(tmp_path: Path) -> None:
     # max_fix_attempts=2, already at 2 — CONCERNS must close+requeue, NOT merge.
     state, sp = _make_state(tmp_path, phase="self_review", self_review_loops=1, fix_attempts=2)
@@ -304,9 +356,9 @@ def test_phase1_skips_escalated_pr_without_new_head(tmp_path: Path) -> None:
 
 
 def test_phase1_resumes_escalated_pr_with_null_sha(tmp_path: Path) -> None:
-    # When escalated with escalated_head_sha=None (e.g. after a manual state
-    # reset or rebase), the watcher must clear the escalation and retry rather
-    # than deadlocking in a permanent skip.
+    # When escalated with escalated_head_sha=None but the current PR data has a
+    # head SHA, the watcher should repair the state and keep waiting instead of
+    # reposting the same needs-human comment every poll.
     state, sp = _make_state(
         tmp_path,
         phase="self_review",
@@ -321,6 +373,38 @@ def test_phase1_resumes_escalated_pr_with_null_sha(tmp_path: Path) -> None:
     ) as mock_review, patch.object(watcher, "_merge_and_done"):
         watcher._phase1(
             state, sp, _pr_data(head_sha="abc123"), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+
+    mock_review.assert_not_called()
+    loaded = watcher._load_state(sp)
+    assert loaded["escalated_needs_human"] is True
+    assert loaded["escalated_head_sha"] == "abc123"
+
+
+def test_phase1_resumes_escalated_pr_with_null_sha_and_missing_head(tmp_path: Path) -> None:
+    # Without a live head SHA we still need the legacy clear-and-retry path.
+    state, sp = _make_state(
+        tmp_path,
+        phase="self_review",
+        escalated_needs_human=True,
+        escalated_head_sha=None,
+        no_verdict_passes=0,
+    )
+    gh = _make_gh()
+
+    with patch.object(
+        watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}
+    ) as mock_review, patch.object(watcher, "_merge_and_done"):
+        watcher._phase1(
+            state,
+            sp,
+            _pr_data(head_sha=None),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            SETTINGS,
         )
 
     mock_review.assert_called_once()
@@ -426,7 +510,9 @@ def test_phase1_ci_persistently_red_escalates(tmp_path: Path) -> None:
     gh.merge_pr.assert_not_called()
     gh.close_pr.assert_not_called()  # work preserved, not closed
     gh.post_comment.assert_called_once()  # needs-human escalation
-    assert watcher._load_state(sp)["escalated_needs_human"] is True
+    loaded = watcher._load_state(sp)
+    assert loaded["escalated_needs_human"] is True
+    assert loaded["escalated_head_sha"] == "abc123"
 
 
 # ── merge_and_done ────────────────────────────────────────────────────────────
@@ -1131,7 +1217,7 @@ def test_stuck_green_escalation_fires_after_repeated_no_verdict_cycles(tmp_path:
     gh = _make_gh()
     captured_detail: list[str] = []
 
-    def _esc(s, sp, gh, o, r, settings, *, reason, detail):
+    def _esc(s, sp, gh, o, r, settings, *, reason, detail, current_head_sha=None):
         captured_detail.append(detail)
         s["escalated_needs_human"] = True
 
@@ -1159,7 +1245,7 @@ def test_stuck_green_not_triggered_on_first_two_escalations(tmp_path: Path) -> N
     gh = _make_gh()
     captured_detail: list[str] = []
 
-    def _esc(s, sp, gh, o, r, settings, *, reason, detail):
+    def _esc(s, sp, gh, o, r, settings, *, reason, detail, current_head_sha=None):
         captured_detail.append(detail)
         s["escalated_needs_human"] = True
 
@@ -1432,10 +1518,11 @@ def test_escalate_stores_comment_id(tmp_path: Path) -> None:
     gh = _make_gh(comment_id=9001)
     watcher._escalate_needs_human(
         state, sp_, gh, "owner", "repo", SETTINGS,
-        reason="no_verdict_unreviewable", detail="details",
+        reason="no_verdict_unreviewable", detail="details", current_head_sha="abc123",
     )
     assert state["escalated_needs_human"] is True
     assert state["escalation_comment_id"] == 9001
+    assert state["escalated_head_sha"] == "abc123"
 
 
 def test_escalate_no_comment_id_when_post_fails(tmp_path: Path) -> None:
@@ -1580,3 +1667,46 @@ def test_concerns_comment_id_tracked(tmp_path: Path) -> None:
 
     loaded = watcher._load_state(sp_)
     assert loaded.get("concerns_comment_id") == 5555
+
+
+def test_new_push_retracts_stale_concerns_and_reposts_for_new_head(tmp_path: Path) -> None:
+    """A new PR head retracts the old concerns comment and resets fix state."""
+    state, sp_ = _make_state(
+        tmp_path,
+        phase="self_review",
+        plane_task_id="task-1",
+        fix_attempts=2,
+        concerns_comment_id=8888,
+        last_concerns_head_sha="old_sha",
+        last_concerns_summary="old concerns",
+        last_fix_pass_pushed=False,
+    )
+    gh = _make_gh(comment_id=5555)
+    gh.list_pr_comments.return_value = [
+        {"id": 8888, "body": "<!-- bot -->\n**Self-review concerns** — auto-fixing:\n\nold concerns"},
+    ]
+
+    with (
+        patch.object(
+            watcher, "_run_direct_review",
+            return_value={"result": "CONCERNS", "summary": "new concerns"},
+        ),
+        patch.object(watcher, "_run_fix_pass", return_value=True),
+        patch.object(watcher, "_merge_and_done"),
+    ):
+        watcher._phase1(
+            state, sp_, _pr_data(head_sha="new_sha"), gh, "owner", "repo",
+            tmp_path, tmp_path / "cfg.yaml", SETTINGS,
+        )
+
+    assert gh.update_comment.call_count == 1
+    retracted = gh.update_comment.call_args[0][3]
+    assert "~~**Self-review concerns**~~" in retracted
+    assert "superseded by new push — re-review resumed" in retracted
+    assert gh.post_comment.call_count == 1
+    loaded = watcher._load_state(sp_)
+    assert loaded["fix_attempts"] == 1
+    assert loaded["concerns_comment_id"] == 5555
+    assert loaded["last_concerns_head_sha"] == "new_sha"
+    assert loaded["last_concerns_summary"] == "new concerns"
+    assert loaded["last_fix_pass_pushed"] is True

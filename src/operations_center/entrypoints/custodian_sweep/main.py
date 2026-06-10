@@ -29,13 +29,16 @@ import os
 import shutil
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from typing import Any
 
 _DEFAULT_HISTORY_PATH = Path("state/custodian_sweep/last_sweep.json")
 _DEDUP_LABEL_PREFIX = "custodian-sweep:"  # one label per repo for dedup
+_DEFAULT_TIMEOUT_SECONDS = 120
 
 
 @dataclass(frozen=True)
@@ -101,7 +104,7 @@ def _resolve_custodian_audit() -> str | None:
     return str(candidate) if os.access(candidate, os.X_OK) else None
 
 
-def _run_custodian_audit(target: _RepoTarget) -> _RepoSweep:
+def _run_custodian_audit(target: _RepoTarget, *, timeout_seconds: int) -> _RepoSweep:
     """Shell out to custodian-audit. Failures land in ``error`` rather than raise."""
     audit_bin = _resolve_custodian_audit()
     if audit_bin is None:
@@ -112,10 +115,10 @@ def _run_custodian_audit(target: _RepoTarget) -> _RepoSweep:
             capture_output=True,
             text=True,
             check=False,
-            timeout=300,
+            timeout=timeout_seconds,
         )
     except subprocess.TimeoutExpired:
-        return _RepoSweep(target.repo_key, error="custodian-audit timed out (>300s)")
+        return _RepoSweep(target.repo_key, error=f"custodian-audit timed out (>{timeout_seconds}s)")
     if proc.returncode != 0 and not proc.stdout.strip():
         return _RepoSweep(
             target.repo_key,
@@ -126,6 +129,20 @@ def _run_custodian_audit(target: _RepoTarget) -> _RepoSweep:
     except json.JSONDecodeError as exc:
         return _RepoSweep(target.repo_key, error=f"non-JSON output: {exc}")
     return _RepoSweep(target.repo_key, envelope=envelope)
+
+
+def _run_custodian_audits(
+    targets: list[_RepoTarget], *, jobs: int, timeout_seconds: int
+) -> list[_RepoSweep]:
+    """Run repo audits with bounded parallelism while preserving target order."""
+    if not targets:
+        return []
+    runner = partial(_run_custodian_audit, timeout_seconds=timeout_seconds)
+    max_workers = max(1, min(jobs, len(targets)))
+    if max_workers == 1:
+        return [runner(target) for target in targets]
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        return list(executor.map(runner, targets))
 
 
 def _delta(current: dict[str, Any], previous: dict[str, Any] | None) -> dict[str, int]:
@@ -238,6 +255,21 @@ def main() -> int:
         action="store_true",
         help="With --emit, log what would happen without calling Plane",
     )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=4,
+        help="Maximum concurrent custodian-audit subprocesses (default: 4)",
+    )
+    parser.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=_DEFAULT_TIMEOUT_SECONDS,
+        help=(
+            "Per-repo custodian-audit timeout in seconds "
+            f"(default: {_DEFAULT_TIMEOUT_SECONDS})"
+        ),
+    )
     args = parser.parse_args()
 
     from operations_center.config import load_settings
@@ -252,7 +284,9 @@ def main() -> int:
         except (OSError, json.JSONDecodeError):
             previous_all = {}
 
-    sweeps: list[_RepoSweep] = [_run_custodian_audit(t) for t in targets]
+    sweeps = _run_custodian_audits(
+        targets, jobs=args.jobs, timeout_seconds=max(1, args.timeout_seconds)
+    )
 
     plane = None
     existing_tasks: dict[str, dict[str, Any]] = {}

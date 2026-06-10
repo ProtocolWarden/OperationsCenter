@@ -96,6 +96,11 @@ def _pr_head_sha(pr_data: dict[str, Any]) -> str:
     return str(((pr_data.get("head") or {}).get("sha") or "")).strip()
 
 
+def _normalize_concerns_summary(summary: str) -> str:
+    """Normalize a reviewer summary for stable no-progress comparisons."""
+    return " ".join(str(summary).split())
+
+
 def _new_state(repo_key: str, pr_number: int) -> dict:
     now = datetime.now(UTC).isoformat()
     return {
@@ -905,12 +910,15 @@ def _escalate_needs_human(
     *,
     reason: str,
     detail: str,
+    current_head_sha: str | None = None,
 ) -> None:
     """Leave the PR OPEN and flag it for a human. Used when the PR must not be
     merged (unresolved) but also must not be closed (work would be lost) — e.g.
     the review pipeline is persistently unavailable, or there is no Plane task
     to re-queue. Comments exactly once, then keeps polling."""
     pr_number = state["pr_number"]
+    if current_head_sha:
+        state["escalated_head_sha"] = current_head_sha
     if not state.get("escalated_needs_human"):
         marker = settings.reviewer.bot_comment_marker
         try:
@@ -1405,21 +1413,54 @@ def _phase1(
     reviewer = settings.reviewer
     current_head_sha = _pr_head_sha(pr_data)
 
+    previous_concerns_head_sha = str(state.get("last_concerns_head_sha") or "").strip()
+    if (
+        state.get("concerns_comment_id")
+        and current_head_sha
+        and previous_concerns_head_sha
+        and current_head_sha != previous_concerns_head_sha
+    ):
+        _retract_flag(
+            state, gh_client, owner, repo, resolution="superseded by new push — re-review resumed"
+        )
+        state["fix_attempts"] = 0
+        state.pop("last_concerns_summary", None)
+        state.pop("last_concerns_head_sha", None)
+        state.pop("last_fix_pass_pushed", None)
+        logger.info(
+            "pr_review_watcher: PR #%d head changed after concerns; resetting fix state",
+            pr_number,
+        )
+        _save_state(state_path, state)
+
     # Once a PR is escalated for human attention, do not keep burning review
     # passes on the same unchanged head. Resume autonomous review only after a
     # new push changes the PR head SHA.
     if state.get("escalated_needs_human"):
         escalated_head_sha = str(state.get("escalated_head_sha") or "").strip()
         if not escalated_head_sha:
-            # Escalated with no recorded SHA (e.g. state was reset after a
-            # rebase or manual clear). Can't compare — clear and retry.
-            state["escalated_needs_human"] = False
-            state["no_verdict_passes"] = 0
-            logger.info(
-                "pr_review_watcher: PR #%d escalated with no recorded SHA; clearing for retry",
-                pr_number,
-            )
-            _save_state(state_path, state)
+            if current_head_sha:
+                # Self-heal older/corrupted state files by pinning the
+                # escalation to the current head instead of re-posting the same
+                # needs-human comment every sweep.
+                state["escalated_head_sha"] = current_head_sha
+                logger.info(
+                    "pr_review_watcher: PR #%d escalated with no recorded SHA; "
+                    "backfilled current head and will await change",
+                    pr_number,
+                )
+                _save_state(state_path, state)
+                return
+            else:
+                # No head SHA means we cannot tell whether anything changed.
+                # Clear and retry once fresh PR data is available.
+                state["escalated_needs_human"] = False
+                state["no_verdict_passes"] = 0
+                logger.info(
+                    "pr_review_watcher: PR #%d escalated with no recorded SHA; clearing for retry",
+                    pr_number,
+                )
+                _save_state(state_path, state)
         elif current_head_sha and current_head_sha != escalated_head_sha:
             _retract_flag(
                 state, gh_client, owner, repo, resolution="new push — automated review resumed"
@@ -1489,6 +1530,7 @@ def _phase1(
                             settings,
                             reason="ci_persistently_red",
                             detail=detail,
+                            current_head_sha=current_head_sha,
                         )
                         return
                     logger.info(
@@ -1614,6 +1656,7 @@ def _phase1(
                 settings,
                 reason="oc_source_tree_unclean",
                 detail=str(exc),
+                current_head_sha=current_head_sha,
             )
             state["env_unclean_passes"] = 0
         _save_state(state_path, state)
@@ -1641,6 +1684,7 @@ def _phase1(
                 settings,
                 reason="reviewer_backend_unavailable",
                 detail=str(exc),
+                current_head_sha=current_head_sha,
             )
             state["backend_error_passes"] = 0
         _save_state(state_path, state)
@@ -1706,6 +1750,7 @@ def _phase1(
                 settings,
                 reason="no_verdict_unreviewable",
                 detail=detail,
+                current_head_sha=current_head_sha,
             )
             state["no_verdict_passes"] = 0  # keep retrying in case it was transient
             _save_state(state_path, state)
@@ -1722,6 +1767,7 @@ def _phase1(
     state["no_verdict_passes"] = 0  # a verdict was produced
     result = (verdict.get("result") or "CONCERNS").upper()
     summary = verdict.get("summary", "(no summary)")
+    normalized_summary = _normalize_concerns_summary(summary)
 
     logger.info("pr_review_watcher: PR #%d self-review verdict=%s", pr_number, result)
 
@@ -1736,6 +1782,34 @@ def _phase1(
         )
         _merge_and_done(
             state, state_path, pr_data, gh_client, owner, repo, settings, reason="self_review_lgtm"
+        )
+        return
+
+    repeated_no_progress = (
+        state.get("fix_attempts", 0) > 0
+        and state.get("last_fix_pass_pushed") is False
+        and current_head_sha
+        and current_head_sha == str(state.get("last_concerns_head_sha") or "").strip()
+        and normalized_summary == str(state.get("last_concerns_summary") or "").strip()
+    )
+    if repeated_no_progress:
+        detail = (
+            "The previous automated fix pass pushed no changes, and a fresh self-review on the "
+            "same PR head produced the same concerns. Further autonomous retries would repeat "
+            "without changing the branch.\n\nLatest concerns:\n\n"
+            f"{summary}"
+        )
+        state["escalated_head_sha"] = current_head_sha or state.get("escalated_head_sha")
+        _escalate_needs_human(
+            state,
+            state_path,
+            gh_client,
+            owner,
+            repo,
+            settings,
+            reason="fix_pass_no_progress",
+            detail=detail,
+            current_head_sha=current_head_sha,
         )
         return
 
@@ -1839,6 +1913,9 @@ def _phase1(
         settings,
         state_key=state_key,
     )
+    state["last_concerns_summary"] = normalized_summary
+    state["last_concerns_head_sha"] = current_head_sha
+    state["last_fix_pass_pushed"] = pushed
     state["fix_attempts"] += 1
     if not pushed:
         logger.warning(

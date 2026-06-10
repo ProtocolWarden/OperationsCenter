@@ -15,6 +15,7 @@ from operations_center.entrypoints.maintenance.orphan_branch_check import (
     OrphanBranch,
     RepoOrphanResult,
     _ALWAYS_PROTECTED,
+    _find_existing_orphan_task_id,
     _open_pr_head_branches,
     _scan_repo,
     main,
@@ -252,6 +253,7 @@ def test_scan_repo_skips_branch_with_zero_commits_ahead(tmp_path: Path) -> None:
 
 def test_scan_repo_skips_recent_branch(tmp_path: Path) -> None:
     (tmp_path / ".git").mkdir()
+    recent = datetime.now(UTC) - timedelta(hours=6)
     git_responses = {
         ("fetch", "origin", "--prune", "--quiet"): ("", 0),
         ("branch", "-r", "--format=%(refname:short)"): (
@@ -260,7 +262,7 @@ def test_scan_repo_skips_recent_branch(tmp_path: Path) -> None:
         ),
         ("rev-list", "--count", "origin/main..origin/feat/new"): ("5", 0),
         ("log", "-1", "--format=%cI", "origin/feat/new"): (
-            _RECENT.isoformat(),
+            recent.isoformat(),
             0,
         ),
     }
@@ -445,6 +447,79 @@ def test_main_emit_calls_plane_task_creation(tmp_path: Path) -> None:
 
     assert rc == 0
     mock_emit.assert_called_once_with(settings, orphan)
+
+
+def test_find_existing_orphan_task_id_matches_non_terminal_task() -> None:
+    orphan = OrphanBranch(
+        repo_key="MyRepo",
+        branch="feat/old",
+        commits_ahead=3,
+        last_commit_at=_OLD,
+        age_hours=50.0,
+    )
+    plane = MagicMock()
+    plane.list_issues.return_value = [
+        {
+            "id": "task-123",
+            "name": "Orphan branch: MyRepo/feat/old (1 commits ahead)",
+            "state": {"name": "Backlog"},
+            "labels": [{"name": "orphan-branch"}, {"name": "repo:MyRepo"}],
+        }
+    ]
+
+    assert _find_existing_orphan_task_id(plane, orphan) == "task-123"
+
+
+def test_find_existing_orphan_task_id_ignores_terminal_tasks() -> None:
+    orphan = OrphanBranch(
+        repo_key="MyRepo",
+        branch="feat/old",
+        commits_ahead=3,
+        last_commit_at=_OLD,
+        age_hours=50.0,
+    )
+    plane = MagicMock()
+    plane.list_issues.return_value = [
+        {
+            "id": "task-123",
+            "name": "Orphan branch: MyRepo/feat/old (1 commits ahead)",
+            "state": {"name": "Cancelled"},
+            "labels": [{"name": "orphan-branch"}, {"name": "repo:MyRepo"}],
+        }
+    ]
+
+    assert _find_existing_orphan_task_id(plane, orphan) is None
+
+
+def test_emit_plane_task_updates_existing_issue() -> None:
+    orphan = OrphanBranch(
+        repo_key="MyRepo",
+        branch="feat/old",
+        commits_ahead=3,
+        last_commit_at=_OLD,
+        age_hours=50.0,
+    )
+    settings = _make_settings()
+    settings.plane = MagicMock(base_url="http://plane", workspace_slug="ws", project_id="proj")
+    settings.plane_token = MagicMock(return_value="token")
+    plane = MagicMock()
+    plane.list_issues.return_value = [
+        {
+            "id": "task-123",
+            "name": "Orphan branch: MyRepo/feat/old (1 commits ahead)",
+            "state": {"name": "Backlog"},
+            "labels": [{"name": "orphan-branch"}, {"name": "repo:MyRepo"}],
+        }
+    ]
+
+    with patch("operations_center.adapters.plane.PlaneClient", return_value=plane):
+        from operations_center.entrypoints.maintenance.orphan_branch_check import _emit_plane_task
+
+        _emit_plane_task(settings, orphan)
+
+    plane.create_issue.assert_not_called()
+    plane.update_issue_description.assert_called_once()
+    plane.update_issue_labels.assert_called_once_with("task-123", ["orphan-branch", "repo:MyRepo"])
 
 
 # ── scan() integration-level ──────────────────────────────────────────────────
