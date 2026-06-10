@@ -232,6 +232,43 @@ def scan(settings: Any, min_age_hours: float = 24.0) -> list[RepoOrphanResult]:
     return results
 
 
+def _orphan_task_title(orphan: OrphanBranch) -> str:
+    return f"Orphan branch: {orphan.repo_key}/{orphan.branch} ({orphan.commits_ahead} commits ahead)"
+
+
+def _orphan_task_description(orphan: OrphanBranch) -> str:
+    return (
+        f"Branch `{orphan.branch}` in **{orphan.repo_key}** has {orphan.commits_ahead} "
+        f"commit(s) ahead of main with no open PR, last committed "
+        f"{orphan.age_hours:.1f}h ago.\n\n"
+        "Action: open a PR, merge the commits, or delete the branch after confirming "
+        "no salvage value per the WO-1 close-with-receipt invariant."
+    )
+
+
+def _find_existing_orphan_task_id(plane: Any, orphan: OrphanBranch) -> str | None:
+    prefix = f"Orphan branch: {orphan.repo_key}/{orphan.branch} "
+    for issue in plane.list_issues():
+        state = issue.get("state")
+        state_name = (
+            (state.get("name", "") if isinstance(state, dict) else str(state or "")).strip().lower()
+        )
+        if state_name in {"done", "cancelled"}:
+            continue
+        labels = [
+            (label.get("name", "") if isinstance(label, dict) else str(label)).strip().lower()
+            for label in issue.get("labels", [])
+        ]
+        if "orphan-branch" not in labels:
+            continue
+        title = str(issue.get("name") or "").strip()
+        if title.startswith(prefix):
+            issue_id = str(issue.get("id") or "").strip()
+            if issue_id:
+                return issue_id
+    return None
+
+
 def _emit_plane_task(settings: Any, orphan: OrphanBranch) -> None:
     from operations_center.adapters.plane import PlaneClient
 
@@ -241,20 +278,19 @@ def _emit_plane_task(settings: Any, orphan: OrphanBranch) -> None:
         workspace_slug=settings.plane.workspace_slug,
         project_id=settings.plane.project_id,
     )
-    title = f"Orphan branch: {orphan.repo_key}/{orphan.branch} ({orphan.commits_ahead} commits ahead)"
-    body = (
-        f"Branch `{orphan.branch}` in **{orphan.repo_key}** has {orphan.commits_ahead} "
-        f"commit(s) ahead of main with no open PR, last committed "
-        f"{orphan.age_hours:.1f}h ago.\n\n"
-        "Action: open a PR, merge the commits, or delete the branch after confirming "
-        "no salvage value per the WO-1 close-with-receipt invariant."
-    )
-    plane.create_issue(
-        name=title,
-        description=body,
-        label_names=["orphan-branch", f"repo:{orphan.repo_key}"],
-    )
+    title = _orphan_task_title(orphan)
+    body = _orphan_task_description(orphan)
+    existing_issue_id = _find_existing_orphan_task_id(plane, orphan)
+    if existing_issue_id:
+        plane.update_issue_description(existing_issue_id, body)
+        plane.update_issue_labels(existing_issue_id, ["orphan-branch", f"repo:{orphan.repo_key}"])
+        logger.info("updated existing Plane task %s for %s/%s", existing_issue_id, orphan.repo_key, orphan.branch)
+        plane.close()
+        return
+
+    plane.create_issue(name=title, description=body, label_names=["orphan-branch", f"repo:{orphan.repo_key}"])
     logger.info("created Plane task for %s/%s", orphan.repo_key, orphan.branch)
+    plane.close()
 
 
 def main(argv: list[str] | None = None) -> int:
