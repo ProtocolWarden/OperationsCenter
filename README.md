@@ -67,20 +67,20 @@ OperationsCenter includes a comprehensive **snapshot validation test runner** th
 **Quick mode** (Layers 1-3, ~30 seconds) — validates schema, completeness, and consistency:
 ```bash
 python -m pytest tests/integration/observer/test_snapshot_validation.py \
-  -m "snapshot and not snapshot_slow" \
+  -m "integration and not slow" \
   -v --tb=short
 ```
 
 **Full mode** (All 5 layers, ~5 minutes) — includes accuracy validation against live services and regression detection:
 ```bash
 python -m pytest tests/integration/observer/test_snapshot_validation.py \
-  -m "snapshot" \
+  -m "integration" \
   -v --tb=short
 ```
 
 **Complete snapshot test suite** (41 integration + 32 unit tests):
 ```bash
-python -m pytest tests/ -k "snapshot" -v --tb=short
+python -m pytest tests/ -m "integration or perf" -v --tb=short
 ```
 
 ### The 5-Layer Validation Pipeline
@@ -811,14 +811,14 @@ The **snapshot** job validates repository state snapshots using a 5-layer pipeli
 **Quick mode (PR trigger):**
 ```bash
 pytest tests/integration/observer/test_snapshot_validation.py \
-  -v -m "snapshot and not snapshot_slow"
+  -v -m "integration and not slow"
 ```
 **Layers**: 1-3 (schema, completeness, consistency) • **Time**: ~30s
 
 **Full mode (push trigger):**
 ```bash
 pytest tests/integration/observer/test_snapshot_validation.py \
-  -v -m snapshot
+  -v -m integration
 ```
 **Layers**: 1-5 (all layers including accuracy and regression) • **Time**: ~5m
 
