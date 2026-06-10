@@ -45,7 +45,7 @@ def _make_observer_context(report_root: Path) -> ObserverContext:
     )
 
 
-@pytest.mark.performance
+@pytest.mark.perf
 class TestDependencyReportPerformanceRegression:
     """Performance regression tests for dependency report generation & collection."""
 

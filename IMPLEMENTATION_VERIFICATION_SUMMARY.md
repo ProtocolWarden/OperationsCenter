@@ -87,7 +87,7 @@ def __init__(self, snapshot: RepoStateSnapshot, repo_path: Path | None = None)
    - Runs actual pytest --collect-only to get real test count
    - Compares with snapshot expectations
    - Configurable tolerance thresholds (default 1% for test count)
-   - Marked as `@pytest.mark.slow` in CI (markers renamed from `snapshot_slow` → `slow` in commit e64847c8)
+   - Marked as `@pytest.mark.slow` in CI
 
 5. **Layer 5: Regression Detection** (`validate_layer_5_regression()`)
    - Compares current vs baseline snapshots

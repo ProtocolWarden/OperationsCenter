@@ -37,7 +37,7 @@ This document specifies the complete architecture for the **CI Integration Test 
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │        snapshot Job (PR/Push/Schedule)              │   │
 │  │  ┌─────────────────────────────────────────────┐   │   │
-│  │  │ pytest --markers=snapshot                   │   │   │
+│  │  │ pytest --markers=integration                │   │   │
 │  │  │  - Layer 1-3: Schema, Completeness, Const.  │   │   │
 │  │  │  - Layer 4-5: Accuracy, Regression (slow)   │   │   │
 │  │  └─────────────────────────────────────────────┘   │   │
@@ -89,8 +89,8 @@ GitHub Actions Workflow
              ├─ validate_layer_1_schema()
              ├─ validate_layer_2_completeness()
              ├─ validate_layer_3_consistency()
-             ├─ validate_layer_4_accuracy() [snapshot_slow]
-             ├─ validate_layer_5_regression() [snapshot_slow]
+             ├─ validate_layer_4_accuracy() [slow]
+             ├─ validate_layer_5_regression() [slow]
              └─ generate_validation_report()
                   ├─ Failure Categorization
                   ├─ Retry Logic
@@ -153,7 +153,7 @@ if build_signal.status == BuildStatus.FAILED:
 assert test_signal.coverage >= 0 and test_signal.coverage <= 100
 ```
 
-#### Layer 4: Accuracy Validation (marked `@pytest.mark.snapshot_slow`)
+#### Layer 4: Accuracy Validation (marked `@pytest.mark.slow`)
 - **Purpose**: Compare snapshot data against live tools (SwitchBoard, Plane, Archon)
 - **Method**: Query live state and diff against snapshot signals
 - **Failure Type**: TRANSIENT (network issues, tool unavailability) or STRUCTURAL (stale snapshot)
@@ -168,7 +168,7 @@ if live_tests != snapshot.repo_signals.test_signal.details:
     raise ValidationError("Snapshot stale: test results diverged from live")
 ```
 
-#### Layer 5: Regression Detection (marked `@pytest.mark.snapshot_slow`)
+#### Layer 5: Regression Detection (marked `@pytest.mark.slow`)
 - **Purpose**: Detect unexpected degradation by comparing to baseline snapshots
 - **Method**: Load baseline snapshot from repository, compute deltas
 - **Tolerance**: Configurable variance (default 5%, set via SNAPSHOT_TOLERANCE)
@@ -287,12 +287,12 @@ jobs:
       # Step 2: Quick mode (PR)
       - if: github.event_name == 'pull_request'
         name: Run Snapshot Validation (Quick)
-        run: pytest tests/integration/observer/test_snapshot_validation.py -m "snapshot and not snapshot_slow" -v
+        run: pytest tests/integration/observer/test_snapshot_validation.py -m "integration and not slow" -v
       
       # Step 3: Full mode (Push/Schedule)
       - if: github.event_name == 'push' || github.event.schedule == '0 2 * * *'
         name: Run Snapshot Validation (Full)
-        run: pytest tests/integration/observer/test_snapshot_validation.py -m snapshot -v
+        run: pytest tests/integration/observer/test_snapshot_validation.py -m integration -v
       
       # Step 4: Upload artifacts
       - name: Upload Validation Reports
