@@ -38,6 +38,7 @@ from typing import Any
 
 _DEFAULT_HISTORY_PATH = Path("state/custodian_sweep/last_sweep.json")
 _DEDUP_LABEL_PREFIX = "custodian-sweep:"  # one label per repo for dedup
+_DEFAULT_TIMEOUT_SECONDS = 120
 
 
 @dataclass(frozen=True)
@@ -263,8 +264,11 @@ def main() -> int:
     parser.add_argument(
         "--timeout-seconds",
         type=int,
-        default=20,
-        help="Per-repo custodian-audit timeout in seconds (default: 20)",
+        default=_DEFAULT_TIMEOUT_SECONDS,
+        help=(
+            "Per-repo custodian-audit timeout in seconds "
+            f"(default: {_DEFAULT_TIMEOUT_SECONDS})"
+        ),
     )
     args = parser.parse_args()
 

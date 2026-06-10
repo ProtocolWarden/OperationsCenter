@@ -11,8 +11,10 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
+import operations_center.config as config_module
 from operations_center.entrypoints.custodian_sweep import main as sweep_module
 from operations_center.entrypoints.custodian_sweep.main import (
+    _DEFAULT_TIMEOUT_SECONDS,
     _DEDUP_LABEL_PREFIX,
     _delta,
     _discover_targets,
@@ -190,3 +192,34 @@ def test_run_custodian_audits_falls_back_to_serial_when_jobs_is_one(monkeypatch)
 
     assert calls == ["A", "B"]
     assert [sweep.repo_key for sweep in sweeps] == ["A", "B"]
+
+
+def test_main_uses_safer_default_timeout(monkeypatch, tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("ignored: true\n", encoding="utf-8")
+    history_path = tmp_path / "history.json"
+    seen: dict[str, int] = {}
+
+    monkeypatch.setattr(config_module, "load_settings", lambda path: SimpleNamespace(repos={}))
+    monkeypatch.setattr(sweep_module, "_discover_targets", lambda settings: [])
+
+    def _fake_run(targets, *, jobs: int, timeout_seconds: int):
+        seen["timeout_seconds"] = timeout_seconds
+        return []
+
+    monkeypatch.setattr(sweep_module, "_run_custodian_audits", _fake_run)
+    monkeypatch.setattr(
+        sweep_module.sys,
+        "argv",
+        [
+            "operations-center-custodian-sweep",
+            "--config",
+            str(config_path),
+            "--history",
+            str(history_path),
+        ],
+    )
+
+    assert sweep_module.main() == 0
+    assert seen == {"timeout_seconds": _DEFAULT_TIMEOUT_SECONDS}
+    assert '"repos_swept": 0' in capsys.readouterr().out
