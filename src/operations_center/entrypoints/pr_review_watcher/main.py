@@ -798,6 +798,7 @@ _MAX_CI_WAIT_CYCLES = 20
 # prevent infinite escalation→retraction loops on PRs whose concerns cannot be
 # resolved by automation alone (e.g. diff-truncation false positives).
 _MAX_CI_GREEN_RETRACTIONS = 1
+_DIFF_LIMIT = 60_000
 
 
 def _run_fix_pass(
@@ -1652,13 +1653,27 @@ def _phase1(
             pr_number,
         )
 
-    _DIFF_LIMIT = 60_000
-    diff_excerpt = diff[:_DIFF_LIMIT] + (
-        f"\n...[diff truncated at {_DIFF_LIMIT} chars — read the changed files "
-        "directly in the workspace to review the remainder]"
-        if len(diff) > _DIFF_LIMIT
-        else ""
-    )
+    if len(diff) > _DIFF_LIMIT:
+        # Fetch the complete file list so the reviewer can verify implementation
+        # completeness even when the diff body is truncated. Without this, the
+        # reviewer sees only documentation changes and wrongly concludes that
+        # implementation files (which sort later alphabetically) are absent.
+        _pr_files = gh_client.list_pr_files(owner, repo, pr_number)
+        _file_lines = (
+            "\n".join(f"  {f}" for f in sorted(_pr_files))
+            if _pr_files
+            else "  (file list unavailable)"
+        )
+        diff_excerpt = (
+            diff[:_DIFF_LIMIT]
+            + f"\n\n...[diff truncated at {_DIFF_LIMIT} chars]\n\n"
+            "IMPORTANT — complete list of ALL files changed in this PR "
+            "(files listed here ARE modified even if their diffs are not shown above; "
+            "do NOT raise 'missing implementation' concerns for files that appear here):\n"
+            + _file_lines
+        )
+    else:
+        diff_excerpt = diff
     title = pr_data.get("title", "")
 
     # Load optional campaign spec and Custodian findings for spec-aware review

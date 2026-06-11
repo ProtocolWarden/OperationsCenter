@@ -2126,3 +2126,60 @@ def test_wo3_no_progress_after_retraction_ci_red_still_escalates(tmp_path: Path)
 
     loaded = watcher._load_state(sp_)
     assert loaded.get("escalated_needs_human") is True
+
+
+# ── Diff truncation: file-list injection ─────────────────────────────────────
+
+
+def test_phase1_truncated_diff_injects_file_list(tmp_path: Path) -> None:
+    """When the PR diff exceeds _DIFF_LIMIT, list_pr_files is called and the
+    complete file list is appended to the excerpt passed to _run_direct_review."""
+    state, sp = _make_state(tmp_path, phase="self_review")
+    gh = _make_gh()
+    big_diff = "diff --git a/docs/foo.md\n" + ("+" * (watcher._DIFF_LIMIT + 100))
+    gh.get_pr_diff.return_value = big_diff
+    gh.list_pr_files.return_value = [
+        "src/mymodule/impl.py",
+        "docs/foo.md",
+        "tests/test_impl.py",
+    ]
+
+    captured_goal: list[str] = []
+
+    def _fake_review(_oc_root, goal_text: str, *args, **kwargs) -> dict:
+        captured_goal.append(goal_text)
+        return {"result": "LGTM", "summary": "ok"}
+
+    with (
+        patch.object(watcher, "_run_direct_review", side_effect=_fake_review),
+        patch.object(watcher, "_merge_and_done"),
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+
+    gh.list_pr_files.assert_called_once_with("owner", "repo", PR_NUMBER)
+    assert captured_goal, "review goal_text not captured"
+    goal = captured_goal[0]
+    assert "src/mymodule/impl.py" in goal
+    assert "tests/test_impl.py" in goal
+    assert "do NOT raise" in goal
+
+
+def test_phase1_untruncated_diff_skips_file_list(tmp_path: Path) -> None:
+    """When diff is under _DIFF_LIMIT, list_pr_files is NOT called."""
+    state, sp = _make_state(tmp_path, phase="self_review")
+    gh = _make_gh()
+    gh.get_pr_diff.return_value = "diff --git a/foo.py\n+x = 1"
+
+    with (
+        patch.object(
+            watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}
+        ),
+        patch.object(watcher, "_merge_and_done"),
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+
+    gh.list_pr_files.assert_not_called()
