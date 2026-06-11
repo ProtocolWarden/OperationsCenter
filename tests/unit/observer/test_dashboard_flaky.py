@@ -31,7 +31,16 @@ class TestDashboardFlakyPanels:
     def mock_metrics_collector(self) -> MagicMock:
         """Create mock metrics collector."""
         collector = MagicMock(spec=MetricsCollector)
-        collector.get_system_metrics.return_value = MagicMock()
+        system_metrics = MagicMock()
+        system_metrics.total_collectors = 10
+        system_metrics.healthy_collectors = 9
+        system_metrics.degraded_collectors = 1
+        system_metrics.critical_collectors = 0
+        system_metrics.system_health_status = "HEALTHY"
+        system_metrics.overall_error_rate_percent = 0.5
+        system_metrics.total_validation_failures = 1
+        system_metrics.collector_metrics = {}
+        collector.get_system_metrics.return_value = system_metrics
         collector.get_all_collector_metrics.return_value = {}
         return collector
 
@@ -151,7 +160,16 @@ class TestDashboardFlakyPanels:
         flaky_test_signal: FlakyTestSignal,
     ) -> None:
         """Test dashboard snapshot generation with flaky test signal."""
-        mock_metrics_collector.get_system_metrics.return_value = MagicMock()
+        system_metrics = MagicMock()
+        system_metrics.total_collectors = 10
+        system_metrics.healthy_collectors = 9
+        system_metrics.degraded_collectors = 1
+        system_metrics.critical_collectors = 0
+        system_metrics.system_health_status = "HEALTHY"
+        system_metrics.overall_error_rate_percent = 0.5
+        system_metrics.total_validation_failures = 1
+        system_metrics.collector_metrics = {}
+        mock_metrics_collector.get_system_metrics.return_value = system_metrics
         mock_metrics_collector.get_all_collector_metrics.return_value = {}
 
         provider = DashboardProvider(

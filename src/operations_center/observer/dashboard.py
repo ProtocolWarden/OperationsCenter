@@ -18,6 +18,7 @@ from typing import Optional
 
 from .health_checks import HealthChecker
 from .metrics import MetricsCollector
+from .models import FlakyTestSignal
 from .structured_logging import StructuredLogReader
 
 
@@ -89,10 +90,12 @@ class DashboardProvider:
         metrics_collector: MetricsCollector,
         health_checker: HealthChecker,
         log_reader: Optional[StructuredLogReader] = None,
+        flaky_test_signal: Optional[FlakyTestSignal] = None,
     ) -> None:
         self.metrics_collector = metrics_collector
         self.health_checker = health_checker
         self.log_reader = log_reader
+        self.flaky_test_signal = flaky_test_signal
 
     def generate_snapshot(self) -> DashboardSnapshot:
         """Generate complete dashboard snapshot."""
@@ -107,6 +110,11 @@ class DashboardProvider:
 
         if self.log_reader:
             panels.append(self._panel_recent_errors())
+
+        if self.flaky_test_signal:
+            panels.append(self._panel_flaky_test_summary())
+            panels.append(self._panel_flaky_test_categories())
+            panels.append(self._panel_most_problematic_tests())
 
         alerts = [issue for issue in health_report.critical_issues] + [
             warning for warning in health_report.warnings
@@ -351,6 +359,120 @@ class DashboardProvider:
             metrics=metrics,
         )
 
+    def _panel_flaky_test_summary(self) -> DashboardPanel:
+        """Flaky test summary panel."""
+        if not self.flaky_test_signal:
+            return DashboardPanel(
+                title="Flaky Tests Summary",
+                description="Flaky test detection summary",
+                metrics=[
+                    DashboardMetric(
+                        name="Flaky Tests",
+                        value="Unavailable",
+                        unit="count",
+                        status="UNKNOWN",
+                    ),
+                ],
+            )
+
+        flaky_count = self.flaky_test_signal.flaky_test_count or 0
+        unstable_count = self.flaky_test_signal.unstable_test_count or 0
+        recovery_rate = self.flaky_test_signal.recovery_rate or 0.0
+
+        metrics = [
+            DashboardMetric(
+                name="Flaky Tests",
+                value=flaky_count,
+                unit="count",
+                status=self._get_flaky_test_status(flaky_count),
+                threshold_warning=5,
+                threshold_critical=10,
+            ),
+            DashboardMetric(
+                name="Unstable Tests",
+                value=unstable_count,
+                unit="count",
+                status=self._get_flaky_test_status(unstable_count),
+            ),
+            DashboardMetric(
+                name="Recovery Rate",
+                value=round(recovery_rate, 2),
+                unit="%",
+                status="HEALTHY" if recovery_rate >= 0.7 else "DEGRADED",
+            ),
+        ]
+
+        if self.flaky_test_signal.failure_rate_trend:
+            metrics.append(
+                DashboardMetric(
+                    name="Failure Rate Trend",
+                    value=round(self.flaky_test_signal.failure_rate_trend, 2),
+                    unit="%",
+                    status="DEGRADED" if self.flaky_test_signal.failure_rate_trend > 0 else "NOMINAL",
+                )
+            )
+
+        return DashboardPanel(
+            title="Flaky Tests Summary",
+            description="Flaky test metrics and trends",
+            metrics=metrics,
+        )
+
+    def _panel_flaky_test_categories(self) -> DashboardPanel:
+        """Flaky test categories breakdown panel."""
+        if not self.flaky_test_signal or not self.flaky_test_signal.category_breakdown:
+            return DashboardPanel(
+                title="Flaky Tests by Category",
+                description="Distribution of flaky tests by root cause",
+                metrics=[],
+            )
+
+        metrics = []
+        for category, count in self.flaky_test_signal.category_breakdown.items():
+            formatted_category = category.replace("_", " ").title()
+            metrics.append(
+                DashboardMetric(
+                    name=formatted_category,
+                    value=count,
+                    unit="count",
+                    status="NOMINAL",
+                )
+            )
+
+        return DashboardPanel(
+            title="Flaky Tests by Category",
+            description="Distribution of flaky tests by root cause",
+            metrics=metrics,
+        )
+
+    def _panel_most_problematic_tests(self) -> DashboardPanel:
+        """Most problematic tests panel."""
+        if not self.flaky_test_signal or not self.flaky_test_signal.most_problematic_tests:
+            return DashboardPanel(
+                title="Most Problematic Tests",
+                description="Top tests with highest failure rates",
+                metrics=[],
+            )
+
+        metrics = []
+        for test in self.flaky_test_signal.most_problematic_tests[:5]:
+            test_name = test.get("name", "Unknown")
+            failure_rate = test.get("failure_rate", 0.0)
+            metrics.append(
+                DashboardMetric(
+                    name=f"{test_name}",
+                    value=round(failure_rate * 100, 1),
+                    unit="%",
+                    status="CRITICAL" if failure_rate > 0.4 else "WARNING" if failure_rate > 0.2 else "NOMINAL",
+                )
+            )
+
+        return DashboardPanel(
+            title="Most Problematic Tests",
+            description="Tests with highest failure rates",
+            metrics=metrics,
+        )
+
     @staticmethod
     def _get_error_rate_status(rate: float) -> str:
         """Determine status based on error rate."""
@@ -370,5 +492,16 @@ class DashboardProvider:
         if latency_ms < 500:
             return "NOMINAL"
         if latency_ms < 1000:
+            return "DEGRADED"
+        return "CRITICAL"
+
+    @staticmethod
+    def _get_flaky_test_status(test_count: int) -> str:
+        """Determine status based on flaky test count."""
+        if test_count == 0:
+            return "HEALTHY"
+        if test_count <= 5:
+            return "NOMINAL"
+        if test_count <= 10:
             return "DEGRADED"
         return "CRITICAL"
