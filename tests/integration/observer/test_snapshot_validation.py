@@ -16,7 +16,7 @@ from operations_center.observer.snapshot_validator import (
     ValidationFailureCategory,
 )
 
-pytestmark = pytest.mark.snapshot
+pytestmark = pytest.mark.integration
 
 
 class TestSnapshotSchemaValidation:
@@ -172,7 +172,7 @@ class TestSnapshotAccuracyValidation:
         result = snapshot_validator.validate_layer_4_accuracy(tolerance=tolerance)
         assert result.check_name == "accuracy_validation"
 
-    @pytest.mark.snapshot_slow
+    @pytest.mark.slow
     def test_accuracy_with_real_tests(self, repo_path: Path):
         """Test accuracy validation against real repository tests."""
         from operations_center.observer.models import (

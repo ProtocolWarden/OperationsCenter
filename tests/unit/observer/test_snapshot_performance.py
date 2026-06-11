@@ -26,6 +26,8 @@ from operations_center.observer.snapshot_repository import (
 )
 from operations_center.observer.snapshot_manager import SnapshotManager
 
+pytestmark = pytest.mark.perf
+
 
 def create_snapshot(index: int, test_count: int = 100) -> RepoStateSnapshot:
     """Factory for creating test snapshots with unique IDs."""
@@ -59,7 +61,7 @@ def create_snapshot(index: int, test_count: int = 100) -> RepoStateSnapshot:
     )
 
 
-@pytest.mark.snapshot_performance
+@pytest.mark.perf
 class TestSnapshotRepositoryPerformance:
     """Performance tests for snapshot repository operations."""
 
@@ -174,7 +176,7 @@ class TestSnapshotRepositoryPerformance:
         assert avg_time < 0.01
 
 
-@pytest.mark.snapshot_performance
+@pytest.mark.perf
 class TestSnapshotManagerPerformance:
     """Performance tests for snapshot manager operations."""
 
@@ -270,7 +272,7 @@ class TestSnapshotManagerPerformance:
         assert len(remaining) <= 50
 
 
-@pytest.mark.snapshot_performance
+@pytest.mark.perf
 class TestSnapshotMemoryEfficiency:
     """Tests for memory efficiency with large snapshots."""
 
@@ -322,7 +324,7 @@ class TestSnapshotMemoryEfficiency:
         assert max_time < avg_time * 3
 
 
-@pytest.mark.snapshot_performance
+@pytest.mark.perf
 class TestSnapshotIndexingPerformance:
     """Tests for snapshot index performance."""
 

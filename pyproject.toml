@@ -108,14 +108,11 @@ filterwarnings = [
   "ignore:cannot collect test class:pytest.PytestCollectionWarning",
 ]
 markers = [
-  "integration: tests that require a live external service (run with: pytest tests/integration/ -v)",
+  "integration: marks integration tests that require external services (run with: pytest tests/integration/ -v)",
   "slow: marks tests as slow-running and typically excluded from quick validation runs",
+  "perf: marks tests as performance regression tests (timing + memory bounds; run with: pytest -m perf)",
   "smoke: marks tests as smoke tests for quick validation of core functionality",
-  "performance: marks tests as performance regression tests (timing + memory bounds; run with: pytest -m performance)",
-  "snapshot_slow: marks snapshot validation tests that run actual tools and are slow",
-  "snapshot_baseline: marks snapshot validation tests that compare against baselines",
-  "snapshot: marks snapshot validation integration tests",
-  "snapshot_performance: marks snapshot performance tests for scaling and efficiency",
+  "edge_case: marks tests that exercise edge cases or unusual scenarios",
   "flaky: marks tests that exercise flaky test detection logic",
   "flaky_historical: marks tests for flaky test historical aggregation and trends",
   "flaky_integration: marks flaky test integration tests with observer service",

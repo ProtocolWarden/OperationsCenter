@@ -134,7 +134,7 @@ class TestFlakyTestStorageManager:
         """Test cleanup of old session reports."""
         storage = FlakyTestStorageManager(tmp_path, session_retention_days=3)
 
-        today = datetime.now(UTC)
+        today = datetime.now(UTC).date()
         old_date = (today - timedelta(days=10)).strftime("%Y-%m-%d")
         recent_date = today.strftime("%Y-%m-%d")
 
@@ -162,7 +162,7 @@ class TestFlakyTestStorageManager:
         """Test cleanup of old aggregation reports."""
         storage = FlakyTestStorageManager(tmp_path, aggregation_retention_days=30)
 
-        today = datetime.now(UTC)
+        today = datetime.now(UTC).date()
         old_date = (today - timedelta(days=60)).strftime("%Y-%m-%d")
         recent_date = today.strftime("%Y-%m-%d")
 
