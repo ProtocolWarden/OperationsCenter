@@ -1778,3 +1778,106 @@ def test_new_push_retracts_stale_concerns_and_reposts_for_new_head(tmp_path: Pat
     assert loaded["last_concerns_head_sha"] == "new_sha"
     assert loaded["last_concerns_summary"] == "new concerns"
     assert loaded["last_fix_pass_pushed"] is True
+
+
+# ── WO-3: CI-green retraction ─────────────────────────────────────────────────
+
+
+def _ci_green_settings() -> MagicMock:
+    """Settings with auto_merge_on_ci_green=True for WO-3 tests."""
+    repo_cfg = MagicMock(
+        auto_merge_on_ci_green=True,
+        ci_ignored_checks=[],
+    )
+    return MagicMock(
+        reviewer=REVIEWER_CFG,
+        repos={REPO_KEY: repo_cfg},
+        plane=MagicMock(base_url="http://plane.local", project_id="proj", workspace_slug="ws"),
+    )
+
+
+def test_wo3_ci_green_retracts_escalation_and_resumes(tmp_path: Path) -> None:
+    """WO-3: CI green on escalated head retracts escalation and resumes review (→ LGTM)."""
+    state, sp_ = _make_state(
+        tmp_path,
+        phase="self_review",
+        escalated_needs_human=True,
+        escalated_head_sha="same_sha",
+        escalation_comment_id=9001,
+        no_verdict_passes=2,
+        ci_green_retraction_count=0,
+        plane_task_id=None,
+    )
+    gh = _make_gh()
+    gh.get_failed_checks.return_value = []  # CI green
+    gh.list_pr_comments.return_value = [
+        {"id": 9001, "body": "<!-- bot -->\n**Needs human attention** (reason=`concerns`)."},
+    ]
+
+    with (
+        patch.object(watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}),
+        patch.object(watcher, "_merge_and_done"),
+    ):
+        watcher._phase1(
+            state, sp_, _pr_data(head_sha="same_sha"), gh, "owner", "repo",
+            tmp_path, tmp_path / "cfg.yaml", _ci_green_settings(),
+        )
+
+    loaded = watcher._load_state(sp_)
+    assert loaded.get("ci_green_retraction_count") == 1
+    assert not loaded.get("escalated_needs_human")
+    gh.update_comment.assert_called_once()
+    retracted = gh.update_comment.call_args[0][3]
+    assert "CI green on unchanged head" in retracted
+
+
+def test_wo3_ci_green_retraction_bounded_by_max(tmp_path: Path) -> None:
+    """WO-3: once retraction count hits _MAX_CI_GREEN_RETRACTIONS, skip still applies."""
+    state, sp_ = _make_state(
+        tmp_path,
+        phase="self_review",
+        escalated_needs_human=True,
+        escalated_head_sha="same_sha",
+        escalation_comment_id=9002,
+        ci_green_retraction_count=watcher._MAX_CI_GREEN_RETRACTIONS,  # already exhausted
+        plane_task_id=None,
+    )
+    gh = _make_gh()
+    gh.get_failed_checks.return_value = []  # CI green — but retraction budget exhausted
+
+    with patch.object(watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}):
+        watcher._phase1(
+            state, sp_, _pr_data(head_sha="same_sha"), gh, "owner", "repo",
+            tmp_path, tmp_path / "cfg.yaml", _ci_green_settings(),
+        )
+
+    loaded = watcher._load_state(sp_)
+    assert loaded.get("escalated_needs_human") is True
+    assert loaded.get("ci_green_retraction_count") == watcher._MAX_CI_GREEN_RETRACTIONS
+    gh.update_comment.assert_not_called()
+
+
+def test_wo3_ci_red_does_not_retract(tmp_path: Path) -> None:
+    """WO-3: CI failures prevent retraction; PR stays escalated."""
+    state, sp_ = _make_state(
+        tmp_path,
+        phase="self_review",
+        escalated_needs_human=True,
+        escalated_head_sha="same_sha",
+        escalation_comment_id=9003,
+        ci_green_retraction_count=0,
+        plane_task_id=None,
+    )
+    gh = _make_gh()
+    gh.get_failed_checks.return_value = [{"name": "Tests", "conclusion": "FAILURE"}]  # CI red
+
+    with patch.object(watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}):
+        watcher._phase1(
+            state, sp_, _pr_data(head_sha="same_sha"), gh, "owner", "repo",
+            tmp_path, tmp_path / "cfg.yaml", _ci_green_settings(),
+        )
+
+    loaded = watcher._load_state(sp_)
+    assert loaded.get("escalated_needs_human") is True
+    assert loaded.get("ci_green_retraction_count", 0) == 0
+    gh.update_comment.assert_not_called()

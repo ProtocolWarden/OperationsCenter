@@ -1,3 +1,11 @@
+## 2026-06-10 — WO-3 extension: CI-green escalation retraction
+
+Added `_MAX_CI_GREEN_RETRACTIONS` guard and CI-green retraction path to `_phase1`.
+When a PR is escalated (same head, no new push) but CI is fully green, the reviewer
+now retracts the escalation once and resumes automated review — prevents diff-truncation
+false positives from permanently blocking autonomy PRs. Bounded by 1 retraction to
+prevent loops. 3 new unit tests; 91/91 reviewer tests pass.
+
 ## 2026-06-08 — WO-6 (items 2+3): backend-crash budget separation + stuck-green escalation
 
 ## 2026-06-08 — WO-1 backfill: all 20 closed-unmerged PRs audited; 14 historical close-receipts posted
