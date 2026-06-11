@@ -247,7 +247,7 @@ class SlackChannel(AlertChannel):
             message = self._build_slack_message(context)
             request = Request(
                 self.webhook_url,
-                data=json.dumps(message).encode(),
+                data=json.dumps(message, ensure_ascii=False).encode(),
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
@@ -527,7 +527,7 @@ class GitHubChannel(AlertChannel):
                 "Content-Type": "application/json",
             }
 
-            data = json.dumps({"body": comment_body}).encode()
+            data = json.dumps({"body": comment_body}, ensure_ascii=False).encode()
             request = Request(url, data=data, headers=headers, method="POST")
 
             with urlopen(request, timeout=10) as response:
