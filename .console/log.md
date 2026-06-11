@@ -1,3 +1,50 @@
+## 2026-06-11 — Campaign: Flaky Test Reporter Stage 0 — Requirements Analysis & Architecture Design (✅ COMPLETE)
+
+Created comprehensive Stage 0 design document: `docs/design/STAGE0_FLAKY_TEST_REPORTER_ARCHITECTURE.md` (4,800+ lines).
+
+**Design Complete — All Acceptance Criteria Met**:
+
+1. ✅ **4-tier Detection Architecture** (Sections 3.1-3.4):
+   - Tier 1 (Per-run): Immediate anomaly detection within single run
+   - Tier 2 (Session-level): Pattern detection across test session
+   - Tier 3 (Historical): 7-30 day trend analysis
+   - Tier 4 (Observer-wide): Repository health and registry
+
+2. ✅ **14 Metrics Specification** (Section 4):
+   - Per-test (7): failure_rate, failure_entropy, streak_variance, recovery_time, duration_stability, environment_correlation, isolation_score
+   - Repository-level (7): flaky_test_percentage, median_failure_rate, flaky_growth_rate, category_concentration, critical_flakiness_ratio, flaky_velocity, health_score
+   - All metrics include formula, range, threshold, and interpretation
+
+3. ✅ **4 Flakiness Categories** with Manifestation Patterns (Section 2):
+   - INTERMITTENT: Random alternation, cascading failures, time clustering
+   - ENVIRONMENT: Service dependency, resource starvation, network sensitivity
+   - INFRASTRUCTURE: Sequential contamination, setup/teardown gaps, runner variance
+   - UNKNOWN: Sporadic failures, anomalies, unclear patterns
+
+4. ✅ **Observer Integration Points** (Section 5):
+   - Signal storage: FlakyTestSignal in observer snapshot
+   - Query APIs: 5 methods for accessing flakiness data
+   - RepoObserverService integration path
+   - Alert generation for Slack/PagerDuty
+   - Dashboard integration points
+
+5. ✅ **Detection Acceptance Criteria** (Section 6):
+   - Per-test criteria: 4 decision rules (failure rate, entropy, duration, environment)
+   - Category assignment: Priority-ordered rules
+   - Repository health: 5 conditions for healthy state
+   - Confidence scoring: 0-1 scale with thresholds
+
+**Document Structure**: 8 sections + 2 appendices, 4,800+ lines
+- Architecture Overview with system context and core components
+- Flakiness categories with signal detection and remediation
+- Detailed tier specifications with code examples
+- Complete metrics reference with formulas and thresholds
+- Data flow examples (3 real-world scenarios)
+- Implementation strategy and file structure
+- Appendices: Quick reference and integration checklist
+
+**Ready for Stage 1**: Core implementation can now proceed from detailed specification.
+
 ## 2026-06-11 — fix(reviewer): trust CI after retraction budget exhausted
 
 When `ci_green_retraction_count >= _MAX_CI_GREEN_RETRACTIONS` and fix passes push nothing

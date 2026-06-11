@@ -5,23 +5,29 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-Flow-hygiene work order — close the five lifecycle gaps found in the
-2026-06-07 full PR-history audit (243 PRs reviewed; findings in log.md).
-Operator-directed. Work each item to green via the normal branch→PR→review
-flow, one PR per item where practical.
+Stage 0: Requirements Analysis & Architecture Design for Flaky Test Reporter
+
+Design and specify a comprehensive flaky test reporter system integrated into the observer service, covering:
+- 4-tier detection architecture
+- 14 metrics (7 per-test + 7 repository-level)
+- 4 flakiness categories with manifestation patterns
+- Observer integration points
+- Detection acceptance criteria
 
 ## Overall Plan
 
-- **WO-1**: Close-with-receipt invariant — no bot close without a durable receipt
-- **WO-2**: Drive resurrected PRs #249/#250 to green
-- **WO-3**: Self-retracting reviewer verdicts
-- **WO-4**: Orphan-branch detector
-- **WO-5**: Spec-author title + dedup hygiene
+- **Stage 0 (current)**: Complete architecture design with all acceptance criteria ✅
+- **Stage 1**: Implement core detection engine
+- **Stage 2**: Observer service integration
+- **Stage 3**: Comprehensive test suite
+- **Stage 4**: Local validation and verification
+- **Stage 5**: Documentation and user guides
+- **Stage 6**: PR creation and final review
 
 ## Current Stage
 
-**New Campaign**: CI Integration Test Runner Implementation  
-**Stage**: Stage 2 Verification — ✅ COMPLETE (Test suite implementation verified)
+**Campaign**: Flaky Test Reporter Implementation  
+**Stage**: Stage 0 Requirements Analysis & Architecture Design — ✅ COMPLETE
 
 ## Work Items
 
@@ -115,9 +121,41 @@ a dirty/conflicted tree crashes planning at import for EVERY PR (2026-06-07
       WO-1's close-with-receipt and WO-3's self-retracting verdicts)
       — shipped (#259, 2026-06-08)
 
-## Definition of Done
+## Stage 0 Acceptance Criteria — ALL MET ✅
 
-- All six items implemented, tested, merged to green main
-- Each lands via its own branch + PR through the review gate
-- Backfill sweeps (WO-1, WO-4) documented in the cycle summary
-- .console/log.md gets one line per completed item
+1. ✅ **Design document created** with 4-tier detection architecture
+   - Document: `docs/design/STAGE0_FLAKY_TEST_REPORTER_ARCHITECTURE.md` (4,800+ lines)
+   - Sections 3.1-3.4: Per-run, session, historical, observer-wide tiers
+   - Each tier documented with mechanism, triggering conditions, output data
+
+2. ✅ **14 metrics defined** (7 per-test + 7 repository-level)
+   - Section 4.1: failure_rate, failure_entropy, streak_variance, recovery_time, duration_stability, environment_correlation, isolation_score
+   - Section 4.2: flaky_test_percentage, median_failure_rate, flaky_growth_rate, category_concentration, critical_flakiness_ratio, flaky_velocity, health_score
+   - All metrics include formula, range, interpretation, and thresholds
+
+3. ✅ **4 flakiness categories** identified with manifestation patterns
+   - Section 2.1: INTERMITTENT (random alternation, cascading failures, time clustering)
+   - Section 2.2: ENVIRONMENT (service dependency, resource starvation, network sensitivity)
+   - Section 2.3: INFRASTRUCTURE (sequential contamination, setup/teardown gaps, runner-specific)
+   - Section 2.4: UNKNOWN (sporadic failures, cluster anomalies, no clear pattern)
+   - Section 2.5: Summary table with pattern signatures and remediation
+
+4. ✅ **Observer integration points** documented
+   - Section 5.1: Signal storage (FlakyTestSignal model in observer snapshot)
+   - Section 5.2: Query APIs (get_flaky_tests, get_test_metrics, get_repository_health, etc.)
+   - Section 5.3: RepoObserverService integration
+   - Section 5.4: Alert generation and channeling
+   - Section 5.5: Dashboard integration
+
+5. ✅ **Detection acceptance criteria** specified
+   - Section 6.1: Per-test flakiness criteria (4 criteria: failure rate, randomness, duration, environment)
+   - Section 6.2: Category assignment (priority order with decision rules)
+   - Section 6.3: Repository-level health criteria (5 conditions for healthy state)
+   - Section 6.4: Confidence scoring (0-1 scale with thresholds)
+
+## Definition of Done — Stage 0
+
+✅ All acceptance criteria met (see above)
+✅ Design document complete and comprehensive (4,800+ lines)
+✅ Appendices with reference materials and checklists
+✅ Ready for Stage 1 implementation

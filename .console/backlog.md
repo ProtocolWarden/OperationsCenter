@@ -669,6 +669,86 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ---
 
+---
+
+## Campaign: Flaky Test Reporter Implementation (Phase 2) — NEW (2026-06-11)
+
+**Status**: 🚀 **STAGE 0 COMPLETE** — Ready for Stage 1 implementation (2026-06-11)
+
+**Campaign Goal**: Implement a comprehensive flaky test reporter system integrated into the observer service with 4-tier detection, 14 metrics, and automatic categorization.
+
+### Stage 0: Requirements Analysis & Architecture Design — ✅ COMPLETE (2026-06-11)
+
+**Objective**: Document complete architecture with 4-tier detection, 14 metrics, 4 flakiness categories, and observer integration.
+
+**Deliverables**:
+- ✅ **Design Document**: `docs/design/STAGE0_FLAKY_TEST_REPORTER_ARCHITECTURE.md` (4,800+ lines, 8 sections + 2 appendices)
+  - Architecture Overview (Section 1): System context, components, interfaces
+  - Flakiness Categories (Section 2): 4 categories with manifestation patterns, detection signals, metrics triggered
+  - 4-Tier Detection (Section 3): Per-run, session, historical, observer-wide with detailed mechanisms
+  - Metrics Specification (Section 4): All 14 metrics with formula, range, interpretation, threshold
+  - Observer Integration (Section 5): Signal storage, query APIs, service integration, alerts, dashboard
+  - Acceptance Criteria (Section 6): Per-test criteria, category assignment, repository health, confidence scoring
+  - Data Flow Examples (Section 7): 3 real-world scenarios (intermittent, environment, infrastructure)
+  - Implementation Strategy (Section 8): Phased rollout, file structure, testing strategy
+
+**Acceptance Criteria — ALL MET** ✅:
+1. ✅ Design document created with 4-tier detection architecture
+2. ✅ 14 metrics defined (7 per-test + 7 repository-level)
+3. ✅ 4 flakiness categories identified with manifestation patterns
+4. ✅ Observer integration points documented
+5. ✅ Detection acceptance criteria specified
+
+**Key Design Decisions**:
+- Tier 1 (per-run): Immediate anomaly detection, seconds after run
+- Tier 2 (session): Pattern detection across test session, minutes after completion
+- Tier 3 (historical): Long-term trends, 7-30 day window, hours after session
+- Tier 4 (observer-wide): Repository health, next sweep (30-60 minutes)
+- Confidence scoring: 0-1 scale based on sample size and metric agreement
+- Repository health: Composite score with 5 acceptance conditions
+
+**Status**: ✅ STAGE 0 COMPLETE — Design fully specified, ready for implementation
+
+### Stage 1: Core Implementation (⏳ PLANNED)
+- Implement FlakyTestReporter class with detection logic
+- Build metric calculation engines for all 14 metrics
+- Implement classification logic for 4 categories
+- Create storage layer (Redis/S3/local)
+- Add factory methods for storage backends
+
+### Stage 2: Observer Integration (⏳ PLANNED)
+- Wire FlakyTestReporter into RepoObserverService
+- Add FlakyTestSignal to RepoSignalsSnapshot
+- Implement query APIs (5 methods)
+- Add alert generation and routing
+- Create dashboard integration
+
+### Stage 3: Comprehensive Tests (⏳ PLANNED)
+- Unit tests: ~60 tests (metric calculations, classification, confidence)
+- Integration tests: ~20 tests (full pipeline, alert generation)
+- Edge case tests: ~15 tests (insufficient data, extremes)
+- Performance tests: ~5 tests (calculation speed, storage efficiency)
+- Total: ~100 tests
+
+### Stage 4: Local Validation (⏳ PLANNED)
+- Run full test suite (expect 8,000+)
+- Verify linters and type checking
+- Ensure no regressions in observer module
+- Test with synthetic flaky patterns
+
+### Stage 5: Documentation (⏳ PLANNED)
+- API reference for FlakyTestReporter
+- Usage examples (3 scenarios)
+- Dashboard configuration guide
+- Troubleshooting guide
+
+### Stage 6: Verification & PR (⏳ PLANNED)
+- Final test suite run
+- Create PR with comprehensive description
+- Merge to green main
+
+---
+
 ## Up Next
 
 ### Campaign: Flaky Test Reporter Implementation (2026-06-07)
