@@ -43,6 +43,7 @@ import logging
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -468,16 +469,33 @@ def _run_pipeline(
             "--source",
             source,
         ]
+        # Use Popen + start_new_session so the entire process group (including
+        # grandchildren like pytest-spawned claude subprocesses) can be killed on
+        # timeout.  subprocess.run with capture_output=True only kills the direct
+        # child on TimeoutExpired; grandchildren keep the pipe open and
+        # communicate() blocks indefinitely.
+        _exec_popen = subprocess.Popen(
+            exec_cmd,
+            cwd=oc_root,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+        )
         try:
-            exec_proc = subprocess.run(
-                exec_cmd,
-                cwd=oc_root,
-                env=env,
-                capture_output=True,
-                text=True,
+            _stdout, _stderr = _exec_popen.communicate(
                 timeout=1800,  # 30 min hard cap — prevents hung executor blocking the watcher
             )
+            exec_proc = subprocess.CompletedProcess(
+                exec_cmd, _exec_popen.returncode, stdout=_stdout, stderr=_stderr
+            )
         except subprocess.TimeoutExpired:
+            try:
+                os.killpg(os.getpgid(_exec_popen.pid), signal.SIGKILL)
+            except (ProcessLookupError, OSError):
+                pass
+            _exec_popen.wait()
             logger.warning(
                 "pr_review_watcher: execute pipeline timed out after 30m for state_key=%s",
                 state_key,
