@@ -3,6 +3,7 @@
 """Tests for alert notification channels."""
 
 import logging
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -181,13 +182,20 @@ class TestSlackChannel:
         assert "not configured" in result.error
 
     def test_notify_with_webhook(self) -> None:
-        channel = SlackChannel(webhook_url="https://hooks.slack.com/test")
-        context = {"condition_name": "test"}
+        with patch("operations_center.observer.alert_channels.urlopen") as mock_urlopen:
+            mock_response = MagicMock()
+            mock_response.status = 200
+            mock_response.__enter__ = MagicMock(return_value=mock_response)
+            mock_response.__exit__ = MagicMock(return_value=None)
+            mock_urlopen.return_value = mock_response
 
-        result = channel.notify(context)
+            channel = SlackChannel(webhook_url="https://hooks.slack.com/test")
+            context = {"condition_name": "test"}
 
-        assert result.success is True
-        assert "would be sent" in result.message
+            result = channel.notify(context)
+
+            assert result.success is True
+            assert "sent" in result.message
 
     def test_validate_configuration_not_enabled(self) -> None:
         channel = SlackChannel()
