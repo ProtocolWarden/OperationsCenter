@@ -661,7 +661,7 @@ class AlertChannelFactory:
         """Create a notification channel by name.
 
         Args:
-            channel_name: Name of channel ("operator_log", "plane", "slack", "pagerduty")
+            channel_name: Name of channel ("operator_log", "plane", "slack", "email", "github", "pagerduty")
             config: Configuration dictionary for the channel
 
         Returns:
@@ -677,6 +677,21 @@ class AlertChannelFactory:
             return PlaneTaskChannel(plane_client=config.get("plane_client"))
         elif channel_name == "slack":
             return SlackChannel(webhook_url=config.get("webhook_url"))
+        elif channel_name == "email":
+            return EmailChannel(
+                smtp_host=config.get("smtp_host"),
+                smtp_port=config.get("smtp_port", 587),
+                sender=config.get("sender"),
+                recipients=config.get("recipients"),
+                username=config.get("username"),
+                password=config.get("password"),
+            )
+        elif channel_name == "github":
+            return GitHubChannel(
+                github_token=config.get("github_token"),
+                repo_owner=config.get("repo_owner"),
+                repo_name=config.get("repo_name"),
+            )
         elif channel_name == "pagerduty":
             return PagerDutyChannel(api_key=config.get("api_key"))
         else:
