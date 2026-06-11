@@ -1849,6 +1849,51 @@ def _phase1(
         and current_head_sha == str(state.get("last_concerns_head_sha") or "").strip()
     )
     if repeated_no_progress:
+        # WO-3 extension: when the CI-green retraction budget is exhausted and fix
+        # passes still push nothing, the concerns are very likely diff-truncation
+        # false positives — CI passing the full test suite is ground truth.
+        # Merge rather than re-entering the escalation→retraction loop.
+        if state.get("ci_green_retraction_count", 0) >= _MAX_CI_GREEN_RETRACTIONS:
+            _rcfg_np = settings.repos.get(repo_key)
+            _head_ref_np = ((pr_data.get("head") or {}).get("ref") or "").lower()
+            if (
+                _rcfg_np
+                and getattr(_rcfg_np, "auto_merge_on_ci_green", False)
+                and _head_ref_np.startswith(("goal/", "test/", "improve/", "spec-author/"))
+            ):
+                try:
+                    _ign_np = list(getattr(_rcfg_np, "ci_ignored_checks", []) or [])
+                    _failed_np = gh_client.get_failed_checks(
+                        owner, repo, pr_number, pr_data=pr_data, ignored_checks=_ign_np
+                    )
+                    if not _failed_np:
+                        logger.info(
+                            "pr_review_watcher: PR #%d repeated no-progress after "
+                            "CI-green retraction budget exhausted; CI still green — "
+                            "trusting CI over truncated-diff false positives and merging",
+                            pr_number,
+                        )
+                        record_decision_outcome(
+                            pr_number=pr_number,
+                            repo_key=repo_key,
+                            outcome="merge",
+                            reason="ci_validated_after_retraction",
+                            lanes=1,
+                        )
+                        _merge_and_done(
+                            state,
+                            state_path,
+                            pr_data,
+                            gh_client,
+                            owner,
+                            repo,
+                            settings,
+                            reason="ci_validated_after_retraction",
+                        )
+                        return
+                except Exception:
+                    pass  # CI check failed — fall through to normal escalation
+
         detail = (
             "The previous automated fix pass pushed no changes; a fresh self-review on the "
             "same PR head still finds concerns. Further autonomous retries would repeat "

@@ -1,3 +1,11 @@
+## 2026-06-11 — fix(reviewer): trust CI after retraction budget exhausted
+
+When `ci_green_retraction_count >= _MAX_CI_GREEN_RETRACTIONS` and fix passes push nothing
+but CI is green, the reviewer now merges directly (`ci_validated_after_retraction`) instead
+of re-escalating. Prevents the diff-truncation false-positive loop where WO-3 retraction
+gives a second chance but the reviewer immediately re-escalates on the same head with no-op
+fix passes. 2 new unit tests (CI-green→merge, CI-red→escalate); 108/108 tests pass.
+
 ## 2026-06-10 — WO-3 extension: CI-green escalation retraction
 
 Added `_MAX_CI_GREEN_RETRACTIONS` guard and CI-green retraction path to `_phase1`.

@@ -1881,3 +1881,63 @@ def test_wo3_ci_red_does_not_retract(tmp_path: Path) -> None:
     assert loaded.get("escalated_needs_human") is True
     assert loaded.get("ci_green_retraction_count", 0) == 0
     gh.update_comment.assert_not_called()
+
+
+def test_wo3_no_progress_after_retraction_trusts_ci_and_merges(tmp_path: Path) -> None:
+    """WO-3 extension: after retraction budget exhausted, CI green + fix-pass no-progress → merge."""
+    state, sp_ = _make_state(
+        tmp_path,
+        phase="self_review",
+        fix_attempts=1,
+        last_fix_pass_pushed=False,
+        last_concerns_head_sha="sha1",
+        ci_green_retraction_count=watcher._MAX_CI_GREEN_RETRACTIONS,
+        plane_task_id=None,
+    )
+    gh = _make_gh()
+    gh.get_failed_checks.return_value = []  # CI green
+    gh.get_mergeable.return_value = True
+
+    with (
+        patch.object(
+            watcher, "_run_direct_review", return_value={"result": "CONCERNS", "summary": "missing files"}
+        ),
+        patch.object(watcher, "_merge_and_done") as mock_merge,
+    ):
+        watcher._phase1(
+            state, sp_, _pr_data(head_sha="sha1"), gh, "owner", "repo",
+            tmp_path, tmp_path / "cfg.yaml", _ci_green_settings(),
+        )
+
+    mock_merge.assert_called_once()
+    call_kwargs = mock_merge.call_args[1]
+    assert call_kwargs.get("reason") == "ci_validated_after_retraction"
+
+
+def test_wo3_no_progress_after_retraction_ci_red_still_escalates(tmp_path: Path) -> None:
+    """WO-3 extension: if CI-green check inside the no-progress path fails, escalation fires."""
+    state, sp_ = _make_state(
+        tmp_path,
+        phase="self_review",
+        fix_attempts=1,
+        last_fix_pass_pushed=False,
+        last_concerns_head_sha="sha1",
+        ci_green_retraction_count=watcher._MAX_CI_GREEN_RETRACTIONS,
+        plane_task_id=None,
+    )
+    gh = _make_gh()
+    # First call: CI precondition passes (green); second call (inside no-progress): red.
+    gh.get_failed_checks.side_effect = [[], [{"name": "Tests", "conclusion": "FAILURE"}]]
+    gh.get_mergeable.return_value = True
+    gh.list_pr_comments.return_value = []
+
+    with patch.object(
+        watcher, "_run_direct_review", return_value={"result": "CONCERNS", "summary": "missing files"}
+    ):
+        watcher._phase1(
+            state, sp_, _pr_data(head_sha="sha1"), gh, "owner", "repo",
+            tmp_path, tmp_path / "cfg.yaml", _ci_green_settings(),
+        )
+
+    loaded = watcher._load_state(sp_)
+    assert loaded.get("escalated_needs_human") is True
