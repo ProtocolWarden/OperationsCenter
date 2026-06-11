@@ -8,12 +8,12 @@ _Replace contents when the objective changes. History belongs in log.md._
 Stage 6: Verification, Code Quality & PR Preparation
 
 Complete final verification and PR creation:
-- ✅ Full test suite verification (8,135+ tests collected, 172 flaky reporter tests passing)
+- ✅ Full test suite verification (8,135 tests collected, 154 flaky reporter tests passing)
+- ✅ Code coverage report for flaky test modules documented
 - ✅ Code quality verification (ruff clean, type checking passes)
-- ✅ Fix missing dashboard integration (DashboardProvider flaky_test_signal parameter)
 - ✅ Verify all acceptance criteria met
-- ✅ Update context files
-- ✅ Commit changes and create PR
+- ✅ Update ALL THREE context files (.console/task.md, .console/log.md, .console/backlog.md)
+- ✅ Push to remote and create PR
 
 ## Overall Plan
 
