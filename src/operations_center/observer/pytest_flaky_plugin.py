@@ -116,7 +116,9 @@ class FlakyTestDetectionPlugin:
         session_report = {
             "session_id": session.name or "default",
             "timestamp": datetime.now(UTC).isoformat(),
-            "duration": (datetime.now(UTC) - (self.session_start_time or datetime.now(UTC))).total_seconds(),
+            "duration": (
+                datetime.now(UTC) - (self.session_start_time or datetime.now(UTC))
+            ).total_seconds(),
             "session_count": len(self.test_outcomes),
             "passed_count": passed_count,
             "failed_count": failed_count,

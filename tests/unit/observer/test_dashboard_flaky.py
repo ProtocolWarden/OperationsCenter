@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from operations_center.observer.dashboard import DashboardProvider
-from operations_center.observer.flaky_test_models import FlakyTestSignal
+from operations_center.observer.models import FlakyTestSignal
 from operations_center.observer.health_checks import HealthChecker
 from operations_center.observer.metrics import MetricsCollector
 

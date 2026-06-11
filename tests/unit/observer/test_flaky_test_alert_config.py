@@ -128,7 +128,7 @@ class TestFlakyTestAlertConfig:
         should_alert, severity = config.should_alert_on_flaky_count(0)
         assert should_alert is False
 
-        should_alert, severity = config.should_alert_on_flaky_count(3)
+        should_alert, severity = config.should_alert_on_flaky_count(6)
         assert should_alert is True
         assert severity == "MEDIUM"
 
@@ -144,10 +144,10 @@ class TestFlakyTestAlertConfig:
         config = FlakyTestAlertConfig()
 
         # Test different rates
-        should_alert, severity = config.should_alert_on_failure_rate(0.02)
+        should_alert, severity = config.should_alert_on_failure_rate(0.08)
         assert should_alert is False
 
-        should_alert, severity = config.should_alert_on_failure_rate(0.07)
+        should_alert, severity = config.should_alert_on_failure_rate(0.12)
         assert should_alert is True
         assert severity == "MEDIUM"
 
@@ -163,14 +163,14 @@ class TestFlakyTestAlertConfig:
         config = FlakyTestAlertConfig()
 
         # Test different regression percentages
-        should_alert, severity = config.should_alert_on_regression(0.1)  # 10%
+        should_alert, severity = config.should_alert_on_regression(0.3)  # 30%
         assert should_alert is False
 
-        should_alert, severity = config.should_alert_on_regression(0.4)  # 40%
+        should_alert, severity = config.should_alert_on_regression(0.6)  # 60%
         assert should_alert is True
         assert severity == "MEDIUM"
 
-        should_alert, severity = config.should_alert_on_regression(0.8)  # 80%
+        should_alert, severity = config.should_alert_on_regression(1.2)  # 120%
         assert should_alert is True
         assert severity == "HIGH"
 

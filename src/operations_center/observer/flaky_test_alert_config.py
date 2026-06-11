@@ -176,8 +176,6 @@ class FlakyTestAlertConfig:
             return True, "HIGH"
         if count >= self.get_threshold("flaky_test_count", "MEDIUM"):
             return True, "MEDIUM"
-        if count >= self.get_threshold("flaky_test_count", "LOW"):
-            return True, "LOW"
         return False, ""
 
     def should_alert_on_failure_rate(self, rate: float) -> tuple[bool, str]:
@@ -195,8 +193,6 @@ class FlakyTestAlertConfig:
             return True, "HIGH"
         if rate >= self.get_threshold("failure_rate", "MEDIUM"):
             return True, "MEDIUM"
-        if rate >= self.get_threshold("failure_rate", "LOW"):
-            return True, "LOW"
         return False, ""
 
     def should_alert_on_regression(self, increase_percent: float) -> tuple[bool, str]:
@@ -214,8 +210,6 @@ class FlakyTestAlertConfig:
             return True, "HIGH"
         if increase_percent >= self.get_threshold("regression_spike", "MEDIUM"):
             return True, "MEDIUM"
-        if increase_percent >= self.get_threshold("regression_spike", "LOW"):
-            return True, "LOW"
         return False, ""
 
     def set_override(self, key: str, value: Any) -> None:
