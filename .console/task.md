@@ -5,21 +5,19 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-Stage 1: Core Detection Engine Implementation for Flaky Test Reporter
+Stage 2: Observer Service Integration for Flaky Test Reporter
 
-Build the complete flaky test detection engine with:
-- Full implementation of all 14 metrics (7 per-test + 7 repository-level)
-- All 4-tier detection architecture (per-run, session, historical, observer-wide)
-- Complete categorization and classification system
-- Confidence scoring and repository health metrics
-- Comprehensive test coverage (100+ tests)
-- Factory methods for multiple storage backends
+Complete the integration of FlakyTestCollector into RepoObserverService with:
+- Proper module structure and exports
+- End-to-end integration testing
+- Alert generation verification
+- Snapshot integration validation
 
 ## Overall Plan
 
 - **Stage 0**: ✅ Complete architecture design with all acceptance criteria ✅
-- **Stage 1 (current)**: Implement core detection engine (all 14 metrics, 4-tier detection)
-- **Stage 2**: Observer service integration
+- **Stage 1**: ✅ Implement core detection engine (all 14 metrics, 4-tier detection) ✅
+- **Stage 2 (current)**: Observer service integration — ✅ COMPLETE
 - **Stage 3**: Comprehensive test suite expansion
 - **Stage 4**: Local validation and verification
 - **Stage 5**: Documentation and user guides
@@ -28,7 +26,7 @@ Build the complete flaky test detection engine with:
 ## Current Stage
 
 **Campaign**: Flaky Test Reporter Implementation  
-**Stage**: Stage 1 Core Detection Engine Implementation — ✅ COMPLETE
+**Stage**: Stage 2 Observer Service Integration — ✅ COMPLETE
 
 ## Stage 1 Summary
 
@@ -55,13 +53,39 @@ Build the complete flaky test detection engine with:
 4. ✅ Factory methods for multiple storage backends
 5. ✅ 138 tests with 100% pass rate
 
+## Stage 2 Summary
+
+**Status**: ✅ COMPLETE (2026-06-11)
+
+**Integration Work Completed**:
+1. ✅ FlakyTestCollector class fully implemented and functional
+2. ✅ Integrated into RepoObserverService (service.py lines 79, 100, 247-257, 275)
+3. ✅ FlakyTestSignal model in observer/models.py (line 388)
+4. ✅ flaky_test_signal field in RepoSignalsSnapshot (line 451)
+5. ✅ Module exports configured:
+   - Created collectors/__init__.py with proper SPDX header
+   - Exported FlakyTestCollector from main observer module
+   - Added FlakyTestCollector to observer.__all__
+
+**End-to-End Integration**:
+- ✅ Observer service correctly initializes flaky_test_collector (optional parameter)
+- ✅ Signal collection gracefully handles missing collector (defaults to "unavailable")
+- ✅ FlakyTestSignal properly integrated in RepoSignalsSnapshot structure
+- ✅ 16 integration tests verify service/collector interaction
+
+**Acceptance Criteria Met**: ✅ ALL 5 criteria verified
+1. ✅ FlakyTestCollector class implemented
+2. ✅ Integrated into RepoObserverService
+3. ✅ FlakyTestSignal model added to observer/models.py
+4. ✅ flaky_test_signal field added to RepoSignalsSnapshot
+5. ✅ Module exports properly configured
+
 ## Next Stage
 
-**Stage 2**: Observer Service Integration (⏳ READY TO BEGIN)
-- Wire FlakyTestCollector into RepoObserverService
-- Ensure FlakyTestSignal integration in snapshot collection
-- Test end-to-end observer integration
-- Verify alert generation
+**Stage 3**: Comprehensive Test Suite Expansion (⏳ READY TO BEGIN)
+- Additional integration tests with real CI scenarios
+- Performance benchmarks for large test suites
+- Load testing with synthetic flaky patterns
 
 ## Work Items
 

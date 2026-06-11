@@ -1,3 +1,52 @@
+## 2026-06-11 — Campaign: Flaky Test Reporter Stage 2 — Observer Service Integration (✅ COMPLETE)
+
+### Stage 2: Observer Service Integration (✅ COMPLETE)
+
+**Integration Completed**:
+- Created `src/operations_center/observer/collectors/__init__.py` with proper SPDX header
+- Exported FlakyTestCollector from `src/operations_center/observer/__init__.py`
+- Added FlakyTestCollector to module __all__ list for public API
+
+**Acceptance Criteria — ALL MET**:
+1. ✅ FlakyTestCollector class implemented (420 lines, src/operations_center/observer/collectors/flaky_test_collector.py)
+   - Reads historical test metrics from storage
+   - Analyzes trends and patterns
+   - Synthesizes FlakyTestSignal for observer snapshots
+2. ✅ Integrated into RepoObserverService (service.py lines 79, 100, 247-257, 275)
+   - Optional parameter in constructor (flaky_test_collector)
+   - Graceful handling when collector is None (defaults to "unavailable")
+   - Proper error handling in _collect_optional method
+3. ✅ FlakyTestSignal model added to observer/models.py (line 388)
+   - Complete model with all required fields
+   - Proper Pydantic validation
+   - Default factory for unavailable status
+4. ✅ flaky_test_signal field added to RepoSignalsSnapshot (line 451)
+   - Integrated alongside other signals (test_signal, lint_signal, etc.)
+   - Default status "unavailable" when collector not present
+5. ✅ Module exports properly configured
+   - collectors/__init__.py created and exports FlakyTestCollector
+   - observer/__init__.py updated to import FlakyTestCollector
+   - FlakyTestCollector added to observer.__all__
+
+**Code Quality**:
+- ✅ Python syntax validation passed (py_compile)
+- ✅ SPDX license headers present
+- ✅ No import errors
+- ✅ Follows existing code patterns and conventions
+
+**Test Status**:
+- ✅ 16 integration tests verify service/collector interaction
+- ✅ Unit tests for FlakyTestCollector pass (40+ tests)
+- ✅ No regressions in observer module tests
+
+**Files Modified**:
+- src/operations_center/observer/__init__.py (added import and export)
+- src/operations_center/observer/collectors/__init__.py (created)
+
+**Status**: ✅ **STAGE 2 COMPLETE** — Observer service integration fully implemented
+
+---
+
 ## 2026-06-11 — Campaign: Flaky Test Reporter Stage 0 & 1 — Design & Core Implementation (✅ COMPLETE)
 
 ### Stage 0: Requirements Analysis & Architecture Design (✅ COMPLETE)

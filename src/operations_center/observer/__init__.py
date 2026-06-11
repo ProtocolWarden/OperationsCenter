@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
+from operations_center.observer.collectors.flaky_test_collector import FlakyTestCollector
 from operations_center.observer.dashboard import DashboardProvider, DashboardSnapshot
 from operations_center.observer.flaky_test_aggregator import FlakyTestAggregator
 from operations_center.observer.flaky_test_alerts import (
@@ -55,6 +56,7 @@ __all__ = [
     "FlakyTestAggregator",
     "FlakyTestAlert",
     "FlakyTestAlertManager",
+    "FlakyTestCollector",
     "FlakyTestConfig",
     "FlakyTestMetric",
     "FlakyTestReporter",
