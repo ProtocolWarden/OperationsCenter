@@ -518,7 +518,8 @@ class GitHubChannel(AlertChannel):
 
         try:
             comment_body = self._build_github_comment(context)
-            url = f"{self.api_base}/repos/{self.repo_owner}/{self.repo_name}/issues/{pr_number}/comments"
+            endpoint = f"/repos/{self.repo_owner}/{self.repo_name}/issues/{pr_number}/comments"
+            url = f"{self.api_base}{endpoint}"
 
             headers = {
                 "Authorization": f"token {self.github_token}",
@@ -597,10 +598,10 @@ class GitHubChannel(AlertChannel):
         comment += """
 
 ### Remediation Steps
-1. **Review logs** — Check the test failure logs to understand the failure mode
-2. **Identify root cause** — Determine if it's timing-related, environment-dependent, or resource-related
-3. **Implement fix** — Add proper synchronization, timeout adjustments, or resource cleanup
-4. **Verify** — Run the test multiple times to confirm stability
+1. **Review logs** — Check failure logs to understand the failure mode
+2. **Identify root cause** — Determine if timing, environment, or resource-related
+3. **Implement fix** — Add synchronization, timeout adjustments, or resource cleanup
+4. **Verify** — Run test multiple times to confirm stability
 
 ---
 *Posted by Flaky Test Reporter*
@@ -661,8 +662,9 @@ class AlertChannelFactory:
         """Create a notification channel by name.
 
         Args:
-            channel_name: Name of channel ("operator_log", "plane", "slack", "email", "github", "pagerduty")
-            config: Configuration dictionary for the channel
+            channel_name: Channel name. Valid: "operator_log", "plane", "slack",
+                "email", "github", "pagerduty"
+            config: Channel configuration dictionary
 
         Returns:
             AlertChannel instance or None if channel not found
