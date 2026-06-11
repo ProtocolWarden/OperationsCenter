@@ -43,6 +43,7 @@ import logging
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -468,16 +469,33 @@ def _run_pipeline(
             "--source",
             source,
         ]
+        # Use Popen + start_new_session so the entire process group (including
+        # grandchildren like pytest-spawned claude subprocesses) can be killed on
+        # timeout.  subprocess.run with capture_output=True only kills the direct
+        # child on TimeoutExpired; grandchildren keep the pipe open and
+        # communicate() blocks indefinitely.
+        _exec_popen = subprocess.Popen(
+            exec_cmd,
+            cwd=oc_root,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+        )
         try:
-            exec_proc = subprocess.run(
-                exec_cmd,
-                cwd=oc_root,
-                env=env,
-                capture_output=True,
-                text=True,
+            _stdout, _stderr = _exec_popen.communicate(
                 timeout=1800,  # 30 min hard cap — prevents hung executor blocking the watcher
             )
+            exec_proc = subprocess.CompletedProcess(
+                exec_cmd, _exec_popen.returncode, stdout=_stdout, stderr=_stderr
+            )
         except subprocess.TimeoutExpired:
+            try:
+                os.killpg(os.getpgid(_exec_popen.pid), signal.SIGKILL)
+            except (ProcessLookupError, OSError):
+                pass
+            _exec_popen.wait()
             logger.warning(
                 "pr_review_watcher: execute pipeline timed out after 30m for state_key=%s",
                 state_key,
@@ -1849,6 +1867,51 @@ def _phase1(
         and current_head_sha == str(state.get("last_concerns_head_sha") or "").strip()
     )
     if repeated_no_progress:
+        # WO-3 extension: when the CI-green retraction budget is exhausted and fix
+        # passes still push nothing, the concerns are very likely diff-truncation
+        # false positives — CI passing the full test suite is ground truth.
+        # Merge rather than re-entering the escalation→retraction loop.
+        if state.get("ci_green_retraction_count", 0) >= _MAX_CI_GREEN_RETRACTIONS:
+            _rcfg_np = settings.repos.get(repo_key)
+            _head_ref_np = ((pr_data.get("head") or {}).get("ref") or "").lower()
+            if (
+                _rcfg_np
+                and getattr(_rcfg_np, "auto_merge_on_ci_green", False)
+                and _head_ref_np.startswith(("goal/", "test/", "improve/", "spec-author/"))
+            ):
+                try:
+                    _ign_np = list(getattr(_rcfg_np, "ci_ignored_checks", []) or [])
+                    _failed_np = gh_client.get_failed_checks(
+                        owner, repo, pr_number, pr_data=pr_data, ignored_checks=_ign_np
+                    )
+                    if not _failed_np:
+                        logger.info(
+                            "pr_review_watcher: PR #%d repeated no-progress after "
+                            "CI-green retraction budget exhausted; CI still green — "
+                            "trusting CI over truncated-diff false positives and merging",
+                            pr_number,
+                        )
+                        record_decision_outcome(
+                            pr_number=pr_number,
+                            repo_key=repo_key,
+                            outcome="merge",
+                            reason="ci_validated_after_retraction",
+                            lanes=1,
+                        )
+                        _merge_and_done(
+                            state,
+                            state_path,
+                            pr_data,
+                            gh_client,
+                            owner,
+                            repo,
+                            settings,
+                            reason="ci_validated_after_retraction",
+                        )
+                        return
+                except Exception:
+                    pass  # CI check failed — fall through to normal escalation
+
         detail = (
             "The previous automated fix pass pushed no changes; a fresh self-review on the "
             "same PR head still finds concerns. Further autonomous retries would repeat "
