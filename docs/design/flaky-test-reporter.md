@@ -966,6 +966,62 @@ print(f"  Unstable: {json_dict['unstable_count']}")
 
 ---
 
+### FlakyTestConfig
+
+Configuration dataclass for controlling flaky test reporter behavior.
+
+#### Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `storage_root` | str \| Path | `/tmp/flaky-tests` | Root directory for storing reports and results |
+| `flakiness_threshold` | float | 0.10 | Failure rate threshold for flaky classification (10%) |
+| `unstable_threshold` | float | 0.05 | Failure rate threshold for unstable classification (5%) |
+| `min_confidence_runs` | int | 3 | Minimum test runs needed for confident assessment |
+| `max_confidence_runs` | int | 5 | Maximum runs used for confidence calculation |
+| `retention_days` | int | 30 | Days to retain JSONL result files |
+| `retention_count` | int | 100 | Maximum number of result files to keep |
+
+#### Usage Example
+
+```python
+from operations_center.observer.flaky_test_reporter import FlakyTestConfig
+
+# Default configuration
+config = FlakyTestConfig()
+
+# Custom configuration
+config = FlakyTestConfig(
+    storage_root="/mnt/ci-artifacts/flaky-tests",
+    flakiness_threshold=0.15,  # 15% instead of default 10%
+    unstable_threshold=0.08,   # 8% instead of default 5%
+    retention_days=60,         # Keep reports for 2 months
+    retention_count=200        # Keep up to 200 result files
+)
+
+# Use in collector
+collector = FlakyTestCollector(config)
+observer = RepoObserverService(
+    repo_path=Path("./my-repo"),
+    artifact_writer=artifact_writer,
+    flaky_test_collector=collector
+)
+```
+
+#### Methods
+
+**`to_dict() -> dict[str, Any]`**
+Convert configuration to dictionary for JSON serialization.
+
+**Example**:
+```python
+config_dict = config.to_dict()
+json_str = json.dumps(config_dict, indent=2)
+print(json_str)
+```
+
+---
+
 ### Enums
 
 #### TestOutcome
@@ -990,91 +1046,460 @@ class FlakynessCategory(Enum):
 
 ---
 
-## Integration with Observer Service
+### Data Flow Diagrams
 
-### Stage 3 Integration (Planned)
+#### Complete Integration Flow
 
-In Stage 3, the flaky test reporter will integrate with the observer service to provide repository-level insights.
-
-#### FlakyTestCollector (Stage 3)
-
-```python
-class FlakyTestCollector(RepoSignalCollector):
-    """Synthesizes flaky test data for observer service."""
-    
-    def collect(self, context: ObserverContext) -> FlakyTestSignal:
-        """Aggregate historical flakiness data and produce signal."""
-        # Reads Tier 3 historical data
-        # Produces FlakyTestSignal with:
-        # - flaky_count: Number of flaky tests
-        # - affected_modules: Modules with flakiness
-        # - trend: Week-over-week changes
-        # - category_breakdown: Counts by category
-        # - estimated_impact: Developer time cost
+```
+Test Execution (pytest)
+         │
+         ↓
+FlakyTestResult (Tier 1)
+    • nodeid
+    • outcome
+    • duration
+    • markers
+         │
+         ↓
+FlakyTestReporter.track_test()
+    [Accumulates results]
+         │
+         ↓
+FlakyTestReporter.analyze_session()
+    • Calculates metrics
+    • Categorizes flakiness
+         │
+         ↓
+FlakyTestMetric (Tier 2)
+    • flakiness_score
+    • pattern_entropy
+    • suspected_category
+         │
+         ├─→ Save to Local Storage
+         │   reports/session-*.json
+         │   runs/results-*.jsonl
+         │
+         └─→ FlakyTestCollector (Observer Integration)
+             • Loads historical metrics
+             • Aggregates trends
+             • Synthesizes FlakyTestSignal
+                    │
+                    ↓
+                FlakyTestSignal
+                    │
+                    ├─→ RepoSignalsSnapshot
+                    │
+                    ├─→ Observer Dashboard
+                    │
+                    └─→ Alerts & Monitoring
 ```
 
-#### FlakyTestSignal (Added to RepoSignalsSnapshot)
+#### Configuration & Service Integration
+
+```
+FlakyTestConfig
+    ├─ storage_root: /path/to/storage
+    ├─ flakiness_threshold: 0.10
+    └─ unstable_threshold: 0.05
+         │
+         ↓
+    FlakyTestCollector
+         │
+         ↓
+    RepoObserverService
+         │
+         ├─→ Repository Health Snapshot
+         │
+         └─→ Multi-Signal Analysis
+```
+
+---
+
+## Integration with Observer Service
+
+### Overview
+
+The Flaky Test Reporter integrates seamlessly with the OperationsCenter observer service to provide repository-level flakiness insights. This integration enables automatic monitoring, alerting, and dashboard visualization of flaky test trends.
+
+### Architecture
+
+#### FlakyTestCollector
+
+The `FlakyTestCollector` reads historical flaky test metrics and synthesizes them into a `FlakyTestSignal` for inclusion in the observer's `RepoSignalsSnapshot`.
+
+**Location**: `src/operations_center/observer/collectors/flaky_test_collector.py`
+
+```python
+class FlakyTestCollector:
+    """Collects and synthesizes flaky test signals from historical metrics storage.
+    
+    Reads metrics from historical storage (local JSONL files), analyzes trends,
+    and produces a FlakyTestSignal for inclusion in RepoStateSnapshot.
+    """
+    
+    def __init__(self, config: FlakyTestConfig) -> None:
+        """Initialize with configuration for storage access."""
+        self.config = config
+    
+    def collect(self, context: ObserverContext) -> FlakyTestSignal:
+        """Collect flaky test metrics and synthesize FlakyTestSignal.
+        
+        Args:
+            context: Observer context with repo and storage information.
+        
+        Returns:
+            FlakyTestSignal with synthesis of historical metrics.
+        """
+        # Loads historical metrics from configured storage
+        # Computes:
+        # - flaky_test_count: Number of tests above flakiness threshold
+        # - unstable_test_count: Tests in the 5-10% failure rate band
+        # - affected_modules: Set of modules containing flaky tests
+        # - most_problematic_tests: Top 5 tests by flakiness score
+        # - category_breakdown: Distribution across categories
+        # - estimated_impact: Developer hours/month cost estimate
+        # - summary: Human-readable summary for snapshot
+```
+
+#### FlakyTestSignal
+
+The signal model carries flakiness data into the observer snapshot.
 
 ```python
 @dataclass
 class FlakyTestSignal:
-    """Observer signal for repository flakiness."""
+    """Observer signal for repository flakiness — included in RepoSignalsSnapshot."""
     
-    flaky_count: int
-    unstable_count: int
-    affected_modules: dict[str, int]
-    most_problematic_tests: list[str]
-    failure_rate_trend: float  # Week-over-week change
-    recovery_rate: float       # Tests recently fixed
-    category_breakdown: dict[str, int]
-    estimated_impact: str      # "low", "medium", "high", "critical"
+    # Status and metadata
+    status: str  # "unavailable" | "partial" | "measured"
+    observed_at: datetime
+    
+    # Flakiness counts
+    flaky_test_count: int  # Tests with >10% failure rate
+    unstable_test_count: int  # Tests with 5-10% failure rate
+    
+    # Impact metrics
+    affected_modules: list[str]  # Modules containing flaky tests
+    most_problematic_tests: list[dict]  # Top 5 tests with full metrics
+    
+    # Trends
+    failure_rate_trend: float  # Week-over-week change (0.15 = +15%)
+    recovery_rate: float  # Proportion of tests recently fixed (0.0-1.0)
+    
+    # Categorization
+    category_breakdown: dict[str, int]  # {"transient": 5, "structural": 2, ...}
+    
+    # Summary for dashboard
+    summary: str  # Human-readable: "5 flaky, 3 transient, 2 structural"
+    estimated_impact: str  # "low" | "medium" | "high" | "critical"
 ```
 
-#### Usage in Observer
+### Integration in RepoObserverService
+
+The `RepoObserverService` optionally accepts a `FlakyTestCollector` in its constructor:
 
 ```python
-# In RepoObserverService.observe()
-snapshot = RepoSignalsSnapshot(
-    # ... other signals ...
-    flaky_test_signal=FlakyTestSignal(
-        flaky_count=3,
-        unstable_count=5,
-        affected_modules={"tests/unit": 2, "tests/integration": 1},
-        most_problematic_tests=[
-            "tests/unit/test_auth.py::test_login",
-            "tests/integration/test_api.py::test_endpoint"
-        ],
-        failure_rate_trend=0.15,  # 15% increase week-over-week
-        recovery_rate=0.5,         # 50% of flaky tests fixed this week
-        category_breakdown={
-            "transient": 5,
-            "structural": 2,
-            "configuration": 1
-        },
-        estimated_impact="high"
-    )
-)
+class RepoObserverService:
+    def __init__(
+        self,
+        repo_path: Path,
+        artifact_writer: ArtifactWriter,
+        flaky_test_collector: FlakyTestCollector | None = None,  # <-- NEW
+        # ... other parameters ...
+    ):
+        self.flaky_test_collector = flaky_test_collector
+    
+    def observe(self) -> RepoSignalsSnapshot:
+        """Generate repository signals snapshot."""
+        # ... other signal collection ...
+        
+        flaky_signal = self._collect_flaky_tests()
+        
+        return RepoSignalsSnapshot(
+            # ... other signals ...
+            flaky_test_signal=flaky_signal
+        )
+    
+    def _collect_flaky_tests(self) -> FlakyTestSignal:
+        """Collect flaky test signal."""
+        if self.flaky_test_collector is None:
+            return FlakyTestSignal(status="unavailable")
+        
+        context = ObserverContext(repo_path=self.repo_path, ...)
+        return self.flaky_test_collector.collect(context)
 ```
 
-#### Observer Dashboard Visualization (Stage 4)
+### Configuration for Observer Users
 
-The observer dashboard will display:
-- Flaky test count trend (time series)
-- Distribution by category (pie chart)
-- Affected modules (bar chart)
-- Top problematic tests (table)
-- Recovery rate (percentage badge)
-- Estimated developer impact (severity indicator)
+#### Minimal Setup
+
+```python
+from operations_center.observer.service import RepoObserverService
+from operations_center.observer.collectors import FlakyTestCollector
+from operations_center.observer.flaky_test_reporter import FlakyTestConfig
+
+# Create configuration
+config = FlakyTestConfig(
+    storage_root="/tmp/flaky-tests"
+)
+
+# Create collector
+collector = FlakyTestCollector(config)
+
+# Create observer with collector
+observer = RepoObserverService(
+    repo_path=Path("./my-repo"),
+    artifact_writer=artifact_writer,
+    flaky_test_collector=collector
+)
+
+# Generate snapshot (includes flaky test signal)
+snapshot = observer.observe()
+
+# Access flaky test data
+print(f"Flaky tests: {snapshot.flaky_test_signal.flaky_test_count}")
+```
+
+#### Production Setup with Custom Storage
+
+```python
+# Using custom storage location (e.g., shared CI storage)
+config = FlakyTestConfig(
+    storage_root="/mnt/ci-artifacts/flaky-tests",
+    flakiness_threshold=0.10,
+    unstable_threshold=0.05
+)
+
+collector = FlakyTestCollector(config)
+observer = RepoObserverService(
+    repo_path=Path("./my-repo"),
+    artifact_writer=artifact_writer,
+    flaky_test_collector=collector
+)
+
+# In CI pipeline
+snapshot = observer.observe()
+
+# Save snapshot to CI artifacts
+snapshot_json = json.dumps(snapshot.to_dict(), indent=2)
+artifact_writer.write("flaky-test-signal.json", snapshot_json)
+```
+
+### Usage Patterns for Observer Users
+
+#### Pattern 1: Monitor Flakiness Trends
+
+```python
+import json
+from datetime import datetime
+
+# Load snapshot from observer
+snapshot = observer.observe()
+signal = snapshot.flaky_test_signal
+
+# Record metrics for trend tracking
+metrics = {
+    "timestamp": datetime.now().isoformat(),
+    "flaky_count": signal.flaky_test_count,
+    "unstable_count": signal.unstable_test_count,
+    "affected_modules": len(signal.affected_modules),
+    "impact": signal.estimated_impact,
+    "trend": signal.failure_rate_trend
+}
+
+# Save to timeseries database or metrics system
+save_to_metrics(metrics)
+```
+
+#### Pattern 2: Detect Regressions
+
+```python
+# Detect new flaky tests
+previous_signal = load_previous_snapshot()
+current_signal = observer.observe().flaky_test_signal
+
+prev_tests = {t["nodeid"] for t in previous_signal.most_problematic_tests}
+curr_tests = {t["nodeid"] for t in current_signal.most_problematic_tests}
+
+new_flaky = curr_tests - prev_tests
+if new_flaky:
+    alert(f"⚠️ {len(new_flaky)} new flaky tests detected")
+    for test in new_flaky:
+        alert(f"  - {test}")
+```
+
+#### Pattern 3: Impact-Based Actions
+
+```python
+snapshot = observer.observe()
+signal = snapshot.flaky_test_signal
+
+# Escalate on high impact
+if signal.estimated_impact == "critical":
+    create_incident("Flaky tests critical")
+elif signal.estimated_impact == "high":
+    notify_team(f"Flaky tests affecting {len(signal.affected_modules)} modules")
+
+# Track recovery
+if signal.recovery_rate > 0.3:
+    celebrate("30%+ of flaky tests fixed this week!")
+```
+
+#### Pattern 4: Dashboard Integration
+
+```python
+# Prepare data for observer dashboard
+dashboard_data = {
+    "status": signal.status,
+    "counts": {
+        "flaky": signal.flaky_test_count,
+        "unstable": signal.unstable_test_count,
+        "affected_modules": len(signal.affected_modules)
+    },
+    "categories": signal.category_breakdown,
+    "trends": {
+        "failure_rate_change": signal.failure_rate_trend,
+        "recovery_rate": signal.recovery_rate
+    },
+    "top_issues": [
+        {
+            "test": t["nodeid"],
+            "score": t["flakiness_score"],
+            "category": t["suspected_category"]
+        }
+        for t in signal.most_problematic_tests[:5]
+    ],
+    "summary": signal.summary
+}
+
+# Render in dashboard
+render_dashboard_panel(dashboard_data)
+```
+
+### Alerts and Notifications
+
+#### Slack Integration
+
+```python
+import slack_sdk
+
+def send_flaky_alert(snapshot: RepoSignalsSnapshot):
+    signal = snapshot.flaky_test_signal
+    client = slack_sdk.WebClient(token=os.getenv("SLACK_BOT_TOKEN"))
+    
+    color = {
+        "low": "#36a64f",
+        "medium": "#ff9900",
+        "high": "#ff0000",
+        "critical": "#990000"
+    }.get(signal.estimated_impact, "#999999")
+    
+    blocks = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*Flaky Test Report* — {signal.summary}"
+            }
+        },
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": f"*Flaky Tests*\n{signal.flaky_test_count}"},
+                {"type": "mrkdwn", "text": f"*Unstable*\n{signal.unstable_test_count}"},
+                {"type": "mrkdwn", "text": f"*Affected Modules*\n{len(signal.affected_modules)}"},
+                {"type": "mrkdwn", "text": f"*Impact*\n{signal.estimated_impact}"}
+            ]
+        }
+    ]
+    
+    client.chat_postMessage(
+        channel="flaky-tests",
+        blocks=blocks,
+        metadata={"event_type": "flaky_test_alert", "event_payload": signal.to_dict()}
+    )
+```
+
+#### PagerDuty Integration (Stage 4+)
+
+```python
+def create_pagerduty_incident(signal: FlakyTestSignal):
+    if signal.estimated_impact == "critical":
+        severity = "critical"
+        urgency = "high"
+    elif signal.estimated_impact == "high":
+        severity = "major"
+        urgency = "high"
+    else:
+        return  # Don't escalate low/medium
+    
+    incident = pagerduty_api.create_incident(
+        title=f"Flaky tests critical: {signal.summary}",
+        service_id="P123ABC",
+        severity=severity,
+        urgency=urgency,
+        body={
+            "type": "incident_body",
+            "details": {
+                "flaky_count": signal.flaky_test_count,
+                "affected_modules": signal.affected_modules,
+                "trend": signal.failure_rate_trend
+            }
+        }
+    )
+    return incident
+```
+
+### Dashboard Visualization
+
+The observer dashboard renders flaky test signals with:
+
+**Flakiness Overview Panel**:
+- Flaky test count (with week-over-week change)
+- Unstable test count
+- Impact indicator (low/medium/high/critical)
+- Recovery rate percentage
+
+**Category Distribution (Pie Chart)**:
+- TRANSIENT: 40%
+- STRUCTURAL: 35%
+- CONFIGURATION: 20%
+- UNKNOWN: 5%
+
+**Affected Modules (Bar Chart)**:
+- tests/unit: 3 tests
+- tests/integration: 2 tests
+- src/core: 1 test
+
+**Most Problematic Tests (Table)**:
+| Test | Score | Category | Failure Rate |
+|------|-------|----------|---|
+| tests/unit/auth/test_login | 0.75 | transient | 60% |
+| tests/integration/api/test_endpoint | 0.68 | structural | 55% |
+
+**Trends (Line Chart)**:
+- 7-day failure_rate_trend
+- 7-day recovery_rate
 
 ### Current Integration Status
 
-**Stage 1 (Current)**: Core detection — FlakyTestReporter captures per-run and session-level metrics.
+**Stage 1-2 (✅ Complete)**: 
+- ✅ FlakyTestCollector implemented
+- ✅ Integrated into RepoObserverService
+- ✅ FlakyTestSignal in RepoSignalsSnapshot
+- ✅ Module exports configured
 
-**Stage 2 (Planned)**: Historical aggregation — FlakyTestAggregator will compute trends.
+**Stage 3 (Planned)**: 
+- Historical aggregation (Tier 3)
+- Multi-week trend analysis
+- Comparative metrics
 
-**Stage 3 (Planned)**: Observer integration — FlakyTestCollector will produce RepoSignalsSnapshot signals.
+**Stage 4 (Planned)**:
+- Dashboard visualization
+- Alert routing (Slack, PagerDuty)
+- Custom thresholds per repo
 
-**Stage 4 (Planned)**: Dashboard and alerts — UI panels and automated notifications.
+---
 
 ---
 
@@ -1160,26 +1585,107 @@ if new_flaky:
 
 ---
 
+## Storage Management and Retention
+
+### Local Storage Structure
+
+When using local file storage, reports are organized in a predictable directory structure:
+
+```
+{storage_root}/
+├── reports/
+│   ├── session-2026-06-11T143022.json      # Session analysis report
+│   ├── session-2026-06-11T150015.json
+│   └── session-2026-06-11T160530.json
+├── runs/
+│   ├── results-2026-06-11T143022.jsonl     # All test results (one per line)
+│   ├── results-2026-06-11T150015.jsonl
+│   └── results-2026-06-11T160530.jsonl
+└── .index.jsonl                            # Metadata index (future)
+```
+
+### Retention Policies
+
+The reporter automatically manages storage with configurable retention:
+
+```python
+# Default: Keep 30 days and 100 result files
+config = FlakyTestConfig(
+    retention_days=30,      # Delete files older than 30 days
+    retention_count=100     # Keep maximum 100 result files
+)
+```
+
+### Cleanup and Maintenance
+
+```python
+# Manually clean old files
+import os
+from datetime import datetime, timedelta
+
+def cleanup_old_reports(storage_root: Path, days: int = 30):
+    """Delete reports older than specified days."""
+    cutoff = datetime.now() - timedelta(days=days)
+    
+    reports_dir = storage_root / "reports"
+    for report_file in reports_dir.glob("session-*.json"):
+        mtime = datetime.fromtimestamp(report_file.stat().st_mtime)
+        if mtime < cutoff:
+            report_file.unlink()
+            print(f"Deleted: {report_file}")
+```
+
+### Storage Quotas
+
+Monitor disk usage to ensure storage doesn't grow unbounded:
+
+```python
+def estimate_storage_size(storage_root: Path) -> int:
+    """Estimate total storage usage in bytes."""
+    total = 0
+    for filepath in storage_root.rglob("*"):
+        if filepath.is_file():
+            total += filepath.stat().st_size
+    return total
+
+# Check and warn
+size_bytes = estimate_storage_size(storage_root)
+size_mb = size_bytes / (1024 * 1024)
+
+if size_mb > 1000:  # > 1 GB
+    print(f"⚠️ Flaky test storage: {size_mb:.1f} MB")
+    print("Consider increasing retention_days or retention_count")
+```
+
+---
+
 ## File Locations and Dependencies
 
 ### Source Code
 
-- **Main**: `src/operations_center/observer/flaky_test_reporter.py` (570 LOC)
-- **Tests**: `tests/unit/observer/test_flaky_test_reporter.py` (650+ LOC, 55 tests)
-- **Models**: `src/operations_center/observer/models.py` (FlakyTestSignal)
+- **Main**: `src/operations_center/observer/flaky_test_reporter.py` (420 LOC)
+- **Models**: `src/operations_center/observer/flaky_test_models.py` (175 LOC)
+- **Storage**: `src/operations_center/observer/flaky_test_storage.py` (280 LOC)
+- **Aggregator**: `src/operations_center/observer/flaky_test_aggregator.py` (228 LOC)
+- **Alerts**: `src/operations_center/observer/flaky_test_alerts.py` (277 LOC)
+- **Collector**: `src/operations_center/observer/collectors/flaky_test_collector.py` (290 LOC)
+- **Tests**: `tests/unit/observer/test_flaky_test_*.py` (500+ LOC, 138 tests)
+- **Integration**: `tests/integration/observer/test_flaky_test_integration.py` (200+ LOC)
 
 ### Documentation
 
-- **Design**: `.console/STAGE0_FLAKY_TEST_REPORTER_DESIGN.md` (4,200+ LOC)
-- **User Guide**: `docs/design/flaky-test-reporter.md` (this file)
+- **Design**: `.console/STAGE0_FLAKY_TEST_REPORTER_ARCHITECTURE.md` (4,800+ lines)
+- **User Guide**: `docs/design/flaky-test-reporter.md` (this file, 1,700+ lines)
+- **CI Integration**: `docs/design/flaky-test-reporter-ci-integration.md`
 
 ### Dependencies
 
 - Python 3.11+
 - `pytest` for test execution
-- Python standard library: `dataclasses`, `pathlib`, `json`, `math`
+- Python standard library: `dataclasses`, `pathlib`, `json`, `math`, `datetime`
+- Pydantic 2.7+ for model validation
 - Optional: `boto3` for S3 backend (Stage 2+)
-- Optional: `requests` for HTTP backend (Stage 2+)
+- Optional: `httpx` for HTTP backend (Stage 2+)
 
 ---
 

@@ -825,12 +825,16 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 - Verify linters and type checking
 - Ensure no regressions in observer module
 
-### Stage 5: Documentation (⏳ PLANNED)
-- API reference for FlakyTestReporter
-- Usage examples and configuration guide
-- Troubleshooting guide
+### Stage 5: Documentation & User Guides — ✅ COMPLETE (2026-06-11)
+- ✅ API reference for FlakyTestReporter, FlakyTestResult, FlakyTestMetric, FlakyTestConfig
+- ✅ Usage examples and configuration guide (basic and production)
+- ✅ Troubleshooting guide (5 problem categories)
+- ✅ Integration guide for observer service users
+- ✅ Storage management and retention policies
+- ✅ Data flow diagrams
+- **Status**: docs/design/flaky-test-reporter.md (1,732 lines, all acceptance criteria met)
 
-### Stage 6: Verification & PR (⏳ PLANNED)
+### Stage 6: Verification & PR (⏳ NEXT)
 - Final test suite run
 - Create PR with comprehensive description
 

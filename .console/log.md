@@ -1,3 +1,85 @@
+## 2026-06-11 — Campaign: Flaky Test Reporter Stage 5 — Documentation & User Guides (✅ COMPLETE)
+
+### Stage 5: Documentation & User Guides (✅ COMPLETE)
+
+**Objective**: Create comprehensive documentation covering all aspects of the flaky test reporter system.
+
+**Deliverable**: `docs/design/flaky-test-reporter.md` (1,732 lines, comprehensive user guide)
+
+**All Acceptance Criteria MET** ✅:
+1. ✅ **Comprehensive design documentation** (1,732 lines)
+   - Executive summary and key capabilities
+   - System architecture with 4-tier design
+   - Flaky test metric specification (14 metrics with interpretation)
+   - Root cause categorization algorithm with examples
+   - All 5 flakiness categories documented
+
+2. ✅ **API reference for all public classes**
+   - FlakyTestReporter: constructors, methods, class variables
+   - FlakyTestResult: fields, types, serialization methods
+   - FlakyTestMetric: 14 fields with ranges and descriptions
+   - FlakyTestSessionReport: structure and usage
+   - FlakyTestConfig: configuration options (8 fields)
+   - Enums: TestOutcome, FlakynessCategory
+
+3. ✅ **Configuration guide with examples**
+   - Basic setup (local storage, tracking, analysis)
+   - Advanced configuration (custom thresholds, remote backends)
+   - Production setup with custom storage locations
+   - pytest plugin integration example
+
+4. ✅ **Troubleshooting guide** (5 problem categories)
+   - Problem 1: Tests not detected as flaky (solution + prevention)
+   - Problem 2: False positives (solution + prevention)
+   - Problem 3: Cannot find root cause (UNKNOWN category)
+   - Problem 4: Storage issues (solution + prevention)
+   - Problem 5: Unexpected categorization (solution + prevention)
+
+5. ✅ **Usage examples with expected output**
+   - Example 1: Track test session and analyze (with output)
+   - Example 2: Categorize and prioritize fixes
+   - Example 3: Export metrics for dashboard
+
+6. ✅ **Integration guide for observer service users**
+   - FlakyTestCollector architecture and implementation
+   - FlakyTestSignal model (11 fields)
+   - Integration in RepoObserverService
+   - Configuration for observer users (minimal + production)
+   - 4 usage patterns with complete code:
+     - Monitor flakiness trends
+     - Detect regressions
+     - Impact-based actions
+     - Dashboard integration
+   - Alerts and notifications (Slack + PagerDuty)
+   - Dashboard visualization specifications
+
+**Additional Sections**:
+- Storage management and retention policies
+- Cleanup and maintenance procedures
+- File locations and dependencies
+- Best practices and recommendations
+- Data flow diagrams (complete integration flow + configuration flow)
+- FAQ with 5 common questions
+- Version history
+
+**Code Quality**:
+- ✅ All Python files compile successfully
+- ✅ SPDX headers present on all source files
+- ✅ No TODOs or stubs in implementation
+- ✅ Type hints complete and valid
+- ✅ Documentation follows project conventions
+
+**Statistics**:
+- Total lines: 1,732 (exceeds 1,700+ requirement)
+- Section headers: 161
+- Code examples: 25+ complete examples
+- Tables: 15+ reference tables
+- Diagrams: 2 data flow diagrams
+
+**Status**: ✅ **STAGE 5 COMPLETE** — Ready for PR creation
+
+---
+
 ## 2026-06-11 — Campaign: Flaky Test Reporter Stage 3 — Comprehensive Test Suite Expansion (✅ COMPLETE)
 
 ### Stage 3: Comprehensive Test Suite Expansion (✅ COMPLETE)
