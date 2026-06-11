@@ -22,7 +22,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Any, Optional
+from typing import Any, Optional, cast
 from urllib.request import Request, urlopen
 
 logger = logging.getLogger(__name__)
@@ -246,7 +246,7 @@ class SlackChannel(AlertChannel):
         try:
             message = self._build_slack_message(context)
             request = Request(
-                self.webhook_url,
+                cast(str, self.webhook_url),
                 data=json.dumps(message, ensure_ascii=False).encode(),
                 headers={"Content-Type": "application/json"},
                 method="POST",
@@ -370,17 +370,17 @@ class EmailChannel(AlertChannel):
 
             msg = MIMEMultipart("alternative")
             msg["Subject"] = subject
-            msg["From"] = self.sender
-            msg["To"] = ", ".join(self.recipients)
+            msg["From"] = cast(str, self.sender)
+            msg["To"] = ", ".join(cast(list[str], self.recipients))
 
             msg.attach(MIMEText(text_body, "plain"))
             msg.attach(MIMEText(html_body, "html"))
 
-            with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=10) as server:
+            with smtplib.SMTP(cast(str, self.smtp_host), self.smtp_port, timeout=10) as server:
                 server.starttls()
                 if self.username and self.password:
                     server.login(self.username, self.password)
-                server.sendmail(self.sender, self.recipients, msg.as_string())
+                server.sendmail(cast(str, self.sender), cast(list[str], self.recipients), msg.as_string())
 
             return AlertChannelResult(
                 channel=self.name,

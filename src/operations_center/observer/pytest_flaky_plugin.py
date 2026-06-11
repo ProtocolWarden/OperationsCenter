@@ -21,6 +21,7 @@ import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -89,8 +90,8 @@ class FlakyTestDetectionPlugin:
             return
 
         # Analyze flakiness patterns
-        flaky_candidates = []
-        unstable_candidates = []
+        flaky_candidates: list[dict[str, Any]] = []
+        unstable_candidates: list[dict[str, Any]] = []
         passed_count = sum(1 for t in self.test_outcomes.values() if t["outcome"] == "passed")
         failed_count = sum(1 for t in self.test_outcomes.values() if t["outcome"] == "failed")
 
