@@ -768,6 +768,12 @@ _MAX_REQUEUES = 3
 # must not silently stall the loop, nor merge on red).
 _MAX_CI_WAIT_CYCLES = 20
 
+# WO-3: when a PR is escalated (same head, no new push) but CI is fully green,
+# retract the escalation once and allow the reviewer to re-evaluate. Bounded to
+# prevent infinite escalation→retraction loops on PRs whose concerns cannot be
+# resolved by automation alone (e.g. diff-truncation false positives).
+_MAX_CI_GREEN_RETRACTIONS = 1
+
 
 def _run_fix_pass(
     oc_root: Path,
@@ -1474,12 +1480,58 @@ def _phase1(
             )
             _save_state(state_path, state)
         else:
-            logger.info(
-                "pr_review_watcher: PR #%d awaiting human attention or new push; "
-                "skipping automated self-review",
-                pr_number,
-            )
-            return
+            # WO-3: if CI is green on the escalated head, the test suite has
+            # validated the implementation. Retract the escalation once so the
+            # reviewer can re-evaluate without a diff-truncation blind spot.
+            # Bounded by _MAX_CI_GREEN_RETRACTIONS to prevent loops.
+            _ci_green_retracted = state.get("ci_green_retraction_count", 0)
+            _did_ci_green_retract = False
+            if _ci_green_retracted < _MAX_CI_GREEN_RETRACTIONS:
+                _rcfg = settings.repos.get(repo_key)
+                if _rcfg and getattr(_rcfg, "auto_merge_on_ci_green", False):
+                    _rhead = ((pr_data.get("head") or {}).get("ref") or "").lower()
+                    if _rhead.startswith(("goal/", "test/", "improve/", "spec-author/")):
+                        _rignored = list(getattr(_rcfg, "ci_ignored_checks", []) or [])
+                        try:
+                            _rfailed = gh_client.get_failed_checks(
+                                owner, repo, pr_number, pr_data=pr_data,
+                                ignored_checks=_rignored,
+                            )
+                            if not _rfailed:
+                                _retract_flag(
+                                    state, gh_client, owner, repo,
+                                    resolution=(
+                                        "CI green on unchanged head — test suite validates "
+                                        "implementation; automated review resumed"
+                                    ),
+                                )
+                                state["escalated_needs_human"] = False
+                                state.pop("escalated_head_sha", None)
+                                state["no_verdict_passes"] = 0
+                                state["fix_attempts"] = 0
+                                state.pop("last_concerns_summary", None)
+                                state.pop("last_concerns_head_sha", None)
+                                state.pop("last_fix_pass_pushed", None)
+                                state["ci_green_retraction_count"] = _ci_green_retracted + 1
+                                logger.info(
+                                    "pr_review_watcher: PR #%d CI green on escalated head; "
+                                    "retracting escalation for automated review retry "
+                                    "(retraction %d/%d)",
+                                    pr_number,
+                                    _ci_green_retracted + 1,
+                                    _MAX_CI_GREEN_RETRACTIONS,
+                                )
+                                _save_state(state_path, state)
+                                _did_ci_green_retract = True
+                        except Exception:
+                            pass  # CI check failed — fall through to skip
+            if not _did_ci_green_retract:
+                logger.info(
+                    "pr_review_watcher: PR #%d awaiting human attention or new push; "
+                    "skipping automated self-review",
+                    pr_number,
+                )
+                return
 
     # ── CI-green precondition ────────────────────────────────────────────────
     # For autonomy PRs on repos that opt in, green CI is a PRECONDITION for
