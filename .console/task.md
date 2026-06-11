@@ -27,98 +27,10 @@ Complete final verification and PR creation:
 
 ## Current Stage
 
-**Campaign**: Flaky Test Reporter Implementation (Phase 2)  
-**Stage**: Stage 5 Documentation & User Guides — ✅ **COMPLETE** (2026-06-11)
-
-## Stage 1 Summary
-
-**Status**: ✅ COMPLETE (2026-06-11)
-
-**Components Delivered**:
-1. ✅ FlakyTestReporter class (420 lines) - Tier 1-2 detection engine
-2. ✅ FlakyTestMetric, FlakyTestResult, FlakyTestSessionReport dataclasses
-3. ✅ Pattern analysis methods (entropy, variance, streak, recovery, confidence)
-4. ✅ FlakyTestStorageManager - JSONL storage with retention
-5. ✅ FlakyTestAggregator - Tier 3 historical aggregation
-6. ✅ FlakyTestAlertManager - Alert generation
-7. ✅ FlakyTestCollector - Signal synthesis
-8. ✅ Factory methods (create_local, create_s3, create_http)
-9. ✅ Query APIs (query_metrics_by_test, query_module_flakiness, query_trend_analysis)
-10. ✅ FlakyTestSignal model (wired into RepoSignalsSnapshot)
-11. ✅ 138 passing tests (72 unit, 66 integration/aggregator)
-12. ✅ Code quality verified (ruff clean, compilation successful)
-
-**Acceptance Criteria Met**: ✅ ALL 5 criteria verified
-1. ✅ FlakyTestReporter class with detection and tracking logic
-2. ✅ All data models (Metric, Result, SessionReport, Config, Signal)
-3. ✅ Pattern analysis methods for all key metrics
-4. ✅ Factory methods for multiple storage backends
-5. ✅ 138 tests with 100% pass rate
-
-## Stage 2 Summary
-
-**Status**: ✅ COMPLETE (2026-06-11)
-
-**Integration Work Completed**:
-1. ✅ FlakyTestCollector class fully implemented and functional
-2. ✅ Integrated into RepoObserverService (service.py lines 79, 100, 247-257, 275)
-3. ✅ FlakyTestSignal model in observer/models.py (line 388)
-4. ✅ flaky_test_signal field in RepoSignalsSnapshot (line 451)
-5. ✅ Module exports configured:
-   - Created collectors/__init__.py with proper SPDX header
-   - Exported FlakyTestCollector from main observer module
-   - Added FlakyTestCollector to observer.__all__
-
-**End-to-End Integration**:
-- ✅ Observer service correctly initializes flaky_test_collector (optional parameter)
-- ✅ Signal collection gracefully handles missing collector (defaults to "unavailable")
-- ✅ FlakyTestSignal properly integrated in RepoSignalsSnapshot structure
-- ✅ 16 integration tests verify service/collector interaction
-
-**Acceptance Criteria Met**: ✅ ALL 5 criteria verified
-1. ✅ FlakyTestCollector class implemented
-2. ✅ Integrated into RepoObserverService
-3. ✅ FlakyTestSignal model added to observer/models.py
-4. ✅ flaky_test_signal field added to RepoSignalsSnapshot
-5. ✅ Module exports properly configured
-
-## Stage 4: Dashboard & Alerting System
-
-**Status**: ✅ COMPLETE (2026-06-11)
-
-**Acceptance Criteria — ALL MET** ✅:
-1. ✅ **Flakiness panels added to observer dashboard**
-   - ✅ Panel 1: Flaky Test Summary (counts, health score, trends)
-   - ✅ Panel 2: Category Breakdown (visualization data for all 4 categories)
-   - ✅ Panel 3: Most Problematic Tests (top N tests with metrics)
-   - ✅ Helper methods for status determination
-
-2. ✅ **Slack alert channel integration for flaky test detection**
-   - ✅ Full Slack webhook integration (real implementation, not stub)
-   - ✅ Rich Slack message formatting for flaky test alerts
-   - ✅ Test details, severity levels, and failure rates included
-
-3. ✅ **Email alert channel implementation**
-   - ✅ EmailChannel class with SMTP support
-   - ✅ Configurable SMTP host, port, sender, recipients
-   - ✅ HTML and plaintext message formatting
-
-4. ✅ **GitHub PR comment generation for detected flaky tests**
-   - ✅ GitHubChannel class with GitHub API integration
-   - ✅ PR comments with markdown formatting and emojis
-   - ✅ Remediation guidance in PR comments
-
-5. ✅ **Alert thresholds and severity levels configured**
-   - ✅ FlakyTestAlertConfig class with threshold management
-   - ✅ AlertChannelConfig for alert routing
-   - ✅ Custom threshold support with overrides
-
-## Next Stage
-
-**Stage 5**: Documentation and User Guides (⏳ READY AFTER STAGE 4)
-- Dashboard usage guide
-- Alert configuration documentation
-- Troubleshooting guide for alert channels
+WO-1 through WO-5 are complete on main. The shared watcher checkout is now back
+on current main, so WO-6 deeper isolation is pending live-pipeline validation
+once the active backend cooldown clears and a real CONFLICTING/self-clearing PR
+path can be observed.
 
 ## Work Items
 
@@ -134,10 +46,10 @@ Evidence: #235 closed 2h after "work preserved / re-queued" with no requeue
 (implementation recovered by operator as PR #250); #227–#233 closed with
 "spec file preserved in the branch" then the branches were deleted.
 
-- [ ] Implement in the watchdog/review close paths (wherever `gh pr close`
+- [x] Implement in the watchdog/review close paths (wherever `gh pr close`
       or close decisions are emitted)
-- [ ] Unit-test: close without receipt is rejected/blocked
-- [ ] Backfill: audit the 34 closed-unmerged PRs for unreceipted salvage
+- [x] Unit-test: close without receipt is rejected/blocked
+- [x] Backfill: audit the 34 closed-unmerged PRs for unreceipted salvage
       (operator already recovered #235 and the t8 orphan branch → #249/#250)
 
 ### WO-2: Drive the resurrected PRs to green
@@ -198,7 +110,8 @@ a dirty/conflicted tree crashes planning at import for EVERY PR (2026-06-07
       cycle; CI + next review re-validate), never force-pushes, real conflict →
       escalate, rebase_attempts orthogonal to fix_attempts, 120s grace. Live-pipeline
       validation pending: confirm a real CONFLICTING PR self-clears once the watchers
-      run main's code (oc_root must sync to main first — currently on a loop branch).
+      run main's code (shared checkout moved back to current main on 2026-06-09; now
+      waiting for backend cooldown clearance and a real live case).
 - [ ] Deeper isolation: run planning/execute against a clean dedicated git
       worktree pinned at the merge ref, NOT the shared mutable checkout. Needs
       the live pipeline (SwitchBoard + backends) to validate — can't be tested
@@ -211,6 +124,8 @@ a dirty/conflicted tree crashes planning at import for EVERY PR (2026-06-07
       repeated reviewer failures should raise a loud, specific alarm (ties to
       WO-1's close-with-receipt and WO-3's self-retracting verdicts)
       — shipped (#259, 2026-06-08)
+- [x] Shared watcher checkout moved back to current `main` during a quiescent
+      window on 2026-06-09, satisfying the prior live-validation precondition.
 
 ## Stage 0 Acceptance Criteria — ALL MET ✅
 

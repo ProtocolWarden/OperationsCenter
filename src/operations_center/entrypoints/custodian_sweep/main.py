@@ -265,10 +265,7 @@ def main() -> int:
         "--timeout-seconds",
         type=int,
         default=_DEFAULT_TIMEOUT_SECONDS,
-        help=(
-            "Per-repo custodian-audit timeout in seconds "
-            f"(default: {_DEFAULT_TIMEOUT_SECONDS})"
-        ),
+        help=(f"Per-repo custodian-audit timeout in seconds (default: {_DEFAULT_TIMEOUT_SECONDS})"),
     )
     args = parser.parse_args()
 

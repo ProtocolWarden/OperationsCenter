@@ -408,7 +408,9 @@ class DashboardProvider:
                     name="Failure Rate Trend",
                     value=round(self.flaky_test_signal.failure_rate_trend, 2),
                     unit="%",
-                    status="DEGRADED" if self.flaky_test_signal.failure_rate_trend > 0 else "NOMINAL",
+                    status="DEGRADED"
+                    if self.flaky_test_signal.failure_rate_trend > 0
+                    else "NOMINAL",
                 )
             )
 
@@ -463,7 +465,11 @@ class DashboardProvider:
                     name=f"{test_name}",
                     value=round(failure_rate * 100, 1),
                     unit="%",
-                    status="CRITICAL" if failure_rate > 0.4 else "WARNING" if failure_rate > 0.2 else "NOMINAL",
+                    status="CRITICAL"
+                    if failure_rate > 0.4
+                    else "WARNING"
+                    if failure_rate > 0.2
+                    else "NOMINAL",
                 )
             )
 

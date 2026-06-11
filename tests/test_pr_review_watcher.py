@@ -40,7 +40,9 @@ SETTINGS = MagicMock(
 )
 
 
-def _pr_data(*, draft: bool = False, title: str = "My PR", head_sha: str = "abc123") -> dict[str, Any]:
+def _pr_data(
+    *, draft: bool = False, title: str = "My PR", head_sha: str = "abc123"
+) -> dict[str, Any]:
     return {
         "number": PR_NUMBER,
         "title": title,
@@ -134,7 +136,9 @@ def test_phase1_lgtm_increments_loop_count(tmp_path: Path) -> None:
     gh = _make_gh()
 
     with (
-        patch.object(watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}),
+        patch.object(
+            watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}
+        ),
         patch.object(watcher, "_merge_and_done") as mock_merge,
     ):
         watcher._phase1(
@@ -217,7 +221,15 @@ def test_phase1_concerns_records_no_progress_signature(tmp_path: Path) -> None:
         patch.object(watcher, "_merge_and_done"),
     ):
         watcher._phase1(
-            state, sp, _pr_data(head_sha="abc123"), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+            state,
+            sp,
+            _pr_data(head_sha="abc123"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            SETTINGS,
         )
 
     loaded = watcher._load_state(sp)
@@ -249,7 +261,15 @@ def test_phase1_repeated_concerns_after_noop_fix_escalates(tmp_path: Path) -> No
         patch.object(watcher, "_escalate_needs_human") as mock_escalate,
     ):
         watcher._phase1(
-            state, sp, _pr_data(head_sha="abc123"), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+            state,
+            sp,
+            _pr_data(head_sha="abc123"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            SETTINGS,
         )
 
     mock_fix.assert_not_called()
@@ -280,7 +300,15 @@ def test_phase1_repeated_concerns_different_text_still_escalates(tmp_path: Path)
         patch.object(watcher, "_escalate_needs_human") as mock_escalate,
     ):
         watcher._phase1(
-            state, sp, _pr_data(head_sha="abc123"), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+            state,
+            sp,
+            _pr_data(head_sha="abc123"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            SETTINGS,
         )
 
     mock_fix.assert_not_called()
@@ -300,6 +328,7 @@ def test_phase1_fix_pass_preserves_external_escalation(tmp_path: Path) -> None:
     def _fix_pass_writes_escalation(*_args, **_kwargs):
         # Simulate watchdog writing escalated_needs_human=True while fix pass runs
         import json
+
         disk = json.loads(sp.read_text())
         disk["escalated_needs_human"] = True
         disk["escalated_head_sha"] = "headsha"
@@ -316,10 +345,19 @@ def test_phase1_fix_pass_preserves_external_escalation(tmp_path: Path) -> None:
         patch.object(watcher, "_escalate_needs_human") as mock_escalate,
     ):
         watcher._phase1(
-            state, sp, _pr_data(head_sha="headsha"), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+            state,
+            sp,
+            _pr_data(head_sha="headsha"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            SETTINGS,
         )
 
     import json
+
     saved = json.loads(sp.read_text())
     assert saved["escalated_needs_human"] is True, "external escalation must survive save"
     mock_escalate.assert_not_called()
@@ -332,7 +370,9 @@ def test_phase1_concerns_closes_and_requeues_at_fix_cap(tmp_path: Path) -> None:
 
     with (
         patch.object(
-            watcher, "_run_direct_review", return_value={"result": "CONCERNS", "summary": "still broken"}
+            watcher,
+            "_run_direct_review",
+            return_value={"result": "CONCERNS", "summary": "still broken"},
         ),
         patch.object(watcher, "_merge_and_done") as mock_merge,
         patch.object(watcher, "_close_and_requeue") as mock_requeue,
@@ -414,7 +454,15 @@ def test_phase1_skips_escalated_pr_without_new_head(tmp_path: Path) -> None:
 
     with patch.object(watcher, "_run_direct_review") as mock_review:
         watcher._phase1(
-            state, sp, _pr_data(head_sha="abc123"), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+            state,
+            sp,
+            _pr_data(head_sha="abc123"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            SETTINGS,
         )
 
     mock_review.assert_not_called()
@@ -436,11 +484,22 @@ def test_phase1_resumes_escalated_pr_with_null_sha(tmp_path: Path) -> None:
     )
     gh = _make_gh()
 
-    with patch.object(
-        watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}
-    ) as mock_review, patch.object(watcher, "_merge_and_done"):
+    with (
+        patch.object(
+            watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}
+        ) as mock_review,
+        patch.object(watcher, "_merge_and_done"),
+    ):
         watcher._phase1(
-            state, sp, _pr_data(head_sha="abc123"), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+            state,
+            sp,
+            _pr_data(head_sha="abc123"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            SETTINGS,
         )
 
     mock_review.assert_not_called()
@@ -460,9 +519,12 @@ def test_phase1_resumes_escalated_pr_with_null_sha_and_missing_head(tmp_path: Pa
     )
     gh = _make_gh()
 
-    with patch.object(
-        watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}
-    ) as mock_review, patch.object(watcher, "_merge_and_done"):
+    with (
+        patch.object(
+            watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}
+        ) as mock_review,
+        patch.object(watcher, "_merge_and_done"),
+    ):
         watcher._phase1(
             state,
             sp,
@@ -490,11 +552,22 @@ def test_phase1_resumes_escalated_pr_after_new_head(tmp_path: Path) -> None:
     )
     gh = _make_gh()
 
-    with patch.object(
-        watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}
-    ) as mock_review, patch.object(watcher, "_merge_and_done") as mock_merge:
+    with (
+        patch.object(
+            watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}
+        ) as mock_review,
+        patch.object(watcher, "_merge_and_done") as mock_merge,
+    ):
         watcher._phase1(
-            state, sp, _pr_data(head_sha="def456"), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+            state,
+            sp,
+            _pr_data(head_sha="def456"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            SETTINGS,
         )
 
     mock_review.assert_called_once()
@@ -754,7 +827,11 @@ def test_close_and_requeue_keeps_pr_open_when_receipt_cannot_be_recorded(tmp_pat
     state, sp = _make_state(tmp_path, plane_task_id="task-abc")
     gh = _make_gh()
     mock_client = MagicMock()
-    mock_client.fetch_issue.return_value = {"id": "task-abc", "description_stripped": "", "labels": []}
+    mock_client.fetch_issue.return_value = {
+        "id": "task-abc",
+        "description_stripped": "",
+        "labels": [],
+    }
 
     with (
         patch.object(watcher, "_requeue_plane_task", return_value=True),
@@ -1094,14 +1171,15 @@ def test_run_direct_review_returns_verdict_from_file(tmp_path: Path) -> None:
 
     def _fake_run(cmd, cwd, capture_output, text, timeout):
         # Simulate claude writing verdict.json to the temp cwd.
-        (Path(cwd) / "verdict.json").write_text(
-            json.dumps(verdict), encoding="utf-8"
-        )
+        (Path(cwd) / "verdict.json").write_text(json.dumps(verdict), encoding="utf-8")
         return _sp.CompletedProcess(cmd, returncode=0, stdout="", stderr="")
 
     with (
         patch.object(watcher, "_oc_source_conflict_markers", return_value=[]),
-        patch("operations_center.entrypoints.pr_review_watcher.main.subprocess.run", side_effect=_fake_run),
+        patch(
+            "operations_center.entrypoints.pr_review_watcher.main.subprocess.run",
+            side_effect=_fake_run,
+        ),
     ):
         result = watcher._run_direct_review(tmp_path, "review this diff", STATE_KEY)
 
@@ -1116,7 +1194,10 @@ def test_run_direct_review_returns_none_when_no_verdict_file(tmp_path: Path) -> 
 
     with (
         patch.object(watcher, "_oc_source_conflict_markers", return_value=[]),
-        patch("operations_center.entrypoints.pr_review_watcher.main.subprocess.run", side_effect=_fake_run),
+        patch(
+            "operations_center.entrypoints.pr_review_watcher.main.subprocess.run",
+            side_effect=_fake_run,
+        ),
     ):
         result = watcher._run_direct_review(tmp_path, "review this diff", STATE_KEY)
 
@@ -1146,7 +1227,9 @@ def test_unclean_tree_does_not_burn_no_verdict_budget(tmp_path: Path) -> None:
     state, sp = _make_state(tmp_path, phase="self_review", no_verdict_passes=0)
     gh = _make_gh()
     with (
-        patch.object(watcher, "_run_direct_review", side_effect=watcher.OCSourceTreeUncleanError("dirty")),
+        patch.object(
+            watcher, "_run_direct_review", side_effect=watcher.OCSourceTreeUncleanError("dirty")
+        ),
         patch.object(watcher, "_escalate_needs_human") as esc,
     ):
         watcher._phase1(
@@ -1163,7 +1246,9 @@ def test_unclean_tree_escalates_with_specific_reason_after_budget(tmp_path: Path
     state, sp = _make_state(tmp_path, phase="self_review", env_unclean_passes=1)  # max=2
     gh = _make_gh()
     with (
-        patch.object(watcher, "_run_direct_review", side_effect=watcher.OCSourceTreeUncleanError("dirty")),
+        patch.object(
+            watcher, "_run_direct_review", side_effect=watcher.OCSourceTreeUncleanError("dirty")
+        ),
         patch.object(watcher, "_escalate_needs_human") as esc,
     ):
         watcher._phase1(
@@ -1186,7 +1271,10 @@ def test_run_direct_review_raises_backend_error_on_nonzero_exit(tmp_path: Path) 
 
     with (
         patch.object(watcher, "_oc_source_conflict_markers", return_value=[]),
-        patch("operations_center.entrypoints.pr_review_watcher.main.subprocess.run", side_effect=_fake_run),
+        patch(
+            "operations_center.entrypoints.pr_review_watcher.main.subprocess.run",
+            side_effect=_fake_run,
+        ),
     ):
         with pytest.raises(watcher.ReviewerBackendError) as ei:
             watcher._run_direct_review(tmp_path, "review this diff", STATE_KEY)
@@ -1201,7 +1289,10 @@ def test_run_direct_review_raises_backend_error_on_timeout(tmp_path: Path) -> No
 
     with (
         patch.object(watcher, "_oc_source_conflict_markers", return_value=[]),
-        patch("operations_center.entrypoints.pr_review_watcher.main.subprocess.run", side_effect=_fake_run),
+        patch(
+            "operations_center.entrypoints.pr_review_watcher.main.subprocess.run",
+            side_effect=_fake_run,
+        ),
     ):
         with pytest.raises(watcher.ReviewerBackendError) as ei:
             watcher._run_direct_review(tmp_path, "review this diff", STATE_KEY)
@@ -1217,7 +1308,10 @@ def test_run_direct_review_returns_none_on_clean_exit_no_verdict(tmp_path: Path)
 
     with (
         patch.object(watcher, "_oc_source_conflict_markers", return_value=[]),
-        patch("operations_center.entrypoints.pr_review_watcher.main.subprocess.run", side_effect=_fake_run),
+        patch(
+            "operations_center.entrypoints.pr_review_watcher.main.subprocess.run",
+            side_effect=_fake_run,
+        ),
     ):
         result = watcher._run_direct_review(tmp_path, "review this diff", STATE_KEY)
     assert result is None  # charged against no_verdict budget
@@ -1229,7 +1323,9 @@ def test_backend_crash_does_not_burn_no_verdict_budget(tmp_path: Path) -> None:
     state, sp = _make_state(tmp_path, phase="self_review", no_verdict_passes=0)
     gh = _make_gh()
     with (
-        patch.object(watcher, "_run_direct_review", side_effect=watcher.ReviewerBackendError("rc=1")),
+        patch.object(
+            watcher, "_run_direct_review", side_effect=watcher.ReviewerBackendError("rc=1")
+        ),
         patch.object(watcher, "_escalate_needs_human") as esc,
     ):
         watcher._phase1(
@@ -1245,7 +1341,9 @@ def test_backend_crash_escalates_with_specific_reason_after_budget(tmp_path: Pat
     state, sp = _make_state(tmp_path, phase="self_review", backend_error_passes=1)  # max=2
     gh = _make_gh()
     with (
-        patch.object(watcher, "_run_direct_review", side_effect=watcher.ReviewerBackendError("timeout")),
+        patch.object(
+            watcher, "_run_direct_review", side_effect=watcher.ReviewerBackendError("timeout")
+        ),
         patch.object(watcher, "_escalate_needs_human") as esc,
     ):
         watcher._phase1(
@@ -1443,7 +1541,8 @@ def test_auto_rebase_clean_resolves_log_via_union_and_pushes(tmp_path: Path) -> 
     # origin/pr now contains main's commit (merged) and both log entries survive.
     merged_log = sp.run(
         ["git", "-C", str(clone), "show", "origin/pr:.console/log.md"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     ).stdout
     assert "main entry" in merged_log and "pr entry" in merged_log
 
@@ -1471,7 +1570,8 @@ def test_auto_rebase_real_code_conflict_aborts(tmp_path: Path) -> None:
     # The conflicting merge must NOT have been pushed — origin/pr is unchanged.
     head = sp.run(
         ["git", "-C", str(clone), "ls-remote", str(origin), "refs/heads/pr"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     ).stdout
     assert head.strip()  # branch still exists, not corrupted
 
@@ -1585,8 +1685,15 @@ def test_escalate_stores_comment_id(tmp_path: Path) -> None:
     state, sp_ = _make_state(tmp_path)
     gh = _make_gh(comment_id=9001)
     watcher._escalate_needs_human(
-        state, sp_, gh, "owner", "repo", SETTINGS,
-        reason="no_verdict_unreviewable", detail="details", current_head_sha="abc123",
+        state,
+        sp_,
+        gh,
+        "owner",
+        "repo",
+        SETTINGS,
+        reason="no_verdict_unreviewable",
+        detail="details",
+        current_head_sha="abc123",
     )
     assert state["escalated_needs_human"] is True
     assert state["escalation_comment_id"] == 9001
@@ -1599,8 +1706,14 @@ def test_escalate_no_comment_id_when_post_fails(tmp_path: Path) -> None:
     gh = _make_gh()
     gh.post_comment.side_effect = RuntimeError("API down")
     watcher._escalate_needs_human(
-        state, sp_, gh, "owner", "repo", SETTINGS,
-        reason="no_verdict_unreviewable", detail="details",
+        state,
+        sp_,
+        gh,
+        "owner",
+        "repo",
+        SETTINGS,
+        reason="no_verdict_unreviewable",
+        detail="details",
     )
     assert state["escalated_needs_human"] is True
     assert state.get("escalation_comment_id") is None
@@ -1608,9 +1721,7 @@ def test_escalate_no_comment_id_when_post_fails(tmp_path: Path) -> None:
 
 def test_retract_flag_strikes_through_needs_human(tmp_path: Path) -> None:
     """_retract_flag edits the escalation comment with a strikethrough and resolution note."""
-    state, sp_ = _make_state(
-        tmp_path, escalation_comment_id=9001
-    )
+    state, sp_ = _make_state(tmp_path, escalation_comment_id=9001)
     gh = _make_gh()
     original_body = (
         "<!-- operations-center:bot -->\n"
@@ -1702,8 +1813,15 @@ def test_escalation_cleared_on_head_change_retracts_flag(tmp_path: Path) -> None
         patch.object(watcher, "_run_pipeline", return_value=(0, None)),
     ):
         watcher._phase1(
-            state, sp_, _pr_data(head_sha="new_sha"), gh, "owner", "repo",
-            Path("/oc"), Path("/cfg"), SETTINGS,
+            state,
+            sp_,
+            _pr_data(head_sha="new_sha"),
+            gh,
+            "owner",
+            "repo",
+            Path("/oc"),
+            Path("/cfg"),
+            SETTINGS,
         )
 
     gh.update_comment.assert_called_once()
@@ -1715,22 +1833,33 @@ def test_escalation_cleared_on_head_change_retracts_flag(tmp_path: Path) -> None
 def test_concerns_comment_id_tracked(tmp_path: Path) -> None:
     """When the first CONCERNS verdict posts the flag, its comment ID is stored in state."""
     state, sp_ = _make_state(
-        tmp_path, phase="self_review", plane_task_id="task-1",
-        fix_attempts=0, self_review_loops=0,
+        tmp_path,
+        phase="self_review",
+        plane_task_id="task-1",
+        fix_attempts=0,
+        self_review_loops=0,
     )
     gh = _make_gh(comment_id=5555)
 
     with (
         patch.object(
-            watcher, "_run_direct_review",
+            watcher,
+            "_run_direct_review",
             return_value={"result": "CONCERNS", "summary": "issues found"},
         ),
         patch.object(watcher, "_run_fix_pass", return_value=True),
         patch.object(watcher, "_merge_and_done"),
     ):
         watcher._phase1(
-            state, sp_, _pr_data(), gh, "owner", "repo",
-            tmp_path, tmp_path / "cfg.yaml", SETTINGS,
+            state,
+            sp_,
+            _pr_data(),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            SETTINGS,
         )
 
     loaded = watcher._load_state(sp_)
@@ -1751,20 +1880,31 @@ def test_new_push_retracts_stale_concerns_and_reposts_for_new_head(tmp_path: Pat
     )
     gh = _make_gh(comment_id=5555)
     gh.list_pr_comments.return_value = [
-        {"id": 8888, "body": "<!-- bot -->\n**Self-review concerns** — auto-fixing:\n\nold concerns"},
+        {
+            "id": 8888,
+            "body": "<!-- bot -->\n**Self-review concerns** — auto-fixing:\n\nold concerns",
+        },
     ]
 
     with (
         patch.object(
-            watcher, "_run_direct_review",
+            watcher,
+            "_run_direct_review",
             return_value={"result": "CONCERNS", "summary": "new concerns"},
         ),
         patch.object(watcher, "_run_fix_pass", return_value=True),
         patch.object(watcher, "_merge_and_done"),
     ):
         watcher._phase1(
-            state, sp_, _pr_data(head_sha="new_sha"), gh, "owner", "repo",
-            tmp_path, tmp_path / "cfg.yaml", SETTINGS,
+            state,
+            sp_,
+            _pr_data(head_sha="new_sha"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            SETTINGS,
         )
 
     assert gh.update_comment.call_count == 1
@@ -1815,12 +1955,21 @@ def test_wo3_ci_green_retracts_escalation_and_resumes(tmp_path: Path) -> None:
     ]
 
     with (
-        patch.object(watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}),
+        patch.object(
+            watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}
+        ),
         patch.object(watcher, "_merge_and_done"),
     ):
         watcher._phase1(
-            state, sp_, _pr_data(head_sha="same_sha"), gh, "owner", "repo",
-            tmp_path, tmp_path / "cfg.yaml", _ci_green_settings(),
+            state,
+            sp_,
+            _pr_data(head_sha="same_sha"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            _ci_green_settings(),
         )
 
     loaded = watcher._load_state(sp_)
@@ -1845,10 +1994,19 @@ def test_wo3_ci_green_retraction_bounded_by_max(tmp_path: Path) -> None:
     gh = _make_gh()
     gh.get_failed_checks.return_value = []  # CI green — but retraction budget exhausted
 
-    with patch.object(watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}):
+    with patch.object(
+        watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}
+    ):
         watcher._phase1(
-            state, sp_, _pr_data(head_sha="same_sha"), gh, "owner", "repo",
-            tmp_path, tmp_path / "cfg.yaml", _ci_green_settings(),
+            state,
+            sp_,
+            _pr_data(head_sha="same_sha"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            _ci_green_settings(),
         )
 
     loaded = watcher._load_state(sp_)
@@ -1871,10 +2029,19 @@ def test_wo3_ci_red_does_not_retract(tmp_path: Path) -> None:
     gh = _make_gh()
     gh.get_failed_checks.return_value = [{"name": "Tests", "conclusion": "FAILURE"}]  # CI red
 
-    with patch.object(watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}):
+    with patch.object(
+        watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}
+    ):
         watcher._phase1(
-            state, sp_, _pr_data(head_sha="same_sha"), gh, "owner", "repo",
-            tmp_path, tmp_path / "cfg.yaml", _ci_green_settings(),
+            state,
+            sp_,
+            _pr_data(head_sha="same_sha"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            _ci_green_settings(),
         )
 
     loaded = watcher._load_state(sp_)
@@ -1900,13 +2067,22 @@ def test_wo3_no_progress_after_retraction_trusts_ci_and_merges(tmp_path: Path) -
 
     with (
         patch.object(
-            watcher, "_run_direct_review", return_value={"result": "CONCERNS", "summary": "missing files"}
+            watcher,
+            "_run_direct_review",
+            return_value={"result": "CONCERNS", "summary": "missing files"},
         ),
         patch.object(watcher, "_merge_and_done") as mock_merge,
     ):
         watcher._phase1(
-            state, sp_, _pr_data(head_sha="sha1"), gh, "owner", "repo",
-            tmp_path, tmp_path / "cfg.yaml", _ci_green_settings(),
+            state,
+            sp_,
+            _pr_data(head_sha="sha1"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            _ci_green_settings(),
         )
 
     mock_merge.assert_called_once()
@@ -1932,11 +2108,20 @@ def test_wo3_no_progress_after_retraction_ci_red_still_escalates(tmp_path: Path)
     gh.list_pr_comments.return_value = []
 
     with patch.object(
-        watcher, "_run_direct_review", return_value={"result": "CONCERNS", "summary": "missing files"}
+        watcher,
+        "_run_direct_review",
+        return_value={"result": "CONCERNS", "summary": "missing files"},
     ):
         watcher._phase1(
-            state, sp_, _pr_data(head_sha="sha1"), gh, "owner", "repo",
-            tmp_path, tmp_path / "cfg.yaml", _ci_green_settings(),
+            state,
+            sp_,
+            _pr_data(head_sha="sha1"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            _ci_green_settings(),
         )
 
     loaded = watcher._load_state(sp_)

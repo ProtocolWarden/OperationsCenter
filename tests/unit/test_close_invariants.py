@@ -41,7 +41,9 @@ def test_close_without_receipt_requires_no_salvage_phrase_without_receipt() -> N
 def test_no_salvage_requires_inline_justification() -> None:
     assert has_no_salvage_justification("Auto-closing with no salvage value: stale autonomy PR.")
     assert has_no_salvage_justification("No salvage value - superseded by merged fix.")
-    assert has_no_salvage_justification("NO SALVAGE VALUE: duplicate branch with no unique commits.")
+    assert has_no_salvage_justification(
+        "NO SALVAGE VALUE: duplicate branch with no unique commits."
+    )
     assert not has_no_salvage_justification("Auto-closing with no salvage value")
     assert not has_no_salvage_justification("Auto-closing. no salvage value")
 

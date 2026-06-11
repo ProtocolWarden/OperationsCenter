@@ -51,8 +51,8 @@ _ALWAYS_PROTECTED = frozenset(
         "HEAD",
         "operations-center-testing-branch",
         "gh-pages",  # GitHub Pages deployment branch
-        "prod",      # Production deployment branch
-        "staging",   # Staging deployment branch
+        "prod",  # Production deployment branch
+        "staging",  # Staging deployment branch
     }
 )
 
@@ -92,7 +92,9 @@ def _open_pr_head_branches(github_client: GitHubPRClient, clone_url: str) -> set
     try:
         owner, repo = GitHubPRClient.owner_repo_from_clone_url(clone_url)
         prs = github_client.list_open_prs(owner, repo)
-        return {str(pr.get("head", {}).get("ref", "")) for pr in prs if pr.get("head", {}).get("ref")}
+        return {
+            str(pr.get("head", {}).get("ref", "")) for pr in prs if pr.get("head", {}).get("ref")
+        }
     except Exception as exc:
         logger.warning("could not list open PRs for %s: %s", clone_url, exc)
         return set()
@@ -233,7 +235,9 @@ def scan(settings: Any, min_age_hours: float = 24.0) -> list[RepoOrphanResult]:
 
 
 def _orphan_task_title(orphan: OrphanBranch) -> str:
-    return f"Orphan branch: {orphan.repo_key}/{orphan.branch} ({orphan.commits_ahead} commits ahead)"
+    return (
+        f"Orphan branch: {orphan.repo_key}/{orphan.branch} ({orphan.commits_ahead} commits ahead)"
+    )
 
 
 def _orphan_task_description(orphan: OrphanBranch) -> str:
@@ -284,11 +288,18 @@ def _emit_plane_task(settings: Any, orphan: OrphanBranch) -> None:
     if existing_issue_id:
         plane.update_issue_description(existing_issue_id, body)
         plane.update_issue_labels(existing_issue_id, ["orphan-branch", f"repo:{orphan.repo_key}"])
-        logger.info("updated existing Plane task %s for %s/%s", existing_issue_id, orphan.repo_key, orphan.branch)
+        logger.info(
+            "updated existing Plane task %s for %s/%s",
+            existing_issue_id,
+            orphan.repo_key,
+            orphan.branch,
+        )
         plane.close()
         return
 
-    plane.create_issue(name=title, description=body, label_names=["orphan-branch", f"repo:{orphan.repo_key}"])
+    plane.create_issue(
+        name=title, description=body, label_names=["orphan-branch", f"repo:{orphan.repo_key}"]
+    )
     logger.info("created Plane task for %s/%s", orphan.repo_key, orphan.branch)
     plane.close()
 
@@ -360,7 +371,9 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 _emit_plane_task(settings, orphan)
             except Exception as exc:
-                logger.warning("failed to emit Plane task for %s/%s: %s", orphan.repo_key, orphan.branch, exc)
+                logger.warning(
+                    "failed to emit Plane task for %s/%s: %s", orphan.repo_key, orphan.branch, exc
+                )
 
     return 0
 

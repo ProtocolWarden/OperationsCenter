@@ -2,8 +2,6 @@
 # Copyright (C) 2026 ProtocolWarden
 """Tests for flaky test alert configuration system."""
 
-import pytest
-
 from operations_center.observer.flaky_test_alert_config import (
     AlertChannelConfig,
     AlertThreshold,

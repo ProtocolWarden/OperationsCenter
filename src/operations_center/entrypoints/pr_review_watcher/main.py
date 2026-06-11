@@ -322,9 +322,7 @@ def _run_direct_review(
                 timeout=300,
             )
         except subprocess.TimeoutExpired:
-            raise ReviewerBackendError(
-                f"direct review timed out (300s) for state_key={state_key}"
-            )
+            raise ReviewerBackendError(f"direct review timed out (300s) for state_key={state_key}")
         if verdict_path.exists():
             try:
                 return json.loads(verdict_path.read_text(encoding="utf-8"))
@@ -347,8 +345,7 @@ def _run_direct_review(
         # not to write a file.  Genuine no-verdict; charge the budget.
         stdout_tail = (proc.stdout or "").strip()[-500:]
         logger.warning(
-            "pr_review_watcher: no verdict.json from direct review for %s "
-            "(rc=0, stdout_tail=%r)",
+            "pr_review_watcher: no verdict.json from direct review for %s (rc=0, stdout_tail=%r)",
             state_key,
             stdout_tail,
         )
@@ -719,7 +716,12 @@ def _auto_rebase_or_escalate(
 
     if state["rebase_attempts"] >= _MAX_REBASE_ATTEMPTS:
         _escalate_needs_human(
-            state, state_path, gh_client, owner, repo, settings,
+            state,
+            state_path,
+            gh_client,
+            owner,
+            repo,
+            settings,
             reason="rebase_attempts_exhausted",
             detail=(
                 f"PR is CONFLICTING and {_MAX_REBASE_ATTEMPTS} auto-rebase attempts did "
@@ -755,7 +757,12 @@ def _auto_rebase_or_escalate(
         _save_state(state_path, state)
     elif outcome == "conflict":
         _escalate_needs_human(
-            state, state_path, gh_client, owner, repo, settings,
+            state,
+            state_path,
+            gh_client,
+            owner,
+            repo,
+            settings,
             reason="rebase_conflict",
             detail=(
                 "Auto-rebase onto the base branch hit a real code conflict "
@@ -1512,12 +1519,18 @@ def _phase1(
                         _rignored = list(getattr(_rcfg, "ci_ignored_checks", []) or [])
                         try:
                             _rfailed = gh_client.get_failed_checks(
-                                owner, repo, pr_number, pr_data=pr_data,
+                                owner,
+                                repo,
+                                pr_number,
+                                pr_data=pr_data,
                                 ignored_checks=_rignored,
                             )
                             if not _rfailed:
                                 _retract_flag(
-                                    state, gh_client, owner, repo,
+                                    state,
+                                    gh_client,
+                                    owner,
+                                    repo,
                                     resolution=(
                                         "CI green on unchanged head — test suite validates "
                                         "implementation; automated review resumed"

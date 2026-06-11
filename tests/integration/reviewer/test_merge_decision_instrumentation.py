@@ -126,7 +126,7 @@ class TestMergeDecisionMetrics:
         start_time = time.time()
         with patch.object(
             watcher,
-            "_run_pipeline",
+            "_run_direct_review",
             return_value={"result": "LGTM", "summary": "All checks passed"},
         ):
             watcher._phase1(
@@ -185,7 +185,7 @@ class TestMergeDecisionMetrics:
         start_time = time.time()
         with patch.object(
             watcher,
-            "_run_pipeline",
+            "_run_direct_review",
             return_value={"result": "CONCERNS", "summary": "Unresolved issues"},
         ):
             watcher._phase1(
@@ -242,7 +242,7 @@ class TestMergeDecisionMetrics:
         start_time = time.time()
         with patch.object(
             watcher,
-            "_run_pipeline",
+            "_run_direct_review",
             return_value={"result": "CONCERNS", "summary": "Fix linting"},
         ):
             watcher._phase1(
@@ -298,7 +298,7 @@ class TestDecisionLatencyMetrics:
         start_time = time.time()
         with patch.object(
             watcher,
-            "_run_pipeline",
+            "_run_direct_review",
             return_value={"result": "LGTM", "summary": "All checks passed"},
         ):
             watcher._phase1(
@@ -372,7 +372,7 @@ class TestStructuredDecisionLogging:
         with caplog.at_level(logging.INFO):
             with patch.object(
                 watcher,
-                "_run_pipeline",
+                "_run_direct_review",
                 return_value={"result": "LGTM", "summary": "All checks passed"},
             ):
                 watcher._phase1(

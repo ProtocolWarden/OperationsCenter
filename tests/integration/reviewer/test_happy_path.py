@@ -68,7 +68,7 @@ class TestHappyPathVerdictFlow:
         with (
             patch.object(
                 watcher,
-                "_run_pipeline",
+                "_run_direct_review",
                 return_value={"result": "LGTM", "summary": "all checks passed"},
             ),
             patch.object(watcher, "_plane_client"),
@@ -139,7 +139,7 @@ class TestHappyPathVerdictFlow:
         with (
             patch.object(
                 watcher,
-                "_run_pipeline",
+                "_run_direct_review",
                 return_value={"result": "LGTM", "summary": "all lanes pass"},
             ),
             patch.object(watcher, "_plane_client"),
@@ -191,7 +191,7 @@ class TestHappyPathVerdictFlow:
         with (
             patch.object(
                 watcher,
-                "_run_pipeline",
+                "_run_direct_review",
                 return_value={"result": "LGTM", "summary": "CI green, LGTM"},
             ),
             patch.object(watcher, "_plane_client"),
@@ -265,7 +265,7 @@ class TestHappyPathVerdictFlow:
         with (
             patch.object(
                 watcher,
-                "_run_pipeline",
+                "_run_direct_review",
                 return_value={"result": "LGTM", "summary": "consolidation ok"},
             ),
             patch.object(watcher, "_plane_client"),

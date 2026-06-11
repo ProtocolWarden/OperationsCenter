@@ -138,7 +138,7 @@ class TestCIGreenGateValidation:
 
         with patch.object(
             watcher,
-            "_run_pipeline",
+            "_run_direct_review",
             return_value={"result": "LGTM", "summary": "Good to merge"},
         ):
             watcher._phase1(
@@ -186,7 +186,7 @@ class TestCIGreenGateValidation:
         # Execute: Run phase1 with LGTM and CI green
         with patch.object(
             watcher,
-            "_run_pipeline",
+            "_run_direct_review",
             return_value={"result": "LGTM", "summary": "All checks passed"},
         ):
             watcher._phase1(
@@ -391,7 +391,7 @@ class TestCIGreenGateValidation:
         # Execute: Run phase1 with CI green
         with patch.object(
             watcher,
-            "_run_pipeline",
+            "_run_direct_review",
             return_value={"result": "LGTM", "summary": "Good"},
         ):
             watcher._phase1(

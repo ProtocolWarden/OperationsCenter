@@ -1,3 +1,8 @@
+---
+status: complete
+stage: 0
+---
+
 # Stage 0: Flaky Test Reporter — Requirements Analysis & Architecture Design
 
 **Document Version**: 1.0  
