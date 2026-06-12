@@ -294,8 +294,8 @@ class TestSignalComputation:
         collector = FlakyTestCollector(config)
         signal = collector.collect(_make_observer_context())
 
-        assert signal.category_breakdown.get("transient", 0) == 2
-        assert signal.category_breakdown.get("structural", 0) == 1
+        assert signal.category_breakdown.get("intermittent", 0) == 2
+        assert signal.category_breakdown.get("infrastructure", 0) == 1
 
 
 class TestImpactEstimation:
