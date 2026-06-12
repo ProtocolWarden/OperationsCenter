@@ -32,7 +32,30 @@ class TestOutcome(Enum):
 
 @dataclass
 class FlakyTestMetric:
-    """Structured metrics for a single flaky test."""
+    """Structured metrics for a single flaky test.
+
+    MVP Implementation (Phase 1) — Implemented metrics:
+    - failure_rate: Percentage of runs that failed (0.0-1.0)
+    - pattern_entropy: Randomness in failure pattern (Shannon entropy)
+    - streak_length: Longest consecutive failure streak (count)
+    - recovery_time_days: Days between first and last failure
+    - duration_mean/variance: Test execution duration statistics
+    - flakiness_score: Combined metric for flakiness severity
+    - confidence: Confidence in the flakiness determination
+
+    Phase 2 Deferred Metrics (not implemented, no stubs):
+    - failure_entropy: Shannon entropy of failure distribution
+    - streak_variance: Variance in failure streak lengths
+    - recovery_time_percentile_90: 90th percentile of recovery time
+    - duration_stability: Stability of test execution duration
+    - environment_correlation: Correlation with environment factors
+    - isolation_score: Test isolation score
+
+    Design Reference: docs/design/STAGE0_FLAKY_TEST_REPORTER_ARCHITECTURE.md
+    Section 4.1 defines all 14 metrics (7 per-test + 7 repository-level).
+    This Phase 1 implementation provides the foundation for Phase 2 metrics.
+    See .console/backlog.md for Phase 2 implementation timeline.
+    """
 
     nodeid: str
     failure_rate: float

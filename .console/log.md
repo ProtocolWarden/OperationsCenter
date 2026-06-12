@@ -1,3 +1,77 @@
+## 2026-06-12 — Stage 1: Fix Scope Creep in task.md — Removed unrelated WO-1/WO-6 items (✅ COMPLETE)
+
+### Objective
+Remove WO-1/WO-6 workflow items from task.md that are pre-existing on main branch and unrelated to PR #269 test revert. Focus task file exclusively on Stage 1 work: resolving PR #271 review concerns.
+
+### Scope Clarification
+The WO-1 through WO-6 items in task.md were pre-existing workflow items on main branch:
+- **NOT introduced by PR #269 revert** (verified via `git diff main fix/revert-269-green-main -- .console/task.md`)
+- **NOT part of current scope** (PR #271 review concerns and test revert only)
+- **Out of scope restructuring** that crept into task.md from previous work
+
+### Changes Made
+
+**task.md Revised**:
+- Removed all WO-1 through WO-6 work items (pre-existing workflow items)
+- Updated Objective to focus on Stage 1: Fix Scope Creep
+- Replaced acceptance criteria to reflect current task (resolving review concerns)
+- Removed outdated Stage 4-8 content from prior campaign
+- Added Investigation Summary referencing Stage 0 findings
+
+### Acceptance Criteria — ALL MET ✅
+- ✅ task.md revised to focus exclusively on PR #269 test revert and review concern resolution
+- ✅ WO-1/WO-6 items removed (verified pre-existing on main)
+- ✅ Current objective clearly stated with acceptance criteria
+- ✅ Investigation Summary added with reference to comprehensive report
+
+### Status
+✅ **STAGE 1 COMPLETE** — Task file scope fixed, out-of-scope items removed
+
+---
+
+## 2026-06-12 — Stage 2: Address Unimplemented Metrics — Metrics Deferral Decision Documented (✅ COMPLETE)
+
+### Objective
+Resolve six missing per-test metrics from review concerns by either removing, deferring with ticket, or clarifying their status. Ensure no orphaned metric code remains in source.
+
+### Acceptance Criteria — ALL MET ✅
+
+1. ✅ **Decision documented for each of six unimplemented metrics**
+   - File: `src/operations_center/observer/flaky_test_models.py` (FlakyTestMetric docstring)
+   - Decision: All 6 metrics DEFERRED to Phase 2 (confirmed in investigation)
+   - Metrics: failure_entropy, streak_variance, recovery_time_percentile_90, duration_stability, environment_correlation, isolation_score
+
+2. ✅ **Code changes applied: Docstring updated with deferral clarification**
+   - Enhanced FlakyTestMetric docstring with:
+     - MVP Implementation section (Phase 1 metrics)
+     - Phase 2 Deferred Metrics section (all 6 listed)
+     - Design reference to STAGE0_FLAKY_TEST_REPORTER_ARCHITECTURE.md
+     - Backlog reference for Phase 2 timeline
+   - No stubs or orphaned implementations
+
+3. ✅ **No orphaned metric code remains**
+   - Grep search verified: Only docstring references + design document
+   - No dangling implementations in src/ or tests/
+   - Metrics were only in reverted edge-case tests (PR #269)
+
+### Implementation Details
+
+**File Updated**: `src/operations_center/observer/flaky_test_models.py`
+- Lines 35-56: Comprehensive docstring with deferral decision
+- Clearly lists Phase 1 (implemented) vs Phase 2 (deferred) metrics
+- References design document and backlog for Phase 2 planning
+- No removal needed — design specifies metrics, Phase 1 MVP is clean
+
+**Verification Performed**:
+- No orphaned code: grep verified no implementations exist
+- Design consistency: All 6 metrics documented in STAGE0_FLAKY_TEST_REPORTER_ARCHITECTURE.md
+- Architectural clarity: Docstring explains decision rationale
+
+### Status
+✅ STAGE 2 COMPLETE — Unimplemented metrics properly documented and deferred
+
+---
+
 ## 2026-06-12 — Stage 0: Investigation & Context — All Review Concerns Analyzed (✅ COMPLETE)
 
 ### Objective
