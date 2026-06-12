@@ -1,3 +1,9 @@
+## 2026-06-12 — fix(custodian): fix T2 and RUFF findings blocking push to goal/3476567d (watchdog)
+
+T2: test_zero_duration_test in test_flaky_test_coverage_enhancements.py had no assert — added metric
+count assertion. RUFF F401: FlakyTestSignal imported but unused in query.py — removed from import.
+These were the two fixable custodian findings blocking the pre-push guard on PR #270.
+
 ## 2026-06-12 — fix(tests): fix 36 API-mismatch failures in flaky test coverage tests (watchdog)
 
 Tests in 3 coverage files were written against a planned API that diverged from the actual implementation.

@@ -636,6 +636,9 @@ class TestBoundaryConditions:
                 timestamp=datetime.now(UTC),
             )
         )
+        metric = reporter.query_metrics_by_test("tests/test_zero.py::test_instant")
+        assert metric is not None
+        assert metric.run_count == 1
 
     def test_negative_recovery_time(self, tmp_path: Path) -> None:
         """Test metric with invalid negative recovery time (should be handled)."""

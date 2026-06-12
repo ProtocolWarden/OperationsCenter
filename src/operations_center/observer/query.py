@@ -47,7 +47,7 @@ from dataclasses import dataclass, field as dataclass_field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from operations_center.observer.models import FlakyTestSignal, RepoStateSnapshot, TestSignal
+from operations_center.observer.models import RepoStateSnapshot, TestSignal
 
 logger = logging.getLogger(__name__)
 
