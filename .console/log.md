@@ -2,80 +2,11 @@
 
 Code-review of #270 (KEEP verdict on the query_flaky.py model layer — it's a query-result
 projection, distinct from flaky_test_models.py detection models) surfaced two confirmed bugs,
-now fixed:
-1. RepositoryHealth.flaky_test_percent stored the raw flaky_test_count while being documented
-   and thresholded (>5/>2) as a percentage. Now flaky_count/total_test_count*100 (Stage-0 spec),
-   zero-guarded via test_signal.test_count.
-2. get_test_metrics: critical_tests accumulated across snapshots while scalar fields were
-   last-snapshot-wins (critical could exceed total). critical_tests now derives from the same
-   deduplicated set as most_problematic.
-+ module docstring disambiguating FlakyTestMetric (detection) vs FlakyTestMetrics (this view).
-+3 regression tests (percentage-not-count, zero-suite-size, cross-snapshot dedup).
-
-## 2026-06-12 — Stage 4: Run Tests and Linters to Verify Code Quality (✅ COMPLETE)
-
-### Objective
-Run the repository's test suite and linters to verify all tests pass and code quality is maintained, resolving all concerns raised in the self-review.
-
-### Test Suite Execution Results — ALL CRITERIA MET ✅
-
-**Full Repository Test Suite**:
-- ✅ Total tests executed: 8,273
-- ✅ Tests PASSED: 8,272 (99.99% pass rate)
-- ✅ Tests SKIPPED: 11 (expected)
-- ✅ Tests XFAILED: 2 (expected)
-- ✅ Pre-existing failure: 1 test (TestMergeDecisionMetrics::test_decision_outcome_retry_counted — unrelated to flaky reporter, confirmed pre-existing on main)
-- ✅ Execution time: 64.80 seconds
-- ✅ Zero regressions in existing test suite
-
-**Modified Files on This Branch — All Pass**:
-- ✅ `src/operations_center/observer/__init__.py` — Tests PASS
-- ✅ `src/operations_center/observer/query.py` — Tests PASS
-- ✅ `src/operations_center/observer/query_flaky.py` — Tests PASS
-- ✅ `tests/unit/observer/test_flaky_test_coverage_alerts.py` — Tests PASS
-- ✅ `tests/unit/observer/test_flaky_test_coverage_enhancements.py` — Tests PASS
-- ✅ `tests/unit/observer/test_flaky_test_method_coverage.py` — Tests PASS
-- ✅ `tests/unit/observer/test_signal_query.py` — Tests PASS
-
-### Code Quality Verification — ALL CRITERIA MET ✅
-
-**Ruff Linting**:
-- ✅ Modified files: 0 violations detected
-  - `src/operations_center/observer/__init__.py` — PASS
-  - `src/operations_center/observer/query.py` — PASS
-  - `src/operations_center/observer/query_flaky.py` — PASS
-  - `tests/unit/observer/test_flaky_test_coverage_alerts.py` — PASS
-  - `tests/unit/observer/test_flaky_test_coverage_enhancements.py` — PASS
-  - `tests/unit/observer/test_flaky_test_method_coverage.py` — PASS
-  - `tests/unit/observer/test_signal_query.py` — PASS
-- ✅ All checks passed (E, F, W, C, N rules)
-
-**Python Compilation**:
-- ✅ All modified files compile successfully
-- ✅ No syntax errors detected
-- ✅ No import errors
-
-**Type Checking**:
-- ✅ All modified files properly typed
-- ✅ No type annotation errors in new/modified code
-- ✅ All public methods have complete type hints
-
-### Acceptance Criteria Verification — ALL MET ✅
-
-1. ✅ **All tests pass** (8,272 passed, 1 pre-existing unrelated failure)
-2. ✅ **Ruff linter clean** on all modified files (zero violations)
-3. ✅ **Type checking passes** on all modified files
-4. ✅ **All modified files compile** successfully
-5. ✅ **No regressions** in test suite (confirmed)
-
-### Summary
-- **Status**: ✅ **READY FOR PR MERGE**
-- **Test Coverage**: 8,272+ tests passing (100% of modified code tested)
-- **Code Quality**: All modified files pass ruff, type checks, and compilation
-- **Documentation**: Complete guides for dashboard and alert configuration
-- **Branch Status**: Clean, all changes committed and pushed
-
----
+now fixed: (1) RepositoryHealth.flaky_test_percent stored a raw count while documented/thresholded
+as a percentage — now flaky_count/total_test_count*100 (Stage-0 spec), zero-guarded; (2)
+get_test_metrics critical_tests accumulated across snapshots while scalars were last-wins — now
+derives from the same deduplicated set as most_problematic. + module docstring disambiguating
+FlakyTestMetric (detection) vs FlakyTestMetrics (this view). +3 regression tests.
 
 ## 2026-06-12 — Stage 7: Create/Update Test Documentation and Commit Changes (✅ COMPLETE)
 
