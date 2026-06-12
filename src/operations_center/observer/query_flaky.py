@@ -12,6 +12,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field as dataclass_field
 from datetime import datetime
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from operations_center.observer.models import RepoStateSnapshot
 
 
 @dataclass
@@ -86,6 +90,12 @@ class FlakyTestQueryMixin:
         _load_snapshots_in_range(timerange) -> list[RepoStateSnapshot]
         _get_recent_snapshots(count)        -> list[RepoStateSnapshot]
     """
+
+    def _load_snapshots_in_range(self, timerange: Any) -> list[RepoStateSnapshot]:
+        raise NotImplementedError
+
+    def _get_recent_snapshots(self, count: int) -> list[RepoStateSnapshot]:
+        raise NotImplementedError
 
     def get_flaky_tests(self, timerange=None) -> list[FlakyTest]:
         """Get all flaky tests detected in a time range.

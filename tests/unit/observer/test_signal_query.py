@@ -15,7 +15,6 @@ from operations_center.observer.models import (
     TodoSignal,
 )
 from operations_center.observer.query import (
-    FlakyTest,
     TestSignalQuery,
     TimeRange,
 )

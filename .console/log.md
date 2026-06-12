@@ -2048,3 +2048,11 @@ Commit 5f763c99 updated mypy error codes on TYPE_CHECKING-guarded imports in
 snapshot_repository.py but dropped the ty-specific `# ty: ignore[unresolved-import]`
 comments. The ty CI check then failed with unresolved-import on lines 24–25.
 Restored both suppression annotations so mypy and ty both pass.
+
+## 2026-06-12 — fix(observer): resolve ty unresolved-attribute and ruff F401 in PR #270
+
+FlakyTestQueryMixin called self._load_snapshots_in_range / self._get_recent_snapshots
+but those are defined on TestSignalQuery (the host class). ty couldn't resolve them on
+the mixin. Fixed by adding NotImplementedError stubs to the mixin with TYPE_CHECKING
+import for RepoStateSnapshot. Also removed FlakyTest from test_signal_query.py imports
+where it was unused (moved to query_flaky.py, re-exported from query.py).
