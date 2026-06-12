@@ -272,6 +272,9 @@ def mock_github_client() -> MagicMock:
     gh.delete_branch.return_value = {}
     gh.get_mergeable.return_value = True
     gh.get_failed_checks.return_value = []
+    # Default: CI has settled (no checks still running). Tests exercising the
+    # "CI still in progress" path override this with a non-empty list.
+    gh.get_incomplete_checks.return_value = []
     return gh
 
 

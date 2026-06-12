@@ -68,6 +68,9 @@ def _make_gh(*, comment_id: int = 0) -> MagicMock:
     gh.post_comment.return_value = {"id": comment_id} if comment_id else {}
     gh.merge_pr.return_value = {}
     gh.update_comment.return_value = {}
+    # Default: CI has settled (no checks still running). The premature-green gate
+    # treats a non-empty result as "not green yet"; tests override as needed.
+    gh.get_incomplete_checks.return_value = []
     return gh
 
 
