@@ -586,6 +586,7 @@ class TestFlakyTestQueries:
         unstable_count: int = 3,
         most_problematic: list[dict] | None = None,
         root: Path | None = None,
+        total_test_count: int | None = None,
     ) -> Path:
         """Helper to create a snapshot with flaky test signal."""
         if most_problematic is None:
@@ -606,7 +607,7 @@ class TestFlakyTestQueries:
                 is_dirty=False,
             ),
             signals=RepoSignalsSnapshot(
-                test_signal=TestSignal(status="passing"),
+                test_signal=TestSignal(status="passing", test_count=total_test_count),
                 dependency_drift=DependencyDriftSignal(status="unavailable"),
                 todo_signal=TodoSignal(),
                 flaky_test_signal=FlakyTestSignal(
@@ -691,6 +692,60 @@ class TestFlakyTestQueries:
         assert health.status in ["HEALTHY", "NOMINAL", "DEGRADED", "CRITICAL"]
         assert health.flaky_test_percent >= 0.0
         assert health.affected_modules_count == 2
+
+    def test_repository_health_percent_is_real_percentage_not_count(
+        self, tmp_snapshot_root: Path
+    ) -> None:
+        """flaky_test_percent must be flaky_count/total_tests*100, not the raw count."""
+        now = datetime.now(UTC)
+        # 10 flaky tests out of 200 total = 5.0% (NOT 10.0, the raw count).
+        self._make_flaky_snapshot(
+            "run_1", now, flaky_count=10, total_test_count=200, root=tmp_snapshot_root
+        )
+
+        query = TestSignalQuery(root=tmp_snapshot_root)
+        health = query.get_repository_health()
+
+        assert health.flaky_test_percent == pytest.approx(5.0)
+        assert health.flaky_test_percent != 10.0  # would be the count under the old bug
+
+    def test_repository_health_percent_zero_when_suite_size_unknown(
+        self, tmp_snapshot_root: Path
+    ) -> None:
+        """No total_test_count -> 0.0, never a division-by-zero or a raw count."""
+        now = datetime.now(UTC)
+        self._make_flaky_snapshot(
+            "run_1", now, flaky_count=7, total_test_count=None, root=tmp_snapshot_root
+        )
+
+        query = TestSignalQuery(root=tmp_snapshot_root)
+        health = query.get_repository_health()
+
+        assert health.flaky_test_percent == 0.0
+
+    def test_get_test_metrics_critical_tests_deduped_across_snapshots(
+        self, tmp_snapshot_root: Path
+    ) -> None:
+        """The same critical test in two snapshots counts once, never exceeding totals."""
+        now = datetime.now(UTC)
+        crit = [{"name": "tests/t.py::crit", "failure_rate": 0.8, "run_count": 10}]
+        self._make_flaky_snapshot(
+            "run_1", now - timedelta(hours=1), flaky_count=1, most_problematic=crit,
+            root=tmp_snapshot_root,
+        )
+        self._make_flaky_snapshot(
+            "run_2", now, flaky_count=1, most_problematic=crit, root=tmp_snapshot_root
+        )
+
+        query = TestSignalQuery(root=tmp_snapshot_root)
+        metrics = query.get_test_metrics(
+            timerange=TimeRange(start=now - timedelta(hours=2), end=now + timedelta(hours=1))
+        )
+
+        assert metrics is not None
+        # Under the old per-snapshot accumulation this was 2 and exceeded total_flaky_tests=1.
+        assert metrics.critical_tests == 1
+        assert metrics.critical_tests <= metrics.total_flaky_tests
 
     def test_filter_by_category(self, tmp_snapshot_root: Path) -> None:
         """Test filtering flaky tests by category."""

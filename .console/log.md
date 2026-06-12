@@ -1,3 +1,17 @@
+## 2026-06-12 — fix(observer): #270 review — real flaky %, consistent metrics, model-layer note
+
+Code-review of #270 (KEEP verdict on the query_flaky.py model layer — it's a query-result
+projection, distinct from flaky_test_models.py detection models) surfaced two confirmed bugs,
+now fixed:
+1. RepositoryHealth.flaky_test_percent stored the raw flaky_test_count while being documented
+   and thresholded (>5/>2) as a percentage. Now flaky_count/total_test_count*100 (Stage-0 spec),
+   zero-guarded via test_signal.test_count.
+2. get_test_metrics: critical_tests accumulated across snapshots while scalar fields were
+   last-snapshot-wins (critical could exceed total). critical_tests now derives from the same
+   deduplicated set as most_problematic.
++ module docstring disambiguating FlakyTestMetric (detection) vs FlakyTestMetrics (this view).
++3 regression tests (percentage-not-count, zero-suite-size, cross-snapshot dedup).
+
 ## 2026-06-12 — Stage 4: Run Tests and Linters to Verify Code Quality (✅ COMPLETE)
 
 ### Objective

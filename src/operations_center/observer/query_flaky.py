@@ -6,6 +6,13 @@ Extracted from query.py to keep that module under the 500-line limit.
 FlakyTestQueryMixin adds get_flaky_tests, get_test_metrics, get_repository_health,
 and filter_by_category to any class that exposes _load_snapshots_in_range and
 _get_recent_snapshots helpers.
+
+Note: FlakyTest / FlakyTestMetrics / RepositoryHealth here are lightweight
+query-result projections read from snapshot signals. They are NOT the flaky-test
+*detection* subsystem's domain models — for those (FlakyTestMetric, FlakyTestResult,
+FlakyTestSessionReport, with flakiness_score / confidence / pattern_entropy and
+serialization) see flaky_test_models.py. Mind the singular/plural: FlakyTestMetric
+(detection) vs FlakyTestMetrics (this aggregate view).
 """
 
 from __future__ import annotations
@@ -158,6 +165,9 @@ class FlakyTestQueryMixin(ABC):
             if signal.status == "unavailable":
                 continue
 
+            # Current-state scalars reflect the most recent available snapshot in
+            # range (last write wins) — counts cannot be summed across snapshots
+            # without double-counting tests present in more than one.
             metrics.total_flaky_tests = signal.flaky_test_count or 0
             metrics.unstable_tests = signal.unstable_test_count or 0
             metrics.affected_modules = signal.affected_modules or []
@@ -168,17 +178,18 @@ class FlakyTestQueryMixin(ABC):
                     test_name = test_dict.get("name", "unknown")
                     if test_name not in seen_tests:
                         seen_tests.add(test_name)
-                        failure_rate = test_dict.get("failure_rate", 0.0)
-                        if failure_rate > 0.5:
-                            metrics.critical_tests += 1
                         all_flaky.append(
                             FlakyTest(
                                 name=test_name,
-                                failure_rate=failure_rate,
+                                failure_rate=test_dict.get("failure_rate", 0.0),
                                 run_count=test_dict.get("run_count", 0),
                                 category=test_dict.get("category"),
                             )
                         )
+
+        # critical_tests derives from the same deduplicated set as most_problematic
+        # so the two never disagree and a test seen across snapshots is counted once.
+        metrics.critical_tests = sum(1 for t in all_flaky if t.failure_rate > 0.5)
 
         if all_flaky:
             metrics.average_failure_rate = sum(t.failure_rate for t in all_flaky) / len(all_flaky)
@@ -211,7 +222,15 @@ class FlakyTestQueryMixin(ABC):
         flaky_signal = latest.signals.flaky_test_signal
 
         if flaky_signal.status != "unavailable":
-            health.flaky_test_percent = float(flaky_signal.flaky_test_count or 0)
+            # flaky_test_percent is a true percentage of the suite (0-100):
+            # flaky_test_count / total_test_count * 100, per the Stage 0 spec.
+            # Falls back to 0.0 when the suite size is unknown (no division by zero).
+            flaky_count = flaky_signal.flaky_test_count or 0
+            test_signal = latest.signals.test_signal
+            total_tests = (test_signal.test_count or 0) if test_signal is not None else 0
+            health.flaky_test_percent = (
+                (flaky_count / total_tests) * 100.0 if total_tests > 0 else 0.0
+            )
             health.recovery_rate = flaky_signal.recovery_rate or 0.0
             health.failure_rate_trend = flaky_signal.failure_rate_trend or 0.0
             health.affected_modules_count = len(flaky_signal.affected_modules or [])
@@ -219,16 +238,11 @@ class FlakyTestQueryMixin(ABC):
             estimated_impact = flaky_signal.estimated_impact or {}
             health.estimated_ci_impact_percent = estimated_impact.get("ci_slowdown_percent", 0.0)
 
-        status_components = []
+        # Thresholds are in percentage points: >5% critical, >2% degraded.
         if health.flaky_test_percent > 5.0:
-            status_components.append("CRITICAL")
-        elif health.flaky_test_percent > 2.0:
-            status_components.append("DEGRADED")
-        elif health.failure_rate_trend > 1.0:
-            status_components.append("DEGRADED")
-
-        if status_components:
-            health.status = max(status_components)
+            health.status = "CRITICAL"
+        elif health.flaky_test_percent > 2.0 or health.failure_rate_trend > 1.0:
+            health.status = "DEGRADED"
         else:
             health.status = "HEALTHY" if health.flaky_test_percent == 0 else "NOMINAL"
 
