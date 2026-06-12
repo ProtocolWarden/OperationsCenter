@@ -2962,3 +2962,5 @@ Commit 5f763c99 updated mypy error codes on TYPE_CHECKING-guarded imports in
 snapshot_repository.py but dropped the ty-specific `# ty: ignore[unresolved-import]`
 comments. The ty CI check then failed with unresolved-import on lines 24–25.
 Restored both suppression annotations so mypy and ty both pass.
+
+## 2026-06-12 — fix(observer): PR #270 CI failures resolved (test data bugs + 24 custodian findings)

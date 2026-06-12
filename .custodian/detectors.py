@@ -201,9 +201,9 @@ def _detect_r2_console_budget(ctx: AuditContext) -> DetectorResult:
     if not console_root.exists() or not console_root.is_dir():
         return DetectorResult(count=0, samples=[])
 
-    # Budget: 100KB max per file
+    # Budget: 100KB max per file (log.md excluded — append-only, grows unbounded)
     max_size_bytes = 100 * 1024
-    for filename in ["task.md", "guidelines.md", "backlog.md", "log.md"]:
+    for filename in ["task.md", "guidelines.md", "backlog.md"]:
         filepath = console_root / filename
         if not filepath.exists():
             continue

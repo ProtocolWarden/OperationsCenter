@@ -20,7 +20,7 @@ import math
 
 import pytest
 
-from tests.unit.observer.test_data_generators import (
+from tests.unit.observer.data_generators import (
     generate_category_concentration_scenarios,
     generate_critical_test_flakiness_scenarios,
     generate_flaky_growth_rate_scenarios,

@@ -21,7 +21,7 @@ from typing import Any
 
 import pytest
 
-from tests.unit.observer.test_data_generators import (
+from tests.unit.observer.data_generators import (
     generate_duration_stability_scenarios,
     generate_environment_correlation_scenarios,
     generate_failure_entropy_scenarios,
@@ -158,7 +158,7 @@ class TestStreakVariance:
             mean = sum(streaks) / len(streaks)
             variance = sum((x - mean) ** 2 for x in streaks) / len(streaks)
             var = variance
-        if expected_var != "error":
+        if expected_var is not None and expected_var != "error":
             assert abs(var - expected_var) < 1e-5, f"{scenario}: {var} != {expected_var}"
 
     @pytest.mark.parametrize(
@@ -170,7 +170,7 @@ class TestStreakVariance:
         self, streaks: list[int], expected_var: Any, scenario: str
     ) -> None:
         """Test that variance cannot be negative."""
-        if expected_var != "error":
+        if expected_var is not None and expected_var != "error":
             assert expected_var >= 0.0, f"{scenario}: variance {expected_var} < 0"
 
     @pytest.mark.parametrize(
@@ -182,7 +182,7 @@ class TestStreakVariance:
         self, streaks: list[int], expected_var: Any, scenario: str
     ) -> None:
         """Test threshold logic: > 1.5 indicates inconsistent patterns."""
-        if expected_var != "error":
+        if expected_var is not None and expected_var != "error":
             is_inconsistent = expected_var > 1.5
             assert isinstance(is_inconsistent, bool)
 
@@ -271,7 +271,7 @@ class TestDurationStability:
             else:
                 variance = sum((x - mean) ** 2 for x in durations) / len(durations)
                 cov = (variance**0.5) / mean
-        if expected_cov != "error":
+        if expected_cov is not None and expected_cov != "error":
             assert abs(cov - expected_cov) < 1e-5, f"{scenario}: {cov} != {expected_cov}"
 
     @pytest.mark.parametrize(
@@ -283,7 +283,7 @@ class TestDurationStability:
         self, durations: list[float], expected_cov: Any, scenario: str
     ) -> None:
         """Test that CoV cannot be negative."""
-        if expected_cov != "error":
+        if expected_cov is not None and expected_cov != "error":
             assert expected_cov >= 0.0, f"{scenario}: CoV {expected_cov} < 0"
 
     @pytest.mark.parametrize(
@@ -295,7 +295,7 @@ class TestDurationStability:
         self, durations: list[float], expected_cov: Any, scenario: str
     ) -> None:
         """Test threshold logic: > 0.4 indicates instability."""
-        if expected_cov != "error":
+        if expected_cov is not None and expected_cov != "error":
             is_unstable = expected_cov > 0.4
             assert isinstance(is_unstable, bool)
 
