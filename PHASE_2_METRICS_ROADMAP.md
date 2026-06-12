@@ -100,6 +100,35 @@ This approach:
 
 ---
 
+## Follow-up Action References
+
+Each deferred metric is tracked with a specific follow-up action ticket for explicit accountability:
+
+| Metric | Ticket | Description | Estimated Scope |
+|--------|--------|-------------|-----------------|
+| failure_entropy | PHASE2-METRICS-001a | Shannon entropy of failure distribution | 1-2 days |
+| streak_variance | PHASE2-METRICS-001b | Variance in failure streak lengths | 1-2 days |
+| recovery_time_percentile_90 | PHASE2-METRICS-001c | 90th percentile of recovery time | 1-2 days |
+| duration_stability | PHASE2-METRICS-001d | Stability of test execution duration | 1-2 days |
+| environment_correlation | PHASE2-METRICS-001e | Correlation with environment factors | 2-3 days |
+| isolation_score | PHASE2-METRICS-001f | Test isolation quality metric | 2-3 days |
+
+**Tracking**: These ticket references (PHASE2-METRICS-001a through 001f) are embedded in:
+1. **Code**: `src/operations_center/observer/flaky_test_models.py` (FlakyTestMetric docstring)
+2. **Documentation**: This roadmap (referenced table above)
+3. **Backlog**: `.console/backlog.md` (Phase 2 campaign section)
+
+**Phase 2 Entry Point**: When implementing Phase 2, start with PHASE2-METRICS-001a (failure_entropy) and proceed sequentially.
+
+**Closure Criteria**: Each PHASE2-METRICS-00X ticket is closed when:
+- ✅ Metric implemented in FlakyTestReporter with validated formula
+- ✅ 8+ unit tests passing with edge case coverage
+- ✅ Formula validation test passing (computed from formula, not hardcoded expected values)
+- ✅ Integration test verifying metric appears in dashboard and alerts
+- ✅ Documentation updated with metric reference and example usage
+
+---
+
 ## Phase 2 Implementation Plan
 
 ### Acceptance Criteria
