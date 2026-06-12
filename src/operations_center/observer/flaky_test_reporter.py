@@ -24,6 +24,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from . import flaky_metrics
 from .flaky_test_models import (
     FlakynessCategory,
     FlakyTestConfig,
@@ -129,6 +130,14 @@ class FlakyTestReporter:
         retry_success_count = self._count_retry_successes(runs)
         recovery_time = self._compute_recovery_time(runs)
 
+        # Derived metrics (observer.flaky_metrics) — normalised entropy, streak
+        # dispersion, and duration coefficient-of-variation over this test's runs.
+        outcomes = [r.outcome == TestOutcome.PASSED for r in runs]
+        durations = [r.duration for r in runs]
+        failure_entropy = flaky_metrics.failure_entropy(run_count - failure_count, failure_count)
+        streak_variance = flaky_metrics.streak_variance(outcomes)
+        duration_stability = flaky_metrics.duration_stability(durations)
+
         last_failure_reason = ""
         for r in reversed(runs):
             if r.outcome == TestOutcome.FAILED and r.exception_type:
@@ -150,6 +159,9 @@ class FlakyTestReporter:
             last_failure_reason=last_failure_reason,
             flakiness_score=flakiness_score,
             confidence=confidence,
+            failure_entropy=failure_entropy,
+            streak_variance=streak_variance,
+            duration_stability=duration_stability,
         )
 
     def _compute_flakiness_score(

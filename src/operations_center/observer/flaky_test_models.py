@@ -48,6 +48,12 @@ class FlakyTestMetric:
     last_failure_reason: str = ""
     flakiness_score: float = 0.0
     confidence: float = 0.0
+    # Derived flakiness metrics (see observer.flaky_metrics). Normalised
+    # pass/fail entropy in [0,1]; dispersion of streak lengths; coefficient of
+    # variation of run durations. None where undefined (e.g. <2 runs, zero mean).
+    failure_entropy: float = 0.0
+    streak_variance: float | None = None
+    duration_stability: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert metric to dictionary for JSON serialization."""
@@ -68,6 +74,13 @@ class FlakyTestMetric:
             "last_failure_reason": self.last_failure_reason,
             "flakiness_score": round(self.flakiness_score, 4),
             "confidence": round(self.confidence, 4),
+            "failure_entropy": round(self.failure_entropy, 4),
+            "streak_variance": (
+                round(self.streak_variance, 4) if self.streak_variance is not None else None
+            ),
+            "duration_stability": (
+                round(self.duration_stability, 4) if self.duration_stability is not None else None
+            ),
         }
 
 
