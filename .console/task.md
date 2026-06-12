@@ -5,50 +5,48 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-**Stage 3: Resolve Precision Discrepancy — Root Cause Identified and Documented** ✅ COMPLETE
+**Stage 4: Update Root-Cause Documentation — Explicit Ticket References Added** ✅ COMPLETE
 
-Investigate and resolve the formula mismatch in `failure_entropy::imbalanced_1_99` test case (0.081296 vs 0.080789). Identify whether the discrepancy is a floating-point rounding issue or a logic error. Create comprehensive technical analysis with Phase 2 implementation guidance.
+Add explicit follow-up action ticket references (PHASE2-METRICS-001a through 001f) to deferred metrics in code and documentation. Clarify architectural decisions with specific, trackable implementation plan for Phase 2.
 
 ## Acceptance Criteria — ALL MET ✅
 
-1. ✅ Root cause identified: Manual calculation error (0.62% mismatch)
-   - Formula verification: -Σ(p·log₂(p)) for p in [pass_ratio, fail_ratio] (Shannon entropy)
-   - Test case: imbalanced_1_99 = 1 failure in 100 runs (1% failure rate)
-   - Correct calculation: 0.080793 (verified with math.log2)
-   - Hardcoded expected: 0.081296 (incorrect, manual calculation error)
-   - Delta: 0.000503 (0.62% error)
+1. ✅ **Deferred metrics reference specific tickets**
+   - File: `src/operations_center/observer/flaky_test_models.py` (lines 46-54)
+   - Each of 6 metrics explicitly mapped to PHASE2-METRICS-001a through 001f
+   - Example: "failure_entropy: Shannon entropy (PHASE2-METRICS-001a, estimated 1-2 days)"
 
-2. ✅ Floating-point vs logic verdict: Neither — incorrect expected value
-   - Formula logic is correct (Shannon entropy formula)
-   - Implementation matches theory (0.080789 ≈ 0.080793)
-   - Error is manual calculation, not algorithmic or precision issue
+2. ✅ **Follow-up action tracking implemented**
+   - File: `PHASE_2_METRICS_ROADMAP.md` (new "Follow-up Action References" section)
+   - Tracking table with ticket, description, estimated scope for each metric
+   - Closure criteria defined for each Phase 2 metric ticket
 
-3. ✅ Test expected values documented
-   - Test removed via revert (no further code changes needed)
-   - Values documented in STAGE3_PRECISION_DISCREPANCY_ANALYSIS.md
+3. ✅ **Phase 2 entry point clearly documented**
+   - "When implementing Phase 2, start with PHASE2-METRICS-001a and proceed sequentially"
+   - Closure criteria specified: formula validation, 8+ tests, integration verification, documentation
 
-4. ✅ Phase 2 implementation guidance provided
-   - Correct formula and validation strategy documented
-   - Reference values for test cases included
-   - Shannon entropy interpretation for flaky test detection explained
+4. ✅ **Commit history**
+   - Commit: 0fb05e6 — docs: Enhance Phase 2 deferred metrics documentation
+   - Commit: 8afd74c — docs: Add Phase 2 follow-up action references and tracking
 
-5. ✅ Changes committed
-   - Commit: 99b2cf8 — docs: Stage 3 — Precision Discrepancy Analysis Complete
-   - Branch: fix/revert-269-green-main (ready to push)
-   - Documentation complete and ready for review
+5. ✅ **Code quality verified**
+   - ✅ Python compilation successful (py_compile)
+   - ✅ SPDX headers present
+   - ✅ Docstrings complete and clear
+
+## Files Updated
+
+1. **src/operations_center/observer/flaky_test_models.py**
+   - Enhanced FlakyTestMetric docstring with ticket references
+   - Each deferred metric now includes: PHASE2-METRICS-001a-f label and time estimate
+
+2. **PHASE_2_METRICS_ROADMAP.md**
+   - Added "Follow-up Action References" section
+   - Tracking table mapping each metric to specific ticket
+   - Defined closure criteria for Phase 2 completion
 
 ## Next Steps
 
-1. ✅ Run repository tests to verify no regressions
-2. Push changes to fix/revert-269-green-main branch
-3. Verify PR updates with Stage 3 completion
-
-## Investigation Summary
-
-**Stage 0 Complete**: Comprehensive analysis identified:
-- 6 unimplemented metrics from PR #269 tests (deferred to Phase 2)
-- Expected value precision issue in failure_entropy test (0.081296 vs 0.080789)
-- Task.md workflow items (WO-1/WO-6) are pre-existing on main, not introduced by revert
-- All production code remains unchanged
-
-See: `INVESTIGATION_REPORT_REVIEW_CONCERNS.md` (committed to branch)
+1. Run repository tests and linters
+2. Create/merge pull request with Stage 4 updates
+3. Verify all review concerns fully resolved
