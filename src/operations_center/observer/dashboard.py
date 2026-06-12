@@ -457,7 +457,7 @@ class DashboardProvider:
             )
 
         metrics = []
-        for test in self.flaky_test_signal.most_problematic_tests[:5]:
+        for test in self.flaky_test_signal.most_problematic_tests[:10]:
             test_name = test.get("name", "Unknown")
             failure_rate = test.get("failure_rate", 0.0)
             metrics.append(

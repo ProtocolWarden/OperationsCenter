@@ -290,17 +290,17 @@ class TestSignalAgainstRealMetrics:
             FlakyTestMetric(
                 nodeid="tests/unit/test_1.py::test_1",
                 failure_rate=0.15,
-                suspected_category=FlakynessCategory.TRANSIENT,
+                suspected_category=FlakynessCategory.INTERMITTENT,
             ),
             FlakyTestMetric(
                 nodeid="tests/unit/test_2.py::test_2",
                 failure_rate=0.50,
-                suspected_category=FlakynessCategory.STRUCTURAL,
+                suspected_category=FlakynessCategory.INFRASTRUCTURE,
             ),
             FlakyTestMetric(
                 nodeid="tests/unit/test_3.py::test_3",
                 failure_rate=0.15,
-                suspected_category=FlakynessCategory.TRANSIENT,
+                suspected_category=FlakynessCategory.INTERMITTENT,
             ),
         ]
         with metrics_file.open("w") as f:
@@ -311,8 +311,8 @@ class TestSignalAgainstRealMetrics:
         collector = FlakyTestCollector(config)
         signal = collector.collect(_make_observer_context())
 
-        assert signal.category_breakdown.get("transient", 0) == 2
-        assert signal.category_breakdown.get("structural", 0) == 1
+        assert signal.category_breakdown.get("intermittent", 0) == 2
+        assert signal.category_breakdown.get("infrastructure", 0) == 1
 
 
 class TestSnapshotValidation:

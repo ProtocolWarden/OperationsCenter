@@ -6,10 +6,10 @@ Implements alert conditions for critical flakiness patterns and generates
 prioritized alerts for action by CI/dashboard systems.
 
 Alert Types:
-  - NEW_FLAKY_TEST: Test became flaky in past 24h (MEDIUM severity)
-  - REGRESSION_SPIKE: Flakiness increased significantly (HIGH severity)
-  - CRITICAL_FLAKINESS: Failure rate >30% (HIGH severity)
-  - MODULE_OUTBREAK: >20% of module tests are flaky (MEDIUM severity)
+  - NEW_FLAKY_TEST: Test became flaky in past 24h (WARNING severity)
+  - REGRESSION_SPIKE: Flakiness increased significantly (CRITICAL severity)
+  - CRITICAL_FLAKINESS: Failure rate >30% (CRITICAL severity)
+  - MODULE_OUTBREAK: >20% of module tests are flaky (WARNING severity)
 
 Usage:
     alerts = FlakyTestAlertManager.check_alerts(agg_report)
@@ -28,10 +28,10 @@ from .flaky_test_storage import FlakyTestAggregationReport
 class AlertSeverity(Enum):
     """Alert severity levels."""
 
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
+    INFO = "info"
+    WARNING = "warning"
     CRITICAL = "critical"
+    EMERGENCY = "emergency"
 
 
 @dataclass
@@ -91,12 +91,12 @@ class FlakyTestAlertManager:
         outbreak_alerts = FlakyTestAlertManager._check_module_outbreak(agg_report)
         alerts.extend(outbreak_alerts)
 
-        # Sort by severity (critical → high → medium → low)
+        # Sort by severity (emergency → critical → warning → info)
         severity_order = {
-            AlertSeverity.CRITICAL: 0,
-            AlertSeverity.HIGH: 1,
-            AlertSeverity.MEDIUM: 2,
-            AlertSeverity.LOW: 3,
+            AlertSeverity.EMERGENCY: 0,
+            AlertSeverity.CRITICAL: 1,
+            AlertSeverity.WARNING: 2,
+            AlertSeverity.INFO: 3,
         }
         alerts.sort(key=lambda a: severity_order.get(a.severity, 4))
 
@@ -128,7 +128,7 @@ class FlakyTestAlertManager:
         if new_flaky_tests:
             alert = FlakyTestAlert(
                 alert_type="NEW_FLAKY_TEST",
-                severity=AlertSeverity.MEDIUM,
+                severity=AlertSeverity.WARNING,
                 description=f"Detected {len(new_flaky_tests)} new flaky test(s) in past 24h",
                 details={
                     "count": len(new_flaky_tests),
@@ -173,7 +173,7 @@ class FlakyTestAlertManager:
         if increase_pct > 0.5 and curr_count > 0:
             alert = FlakyTestAlert(
                 alert_type="REGRESSION_SPIKE",
-                severity=AlertSeverity.HIGH,
+                severity=AlertSeverity.CRITICAL,
                 description=f"Flaky test count increased by {increase_pct * 100:.0f}% "
                 f"({prev_count} → {curr_count})",
                 details={
@@ -205,7 +205,7 @@ class FlakyTestAlertManager:
         if critical_tests:
             alert = FlakyTestAlert(
                 alert_type="CRITICAL_FLAKINESS",
-                severity=AlertSeverity.HIGH,
+                severity=AlertSeverity.CRITICAL,
                 description=f"Found {len(critical_tests)} test(s) with >30% failure rate",
                 details={
                     "count": len(critical_tests),
@@ -258,7 +258,7 @@ class FlakyTestAlertManager:
             outbreak_modules.sort(key=lambda x: x["flaky_ratio"], reverse=True)
             alert = FlakyTestAlert(
                 alert_type="MODULE_OUTBREAK",
-                severity=AlertSeverity.MEDIUM,
+                severity=AlertSeverity.WARNING,
                 description=f"Module outbreak detected in {len(outbreak_modules)} module(s)",
                 details={
                     "count": len(outbreak_modules),

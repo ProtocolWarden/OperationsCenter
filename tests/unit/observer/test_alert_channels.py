@@ -53,7 +53,7 @@ class TestOperatorLogChannel:
             "error_count": 15,
             "threshold": 10,
             "time_window_minutes": 5,
-            "severity": "HIGH",
+            "severity": "CRITICAL",
             "collector_name": "TestCollector",
         }
 
@@ -64,13 +64,13 @@ class TestOperatorLogChannel:
         assert result.channel == "operator_log"
         assert "test_alert" in result.message
 
-    def test_notify_medium_severity(self, caplog: pytest.LogCaptureFixture) -> None:
+    def test_notify_warning_severity(self, caplog: pytest.LogCaptureFixture) -> None:
         channel = OperatorLogChannel()
         context = {
             "condition_name": "test",
             "error_count": 5,
             "threshold": 5,
-            "severity": "MEDIUM",
+            "severity": "WARNING",
         }
 
         with caplog.at_level(logging.WARNING):
@@ -82,7 +82,7 @@ class TestOperatorLogChannel:
         channel = OperatorLogChannel()
         context = {
             "condition_name": "test",
-            "severity": "LOW",
+            "severity": "INFO",
         }
 
         with caplog.at_level(logging.INFO):
@@ -115,7 +115,7 @@ class TestPlaneTaskChannel:
             "error_count": 10,
             "threshold": 10,
             "collector_name": "TestCollector",
-            "severity": "HIGH",
+            "severity": "CRITICAL",
         }
 
         result = channel.notify(context)
@@ -126,7 +126,7 @@ class TestPlaneTaskChannel:
     def test_build_task_description(self) -> None:
         context = {
             "condition_name": "parse_error_spike",
-            "severity": "HIGH",
+            "severity": "CRITICAL",
             "collector_name": "ExecutionArtifactCollector",
             "error_count": 15,
             "threshold": 10,
@@ -138,20 +138,21 @@ class TestPlaneTaskChannel:
         description = PlaneTaskChannel._build_task_description(context)
 
         assert "parse_error_spike" in description
-        assert "HIGH" in description
+        assert "CRITICAL" in description
         assert "ExecutionArtifactCollector" in description
         assert "15 / 10" in description
 
     def test_severity_to_priority(self) -> None:
-        assert PlaneTaskChannel._severity_to_priority("HIGH") == "urgent"
-        assert PlaneTaskChannel._severity_to_priority("MEDIUM") == "high"
-        assert PlaneTaskChannel._severity_to_priority("LOW") == "medium"
+        assert PlaneTaskChannel._severity_to_priority("EMERGENCY") == "urgent"
+        assert PlaneTaskChannel._severity_to_priority("CRITICAL") == "high"
+        assert PlaneTaskChannel._severity_to_priority("WARNING") == "medium"
+        assert PlaneTaskChannel._severity_to_priority("INFO") == "low"
         assert PlaneTaskChannel._severity_to_priority("UNKNOWN") == "medium"
 
     def test_build_labels(self) -> None:
         context = {
             "condition_name": "parse_error_spike",
-            "severity": "HIGH",
+            "severity": "CRITICAL",
         }
 
         labels = PlaneTaskChannel._build_labels(context)
@@ -159,7 +160,7 @@ class TestPlaneTaskChannel:
         assert "validation" in labels
         assert "alert" in labels
         assert "parse-error-spike" in labels
-        assert "severity-high" in labels
+        assert "severity-critical" in labels
 
     def test_validate_configuration_not_enabled(self) -> None:
         channel = PlaneTaskChannel()
@@ -336,7 +337,7 @@ class TestOperatorLogChannelEdgeCases:
         channel.logger = MagicMock()
         channel.logger.critical.side_effect = RuntimeError("logging failed")
 
-        context = {"condition_name": "test", "severity": "HIGH"}
+        context = {"condition_name": "test", "severity": "CRITICAL"}
         result = channel.notify(context)
 
         assert result.success is False
@@ -354,7 +355,7 @@ class TestPlaneTaskChannelEdgeCases:
             "operations_center.observer.alert_channels.logger",
         ) as mock_logger:
             mock_logger.info.side_effect = RuntimeError("logging failed")
-            context = {"condition_name": "test", "severity": "HIGH"}
+            context = {"condition_name": "test", "severity": "CRITICAL"}
             result = channel.notify(context)
 
         assert result.success is False
@@ -392,7 +393,7 @@ class TestSlackChannelEdgeCases:
     def test_build_slack_message_with_problematic_tests(self) -> None:
         context = {
             "condition_name": "high_flakiness",
-            "severity": "HIGH",
+            "severity": "CRITICAL",
             "flaky_test_count": 3,
             "failure_rate": 0.25,
             "most_problematic_tests": [
@@ -442,7 +443,7 @@ class TestEmailChannel:
             sender="from@example.com",
             recipients=["to@example.com"],
         )
-        context = {"condition_name": "test_alert", "severity": "HIGH"}
+        context = {"condition_name": "test_alert", "severity": "CRITICAL"}
 
         with patch("operations_center.observer.alert_channels.smtplib.SMTP") as mock_smtp_cls:
             mock_server = MagicMock()
@@ -494,23 +495,23 @@ class TestEmailChannel:
     def test_build_email_message_basic(self) -> None:
         context = {
             "condition_name": "flaky_tests",
-            "severity": "HIGH",
+            "severity": "CRITICAL",
             "flaky_test_count": 5,
             "failure_rate": 0.3,
         }
         subject, text_body, html_body = EmailChannel._build_email_message(context)
 
-        assert "[HIGH]" in subject
+        assert "[CRITICAL]" in subject
         assert "flaky_tests" in subject
         assert "flaky_tests" in text_body
-        assert "HIGH" in text_body
+        assert "CRITICAL" in text_body
         assert "<html>" in html_body
-        assert "HIGH" in html_body
+        assert "CRITICAL" in html_body
 
     def test_build_email_message_with_problematic_tests(self) -> None:
         context = {
             "condition_name": "test_alert",
-            "severity": "MEDIUM",
+            "severity": "WARNING",
             "flaky_test_count": 2,
             "failure_rate": 0.15,
             "most_problematic_tests": [
@@ -637,14 +638,14 @@ class TestGitHubChannel:
     def test_build_github_comment_basic(self) -> None:
         context = {
             "condition_name": "flaky_tests",
-            "severity": "HIGH",
+            "severity": "CRITICAL",
             "flaky_test_count": 3,
             "failure_rate": 0.25,
         }
         comment = GitHubChannel._build_github_comment(context)
 
         assert "flaky_tests" in comment
-        assert "HIGH" in comment
+        assert "CRITICAL" in comment
         assert "Remediation Steps" in comment
 
     def test_build_github_comment_with_tests(self) -> None:
@@ -663,7 +664,7 @@ class TestGitHubChannel:
         assert "CRITICAL" in comment
 
     def test_build_github_comment_severity_emoji(self) -> None:
-        for severity in ["LOW", "MEDIUM", "HIGH", "CRITICAL"]:
+        for severity in ["INFO", "WARNING", "CRITICAL", "EMERGENCY"]:
             context = {
                 "condition_name": "test",
                 "severity": severity,

@@ -60,8 +60,8 @@ class TestDashboardFlakyPanels:
             failure_rate_trend=5.2,
             recovery_rate=0.75,
             category_breakdown={
-                "TRANSIENT": 4,
-                "STRUCTURAL": 1,
+                "INTERMITTENT": 4,
+                "INFRASTRUCTURE": 1,
             },
             estimated_impact={
                 "ci_slowdown_percent": 8.5,
@@ -129,8 +129,8 @@ class TestDashboardFlakyPanels:
         assert panel.title == "Flaky Tests by Category"
         assert len(panel.metrics) == 2
         metric_names = [m.name for m in panel.metrics]
-        assert "Transient" in metric_names
-        assert "Structural" in metric_names
+        assert "Intermittent" in metric_names
+        assert "Infrastructure" in metric_names
 
     def test_panel_most_problematic_tests(
         self,

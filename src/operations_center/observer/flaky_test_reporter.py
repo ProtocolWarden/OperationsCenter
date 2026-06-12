@@ -262,19 +262,22 @@ class FlakyTestReporter:
         """Categorize suspected root cause using failure rate, variance, and markers."""
         variance = self._compute_pattern_variance(runs)
 
-        if 0.05 <= failure_rate <= 0.40 and variance > 0.1:
-            return FlakynessCategory.TRANSIENT
-
-        if failure_rate > 0.50:
-            if variance < 0.05:
-                return FlakynessCategory.STRUCTURAL
-            return FlakynessCategory.INTERMITTENT_STRUCTURAL
-
+        # ENVIRONMENT: service/resource issues (timeout, slow markers)
         if any(marker in ("slow", "timeout") for marker in runs[0].markers):
-            return FlakynessCategory.TRANSIENT
+            return FlakynessCategory.ENVIRONMENT
 
         if "timeout" in runs[0].exception_type.lower():
-            return FlakynessCategory.TRANSIENT
+            return FlakynessCategory.ENVIRONMENT
+
+        # INTERMITTENT: random alternation with moderate to high variance
+        if 0.05 <= failure_rate <= 0.40 and variance > 0.1:
+            return FlakynessCategory.INTERMITTENT
+
+        # INFRASTRUCTURE: consistent failures (high failure rate, low variance)
+        if failure_rate > 0.50:
+            if variance < 0.05:
+                return FlakynessCategory.INFRASTRUCTURE
+            return FlakynessCategory.INTERMITTENT
 
         return FlakynessCategory.UNKNOWN
 

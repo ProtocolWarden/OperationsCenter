@@ -77,10 +77,10 @@ class TestFlakyTestAlertManager:
 
         alerts = FlakyTestAlertManager.check_alerts(report)
 
-        # Should have HIGH severity alert
+        # Should have CRITICAL severity alert
         critical_alerts = [a for a in alerts if a.alert_type == "CRITICAL_FLAKINESS"]
         assert len(critical_alerts) > 0
-        assert critical_alerts[0].severity == AlertSeverity.HIGH
+        assert critical_alerts[0].severity == AlertSeverity.CRITICAL
 
     def test_check_alerts_regression_spike(self):
         """Test detection of regression spike in flakiness."""
@@ -113,7 +113,7 @@ class TestFlakyTestAlertManager:
         # Should have regression spike alert
         spike_alerts = [a for a in alerts if a.alert_type == "REGRESSION_SPIKE"]
         assert len(spike_alerts) > 0
-        assert spike_alerts[0].severity == AlertSeverity.HIGH
+        assert spike_alerts[0].severity == AlertSeverity.CRITICAL
 
     def test_check_alerts_module_outbreak(self):
         """Test detection of module outbreak (>20% flaky tests in module)."""
@@ -144,7 +144,7 @@ class TestFlakyTestAlertManager:
         # Should have module outbreak alert
         outbreak_alerts = [a for a in alerts if a.alert_type == "MODULE_OUTBREAK"]
         assert len(outbreak_alerts) > 0
-        assert outbreak_alerts[0].severity == AlertSeverity.MEDIUM
+        assert outbreak_alerts[0].severity == AlertSeverity.WARNING
 
     def test_check_alerts_new_flaky_tests(self):
         """Test detection of new flaky tests."""
@@ -169,7 +169,7 @@ class TestFlakyTestAlertManager:
         # Should have NEW_FLAKY_TEST alert
         new_alerts = [a for a in alerts if a.alert_type == "NEW_FLAKY_TEST"]
         assert len(new_alerts) > 0
-        assert new_alerts[0].severity == AlertSeverity.MEDIUM
+        assert new_alerts[0].severity == AlertSeverity.WARNING
 
     def test_check_alerts_severity_ordering(self):
         """Test that alerts are sorted by severity."""
@@ -199,14 +199,14 @@ class TestFlakyTestAlertManager:
         alerts = FlakyTestAlertManager.check_alerts(report)
 
         # Filter to only alerts we expect
-        high_severity = [a for a in alerts if a.severity == AlertSeverity.HIGH]
-        medium_severity = [a for a in alerts if a.severity == AlertSeverity.MEDIUM]
+        critical_severity = [a for a in alerts if a.severity == AlertSeverity.CRITICAL]
+        warning_severity = [a for a in alerts if a.severity == AlertSeverity.WARNING]
 
-        # HIGH severity alerts should come before MEDIUM
-        if high_severity and medium_severity:
-            high_index = alerts.index(high_severity[0])
-            medium_index = alerts.index(medium_severity[0])
-            assert high_index < medium_index
+        # CRITICAL severity alerts should come before WARNING
+        if critical_severity and warning_severity:
+            critical_index = alerts.index(critical_severity[0])
+            warning_index = alerts.index(warning_severity[0])
+            assert critical_index < warning_index
 
     def test_alert_serialization(self):
         """Test alert serialization to dict."""

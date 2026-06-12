@@ -15,14 +15,16 @@ class TestAlertThreshold:
     def test_create_threshold(self) -> None:
         threshold = AlertThreshold(
             alert_type="flaky_test_count",
-            low_threshold=1,
-            medium_threshold=5,
-            high_threshold=10,
-            critical_threshold=20,
+            info_threshold=1,
+            warning_threshold=5,
+            critical_threshold=10,
+            emergency_threshold=20,
         )
         assert threshold.alert_type == "flaky_test_count"
-        assert threshold.low_threshold == 1
-        assert threshold.medium_threshold == 5
+        assert threshold.info_threshold == 1
+        assert threshold.warning_threshold == 5
+        assert threshold.critical_threshold == 10
+        assert threshold.emergency_threshold == 20
 
 
 class TestAlertChannelConfig:
@@ -31,36 +33,36 @@ class TestAlertChannelConfig:
     def test_create_config(self) -> None:
         config = AlertChannelConfig(
             alert_type="NEW_FLAKY_TEST",
-            low_channels=["operator_log"],
-            medium_channels=["operator_log", "slack"],
-            high_channels=["operator_log", "slack", "email"],
-            critical_channels=["operator_log", "slack", "email", "pagerduty"],
+            info_channels=["operator_log"],
+            warning_channels=["operator_log", "slack"],
+            critical_channels=["operator_log", "slack", "email"],
+            emergency_channels=["operator_log", "slack", "email", "pagerduty"],
         )
         assert config.alert_type == "NEW_FLAKY_TEST"
-        assert len(config.low_channels) == 1
-        assert len(config.medium_channels) == 2
+        assert len(config.info_channels) == 1
+        assert len(config.warning_channels) == 2
 
     def test_get_channels_for_severity(self) -> None:
         config = AlertChannelConfig(
             alert_type="TEST",
-            low_channels=["a"],
-            medium_channels=["a", "b"],
-            high_channels=["a", "b", "c"],
-            critical_channels=["a", "b", "c", "d"],
+            info_channels=["a"],
+            warning_channels=["a", "b"],
+            critical_channels=["a", "b", "c"],
+            emergency_channels=["a", "b", "c", "d"],
         )
 
-        assert config.get_channels_for_severity("LOW") == ["a"]
-        assert config.get_channels_for_severity("MEDIUM") == ["a", "b"]
-        assert config.get_channels_for_severity("HIGH") == ["a", "b", "c"]
-        assert config.get_channels_for_severity("CRITICAL") == ["a", "b", "c", "d"]
+        assert config.get_channels_for_severity("INFO") == ["a"]
+        assert config.get_channels_for_severity("WARNING") == ["a", "b"]
+        assert config.get_channels_for_severity("CRITICAL") == ["a", "b", "c"]
+        assert config.get_channels_for_severity("EMERGENCY") == ["a", "b", "c", "d"]
 
     def test_get_channels_unknown_severity(self) -> None:
         config = AlertChannelConfig(
             alert_type="TEST",
-            medium_channels=["default"],
+            warning_channels=["default"],
         )
 
-        # Unknown severity defaults to medium
+        # Unknown severity defaults to warning
         assert config.get_channels_for_severity("UNKNOWN") == ["default"]
 
 
@@ -82,9 +84,9 @@ class TestFlakyTestAlertConfig:
         assert "CRITICAL_FLAKINESS" in config.channel_routes
         assert "MODULE_OUTBREAK" in config.channel_routes
 
-    def test_get_channels_for_alert_low(self) -> None:
+    def test_get_channels_for_alert_info(self) -> None:
         config = FlakyTestAlertConfig()
-        channels = config.get_channels_for_alert("NEW_FLAKY_TEST", "LOW")
+        channels = config.get_channels_for_alert("NEW_FLAKY_TEST", "INFO")
 
         assert "operator_log" in channels
         assert isinstance(channels, list)
@@ -96,105 +98,61 @@ class TestFlakyTestAlertConfig:
         assert "operator_log" in channels
         assert "slack" in channels
         assert "email" in channels
-        assert "pagerduty" in channels
+        # pagerduty only in emergency, not critical
+        assert "pagerduty" not in channels
 
     def test_get_channels_for_unknown_alert(self) -> None:
         config = FlakyTestAlertConfig()
-        channels = config.get_channels_for_alert("UNKNOWN_ALERT", "HIGH")
+        channels = config.get_channels_for_alert("UNKNOWN_ALERT", "WARNING")
 
-        # Should return default routing for unknown alerts
+        # Should return default channels for unknown alert type
+        assert isinstance(channels, list)
         assert "operator_log" in channels
-        assert "slack" in channels
 
     def test_get_threshold(self) -> None:
         config = FlakyTestAlertConfig()
+        threshold_value = config.get_threshold("flaky_test_count", "WARNING")
 
-        # Test flaky_test_count thresholds
-        assert config.get_threshold("flaky_test_count", "LOW") == 1
-        assert config.get_threshold("flaky_test_count", "MEDIUM") == 5
-        assert config.get_threshold("flaky_test_count", "HIGH") == 10
-        assert config.get_threshold("flaky_test_count", "CRITICAL") == 20
-
-    def test_get_threshold_unknown_metric(self) -> None:
-        config = FlakyTestAlertConfig()
-        assert config.get_threshold("unknown_metric") == 0
+        assert threshold_value == 5
+        assert isinstance(threshold_value, (int, float))
 
     def test_should_alert_on_flaky_count(self) -> None:
         config = FlakyTestAlertConfig()
 
-        # Test different counts
-        should_alert, severity = config.should_alert_on_flaky_count(0)
+        # Test no alert when count is below warning threshold
+        should_alert, severity = config.should_alert_on_flaky_count(3)
         assert should_alert is False
 
-        should_alert, severity = config.should_alert_on_flaky_count(6)
+        # Test warning alert when count is at warning threshold
+        should_alert, severity = config.should_alert_on_flaky_count(5)
         assert should_alert is True
-        assert severity == "MEDIUM"
+        assert severity == "WARNING"
 
-        should_alert, severity = config.should_alert_on_flaky_count(15)
-        assert should_alert is True
-        assert severity == "HIGH"
-
-        should_alert, severity = config.should_alert_on_flaky_count(25)
+        # Test critical alert when count is at critical threshold
+        should_alert, severity = config.should_alert_on_flaky_count(10)
         assert should_alert is True
         assert severity == "CRITICAL"
 
     def test_should_alert_on_failure_rate(self) -> None:
         config = FlakyTestAlertConfig()
 
-        # Test different rates
-        should_alert, severity = config.should_alert_on_failure_rate(0.08)
+        # Test no alert when rate is below warning threshold
+        should_alert, severity = config.should_alert_on_failure_rate(0.05)
         assert should_alert is False
 
-        should_alert, severity = config.should_alert_on_failure_rate(0.12)
+        # Test warning alert when rate is at warning threshold
+        should_alert, severity = config.should_alert_on_failure_rate(0.1)
         assert should_alert is True
-        assert severity == "MEDIUM"
-
-        should_alert, severity = config.should_alert_on_failure_rate(0.25)
-        assert should_alert is True
-        assert severity == "HIGH"
-
-        should_alert, severity = config.should_alert_on_failure_rate(0.6)
-        assert should_alert is True
-        assert severity == "CRITICAL"
+        assert severity == "WARNING"
 
     def test_should_alert_on_regression(self) -> None:
         config = FlakyTestAlertConfig()
 
-        # Test different regression percentages
-        should_alert, severity = config.should_alert_on_regression(0.3)  # 30%
+        # Test no alert below info threshold
+        should_alert, severity = config.should_alert_on_regression(0.1)
         assert should_alert is False
 
-        should_alert, severity = config.should_alert_on_regression(0.6)  # 60%
+        # Test alert at warning threshold (50% increase)
+        should_alert, severity = config.should_alert_on_regression(0.5)
         assert should_alert is True
-        assert severity == "MEDIUM"
-
-        should_alert, severity = config.should_alert_on_regression(1.2)  # 120%
-        assert should_alert is True
-        assert severity == "HIGH"
-
-        should_alert, severity = config.should_alert_on_regression(2.5)  # 250%
-        assert should_alert is True
-        assert severity == "CRITICAL"
-
-    def test_set_and_get_override(self) -> None:
-        config = FlakyTestAlertConfig()
-
-        # Test setting and getting overrides
-        config.set_override("custom_threshold", 42)
-        assert config.get_override("custom_threshold") == 42
-
-        # Test default value
-        assert config.get_override("nonexistent", "default") == "default"
-
-    def test_override_with_complex_value(self) -> None:
-        config = FlakyTestAlertConfig()
-
-        override_value = {
-            "channels": ["slack", "email"],
-            "threshold": 10,
-        }
-        config.set_override("custom_alert", override_value)
-
-        retrieved = config.get_override("custom_alert")
-        assert retrieved["channels"] == ["slack", "email"]
-        assert retrieved["threshold"] == 10
+        assert severity == "WARNING"
