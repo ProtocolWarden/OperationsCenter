@@ -322,9 +322,7 @@ def _run_direct_review(
                 timeout=300,
             )
         except subprocess.TimeoutExpired:
-            raise ReviewerBackendError(
-                f"direct review timed out (300s) for state_key={state_key}"
-            )
+            raise ReviewerBackendError(f"direct review timed out (300s) for state_key={state_key}")
         if verdict_path.exists():
             try:
                 return json.loads(verdict_path.read_text(encoding="utf-8"))
@@ -347,8 +345,7 @@ def _run_direct_review(
         # not to write a file.  Genuine no-verdict; charge the budget.
         stdout_tail = (proc.stdout or "").strip()[-500:]
         logger.warning(
-            "pr_review_watcher: no verdict.json from direct review for %s "
-            "(rc=0, stdout_tail=%r)",
+            "pr_review_watcher: no verdict.json from direct review for %s (rc=0, stdout_tail=%r)",
             state_key,
             stdout_tail,
         )
@@ -719,7 +716,12 @@ def _auto_rebase_or_escalate(
 
     if state["rebase_attempts"] >= _MAX_REBASE_ATTEMPTS:
         _escalate_needs_human(
-            state, state_path, gh_client, owner, repo, settings,
+            state,
+            state_path,
+            gh_client,
+            owner,
+            repo,
+            settings,
             reason="rebase_attempts_exhausted",
             detail=(
                 f"PR is CONFLICTING and {_MAX_REBASE_ATTEMPTS} auto-rebase attempts did "
@@ -755,7 +757,12 @@ def _auto_rebase_or_escalate(
         _save_state(state_path, state)
     elif outcome == "conflict":
         _escalate_needs_human(
-            state, state_path, gh_client, owner, repo, settings,
+            state,
+            state_path,
+            gh_client,
+            owner,
+            repo,
+            settings,
             reason="rebase_conflict",
             detail=(
                 "Auto-rebase onto the base branch hit a real code conflict "
@@ -791,6 +798,7 @@ _MAX_CI_WAIT_CYCLES = 20
 # prevent infinite escalation→retraction loops on PRs whose concerns cannot be
 # resolved by automation alone (e.g. diff-truncation false positives).
 _MAX_CI_GREEN_RETRACTIONS = 1
+_DIFF_LIMIT = 60_000
 
 
 def _run_fix_pass(
@@ -1512,12 +1520,18 @@ def _phase1(
                         _rignored = list(getattr(_rcfg, "ci_ignored_checks", []) or [])
                         try:
                             _rfailed = gh_client.get_failed_checks(
-                                owner, repo, pr_number, pr_data=pr_data,
+                                owner,
+                                repo,
+                                pr_number,
+                                pr_data=pr_data,
                                 ignored_checks=_rignored,
                             )
                             if not _rfailed:
                                 _retract_flag(
-                                    state, gh_client, owner, repo,
+                                    state,
+                                    gh_client,
+                                    owner,
+                                    repo,
                                     resolution=(
                                         "CI green on unchanged head — test suite validates "
                                         "implementation; automated review resumed"
@@ -1639,13 +1653,27 @@ def _phase1(
             pr_number,
         )
 
-    _DIFF_LIMIT = 60_000
-    diff_excerpt = diff[:_DIFF_LIMIT] + (
-        f"\n...[diff truncated at {_DIFF_LIMIT} chars — read the changed files "
-        "directly in the workspace to review the remainder]"
-        if len(diff) > _DIFF_LIMIT
-        else ""
-    )
+    if len(diff) > _DIFF_LIMIT:
+        # Fetch the complete file list so the reviewer can verify implementation
+        # completeness even when the diff body is truncated. Without this, the
+        # reviewer sees only documentation changes and wrongly concludes that
+        # implementation files (which sort later alphabetically) are absent.
+        _pr_files = gh_client.list_pr_files(owner, repo, pr_number)
+        _file_lines = (
+            "\n".join(f"  {f}" for f in sorted(_pr_files))
+            if _pr_files
+            else "  (file list unavailable)"
+        )
+        diff_excerpt = (
+            diff[:_DIFF_LIMIT]
+            + f"\n\n...[diff truncated at {_DIFF_LIMIT} chars]\n\n"
+            "IMPORTANT — complete list of ALL files changed in this PR "
+            "(files listed here ARE modified even if their diffs are not shown above; "
+            "do NOT raise 'missing implementation' concerns for files that appear here):\n"
+            + _file_lines
+        )
+    else:
+        diff_excerpt = diff
     title = pr_data.get("title", "")
 
     # Load optional campaign spec and Custodian findings for spec-aware review
@@ -2009,10 +2037,19 @@ def _phase1(
         )
         return
 
+    # Pre-save the attempt counter and head SHA before the (potentially long) fix
+    # pass — if the watcher is restarted while the backend runs, the counter
+    # survives. last_fix_pass_pushed is cleared until the pass completes, so
+    # repeated_no_progress (which checks `is False`) won't fire on a missing key.
+    state["fix_attempts"] += 1
+    state["last_concerns_head_sha"] = current_head_sha
+    state.pop("last_fix_pass_pushed", None)
+    _save_state(state_path, state)
+
     logger.info(
         "pr_review_watcher: PR #%d CONCERNS — dispatching fix pass %d/%d on branch %s",
         pr_number,
-        state["fix_attempts"] + 1,
+        state["fix_attempts"],
         reviewer.max_fix_attempts,
         head_ref,
     )
@@ -2033,9 +2070,7 @@ def _phase1(
         state_key=state_key,
     )
     state["last_concerns_summary"] = normalized_summary
-    state["last_concerns_head_sha"] = current_head_sha
     state["last_fix_pass_pushed"] = pushed
-    state["fix_attempts"] += 1
     if not pushed:
         logger.warning(
             "pr_review_watcher: fix pass for PR #%d pushed no changes (attempt %d/%d)",

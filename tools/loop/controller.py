@@ -1083,9 +1083,7 @@ def main() -> None:
                                 if _handle_backend_limit(
                                     backend, session_log, cooldowns, cooldown_meta
                                 ):
-                                    write_runtime_state(
-                                        cooldowns, None, limit_meta=cooldown_meta
-                                    )
+                                    write_runtime_state(cooldowns, None, limit_meta=cooldown_meta)
                             if _sleep_until_backend_reset(cooldowns):
                                 continue
                     else:

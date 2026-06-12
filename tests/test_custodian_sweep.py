@@ -184,8 +184,9 @@ def test_run_custodian_audits_falls_back_to_serial_when_jobs_is_one(monkeypatch)
     monkeypatch.setattr(
         sweep_module,
         "_run_custodian_audit",
-        lambda target, *, timeout_seconds: calls.append(target.repo_key)
-        or _RepoSweep(repo_key=target.repo_key),
+        lambda target, *, timeout_seconds: (
+            calls.append(target.repo_key) or _RepoSweep(repo_key=target.repo_key)
+        ),
     )
 
     sweeps = _run_custodian_audits(targets, jobs=1, timeout_seconds=20)

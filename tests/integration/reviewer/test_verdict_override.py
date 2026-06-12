@@ -63,7 +63,7 @@ class TestMixedVerdictOverrideLogic:
         with (
             patch.object(
                 watcher,
-                "_run_pipeline",
+                "_run_direct_review",
                 return_value={"result": "CONCERNS", "summary": "Fix linting"},
             ),
             patch.object(watcher, "_run_fix_pass", return_value=True),
@@ -108,7 +108,7 @@ class TestMixedVerdictOverrideLogic:
         gh_loop2 = mock_github_client()
         with patch.object(
             watcher,
-            "_run_pipeline",
+            "_run_direct_review",
             return_value={"result": "LGTM", "summary": "All checks passed"},
         ):
             watcher._phase1(
@@ -164,7 +164,7 @@ class TestMixedVerdictOverrideLogic:
         with (
             patch.object(
                 watcher,
-                "_run_pipeline",
+                "_run_direct_review",
                 return_value={"result": "CONCERNS", "summary": "New issues in changed code"},
             ),
             patch.object(watcher, "_run_fix_pass", return_value=True),
@@ -213,7 +213,7 @@ class TestMixedVerdictOverrideLogic:
         with (
             patch.object(
                 watcher,
-                "_run_pipeline",
+                "_run_direct_review",
                 return_value={"result": "CONCERNS", "summary": "Issue 1"},
             ),
             patch.object(watcher, "_run_fix_pass", return_value=True),
@@ -248,7 +248,7 @@ class TestMixedVerdictOverrideLogic:
         with (
             patch.object(
                 watcher,
-                "_run_pipeline",
+                "_run_direct_review",
                 return_value={"result": "CONCERNS", "summary": "Issue 2"},
             ),
             patch.object(watcher, "_run_fix_pass", return_value=True),
@@ -283,7 +283,7 @@ class TestMixedVerdictOverrideLogic:
         gh_loop3 = mock_github_client()
         with patch.object(
             watcher,
-            "_run_pipeline",
+            "_run_direct_review",
             return_value={"result": "CONCERNS", "summary": "Issue 3"},
         ):
             watcher._phase1(

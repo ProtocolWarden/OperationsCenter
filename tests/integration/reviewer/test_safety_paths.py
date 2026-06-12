@@ -48,7 +48,7 @@ class TestSafetyPaths:
             with (
                 patch.object(
                     watcher,
-                    "_run_pipeline",
+                    "_run_direct_review",
                     return_value={"result": "CONCERNS", "summary": "Issue"},
                 ),
                 patch.object(watcher, "_run_fix_pass", return_value=True),
@@ -79,7 +79,7 @@ class TestSafetyPaths:
         gh_final = mock_github_client()
         with patch.object(
             watcher,
-            "_run_pipeline",
+            "_run_direct_review",
             return_value={"result": "CONCERNS", "summary": "Still issues"},
         ):
             watcher._phase1(
@@ -117,7 +117,7 @@ class TestSafetyPaths:
         )
         state_path = save_pr_state(tmp_path, state)
 
-        with patch.object(watcher, "_run_pipeline", return_value=None):
+        with patch.object(watcher, "_run_direct_review", return_value=None):
             watcher._phase1(
                 state,
                 state_path,
@@ -159,7 +159,7 @@ class TestSafetyPaths:
         state_path = save_pr_state(tmp_path, state1)
 
         gh1 = mock_github_client()
-        with patch.object(watcher, "_run_pipeline", return_value=None):
+        with patch.object(watcher, "_run_direct_review", return_value=None):
             watcher._phase1(
                 state1,
                 state_path,
@@ -175,7 +175,7 @@ class TestSafetyPaths:
         # Verify first comment posted
         assert gh1.post_comment.call_count >= 1
 
-        # Second cycle: already escalated
+        # Second cycle: already escalated — escalated_head_sha keeps the flag anchored
         state2 = create_pr_state(
             repo_key="TestRepo",
             pr_number=42,
@@ -183,15 +183,22 @@ class TestSafetyPaths:
             self_review_loops=settings.reviewer.max_self_review_loops,
             no_verdict_passes=settings.reviewer.max_self_review_loops,
             escalated_needs_human=True,  # Already escalated
+            escalated_head_sha="abc123",  # Pinned to current head
         )
         save_pr_state(tmp_path, state2)
 
         gh2 = mock_github_client()
-        with patch.object(watcher, "_run_pipeline", return_value=None):
+        gh2.get_failed_checks.return_value = ["Test: FAILED"]  # CI red — no WO-3 retraction
+        with patch.object(watcher, "_run_direct_review", return_value=None):
             watcher._phase1(
                 state2,
                 state_path,
-                {"number": 42, "title": "Test PR", "draft": False, "head": {"ref": "goal/42"}},
+                {
+                    "number": 42,
+                    "title": "Test PR",
+                    "draft": False,
+                    "head": {"ref": "goal/42", "sha": "abc123"},
+                },
                 gh2,
                 "owner",
                 "TestRepo",
@@ -226,7 +233,7 @@ class TestSafetyPaths:
 
         with patch.object(
             watcher,
-            "_run_pipeline",
+            "_run_direct_review",
             return_value={"result": "CONCERNS", "summary": "Critical issue"},
         ):
             watcher._phase1(
@@ -310,7 +317,7 @@ class TestSafetyPaths:
 
         with patch.object(
             watcher,
-            "_run_pipeline",
+            "_run_direct_review",
             return_value={"result": "LGTM", "summary": "Good"},
         ):
             watcher._phase1(

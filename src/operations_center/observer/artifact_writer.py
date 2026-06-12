@@ -31,13 +31,11 @@ class ObserverArtifactWriter:
             "",
             "## Recent Commits",
         ]
-        md_lines.extend(
-            [
-                f"- {commit.sha_short} {commit.author} {commit.timestamp.isoformat()} {commit.subject}"
-                for commit in snapshot.signals.recent_commits
-            ]
-            or ["- none"]
-        )
+        commit_lines = [
+            f"- {c.sha_short} {c.author} {c.timestamp.isoformat()} {c.subject}"
+            for c in snapshot.signals.recent_commits
+        ]
+        md_lines.extend(commit_lines or ["- none"])
         md_lines.extend(["", "## File Hotspots"])
         md_lines.extend(
             [
@@ -46,20 +44,32 @@ class ObserverArtifactWriter:
             ]
             or ["- none"]
         )
+        test_signal = snapshot.signals.test_signal
+        test_observed = (
+            test_signal.observed_at.isoformat()
+            if test_signal.observed_at
+            else "none"
+        )
+        dependency_drift = snapshot.signals.dependency_drift
+        drift_observed = (
+            dependency_drift.observed_at.isoformat()
+            if dependency_drift.observed_at
+            else "none"
+        )
         md_lines.extend(
             [
                 "",
                 "## Test Signal",
-                f"- status: {snapshot.signals.test_signal.status}",
-                f"- source: {snapshot.signals.test_signal.source or 'none'}",
-                f"- observed_at: {snapshot.signals.test_signal.observed_at.isoformat() if snapshot.signals.test_signal.observed_at else 'none'}",
-                f"- summary: {snapshot.signals.test_signal.summary or 'none'}",
+                f"- status: {test_signal.status}",
+                f"- source: {test_signal.source or 'none'}",
+                f"- observed_at: {test_observed}",
+                f"- summary: {test_signal.summary or 'none'}",
                 "",
                 "## Dependency Drift",
-                f"- status: {snapshot.signals.dependency_drift.status}",
-                f"- source: {snapshot.signals.dependency_drift.source or 'none'}",
-                f"- observed_at: {snapshot.signals.dependency_drift.observed_at.isoformat() if snapshot.signals.dependency_drift.observed_at else 'none'}",
-                f"- summary: {snapshot.signals.dependency_drift.summary or 'none'}",
+                f"- status: {dependency_drift.status}",
+                f"- source: {dependency_drift.source or 'none'}",
+                f"- observed_at: {drift_observed}",
+                f"- summary: {dependency_drift.summary or 'none'}",
                 "",
                 "## TODO Signal",
                 f"- todo_count: {snapshot.signals.todo_signal.todo_count}",

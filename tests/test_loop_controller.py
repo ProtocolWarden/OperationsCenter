@@ -321,9 +321,7 @@ def test_alternate_backend_follows_priority_order() -> None:
     assert controller._alternate_backend("codex") == "claude"
 
 
-def test_handle_backend_limit_bare_weekly_limit_cools_opus_too(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_handle_backend_limit_bare_weekly_limit_cools_opus_too(monkeypatch, tmp_path: Path) -> None:
     frozen_now = datetime(2026, 5, 25, 15, 0, tzinfo=timezone.utc)
 
     class FrozenDateTime(datetime):

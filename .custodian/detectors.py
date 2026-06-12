@@ -124,6 +124,7 @@ def _detect_r2_console_budget(ctx: AuditContext) -> DetectorResult:
 
     return DetectorResult(count=len(samples), samples=samples)
 
+
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 

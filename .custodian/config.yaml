@@ -497,6 +497,15 @@ audit:
       # validation.py is the canonical per-collector validator library — all
       # artifact validation helpers live in one module by design.
       - src/operations_center/observer/validation.py
+      # dashboard.py implements the full DashboardProvider with metrics, latency,
+      # health, log, and flaky-test panels in one cohesive module — splitting by
+      # panel type would fragment the shared snapshot generation and helper logic.
+      - src/operations_center/observer/dashboard.py
+      # alert_channels.py implements all alert channel backends (Slack, Email,
+      # GitHub, Plane, OperatorLog) plus the factory — each channel class is
+      # self-contained; splitting by channel would scatter the shared AlertResult
+      # and factory in ways that add indirection without clarity.
+      - src/operations_center/observer/alert_channels.py
     C11:
       # Agent-spawning entrypoints: board_worker, intake, pr_review_watcher invoke
       # the coding backend (team_executor, aider, etc.) which runs for an unbounded

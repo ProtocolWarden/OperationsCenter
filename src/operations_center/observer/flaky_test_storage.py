@@ -19,6 +19,7 @@ import shutil
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 
 @dataclass
@@ -168,7 +169,7 @@ class FlakyTestStorageManager:
             List of session report dictionaries
         """
         cutoff = datetime.now(UTC) - timedelta(days=days)
-        sessions = []
+        sessions: list[dict[str, Any]] = []
 
         if not self.session_dir.exists():
             return sessions
@@ -206,7 +207,7 @@ class FlakyTestStorageManager:
             List of aggregation reports
         """
         cutoff = datetime.now(UTC) - timedelta(days=days)
-        aggregations = []
+        aggregations: list[FlakyTestAggregationReport] = []
 
         if not self.aggregation_dir.exists():
             return aggregations

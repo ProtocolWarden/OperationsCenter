@@ -45,7 +45,7 @@ class TestBoundaryConditions:
 
         with patch.object(
             watcher,
-            "_run_pipeline",
+            "_run_direct_review",
             return_value={"result": "CONCERNS", "summary": "Still has issues"},
         ):
             watcher._phase1(
@@ -87,7 +87,7 @@ class TestBoundaryConditions:
         with (
             patch.object(
                 watcher,
-                "_run_pipeline",
+                "_run_direct_review",
                 return_value={"result": "CONCERNS", "summary": "Issue found"},
             ),
             patch.object(watcher, "_run_fix_pass", return_value=True),
@@ -128,7 +128,7 @@ class TestBoundaryConditions:
         )
         state_path = save_pr_state(tmp_path, state)
 
-        with patch.object(watcher, "_run_pipeline", return_value=None):
+        with patch.object(watcher, "_run_direct_review", return_value=None):
             watcher._phase1(
                 state,
                 state_path,
@@ -164,7 +164,7 @@ class TestBoundaryConditions:
         )
         state_path = save_pr_state(tmp_path, state)
 
-        with patch.object(watcher, "_run_pipeline", return_value=None):
+        with patch.object(watcher, "_run_direct_review", return_value=None):
             watcher._phase1(
                 state,
                 state_path,
@@ -247,7 +247,7 @@ class TestBoundaryConditions:
             with (
                 patch.object(
                     watcher,
-                    "_run_pipeline",
+                    "_run_direct_review",
                     return_value={"result": "CONCERNS", "summary": f"Issue {i}"},
                 ),
                 patch.object(watcher, "_run_fix_pass", return_value=True),
@@ -291,7 +291,7 @@ class TestBoundaryConditions:
         with (
             patch.object(
                 watcher,
-                "_run_pipeline",
+                "_run_direct_review",
                 return_value={"result": "CONCERNS", "summary": "Test"},
             ),
             patch.object(watcher, "_run_fix_pass", return_value=True),

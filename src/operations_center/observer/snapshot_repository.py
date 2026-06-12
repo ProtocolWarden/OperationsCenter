@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 # Optional imports for remote backends
 if TYPE_CHECKING:
-    import boto3  # type: ignore[import-untyped]  # ty: ignore[unresolved-import]
+    import boto3  # type: ignore[import-not-found,import-untyped]  # ty: ignore[unresolved-import]
     import requests  # type: ignore[import-untyped]  # ty: ignore[unresolved-import]
 else:
     try:
@@ -748,10 +748,10 @@ def _compute_snapshot_diff(
     snapshot1: RepoStateSnapshot, snapshot2: RepoStateSnapshot
 ) -> dict[str, dict[str, Any]]:
     """Compute differences between two snapshots."""
-    diff = {}
+    diff: dict[str, Any] = {}
 
     # Compare repo context
-    repo_diff = {}
+    repo_diff: dict[str, Any] = {}
     if snapshot1.repo.current_branch != snapshot2.repo.current_branch:
         repo_diff["current_branch"] = {
             "before": snapshot1.repo.current_branch,
@@ -767,7 +767,7 @@ def _compute_snapshot_diff(
         diff["repo"] = repo_diff
 
     # Compare signals
-    signals_diff = {}
+    signals_diff: dict[str, Any] = {}
 
     # Test signal
     if snapshot1.signals.test_signal.test_count != snapshot2.signals.test_signal.test_count:

@@ -81,6 +81,7 @@ def _make_snapshot(
 
 # TimeRange tests
 
+
 class TestTimeRange:
     def test_last_hours(self) -> None:
         tr = TimeRange.last_hours(24)
@@ -105,6 +106,7 @@ class TestTimeRange:
 
 # Single-signal query tests
 
+
 class TestGetLatestTestSignal:
     def test_returns_none_when_no_snapshots(self, query: TestSignalQuery) -> None:
         assert query.get_latest_test_signal() is None
@@ -112,7 +114,11 @@ class TestGetLatestTestSignal:
     def test_returns_latest_signal(self, tmp_snapshot_root: Path, query: TestSignalQuery) -> None:
         now = datetime.now(UTC)
         _make_snapshot(
-            "run_1", now - timedelta(hours=2), status="passing", passed_count=100, root=tmp_snapshot_root
+            "run_1",
+            now - timedelta(hours=2),
+            status="passing",
+            passed_count=100,
+            root=tmp_snapshot_root,
         )
         _make_snapshot(
             "run_2",
@@ -127,12 +133,16 @@ class TestGetLatestTestSignal:
         assert signal.status == "failing"
         assert signal.failed_count == 5
 
-    def test_skips_unavailable_signals(self, tmp_snapshot_root: Path, query: TestSignalQuery) -> None:
+    def test_skips_unavailable_signals(
+        self, tmp_snapshot_root: Path, query: TestSignalQuery
+    ) -> None:
         now = datetime.now(UTC)
         _make_snapshot("run_1", now, status="unavailable", root=tmp_snapshot_root)
         assert query.get_latest_test_signal() is None
 
-    def test_returns_none_on_corrupted_json(self, tmp_snapshot_root: Path, query: TestSignalQuery) -> None:
+    def test_returns_none_on_corrupted_json(
+        self, tmp_snapshot_root: Path, query: TestSignalQuery
+    ) -> None:
         run_dir = tmp_snapshot_root / "run_corrupt"
         run_dir.mkdir(parents=True)
         (run_dir / "repo_state_snapshot.json").write_text("invalid json")
@@ -140,7 +150,9 @@ class TestGetLatestTestSignal:
 
 
 class TestGetSignalByRunId:
-    def test_returns_signal_for_valid_run_id(self, tmp_snapshot_root: Path, query: TestSignalQuery) -> None:
+    def test_returns_signal_for_valid_run_id(
+        self, tmp_snapshot_root: Path, query: TestSignalQuery
+    ) -> None:
         now = datetime.now(UTC)
         _make_snapshot("run_abc123", now, status="passing", passed_count=50, root=tmp_snapshot_root)
         signal = query.get_signal_by_run_id("run_abc123")
@@ -150,7 +162,9 @@ class TestGetSignalByRunId:
     def test_returns_none_for_missing_run_id(self, query: TestSignalQuery) -> None:
         assert query.get_signal_by_run_id("nonexistent") is None
 
-    def test_returns_none_for_unavailable_status(self, tmp_snapshot_root: Path, query: TestSignalQuery) -> None:
+    def test_returns_none_for_unavailable_status(
+        self, tmp_snapshot_root: Path, query: TestSignalQuery
+    ) -> None:
         now = datetime.now(UTC)
         _make_snapshot("run_unavail", now, status="unavailable", root=tmp_snapshot_root)
         assert query.get_signal_by_run_id("run_unavail") is None
@@ -161,7 +175,9 @@ class TestListTestSignalHistory:
         timerange = TimeRange.last_hours(1)
         assert query.list_test_signal_history(timerange) == []
 
-    def test_returns_signals_in_order(self, tmp_snapshot_root: Path, query: TestSignalQuery) -> None:
+    def test_returns_signals_in_order(
+        self, tmp_snapshot_root: Path, query: TestSignalQuery
+    ) -> None:
         now = datetime.now(UTC)
         times = [now - timedelta(hours=i) for i in range(3, 0, -1)]
         for i, t in enumerate(times):
@@ -183,9 +199,13 @@ class TestListTestSignalHistory:
         assert len(results) == 1
         assert results[0][0] == "run_recent"
 
-    def test_skips_unavailable_signals(self, tmp_snapshot_root: Path, query: TestSignalQuery) -> None:
+    def test_skips_unavailable_signals(
+        self, tmp_snapshot_root: Path, query: TestSignalQuery
+    ) -> None:
         now = datetime.now(UTC)
-        _make_snapshot("run_good", now - timedelta(hours=1), status="passing", root=tmp_snapshot_root)
+        _make_snapshot(
+            "run_good", now - timedelta(hours=1), status="passing", root=tmp_snapshot_root
+        )
         _make_snapshot("run_bad", now, status="unavailable", root=tmp_snapshot_root)
 
         timerange = TimeRange.last_hours(2)
@@ -196,8 +216,11 @@ class TestListTestSignalHistory:
 
 # Trend analysis tests
 
+
 class TestTestStatusTrend:
-    def test_returns_none_with_fewer_than_2_snapshots(self, tmp_snapshot_root: Path, query: TestSignalQuery) -> None:
+    def test_returns_none_with_fewer_than_2_snapshots(
+        self, tmp_snapshot_root: Path, query: TestSignalQuery
+    ) -> None:
         now = datetime.now(UTC)
         _make_snapshot("run_1", now, root=tmp_snapshot_root)
         assert query.test_status_trend(count=5) is None
@@ -205,7 +228,9 @@ class TestTestStatusTrend:
     def test_detects_stable_status(self, tmp_snapshot_root: Path, query: TestSignalQuery) -> None:
         now = datetime.now(UTC)
         for i in range(5):
-            _make_snapshot(f"run_{i}", now - timedelta(hours=5 - i), status="passing", root=tmp_snapshot_root)
+            _make_snapshot(
+                f"run_{i}", now - timedelta(hours=5 - i), status="passing", root=tmp_snapshot_root
+            )
 
         trend = query.test_status_trend(count=5)
         assert trend is not None
@@ -213,7 +238,9 @@ class TestTestStatusTrend:
         assert trend.change_count == 0
         assert trend.current_status == "passing"
 
-    def test_detects_status_transitions(self, tmp_snapshot_root: Path, query: TestSignalQuery) -> None:
+    def test_detects_status_transitions(
+        self, tmp_snapshot_root: Path, query: TestSignalQuery
+    ) -> None:
         now = datetime.now(UTC)
         statuses = ["passing", "passing", "failing", "failing", "passing"]
         for i, status in enumerate(statuses):
@@ -226,7 +253,9 @@ class TestTestStatusTrend:
         assert trend.change_count == 2
         assert not trend.is_stable
 
-    def test_counts_status_occurrences(self, tmp_snapshot_root: Path, query: TestSignalQuery) -> None:
+    def test_counts_status_occurrences(
+        self, tmp_snapshot_root: Path, query: TestSignalQuery
+    ) -> None:
         now = datetime.now(UTC)
         statuses = ["passing", "passing", "failing", "passing", "failing"]
         for i, status in enumerate(statuses):
@@ -239,10 +268,14 @@ class TestTestStatusTrend:
         assert trend.status_history == {"passing": 3, "failing": 2}
         assert trend.dominant_status == "passing"
 
-    def test_returns_none_when_all_unavailable(self, tmp_snapshot_root: Path, query: TestSignalQuery) -> None:
+    def test_returns_none_when_all_unavailable(
+        self, tmp_snapshot_root: Path, query: TestSignalQuery
+    ) -> None:
         now = datetime.now(UTC)
         _make_snapshot("run_1", now, status="unavailable", root=tmp_snapshot_root)
-        _make_snapshot("run_2", now - timedelta(hours=1), status="unavailable", root=tmp_snapshot_root)
+        _make_snapshot(
+            "run_2", now - timedelta(hours=1), status="unavailable", root=tmp_snapshot_root
+        )
         assert query.test_status_trend(count=5) is None
 
 
@@ -255,9 +288,13 @@ class TestCoverageChangeRate:
         timerange = TimeRange.last_hours(1)
         assert query.coverage_change_rate(timerange) is None
 
-    def test_detects_improving_coverage(self, tmp_snapshot_root: Path, query: TestSignalQuery) -> None:
+    def test_detects_improving_coverage(
+        self, tmp_snapshot_root: Path, query: TestSignalQuery
+    ) -> None:
         now = datetime.now(UTC)
-        _make_snapshot("run_1", now - timedelta(days=7), coverage_percent=80.0, root=tmp_snapshot_root)
+        _make_snapshot(
+            "run_1", now - timedelta(days=7), coverage_percent=80.0, root=tmp_snapshot_root
+        )
         _make_snapshot("run_2", now, coverage_percent=85.0, root=tmp_snapshot_root)
 
         trend = query.coverage_change_rate(TimeRange.last_days(8))
@@ -266,9 +303,13 @@ class TestCoverageChangeRate:
         assert trend.change_percent == pytest.approx(5.0)
         assert trend.current_percent == 85.0
 
-    def test_detects_regressing_coverage(self, tmp_snapshot_root: Path, query: TestSignalQuery) -> None:
+    def test_detects_regressing_coverage(
+        self, tmp_snapshot_root: Path, query: TestSignalQuery
+    ) -> None:
         now = datetime.now(UTC)
-        _make_snapshot("run_1", now - timedelta(days=7), coverage_percent=85.0, root=tmp_snapshot_root)
+        _make_snapshot(
+            "run_1", now - timedelta(days=7), coverage_percent=85.0, root=tmp_snapshot_root
+        )
         _make_snapshot("run_2", now, coverage_percent=80.0, root=tmp_snapshot_root)
 
         trend = query.coverage_change_rate(TimeRange.last_days(8))
@@ -278,14 +319,18 @@ class TestCoverageChangeRate:
 
     def test_detects_stable_coverage(self, tmp_snapshot_root: Path, query: TestSignalQuery) -> None:
         now = datetime.now(UTC)
-        _make_snapshot("run_1", now - timedelta(days=7), coverage_percent=85.0, root=tmp_snapshot_root)
+        _make_snapshot(
+            "run_1", now - timedelta(days=7), coverage_percent=85.0, root=tmp_snapshot_root
+        )
         _make_snapshot("run_2", now, coverage_percent=85.05, root=tmp_snapshot_root)
 
         trend = query.coverage_change_rate(TimeRange.last_days(8))
         assert trend is not None
         assert trend.trend_direction == "stable"
 
-    def test_calculates_coverage_statistics(self, tmp_snapshot_root: Path, query: TestSignalQuery) -> None:
+    def test_calculates_coverage_statistics(
+        self, tmp_snapshot_root: Path, query: TestSignalQuery
+    ) -> None:
         now = datetime.now(UTC)
         percents = [80.0, 82.0, 85.0, 83.0, 87.0]
         for i, pct in enumerate(percents):
@@ -302,10 +347,16 @@ class TestCoverageChangeRate:
         assert trend.max_percent == 87.0
         assert trend.average_percent == pytest.approx(83.4)
 
-    def test_skips_none_coverage_values(self, tmp_snapshot_root: Path, query: TestSignalQuery) -> None:
+    def test_skips_none_coverage_values(
+        self, tmp_snapshot_root: Path, query: TestSignalQuery
+    ) -> None:
         now = datetime.now(UTC)
-        _make_snapshot("run_1", now - timedelta(hours=2), coverage_percent=None, root=tmp_snapshot_root)
-        _make_snapshot("run_2", now - timedelta(hours=1), coverage_percent=85.0, root=tmp_snapshot_root)
+        _make_snapshot(
+            "run_1", now - timedelta(hours=2), coverage_percent=None, root=tmp_snapshot_root
+        )
+        _make_snapshot(
+            "run_2", now - timedelta(hours=1), coverage_percent=85.0, root=tmp_snapshot_root
+        )
         _make_snapshot("run_3", now, coverage_percent=86.0, root=tmp_snapshot_root)
 
         trend = query.coverage_change_rate(TimeRange.last_hours(3))
@@ -318,7 +369,9 @@ class TestFailureReasonSummary:
         timerange = TimeRange.last_hours(24)
         assert query.failure_reason_summary(timerange) is None
 
-    def test_returns_none_with_no_failures(self, tmp_snapshot_root: Path, query: TestSignalQuery) -> None:
+    def test_returns_none_with_no_failures(
+        self, tmp_snapshot_root: Path, query: TestSignalQuery
+    ) -> None:
         now = datetime.now(UTC)
         _make_snapshot("run_1", now - timedelta(hours=1), status="passing", root=tmp_snapshot_root)
         _make_snapshot("run_2", now, status="passing", root=tmp_snapshot_root)
@@ -344,9 +397,7 @@ class TestFailureReasonSummary:
             failure_category="timeout",
             root=tmp_snapshot_root,
         )
-        _make_snapshot(
-            "run_3", now, status="passing", root=tmp_snapshot_root
-        )
+        _make_snapshot("run_3", now, status="passing", root=tmp_snapshot_root)
 
         summary = query.failure_reason_summary(TimeRange.last_hours(3))
         assert summary is not None
@@ -356,7 +407,9 @@ class TestFailureReasonSummary:
         assert summary.failing_rate == pytest.approx(2 / 3)
         assert summary.is_concerning
 
-    def test_identifies_most_common_failure(self, tmp_snapshot_root: Path, query: TestSignalQuery) -> None:
+    def test_identifies_most_common_failure(
+        self, tmp_snapshot_root: Path, query: TestSignalQuery
+    ) -> None:
         now = datetime.now(UTC)
         for i in range(4):
             _make_snapshot(
@@ -384,7 +437,12 @@ class TestFailureReasonSummary:
         now = datetime.now(UTC)
         # 5 passing, 2 failing
         for i in range(5):
-            _make_snapshot(f"run_pass_{i}", now - timedelta(hours=7 - i), status="passing", root=tmp_snapshot_root)
+            _make_snapshot(
+                f"run_pass_{i}",
+                now - timedelta(hours=7 - i),
+                status="passing",
+                root=tmp_snapshot_root,
+            )
         for i in range(2):
             _make_snapshot(
                 f"run_fail_{i}",
@@ -400,9 +458,13 @@ class TestFailureReasonSummary:
         assert summary.failing_rate == pytest.approx(2 / 7)
         assert summary.is_concerning
 
-    def test_skips_unavailable_signals(self, tmp_snapshot_root: Path, query: TestSignalQuery) -> None:
+    def test_skips_unavailable_signals(
+        self, tmp_snapshot_root: Path, query: TestSignalQuery
+    ) -> None:
         now = datetime.now(UTC)
-        _make_snapshot("run_good", now - timedelta(hours=1), status="passing", root=tmp_snapshot_root)
+        _make_snapshot(
+            "run_good", now - timedelta(hours=1), status="passing", root=tmp_snapshot_root
+        )
         _make_snapshot("run_unavail", now, status="unavailable", root=tmp_snapshot_root)
 
         summary = query.failure_reason_summary(TimeRange.last_hours(2))
@@ -410,6 +472,7 @@ class TestFailureReasonSummary:
 
 
 # Snapshot-level API tests
+
 
 class TestSnapshotAPI:
     def test_get_snapshot(self, tmp_snapshot_root: Path, query: TestSignalQuery) -> None:
@@ -438,6 +501,7 @@ class TestSnapshotAPI:
 
 
 # Integration tests
+
 
 class TestQueryIntegration:
     def test_autonomy_workflow_failure_investigation(
@@ -485,7 +549,9 @@ class TestQueryIntegration:
         assert summary.most_common == "timeout"
         assert summary.is_concerning
 
-    def test_coverage_monitoring_workflow(self, tmp_snapshot_root: Path, query: TestSignalQuery) -> None:
+    def test_coverage_monitoring_workflow(
+        self, tmp_snapshot_root: Path, query: TestSignalQuery
+    ) -> None:
         """Simulate autonomy system monitoring coverage trends."""
         now = datetime.now(UTC)
         # Create steady coverage improvement

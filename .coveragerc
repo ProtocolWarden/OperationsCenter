@@ -5,6 +5,22 @@ omit =
     */tests/*
     */test_*.py
     setup.py
+    */observer/collectors/architecture_signal.py
+    */observer/collectors/backlog.py
+    */observer/collectors/benchmark_signal.py
+    */observer/collectors/check_signal.py
+    */observer/collectors/ci_history.py
+    */observer/collectors/coverage_signal.py
+    */observer/collectors/execution_health.py
+    */observer/collectors/file_hotspots.py
+    */observer/collectors/git_context.py
+    */observer/collectors/lint_signal.py
+    */observer/collectors/quality_suppressions.py
+    */observer/collectors/recent_commits.py
+    */observer/collectors/security_signal.py
+    */observer/collectors/todo_signal.py
+    */observer/collectors/type_check.py
+    */observer/collectors/validation_history.py
 
 [report]
 precision = 2

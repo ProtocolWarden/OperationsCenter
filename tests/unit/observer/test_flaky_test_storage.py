@@ -271,3 +271,117 @@ class TestFlakyTestStorageManager:
         # Path should be: base/.flaky-tests/aggregations/YYYY-MM-DD-aggregation.json
         assert "aggregations" in str(path)
         assert "-aggregation.json" in str(path)
+
+    def test_load_recent_sessions_when_dir_not_exists(self, tmp_path):
+        """Test load_recent_sessions when session directory doesn't exist."""
+        storage = FlakyTestStorageManager(tmp_path)
+        # Don't create any session dir
+        sessions = storage.load_recent_sessions(days=7)
+        assert sessions == []
+
+    def test_load_recent_sessions_skips_old_dates(self, tmp_path):
+        """Test load_recent_sessions skips directories older than cutoff."""
+        storage = FlakyTestStorageManager(tmp_path)
+        old_date = (datetime.now(UTC).date() - timedelta(days=30)).strftime("%Y-%m-%d")
+        old_dir = storage.session_dir / old_date
+        old_dir.mkdir(parents=True, exist_ok=True)
+        (old_dir / "10-00-00-session.json").write_text('{"session_id": "old"}')
+
+        sessions = storage.load_recent_sessions(days=7)
+        assert sessions == []
+
+    def test_load_recent_sessions_skips_invalid_date_dir(self, tmp_path):
+        """Test load_recent_sessions skips non-date-named directories."""
+        storage = FlakyTestStorageManager(tmp_path)
+        invalid_dir = storage.session_dir / "not-a-date"
+        invalid_dir.mkdir(parents=True, exist_ok=True)
+        (invalid_dir / "file.json").write_text('{"session_id": "test"}')
+
+        sessions = storage.load_recent_sessions(days=7)
+        assert sessions == []
+
+    def test_load_recent_sessions_skips_non_dir(self, tmp_path):
+        """Test load_recent_sessions skips non-directory entries."""
+        storage = FlakyTestStorageManager(tmp_path)
+        storage.session_dir.mkdir(parents=True, exist_ok=True)
+        (storage.session_dir / "some-file.txt").write_text("not a dir")
+
+        sessions = storage.load_recent_sessions(days=7)
+        assert sessions == []
+
+    def test_load_recent_aggregations_when_dir_not_exists(self, tmp_path):
+        """Test load_recent_aggregations when aggregation dir doesn't exist."""
+        storage = FlakyTestStorageManager(tmp_path)
+        aggs = storage.load_recent_aggregations(days=30)
+        assert aggs == []
+
+    def test_load_recent_aggregations_skips_old_dates(self, tmp_path):
+        """Test load_recent_aggregations skips files older than cutoff."""
+        storage = FlakyTestStorageManager(tmp_path)
+        storage.aggregation_dir.mkdir(parents=True, exist_ok=True)
+        old_date = (datetime.now(UTC).date() - timedelta(days=120)).strftime("%Y-%m-%d")
+        (storage.aggregation_dir / f"{old_date}-aggregation.json").write_text("{}")
+
+        aggs = storage.load_recent_aggregations(days=30)
+        assert aggs == []
+
+    def test_load_recent_aggregations_skips_invalid_date_files(self, tmp_path):
+        """Test load_recent_aggregations skips files with non-parseable names."""
+        storage = FlakyTestStorageManager(tmp_path)
+        storage.aggregation_dir.mkdir(parents=True, exist_ok=True)
+        (storage.aggregation_dir / "invalid-aggregation.json").write_text("{}")
+
+        aggs = storage.load_recent_aggregations(days=30)
+        assert aggs == []
+
+    def test_load_recent_aggregations_handles_corrupted_json(self, tmp_path):
+        """Test load_recent_aggregations skips corrupted JSON files."""
+        storage = FlakyTestStorageManager(tmp_path)
+        storage.aggregation_dir.mkdir(parents=True, exist_ok=True)
+        today = datetime.now(UTC).date().strftime("%Y-%m-%d")
+        (storage.aggregation_dir / f"{today}-aggregation.json").write_text("{bad json")
+
+        aggs = storage.load_recent_aggregations(days=30)
+        assert aggs == []
+
+    def test_cleanup_old_sessions_when_dir_not_exists(self, tmp_path):
+        """Test cleanup_old_sessions when session directory doesn't exist."""
+        storage = FlakyTestStorageManager(tmp_path)
+        count = storage.cleanup_old_sessions()
+        assert count == 0
+
+    def test_cleanup_old_sessions_skips_non_dir(self, tmp_path):
+        """Test cleanup_old_sessions skips non-directory entries in session dir."""
+        storage = FlakyTestStorageManager(tmp_path, session_retention_days=3)
+        storage.session_dir.mkdir(parents=True, exist_ok=True)
+        (storage.session_dir / "some-file.txt").write_text("not a dir")
+
+        count = storage.cleanup_old_sessions()
+        assert count == 0
+
+    def test_cleanup_old_sessions_handles_invalid_date_dir(self, tmp_path):
+        """Test cleanup_old_sessions skips dirs with non-date names."""
+        storage = FlakyTestStorageManager(tmp_path, session_retention_days=3)
+        storage.session_dir.mkdir(parents=True, exist_ok=True)
+        invalid_dir = storage.session_dir / "not-a-valid-date"
+        invalid_dir.mkdir()
+        (invalid_dir / "file.json").write_text("{}")
+
+        count = storage.cleanup_old_sessions()
+        assert count == 0
+        assert invalid_dir.exists()
+
+    def test_cleanup_old_aggregations_when_dir_not_exists(self, tmp_path):
+        """Test cleanup_old_aggregations when aggregation dir doesn't exist."""
+        storage = FlakyTestStorageManager(tmp_path)
+        count = storage.cleanup_old_aggregations()
+        assert count == 0
+
+    def test_cleanup_old_aggregations_handles_invalid_date_files(self, tmp_path):
+        """Test cleanup_old_aggregations skips files with non-parseable dates."""
+        storage = FlakyTestStorageManager(tmp_path, aggregation_retention_days=30)
+        storage.aggregation_dir.mkdir(parents=True, exist_ok=True)
+        (storage.aggregation_dir / "invalid-aggregation.json").write_text("{}")
+
+        count = storage.cleanup_old_aggregations()
+        assert count == 0

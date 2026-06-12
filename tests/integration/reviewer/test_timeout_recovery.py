@@ -47,7 +47,7 @@ class TestTimeoutRecoveryScenarios:
         state_path = save_pr_state(tmp_path, state1)
 
         gh1 = mock_github_client()
-        with patch.object(watcher, "_run_pipeline", return_value=None):
+        with patch.object(watcher, "_run_direct_review", return_value=None):
             watcher._phase1(
                 state1,
                 state_path,
@@ -74,7 +74,7 @@ class TestTimeoutRecoveryScenarios:
         save_pr_state(tmp_path, state2)
 
         gh_escalate = mock_github_client()
-        with patch.object(watcher, "_run_pipeline", return_value=None):
+        with patch.object(watcher, "_run_direct_review", return_value=None):
             watcher._phase1(
                 state2,
                 state_path,
@@ -103,7 +103,7 @@ class TestTimeoutRecoveryScenarios:
         gh_recovery = mock_github_client()
         with patch.object(
             watcher,
-            "_run_pipeline",
+            "_run_direct_review",
             return_value={"result": "LGTM", "summary": "All good"},
         ):
             watcher._phase1(
@@ -143,7 +143,7 @@ class TestTimeoutRecoveryScenarios:
         state_path = save_pr_state(tmp_path, state)
 
         gh_poll = mock_github_client()
-        with patch.object(watcher, "_run_pipeline", return_value=None):
+        with patch.object(watcher, "_run_direct_review", return_value=None):
             watcher._phase1(
                 state,
                 state_path,
@@ -191,7 +191,7 @@ class TestTimeoutRecoveryScenarios:
         with (
             patch.object(
                 watcher,
-                "_run_pipeline",
+                "_run_direct_review",
                 return_value={"result": "CONCERNS", "summary": "Fix issues"},
             ),
             patch.object(watcher, "_run_fix_pass", return_value=True),
@@ -240,7 +240,7 @@ class TestTimeoutRecoveryScenarios:
         # Mock pending CI (no failed checks, but not all passed)
         gh.get_failed_checks.return_value = []  # No failures but...
         # Simulate pending by returning None from pipeline (CI not ready)
-        with patch.object(watcher, "_run_pipeline", return_value=None):
+        with patch.object(watcher, "_run_direct_review", return_value=None):
             watcher._phase1(
                 state1,
                 state_path,
@@ -274,7 +274,7 @@ class TestTimeoutRecoveryScenarios:
 
         with patch.object(
             watcher,
-            "_run_pipeline",
+            "_run_direct_review",
             return_value={"result": "LGTM", "summary": "All good"},
         ):
             watcher._phase1(

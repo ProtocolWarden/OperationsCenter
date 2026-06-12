@@ -192,11 +192,12 @@ class FlakyTestAggregator:
             if stats["flaky_count"] / max(1, stats["total_count"]) > 0.2
         ]
         if outbreak_modules:
+            top_modules = ', '.join(outbreak_modules[:3])
             recommendations.append(
                 {
                     "priority": "high",
                     "type": "module_outbreak",
-                    "description": f"Module outbreak detected in: {', '.join(outbreak_modules[:3])}",
+                    "description": f"Module outbreak detected in: {top_modules}",
                     "affected_modules": outbreak_modules,
                 }
             )
