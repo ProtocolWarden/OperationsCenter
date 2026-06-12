@@ -80,7 +80,7 @@ class OperatorLogChannel(AlertChannel):
             AlertChannelResult with success status
         """
         try:
-            severity = context.get("severity", "MEDIUM")
+            severity = context.get("severity", "WARNING")
             condition = context.get("condition_name", "unknown")
             error_count = context.get("error_count", 0)
             threshold = context.get("threshold", 0)
@@ -94,9 +94,9 @@ class OperatorLogChannel(AlertChannel):
             )
 
             # Log at appropriate level
-            if severity == "HIGH":
+            if severity in ("CRITICAL", "EMERGENCY"):
                 self.logger.critical(message, extra={"alert_context": context})
-            elif severity == "MEDIUM":
+            elif severity == "WARNING":
                 self.logger.warning(message, extra={"alert_context": context})
             else:
                 self.logger.info(message, extra={"alert_context": context})
@@ -202,9 +202,10 @@ class PlaneTaskChannel(AlertChannel):
     def _severity_to_priority(severity: str) -> str:
         """Map severity to Plane priority."""
         severity_map = {
-            "HIGH": "urgent",
-            "MEDIUM": "high",
-            "LOW": "medium",
+            "EMERGENCY": "urgent",
+            "CRITICAL": "high",
+            "WARNING": "medium",
+            "INFO": "low",
         }
         return severity_map.get(severity, "medium")
 
@@ -287,15 +288,15 @@ class SlackChannel(AlertChannel):
             Dictionary formatted for Slack webhook
         """
         alert_type = context.get("condition_name", "Unknown Alert")
-        severity = context.get("severity", "MEDIUM")
+        severity = context.get("severity", "WARNING")
         test_count = context.get("flaky_test_count", 0)
         failure_rate = context.get("failure_rate", 0.0)
 
         color_map = {
-            "LOW": "#36a64f",
-            "MEDIUM": "#ff9900",
-            "HIGH": "#ff3333",
-            "CRITICAL": "#8b0000",
+            "INFO": "#36a64f",
+            "WARNING": "#ff9900",
+            "CRITICAL": "#ff3333",
+            "EMERGENCY": "#8b0000",
         }
         color = color_map.get(severity, "#cccccc")
 
@@ -410,7 +411,7 @@ class EmailChannel(AlertChannel):
             Tuple of (subject, text_body, html_body)
         """
         alert_type = context.get("condition_name", "Flaky Test Alert")
-        severity = context.get("severity", "MEDIUM")
+        severity = context.get("severity", "WARNING")
         test_count = context.get("flaky_test_count", 0)
         failure_rate = context.get("failure_rate", 0.0)
 
@@ -566,15 +567,15 @@ class GitHubChannel(AlertChannel):
             Markdown-formatted comment body
         """
         alert_type = context.get("condition_name", "Flaky Test Alert")
-        severity = context.get("severity", "MEDIUM")
+        severity = context.get("severity", "WARNING")
         test_count = context.get("flaky_test_count", 0)
         failure_rate = context.get("failure_rate", 0.0)
 
         severity_emoji = {
-            "LOW": "⚠️",
-            "MEDIUM": "⚠️⚠️",
-            "HIGH": "🚨",
-            "CRITICAL": "🚨🚨",
+            "INFO": "ℹ️",
+            "WARNING": "⚠️",
+            "CRITICAL": "🚨",
+            "EMERGENCY": "🚨🚨",
         }
         emoji = severity_emoji.get(severity, "⚠️")
 
