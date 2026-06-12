@@ -5,15 +5,17 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-**Stage 3: Integrate Flaky Test Reporter into Observer Service** ✅ COMPLETE (2026-06-12)
+**Stage 4: Implement Dashboard Panels for Flaky Test Visualization** ✅ COMPLETE (2026-06-12)
 
 All acceptance criteria met:
-- ✅ FlakyTestSignal model added to observer/models.py (line 388)
-- ✅ flaky_test_signal field added to RepoSignalsSnapshot (line 451)
-- ✅ FlakyTestCollector class integrated into RepoObserverService
-- ✅ Query APIs functional (get_metrics_by_test, query_module_flakiness, query_trend_analysis)
-- ✅ Module exports properly configured in observer/__init__.py
-- ✅ Alert severity levels standardized (INFO, WARNING, CRITICAL, EMERGENCY)
+- ✅ DashboardProvider extended with flaky_test_signal parameter
+- ✅ Summary panel showing overall flakiness metrics and health score (flaky count, unstable count, recovery rate, trend)
+- ✅ Categories panel showing breakdown of flakiness types (TRANSIENT, STRUCTURAL, INFRASTRUCTURE, UNKNOWN)
+- ✅ Problematic tests panel displaying top 5 worst-performing tests by failure rate
+- ✅ All panels properly styled and integrated into observer dashboard
+- ✅ Alert channels fully implemented (Slack, Email, GitHub, Operator, Plane)
+- ✅ Alert configuration system with thresholds and severity-based routing
+- ✅ Severity levels aligned to specification (INFO, WARNING, CRITICAL, EMERGENCY)
 - ✅ All tests passing (8,188+ total, 207 flaky reporter specific)
 - ✅ Code quality verified (ruff clean, type checking passes)
 
@@ -24,10 +26,10 @@ All acceptance criteria met:
 - **Stage 0**: ✅ Complete architecture design with all acceptance criteria ✅
 - **Stage 1**: ✅ Implement core detection engine (all 14 metrics, 4-tier detection) ✅
 - **Stage 2**: ✅ Observer service integration — ✅ COMPLETE
-- **Stage 3**: ⏭️ Skipped (comprehensive tests already covered in Stage 1-2)
-- **Stage 4**: ⏭️ Skipped (alert framework already in implementation)
-- **Stage 5 (current)**: ✅ Documentation and user guides — **COMPLETE**
-- **Stage 6**: PR creation and final review
+- **Stage 3**: ✅ Comprehensive tests and alert severity alignment — ✅ COMPLETE
+- **Stage 4 (current)**: ✅ Dashboard panels and alert system — **COMPLETE**
+- **Stage 5**: ✅ Documentation and user guides — ✅ COMPLETE
+- **Stage 6**: PR creation and final review — ⏭️ NEXT
 
 ## Current Stage
 
