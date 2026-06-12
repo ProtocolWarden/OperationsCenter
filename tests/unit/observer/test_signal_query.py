@@ -7,6 +7,7 @@ import pytest
 
 from operations_center.observer.models import (
     DependencyDriftSignal,
+    FlakyTestSignal,
     RepoContextSnapshot,
     RepoSignalsSnapshot,
     RepoStateSnapshot,
@@ -14,6 +15,7 @@ from operations_center.observer.models import (
     TodoSignal,
 )
 from operations_center.observer.query import (
+    FlakyTest,
     TestSignalQuery,
     TimeRange,
 )
@@ -571,3 +573,186 @@ class TestQueryIntegration:
 
         history = query.list_test_signal_history(TimeRange.last_days(6))
         assert len(history) == 5
+
+
+# Flaky test query tests
+
+
+class TestFlakyTestQueries:
+    def _make_flaky_snapshot(
+        self,
+        run_id: str,
+        observed_at: datetime,
+        flaky_count: int = 5,
+        unstable_count: int = 3,
+        most_problematic: list[dict] | None = None,
+        root: Path | None = None,
+    ) -> Path:
+        """Helper to create a snapshot with flaky test signal."""
+        if most_problematic is None:
+            most_problematic = [
+                {"name": "tests/test_a.py::test_1", "failure_rate": 0.6, "run_count": 10},
+                {"name": "tests/test_b.py::test_2", "failure_rate": 0.4, "run_count": 10},
+                {"name": "tests/test_c.py::test_3", "failure_rate": 0.3, "run_count": 10},
+            ]
+
+        snapshot = RepoStateSnapshot(
+            run_id=run_id,
+            observed_at=observed_at,
+            source_command="test observe",
+            repo=RepoContextSnapshot(
+                name="test-repo",
+                path=Path("/test"),
+                current_branch="main",
+                is_dirty=False,
+            ),
+            signals=RepoSignalsSnapshot(
+                test_signal=TestSignal(status="passing"),
+                dependency_drift=DependencyDriftSignal(status="unavailable"),
+                todo_signal=TodoSignal(),
+                flaky_test_signal=FlakyTestSignal(
+                    status="measured",
+                    flaky_test_count=flaky_count,
+                    unstable_test_count=unstable_count,
+                    most_problematic_tests=most_problematic,
+                    affected_modules=["tests/unit", "tests/integration"],
+                    category_breakdown={"INTERMITTENT": 3, "ENVIRONMENT": 2},
+                    recovery_rate=0.5,
+                    failure_rate_trend=1.2,
+                    estimated_impact={"ci_slowdown_percent": 15.0},
+                ),
+            ),
+        )
+
+        run_dir = root / run_id
+        run_dir.mkdir(parents=True, exist_ok=True)
+        json_path = run_dir / "repo_state_snapshot.json"
+        json_path.write_text(snapshot.model_dump_json(), encoding="utf-8")
+        return json_path
+
+    def test_get_flaky_tests(self, tmp_snapshot_root: Path) -> None:
+        """Test retrieving flaky tests."""
+        now = datetime.now(UTC)
+        self._make_flaky_snapshot("run_1", now - timedelta(hours=2), root=tmp_snapshot_root)
+
+        query = TestSignalQuery(root=tmp_snapshot_root)
+        flaky_tests = query.get_flaky_tests()
+
+        assert len(flaky_tests) == 3
+        assert flaky_tests[0].name == "tests/test_a.py::test_1"
+        assert flaky_tests[0].failure_rate == 0.6
+        assert flaky_tests[0].run_count == 10
+
+    def test_get_flaky_tests_sorted_by_failure_rate(self, tmp_snapshot_root: Path) -> None:
+        """Test flaky tests are sorted by failure rate descending."""
+        now = datetime.now(UTC)
+        self._make_flaky_snapshot("run_1", now, root=tmp_snapshot_root)
+
+        query = TestSignalQuery(root=tmp_snapshot_root)
+        flaky_tests = query.get_flaky_tests()
+
+        failure_rates = [t.failure_rate for t in flaky_tests]
+        assert failure_rates == sorted(failure_rates, reverse=True)
+
+    def test_get_flaky_tests_empty(self, tmp_snapshot_root: Path) -> None:
+        """Test get_flaky_tests with no flaky tests."""
+        now = datetime.now(UTC)
+        self._make_flaky_snapshot(
+            "run_1", now, flaky_count=0, most_problematic=[], root=tmp_snapshot_root
+        )
+
+        query = TestSignalQuery(root=tmp_snapshot_root)
+        flaky_tests = query.get_flaky_tests()
+
+        assert len(flaky_tests) == 0
+
+    def test_get_test_metrics(self, tmp_snapshot_root: Path) -> None:
+        """Test retrieving aggregated test metrics."""
+        now = datetime.now(UTC)
+        self._make_flaky_snapshot("run_1", now, root=tmp_snapshot_root)
+
+        query = TestSignalQuery(root=tmp_snapshot_root)
+        metrics = query.get_test_metrics()
+
+        assert metrics is not None
+        assert metrics.total_flaky_tests == 5
+        assert metrics.unstable_tests == 3
+        assert len(metrics.affected_modules) == 2
+        assert metrics.trend == 1.2
+        assert len(metrics.most_problematic) > 0
+
+    def test_get_repository_health(self, tmp_snapshot_root: Path) -> None:
+        """Test repository health assessment."""
+        now = datetime.now(UTC)
+        self._make_flaky_snapshot("run_1", now, flaky_count=2, root=tmp_snapshot_root)
+
+        query = TestSignalQuery(root=tmp_snapshot_root)
+        health = query.get_repository_health()
+
+        assert health.status in ["HEALTHY", "NOMINAL", "DEGRADED", "CRITICAL"]
+        assert health.flaky_test_percent >= 0.0
+        assert health.affected_modules_count == 2
+
+    def test_filter_by_category(self, tmp_snapshot_root: Path) -> None:
+        """Test filtering flaky tests by category."""
+        now = datetime.now(UTC)
+        self._make_flaky_snapshot(
+            "run_1",
+            now,
+            most_problematic=[
+                {
+                    "name": "tests/test_intermittent.py::test",
+                    "failure_rate": 0.5,
+                    "run_count": 10,
+                    "category": "INTERMITTENT",
+                },
+                {
+                    "name": "tests/test_env.py::test",
+                    "failure_rate": 0.3,
+                    "run_count": 10,
+                    "category": "ENVIRONMENT",
+                },
+            ],
+            root=tmp_snapshot_root,
+        )
+
+        query = TestSignalQuery(root=tmp_snapshot_root)
+        intermittent = query.filter_by_category("INTERMITTENT")
+
+        assert len(intermittent) == 1
+        assert intermittent[0].category == "INTERMITTENT"
+
+    def test_filter_by_category_case_insensitive(self, tmp_snapshot_root: Path) -> None:
+        """Test category filtering is case-insensitive."""
+        now = datetime.now(UTC)
+        self._make_flaky_snapshot(
+            "run_1",
+            now,
+            most_problematic=[
+                {
+                    "name": "tests/test.py::test",
+                    "failure_rate": 0.5,
+                    "run_count": 10,
+                    "category": "ENVIRONMENT",
+                }
+            ],
+            root=tmp_snapshot_root,
+        )
+
+        query = TestSignalQuery(root=tmp_snapshot_root)
+        env_tests = query.filter_by_category("environment")
+
+        assert len(env_tests) == 1
+
+    def test_query_with_time_range(self, tmp_snapshot_root: Path) -> None:
+        """Test flaky test queries with time range."""
+        now = datetime.now(UTC)
+        self._make_flaky_snapshot("run_old", now - timedelta(days=10), root=tmp_snapshot_root)
+        self._make_flaky_snapshot("run_recent", now - timedelta(hours=2), root=tmp_snapshot_root)
+
+        query = TestSignalQuery(root=tmp_snapshot_root)
+        recent = query.get_flaky_tests(TimeRange.last_days(1))
+
+        assert len(recent) == 3
+        first_test_name = recent[0].name
+        assert first_test_name.startswith("tests/")
