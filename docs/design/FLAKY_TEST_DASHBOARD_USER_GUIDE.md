@@ -1,3 +1,10 @@
+---
+title: Flaky Test Reporter — Dashboard User Guide
+status: complete
+version: "1.0"
+last_updated: "2026-06-12"
+---
+
 # Flaky Test Reporter — Dashboard User Guide
 
 **Version**: 1.0  
