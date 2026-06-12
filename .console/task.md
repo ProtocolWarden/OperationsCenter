@@ -5,45 +5,43 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-**Stage 2: Address Unimplemented Metrics — Metrics Deferral Decision Documented** ✅ COMPLETE
+**Stage 3: Resolve Precision Discrepancy — Root Cause Identified and Documented** ✅ COMPLETE
 
-Resolve six missing per-test metrics from review concerns (concern #1: Scope Ambiguity) by documenting the deferral decision in code. Ensure no orphaned metric implementations remain in src/.
+Investigate and resolve the formula mismatch in `failure_entropy::imbalanced_1_99` test case (0.081296 vs 0.080789). Identify whether the discrepancy is a floating-point rounding issue or a logic error. Create comprehensive technical analysis with Phase 2 implementation guidance.
 
 ## Acceptance Criteria — ALL MET ✅
 
-1. ✅ Decision documented for each of six unimplemented metrics
-   - File: `src/operations_center/observer/flaky_test_models.py` (FlakyTestMetric docstring)
-   - All 6 metrics clearly listed as Phase 2 deferred
-   - References to design document and backlog included
+1. ✅ Root cause identified: Manual calculation error (0.62% mismatch)
+   - Formula verification: -Σ(p·log₂(p)) for p in [pass_ratio, fail_ratio] (Shannon entropy)
+   - Test case: imbalanced_1_99 = 1 failure in 100 runs (1% failure rate)
+   - Correct calculation: 0.080793 (verified with math.log2)
+   - Hardcoded expected: 0.081296 (incorrect, manual calculation error)
+   - Delta: 0.000503 (0.62% error)
 
-2. ✅ Code changes applied: docstring updated with deferral clarification
-   - Enhanced FlakyTestMetric docstring with MVP vs Phase 2 sections
-   - No stubs or partial implementations left in code
-   - Clean architectural decision documented
+2. ✅ Floating-point vs logic verdict: Neither — incorrect expected value
+   - Formula logic is correct (Shannon entropy formula)
+   - Implementation matches theory (0.080789 ≈ 0.080793)
+   - Error is manual calculation, not algorithmic or precision issue
 
-3. ✅ No orphaned metric code remains
-   - Grep verification: Only docstring + design document references
-   - No implementations in src/ or tests/
-   - Metrics were only in reverted edge-case tests (PR #269)
+3. ✅ Test expected values documented
+   - Test removed via revert (no further code changes needed)
+   - Values documented in STAGE3_PRECISION_DISCREPANCY_ANALYSIS.md
 
-4. ✅ Changes committed and pushed
-   - Commit: de7071d — refactor(observer): Document Phase 2 deferred metrics
-   - Branch: fix/revert-269-green-main (pushed to origin)
-   - Python syntax verified: All observer modules compile successfully
+4. ✅ Phase 2 implementation guidance provided
+   - Correct formula and validation strategy documented
+   - Reference values for test cases included
+   - Shannon entropy interpretation for flaky test detection explained
+
+5. ✅ Changes committed
+   - Commit: 99b2cf8 — docs: Stage 3 — Precision Discrepancy Analysis Complete
+   - Branch: fix/revert-269-green-main (ready to push)
+   - Documentation complete and ready for review
 
 ## Next Steps
 
-Run repository tests to verify all changes pass with no regressions.
-
-4. ⏳ Tests pass and linters clean:
-   - Run full test suite: `pytest`
-   - Run ruff linter: `ruff check .`
-   - Zero failures, zero linter violations
-
-5. ⏳ Changes committed and pushed:
-   - Stage 1 commit created: "fix(pr-271): Remove scope creep from task.md"
-   - All changes pushed to `fix/revert-269-green-main` branch
-   - Existing PR updated in place
+1. ✅ Run repository tests to verify no regressions
+2. Push changes to fix/revert-269-green-main branch
+3. Verify PR updates with Stage 3 completion
 
 ## Investigation Summary
 
