@@ -1,3 +1,17 @@
+## 2026-06-12 — feat(observer): flaky_metrics — correct, validated metric library
+
+Implements the flakiness metrics the reverted #269 botched, as pure validated functions in
+observer/flaky_metrics.py: 7 per-test (failure_rate, failure_entropy [normalised binary Shannon],
+streak_variance, recovery_time_percentile_90, duration_stability [CoV], environment_correlation
+[Pearson], isolation_score) and 7 repository-level (flaky_test_percentage, median_failure_rate,
+flaky_growth_rate, category_concentration, critical_test_flakiness_ratio, flaky_velocity,
+repository_health_score). Each has well-defined edge behaviour (div-by-zero, empty, no-variation)
+and a derived-ground-truth test (80 tests). Expected values are correct: e.g. failure_entropy(1,99)
+= 0.080793, NOT the 0.081296 the reverted suite asserted. The 3 per-test metrics computable from
+collected data (failure_entropy, streak_variance, duration_stability) are wired into FlakyTestMetric
++ the reporter + to_dict; environment_correlation and isolation_score are implemented+tested but need
+a collector that records env vectors / serial-vs-parallel failures before wiring (documented).
+
 ## 2026-06-12 — fix(reviewer): require CI *settled* before declaring green (root cause of #269 merging red)
 
 The merge gate declared CI green whenever get_failed_checks returned [] — but that only means
