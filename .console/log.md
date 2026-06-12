@@ -1,3 +1,17 @@
+## 2026-06-12 — fix(controller): _restart_watchers killed the supervisor (fleet-wide outage on every merge)
+
+`_restart_watchers()` SIGTERM'd the pid in each `*.pid` file — but that pid is the
+`setsid bash` *wrapper*, whose `trap TERM → exit 0` kills the supervisor loop, so the
+watcher never relaunches. The watchdog (the only reviver) was in the kill list too, so a
+single `git pull`-triggered restart took the whole fleet down until manual relaunch.
+Observed live: all 8 watchers + watchdog died 2026-06-11T14:16Z on a sibling merge; PR #265
+sat unmergeable (CONCERNS, fix pass undispatched) for 13h. Fix: bounce the wrapper's Python
+*child* (`pkill -TERM -P <wrapper> -f operations_center.entrypoints`) so the surviving
+wrapper relaunches it against fresh editable source; never touch the watchdog. +4 unit tests
+in tests/test_loop_controller.py (bounce-not-wrapper, watchdog-untouched, dead-wrapper-skip,
+missing-pidfile-skip). NOTE: takes effect only after the running controller is restarted —
+it does not self-re-exec.
+
 ## 2026-06-11 — Stage 3: Run Comprehensive Test and Linter Suite with Actual Verified Output (✅ COMPLETE)
 
 ### Objective
