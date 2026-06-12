@@ -8,12 +8,13 @@ to achieve ≥85% code coverage threshold.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from operations_center.observer.flaky_test_aggregator import FlakyTestAggregator
-from operations_center.observer.flaky_test_alert_config import FlakyTestAlertConfig
+from operations_center.observer.flaky_test_alert_config import (
+    FlakyTestAlertConfig,
+)
 from operations_center.observer.flaky_test_alerts import (
     AlertSeverity,
     FlakyTestAlert,
@@ -23,7 +24,10 @@ from operations_center.observer.flaky_test_reporter import (
     FlakyTestMetric,
     FlakynessCategory,
 )
-from operations_center.observer.flaky_test_storage import FlakyTestAggregationReport
+from operations_center.observer.flaky_test_storage import (
+    FlakyTestAggregationReport,
+    FlakyTestStorageManager,
+)
 
 
 @pytest.mark.flaky
@@ -229,140 +233,155 @@ class TestFlakyTestAlertDetectionPaths:
 class TestFlakyTestAggregatorDetailedCoverage:
     """Detailed tests for aggregator to improve coverage."""
 
-    def test_aggregator_no_metrics(self) -> None:
-        """Test aggregation with no metrics."""
-        aggregator = FlakyTestAggregator()
-        result = aggregator.aggregate([])
+    def test_aggregator_no_metrics(self, tmp_path: pytest.fixture) -> None:
+        """Test aggregation with no session data in storage."""
+        storage = FlakyTestStorageManager(tmp_path)
+        aggregator = FlakyTestAggregator(storage)
+        result = aggregator.aggregate(days=7)
 
         assert result is not None
         assert result.flaky_test_count == 0
 
-    def test_aggregator_single_stable_test(self) -> None:
+    def test_aggregator_single_stable_test(self, tmp_path: pytest.fixture) -> None:
         """Test aggregation with single stable test (no flakiness)."""
-        aggregator = FlakyTestAggregator()
+        storage = FlakyTestStorageManager(tmp_path)
+        aggregator = FlakyTestAggregator(storage)
 
-        metric = FlakyTestMetric(
-            nodeid="tests/unit/test_stable.py::test_method",
-            failure_rate=0.02,
-            run_count=100,
-            flakiness_score=0.05,
-            confidence=0.99,
+        storage.save_session_results(
+            {
+                "session_count": 100,
+                "flaky_candidates": [],
+                "unstable_candidates": [
+                    {
+                        "test_name": "tests/unit/test_stable.py::test_method",
+                        "failure_rate": 0.02,
+                        "first_seen": "2026-06-12T08:00:00+00:00",
+                        "category": "unknown",
+                    }
+                ],
+            }
         )
 
-        result = aggregator.aggregate([metric])
+        result = aggregator.aggregate(days=7)
         assert result is not None
 
-    def test_aggregator_mixed_stability_metrics(self) -> None:
+    def test_aggregator_mixed_stability_metrics(self, tmp_path: pytest.fixture) -> None:
         """Test aggregation with mix of stable and unstable tests."""
-        aggregator = FlakyTestAggregator()
+        storage = FlakyTestStorageManager(tmp_path)
+        aggregator = FlakyTestAggregator(storage)
 
-        metrics = [
-            # Stable tests
-            FlakyTestMetric(
-                nodeid="tests/test_stable_1.py::test_method",
-                failure_rate=0.01,
-                run_count=100,
-            ),
-            FlakyTestMetric(
-                nodeid="tests/test_stable_2.py::test_method",
-                failure_rate=0.02,
-                run_count=50,
-            ),
-            # Flaky tests
-            FlakyTestMetric(
-                nodeid="tests/test_flaky_1.py::test_method",
-                failure_rate=0.35,
-                run_count=20,
-            ),
-            FlakyTestMetric(
-                nodeid="tests/test_flaky_2.py::test_method",
-                failure_rate=0.50,
-                run_count=20,
-            ),
-            # Unstable tests
-            FlakyTestMetric(
-                nodeid="tests/test_unstable_1.py::test_method",
-                failure_rate=0.08,
-                run_count=25,
-            ),
-        ]
+        storage.save_session_results(
+            {
+                "session_count": 50,
+                "flaky_candidates": [
+                    {
+                        "test_name": "tests/test_flaky_1.py::test_method",
+                        "failure_rate": 0.35,
+                        "first_seen": "2026-06-12T08:00:00+00:00",
+                        "category": "intermittent",
+                    },
+                    {
+                        "test_name": "tests/test_flaky_2.py::test_method",
+                        "failure_rate": 0.50,
+                        "first_seen": "2026-06-12T08:00:00+00:00",
+                        "category": "infrastructure",
+                    },
+                ],
+                "unstable_candidates": [
+                    {
+                        "test_name": "tests/test_unstable_1.py::test_method",
+                        "failure_rate": 0.08,
+                        "first_seen": "2026-06-12T08:00:00+00:00",
+                        "category": "unknown",
+                    }
+                ],
+            }
+        )
 
-        result = aggregator.aggregate(metrics)
+        result = aggregator.aggregate(days=7)
         assert result is not None
-        # Should categorize into flaky, unstable, and stable
         assert result.flaky_test_count >= 0
 
-    def test_aggregator_with_multiple_modules(self) -> None:
+    def test_aggregator_with_multiple_modules(self, tmp_path: pytest.fixture) -> None:
         """Test aggregator breakdown by module."""
-        aggregator = FlakyTestAggregator()
+        storage = FlakyTestStorageManager(tmp_path)
+        aggregator = FlakyTestAggregator(storage)
 
-        metrics = [
-            FlakyTestMetric(
-                nodeid=f"tests/auth/test_login.py::test_case_{i}",
-                failure_rate=0.3 if i % 2 == 0 else 0.05,
-                run_count=10,
-                suspected_category=FlakynessCategory.INTERMITTENT
-                if i % 2 == 0
-                else None,
-            )
-            for i in range(5)
-        ] + [
-            FlakyTestMetric(
-                nodeid=f"tests/api/test_endpoints.py::test_case_{i}",
-                failure_rate=0.4 if i % 2 == 0 else 0.02,
-                run_count=15,
-            )
-            for i in range(5)
-        ]
+        storage.save_session_results(
+            {
+                "session_count": 30,
+                "flaky_candidates": [
+                    {
+                        "test_name": f"tests/auth/test_login.py::test_case_{i}",
+                        "failure_rate": 0.3,
+                        "first_seen": "2026-06-12T08:00:00+00:00",
+                        "category": "intermittent",
+                    }
+                    for i in range(5)
+                ]
+                + [
+                    {
+                        "test_name": f"tests/api/test_endpoints.py::test_case_{i}",
+                        "failure_rate": 0.4,
+                        "first_seen": "2026-06-12T08:00:00+00:00",
+                        "category": "infrastructure",
+                    }
+                    for i in range(5)
+                ],
+                "unstable_candidates": [],
+            }
+        )
 
-        result = aggregator.aggregate(metrics)
+        result = aggregator.aggregate(days=7)
         assert result is not None
         assert len(result.by_module) > 0
 
-    def test_aggregator_category_assignment(self) -> None:
+    def test_aggregator_category_assignment(self, tmp_path: pytest.fixture) -> None:
         """Test aggregator handles metrics with various categories."""
-        aggregator = FlakyTestAggregator()
+        storage = FlakyTestStorageManager(tmp_path)
+        aggregator = FlakyTestAggregator(storage)
 
-        metrics = [
-            FlakyTestMetric(
-                nodeid=f"tests/test_{cat}.py::test_method",
-                failure_rate=0.3,
-                run_count=10,
-                suspected_category=cat,
-            )
-            for cat in [
-                FlakynessCategory.INTERMITTENT,
-                FlakynessCategory.INFRASTRUCTURE,
-                FlakynessCategory.ENVIRONMENT,
-                FlakynessCategory.UNKNOWN,
-            ]
-        ]
+        storage.save_session_results(
+            {
+                "session_count": 40,
+                "flaky_candidates": [
+                    {
+                        "test_name": f"tests/test_{cat}.py::test_method",
+                        "failure_rate": 0.3,
+                        "first_seen": "2026-06-12T08:00:00+00:00",
+                        "category": cat,
+                    }
+                    for cat in ["intermittent", "infrastructure", "environment", "unknown"]
+                ],
+                "unstable_candidates": [],
+            }
+        )
 
-        result = aggregator.aggregate(metrics)
+        result = aggregator.aggregate(days=7)
         assert result is not None
 
-    def test_aggregator_high_volume_metrics(self) -> None:
-        """Test aggregator with many metrics (stress test)."""
-        aggregator = FlakyTestAggregator()
+    def test_aggregator_high_volume_metrics(self, tmp_path: pytest.fixture) -> None:
+        """Test aggregator with many session entries (stress test)."""
+        storage = FlakyTestStorageManager(tmp_path)
+        aggregator = FlakyTestAggregator(storage)
 
-        # Create 100 metrics with varying failure rates
-        metrics = [
-            FlakyTestMetric(
-                nodeid=f"tests/unit/test_module_{i // 20}.py::test_case_{i % 20}",
-                failure_rate=(i % 100) / 100.0,
-                run_count=10 + (i % 30),
-                suspected_category=(
-                    FlakynessCategory.INTERMITTENT
-                    if i % 3 == 0
-                    else FlakynessCategory.INFRASTRUCTURE
-                    if i % 3 == 1
-                    else None
-                ),
-            )
-            for i in range(100)
-        ]
+        storage.save_session_results(
+            {
+                "session_count": 1000,
+                "flaky_candidates": [
+                    {
+                        "test_name": f"tests/unit/test_module_{i // 20}.py::test_case_{i % 20}",
+                        "failure_rate": (i % 90 + 10) / 100.0,
+                        "first_seen": "2026-06-12T08:00:00+00:00",
+                        "category": "intermittent" if i % 2 == 0 else "infrastructure",
+                    }
+                    for i in range(100)
+                ],
+                "unstable_candidates": [],
+            }
+        )
 
-        result = aggregator.aggregate(metrics)
+        result = aggregator.aggregate(days=7)
         assert result is not None
         assert result.total_test_executions > 0
 
@@ -372,69 +391,34 @@ class TestAlertConfigDetailedCoverage:
     """Detailed tests for alert configuration."""
 
     def test_alert_config_all_thresholds(self) -> None:
-        """Test alert config with all customizable thresholds."""
-        config = FlakyTestAlertConfig(
-            failure_rate_threshold=0.45,
-            duration_variance_threshold=2.5,
-            streak_variance_threshold=0.5,
-            recovery_time_threshold_days=2.0,
-            entropy_threshold=0.75,
-            environment_correlation_threshold=0.65,
-            isolation_score_threshold=0.3,
-        )
+        """Test alert config initializes channel routes for all alert types."""
+        config = FlakyTestAlertConfig()
 
-        assert config.failure_rate_threshold == 0.45
-        assert config.duration_variance_threshold == 2.5
-        assert config.recovery_time_threshold_days == 2.0
+        assert "NEW_FLAKY_TEST" in config.channel_routes
+        assert "REGRESSION_SPIKE" in config.channel_routes
+        assert "CRITICAL_FLAKINESS" in config.channel_routes
 
     def test_alert_config_get_severity_for_metric(self) -> None:
-        """Test severity classification for metrics."""
-        config = FlakyTestAlertConfig(failure_rate_threshold=0.5)
+        """Test severity classification via should_alert methods."""
+        config = FlakyTestAlertConfig()
 
-        # Low failure rate
-        metric_low = FlakyTestMetric(
-            nodeid="test_low",
-            failure_rate=0.1,
-            run_count=10,
-        )
+        should_low, sev_low = config.should_alert_on_failure_rate(0.1)
+        should_high, sev_high = config.should_alert_on_failure_rate(0.8)
 
-        # Medium failure rate
-        metric_med = FlakyTestMetric(
-            nodeid="test_med",
-            failure_rate=0.4,
-            run_count=10,
-        )
-
-        # High failure rate
-        metric_high = FlakyTestMetric(
-            nodeid="test_high",
-            failure_rate=0.8,
-            run_count=10,
-        )
-
-        # Just test that config can work with these
-        assert config is not None
+        assert isinstance(should_low, bool)
+        assert isinstance(sev_low, str)
+        assert isinstance(should_high, bool)
+        assert isinstance(sev_high, str)
 
     def test_alert_config_with_module_filtering(self) -> None:
-        """Test alert config can filter by module patterns."""
-        config = FlakyTestAlertConfig(
-            failure_rate_threshold=0.5,
-        )
+        """Test alert config can be queried for different alert types."""
+        config = FlakyTestAlertConfig()
 
-        # Should work with metrics from various modules
-        metric1 = FlakyTestMetric(
-            nodeid="tests/unit/auth/test_login.py::test_valid",
-            failure_rate=0.6,
-            run_count=10,
-        )
+        channels_warning = config.get_channels_for_alert("NEW_FLAKY_TEST", severity="WARNING")
+        channels_critical = config.get_channels_for_alert("NEW_FLAKY_TEST", severity="CRITICAL")
 
-        metric2 = FlakyTestMetric(
-            nodeid="tests/integration/api/test_endpoints.py::test_get",
-            failure_rate=0.3,
-            run_count=10,
-        )
-
-        assert config is not None
+        assert isinstance(channels_warning, list)
+        assert isinstance(channels_critical, list)
 
 
 @pytest.mark.flaky
@@ -476,7 +460,6 @@ class TestAlertMetricInteractions:
             ),
         ]
 
-        alert_manager = FlakyTestAlertManager()
         # Should be able to process metrics with markers
         assert metrics is not None
 
@@ -500,24 +483,31 @@ class TestAlertMetricInteractions:
         for metric in metrics:
             assert metric.last_failure_reason is not None
 
-    def test_aggregation_with_recovery_rates(self) -> None:
-        """Test aggregation considers recovery rates."""
-        aggregator = FlakyTestAggregator()
+    def test_aggregation_with_recovery_rates(self, tmp_path: pytest.fixture) -> None:
+        """Test aggregation from storage with recovery data."""
+        storage = FlakyTestStorageManager(tmp_path)
+        aggregator = FlakyTestAggregator(storage)
 
-        metrics = [
-            FlakyTestMetric(
-                nodeid="tests/test_quick_recovery.py::test_method",
-                failure_rate=0.3,
-                run_count=20,
-                recovery_time_days=0.5,
-            ),
-            FlakyTestMetric(
-                nodeid="tests/test_slow_recovery.py::test_method",
-                failure_rate=0.3,
-                run_count=20,
-                recovery_time_days=5.0,
-            ),
-        ]
+        storage.save_session_results(
+            {
+                "session_count": 40,
+                "flaky_candidates": [
+                    {
+                        "test_name": "tests/test_quick_recovery.py::test_method",
+                        "failure_rate": 0.3,
+                        "first_seen": "2026-06-12T08:00:00+00:00",
+                        "category": "intermittent",
+                    },
+                    {
+                        "test_name": "tests/test_slow_recovery.py::test_method",
+                        "failure_rate": 0.3,
+                        "first_seen": "2026-06-10T08:00:00+00:00",
+                        "category": "infrastructure",
+                    },
+                ],
+                "unstable_candidates": [],
+            }
+        )
 
-        result = aggregator.aggregate(metrics)
+        result = aggregator.aggregate(days=7)
         assert result is not None

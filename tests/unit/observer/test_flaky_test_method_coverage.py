@@ -8,7 +8,6 @@ coverage across all modules and achieve ≥85% threshold.
 
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -42,13 +41,11 @@ class TestFlakyTestMetricMethods:
             run_count=4,
             flakiness_score=0.3,
             confidence=0.8,
-            failure_entropy=0.65,
-            streak_variance=0.4,
+            pattern_entropy=0.65,
+            streak_length=3,
             recovery_time_days=1.5,
             duration_variance=2.1,
-            environment_correlation=0.55,
-            isolation_score=0.85,
-            retry_success_rate=0.7,
+            retry_success_count=2,
             markers=["slow", "integration"],
             last_failure_reason="Timeout",
             suspected_category=FlakynessCategory.INTERMITTENT,
@@ -57,27 +54,27 @@ class TestFlakyTestMetricMethods:
         data = metric.to_dict()
         assert data["nodeid"] == "tests/unit/test_foo.py::test_method"
         assert data["failure_rate"] == 0.25
-        assert data["failure_entropy"] == 0.65
-        assert data["streak_variance"] == 0.4
+        assert data["pattern_entropy"] == 0.65
+        assert data["streak_length"] == 3
         assert data["recovery_time_days"] == 1.5
         assert data["markers"] == ["slow", "integration"]
         assert data["suspected_category"] == "intermittent"
 
     def test_metric_to_dict_with_none_values(self) -> None:
-        """Test FlakyTestMetric.to_dict handles None values correctly."""
+        """Test FlakyTestMetric.to_dict handles None/default values correctly."""
         metric = FlakyTestMetric(
             nodeid="test",
             failure_rate=0.5,
             run_count=2,
             recovery_time_days=None,
-            last_failure_reason=None,
-            suspected_category=None,
+            last_failure_reason="",
+            suspected_category=FlakynessCategory.UNKNOWN,
         )
 
         data = metric.to_dict()
         assert data["recovery_time_days"] is None
-        assert data["last_failure_reason"] is None
-        assert data["suspected_category"] is None
+        assert data["last_failure_reason"] == ""
+        assert data["suspected_category"] == "unknown"
 
     def test_metric_numeric_rounding(self) -> None:
         """Test FlakyTestMetric rounds numeric values correctly."""
@@ -110,23 +107,23 @@ class TestFlakyTestResultMethods:
         )
 
         assert result.nodeid == "tests/test_foo.py::test_method"
-        assert result.outcome == "passed"
+        assert result.outcome == TestOutcome.PASSED
         assert result.duration == 1.5
-        assert result.failure_reason is None
+        assert result.exception_message == ""
         assert result.markers == []
 
     def test_result_with_markers_and_reason(self) -> None:
-        """Test FlakyTestResult with markers and failure reason."""
+        """Test FlakyTestResult with markers and exception message."""
         result = FlakyTestResult(
             nodeid="tests/test_flaky.py::test_method",
             outcome="failed",
             duration=0.5,
             timestamp=datetime.now(UTC),
-            failure_reason="AssertionError: Expected 5 but got 4",
+            exception_message="AssertionError: Expected 5 but got 4",
             markers=["slow", "flaky"],
         )
 
-        assert result.failure_reason == "AssertionError: Expected 5 but got 4"
+        assert result.exception_message == "AssertionError: Expected 5 but got 4"
         assert "slow" in result.markers
 
 
@@ -137,19 +134,19 @@ class TestFlakyTestSessionReportMethods:
     def test_session_report_initialization(self) -> None:
         """Test FlakyTestSessionReport initialization."""
         report = FlakyTestSessionReport(
+            session_id="test-session",
+            timestamp=datetime.now(UTC),
+            run_count=10,
             total_tests=10,
-            passed_count=8,
-            failed_count=2,
         )
 
         assert report.total_tests == 10
-        assert report.passed_count == 8
-        assert report.failed_count == 2
-        assert report.flaky_tests == []
-        assert report.unstable_tests == []
+        assert report.run_count == 10
+        assert report.flaky_candidates == []
+        assert report.unstable_candidates == []
 
     def test_session_report_with_metrics(self) -> None:
-        """Test FlakyTestSessionReport with flaky/unstable tests."""
+        """Test FlakyTestSessionReport with flaky/unstable candidates."""
         flaky_metric = FlakyTestMetric(
             nodeid="tests/test_flaky.py::test_method",
             failure_rate=0.4,
@@ -163,15 +160,16 @@ class TestFlakyTestSessionReportMethods:
         )
 
         report = FlakyTestSessionReport(
+            session_id="test-session",
+            timestamp=datetime.now(UTC),
+            run_count=100,
             total_tests=100,
-            passed_count=95,
-            failed_count=5,
-            flaky_tests=[flaky_metric],
-            unstable_tests=[unstable_metric],
+            flaky_candidates=[flaky_metric],
+            unstable_candidates=[unstable_metric],
         )
 
-        assert len(report.flaky_tests) == 1
-        assert len(report.unstable_tests) == 1
+        assert len(report.flaky_candidates) == 1
+        assert len(report.unstable_candidates) == 1
 
 
 @pytest.mark.flaky
@@ -186,8 +184,6 @@ class TestFlakyTestConfigMethods:
             flakiness_threshold=0.2,
             unstable_threshold=0.08,
             historical_window_days=60,
-            session_retention_days=3,
-            aggregation_retention_days=90,
         )
 
         data = config.to_dict()
@@ -397,64 +393,59 @@ class TestFlakyTestReporterTracking:
 
         report = reporter.analyze_session()
         assert report.total_tests == 10
-        assert report.passed_count == 8
-        assert report.failed_count == 2
+        assert isinstance(report.flaky_candidates, list)
+        assert isinstance(report.unstable_candidates, list)
 
 
 @pytest.mark.flaky
 class TestFlakyTestAggregatorMethods:
     """Tests for FlakyTestAggregator methods."""
 
-    def test_aggregate_categorization_logic(self) -> None:
-        """Test aggregate correctly categorizes flakiness levels."""
-        aggregator = FlakyTestAggregator()
+    def test_aggregate_categorization_logic(self, tmp_path: Path) -> None:
+        """Test aggregate correctly categorizes flakiness levels from storage."""
+        storage = FlakyTestStorageManager(tmp_path)
+        aggregator = FlakyTestAggregator(storage)
 
-        # Create metrics with different flakiness levels
-        metrics = [
-            # Definitely flaky (>10%)
-            FlakyTestMetric(
-                nodeid="tests/test_flaky_1.py::test_method",
-                failure_rate=0.35,
-                run_count=20,
-            ),
-            # Moderately unstable (5-10%)
-            FlakyTestMetric(
-                nodeid="tests/test_unstable.py::test_method",
-                failure_rate=0.07,
-                run_count=50,
-            ),
-            # Stable (<5%)
-            FlakyTestMetric(
-                nodeid="tests/test_stable.py::test_method",
-                failure_rate=0.02,
-                run_count=100,
-            ),
-        ]
+        storage.save_session_results(
+            {
+                "session_count": 20,
+                "flaky_candidates": [
+                    {
+                        "test_name": "tests/test_flaky_1.py::test_method",
+                        "failure_rate": 0.35,
+                        "first_seen": "2026-06-12T08:00:00+00:00",
+                        "category": "intermittent",
+                    }
+                ],
+                "unstable_candidates": [
+                    {
+                        "test_name": "tests/test_unstable.py::test_method",
+                        "failure_rate": 0.07,
+                        "first_seen": "2026-06-12T08:00:00+00:00",
+                        "category": "unknown",
+                    }
+                ],
+            }
+        )
 
-        result = aggregator.aggregate(metrics)
+        result = aggregator.aggregate(days=7)
         assert result.flaky_test_count >= 1
 
-    def test_aggregate_empty_recommendations(self) -> None:
-        """Test aggregate handles empty recommendation generation."""
-        aggregator = FlakyTestAggregator()
+    def test_aggregate_empty_recommendations(self, tmp_path: Path) -> None:
+        """Test aggregate handles empty storage (no recommendations)."""
+        storage = FlakyTestStorageManager(tmp_path)
+        aggregator = FlakyTestAggregator(storage)
 
-        metrics = [
-            FlakyTestMetric(
-                nodeid="test",
-                failure_rate=0.15,
-                run_count=10,
-            )
-        ]
-
-        result = aggregator.aggregate(metrics)
+        result = aggregator.aggregate(days=7)
         # recommendations can be empty or populated depending on logic
         assert isinstance(result.recommendations, list)
 
-    def test_aggregate_date_string_generation(self) -> None:
+    def test_aggregate_date_string_generation(self, tmp_path: Path) -> None:
         """Test aggregate generates correct date string."""
-        aggregator = FlakyTestAggregator()
+        storage = FlakyTestStorageManager(tmp_path)
+        aggregator = FlakyTestAggregator(storage)
 
-        result = aggregator.aggregate([])
+        result = aggregator.aggregate(days=7)
         # Date should be in YYYY-MM-DD format
         assert len(result.date) == 10
         assert result.date.count("-") == 2

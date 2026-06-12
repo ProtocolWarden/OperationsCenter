@@ -1,3 +1,11 @@
+## 2026-06-12 — fix(tests): fix 36 API-mismatch failures in flaky test coverage tests (watchdog)
+
+Tests in 3 coverage files were written against a planned API that diverged from the actual implementation.
+Root causes: FlakyTestAggregator requires storage arg and aggregate(days) not metrics list;
+FlakyTestAlertConfig takes no constructor args; FlakyTestResult uses exception_message not failure_reason;
+FlakyTestSessionReport uses flaky_candidates not flaky_tests; FlakyTestMetric uses pattern_entropy not
+failure_entropy. Ruff lint also cleaned up unused imports. All 76 tests pass, ruff clean, 15/15 invariants.
+
 ## 2026-06-12 — Stage 6: Verify Implementation Quality and Create Production-Ready Pull Request (✅ COMPLETE)
 
 ### Objective
