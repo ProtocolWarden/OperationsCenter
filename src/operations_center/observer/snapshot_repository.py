@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 
 # Optional imports for remote backends
 if TYPE_CHECKING:
-    import boto3  # type: ignore[import-not-found,import-untyped]
-    import requests  # type: ignore[import-untyped]
+    import boto3  # type: ignore[import-not-found,import-untyped]  # ty: ignore[unresolved-import]
+    import requests  # type: ignore[import-untyped]  # ty: ignore[unresolved-import]
 else:
     try:
         import boto3

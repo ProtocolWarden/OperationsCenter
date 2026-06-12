@@ -1597,3 +1597,10 @@ fix pass. Fixed both; 88 reviewer tests pass.
 ## 2026-06-10 — fix(tests): use dynamic dates in flaky storage cleanup tests
 
 Hardcoded 2026-06-07 "recent" date fell behind the 3-day retention window causing CI failures.
+
+## 2026-06-12 — fix(observer): restore ty: ignore suppression for boto3/requests
+
+Commit 5f763c99 updated mypy error codes on TYPE_CHECKING-guarded imports in
+snapshot_repository.py but dropped the ty-specific `# ty: ignore[unresolved-import]`
+comments. The ty CI check then failed with unresolved-import on lines 24–25.
+Restored both suppression annotations so mypy and ty both pass.
