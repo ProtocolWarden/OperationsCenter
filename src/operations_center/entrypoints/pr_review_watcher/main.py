@@ -2037,10 +2037,19 @@ def _phase1(
         )
         return
 
+    # Pre-save the attempt counter and head SHA before the (potentially long) fix
+    # pass — if the watcher is restarted while the backend runs, the counter
+    # survives. last_fix_pass_pushed is cleared until the pass completes, so
+    # repeated_no_progress (which checks `is False`) won't fire on a missing key.
+    state["fix_attempts"] += 1
+    state["last_concerns_head_sha"] = current_head_sha
+    state.pop("last_fix_pass_pushed", None)
+    _save_state(state_path, state)
+
     logger.info(
         "pr_review_watcher: PR #%d CONCERNS — dispatching fix pass %d/%d on branch %s",
         pr_number,
-        state["fix_attempts"] + 1,
+        state["fix_attempts"],
         reviewer.max_fix_attempts,
         head_ref,
     )
@@ -2061,9 +2070,7 @@ def _phase1(
         state_key=state_key,
     )
     state["last_concerns_summary"] = normalized_summary
-    state["last_concerns_head_sha"] = current_head_sha
     state["last_fix_pass_pushed"] = pushed
-    state["fix_attempts"] += 1
     if not pushed:
         logger.warning(
             "pr_review_watcher: fix pass for PR #%d pushed no changes (attempt %d/%d)",
