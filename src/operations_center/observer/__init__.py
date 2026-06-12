@@ -1,8 +1,20 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
+from operations_center.observer.alert_channels import (
+    AlertChannel,
+    AlertChannelFactory,
+    AlertChannelResult,
+    EmailChannel,
+    GitHubChannel,
+    SlackChannel,
+)
 from operations_center.observer.collectors.flaky_test_collector import FlakyTestCollector
 from operations_center.observer.dashboard import DashboardProvider, DashboardSnapshot
 from operations_center.observer.flaky_test_aggregator import FlakyTestAggregator
+from operations_center.observer.flaky_test_alert_config import (
+    AlertThreshold,
+    FlakyTestAlertConfig,
+)
 from operations_center.observer.flaky_test_alerts import (
     AlertSeverity,
     FlakyTestAlert,
@@ -49,12 +61,18 @@ from operations_center.observer.structured_logging import (
 )
 
 __all__ = [
+    "AlertChannel",
+    "AlertChannelFactory",
+    "AlertChannelResult",
     "AlertSeverity",
+    "AlertThreshold",
     "DashboardProvider",
     "DashboardSnapshot",
+    "EmailChannel",
     "FlakyTestAggregationReport",
     "FlakyTestAggregator",
     "FlakyTestAlert",
+    "FlakyTestAlertConfig",
     "FlakyTestAlertManager",
     "FlakyTestCollector",
     "FlakyTestConfig",
@@ -65,6 +83,7 @@ __all__ = [
     "FlakyTestSignal",
     "FlakyTestStorageManager",
     "FlakynessCategory",
+    "GitHubChannel",
     "HealthChecker",
     "HTTPSnapshotRepository",
     "LocalSnapshotRepository",
@@ -74,6 +93,7 @@ __all__ = [
     "RepoObserverService",
     "RepoStateSnapshot",
     "S3SnapshotRepository",
+    "SlackChannel",
     "SnapshotManager",
     "SnapshotRepository",
     "SnapshotValidator",
