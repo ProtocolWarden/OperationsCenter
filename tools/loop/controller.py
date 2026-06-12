@@ -511,24 +511,61 @@ def release_lock() -> None:
 
 WATCH_DIR = REPO_ROOT / "logs/local/watch-all"
 _WATCHER_ROLES = ["goal", "test", "improve", "propose", "review", "spec", "intake", "watchdog"]
+# Substring that uniquely identifies a watcher's Python child process on the
+# command line (every entrypoint runs `python -m operations_center.entrypoints.*`).
+# Used to bounce the child without touching its supervisor wrapper or sibling
+# heartbeat loops.
+_WATCHER_CHILD_MATCH = "operations_center.entrypoints"
 
 
 def _restart_watchers() -> None:
-    """Send SIGTERM to every running watcher so the process supervisor relaunches
-    them with the freshly-pulled code.  Only kills processes we own (pid file present
-    and process alive); silently skips missing/dead watchers."""
+    """Bounce each watcher's Python child so its supervisor wrapper relaunches it
+    against the freshly-pulled code.
+
+    Why not just SIGTERM the pid in the pid file: that pid is the *wrapper* (the
+    `setsid bash` auto-restart loop), and every wrapper traps SIGTERM with
+    `exit 0`.  Signalling it therefore kills the supervisor itself and the watcher
+    never comes back — there is no outer supervisor for the wrapper.  The watchdog
+    is the only reviver, and it used to be in this kill list too, so a single code
+    update would take the whole fleet down until manually relaunched.
+
+    Instead we SIGTERM the wrapper's Python *children* (matched by command line so
+    sibling heartbeat loops survive).  The wrapper's `wait` returns, the pid file is
+    still present, and it immediately restarts the child — which re-imports the
+    current editable source.  The watchdog is never bounced: it is the backstop that
+    revives a wrapper that has genuinely died, and it must outlive every restart."""
     for role in _WATCHER_ROLES:
+        if role == "watchdog":
+            # Never bounce the reviver. Its shell loop carries no
+            # operations_center.entrypoints child to refresh, and killing it would
+            # remove the only process that can revive a genuinely-dead wrapper.
+            continue
         pid_file = WATCH_DIR / f"{role}.pid"
         if not pid_file.exists():
             continue
         try:
-            pid = int(pid_file.read_text().strip())
-            os.kill(pid, signal.SIGTERM)
-            _log(f"Restarted watcher '{role}' (pid {pid}) — code updated")
-        except (ProcessLookupError, ValueError):
+            wrapper_pid = int(pid_file.read_text().strip())
+        except (OSError, ValueError):
+            continue
+        # Skip wrappers that have already died — the watchdog will revive them from
+        # the stale pid file on its next tick. Bouncing children here would be a no-op.
+        try:
+            os.kill(wrapper_pid, 0)
+        except ProcessLookupError:
+            continue
+        except PermissionError:
             pass
+        try:
+            # pkill -P restricts to direct children of the wrapper; -f matches the
+            # entrypoint on the command line so the heartbeat loop is spared.
+            # Exit 1 (no matching child, e.g. mid-backoff) is not an error.
+            subprocess.run(
+                ["pkill", "-TERM", "-P", str(wrapper_pid), "-f", _WATCHER_CHILD_MATCH],
+                capture_output=True,
+            )
+            _log(f"Bounced watcher '{role}' child (wrapper pid {wrapper_pid}) — code updated")
         except Exception as exc:
-            _log(f"Failed to restart watcher '{role}': {exc}")
+            _log(f"Failed to bounce watcher '{role}': {exc}")
 
 
 def write_watchdog_loop_lock() -> None:

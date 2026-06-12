@@ -528,3 +528,81 @@ def test_write_runtime_state_reports_running_backend_during_sleep(tmp_path, monk
     state = json.loads(state_path.read_text())
     assert state["runnable_backend"] == "opus"
     assert state["sleeping_until_utc"] == "2026-05-31T08:19:39Z"
+
+
+def _seed_watcher_pidfiles(monkeypatch, tmp_path: Path, roles_to_pids: dict[str, int]) -> Path:
+    """Point controller.WATCH_DIR at tmp_path and write the given role pid files."""
+    watch_dir = tmp_path / "watch-all"
+    watch_dir.mkdir()
+    for role, pid in roles_to_pids.items():
+        (watch_dir / f"{role}.pid").write_text(str(pid))
+    monkeypatch.setattr(controller, "WATCH_DIR", watch_dir)
+    monkeypatch.setattr(controller, "_log", lambda *a, **k: None)
+    return watch_dir
+
+
+def test_restart_watchers_bounces_child_not_wrapper(monkeypatch, tmp_path: Path) -> None:
+    # The pid file holds the wrapper pid; the fix must SIGTERM the wrapper's
+    # *children* (via pkill -P), never os.kill the wrapper itself.
+    _seed_watcher_pidfiles(monkeypatch, tmp_path, {"review": 4242})
+
+    monkeypatch.setattr(controller.os, "kill", lambda pid, sig: None)  # wrapper alive
+
+    calls: list[list[str]] = []
+    monkeypatch.setattr(
+        controller.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or None
+    )
+
+    controller._restart_watchers()
+
+    assert calls == [
+        ["pkill", "-TERM", "-P", "4242", "-f", controller._WATCHER_CHILD_MATCH]
+    ]
+
+
+def test_restart_watchers_never_touches_watchdog(monkeypatch, tmp_path: Path) -> None:
+    # The watchdog is the only reviver — it must outlive every restart.
+    _seed_watcher_pidfiles(monkeypatch, tmp_path, {"watchdog": 999, "review": 4242})
+
+    monkeypatch.setattr(controller.os, "kill", lambda pid, sig: None)
+    bounced: list[str] = []
+    monkeypatch.setattr(
+        controller.subprocess, "run", lambda cmd, **kw: bounced.append(cmd[3]) or None
+    )
+
+    controller._restart_watchers()
+
+    # Only the review wrapper's children were bounced; watchdog pid 999 untouched.
+    assert bounced == ["4242"]
+
+
+def test_restart_watchers_skips_dead_wrapper(monkeypatch, tmp_path: Path) -> None:
+    # A dead wrapper is left for the watchdog to revive — no child bounce attempted.
+    _seed_watcher_pidfiles(monkeypatch, tmp_path, {"review": 4242})
+
+    def _dead(pid: int, sig: int) -> None:
+        raise ProcessLookupError
+
+    monkeypatch.setattr(controller.os, "kill", _dead)
+    calls: list[list[str]] = []
+    monkeypatch.setattr(
+        controller.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or None
+    )
+
+    controller._restart_watchers()
+
+    assert calls == []
+
+
+def test_restart_watchers_skips_missing_pidfile(monkeypatch, tmp_path: Path) -> None:
+    _seed_watcher_pidfiles(monkeypatch, tmp_path, {})  # no pid files at all
+
+    monkeypatch.setattr(controller.os, "kill", lambda pid, sig: None)
+    calls: list[list[str]] = []
+    monkeypatch.setattr(
+        controller.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or None
+    )
+
+    controller._restart_watchers()
+
+    assert calls == []
