@@ -1,3 +1,13 @@
+## 2026-06-12 — #270 rescoped to the query layer (clean on reverted main)
+
+After reverting #269 (b82b944d), #270 is rebuilt as green-main + the genuinely-new flaky-test
+query layer only: query_flaky.py (FlakyTestQueryMixin + FlakyTest/FlakyTestMetrics/RepositoryHealth
+query-result projections), the TestSignalQuery mixin hookup in query.py, the __init__ export, and
+test_signal_query.py. Includes the #270-review fixes: flaky_test_percent computes a real percentage
+(flaky/total*100, zero-guarded); critical_tests derives from the deduplicated set; +3 regression
+tests; docstring disambiguating this query view from flaky_test_models.py detection models. The
+stale edge-case/integration test files that targeted an unbuilt metric API are gone with the revert.
+
 ## 2026-06-12 — Revert #269 (merged red, broke main CI ~5h)
 
 #269 ("parametrized edge-case tests") was merged with 4 failing CI checks. Its ~2,700 lines of
