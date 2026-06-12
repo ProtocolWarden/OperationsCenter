@@ -2053,6 +2053,7 @@ Restored both suppression annotations so mypy and ty both pass.
 
 FlakyTestQueryMixin called self._load_snapshots_in_range / self._get_recent_snapshots
 but those are defined on TestSignalQuery (the host class). ty couldn't resolve them on
-the mixin. Fixed by adding NotImplementedError stubs to the mixin with TYPE_CHECKING
-import for RepoStateSnapshot. Also removed FlakyTest from test_signal_query.py imports
-where it was unused (moved to query_flaky.py, re-exported from query.py).
+the mixin. Fixed by making FlakyTestQueryMixin(ABC) and decorating both stubs with
+@abstractmethod with ellipsis bodies — satisfies ty (empty body allowed for abstractmethod),
+custodian (U1/U2 exempted for abstractmethod), and ruff. Also removed FlakyTest from
+test_signal_query.py where it was unused (moved to query_flaky.py, re-exported from query.py).

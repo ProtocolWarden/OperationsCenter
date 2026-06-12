@@ -10,6 +10,7 @@ _get_recent_snapshots helpers.
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field as dataclass_field
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -83,7 +84,7 @@ class RepositoryHealth:
     last_improved: datetime | None = None
 
 
-class FlakyTestQueryMixin:
+class FlakyTestQueryMixin(ABC):
     """Mixin that adds flaky-test query methods to TestSignalQuery.
 
     Requires the host class to expose:
@@ -91,11 +92,11 @@ class FlakyTestQueryMixin:
         _get_recent_snapshots(count)        -> list[RepoStateSnapshot]
     """
 
-    def _load_snapshots_in_range(self, timerange: Any) -> list[RepoStateSnapshot]:
-        raise NotImplementedError
+    @abstractmethod
+    def _load_snapshots_in_range(self, timerange: Any) -> list[RepoStateSnapshot]: ...
 
-    def _get_recent_snapshots(self, count: int) -> list[RepoStateSnapshot]:
-        raise NotImplementedError
+    @abstractmethod
+    def _get_recent_snapshots(self, count: int) -> list[RepoStateSnapshot]: ...
 
     def get_flaky_tests(self, timerange=None) -> list[FlakyTest]:
         """Get all flaky tests detected in a time range.
