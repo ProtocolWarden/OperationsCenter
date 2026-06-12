@@ -711,11 +711,26 @@ class _FakeClient:
         self.closed = False
         self._issues = []
         self._raise = None
+        self._fetch_issue_responses: dict[str, object] = {}
 
     def list_issues(self):
         if self._raise:
             raise self._raise
         return self._issues
+
+    def fetch_issue(self, task_id: str) -> dict:
+        response = self._fetch_issue_responses.get(task_id)
+        if response is None:
+            import httpx
+
+            raise httpx.HTTPStatusError(
+                "404 Not Found",
+                request=mock.Mock(),
+                response=mock.Mock(status_code=404),
+            )
+        if isinstance(response, Exception):
+            raise response
+        return response  # type: ignore[return-value]
 
     def transition_issue(self, task_id, to_state):
         self.transitions.append((task_id, to_state))
@@ -735,7 +750,9 @@ def _patch_main(monkeypatch, *, client, mem=16.0, cooldown_reason=None):
         plane_token=lambda: "tok",
     )
     monkeypatch.setattr(bu, "load_settings", lambda cfg: fake_settings)
-    monkeypatch.setattr(bu, "UsageStore", lambda *a, **k: mock.Mock())
+    fake_store = mock.Mock()
+    fake_store.load.return_value = {"events": []}
+    monkeypatch.setattr(bu, "UsageStore", lambda *a, **k: fake_store)
     monkeypatch.setattr(bu, "_dispatch_cooldown_reason", lambda *a, **k: cooldown_reason)
     # ensure worker_backend_probe import inside main resolves
     probe = SimpleNamespace(refresh_cooldowns=lambda *a, **k: None)
@@ -848,3 +865,168 @@ def test_main_cooldown_import_error(monkeypatch, capsys):
     assert bu.main() == 0
     out = json.loads(capsys.readouterr().out)
     assert out["cooldown_skip_reason"] is None
+
+
+# ---------------------------------------------------------------------------
+# Rule 10 — ORPHANED_IN_FLIGHT_CLEAR
+# ---------------------------------------------------------------------------
+
+
+def _make_store_with_events(events: list[dict]) -> mock.Mock:
+    store = mock.Mock()
+    store.load.return_value = {"events": events}
+    return store
+
+
+def _started_event(task_id: str, backend: str = "team_executor", ts: str = "2026-05-28T12:00:00+00:00") -> dict:
+    return {"kind": "execution_started", "task_id": task_id, "backend": backend, "timestamp": ts}
+
+
+def _finished_event(task_id: str, backend: str = "team_executor", ts: str = "2026-05-28T12:01:00+00:00") -> dict:
+    return {"kind": "execution_finished", "task_id": task_id, "backend": backend, "timestamp": ts}
+
+
+def test_rule10_clears_deleted_task_apply():
+    """Orphaned started event for 404 task → write execution_finished (apply mode)."""
+    client = _FakeClient()
+    # task "t-orphan" is 404 (not in _fetch_issue_responses)
+    store = _make_store_with_events([_started_event("t-orphan")])
+
+    cleared = bu._clear_orphaned_in_flight_events(client, store, now=_NOW, apply=True)
+
+    assert len(cleared) == 1
+    assert cleared[0]["rule"] == "ORPHANED_IN_FLIGHT_CLEAR"
+    assert cleared[0]["task_id"] == "t-orphan"
+    assert cleared[0]["action"] == "applied"
+    assert "404" in cleared[0]["reason"]
+    store.record_execution_finished.assert_called_once_with(
+        task_id="t-orphan", backend="team_executor", now=_NOW
+    )
+
+
+def test_rule10_clears_deleted_task_dry_run():
+    """Orphaned started event for 404 task → would_apply in dry-run mode."""
+    client = _FakeClient()
+    store = _make_store_with_events([_started_event("t-orphan")])
+
+    cleared = bu._clear_orphaned_in_flight_events(client, store, now=_NOW, apply=False)
+
+    assert len(cleared) == 1
+    assert cleared[0]["action"] == "would_apply"
+    store.record_execution_finished.assert_not_called()
+
+
+def test_rule10_clears_terminal_state_task():
+    """Orphaned started event for task in Done state → cleared."""
+    client = _FakeClient()
+    client._fetch_issue_responses["t-done"] = {
+        "id": "t-done",
+        "name": "Done task",
+        "state": {"name": "Done"},
+        "labels": [],
+    }
+    store = _make_store_with_events([_started_event("t-done")])
+
+    cleared = bu._clear_orphaned_in_flight_events(client, store, now=_NOW, apply=True)
+
+    assert len(cleared) == 1
+    assert cleared[0]["action"] == "applied"
+    assert "Done" in cleared[0]["reason"]
+
+
+def test_rule10_skips_active_task():
+    """In_flight event for a task still Running → NOT cleared."""
+    client = _FakeClient()
+    client._fetch_issue_responses["t-running"] = {
+        "id": "t-running",
+        "name": "Active task",
+        "state": {"name": "Running"},
+        "labels": [],
+    }
+    store = _make_store_with_events([_started_event("t-running")])
+
+    cleared = bu._clear_orphaned_in_flight_events(client, store, now=_NOW, apply=True)
+
+    assert len(cleared) == 0
+    store.record_execution_finished.assert_not_called()
+
+
+def test_rule10_skips_balanced_events():
+    """Started + finished pair → not in_flight, not cleared."""
+    client = _FakeClient()
+    store = _make_store_with_events([
+        _started_event("t-balanced"),
+        _finished_event("t-balanced"),
+    ])
+
+    cleared = bu._clear_orphaned_in_flight_events(client, store, now=_NOW, apply=True)
+
+    assert len(cleared) == 0
+
+
+def test_rule10_skips_stale_events_beyond_24h():
+    """Events older than 24h are excluded from the in_flight window."""
+    client = _FakeClient()
+    old_ts = "2026-05-27T09:00:00+00:00"  # 27h before _NOW
+    store = _make_store_with_events([_started_event("t-old", ts=old_ts)])
+
+    cleared = bu._clear_orphaned_in_flight_events(client, store, now=_NOW, apply=True)
+
+    assert len(cleared) == 0
+
+
+def test_rule10_handles_fetch_error_gracefully():
+    """Non-404 fetch errors → skip (don't clear, don't raise)."""
+    import httpx
+
+    client = _FakeClient()
+    client._fetch_issue_responses["t-err"] = httpx.HTTPStatusError(
+        "503 Service Unavailable",
+        request=mock.Mock(),
+        response=mock.Mock(status_code=503),
+    )
+    store = _make_store_with_events([_started_event("t-err")])
+
+    cleared = bu._clear_orphaned_in_flight_events(client, store, now=_NOW, apply=True)
+
+    assert len(cleared) == 0
+
+
+def test_rule10_multiple_backends():
+    """Each (backend, task_id) pair tracked independently."""
+    client = _FakeClient()
+    store = _make_store_with_events([
+        _started_event("t1", backend="team_executor"),
+        _started_event("t1", backend="dag_executor"),  # same task, different backend
+        _finished_event("t1", backend="team_executor"),  # closes team_executor slot
+    ])
+
+    cleared = bu._clear_orphaned_in_flight_events(client, store, now=_NOW, apply=True)
+
+    # Only dag_executor slot is orphaned (t1 is 404)
+    assert len(cleared) == 1
+    assert cleared[0]["backend"] == "dag_executor"
+
+
+def test_rule10_integrated_in_main(monkeypatch, capsys):
+    """Rule 10 runs inside main() and appears in output actions."""
+    from datetime import datetime, UTC, timedelta
+
+    # Use a timestamp within the 24h window relative to real now
+    recent_ts = (datetime.now(UTC) - timedelta(minutes=30)).isoformat()
+
+    client = _FakeClient()
+    client._issues = []
+    _patch_main(monkeypatch, client=client)
+    # Inject a started event for a deleted task into the fake store
+    fake_store = mock.Mock()
+    fake_store.load.return_value = {"events": [_started_event("t-gone", ts=recent_ts)]}
+    monkeypatch.setattr(bu, "UsageStore", lambda *a, **k: fake_store)
+    _argv(monkeypatch, ["--apply"])
+
+    assert bu.main() == 0
+    out = json.loads(capsys.readouterr().out)
+    rule10_actions = [a for a in out["actions"] if a.get("rule") == "ORPHANED_IN_FLIGHT_CLEAR"]
+    assert len(rule10_actions) == 1
+    assert rule10_actions[0]["action"] == "applied"
+    fake_store.record_execution_finished.assert_called_once()

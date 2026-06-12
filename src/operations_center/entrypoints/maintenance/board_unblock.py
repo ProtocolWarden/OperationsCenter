@@ -6,7 +6,7 @@ The loop is the operator for all conditions handled here.  Do not add "operator 
 required" notes for patterns this tool covers.  When a new stuck pattern emerges, add a
 rule here rather than logging it and waiting.
 
-Applies nine rules on every run:
+Applies ten rules on every run:
 
   Rule 1 — DEAD_REMEDIATION_CANCEL
     Tasks with label "dead-remediation" OR (executor-signal: sigkill + retry-count ≥ 3)
@@ -80,6 +80,15 @@ Applies nine rules on every run:
     Skipped when memory is below the executor dispatch threshold or when any active retry
     blocker is present (budget_exhausted, session_limit, global_rate_exceeded, etc.).
 
+  Rule 10 — ORPHANED_IN_FLIGHT_CLEAR
+    Usage-store ``execution_started`` events whose matching ``execution_finished`` was never
+    written, where the task no longer exists in Plane (404) or is in a terminal state
+    (Done/Cancelled) → write ``execution_finished`` to close the orphaned in-flight slot.
+    Without this, a task deleted from Plane while its executor was running holds the global
+    concurrency gate at ``current=1`` for up to 24 h (the stale-event cutoff), blocking every
+    watcher from dispatching anything.  This rule detects and clears the deadlock within one
+    board-unblock cycle.
+
 Worker-backend cooldown gate:
     The four rules that promote a task INTO "Ready for AI" (Rule 4 SELF_MODIFY_REQUEUE,
     Rule 6 STALE_RUNNING_REQUEUE, Rule 7 GOAL_BACKLOG_PROMOTE, Rule 9 SPEC_AUTHOR_BACKLOG_PROMOTE)
@@ -106,6 +115,8 @@ import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
+
+import httpx
 
 from operations_center.adapters.plane import PlaneClient
 from operations_center.config import load_settings
@@ -643,6 +654,94 @@ def _apply_rules(
     return actions
 
 
+def _clear_orphaned_in_flight_events(
+    client: PlaneClient,
+    usage_store: UsageStore,
+    *,
+    now: datetime,
+    apply: bool,
+) -> list[dict[str, Any]]:
+    """Rule 10 — clear orphaned execution_started events that will never be closed.
+
+    Reads the usage store for ``execution_started`` events without a matching
+    ``execution_finished``.  For each in-flight (backend, task_id) pair, fetches
+    the task from Plane.  If the task is 404 (deleted) or in a terminal state
+    (Done/Cancelled), the slot is leaked and will block dispatch until the 24 h
+    stale-event cutoff expires.  This rule writes ``execution_finished`` immediately
+    to release the slot.
+    """
+    data = usage_store.load()
+    events = data.get("events", [])
+    cutoff = now - timedelta(hours=24)
+
+    in_flight: dict[tuple[str, str], dict[str, Any]] = {}
+    for e in events:
+        ts_raw = e.get("timestamp")
+        if not isinstance(ts_raw, str):
+            continue
+        try:
+            ts = datetime.fromisoformat(ts_raw)
+        except ValueError:
+            continue
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=UTC)
+        if ts < cutoff:
+            continue
+        tid = e.get("task_id")
+        backend = e.get("backend") or ""
+        if not isinstance(tid, str):
+            continue
+        kind = e.get("kind")
+        key = (backend, tid)
+        if kind == "execution_started":
+            in_flight[key] = e
+        elif kind == "execution_finished":
+            in_flight.pop(key, None)
+
+    cleared: list[dict[str, Any]] = []
+    for (backend, task_id), start_event in in_flight.items():
+        try:
+            issue = client.fetch_issue(task_id)
+            task_state = _state_name(issue)
+            is_orphaned = _is_terminal(task_state)
+            reason = f"task {task_id} is in terminal state {task_state!r}"
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                is_orphaned = True
+                reason = f"task {task_id} not found in Plane (404 — deleted or never created)"
+            else:
+                continue
+        except Exception:
+            continue
+
+        if not is_orphaned:
+            continue
+
+        entry: dict[str, Any] = {
+            "task_id": task_id,
+            "backend": backend,
+            "started_at": start_event.get("timestamp"),
+            "rule": "ORPHANED_IN_FLIGHT_CLEAR",
+            "reason": reason,
+        }
+        if apply:
+            try:
+                usage_store.record_execution_finished(
+                    task_id=task_id,
+                    backend=backend,
+                    now=now,
+                )
+                entry["action"] = "applied"
+            except Exception as exc:
+                entry["action"] = "error"
+                entry["error"] = str(exc)
+        else:
+            entry["action"] = "would_apply"
+        cleared.append(entry)
+
+    return cleared
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Autonomous board unblocking")
     parser.add_argument("--config", required=True, type=Path)
@@ -744,6 +843,13 @@ def main() -> int:
                 entry["action"] = "error"
                 entry["error"] = str(exc)
         results.append(entry)
+
+    # Rule 10 — clear orphaned in_flight events after board-state actions are applied
+    usage_store = UsageStore()
+    orphan_actions = _clear_orphaned_in_flight_events(
+        client, usage_store, now=now, apply=args.apply
+    )
+    results.extend(orphan_actions)
 
     client.close()
     print(

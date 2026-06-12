@@ -1,3 +1,12 @@
+## 2026-06-12 — fix(board-unblock): Rule 10 clears orphaned execution_started events
+
+Orphaned in_flight slot (task b1bcdd4a, team_executor) held global_concurrency gate at current=1
+for ~7h, blocking all watchers. Root cause: task deleted from Plane while executor was running;
+execution_finished never written. Added Rule 10 (ORPHANED_IN_FLIGHT_CLEAR) to board_unblock:
+detects orphaned (backend, task_id) pairs via fetch_issue (404 or terminal state) and writes
+execution_finished to release the slot within one cycle. 9 new tests. Manual hotfix (execution_finished
+written via Python API) applied this cycle to unblock watchers immediately.
+
 ## 2026-06-12 — fix(controller): _restart_watchers killed the supervisor (fleet-wide outage on every merge)
 
 `_restart_watchers()` SIGTERM'd the pid in each `*.pid` file — but that pid is the
