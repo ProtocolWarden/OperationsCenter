@@ -13,7 +13,6 @@ This module is designed to be used with pytest parametrization:
 from __future__ import annotations
 
 
-from operations_center.observer.flaky_test_models import TestOutcome
 from operations_center.observer.flaky_test_reporter import FlakyTestResult
 
 
@@ -84,47 +83,44 @@ def generate_failure_entropy_scenarios() -> list[tuple]:
         # BOUNDARY/EXTREME: Two different outcomes
         (1, 1, 1.0, "two_different"),
         # PATHOLOGICAL: Imbalanced 1/99
-        (1, 99, 0.081296, "imbalanced_1_99"),
+        (1, 99, 0.080793, "imbalanced_1_99"),
         # PATHOLOGICAL: Imbalanced 99/1
-        (99, 1, 0.081296, "imbalanced_99_1"),
+        (99, 1, 0.080793, "imbalanced_99_1"),
         # VALID: Moderately imbalanced
-        (10, 1, 0.469566, "moderately_imbalanced"),
+        (10, 1, 0.439497, "moderately_imbalanced"),
     ]
 
 
 def generate_streak_variance_scenarios() -> list[tuple[list, float | None, str]]:
     """Generate parametrization scenarios for streak_variance metric.
 
-    Variance of streak lengths: Var(streak_lengths) / Mean(streak_lengths)
+    Variance of streak lengths: population variance of the list of streak lengths.
     Valid range: [0, ∞], threshold > 1.5
 
     Covers:
-    - Single run (undefined)
-    - All same outcome (single long streak)
-    - Alternating (all streaks = 1)
+    - Single streak (undefined variance)
+    - All same outcome (single long streak, variance = 0)
+    - Alternating (10 streaks of 1, variance = 0)
     - Mixed patterns
 
     Returns:
-        List of tuples: (pattern, expected_variance, scenario_name)
-        pattern: list of TestOutcome values or pattern string
+        List of tuples: (streak_lengths, expected_variance, scenario_name)
+        streak_lengths: list of int streak lengths
+        expected_variance: float or None (None means variance is undefined/not checked)
     """
     return [
-        # ZERO_INPUT: Single run (undefined)
-        ([TestOutcome.PASSED], None, "single_run_undefined"),
-        # PATHOLOGICAL: All same outcome
-        ([TestOutcome.PASSED] * 5, 0.0, "all_same_pass"),
-        # PATHOLOGICAL: All failures
-        ([TestOutcome.FAILED] * 5, 0.0, "all_same_fail"),
-        # PATHOLOGICAL: Alternating (all streaks = 1)
-        ([TestOutcome.PASSED, TestOutcome.FAILED] * 5, 0.0, "alternating"),
-        # VALID: Mixed pattern (high variance)
-        (
-            [TestOutcome.PASSED] * 5 + [TestOutcome.FAILED] + [TestOutcome.PASSED] * 5,
-            None,
-            "mixed_high_variance",
-        ),
-        # VALID: Two different streaks
-        ([TestOutcome.PASSED] * 3 + [TestOutcome.FAILED] * 2, None, "two_streaks"),
+        # ZERO_INPUT: Single streak of length 1 (undefined variance)
+        ([1], None, "single_run_undefined"),
+        # PATHOLOGICAL: One long streak of 5 passes (variance = 0)
+        ([5], 0.0, "all_same_pass"),
+        # PATHOLOGICAL: One long streak of 5 failures (variance = 0)
+        ([5], 0.0, "all_same_fail"),
+        # PATHOLOGICAL: 10 alternating streaks of length 1 each (variance = 0)
+        ([1] * 10, 0.0, "alternating"),
+        # VALID: Three streaks [5, 1, 5] — high variance (32/9 ≈ 3.556)
+        ([5, 1, 5], 32 / 9, "mixed_high_variance"),
+        # VALID: Two streaks [3, 2] — low variance (0.25)
+        ([3, 2], 0.25, "two_streaks"),
     ]
 
 
@@ -154,10 +150,10 @@ def generate_recovery_time_percentile_90_scenarios() -> list[tuple]:
         (10, 1, float("inf"), "mostly_unrecovered"),
         # VALID: 90% recovered (10 failures, 9 recovered)
         (10, 9, 9, "ninety_percent_recovered"),
-        # VALID: Exactly at percentile boundary
-        (9, 9, 1, "all_but_one_recovered"),
-        # EXTREME: Large sample
-        (100, 90, 50, "large_sample_recovery"),
+        # VALID: Exactly at percentile boundary (range(1,10)=[1..9], idx=8, p90=9)
+        (9, 9, 9, "all_but_one_recovered"),
+        # EXTREME: Large sample (range(1,91)=[1..90], idx=81, p90=82)
+        (100, 90, 82, "large_sample_recovery"),
     ]
 
 
@@ -476,12 +472,12 @@ def generate_repository_health_score_scenarios() -> list[tuple]:
         (0.05, 0.0, 0.0, 0.0, 0.5, "with_flakiness_5pct"),
         # BOUNDARY: At limit (10%)
         (0.10, 0.0, 0.0, 0.0, 0.0, "at_limit_10pct"),
-        # VALID: With growth penalty
-        (0.05, 0.2, 0.0, 0.0, 0.4, "with_growth_penalty"),
-        # VALID: With critical penalty
-        (0.05, 0.0, 0.1, 0.0, 0.3, "with_critical_penalty"),
-        # VALID: With unknown penalty
-        (0.05, 0.0, 0.0, 0.5, 0.35, "with_unknown_penalty"),
+        # VALID: With growth penalty (0.3 > 0.2 threshold → score = 0.5 - 0.1 = 0.4)
+        (0.05, 0.3, 0.0, 0.0, 0.4, "with_growth_penalty"),
+        # VALID: With critical penalty (flaky=0.06→score=0.4, critical 0.2 > 0.1 → 0.4-0.1 = 0.3)
+        (0.06, 0.0, 0.2, 0.0, 0.3, "with_critical_penalty"),
+        # VALID: With unknown penalty (0.6 > 0.5 threshold → score = 0.5 - 0.15 = 0.35)
+        (0.05, 0.0, 0.0, 0.6, 0.35, "with_unknown_penalty"),
         # EXTREME: All issues (clamped to 0)
         (0.20, 0.5, 0.2, 1.0, 0.0, "all_issues_critical"),
     ]

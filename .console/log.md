@@ -1,3 +1,9 @@
+## 2026-06-12 — Watchdog: correct data_generators expected values (post-merge cleanup)
+
+Fixed residual working-tree corrections to data_generators.py not captured in prior commit:
+entropy expected values (0.081296→0.080793 etc.), streak_variance to use int streak lengths,
+recovery_time p90 boundary values (1→9, 50→82). PR #270 merged 16/16 CI green. 296/296 tests pass.
+
 ## 2026-06-12 — Stage 3: Run Tests and Linters — Test Fixture Fixes ✅ COMPLETE
 
 **Objective**: Execute test suite and linters to verify PR review concerns are resolved and all code passes quality checks.
