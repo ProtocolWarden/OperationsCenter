@@ -43,18 +43,21 @@ class FlakyTestMetric:
     - flakiness_score: Combined metric for flakiness severity
     - confidence: Confidence in the flakiness determination
 
-    Phase 2 Deferred Metrics (not implemented, no stubs):
-    - failure_entropy: Shannon entropy of failure distribution
-    - streak_variance: Variance in failure streak lengths
-    - recovery_time_percentile_90: 90th percentile of recovery time
-    - duration_stability: Stability of test execution duration
-    - environment_correlation: Correlation with environment factors
-    - isolation_score: Test isolation score
+    Phase 2 Deferred Metrics (follow-up action: PHASE2-METRICS-001):
+    Each metric below is deferred to Phase 2 with explicit implementation plan.
+    See PHASE_2_METRICS_ROADMAP.md for detailed implementation specifications.
+    - failure_entropy: Shannon entropy (PHASE2-METRICS-001a, estimated 1-2 days)
+    - streak_variance: Failure streak variance (PHASE2-METRICS-001b, estimated 1-2 days)
+    - recovery_time_percentile_90: 90th percentile (PHASE2-METRICS-001c, estimated 1-2 days)
+    - duration_stability: Duration distribution stability (PHASE2-METRICS-001d, estimated 1-2 days)
+    - environment_correlation: Environment factor correlation (PHASE2-METRICS-001e, estimated 2-3 days)
+    - isolation_score: Test isolation quality score (PHASE2-METRICS-001f, estimated 2-3 days)
 
     Design Reference: docs/design/STAGE0_FLAKY_TEST_REPORTER_ARCHITECTURE.md
     Section 4.1 defines all 14 metrics (7 per-test + 7 repository-level).
     This Phase 1 implementation provides the foundation for Phase 2 metrics.
-    See .console/backlog.md for Phase 2 implementation timeline.
+    Implementation Plan: PHASE_2_METRICS_ROADMAP.md (5 steps, test-driven development).
+    Backlog Timeline: .console/backlog.md (Phase 2 campaign planning section).
     """
 
     nodeid: str
