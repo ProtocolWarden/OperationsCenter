@@ -14,10 +14,9 @@ from typing import Any
 class FlakynessCategory(Enum):
     """Root cause categories for flaky tests."""
 
-    TRANSIENT = "transient"
-    STRUCTURAL = "structural"
-    CONFIGURATION = "configuration"
-    INTERMITTENT_STRUCTURAL = "intermittent_structural"
+    INTERMITTENT = "intermittent"
+    ENVIRONMENT = "environment"
+    INFRASTRUCTURE = "infrastructure"
     UNKNOWN = "unknown"
 
 

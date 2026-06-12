@@ -56,10 +56,10 @@ class TestFlakynessMetricDataclass:
             nodeid="test",
             failure_rate=0.5,
             run_count=2,
-            suspected_category=FlakynessCategory.STRUCTURAL,
+            suspected_category=FlakynessCategory.INFRASTRUCTURE,
         )
         data = metric.to_dict()
-        assert data["suspected_category"] == "structural"
+        assert data["suspected_category"] == "infrastructure"
 
     def test_metric_with_markers_and_reasons(self) -> None:
         metric = FlakyTestMetric(
@@ -374,7 +374,7 @@ class TestPatternAnalysisMethods:
 class TestFlakynessCategorizationMethods:
     """Tests for root cause categorization."""
 
-    def test_categorize_transient_low_rate_high_variance(self) -> None:
+    def test_categorize_intermittent_low_rate_high_variance(self) -> None:
         reporter = FlakyTestReporter()
         runs = [
             FlakyTestResult(nodeid="test", outcome="passed", duration=1.0),
@@ -382,9 +382,9 @@ class TestFlakynessCategorizationMethods:
             FlakyTestResult(nodeid="test", outcome="passed", duration=1.0),
         ]
         category = reporter._categorize_flakiness(1.0 / 3, runs)
-        assert category == FlakynessCategory.TRANSIENT
+        assert category == FlakynessCategory.INTERMITTENT
 
-    def test_categorize_structural_high_rate_consistent(self) -> None:
+    def test_categorize_infrastructure_high_rate_consistent(self) -> None:
         reporter = FlakyTestReporter()
         runs = [
             FlakyTestResult(nodeid="test", outcome="failed", duration=1.0),
@@ -392,9 +392,9 @@ class TestFlakynessCategorizationMethods:
             FlakyTestResult(nodeid="test", outcome="failed", duration=1.0),
         ]
         category = reporter._categorize_flakiness(1.0, runs)
-        assert category == FlakynessCategory.STRUCTURAL
+        assert category == FlakynessCategory.INFRASTRUCTURE
 
-    def test_categorize_transient_with_timeout_marker(self) -> None:
+    def test_categorize_environment_with_timeout_marker(self) -> None:
         reporter = FlakyTestReporter()
         runs = [
             FlakyTestResult(
@@ -405,9 +405,9 @@ class TestFlakynessCategorizationMethods:
             ),
         ]
         category = reporter._categorize_flakiness(0.5, runs)
-        assert category in [FlakynessCategory.TRANSIENT, FlakynessCategory.UNKNOWN]
+        assert category == FlakynessCategory.ENVIRONMENT
 
-    def test_categorize_transient_with_timeout_exception(self) -> None:
+    def test_categorize_environment_with_timeout_exception(self) -> None:
         reporter = FlakyTestReporter()
         runs = [
             FlakyTestResult(
@@ -418,7 +418,7 @@ class TestFlakynessCategorizationMethods:
             ),
         ]
         category = reporter._categorize_flakiness(0.25, runs)
-        assert category == FlakynessCategory.TRANSIENT
+        assert category == FlakynessCategory.ENVIRONMENT
 
 
 class TestTracking:
@@ -652,7 +652,7 @@ class TestIntegration:
         assert len(report.flaky_candidates) == 1
         metric = report.flaky_candidates[0]
         assert metric.suspected_category in [
-            FlakynessCategory.TRANSIENT,
+            FlakynessCategory.INTERMITTENT,
             FlakynessCategory.UNKNOWN,
         ]
         assert metric.flakiness_score > 0.0

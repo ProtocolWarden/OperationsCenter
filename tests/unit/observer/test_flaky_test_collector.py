@@ -271,19 +271,19 @@ class TestSignalComputation:
                 nodeid="tests/unit/test_1.py::test_1",
                 failure_rate=0.15,
                 run_count=10,
-                suspected_category=FlakynessCategory.TRANSIENT,
+                suspected_category=FlakynessCategory.INTERMITTENT,
             ),
             FlakyTestMetric(
                 nodeid="tests/unit/test_2.py::test_2",
                 failure_rate=0.50,
                 run_count=10,
-                suspected_category=FlakynessCategory.STRUCTURAL,
+                suspected_category=FlakynessCategory.INFRASTRUCTURE,
             ),
             FlakyTestMetric(
                 nodeid="tests/unit/test_3.py::test_3",
                 failure_rate=0.15,
                 run_count=10,
-                suspected_category=FlakynessCategory.TRANSIENT,
+                suspected_category=FlakynessCategory.INTERMITTENT,
             ),
         ]
         with metrics_file.open("w") as f:
