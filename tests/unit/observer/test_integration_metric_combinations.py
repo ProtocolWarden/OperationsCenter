@@ -35,12 +35,11 @@ class MetricCombination:
     """A set of metric values to test together."""
 
     failure_rate: float
-    failure_entropy: float
-    streak_variance: float
+    pattern_entropy: float
+    streak_length: int
     recovery_time_days: float | None
-    duration_stability: float
-    environment_correlation: float
-    isolation_score: float
+    duration_variance: float
+    flakiness_score: float
     expected_category: FlakynessCategory
     expected_alert_severity: AlertSeverity | None = None
 
@@ -98,68 +97,65 @@ class TestMetricInterdependencies:
         assert metric.recovery_time_days < 1.0
 
     def test_streak_variance_correlates_with_entropy(self, metric_factory):
-        """High entropy should correlate with high streak_variance.
+        """High entropy should correlate with high streak_length.
 
         Entropy indicates variation in pass/fail pattern.
-        Streak variance measures length of consecutive runs.
+        Streak length measures consecutive runs.
         Both indicate non-deterministic behavior.
         """
         # Balanced entropy (high)
         metric_balanced = metric_factory(
             nodeid="test::balanced",
             pattern_entropy=0.9,
-            streak_variance=2.5,
+            streak_length=5,
         )
 
         # Unbalanced entropy (low)
         metric_unbalanced = metric_factory(
             nodeid="test::unbalanced",
             pattern_entropy=0.1,
-            streak_variance=0.3,
+            streak_length=1,
         )
 
         assert metric_balanced.pattern_entropy > metric_unbalanced.pattern_entropy
-        assert metric_balanced.streak_variance > metric_unbalanced.streak_variance
+        assert metric_balanced.streak_length > metric_unbalanced.streak_length
 
-    def test_isolation_score_inverse_environment_correlation(self, metric_factory):
-        """High isolation_score should correlate with LOW environment_correlation.
+    def test_confidence_with_high_entropy(self, metric_factory):
+        """High entropy should allow for higher confidence in flakiness assessment.
 
-        Isolation score: how isolated from environment changes (0=no isolation, 1=isolated).
-        Environment correlation: how much failures correlate with env changes.
-        These should be inversely related.
+        Pattern entropy indicates variation in pass/fail pattern.
+        Higher entropy (more variation) should support higher confidence.
         """
-        metric_isolated = metric_factory(
-            nodeid="test::isolated",
-            isolation_score=0.95,
-            environment_correlation=-0.1,
+        metric_high_entropy = metric_factory(
+            nodeid="test::high_entropy",
+            pattern_entropy=0.9,
+            confidence=0.95,
         )
 
-        metric_env_dependent = metric_factory(
-            nodeid="test::env_dependent",
-            isolation_score=0.1,
-            environment_correlation=0.8,
+        metric_low_entropy = metric_factory(
+            nodeid="test::low_entropy",
+            pattern_entropy=0.1,
+            confidence=0.3,
         )
 
-        # Isolated tests have low env correlation
-        assert metric_isolated.isolation_score > metric_env_dependent.isolation_score
-        assert (
-            metric_isolated.environment_correlation < metric_env_dependent.environment_correlation
-        )
+        # Higher entropy supports higher confidence
+        assert metric_high_entropy.pattern_entropy > metric_low_entropy.pattern_entropy
+        assert metric_high_entropy.confidence > metric_low_entropy.confidence
 
-    def test_duration_stability_zero_variance(self, metric_factory):
-        """When duration_variance is 0, duration_stability should indicate consistency.
+    def test_duration_variance_consistency(self, metric_factory):
+        """When duration_variance is 0, execution time is consistent.
 
-        Zero variance means all durations identical, indicating perfect stability.
+        Zero variance means all durations identical, indicating perfect consistency.
         """
         metric = metric_factory(
             nodeid="test::consistent_duration",
             duration_mean=1.5,
             duration_variance=0.0,
-            duration_stability=0.0,
         )
 
         # Zero variance = perfect stability
         assert metric.duration_variance == 0.0
+        assert metric.duration_mean == 1.5
 
     @pytest.mark.parametrize(
         "failure_rate,entropy,expected_category",
@@ -286,14 +282,14 @@ class TestAlertSeverityMappingWithExtremeValues:
     def base_agg_report(self) -> FlakyTestAggregationReport:
         """Create base aggregation report for alert testing."""
         return FlakyTestAggregationReport(
-            session_id="alert-test-session",
+            date="2026-06-12",
             period_days=7,
-            total_tests=1000,
+            total_test_executions=1000,
             flaky_test_count=0,
+            unstable_test_count=0,
             flaky_tests=[],
             by_module={},
-            category_breakdown={},
-            trend_data={},
+            by_category={},
         )
 
     def test_alert_severity_zero_flaky_tests(self, base_agg_report):
@@ -349,13 +345,19 @@ class TestAlertSeverityMappingWithExtremeValues:
         Current: 16 flaky tests (+60%)
         Expected: CRITICAL severity
         """
-        prev_report = base_agg_report
-        prev_report.flaky_test_count = 10
-        prev_report.flaky_tests = [{"test_name": f"test_{i}"} for i in range(10)]
+        from dataclasses import replace
 
-        curr_report = base_agg_report
-        curr_report.flaky_test_count = 16
-        curr_report.flaky_tests = [{"test_name": f"test_{i}"} for i in range(16)]
+        prev_report = replace(
+            base_agg_report,
+            flaky_test_count=10,
+            flaky_tests=[{"test_name": f"test_{i}"} for i in range(10)]
+        )
+
+        curr_report = replace(
+            base_agg_report,
+            flaky_test_count=16,
+            flaky_tests=[{"test_name": f"test_{i}"} for i in range(16)]
+        )
 
         alerts = FlakyTestAlertManager.check_alerts(curr_report, prev_report)
 
@@ -580,60 +582,55 @@ class TestParametrizedMetricCombinations:
             # Case 1: Intermittent flakiness (random failures)
             MetricCombination(
                 failure_rate=0.15,
-                failure_entropy=0.85,
-                streak_variance=2.1,
+                pattern_entropy=0.85,
+                streak_length=2,
                 recovery_time_days=0.5,
-                duration_stability=0.3,
-                environment_correlation=0.1,
-                isolation_score=0.8,
+                duration_variance=0.3,
+                flakiness_score=0.6,
                 expected_category=FlakynessCategory.INTERMITTENT,
                 expected_alert_severity=AlertSeverity.WARNING,
             ),
             # Case 2: Environment-dependent flakiness
             MetricCombination(
                 failure_rate=0.35,
-                failure_entropy=0.3,
-                streak_variance=0.5,
+                pattern_entropy=0.3,
+                streak_length=1,
                 recovery_time_days=1.5,
-                duration_stability=0.6,
-                environment_correlation=0.85,
-                isolation_score=0.2,
+                duration_variance=0.6,
+                flakiness_score=0.8,
                 expected_category=FlakynessCategory.ENVIRONMENT,
                 expected_alert_severity=AlertSeverity.CRITICAL,
             ),
             # Case 3: Infrastructure issues (systematic)
             MetricCombination(
                 failure_rate=0.50,
-                failure_entropy=0.2,
-                streak_variance=0.8,
+                pattern_entropy=0.2,
+                streak_length=1,
                 recovery_time_days=None,
-                duration_stability=0.8,
-                environment_correlation=0.7,
-                isolation_score=0.3,
+                duration_variance=0.8,
+                flakiness_score=0.9,
                 expected_category=FlakynessCategory.INFRASTRUCTURE,
                 expected_alert_severity=AlertSeverity.CRITICAL,
             ),
             # Case 4: Rare, isolated flakiness
             MetricCombination(
                 failure_rate=0.02,
-                failure_entropy=0.5,
-                streak_variance=0.2,
+                pattern_entropy=0.5,
+                streak_length=1,
                 recovery_time_days=0.01,
-                duration_stability=0.1,
-                environment_correlation=0.0,
-                isolation_score=0.95,
+                duration_variance=0.1,
+                flakiness_score=0.2,
                 expected_category=FlakynessCategory.INTERMITTENT,
                 expected_alert_severity=None,
             ),
             # Case 5: Borderline flakiness (at thresholds)
             MetricCombination(
                 failure_rate=0.10,
-                failure_entropy=0.7,
-                streak_variance=1.5,
+                pattern_entropy=0.7,
+                streak_length=2,
                 recovery_time_days=0.3,
-                duration_stability=0.4,
-                environment_correlation=0.6,
-                isolation_score=0.3,
+                duration_variance=0.4,
+                flakiness_score=0.5,
                 expected_category=FlakynessCategory.INTERMITTENT,
                 expected_alert_severity=AlertSeverity.WARNING,
             ),
@@ -648,12 +645,11 @@ class TestParametrizedMetricCombinations:
         metric = metric_factory(
             nodeid="test::combination_test",
             failure_rate=combination.failure_rate,
-            pattern_entropy=combination.failure_entropy,
-            streak_variance=combination.streak_variance,
+            pattern_entropy=combination.pattern_entropy,
+            streak_length=combination.streak_length,
             recovery_time_days=combination.recovery_time_days,
-            duration_stability=combination.duration_stability,
-            environment_correlation=combination.environment_correlation,
-            isolation_score=combination.isolation_score,
+            duration_variance=combination.duration_variance,
+            flakiness_score=combination.flakiness_score,
             suspected_category=combination.expected_category,
         )
 
@@ -662,8 +658,8 @@ class TestParametrizedMetricCombinations:
         assert metric.suspected_category == combination.expected_category
 
         # Verify logical relationships
-        if combination.environment_correlation > 0.6 and combination.isolation_score < 0.5:
-            # High env correlation + low isolation = environment-dependent
+        if combination.flakiness_score > 0.6 and combination.pattern_entropy < 0.5:
+            # High flakiness score + low entropy = systematic issue
             assert metric.suspected_category in (
                 FlakynessCategory.ENVIRONMENT,
                 FlakynessCategory.INFRASTRUCTURE,
@@ -754,41 +750,41 @@ class TestParametrizedMetricCombinations:
         # Entropy can be calculated with >= 2 runs
         assert metric.run_count == run_count
 
-    def test_isolation_score_bounds(self, metric_factory):
-        """Isolation score must be in [0.0, 1.0].
+    def test_confidence_bounds(self, metric_factory):
+        """Confidence must be in [0.0, 1.0].
 
-        0 = not isolated (fully environment-dependent)
-        1 = fully isolated (independent of environment)
+        0 = no confidence in flakiness assessment
+        1 = full confidence in flakiness assessment
         """
-        for isolation_value in [0.0, 0.25, 0.5, 0.75, 1.0]:
+        for confidence_value in [0.0, 0.25, 0.5, 0.75, 1.0]:
             metric = metric_factory(
-                nodeid="test::isolation",
-                isolation_score=isolation_value,
+                nodeid="test::confidence",
+                confidence=confidence_value,
             )
 
-            assert 0.0 <= metric.isolation_score <= 1.0
+            assert 0.0 <= metric.confidence <= 1.0
 
-    def test_duration_stability_calculation_with_variance(self, metric_factory):
-        """duration_stability is typically derived from duration_variance.
+    def test_duration_variance_consistency_check(self, metric_factory):
+        """duration_variance indicates execution time consistency.
 
-        If variance = 0, stability should be perfect (low value or 0).
-        If variance is high, stability should be poor (high value).
+        If variance = 0, execution time is perfectly consistent.
+        If variance is high, execution time varies significantly.
         """
         # Zero variance = stable
         metric_stable = metric_factory(
             nodeid="test::stable",
             duration_variance=0.0,
-            duration_stability=0.0,
         )
 
         # High variance = unstable
         metric_unstable = metric_factory(
             nodeid="test::unstable",
             duration_variance=5.0,
-            duration_stability=0.8,
         )
 
-        assert metric_stable.duration_stability <= metric_unstable.duration_stability
+        assert metric_stable.duration_variance <= metric_unstable.duration_variance
+        assert metric_stable.duration_variance == 0.0
+        assert metric_unstable.duration_variance == 5.0
 
     def test_confidence_score_bounds(self, metric_factory):
         """Confidence must be in [0.0, 1.0].
@@ -842,12 +838,6 @@ class TestMetricConstraintValidation:
             ("pattern_entropy", 0.0, (0.0, 1.0)),
             ("pattern_entropy", 0.7, (0.0, 1.0)),
             ("pattern_entropy", 1.0, (0.0, 1.0)),
-            ("isolation_score", 0.0, (0.0, 1.0)),
-            ("isolation_score", 0.5, (0.0, 1.0)),
-            ("isolation_score", 1.0, (0.0, 1.0)),
-            ("environment_correlation", -1.0, (-1.0, 1.0)),
-            ("environment_correlation", 0.0, (-1.0, 1.0)),
-            ("environment_correlation", 1.0, (-1.0, 1.0)),
             ("confidence", 0.0, (0.0, 1.0)),
             ("confidence", 0.99, (0.0, 1.0)),
         ],
