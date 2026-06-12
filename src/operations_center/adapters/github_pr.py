@@ -255,6 +255,52 @@ class GitHubPRClient:
                 failed.append(f"{name}: {summary}")
         return failed
 
+    def get_incomplete_checks(
+        self,
+        owner: str,
+        repo: str,
+        pr_number: int,
+        *,
+        pr_data: dict | None = None,
+        ignored_checks: list[str] | None = None,
+    ) -> list[str]:
+        """Return names of checks not yet in a terminal state for the PR head.
+
+        A check is "incomplete" when its ``status`` is anything other than
+        ``completed`` (e.g. ``queued`` / ``in_progress``) — such a run has no
+        ``conclusion`` yet, so :meth:`get_failed_checks` cannot see it.
+
+        Callers gating a merge on green CI MUST treat a non-empty result as
+        "not green yet": an empty failure list means only "nothing has failed
+        *so far*", which is true while CI is still running. Declaring green in
+        that window is how a PR can be merged before its tests finish and then
+        turn the base branch red.
+        """
+        if pr_data is None:
+            pr_data = self.get_pr(owner, repo, pr_number)
+        head_sha = (pr_data.get("head") or {}).get("sha", "")
+        if not head_sha:
+            return []
+        try:
+            check_runs = self.get_check_runs(owner, repo, head_sha)
+        except Exception:
+            return []
+        ignored = [s.lower() for s in (ignored_checks or [])]
+        # Dedupe by name (keep the newest run) — same rationale as get_failed_checks.
+        latest: dict[str, dict] = {}
+        for cr in check_runs:
+            name = cr.get("name", "unknown")
+            if cr.get("id", 0) > latest.get(name, {}).get("id", 0):
+                latest[name] = cr
+        pending = []
+        for cr in latest.values():
+            if cr.get("status") != "completed":
+                name = cr.get("name", "unknown")
+                if ignored and any(pat in name.lower() for pat in ignored):
+                    continue
+                pending.append(name)
+        return pending
+
     def list_open_prs(self, owner: str, repo: str) -> list[dict]:
         resp = self._request(
             "GET",

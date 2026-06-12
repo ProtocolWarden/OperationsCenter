@@ -1526,7 +1526,15 @@ def _phase1(
                                 pr_data=pr_data,
                                 ignored_checks=_rignored,
                             )
-                            if not _rfailed:
+                            # Settled-and-green only: don't retract while checks run.
+                            _rpending = gh_client.get_incomplete_checks(
+                                owner,
+                                repo,
+                                pr_number,
+                                pr_data=pr_data,
+                                ignored_checks=_rignored,
+                            )
+                            if not _rfailed and not _rpending:
                                 _retract_flag(
                                     state,
                                     gh_client,
@@ -1634,7 +1642,57 @@ def _phase1(
                     )
                     _save_state(state_path, state)
                     return
-                state["ci_wait_cycles"] = 0  # CI green — reset the wait counter
+                # No check has FAILED — but an empty failure list only means
+                # "nothing has failed yet". While any check is still queued/running
+                # its conclusion is None, invisible to get_failed_checks. Declaring
+                # green here would let a self-review LGTM merge the PR before CI
+                # finishes, turning the base branch red (this is how #269 merged red).
+                # Require CI to have SETTLED (no pending checks) before green.
+                pending = gh_client.get_incomplete_checks(
+                    owner,
+                    repo,
+                    pr_number,
+                    pr_data=pr_data,
+                    ignored_checks=ignored,
+                )
+                if pending:
+                    state["ci_wait_cycles"] = state.get("ci_wait_cycles", 0) + 1
+                    if state["ci_wait_cycles"] >= _MAX_CI_WAIT_CYCLES:
+                        detail = (
+                            f"CI has not settled after {state['ci_wait_cycles']} checks "
+                            f"({len(pending)} still running: {', '.join(pending[:5])}). "
+                            f"Not merged (CI incomplete) and not closed (work preserved) "
+                            f"— needs a human to investigate stuck CI."
+                        )
+                        record_escalation(
+                            pr_number=pr_number,
+                            repo_key=repo_key,
+                            reason="ci_never_settled",
+                            detail=detail,
+                        )
+                        _escalate_needs_human(
+                            state,
+                            state_path,
+                            gh_client,
+                            owner,
+                            repo,
+                            settings,
+                            reason="ci_never_settled",
+                            detail=detail,
+                            current_head_sha=current_head_sha,
+                        )
+                        return
+                    logger.info(
+                        "pr_review_watcher: PR #%d CI still running (%d pending, wait %d/%d) "
+                        "— deferring self-review until checks settle",
+                        pr_number,
+                        len(pending),
+                        state["ci_wait_cycles"],
+                        _MAX_CI_WAIT_CYCLES,
+                    )
+                    _save_state(state_path, state)
+                    return
+                state["ci_wait_cycles"] = 0  # CI settled and green — reset the wait counter
                 logger.info(
                     "pr_review_watcher: PR #%d CI green — proceeding to verdict-gated "
                     "self-review (LGTM required to merge)",
@@ -1912,7 +1970,12 @@ def _phase1(
                     _failed_np = gh_client.get_failed_checks(
                         owner, repo, pr_number, pr_data=pr_data, ignored_checks=_ign_np
                     )
-                    if not _failed_np:
+                    # Only merge on CI that has SETTLED — never while checks are still
+                    # running (no failure yet != green).
+                    _pending_np = gh_client.get_incomplete_checks(
+                        owner, repo, pr_number, pr_data=pr_data, ignored_checks=_ign_np
+                    )
+                    if not _failed_np and not _pending_np:
                         logger.info(
                             "pr_review_watcher: PR #%d repeated no-progress after "
                             "CI-green retraction budget exhausted; CI still green — "

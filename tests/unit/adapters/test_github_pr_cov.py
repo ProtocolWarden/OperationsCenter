@@ -342,6 +342,55 @@ def test_get_failed_checks_check_runs_exception(client):
     assert out == []
 
 
+# ---------------------------------------------------------------------------
+# get_incomplete_checks
+# ---------------------------------------------------------------------------
+def test_get_incomplete_checks_flags_running_runs(client):
+    runs = [
+        {"id": 1, "name": "lint", "status": "completed", "conclusion": "success"},
+        {"id": 2, "name": "Test (pytest)", "status": "in_progress", "conclusion": None},
+        {"id": 3, "name": "Snapshot", "status": "queued", "conclusion": None},
+    ]
+    with mock.patch.object(client, "get_check_runs", return_value=runs):
+        out = client.get_incomplete_checks("o", "r", 1, pr_data={"head": {"sha": "x"}})
+    assert sorted(out) == ["Snapshot", "Test (pytest)"]
+
+
+def test_get_incomplete_checks_empty_when_all_completed(client):
+    runs = [
+        {"id": 1, "name": "lint", "status": "completed", "conclusion": "success"},
+        {"id": 2, "name": "test", "status": "completed", "conclusion": "failure"},
+    ]
+    with mock.patch.object(client, "get_check_runs", return_value=runs):
+        out = client.get_incomplete_checks("o", "r", 1, pr_data={"head": {"sha": "x"}})
+    assert out == []
+
+
+def test_get_incomplete_checks_honors_ignored_and_latest_run(client):
+    # A stale in_progress run superseded by a newer completed run for the same
+    # name must not count as pending; ignored names are excluded.
+    runs = [
+        {"id": 1, "name": "flaky", "status": "in_progress", "conclusion": None},
+        {"id": 5, "name": "flaky", "status": "completed", "conclusion": "success"},
+        {"id": 6, "name": "Snapshot validation", "status": "queued", "conclusion": None},
+    ]
+    with mock.patch.object(client, "get_check_runs", return_value=runs):
+        out = client.get_incomplete_checks(
+            "o", "r", 1, pr_data={"head": {"sha": "x"}}, ignored_checks=["snapshot"]
+        )
+    assert out == []
+
+
+def test_get_incomplete_checks_no_head_sha(client):
+    assert client.get_incomplete_checks("o", "r", 1, pr_data={"head": {}}) == []
+
+
+def test_get_incomplete_checks_check_runs_exception(client):
+    with mock.patch.object(client, "get_check_runs", side_effect=RuntimeError("boom")):
+        out = client.get_incomplete_checks("o", "r", 1, pr_data={"head": {"sha": "x"}})
+    assert out == []
+
+
 def test_get_failed_checks_uses_output_title(client):
     runs = [
         {
