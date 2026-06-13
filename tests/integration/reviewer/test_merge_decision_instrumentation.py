@@ -238,12 +238,20 @@ class TestMergeDecisionMetrics:
 
         gh.get_failed_checks.return_value = []
 
+        # Create a minimal config file for the test
+        config_path = tmp_path / "cfg.yaml"
+        config_path.write_text("# Minimal test config\n")
+
         # Record retry decision
         start_time = time.time()
         with patch.object(
             watcher,
             "_run_direct_review",
             return_value={"result": "CONCERNS", "summary": "Fix linting"},
+        ), patch.object(
+            watcher,
+            "_run_fix_pass",
+            return_value=False,
         ):
             watcher._phase1(
                 state,
@@ -253,7 +261,7 @@ class TestMergeDecisionMetrics:
                 "owner",
                 "TestRepo",
                 tmp_path,
-                tmp_path / "cfg.yaml",
+                config_path,
                 settings,
             )
         latency_ms = (time.time() - start_time) * 1000
