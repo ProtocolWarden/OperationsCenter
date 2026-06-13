@@ -291,7 +291,7 @@ Current Measurement: {alert.current_value:.1f}% {threshold_part}
             text_body += "1. Identify root cause of degradation\n"
             text_body += "2. Prioritize coverage improvements\n"
             text_body += "3. Establish coverage goals\n"
-        elif alert.alert_type == AlertType.CRITICAL_MODULE_COVERAGE.value:
+        elif alert.alert_type == AlertType.MODULE_GAP.value:
             text_body += "1. Focus on high-touch modules\n"
             text_body += "2. Add tests for frequently changed files\n"
             text_body += "3. Track module-level coverage metrics\n"
@@ -378,7 +378,7 @@ Current Measurement: {alert.current_value:.1f}% {threshold_part}
     <li>Prioritize coverage improvements</li>
     <li>Establish coverage goals</li>
 """
-        elif alert.alert_type == AlertType.CRITICAL_MODULE_COVERAGE.value:
+        elif alert.alert_type == AlertType.MODULE_GAP.value:
             html_body += """
     <li>Focus on high-touch modules</li>
     <li>Add tests for frequently changed files</li>
@@ -467,7 +467,7 @@ class CoverageGitHubFormatter:
 - **Add tests** — Increase test coverage for new code
 - **Set goals** — Establish team coverage targets
 """
-        elif alert.alert_type == AlertType.CRITICAL_MODULE_COVERAGE.value:
+        elif alert.alert_type == AlertType.MODULE_GAP.value:
             comment += """- **Focus on modules** — Prioritize listed files for testing
 - **Add tests** — Test high-touch modules thoroughly
 - **Track progress** — Monitor module-level metrics
