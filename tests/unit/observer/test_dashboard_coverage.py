@@ -637,6 +637,111 @@ class TestDashboardSystemPanels:
         assert len(panel.metrics) >= 2
 
 
+class TestDashboardRecentErrorsPanel:
+    """Test recent errors dashboard panel."""
+
+    @pytest.fixture
+    def mock_health_checker(self) -> MagicMock:
+        """Create mock health checker."""
+        checker = MagicMock(spec=HealthChecker)
+        health_report = MagicMock()
+        health_report.critical_issues = []
+        health_report.warnings = []
+        health_report.overall_status.value = "HEALTHY"
+        checker.run_all_checks.return_value = health_report
+        return checker
+
+    @pytest.fixture
+    def mock_metrics_collector(self) -> MagicMock:
+        """Create mock metrics collector."""
+        collector = MagicMock(spec=MetricsCollector)
+        system_metrics = MagicMock()
+        system_metrics.total_collectors = 5
+        system_metrics.healthy_collectors = 5
+        system_metrics.degraded_collectors = 0
+        system_metrics.critical_collectors = 0
+        system_metrics.system_health_status = "HEALTHY"
+        system_metrics.overall_error_rate_percent = 0.0
+        system_metrics.total_validation_failures = 0
+        system_metrics.collector_metrics = {}
+        collector.get_system_metrics.return_value = system_metrics
+        collector.get_all_collector_metrics.return_value = {}
+        return collector
+
+    def test_panel_recent_errors_with_log_reader(
+        self,
+        mock_health_checker: MagicMock,
+        mock_metrics_collector: MagicMock,
+    ) -> None:
+        """Test recent errors panel with log reader."""
+        log_reader = MagicMock()
+        error_entries = [
+            MagicMock(
+                collector="collector_a",
+                error_type="parse_error",
+                message="Failed to parse JSON",
+                timestamp=datetime.now(timezone.utc),
+            ),
+            MagicMock(
+                collector="collector_b",
+                error_type="structure_error",
+                message="Invalid structure",
+                timestamp=datetime.now(timezone.utc),
+            ),
+        ]
+        log_reader.read_recent.return_value = error_entries
+
+        provider = DashboardProvider(
+            metrics_collector=mock_metrics_collector,
+            health_checker=mock_health_checker,
+            log_reader=log_reader,
+        )
+
+        panel = provider._panel_recent_errors()
+
+        assert panel.title == "Recent Errors"
+        assert len(panel.metrics) == 2
+        assert panel.metrics[0].status == "WARNING"
+
+    def test_panel_recent_errors_without_log_reader(
+        self,
+        mock_health_checker: MagicMock,
+        mock_metrics_collector: MagicMock,
+    ) -> None:
+        """Test recent errors panel without log reader."""
+        provider = DashboardProvider(
+            metrics_collector=mock_metrics_collector,
+            health_checker=mock_health_checker,
+        )
+
+        panel = provider._panel_recent_errors()
+
+        assert panel.title == "Recent Errors"
+        assert len(panel.metrics) == 0
+
+    def test_panel_recent_errors_with_no_recent_errors(
+        self,
+        mock_health_checker: MagicMock,
+        mock_metrics_collector: MagicMock,
+    ) -> None:
+        """Test recent errors panel with no recent errors."""
+        log_reader = MagicMock()
+        log_reader.read_recent.return_value = []
+
+        provider = DashboardProvider(
+            metrics_collector=mock_metrics_collector,
+            health_checker=mock_health_checker,
+            log_reader=log_reader,
+        )
+
+        panel = provider._panel_recent_errors()
+
+        assert panel.title == "Recent Errors"
+        assert len(panel.metrics) == 1
+        assert panel.metrics[0].value == "OK"
+        assert panel.metrics[0].status == "HEALTHY"
+
+
 class TestDashboardFlakyTestPanels:
     """Test flaky test dashboard panels."""
 
