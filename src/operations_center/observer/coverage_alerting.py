@@ -28,7 +28,7 @@ class AlertType(str, Enum):
     BELOW_THRESHOLD = "below_threshold"
     REGRESSION_DETECTED = "regression_detected"
     TREND_DEGRADING = "trend_degrading"
-    MODULE_GAP = "module_gap"
+    CRITICAL_MODULE_COVERAGE = "critical_module_coverage"
 
 
 class AlertSeverity(str, Enum):
@@ -102,7 +102,7 @@ def get_alert_priority(alert_type: str, severity: str) -> int:
     base_priority = severity_weights.get(severity, 0)
 
     type_weights: dict[str, int] = {
-        AlertType.MODULE_GAP.value: 3,
+        AlertType.CRITICAL_MODULE_COVERAGE.value: 3,
         AlertType.REGRESSION_DETECTED.value: 2,
         AlertType.TREND_DEGRADING.value: 1,
         AlertType.BELOW_THRESHOLD.value: 0,
@@ -202,7 +202,7 @@ class CoverageAlertConfig(BaseModel):
 class CoverageAlertManager:
     """Generates and manages coverage alerts for threshold breaches and regressions."""
 
-    def __init__(self, config: CoverageAlertConfig | None = None):
+    def __init__(self, config: CoverageAlertConfig | None = None) -> None:
         """Initialize alert manager with optional configuration.
 
         Args:
@@ -346,7 +346,7 @@ class CoverageAlertManager:
                     alert: CoverageAlert = CoverageAlert(
                         alert_id=str(uuid4()),
                         timestamp=snapshot.timestamp,
-                        alert_type=AlertType.MODULE_GAP.value,
+                        alert_type=AlertType.CRITICAL_MODULE_COVERAGE.value,
                         severity=severity.value,
                         metric_type="statement",
                         granularity="module",
@@ -464,7 +464,7 @@ class CoverageAlertManager:
             AlertType.BELOW_THRESHOLD.value: "Threshold Breach",
             AlertType.REGRESSION_DETECTED.value: "Regression",
             AlertType.TREND_DEGRADING.value: "Trend Decline",
-            AlertType.MODULE_GAP.value: "Module Critical",
+            AlertType.CRITICAL_MODULE_COVERAGE.value: "Module Critical",
         }
         return category_map.get(alert_type, "Unknown")
 

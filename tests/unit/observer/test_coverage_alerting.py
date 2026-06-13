@@ -320,7 +320,7 @@ class TestCriticalModuleDetection:
         alerts = manager.generate_alerts(below_threshold_snapshot)
 
         module_alerts = [
-            a for a in alerts if a.alert_type == AlertType.MODULE_GAP.value
+            a for a in alerts if a.alert_type == AlertType.CRITICAL_MODULE_COVERAGE.value
         ]
         assert len(module_alerts) > 0
 
@@ -332,7 +332,7 @@ class TestCriticalModuleDetection:
         alerts = manager.generate_alerts(below_threshold_snapshot)
 
         module_alerts = [
-            a for a in alerts if a.alert_type == AlertType.MODULE_GAP.value
+            a for a in alerts if a.alert_type == AlertType.CRITICAL_MODULE_COVERAGE.value
         ]
         alert = module_alerts[0]
 
@@ -348,7 +348,7 @@ class TestCriticalModuleDetection:
         alerts = manager.generate_alerts(healthy_snapshot)
 
         module_alerts = [
-            a for a in alerts if a.alert_type == AlertType.MODULE_GAP.value
+            a for a in alerts if a.alert_type == AlertType.CRITICAL_MODULE_COVERAGE.value
         ]
         assert len(module_alerts) == 0
 
@@ -784,12 +784,12 @@ class TestUtilityFunctions:
 
     def test_get_alert_priority_with_type_bonus(self) -> None:
         """Test priority calculation with type-based bonus."""
-        priority = get_alert_priority(AlertType.MODULE_GAP.value, AlertSeverity.CRITICAL.value)
+        priority = get_alert_priority(AlertType.CRITICAL_MODULE_COVERAGE.value, AlertSeverity.CRITICAL.value)
         assert priority == 10
 
     def test_get_alert_priority_caps_at_ten(self) -> None:
         """Test that priority caps at 10."""
-        priority = get_alert_priority(AlertType.MODULE_GAP.value, AlertSeverity.EMERGENCY.value)
+        priority = get_alert_priority(AlertType.CRITICAL_MODULE_COVERAGE.value, AlertSeverity.EMERGENCY.value)
         assert priority == 10
 
     def test_calculate_trend_direction_improving(self) -> None:
@@ -958,7 +958,7 @@ class TestAlertManagerMethods:
         manager = CoverageAlertManager(config=default_config)
         manager.generate_alerts(below_threshold_snapshot)
         module_alerts = [
-            a for a in manager.alerts if a.alert_type == AlertType.MODULE_GAP.value
+            a for a in manager.alerts if a.alert_type == AlertType.CRITICAL_MODULE_COVERAGE.value
         ]
         if module_alerts:
             categorization = manager.categorize_alert(module_alerts[0])
@@ -990,4 +990,4 @@ class TestAlertManagerMethods:
         alerts = manager.generate_alerts(below_threshold_snapshot)
         assert len(alerts) > 0
         assert any(a.alert_type == AlertType.BELOW_THRESHOLD.value for a in alerts)
-        assert any(a.alert_type == AlertType.MODULE_GAP.value for a in alerts)
+        assert any(a.alert_type == AlertType.CRITICAL_MODULE_COVERAGE.value for a in alerts)

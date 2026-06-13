@@ -263,7 +263,7 @@ class CoverageAlert(BaseModel):
 
     alert_id: str
     timestamp: datetime
-    alert_type: Literal["below_threshold", "regression_detected", "trend_degrading", "module_gap"]
+    alert_type: Literal["below_threshold", "regression_detected", "trend_degrading", "critical_module_coverage"]
     severity: Literal["info", "warning", "critical", "emergency"]
 
     metric_type: Literal["statement", "branch", "line"]
@@ -368,7 +368,7 @@ class CoverageAlert(BaseModel):
             "below_threshold": "Below Threshold",
             "regression_detected": "Regression Detected",
             "trend_degrading": "Trend Degrading",
-            "module_gap": "Module Coverage Gap",
+            "critical_module_coverage": "Module Coverage Gap",
         }
         return label_map.get(self.alert_type, "Unknown Alert")
 

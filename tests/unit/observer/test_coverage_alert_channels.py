@@ -99,7 +99,7 @@ def module_alert() -> CoverageAlert:
     """Create a module critical gap alert."""
     return CoverageAlert(
         alert_id="test-alert-4",
-        alert_type=AlertType.MODULE_GAP,
+        alert_type=AlertType.CRITICAL_MODULE_COVERAGE,
         severity=AlertSeverity.CRITICAL,
         metric_type="statement",
         granularity="module",
@@ -580,7 +580,7 @@ class TestCoverageAlertFormattersIntegration:
             ),
             CoverageAlert(
                 alert_id="test-4",
-                alert_type=AlertType.MODULE_GAP,
+                alert_type=AlertType.CRITICAL_MODULE_COVERAGE,
                 severity=AlertSeverity.CRITICAL,
                 metric_type="statement",
                 granularity="module",

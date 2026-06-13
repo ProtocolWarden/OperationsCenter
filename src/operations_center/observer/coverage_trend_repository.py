@@ -121,7 +121,7 @@ class LocalCoverageTrendRepository(CoverageTrendRepository):
         root: Path | None = None,
         retention_days: int = 30,
         default_format: CoverageTrendFormat = CoverageTrendFormat.JSONL,
-    ):
+    ) -> None:
         self.root = root or Path(".coverage_data")
         self.retention_days = retention_days
         self.default_format = default_format
@@ -373,7 +373,7 @@ class S3CoverageTrendRepository(CoverageTrendRepository):
         access_key: str | None = None,
         secret_key: str | None = None,
         region: str = "us-east-1",
-    ):
+    ) -> None:
         if boto3 is None:
             raise ImportError("boto3 is required for S3 storage")
 
@@ -619,7 +619,7 @@ class HTTPCoverageTrendRepository(CoverageTrendRepository):
         self,
         base_url: str,
         token: str | None = None,
-    ):
+    ) -> None:
         if requests is None:
             raise ImportError("requests is required for HTTP storage")
 

@@ -1062,11 +1062,11 @@ class TestCoverageAlert:
         assert alert.get_alert_type_label() == "Trend Degrading"
 
     def test_get_alert_type_label_module_gap(self) -> None:
-        """Test label for module_gap alert type."""
+        """Test label for critical_module_coverage alert type."""
         alert = CoverageAlert(
             alert_id="alert-001",
             timestamp=datetime.now(UTC),
-            alert_type="module_gap",
+            alert_type="critical_module_coverage",
             severity="critical",
             metric_type="statement",
             granularity="module",
