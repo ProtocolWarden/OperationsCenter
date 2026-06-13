@@ -1,3 +1,11 @@
+## 2026-06-13 — Watchdog: fix reviewer_backend_unavailable exhausting WO-3 retraction budget
+
+pr_review_watcher/main.py: reset ci_green_retraction_count=0 when reviewer_backend_unavailable
+escalation fires. The WO-3 retraction budget was being permanently exhausted by backend-failure
+escalations — the retry was wasted on infra, not a review concern. Also reset state file for
+PR #275 (ci_green_retraction_count: 1 → 0); WO-3 retracted the comment and escalated_needs_human
+went false; review will resume on next sweep.
+
 ## 2026-06-13 — Watchdog: resolved ty type errors blocking PR #275 CI
 
 dag_executor/adapter.py and team_executor/adapter.py: cast worker_backend str → Literal to
