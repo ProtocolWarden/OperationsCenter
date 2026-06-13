@@ -96,7 +96,7 @@ def sample_alert() -> CoverageAlert:
         alert_id="alert-001",
         timestamp=datetime.now(tz=timezone.utc),
         alert_type="below_threshold",
-        severity="high",
+        severity="critical",
         metric_type="line",
         granularity="repository",
         scope_id="",

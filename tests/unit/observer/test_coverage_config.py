@@ -759,21 +759,21 @@ class TestAlertChannelRoute:
 
         # Should match specified modules
         assert route.matches_alert(
-            AlertType.CRITICAL_MODULE_COVERAGE, AlertSeverity.INFO, "src/observer"
+            AlertType.MODULE_GAP, AlertSeverity.INFO, "src/observer"
         )
         assert route.matches_alert(
-            AlertType.CRITICAL_MODULE_COVERAGE, AlertSeverity.INFO, "src/custodian"
+            AlertType.MODULE_GAP, AlertSeverity.INFO, "src/custodian"
         )
 
         # Should not match unspecified modules
         assert not route.matches_alert(
-            AlertType.CRITICAL_MODULE_COVERAGE,
+            AlertType.MODULE_GAP,
             AlertSeverity.INFO,
             "src/execution",
         )
 
         # Should match when module not specified and list not empty
-        assert not route.matches_alert(AlertType.CRITICAL_MODULE_COVERAGE, AlertSeverity.INFO)
+        assert not route.matches_alert(AlertType.MODULE_GAP, AlertSeverity.INFO)
 
     def test_route_disabled_never_matches(self) -> None:
         """Test that disabled routes never match alerts."""

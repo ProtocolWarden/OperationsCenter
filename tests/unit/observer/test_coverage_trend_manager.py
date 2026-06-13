@@ -311,7 +311,7 @@ class TestCoverageTrendManager:
             alert_id="alert-001",
             timestamp=datetime.now(),
             alert_type="below_threshold",
-            severity="high",
+            severity="critical",
             metric_type="line",
             granularity="repository",
             scope_id="",
@@ -322,7 +322,7 @@ class TestCoverageTrendManager:
         )
 
         manager.save_alert(alert)
-        alerts = manager.list_alerts(severity="high")
+        alerts = manager.list_alerts(severity="critical")
 
         assert len(alerts) >= 1
         assert any(a.alert_id == "alert-001" for a in alerts)
