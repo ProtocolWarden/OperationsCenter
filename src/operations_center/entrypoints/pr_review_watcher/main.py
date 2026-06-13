@@ -1655,14 +1655,31 @@ def _phase1(
                     pr_data=pr_data,
                     ignored_checks=ignored,
                 )
-                if pending:
+                # Guard C: the gating green must belong to the CURRENT head. An empty
+                # completed-checks list means CI has produced no result on this head
+                # yet (just pushed / auto-rebased) — failed==[] and pending==[] would
+                # otherwise read as green on a head that has no CI at all, so a stale
+                # pre-rebase green could carry a self-review LGTM straight to merge.
+                completed = gh_client.get_completed_checks(
+                    owner,
+                    repo,
+                    pr_number,
+                    pr_data=pr_data,
+                    ignored_checks=ignored,
+                )
+                if pending or not completed:
                     state["ci_wait_cycles"] = state.get("ci_wait_cycles", 0) + 1
+                    _why = (
+                        f"{len(pending)} still running: {', '.join(pending[:5])}"
+                        if pending
+                        else "no checks have reported on the current head yet"
+                    )
                     if state["ci_wait_cycles"] >= _MAX_CI_WAIT_CYCLES:
                         detail = (
-                            f"CI has not settled after {state['ci_wait_cycles']} checks "
-                            f"({len(pending)} still running: {', '.join(pending[:5])}). "
-                            f"Not merged (CI incomplete) and not closed (work preserved) "
-                            f"— needs a human to investigate stuck CI."
+                            f"CI has not settled-green on the current head after "
+                            f"{state['ci_wait_cycles']} checks ({_why}). Not merged (CI "
+                            f"incomplete) and not closed (work preserved) — needs a human "
+                            f"to investigate stuck CI."
                         )
                         record_escalation(
                             pr_number=pr_number,
@@ -1683,10 +1700,10 @@ def _phase1(
                         )
                         return
                     logger.info(
-                        "pr_review_watcher: PR #%d CI still running (%d pending, wait %d/%d) "
-                        "— deferring self-review until checks settle",
+                        "pr_review_watcher: PR #%d CI not settled-green on current head "
+                        "(%s, wait %d/%d) — deferring self-review",
                         pr_number,
-                        len(pending),
+                        _why,
                         state["ci_wait_cycles"],
                         _MAX_CI_WAIT_CYCLES,
                     )
@@ -1971,11 +1988,15 @@ def _phase1(
                         owner, repo, pr_number, pr_data=pr_data, ignored_checks=_ign_np
                     )
                     # Only merge on CI that has SETTLED — never while checks are still
-                    # running (no failure yet != green).
+                    # running (no failure yet != green) and never on a head with no
+                    # reported checks at all (Guard C: gating green must be on THIS head).
                     _pending_np = gh_client.get_incomplete_checks(
                         owner, repo, pr_number, pr_data=pr_data, ignored_checks=_ign_np
                     )
-                    if not _failed_np and not _pending_np:
+                    _completed_np = gh_client.get_completed_checks(
+                        owner, repo, pr_number, pr_data=pr_data, ignored_checks=_ign_np
+                    )
+                    if not _failed_np and not _pending_np and _completed_np:
                         logger.info(
                             "pr_review_watcher: PR #%d repeated no-progress after "
                             "CI-green retraction budget exhausted; CI still green — "

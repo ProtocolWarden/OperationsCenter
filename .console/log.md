@@ -1,3 +1,14 @@
+## 2026-06-13 — fix(reviewer): gate merge on the rebased head's CI (divergence guard C)
+
+#272 stopped merging on incomplete/red CI, but left a window: a freshly pushed/auto-rebased head
+has no check runs yet, so get_failed_checks and get_incomplete_checks both return [] and the gate
+would declare green on a head with NO CI — a stale pre-rebase green carrying a self-review LGTM
+straight to merge (the clean-but-semantically-broken merge that the goal/3476567d divergence rode).
+Fix: new GitHubPRClient.get_completed_checks; the self-review gate and the WO-3 no-progress
+direct-merge now additionally require ≥1 completed check on the current head (failed==[] AND
+pending==[] AND completed!=[]) before green/merge; otherwise defer via the existing ci_wait_cycles
+machinery. +4 tests (adapter + gate defers-on-no-checks) + mock defaults.
+
 ## 2026-06-12 — Stage 4: Verify implementation completeness and create PR-ready commit (✅ COMPLETE)
 
 ### Objective
