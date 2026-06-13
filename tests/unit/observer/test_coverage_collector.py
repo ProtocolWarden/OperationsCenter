@@ -438,3 +438,572 @@ class TestCoverageCollectorEdgeCases:
             assert signal.uncovered_file_count == 2
         finally:
             Path(temp_path).unlink()
+
+
+class TestValidateSnapshot:
+    """Tests for snapshot validation."""
+
+    def test_validate_snapshot_valid(self) -> None:
+        """Test validating a valid snapshot."""
+        collector = CoverageCollector()
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(UTC),
+            run_id="test",
+            source="pytest-cov",
+            overall_statement_coverage_pct=85.0,
+            overall_branch_coverage_pct=75.0,
+            overall_line_coverage_pct=86.0,
+            module_coverages=[],
+        )
+
+        assert collector._validate_snapshot(snapshot) is True
+
+    def test_validate_snapshot_edge_cases(self) -> None:
+        """Test validating snapshot with boundary values."""
+        collector = CoverageCollector()
+
+        # Test 0% coverage
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(UTC),
+            run_id="test",
+            source="pytest-cov",
+            overall_statement_coverage_pct=0.0,
+            overall_branch_coverage_pct=0.0,
+            overall_line_coverage_pct=0.0,
+            module_coverages=[],
+        )
+        assert collector._validate_snapshot(snapshot) is True
+
+        # Test 100% coverage
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(UTC),
+            run_id="test",
+            source="pytest-cov",
+            overall_statement_coverage_pct=100.0,
+            overall_branch_coverage_pct=100.0,
+            overall_line_coverage_pct=100.0,
+            module_coverages=[],
+        )
+        assert collector._validate_snapshot(snapshot) is True
+
+
+class TestFilterModulesByHealth:
+    """Tests for filtering modules by health status."""
+
+    def test_filter_modules_healthy(self) -> None:
+        """Test filtering modules with healthy status."""
+        collector = CoverageCollector()
+
+        healthy = ModuleCoverage(
+            module_path="src/observer",
+            statement_coverage_pct=85.0,
+            branch_coverage_pct=75.0,
+            line_coverage_pct=86.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        at_risk = ModuleCoverage(
+            module_path="src/custodian",
+            statement_coverage_pct=75.0,
+            branch_coverage_pct=65.0,
+            line_coverage_pct=74.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="at_risk",
+        )
+
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(UTC),
+            run_id="test",
+            source="pytest-cov",
+            overall_statement_coverage_pct=80.0,
+            overall_branch_coverage_pct=70.0,
+            overall_line_coverage_pct=80.0,
+            module_coverages=[healthy, at_risk],
+        )
+
+        healthy_modules = collector._filter_modules_by_health(snapshot, "healthy")
+        assert len(healthy_modules) == 1
+        assert healthy_modules[0].module_path == "src/observer"
+
+    def test_filter_modules_critical(self) -> None:
+        """Test filtering modules with critical status."""
+        collector = CoverageCollector()
+
+        critical = ModuleCoverage(
+            module_path="src/low",
+            statement_coverage_pct=50.0,
+            branch_coverage_pct=40.0,
+            line_coverage_pct=49.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="critical",
+        )
+
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(UTC),
+            run_id="test",
+            source="pytest-cov",
+            overall_statement_coverage_pct=50.0,
+            overall_branch_coverage_pct=40.0,
+            overall_line_coverage_pct=49.0,
+            module_coverages=[critical],
+        )
+
+        critical_modules = collector._filter_modules_by_health(snapshot, "critical")
+        assert len(critical_modules) == 1
+        assert critical_modules[0].module_path == "src/low"
+
+    def test_filter_modules_empty_snapshot(self) -> None:
+        """Test filtering with empty snapshot."""
+        collector = CoverageCollector()
+
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(UTC),
+            run_id="test",
+            source="pytest-cov",
+            overall_statement_coverage_pct=0.0,
+            overall_branch_coverage_pct=0.0,
+            overall_line_coverage_pct=0.0,
+            module_coverages=[],
+        )
+
+        result = collector._filter_modules_by_health(snapshot, "healthy")
+        assert len(result) == 0
+
+
+class TestCountByHealthStatus:
+    """Tests for health status counting."""
+
+    def test_count_by_health_status(self) -> None:
+        """Test counting modules by health status."""
+        collector = CoverageCollector()
+
+        healthy = ModuleCoverage(
+            module_path="src/observer",
+            statement_coverage_pct=85.0,
+            branch_coverage_pct=75.0,
+            line_coverage_pct=86.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        at_risk = ModuleCoverage(
+            module_path="src/custodian",
+            statement_coverage_pct=75.0,
+            branch_coverage_pct=65.0,
+            line_coverage_pct=74.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="at_risk",
+        )
+
+        critical = ModuleCoverage(
+            module_path="src/low",
+            statement_coverage_pct=50.0,
+            branch_coverage_pct=40.0,
+            line_coverage_pct=49.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="critical",
+        )
+
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(UTC),
+            run_id="test",
+            source="pytest-cov",
+            overall_statement_coverage_pct=70.0,
+            overall_branch_coverage_pct=60.0,
+            overall_line_coverage_pct=70.0,
+            module_coverages=[healthy, at_risk, critical],
+        )
+
+        counts = collector._count_by_health_status(snapshot)
+
+        assert counts["healthy"] == 1
+        assert counts["at_risk"] == 1
+        assert counts["critical"] == 1
+
+
+class TestGetAverageCoverage:
+    """Tests for average coverage calculation."""
+
+    def test_get_average_coverage_statement(self) -> None:
+        """Test calculating average statement coverage."""
+        collector = CoverageCollector()
+
+        module1 = ModuleCoverage(
+            module_path="src/module1",
+            statement_coverage_pct=80.0,
+            branch_coverage_pct=70.0,
+            line_coverage_pct=81.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        module2 = ModuleCoverage(
+            module_path="src/module2",
+            statement_coverage_pct=90.0,
+            branch_coverage_pct=85.0,
+            line_coverage_pct=91.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(UTC),
+            run_id="test",
+            source="pytest-cov",
+            overall_statement_coverage_pct=85.0,
+            overall_branch_coverage_pct=77.5,
+            overall_line_coverage_pct=86.0,
+            module_coverages=[module1, module2],
+        )
+
+        avg = collector._get_average_coverage(snapshot, "statement")
+        assert avg == 85.0
+
+    def test_get_average_coverage_branch(self) -> None:
+        """Test calculating average branch coverage."""
+        collector = CoverageCollector()
+
+        module1 = ModuleCoverage(
+            module_path="src/module1",
+            statement_coverage_pct=80.0,
+            branch_coverage_pct=70.0,
+            line_coverage_pct=81.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        module2 = ModuleCoverage(
+            module_path="src/module2",
+            statement_coverage_pct=90.0,
+            branch_coverage_pct=90.0,
+            line_coverage_pct=91.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(UTC),
+            run_id="test",
+            source="pytest-cov",
+            overall_statement_coverage_pct=85.0,
+            overall_branch_coverage_pct=80.0,
+            overall_line_coverage_pct=86.0,
+            module_coverages=[module1, module2],
+        )
+
+        avg = collector._get_average_coverage(snapshot, "branch")
+        assert avg == 80.0
+
+    def test_get_average_coverage_empty(self) -> None:
+        """Test calculating average coverage with empty modules."""
+        collector = CoverageCollector()
+
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(UTC),
+            run_id="test",
+            source="pytest-cov",
+            overall_statement_coverage_pct=0.0,
+            overall_branch_coverage_pct=0.0,
+            overall_line_coverage_pct=0.0,
+            module_coverages=[],
+        )
+
+        avg = collector._get_average_coverage(snapshot, "statement")
+        assert avg == 0.0
+
+
+class TestGetMinMaxCoverageModule:
+    """Tests for finding modules with min/max coverage."""
+
+    def test_get_min_coverage_module(self) -> None:
+        """Test finding module with minimum coverage."""
+        collector = CoverageCollector()
+
+        module1 = ModuleCoverage(
+            module_path="src/module1",
+            statement_coverage_pct=80.0,
+            branch_coverage_pct=70.0,
+            line_coverage_pct=81.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        module2 = ModuleCoverage(
+            module_path="src/module2",
+            statement_coverage_pct=50.0,
+            branch_coverage_pct=40.0,
+            line_coverage_pct=51.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="critical",
+        )
+
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(UTC),
+            run_id="test",
+            source="pytest-cov",
+            overall_statement_coverage_pct=65.0,
+            overall_branch_coverage_pct=55.0,
+            overall_line_coverage_pct=66.0,
+            module_coverages=[module1, module2],
+        )
+
+        min_module = collector._get_min_coverage_module(snapshot, "statement")
+        assert min_module is not None
+        assert min_module.module_path == "src/module2"
+        assert min_module.statement_coverage_pct == 50.0
+
+    def test_get_max_coverage_module(self) -> None:
+        """Test finding module with maximum coverage."""
+        collector = CoverageCollector()
+
+        module1 = ModuleCoverage(
+            module_path="src/module1",
+            statement_coverage_pct=80.0,
+            branch_coverage_pct=70.0,
+            line_coverage_pct=81.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        module2 = ModuleCoverage(
+            module_path="src/module2",
+            statement_coverage_pct=95.0,
+            branch_coverage_pct=90.0,
+            line_coverage_pct=96.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(UTC),
+            run_id="test",
+            source="pytest-cov",
+            overall_statement_coverage_pct=87.5,
+            overall_branch_coverage_pct=80.0,
+            overall_line_coverage_pct=88.5,
+            module_coverages=[module1, module2],
+        )
+
+        max_module = collector._get_max_coverage_module(snapshot, "statement")
+        assert max_module is not None
+        assert max_module.module_path == "src/module2"
+        assert max_module.statement_coverage_pct == 95.0
+
+    def test_get_min_coverage_module_empty(self) -> None:
+        """Test finding min module with empty snapshot."""
+        collector = CoverageCollector()
+
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(UTC),
+            run_id="test",
+            source="pytest-cov",
+            overall_statement_coverage_pct=0.0,
+            overall_branch_coverage_pct=0.0,
+            overall_line_coverage_pct=0.0,
+            module_coverages=[],
+        )
+
+        result = collector._get_min_coverage_module(snapshot, "statement")
+        assert result is None
+
+    def test_get_max_coverage_module_empty(self) -> None:
+        """Test finding max module with empty snapshot."""
+        collector = CoverageCollector()
+
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(UTC),
+            run_id="test",
+            source="pytest-cov",
+            overall_statement_coverage_pct=0.0,
+            overall_branch_coverage_pct=0.0,
+            overall_line_coverage_pct=0.0,
+            module_coverages=[],
+        )
+
+        result = collector._get_max_coverage_module(snapshot, "statement")
+        assert result is None
+
+
+class TestShouldAlertOnModule:
+    """Tests for module alert determination."""
+
+    def test_should_alert_on_critical_module(self) -> None:
+        """Test alert determination for critical module below threshold."""
+        collector = CoverageCollector()
+
+        critical_module = ModuleCoverage(
+            module_path="src/critical",
+            statement_coverage_pct=60.0,
+            branch_coverage_pct=50.0,
+            line_coverage_pct=59.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="critical",
+        )
+
+        assert collector._should_alert_on_module(critical_module, 75.0) is True
+
+    def test_should_not_alert_on_healthy_module(self) -> None:
+        """Test alert determination for healthy module."""
+        collector = CoverageCollector()
+
+        healthy_module = ModuleCoverage(
+            module_path="src/healthy",
+            statement_coverage_pct=85.0,
+            branch_coverage_pct=75.0,
+            line_coverage_pct=86.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        assert collector._should_alert_on_module(healthy_module, 75.0) is False
+
+    def test_should_not_alert_critical_above_threshold(self) -> None:
+        """Test alert determination for critical module above threshold."""
+        collector = CoverageCollector()
+
+        critical_module = ModuleCoverage(
+            module_path="src/critical",
+            statement_coverage_pct=80.0,
+            branch_coverage_pct=70.0,
+            line_coverage_pct=81.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="critical",
+        )
+
+        assert collector._should_alert_on_module(critical_module, 75.0) is False
+
+
+class TestModuleCoverageHelperFunctions:
+    """Tests for module-level helper functions."""
+
+    def test_calculate_module_coverage_average_statement(self) -> None:
+        """Test calculating average module coverage."""
+        from operations_center.observer.collectors.coverage_collector import (
+            calculate_module_coverage_average,
+        )
+
+        module1 = ModuleCoverage(
+            module_path="src/module1",
+            statement_coverage_pct=80.0,
+            branch_coverage_pct=70.0,
+            line_coverage_pct=81.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        module2 = ModuleCoverage(
+            module_path="src/module2",
+            statement_coverage_pct=90.0,
+            branch_coverage_pct=85.0,
+            line_coverage_pct=91.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        avg = calculate_module_coverage_average([module1, module2], "statement")
+        assert avg == 85.0
+
+    def test_calculate_module_coverage_average_empty(self) -> None:
+        """Test calculating average with empty list."""
+        from operations_center.observer.collectors.coverage_collector import (
+            calculate_module_coverage_average,
+        )
+
+        avg = calculate_module_coverage_average([], "statement")
+        assert avg == 0.0
+
+    def test_get_module_health_summary(self) -> None:
+        """Test getting module health summary."""
+        from operations_center.observer.collectors.coverage_collector import (
+            get_module_health_summary,
+        )
+
+        module1 = ModuleCoverage(
+            module_path="src/module1",
+            statement_coverage_pct=85.0,
+            branch_coverage_pct=75.0,
+            line_coverage_pct=86.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        module2 = ModuleCoverage(
+            module_path="src/module2",
+            statement_coverage_pct=75.0,
+            branch_coverage_pct=65.0,
+            line_coverage_pct=74.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="at_risk",
+        )
+
+        module3 = ModuleCoverage(
+            module_path="src/module3",
+            statement_coverage_pct=50.0,
+            branch_coverage_pct=40.0,
+            line_coverage_pct=49.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="critical",
+        )
+
+        summary = get_module_health_summary([module1, module2, module3])
+
+        assert summary["healthy"] == 1
+        assert summary["at_risk"] == 1
+        assert summary["critical"] == 1
+
+    def test_get_module_health_summary_empty(self) -> None:
+        """Test getting health summary for empty list."""
+        from operations_center.observer.collectors.coverage_collector import (
+            get_module_health_summary,
+        )
+
+        summary = get_module_health_summary([])
+
+        assert summary["healthy"] == 0
+        assert summary["at_risk"] == 0
+        assert summary["critical"] == 0

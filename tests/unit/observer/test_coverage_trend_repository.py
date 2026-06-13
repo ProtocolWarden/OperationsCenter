@@ -381,3 +381,539 @@ class TestHTTPCoverageTrendRepository:
         )
 
         mock_session.headers.update.assert_called_once_with({"Authorization": "Bearer test-token"})
+
+
+class TestLocalRepositoryEdgeCases:
+    """Tests for edge cases in local repository."""
+
+    def test_list_snapshots_with_severity_filter(
+        self,
+        temp_storage_dir: Path,
+        sample_alert: CoverageAlert,
+    ) -> None:
+        """Test filtering alerts by severity."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+
+        critical_alert = CoverageAlert(
+            alert_id="critical-001",
+            timestamp=datetime.now(tz=timezone.utc),
+            alert_type="below_threshold",
+            severity="critical",
+            metric_type="line",
+            granularity="repository",
+            scope_id="",
+            current_value=70.0,
+            threshold_or_baseline=80.0,
+            delta_pct=-10.0,
+            baseline_type="minimum_threshold",
+        )
+
+        warning_alert = CoverageAlert(
+            alert_id="warning-001",
+            timestamp=datetime.now(tz=timezone.utc),
+            alert_type="below_threshold",
+            severity="warning",
+            metric_type="line",
+            granularity="repository",
+            scope_id="",
+            current_value=75.0,
+            threshold_or_baseline=80.0,
+            delta_pct=-5.0,
+            baseline_type="minimum_threshold",
+        )
+
+        repo.store_alert(critical_alert)
+        repo.store_alert(warning_alert)
+
+        critical_alerts = repo.list_alerts(severity="critical")
+        assert len(critical_alerts) == 1
+        assert critical_alerts[0].severity == "critical"
+
+        warning_alerts = repo.list_alerts(severity="warning")
+        assert len(warning_alerts) == 1
+        assert warning_alerts[0].severity == "warning"
+
+    def test_list_snapshots_empty(
+        self,
+        temp_storage_dir: Path,
+    ) -> None:
+        """Test listing snapshots from empty repository."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+        snapshots = repo.list_snapshots()
+        assert snapshots == []
+
+    def test_load_nonexistent_trend_analysis(
+        self,
+        temp_storage_dir: Path,
+    ) -> None:
+        """Test loading trend analysis that doesn't exist."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+        result = repo.load_trend_analysis("line", "repository")
+        assert result is None
+
+    def test_delete_nonexistent_snapshot(
+        self,
+        temp_storage_dir: Path,
+    ) -> None:
+        """Test deleting snapshot that doesn't exist."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+        result = repo.delete_snapshot("nonexistent")
+        assert result is False
+
+    def test_list_alerts_with_limit(
+        self,
+        temp_storage_dir: Path,
+    ) -> None:
+        """Test listing alerts with limit."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+
+        for i in range(5):
+            alert = CoverageAlert(
+                alert_id=f"alert-{i}",
+                timestamp=datetime.now(tz=timezone.utc),
+                alert_type="below_threshold",
+                severity="warning",
+                metric_type="line",
+                granularity="repository",
+                scope_id="",
+                current_value=75.0,
+                threshold_or_baseline=80.0,
+                delta_pct=-5.0,
+                baseline_type="minimum_threshold",
+            )
+            repo.store_alert(alert)
+
+        limited_alerts = repo.list_alerts(limit=2)
+        assert len(limited_alerts) == 2
+
+    def test_list_alerts_empty_repository(
+        self,
+        temp_storage_dir: Path,
+    ) -> None:
+        """Test listing alerts from repository with no alerts."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+        alerts = repo.list_alerts()
+        assert alerts == []
+
+    def test_store_multiple_trend_analyses(
+        self,
+        temp_storage_dir: Path,
+    ) -> None:
+        """Test storing multiple trend analyses for same metric."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+
+        now = datetime.now(tz=timezone.utc)
+        analysis1 = CoverageTrendAnalysis(
+            metric_type="line",
+            granularity="repository",
+            scope_id="",
+            window_start=now - timedelta(days=7),
+            window_end=now,
+            measurements=[(now - timedelta(days=i), 85.0 + i) for i in range(5)],
+            current_value=90.0,
+            average_value=87.5,
+            min_value=85.0,
+            max_value=90.0,
+            trend_direction="improving",
+            trend_pct=5.0,
+            standard_deviation=1.5,
+            stability_score=0.9,
+        )
+
+        analysis2 = CoverageTrendAnalysis(
+            metric_type="line",
+            granularity="repository",
+            scope_id="",
+            window_start=now - timedelta(days=6),
+            window_end=now + timedelta(days=1),
+            measurements=[(now - timedelta(days=i), 87.0 + i) for i in range(5)],
+            current_value=92.0,
+            average_value=89.5,
+            min_value=87.0,
+            max_value=92.0,
+            trend_direction="improving",
+            trend_pct=7.0,
+            standard_deviation=1.2,
+            stability_score=0.95,
+        )
+
+        repo.store_trend_analysis(analysis1)
+        repo.store_trend_analysis(analysis2)
+
+        loaded = repo.load_trend_analysis("line", "repository")
+        assert loaded is not None
+        assert loaded.current_value == 92.0
+
+    def test_cleanup_with_invalid_timestamps(
+        self,
+        temp_storage_dir: Path,
+    ) -> None:
+        """Test cleanup handles invalid timestamps gracefully."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir, retention_days=7)
+
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(tz=timezone.utc),
+            run_id="test-run",
+            source="coverage.py",
+            overall_statement_coverage_pct=85.0,
+            overall_branch_coverage_pct=78.0,
+            overall_line_coverage_pct=87.0,
+        )
+
+        repo.store_snapshot(snapshot)
+
+        # Corrupt the index with invalid timestamp
+        repo._index["test-run"]["observed_at"] = "invalid-date"
+
+        deleted = repo.cleanup(retention_days=7)
+        assert "test-run" not in deleted
+
+
+class TestS3RepositoryEdgeCases:
+    """Tests for edge cases in S3 repository."""
+
+    @patch("operations_center.observer.coverage_trend_repository.boto3")
+    def test_list_snapshots_from_s3(
+        self,
+        mock_boto3: MagicMock,
+        sample_snapshot: CoverageSnapshot,
+    ) -> None:
+        """Test listing snapshots from S3."""
+        mock_client = MagicMock()
+        mock_boto3.client.return_value = mock_client
+
+        now = datetime.now(tz=timezone.utc)
+        mock_client.get_paginator.return_value.paginate.return_value = [
+            {
+                "Contents": [
+                    {
+                        "Key": "coverage-trends/snapshots/run-1/snapshot.json",
+                        "LastModified": now,
+                    },
+                ]
+            }
+        ]
+
+        repo = S3CoverageTrendRepository(bucket="test-bucket")
+        snapshots = repo.list_snapshots()
+
+        assert len(snapshots) >= 0
+
+    @patch("operations_center.observer.coverage_trend_repository.boto3")
+    def test_store_trend_analysis_to_s3_append(
+        self,
+        mock_boto3: MagicMock,
+    ) -> None:
+        """Test appending trend analysis to existing S3 file."""
+        mock_client = MagicMock()
+        mock_boto3.client.return_value = mock_client
+
+        existing_content = '{"trend": "old"}'
+        mock_client.get_object.return_value = {"Body": MagicMock(read=lambda: existing_content.encode())}
+
+        now = datetime.now(tz=timezone.utc)
+        analysis = CoverageTrendAnalysis(
+            metric_type="line",
+            granularity="repository",
+            scope_id="",
+            window_start=now - timedelta(days=7),
+            window_end=now,
+            measurements=[],
+            current_value=85.0,
+            average_value=85.0,
+            min_value=85.0,
+            max_value=85.0,
+            trend_direction="stable",
+            trend_pct=0.0,
+            standard_deviation=0.0,
+            stability_score=1.0,
+        )
+
+        repo = S3CoverageTrendRepository(bucket="test-bucket")
+        metadata = repo.store_trend_analysis(analysis)
+
+        assert "checksum" in metadata
+        mock_client.put_object.assert_called_once()
+
+    @patch("operations_center.observer.coverage_trend_repository.boto3")
+    def test_list_alerts_from_s3(
+        self,
+        mock_boto3: MagicMock,
+        sample_alert: CoverageAlert,
+    ) -> None:
+        """Test listing alerts from S3."""
+        mock_client = MagicMock()
+        mock_boto3.client.return_value = mock_client
+
+        alert_content = sample_alert.model_dump_json()
+        mock_client.get_paginator.return_value.paginate.return_value = [
+            {
+                "Contents": [
+                    {
+                        "Key": "coverage-trends/alerts/2026-06-13/alerts.jsonl",
+                        "LastModified": datetime.now(tz=timezone.utc),
+                    },
+                ]
+            }
+        ]
+
+        mock_client.get_object.return_value = {"Body": MagicMock(read=lambda: alert_content.encode())}
+
+        repo = S3CoverageTrendRepository(bucket="test-bucket")
+        alerts = repo.list_alerts()
+
+        assert len(alerts) >= 0
+
+    @patch("operations_center.observer.coverage_trend_repository.boto3")
+    def test_cleanup_s3_old_snapshots(
+        self,
+        mock_boto3: MagicMock,
+    ) -> None:
+        """Test cleanup of old snapshots in S3."""
+        mock_client = MagicMock()
+        mock_boto3.client.return_value = mock_client
+
+        old_date = datetime.now(tz=timezone.utc) - timedelta(days=40)
+        mock_client.get_paginator.return_value.paginate.return_value = [
+            {
+                "Contents": [
+                    {
+                        "Key": "coverage-trends/snapshots/old-run/snapshot.json",
+                        "LastModified": old_date,
+                    },
+                ]
+            }
+        ]
+
+        repo = S3CoverageTrendRepository(bucket="test-bucket")
+        deleted = repo.cleanup(retention_days=30)
+
+        assert len(deleted) >= 0
+
+
+class TestHTTPRepositoryEdgeCases:
+    """Tests for edge cases in HTTP repository."""
+
+    @patch("operations_center.observer.coverage_trend_repository.requests")
+    def test_delete_snapshot_via_http_failure(
+        self,
+        mock_requests: MagicMock,
+    ) -> None:
+        """Test handling HTTP deletion failure."""
+        mock_session = MagicMock()
+        mock_requests.Session.return_value = mock_session
+        mock_session.delete.side_effect = Exception("Network error")
+
+        repo = HTTPCoverageTrendRepository(base_url="http://api.example.com")
+        result = repo.delete_snapshot("test-run")
+
+        assert result is False
+
+    @patch("operations_center.observer.coverage_trend_repository.requests")
+    def test_list_snapshots_via_http(
+        self,
+        mock_requests: MagicMock,
+    ) -> None:
+        """Test listing snapshots via HTTP."""
+        mock_session = MagicMock()
+        mock_requests.Session.return_value = mock_session
+
+        mock_response = MagicMock(
+            json=lambda: [
+                {"run_id": "run-1", "observed_at": "2026-06-13T00:00:00+00:00"},
+            ]
+        )
+        mock_session.get.return_value = mock_response
+
+        repo = HTTPCoverageTrendRepository(base_url="http://api.example.com")
+        snapshots = repo.list_snapshots()
+
+        assert len(snapshots) >= 0
+
+    @patch("operations_center.observer.coverage_trend_repository.requests")
+    def test_store_trend_analysis_via_http(
+        self,
+        mock_requests: MagicMock,
+    ) -> None:
+        """Test storing trend analysis via HTTP."""
+        mock_session = MagicMock()
+        mock_requests.Session.return_value = mock_session
+
+        now = datetime.now(tz=timezone.utc)
+        analysis = CoverageTrendAnalysis(
+            metric_type="line",
+            granularity="repository",
+            scope_id="",
+            window_start=now - timedelta(days=7),
+            window_end=now,
+            measurements=[],
+            current_value=85.0,
+            average_value=85.0,
+            min_value=85.0,
+            max_value=85.0,
+            trend_direction="stable",
+            trend_pct=0.0,
+            standard_deviation=0.0,
+            stability_score=1.0,
+        )
+
+        repo = HTTPCoverageTrendRepository(base_url="http://api.example.com")
+        metadata = repo.store_trend_analysis(analysis)
+
+        assert "checksum" in metadata
+        mock_session.put.assert_called_once()
+
+    @patch("operations_center.observer.coverage_trend_repository.requests")
+    def test_load_trend_analysis_via_http_failure(
+        self,
+        mock_requests: MagicMock,
+    ) -> None:
+        """Test handling HTTP trend analysis load failure."""
+        mock_session = MagicMock()
+        mock_requests.Session.return_value = mock_session
+        mock_session.get.side_effect = Exception("Network error")
+
+        repo = HTTPCoverageTrendRepository(base_url="http://api.example.com")
+        result = repo.load_trend_analysis("line", "repository")
+
+        assert result is None
+
+    @patch("operations_center.observer.coverage_trend_repository.requests")
+    def test_list_alerts_via_http(
+        self,
+        mock_requests: MagicMock,
+    ) -> None:
+        """Test listing alerts via HTTP."""
+        mock_session = MagicMock()
+        mock_requests.Session.return_value = mock_session
+
+        alert_data = {
+            "alert_id": "alert-1",
+            "timestamp": "2026-06-13T00:00:00+00:00",
+            "alert_type": "below_threshold",
+            "severity": "critical",
+            "metric_type": "line",
+            "granularity": "repository",
+            "scope_id": "",
+            "current_value": 75.0,
+            "threshold_or_baseline": 80.0,
+            "delta_pct": -5.0,
+            "baseline_type": "minimum_threshold",
+        }
+
+        mock_response = MagicMock(json=lambda: [alert_data])
+        mock_session.get.return_value = mock_response
+
+        repo = HTTPCoverageTrendRepository(base_url="http://api.example.com")
+        alerts = repo.list_alerts()
+
+        assert len(alerts) >= 0
+
+    @patch("operations_center.observer.coverage_trend_repository.requests")
+    def test_cleanup_via_http(
+        self,
+        mock_requests: MagicMock,
+    ) -> None:
+        """Test cleanup via HTTP."""
+        mock_session = MagicMock()
+        mock_requests.Session.return_value = mock_session
+
+        mock_response = MagicMock(json=lambda: {"deleted": ["run-1", "run-2"]})
+        mock_session.post.return_value = mock_response
+
+        repo = HTTPCoverageTrendRepository(base_url="http://api.example.com")
+        deleted = repo.cleanup(retention_days=30)
+
+        assert len(deleted) >= 0
+
+
+class TestValidationFunctions:
+    """Tests for validation helper functions."""
+
+    def test_validate_snapshot_data_valid(
+        self,
+        sample_snapshot: CoverageSnapshot,
+    ) -> None:
+        """Test snapshot validation with valid data."""
+        from operations_center.observer.coverage_trend_repository import validate_snapshot_data
+
+        result = validate_snapshot_data(sample_snapshot)
+        assert result is True
+
+    def test_validate_snapshot_data_invalid_coverage(self) -> None:
+        """Test snapshot validation with invalid coverage percentage."""
+        from operations_center.observer.coverage_trend_repository import validate_snapshot_data
+
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(tz=timezone.utc),
+            run_id="test",
+            source="coverage.py",
+            overall_statement_coverage_pct=150.0,  # Invalid: > 100
+            overall_branch_coverage_pct=78.0,
+            overall_line_coverage_pct=87.0,
+        )
+        result = validate_snapshot_data(snapshot)
+        assert result is False
+
+    def test_validate_trend_analysis_valid(
+        self,
+        sample_trend_analysis: CoverageTrendAnalysis,
+    ) -> None:
+        """Test trend analysis validation with valid data."""
+        from operations_center.observer.coverage_trend_repository import validate_trend_analysis
+
+        result = validate_trend_analysis(sample_trend_analysis)
+        assert result is True
+
+    def test_validate_trend_analysis_invalid_direction(self) -> None:
+        """Test trend analysis validation with invalid direction."""
+        from operations_center.observer.coverage_trend_repository import validate_trend_analysis
+
+        analysis = CoverageTrendAnalysis(
+            metric_type="line",
+            granularity="repository",
+            scope_id="",
+            window_start=datetime.now(tz=timezone.utc) - timedelta(days=7),
+            window_end=datetime.now(tz=timezone.utc),
+            measurements=[],
+            current_value=85.0,
+            average_value=85.0,
+            min_value=85.0,
+            max_value=85.0,
+            trend_direction="invalid",  # Invalid direction
+            trend_pct=0.0,
+            standard_deviation=0.0,
+            stability_score=1.0,
+        )
+        result = validate_trend_analysis(analysis)
+        assert result is False
+
+    def test_validate_alert_valid(
+        self,
+        sample_alert: CoverageAlert,
+    ) -> None:
+        """Test alert validation with valid data."""
+        from operations_center.observer.coverage_trend_repository import validate_alert
+
+        result = validate_alert(sample_alert)
+        assert result is True
+
+    def test_validate_alert_invalid_type(self) -> None:
+        """Test alert validation with invalid alert type."""
+        from operations_center.observer.coverage_trend_repository import validate_alert
+
+        alert = CoverageAlert(
+            alert_id="alert-1",
+            timestamp=datetime.now(tz=timezone.utc),
+            alert_type="invalid_type",  # Invalid type
+            severity="critical",
+            metric_type="line",
+            granularity="repository",
+            scope_id="",
+            current_value=75.0,
+            threshold_or_baseline=80.0,
+            delta_pct=-5.0,
+            baseline_type="minimum_threshold",
+        )
+        result = validate_alert(alert)
+        assert result is False

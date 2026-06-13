@@ -9,8 +9,13 @@ import pytest
 from operations_center.observer.coverage_alerting import (
     AlertSeverity,
     AlertType,
+    calculate_coverage_gap,
+    calculate_coverage_trend_direction,
     CoverageAlertConfig,
     CoverageAlertManager,
+    format_coverage_value,
+    get_alert_priority,
+    is_coverage_critical,
 )
 from operations_center.observer.coverage_models import (
     CoverageSnapshot,
@@ -703,3 +708,274 @@ class TestAlertSummarization:
                 assert categorization["action_required"] is True
             else:
                 assert categorization["action_required"] is False
+
+
+class TestUtilityFunctions:
+    """Tests for coverage alerting utility functions."""
+
+    def test_calculate_coverage_gap_positive(self) -> None:
+        """Test coverage gap calculation with positive gap."""
+        gap = calculate_coverage_gap(75.0, 85.0)
+        assert gap == 10.0
+
+    def test_calculate_coverage_gap_negative(self) -> None:
+        """Test coverage gap calculation with negative gap (exceeds target)."""
+        gap = calculate_coverage_gap(90.0, 85.0)
+        assert gap == -5.0
+
+    def test_calculate_coverage_gap_zero(self) -> None:
+        """Test coverage gap calculation with zero gap."""
+        gap = calculate_coverage_gap(80.0, 80.0)
+        assert gap == 0.0
+
+    def test_is_coverage_critical_true(self) -> None:
+        """Test critical coverage detection when coverage is below 50%."""
+        is_critical = is_coverage_critical(35.0)
+        assert is_critical is True
+
+    def test_is_coverage_critical_false(self) -> None:
+        """Test critical coverage detection when coverage is at or above 50%."""
+        is_critical = is_coverage_critical(55.0)
+        assert is_critical is False
+
+    def test_is_coverage_critical_boundary(self) -> None:
+        """Test critical coverage detection at boundary (50%)."""
+        is_critical = is_coverage_critical(50.0)
+        assert is_critical is False
+
+    def test_format_coverage_value_default_precision(self) -> None:
+        """Test coverage value formatting with default precision."""
+        formatted = format_coverage_value(82.5)
+        assert formatted == "82.5%"
+
+    def test_format_coverage_value_custom_precision(self) -> None:
+        """Test coverage value formatting with custom precision."""
+        formatted = format_coverage_value(82.5347, precision=2)
+        assert formatted == "82.53%"
+
+    def test_format_coverage_value_zero_precision(self) -> None:
+        """Test coverage value formatting with zero decimal places."""
+        formatted = format_coverage_value(82.7, precision=0)
+        assert formatted == "83%"
+
+    def test_get_alert_priority_emergency(self) -> None:
+        """Test priority calculation for emergency severity."""
+        priority = get_alert_priority(
+            AlertType.BELOW_THRESHOLD.value, AlertSeverity.EMERGENCY.value
+        )
+        assert priority == 10
+
+    def test_get_alert_priority_critical(self) -> None:
+        """Test priority calculation for critical severity."""
+        priority = get_alert_priority(
+            AlertType.BELOW_THRESHOLD.value, AlertSeverity.CRITICAL.value
+        )
+        assert priority == 7
+
+    def test_get_alert_priority_warning(self) -> None:
+        """Test priority calculation for warning severity."""
+        priority = get_alert_priority(AlertType.BELOW_THRESHOLD.value, AlertSeverity.WARNING.value)
+        assert priority == 4
+
+    def test_get_alert_priority_info(self) -> None:
+        """Test priority calculation for info severity."""
+        priority = get_alert_priority(AlertType.BELOW_THRESHOLD.value, AlertSeverity.INFO.value)
+        assert priority == 1
+
+    def test_get_alert_priority_with_type_bonus(self) -> None:
+        """Test priority calculation with type-based bonus."""
+        priority = get_alert_priority(AlertType.MODULE_GAP.value, AlertSeverity.CRITICAL.value)
+        assert priority == 10
+
+    def test_get_alert_priority_caps_at_ten(self) -> None:
+        """Test that priority caps at 10."""
+        priority = get_alert_priority(AlertType.MODULE_GAP.value, AlertSeverity.EMERGENCY.value)
+        assert priority == 10
+
+    def test_calculate_trend_direction_improving(self) -> None:
+        """Test trend direction calculation for improving trend."""
+        direction = calculate_coverage_trend_direction(80.0, 82.0)
+        assert direction == "improving"
+
+    def test_calculate_trend_direction_degrading(self) -> None:
+        """Test trend direction calculation for degrading trend."""
+        direction = calculate_coverage_trend_direction(82.0, 80.0)
+        assert direction == "degrading"
+
+    def test_calculate_trend_direction_stable(self) -> None:
+        """Test trend direction calculation for stable trend."""
+        direction = calculate_coverage_trend_direction(82.0, 82.2)
+        assert direction == "stable"
+
+    def test_calculate_trend_direction_stable_at_boundary(self) -> None:
+        """Test trend direction calculation at 0.5% boundary (stable side)."""
+        direction = calculate_coverage_trend_direction(82.0, 82.4)
+        assert direction == "stable"
+
+    def test_calculate_trend_direction_improving_at_boundary(self) -> None:
+        """Test trend direction calculation at 0.5% boundary (improving side)."""
+        direction = calculate_coverage_trend_direction(82.0, 82.6)
+        assert direction == "improving"
+
+    def test_calculate_trend_direction_degrading_at_boundary(self) -> None:
+        """Test trend direction calculation at -0.5% boundary (degrading side)."""
+        direction = calculate_coverage_trend_direction(82.0, 81.4)
+        assert direction == "degrading"
+
+
+class TestAlertManagerMethods:
+    """Tests for CoverageAlertManager methods."""
+
+    def test_get_action_required_alerts_empty(self, default_config: CoverageAlertConfig) -> None:
+        """Test getting action required alerts when none exist."""
+        manager = CoverageAlertManager(config=default_config)
+        action_alerts = manager.get_action_required_alerts()
+        assert len(action_alerts) == 0
+
+    def test_get_action_required_alerts_with_critical(
+        self, default_config: CoverageAlertConfig, below_threshold_snapshot: CoverageSnapshot
+    ) -> None:
+        """Test getting action required alerts with critical severity."""
+        manager = CoverageAlertManager(config=default_config)
+        manager.generate_alerts(below_threshold_snapshot)
+        action_alerts = manager.get_action_required_alerts()
+        assert len(action_alerts) > 0
+
+    def test_get_action_required_alerts_with_emergency(
+        self, custom_config: CoverageAlertConfig
+    ) -> None:
+        """Test getting action required alerts with emergency severity."""
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(),
+            run_id="sha_emergency",
+            source="coverage.py",
+            overall_statement_coverage_pct=35.0,
+            overall_branch_coverage_pct=30.0,
+            overall_line_coverage_pct=32.0,
+        )
+        manager = CoverageAlertManager(config=custom_config)
+        manager.generate_alerts(snapshot)
+        action_alerts = manager.get_action_required_alerts()
+        assert all(
+            a.severity in [AlertSeverity.CRITICAL.value, AlertSeverity.EMERGENCY.value]
+            for a in action_alerts
+        )
+
+    def test_get_alerts_by_module_empty(self, default_config: CoverageAlertConfig) -> None:
+        """Test getting alerts by module when no alerts exist."""
+        manager = CoverageAlertManager(config=default_config)
+        module_alerts = manager.get_alerts_by_module("src/operations_center/observer")
+        assert len(module_alerts) == 0
+
+    def test_get_alerts_by_module_with_alerts(
+        self, default_config: CoverageAlertConfig, below_threshold_snapshot: CoverageSnapshot
+    ) -> None:
+        """Test getting alerts by specific module."""
+        manager = CoverageAlertManager(config=default_config)
+        manager.generate_alerts(below_threshold_snapshot)
+        module_alerts = manager.get_alerts_by_module("src/operations_center/observer")
+        assert len(module_alerts) > 0
+
+    def test_get_alerts_by_module_no_matching_alerts(
+        self, default_config: CoverageAlertConfig, below_threshold_snapshot: CoverageSnapshot
+    ) -> None:
+        """Test getting alerts by module with no matching alerts."""
+        manager = CoverageAlertManager(config=default_config)
+        manager.generate_alerts(below_threshold_snapshot)
+        module_alerts = manager.get_alerts_by_module("src/nonexistent/module")
+        assert len(module_alerts) == 0
+
+    def test_clear_alerts_empty(self, default_config: CoverageAlertConfig) -> None:
+        """Test clearing alerts when none exist."""
+        manager = CoverageAlertManager(config=default_config)
+        cleared_count = manager.clear_alerts()
+        assert cleared_count == 0
+
+    def test_clear_alerts_with_alerts(
+        self, default_config: CoverageAlertConfig, below_threshold_snapshot: CoverageSnapshot
+    ) -> None:
+        """Test clearing alerts when alerts exist."""
+        manager = CoverageAlertManager(config=default_config)
+        manager.generate_alerts(below_threshold_snapshot)
+        initial_count = len(manager.alerts)
+        cleared_count = manager.clear_alerts()
+        assert cleared_count == initial_count
+        assert len(manager.alerts) == 0
+
+    def test_acknowledge_alert_found(
+        self, default_config: CoverageAlertConfig, below_threshold_snapshot: CoverageSnapshot
+    ) -> None:
+        """Test acknowledging an existing alert."""
+        manager = CoverageAlertManager(config=default_config)
+        manager.generate_alerts(below_threshold_snapshot)
+        if manager.alerts:
+            alert_id = manager.alerts[0].alert_id
+            result = manager.acknowledge_alert(alert_id, "test_user", "reviewed")
+            assert result is True
+            assert manager.alerts[0].acknowledged is True
+            assert manager.alerts[0].acknowledged_by == "test_user"
+
+    def test_acknowledge_alert_not_found(self, default_config: CoverageAlertConfig) -> None:
+        """Test acknowledging a non-existent alert."""
+        manager = CoverageAlertManager(config=default_config)
+        result = manager.acknowledge_alert("nonexistent_id", "test_user")
+        assert result is False
+
+    def test_acknowledge_alert_without_reason(
+        self, default_config: CoverageAlertConfig, below_threshold_snapshot: CoverageSnapshot
+    ) -> None:
+        """Test acknowledging alert without providing reason."""
+        manager = CoverageAlertManager(config=default_config)
+        manager.generate_alerts(below_threshold_snapshot)
+        if manager.alerts:
+            alert_id = manager.alerts[0].alert_id
+            result = manager.acknowledge_alert(alert_id, "test_user")
+            assert result is True
+            assert manager.alerts[0].acknowledged_by == "test_user"
+
+    def test_dismiss_alert_found(
+        self, default_config: CoverageAlertConfig, below_threshold_snapshot: CoverageSnapshot
+    ) -> None:
+        """Test dismissing an existing alert."""
+        manager = CoverageAlertManager(config=default_config)
+        manager.generate_alerts(below_threshold_snapshot)
+        if manager.alerts:
+            alert_id = manager.alerts[0].alert_id
+            result = manager.dismiss_alert(alert_id, "false_positive")
+            assert result is True
+            assert manager.alerts[0].dismissal_reason == "false_positive"
+
+    def test_dismiss_alert_not_found(self, default_config: CoverageAlertConfig) -> None:
+        """Test dismissing a non-existent alert."""
+        manager = CoverageAlertManager(config=default_config)
+        result = manager.dismiss_alert("nonexistent_id", "reason")
+        assert result is False
+
+    def test_categorize_module_gap_alert(
+        self, default_config: CoverageAlertConfig, below_threshold_snapshot: CoverageSnapshot
+    ) -> None:
+        """Test categorization of module gap alert."""
+        manager = CoverageAlertManager(config=default_config)
+        manager.generate_alerts(below_threshold_snapshot)
+        module_alerts = [
+            a for a in manager.alerts if a.alert_type == AlertType.MODULE_GAP.value
+        ]
+        if module_alerts:
+            categorization = manager.categorize_alert(module_alerts[0])
+            assert categorization["category"] == "Module Critical"
+
+    def test_categorize_trend_degrading_alert(
+        self,
+        default_config: CoverageAlertConfig,
+        healthy_snapshot: CoverageSnapshot,
+        degrading_trend_analysis: CoverageTrendAnalysis,
+    ) -> None:
+        """Test categorization of trend degrading alert."""
+        manager = CoverageAlertManager(config=default_config)
+        manager.generate_alerts(healthy_snapshot, trend_analysis=degrading_trend_analysis)
+        trend_alerts = [
+            a for a in manager.alerts if a.alert_type == AlertType.TREND_DEGRADING.value
+        ]
+        if trend_alerts:
+            categorization = manager.categorize_alert(trend_alerts[0])
+            assert categorization["category"] == "Trend Decline"
