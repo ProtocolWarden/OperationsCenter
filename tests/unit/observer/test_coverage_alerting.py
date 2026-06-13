@@ -119,30 +119,6 @@ def below_threshold_snapshot() -> CoverageSnapshot:
     )
 
 
-@pytest.fixture
-def regressed_snapshot() -> CoverageSnapshot:
-    """Create a snapshot showing regression from previous measurement."""
-    return CoverageSnapshot(
-        timestamp=datetime.now(),
-        run_id="sha125",
-        source="coverage.py",
-        overall_statement_coverage_pct=80.5,
-        overall_branch_coverage_pct=75.0,
-        overall_line_coverage_pct=79.0,
-        module_coverages=[
-            ModuleCoverage(
-                module_path="src/operations_center/observer",
-                statement_coverage_pct=85.0,
-                branch_coverage_pct=80.0,
-                line_coverage_pct=83.0,
-                statement_count=1000,
-                branch_count=500,
-                line_count=800,
-                health_status="healthy",
-            ),
-        ],
-    )
-
 
 @pytest.fixture
 def degrading_trend_analysis() -> CoverageTrendAnalysis:
