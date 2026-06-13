@@ -1502,7 +1502,8 @@ def _phase1(
             state.pop("escalated_head_sha", None)
             state["no_verdict_passes"] = 0
             logger.info(
-                "pr_review_watcher: PR #%d head changed after escalation; resuming automated review",
+                "pr_review_watcher: PR #%d head changed after escalation; "
+                "resuming automated review",
                 pr_number,
             )
             _save_state(state_path, state)
