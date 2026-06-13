@@ -738,6 +738,103 @@ def _detect_oc12_model_field_mismatch(ctx: AuditContext) -> DetectorResult:
     return DetectorResult(count=len(samples), samples=samples[:20])
 
 
+# ── OC13: test re-implements a metric formula instead of calling production ───
+#
+# Flags a test function that computes a metric formula INLINE (currently the
+# log-based entropy signature: math.log / log2 / log10) and asserts on it, while
+# never calling any production metric function. This is the #269 anti-pattern: its
+# tests recomputed Shannon entropy inline and asserted hardcoded constants that did
+# not even match the formula (asserted 0.081296; correct value 0.080793) — and the
+# production code was never exercised, so the test validated nothing real.
+#
+# It deliberately does NOT fire on the legitimate golden-value cross-check pattern,
+# where a test CALLS the production function and compares it to an independently
+# computed reference, e.g.:
+#     entropy = reporter._compute_pattern_entropy(runs)   # production exercised
+#     assert abs(entropy - (-math.log(0.5) * 0.5 * 2)) < 1e-3
+# Here the inline math is a reference value, not a replacement — so a call to a
+# production metric symbol in the same function suppresses the finding. The rule
+# keys on import/call-absence and inline-formula presence, never on literal values.
+
+_INLINE_METRIC_FNS = {"log", "log2", "log10"}  # math.* entropy signature
+_PRODUCTION_METRIC_RE = re.compile(r"^_compute_[a-z_]+$")
+
+
+def _flaky_metric_symbols(src_root: Path) -> set[str]:
+    """Public function names exported by observer/flaky_metrics.py (the canonical
+    metric implementations a test should call instead of re-deriving)."""
+    fm = src_root / "observer" / "flaky_metrics.py"
+    names: set[str] = set()
+    try:
+        tree = ast.parse(fm.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError):
+        return names
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and not node.name.startswith("_"):
+            names.add(node.name)
+    return names
+
+
+def _calls_production_metric(fn: ast.AST, production: set[str]) -> bool:
+    for node in ast.walk(fn):
+        if not isinstance(node, ast.Call):
+            continue
+        callee = node.func
+        name = (
+            callee.attr if isinstance(callee, ast.Attribute)
+            else callee.id if isinstance(callee, ast.Name)
+            else None
+        )
+        if name and (name in production or _PRODUCTION_METRIC_RE.match(name)):
+            return True
+    return False
+
+
+def _computes_metric_inline(fn: ast.AST) -> bool:
+    for node in ast.walk(fn):
+        if not isinstance(node, ast.Call):
+            continue
+        callee = node.func
+        if isinstance(callee, ast.Attribute) and callee.attr in _INLINE_METRIC_FNS:
+            if isinstance(callee.value, ast.Name) and callee.value.id == "math":
+                return True
+        if isinstance(callee, ast.Name) and callee.id in _INLINE_METRIC_FNS:
+            return True  # `from math import log2`
+    return False
+
+
+def _has_assert(fn: ast.AST) -> bool:
+    return any(isinstance(n, ast.Assert) for n in ast.walk(fn))
+
+
+def _detect_oc13_test_reimplements_metric(ctx: AuditContext) -> DetectorResult:
+    tests = ctx.tests_root
+    if not tests.is_dir():
+        return DetectorResult(count=0, samples=[])
+    production = _flaky_metric_symbols(ctx.src_root)
+    samples: list[str] = []
+    for py in tests.rglob("*.py"):
+        try:
+            tree = ast.parse(py.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError):
+            continue
+        rel = py.relative_to(ctx.repo_root)
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.FunctionDef) and node.name.startswith("test")):
+                continue
+            if (
+                _computes_metric_inline(node)
+                and _has_assert(node)
+                and not _calls_production_metric(node, production)
+            ):
+                samples.append(
+                    f"{rel}:{node.lineno}: {node.name}() computes a metric inline "
+                    f"(math.log*) and asserts on it without calling a production metric "
+                    f"function — import observer.flaky_metrics (or call the reporter) instead"
+                )
+    return DetectorResult(count=len(samples), samples=samples[:20])
+
+
 # ── contributor entry point ───────────────────────────────────────────────────
 
 
@@ -775,5 +872,12 @@ def build_oc_detectors() -> list[Detector]:
             "open",
             _detect_oc12_model_field_mismatch,
             MEDIUM,
+        ),
+        Detector(
+            "OC13",
+            "test re-implements a metric formula inline without calling production",
+            "open",
+            _detect_oc13_test_reimplements_metric,
+            LOW,
         ),
     ]

@@ -1,3 +1,14 @@
+## 2026-06-13 — feat(custodian): OC13 — test re-implements a metric inline without calling production (guard B)
+
+New LOW custodian detector flagging a test that computes a metric formula inline (math.log/log2/log10
+entropy signature) and asserts on it, while never calling a production metric function. This is the
+#269 anti-pattern: tests recomputed Shannon entropy inline and asserted constants that didn't match
+their own formula (0.081296 vs correct 0.080793), never exercising production. Per the adversarial
+review it deliberately does NOT fire on the legitimate golden-value cross-check (where the test CALLS
+the production function — e.g. reporter._compute_pattern_entropy — and uses inline math only as a
+reference): a production-metric call in the same function suppresses the finding. Keyed on inline-
+formula + call-absence, never on literal values. Zero findings on main; +5 unit tests.
+
 ## 2026-06-13 — feat(custodian): OC12 detector — model construction field mismatch (divergence guard A)
 
 New static-AST custodian detector flagging construction of a local @dataclass / Pydantic BaseModel
