@@ -1,3 +1,15 @@
+## 2026-06-13 — feat(custodian): OC12 detector — model construction field mismatch (divergence guard A)
+
+New static-AST custodian detector flagging construction of a local @dataclass / Pydantic BaseModel
+with a keyword arg that isn't one of its fields — the observable symptom of divergent definitions
+(#269: FlakyTestMetric(failure_entropy=...) vs real pattern_entropy; 0cb06e0e: CoverageAlert field
+rename). Conservative by construction (resolves which same-named class each call site imports to
+avoid the OC-AuditContext vs custodian-AuditContext collision; skips negative pytest.raises tests,
+extra='allow' models, external bases, **kwargs, subclasses; never keys on name similarity so the
+intentional FlakyTestMetric/FlakyTestMetrics pair is safe). Found and fixed 16 real latent drifts
+on main: integration fixtures built TodoSignal(count=,summary=) and DependencyDriftSignal(critical_
+issues=) — fields Pydantic v2 silently drops — now todo_count / dropped non-fields. +7 unit tests.
+
 ## 2026-06-12 — Stage 4: Verify implementation completeness and create PR-ready commit (✅ COMPLETE)
 
 ### Objective
