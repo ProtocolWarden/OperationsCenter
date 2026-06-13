@@ -599,10 +599,30 @@ class TestDashboardCoveragePanels:
             branch_coverage_pct=65.0,
             line_coverage_pct=72.0,
             active_alerts=[
-                {"alert_type": "test1", "severity": "info", "scope_id": "s1", "current_value": 70.0},
-                {"alert_type": "test2", "severity": "warning", "scope_id": "s2", "current_value": 70.0},
-                {"alert_type": "test3", "severity": "critical", "scope_id": "s3", "current_value": 70.0},
-                {"alert_type": "test4", "severity": "emergency", "scope_id": "s4", "current_value": 70.0},
+                {
+                    "alert_type": "test1",
+                    "severity": "info",
+                    "scope_id": "s1",
+                    "current_value": 70.0,
+                },
+                {
+                    "alert_type": "test2",
+                    "severity": "warning",
+                    "scope_id": "s2",
+                    "current_value": 70.0,
+                },
+                {
+                    "alert_type": "test3",
+                    "severity": "critical",
+                    "scope_id": "s3",
+                    "current_value": 70.0,
+                },
+                {
+                    "alert_type": "test4",
+                    "severity": "emergency",
+                    "scope_id": "s4",
+                    "current_value": 70.0,
+                },
             ],
         )
         provider = DashboardProvider(
