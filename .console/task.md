@@ -5,124 +5,84 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-**Stage 0: Design coverage threshold alerting system and document metrics/alert conditions/trend strategy** (In Progress)
+**Stage 0: Design coverage threshold alerting system and document metrics/alert conditions/trend strategy** ✅ COMPLETE (2026-06-12)
 
 ## Overall Plan
 
-Parametrized edge-case tests for extreme metric scenarios across observer and tuning modules (CollectorMetrics, SystemMetrics, aggregate_family_metrics). Stages 0–4 all complete.
+Coverage threshold alerting system design and implementation. Stage 0 (design) complete. Stages 1-8 planned for implementation across multiple future sessions.
 
 ## Current Stage
 
-Stage 4: COMPLETE (2026-06-12). PR #274 open for review — all 144 tests passing, ruff clean, type-safe.
+Stage 0: COMPLETE (2026-06-12). Design document created covering all metrics, thresholds, alerts, trends, and observer integration. Ready for Stage 1 implementation.
 
-## Stage 4 Acceptance Criteria — ALL MET ✅
+## Stage 0 Acceptance Criteria — ALL MET ✅
 
-1. ✅ **No TODOs or stubs in new test files**
-   - Verified: grep for "TODO|FIXME|stub|pass$" returns no results in either test file
-   - Both test files: fully implemented with complete test bodies
-   - No incomplete placeholders or pending work
+1. ✅ **Design document created covering coverage metrics**
+   - Document: `docs/design/STAGE0_COVERAGE_THRESHOLD_ALERTING_SYSTEM.md` (2,400+ lines, 8 sections)
+   - Coverage metrics specification: statements, branches, lines at repo/module/file granularities
+   - Per-test metrics, module-level metrics, file-level metrics, and computed trends all documented
+   - Tool support matrix included (coverage.py, pytest-cov, jacoco, istanbul, LLVM-cov)
 
-2. ✅ **All parametrized test decorators properly configured**
-   - test_tuning_metrics_extreme_scenarios.py: 7 test classes with @pytest.mark.parametrize
-   - test_observer_metrics_extreme_scenarios.py: 11 test classes with parametrized decorators
-   - All parameter sets properly formatted with clear test IDs
-   - Parametrized dimensions: 40+ distinct edge-case scenarios
+2. ✅ **Threshold definitions specified**
+   - Repository-level thresholds: minimum (80%), warning (85%), target (90%) for each metric type
+   - Module-level threshold overrides with per-module customization
+   - Regression thresholds: run-to-run (2%), 7-day (3%), 30-day (5%)
+   - Trend thresholds: 5+ consecutive declining measurements at -1% per measurement
+   - Severity levels: CRITICAL (<50%), HIGH (<70%), MEDIUM (<80%), LOW (<threshold)
 
-3. ✅ **Docstrings on all test functions document scenario purpose**
-   - All 76 tests in observer file have descriptive docstrings
-   - All 68 tests in tuning file have descriptive docstrings
-   - Docstrings clearly explain what scenario is being tested
-   - Example: "Verify health status classification at all threshold boundaries"
+3. ✅ **Alert conditions specified**
+   - Below-threshold alerts with 4 severity levels and example JSON
+   - Regression-detected alerts with baseline types and affected scope
+   - Trend-degrading alerts with direction, velocity, projection, and recommendations
+   - Module-critical-gap alerts with priority scoring and uncovered line mapping
 
-4. ✅ **Context files updated (.console/task.md, .console/log.md, .console/backlog.md)**
-   - .console/task.md: Updated to Stage 4 completion
-   - .console/log.md: New entry documenting Stage 4 completion with verification results
-   - .console/backlog.md: Campaign updated to mark ALL STAGES COMPLETE
+4. ✅ **Data model designed for coverage trends**
+   - CoverageMetricsSnapshot: Point-in-time measurement with all granularities
+   - ModuleCoverage: Module-level metrics with health status
+   - FileCoverage: File-level metrics with uncovered lines and branches
+   - CoverageTrendAnalysis: Trend direction, velocity, stability score, projection
+   - CoverageAlert: Alert schema with type, severity, scope, measurements, recommendations
+   - CoverageTrendCollector: Complete query API with 4 methods
 
-5. ✅ **Changes committed with descriptive message**
-   - All 144 new parametrized test cases staged
-   - New test files added to index
-   - Context files staged with comprehensive updates
+5. ✅ **Integration points with observer service identified**
+   - CoverageSignal extension: 8 new fields (statement/branch/line coverage, module metrics, trends, alerts)
+   - CoverageTrendCollector: New service class with collect_signal() method
+   - Alert generation: 4 methods for threshold/regression/trend/module detection
+   - Integration hooks: observer.py, models.py, alert routing, dashboard, CI gates
+   - Backward compatibility: New fields optional with sensible defaults
 
-6. ✅ **Branch clean and ready for PR creation**
-   - git status: All changes staged (nothing uncommitted)
-   - No untracked files in project root
-   - Ready for commit and PR
+6. ✅ **Detection acceptance criteria specified**
+   - Below-threshold: <1% false alarm rate, 100% specificity, <0.1% miss rate
+   - Regression: 2%+ drops detected within 1 measurement, <0.5% natural variance excluded
+   - Trend: 5+ consecutive declines detected within 5-6 days, ±2% projection accuracy
+   - Module-gap: All modules >15% below target identified, priority-weighted scoring
+   - Edge cases: Tool unavailability, partial data, first measurement, measurement error tolerance
 
-## Stage 3 Acceptance Criteria — ALL MET ✅
+7. ✅ **Implementation strategy documented**
+   - 8-stage roadmap (Design→Collector→Storage→Signal/Integration→Alerts→Dashboard→Docs→Testing/PR)
+   - Tech stack: Python 3.11, Pydantic, JSONL/S3/InfluxDB
+   - Risk mitigation: Graceful degradation, alert deduplication, caching, retention policies
+   - Dependencies and technology choices clearly justified
 
-1. ✅ **pytest: All tests passing (new edge-case tests + existing tests)**
-   - New tests: 144/144 passing ✅
-   - Overall suite: 8,349/8,350 passing (99.99%)
-   - One pre-existing failure: `test_decision_outcome_retry_counted` (unrelated to changes)
-   - Execution time: 71.76 seconds for full suite
-   - Confirmed pre-existing by checking commit f4327ff (test fails on original)
+8. ✅ **Context files updated**
+   - .console/task.md: Stage 0 objective and acceptance criteria documented
+   - .console/log.md: Comprehensive Stage 0 completion entry with all deliverables
+   - .console/backlog.md: Campaign created with Stage 0 marked complete
 
-2. ✅ **ruff: Zero linting violations on new test files**
-   - Fixed unused `math` import in test_tuning_metrics_extreme_scenarios.py
-   - Both test files pass ruff check: "All checks passed!"
-   - No violations across 1,700+ lines of new test code
+9. ✅ **Changes committed with descriptive message**
+   - Design document added to git
+   - Context files staged and committed
+   - Commit message includes all 5 acceptance criteria verification
 
-3. ✅ **Type checking: All type annotations valid**
-   - Tool: ty 0.0.40 (Python 3.11 target)
-   - Result: "All checks passed!"
-   - Fixed: Added `assert second_timestamp is not None` for type guard
-   - Both test files fully type-safe
-
-4. ✅ **No regressions in existing test suite**
-   - Existing observer tests: 37 tests → all passing
-   - All other test suites passing
-   - Zero changes to production code
-   - Zero changes to existing test files
-
-5. ✅ **Execution time: New tests complete in <30s**
-   - New test suite execution: 0.27 seconds ✅
-   - Well under 30-second requirement
-   - 144 tests in 0.27s = 533 tests/second throughput
-
-## Stage 3 Deliverables Summary ✅
-
-### Test Files Created (2 new files, 144 tests total)
-
-1. **tests/unit/observer/test_tuning_metrics_extreme_scenarios.py** (887 lines)
-   - 68 parametrized edge-case tests
-   - 7 parameter sets covering: health thresholds, latency, artifacts, error rates, throughput, health precedence, system error rates
-   - Real-world scenario integration tests
-
-2. **tests/unit/operations_center/observer/test_observer_metrics_extreme_scenarios.py** (766 lines)
-   - 76 parametrized edge-case tests
-   - 11 test classes covering: health status thresholds, latency edge cases, artifact processing, error rate calculation, system health precedence, system error rate, timestamp handling, serialization, multiple run dynamics, large numbers, real-world scenarios
-
-### Code Quality Metrics ✅
-
-- **Lines of test code**: 1,653 lines (both files combined)
-- **Test case count**: 144 total (100% passing)
-- **Parametrized dimensions**: 40+ distinct edge cases
-- **Linting**: 100% pass rate (0 violations)
-- **Type checking**: 100% pass rate (ty 0.0.40)
-- **Execution performance**: 0.27s for new tests (533 tests/second)
-
-## Overall Project Status
-
-**Completed Stages**:
-- **Stage 0**: ✅ Analysis and edge-case identification
-- **Stage 1**: ✅ Parametrized tests for observer metrics (CollectorMetrics/SystemMetrics)
-- **Stage 2**: ✅ Parametrized tests for tuning metrics (aggregate_family_metrics)
-- **Stage 3**: ✅ Full verification suite (pytest, ruff, type checking) — **CURRENT**
-
-**Test Suite Health**:
-- New tests: 144/144 passing (100%)
-- Full suite: 8,349/8,350 passing (99.99%)
-- Only 1 pre-existing failure (unrelated to changes)
-- Zero regressions introduced
-
-## Definition of Done — Stage 3
+## Definition of Done — Stage 0
 
 ✅ All acceptance criteria met (see above)
-✅ 144 new parametrized edge-case tests created
-✅ Full pytest suite passing (8,349/8,350, 99.99%)
-✅ Ruff linting: 100% pass rate (all violations fixed)
-✅ Type checking: 100% pass rate (ty validation)
-✅ No regressions to existing test suite
-✅ Execution time verified: 0.27s for new tests
-✅ Ready for commit and merge
+✅ Design document comprehensive and complete (2,400+ lines, 8 sections)
+✅ Coverage metrics specification with 3 types and 3 granularities
+✅ Threshold system with configurable levels and regression detection
+✅ Four alert types with severity levels and examples
+✅ Data model with persistence and query API
+✅ Observer service integration strategy defined
+✅ Detection criteria with accuracy specifications
+✅ Context files updated
+✅ Ready for Stage 1 implementation
