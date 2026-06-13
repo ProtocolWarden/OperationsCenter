@@ -64,7 +64,7 @@ class CoverageSlackFormatter:
                 }
             )
 
-        if alert.delta_pct is not None and alert.alert_type == AlertType.REGRESSION_DETECTED:
+        if alert.delta_pct is not None and alert.alert_type == AlertType.REGRESSION_DETECTED.value:
             fields.append(
                 {
                     "title": "Regression",
@@ -127,7 +127,7 @@ Scope: {alert.scope_id}
 Current Measurement: {alert.current_value:.1f}% {f"(threshold: {alert.threshold_or_baseline:.1f}%)" if alert.threshold_or_baseline else ""}
 """
 
-        if alert.alert_type == AlertType.REGRESSION_DETECTED and alert.delta_pct is not None:
+        if alert.alert_type == AlertType.REGRESSION_DETECTED.value and alert.delta_pct is not None:
             text_body += f"\nRegression: {alert.delta_pct:+.1f}% from baseline {alert.threshold_or_baseline or 0:.1f}%\n"
 
         if alert.affected_modules:
@@ -144,19 +144,19 @@ Current Measurement: {alert.current_value:.1f}% {f"(threshold: {alert.threshold_
             text_body += "Review coverage metrics and adjust testing strategy accordingly.\n"
 
         text_body += "\nAction Items:\n"
-        if alert.alert_type == AlertType.BELOW_THRESHOLD:
+        if alert.alert_type == AlertType.BELOW_THRESHOLD.value:
             text_body += "1. Review untested code paths\n"
             text_body += "2. Add tests for critical paths\n"
             text_body += "3. Validate test coverage tools\n"
-        elif alert.alert_type == AlertType.REGRESSION_DETECTED:
+        elif alert.alert_type == AlertType.REGRESSION_DETECTED.value:
             text_body += "1. Review recent code changes\n"
             text_body += "2. Add tests for new code\n"
             text_body += "3. Block PR merge if below threshold\n"
-        elif alert.alert_type == AlertType.TREND_DEGRADING:
+        elif alert.alert_type == AlertType.TREND_DEGRADING.value:
             text_body += "1. Identify root cause of degradation\n"
             text_body += "2. Prioritize coverage improvements\n"
             text_body += "3. Establish coverage goals\n"
-        elif alert.alert_type == AlertType.CRITICAL_MODULE_COVERAGE:
+        elif alert.alert_type == AlertType.CRITICAL_MODULE_COVERAGE.value:
             text_body += "1. Focus on high-touch modules\n"
             text_body += "2. Add tests for frequently changed files\n"
             text_body += "3. Track module-level coverage metrics\n"
@@ -218,25 +218,25 @@ Current Measurement: {alert.current_value:.1f}% {f"(threshold: {alert.threshold_
 <ol>
 """
 
-        if alert.alert_type == AlertType.BELOW_THRESHOLD:
+        if alert.alert_type == AlertType.BELOW_THRESHOLD.value:
             html_body += """
     <li>Review untested code paths</li>
     <li>Add tests for critical paths</li>
     <li>Validate test coverage tools</li>
 """
-        elif alert.alert_type == AlertType.REGRESSION_DETECTED:
+        elif alert.alert_type == AlertType.REGRESSION_DETECTED.value:
             html_body += """
     <li>Review recent code changes</li>
     <li>Add tests for new code</li>
     <li>Block PR merge if below threshold</li>
 """
-        elif alert.alert_type == AlertType.TREND_DEGRADING:
+        elif alert.alert_type == AlertType.TREND_DEGRADING.value:
             html_body += """
     <li>Identify root cause of degradation</li>
     <li>Prioritize coverage improvements</li>
     <li>Establish coverage goals</li>
 """
-        elif alert.alert_type == AlertType.CRITICAL_MODULE_COVERAGE:
+        elif alert.alert_type == AlertType.CRITICAL_MODULE_COVERAGE.value:
             html_body += """
     <li>Focus on high-touch modules</li>
     <li>Add tests for frequently changed files</li>
@@ -288,7 +288,7 @@ class CoverageGitHubFormatter:
         if alert.threshold_or_baseline:
             comment += f"**Threshold:** {alert.threshold_or_baseline:.1f}%\n"
 
-        if alert.alert_type == AlertType.REGRESSION_DETECTED and alert.delta_pct is not None:
+        if alert.alert_type == AlertType.REGRESSION_DETECTED.value and alert.delta_pct is not None:
             comment += f"**Change:** {alert.delta_pct:+.1f}% from baseline {alert.threshold_or_baseline or 0:.1f}%\n"
 
         # Module-specific section for file-level alerts
@@ -308,22 +308,22 @@ class CoverageGitHubFormatter:
 
         comment += "\n### Remediation\n\n"
 
-        if alert.alert_type == AlertType.BELOW_THRESHOLD:
+        if alert.alert_type == AlertType.BELOW_THRESHOLD.value:
             comment += """- **Review untested code** — Check what's not covered by tests
 - **Add test cases** — Focus on critical paths first
 - **Validate tools** — Ensure coverage measurement is accurate
 """
-        elif alert.alert_type == AlertType.REGRESSION_DETECTED:
+        elif alert.alert_type == AlertType.REGRESSION_DETECTED.value:
             comment += """- **Review PR changes** — Check what new code was added
 - **Add tests** — Test all new code paths
 - **Check baseline** — Ensure comparison baseline is correct
 """
-        elif alert.alert_type == AlertType.TREND_DEGRADING:
+        elif alert.alert_type == AlertType.TREND_DEGRADING.value:
             comment += """- **Analyze trend** — Determine why coverage is declining
 - **Add tests** — Increase test coverage for new code
 - **Set goals** — Establish team coverage targets
 """
-        elif alert.alert_type == AlertType.CRITICAL_MODULE_COVERAGE:
+        elif alert.alert_type == AlertType.CRITICAL_MODULE_COVERAGE.value:
             comment += """- **Focus on modules** — Prioritize listed files for testing
 - **Add tests** — Test high-touch modules thoroughly
 - **Track progress** — Monitor module-level metrics
@@ -361,7 +361,7 @@ class CoverageOperatorFormatter:
         if alert.threshold_or_baseline is not None:
             message += f" (threshold: {alert.threshold_or_baseline:.1f}%)"
 
-        if alert.alert_type == AlertType.REGRESSION_DETECTED and alert.delta_pct is not None:
+        if alert.alert_type == AlertType.REGRESSION_DETECTED.value and alert.delta_pct is not None:
             message += f" [regressed {alert.delta_pct:+.1f}%]"
 
         if alert.affected_modules:
@@ -581,19 +581,19 @@ class CoverageAlertRouter:
         channels = ["operator"]  # Always log to operator
 
         # Route based on severity
-        if alert.severity in (AlertSeverity.CRITICAL, AlertSeverity.EMERGENCY):
+        if alert.severity in (AlertSeverity.CRITICAL.value, AlertSeverity.EMERGENCY.value):
             # High severity: use multiple channels
             if self.slack_channel:
                 channels.append("slack")
             if self.email_channel:
                 channels.append("email")
-        elif alert.severity == AlertSeverity.WARNING:
+        elif alert.severity == AlertSeverity.WARNING.value:
             # Medium severity: use primary channel
             if self.slack_channel:
                 channels.append("slack")
 
         # GitHub channel for regression alerts (if PR context available)
-        if alert.alert_type == AlertType.REGRESSION_DETECTED and self.github_channel:
+        if alert.alert_type == AlertType.REGRESSION_DETECTED.value and self.github_channel:
             channels.append("github")
 
         return channels
