@@ -29,6 +29,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from operations_center.adapters.git.client import GitClient
+from operations_center.contracts.enums import FailureReasonCategory
 from operations_center.contracts.execution import ExecutionRequest, ExecutionResult
 
 logger = logging.getLogger(__name__)
@@ -255,7 +256,7 @@ class WorkspaceManager:
             return result.model_copy(
                 update={
                     "branch_pushed": False,
-                    "failure_category": "scope_too_wide",
+                    "failure_category": FailureReasonCategory.SCOPE_TOO_WIDE,
                     "failure_reason": (
                         f"diff exceeded soft cap: {n_files} files, {n_lines} lines "
                         f"(caps {self._max_files} / {self._max_lines}). "
