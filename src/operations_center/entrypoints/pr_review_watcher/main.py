@@ -967,6 +967,7 @@ def _escalate_needs_human(
                 "pr_review_watcher: failed to post needs-human comment PR #%d — %s", pr_number, exc
             )
         state["escalated_needs_human"] = True
+        state["escalation_reason"] = reason
         logger.warning(
             "pr_review_watcher: PR #%d escalated for human attention (reason=%s)", pr_number, reason
         )
@@ -1510,9 +1511,17 @@ def _phase1(
             # validated the implementation. Retract the escalation once so the
             # reviewer can re-evaluate without a diff-truncation blind spot.
             # Bounded by _MAX_CI_GREEN_RETRACTIONS to prevent loops.
+            # Exception: timing escalations (ci_never_settled, ci_persistently_red)
+            # are not review-concern escalations — they don't consume the budget
+            # because CI being settled/green IS the resolution of those conditions.
             _ci_green_retracted = state.get("ci_green_retraction_count", 0)
+            _escalation_reason = state.get("escalation_reason", "")
+            _is_timing_escalation = _escalation_reason in (
+                "ci_never_settled",
+                "ci_persistently_red",
+            )
             _did_ci_green_retract = False
-            if _ci_green_retracted < _MAX_CI_GREEN_RETRACTIONS:
+            if _is_timing_escalation or _ci_green_retracted < _MAX_CI_GREEN_RETRACTIONS:
                 _rcfg = settings.repos.get(repo_key)
                 if _rcfg and getattr(_rcfg, "auto_merge_on_ci_green", False):
                     _rhead = ((pr_data.get("head") or {}).get("ref") or "").lower()
@@ -1552,14 +1561,20 @@ def _phase1(
                                 state.pop("last_concerns_summary", None)
                                 state.pop("last_concerns_head_sha", None)
                                 state.pop("last_fix_pass_pushed", None)
-                                state["ci_green_retraction_count"] = _ci_green_retracted + 1
+                                # Only consume budget for review-concern escalations,
+                                # not timing escalations (ci_never_settled, etc.)
+                                if not _is_timing_escalation:
+                                    state["ci_green_retraction_count"] = (
+                                        _ci_green_retracted + 1
+                                    )
                                 logger.info(
                                     "pr_review_watcher: PR #%d CI green on escalated head; "
                                     "retracting escalation for automated review retry "
-                                    "(retraction %d/%d)",
+                                    "(retraction %d/%d, timing_escalation=%s)",
                                     pr_number,
                                     _ci_green_retracted + 1,
                                     _MAX_CI_GREEN_RETRACTIONS,
+                                    _is_timing_escalation,
                                 )
                                 _save_state(state_path, state)
                                 _did_ci_green_retract = True

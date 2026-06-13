@@ -2021,6 +2021,100 @@ def test_wo3_ci_green_retraction_bounded_by_max(tmp_path: Path) -> None:
     gh.update_comment.assert_not_called()
 
 
+def test_wo3_timing_escalation_bypasses_retraction_budget(tmp_path: Path) -> None:
+    """WO-3: ci_never_settled is a timing escalation — CI settling green IS the resolution.
+    The retraction budget should not be consumed, and retraction should fire even when
+    ci_green_retraction_count is at max."""
+    state, sp_ = _make_state(
+        tmp_path,
+        phase="self_review",
+        escalated_needs_human=True,
+        escalated_head_sha="same_sha",
+        escalation_comment_id=9010,
+        escalation_reason="ci_never_settled",
+        ci_green_retraction_count=watcher._MAX_CI_GREEN_RETRACTIONS,  # budget exhausted
+        plane_task_id=None,
+    )
+    gh = _make_gh()
+    gh.get_failed_checks.return_value = []  # CI now green and settled
+    gh.get_incomplete_checks.return_value = []
+    gh.list_pr_comments.return_value = [
+        {"id": 9010, "body": "<!-- bot -->\n**Needs human attention** (reason=`ci_never_settled`)."},
+    ]
+
+    with (
+        patch.object(
+            watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}
+        ),
+        patch.object(watcher, "_merge_and_done"),
+    ):
+        watcher._phase1(
+            state,
+            sp_,
+            _pr_data(head_sha="same_sha"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            _ci_green_settings(),
+        )
+
+    loaded = watcher._load_state(sp_)
+    # Timing escalation should be retracted since CI is now settled and green
+    assert not loaded.get("escalated_needs_human")
+    # Budget should NOT be incremented for timing escalations
+    assert loaded.get("ci_green_retraction_count") == watcher._MAX_CI_GREEN_RETRACTIONS
+    gh.update_comment.assert_called_once()
+    retracted = gh.update_comment.call_args[0][3]
+    assert "CI green on unchanged head" in retracted
+
+
+def test_wo3_ci_persistently_red_timing_escalation_bypasses_budget(tmp_path: Path) -> None:
+    """WO-3: ci_persistently_red is also a timing escalation — same bypass applies."""
+    state, sp_ = _make_state(
+        tmp_path,
+        phase="self_review",
+        escalated_needs_human=True,
+        escalated_head_sha="same_sha",
+        escalation_comment_id=9011,
+        escalation_reason="ci_persistently_red",
+        ci_green_retraction_count=watcher._MAX_CI_GREEN_RETRACTIONS,
+        plane_task_id=None,
+    )
+    gh = _make_gh()
+    gh.get_failed_checks.return_value = []
+    gh.get_incomplete_checks.return_value = []
+    gh.list_pr_comments.return_value = [
+        {"id": 9011, "body": "<!-- bot -->\n**Needs human attention** (reason=`ci_persistently_red`)."},
+    ]
+
+    with (
+        patch.object(
+            watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}
+        ),
+        patch.object(watcher, "_merge_and_done"),
+    ):
+        watcher._phase1(
+            state,
+            sp_,
+            _pr_data(head_sha="same_sha"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            _ci_green_settings(),
+        )
+
+    loaded = watcher._load_state(sp_)
+    assert not loaded.get("escalated_needs_human")
+    assert loaded.get("ci_green_retraction_count") == watcher._MAX_CI_GREEN_RETRACTIONS
+    gh.update_comment.assert_called_once()
+    retracted = gh.update_comment.call_args[0][3]
+    assert "CI green on unchanged head" in retracted
+
+
 def test_wo3_ci_red_does_not_retract(tmp_path: Path) -> None:
     """WO-3: CI failures prevent retraction; PR stays escalated."""
     state, sp_ = _make_state(
