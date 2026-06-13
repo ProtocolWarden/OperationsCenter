@@ -98,3 +98,31 @@ def test_spec_hygiene_task_exception_returns_failed(monkeypatch):
     result = task.run_once(MaintenanceContext(cycle_id="c", now=datetime.now(timezone.utc)))
     assert result.status == "failed"
     assert result.error == "plane down"
+
+
+def test_rebuild_active_projection_excludes_terminal(tmp_path):
+    """active.json projects only active campaigns; terminal ones (complete/cancelled)
+    are history (in Plane) and must not accumulate in the pane projection."""
+    from operations_center.spec_author.state import CampaignStateManager
+
+    mgr = CampaignStateManager(state_path=tmp_path / "active.json")
+
+    def issue(cid: str, state: str) -> dict:
+        return {
+            "name": f"[Campaign] {cid}",
+            "labels": [{"name": "source: spec-campaign"}, {"name": f"campaign-id: {cid}"}],
+            "state": {"name": state},
+        }
+
+    spec_hygiene_main._rebuild_active_projection(
+        mgr,
+        [
+            issue("active1", "in progress"),  # → active
+            issue("cancelled1", "cancelled"),  # → cancelled (excluded)
+            issue("done1", "done"),  # → complete (excluded)
+        ],
+    )
+
+    saved = mgr.load()
+    assert [c.slug for c in saved.campaigns] == ["active1"]
+    assert all(c.status == "active" for c in saved.campaigns)
