@@ -8,18 +8,15 @@ import json
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
+from unittest.mock import MagicMock
 
-import pytest
 
 from operations_center.observer.collectors.coverage_collector import CoverageCollector
 from operations_center.observer.coverage_models import (
     CoverageMetric,
     CoverageSnapshot,
-    FileCoverage,
     ModuleCoverage,
 )
-from operations_center.observer.models import CoverageSignal
-from operations_center.observer.service import ObserverContext, new_observer_context
 
 
 class TestCoverageMetric:
@@ -139,9 +136,7 @@ class TestCoverageCollector:
     def test_collector_initialization(self) -> None:
         """Test initializing a coverage collector."""
         collector = CoverageCollector()
-        assert collector.coverage_json_path is None or isinstance(
-            collector.coverage_json_path, str
-        )
+        assert collector.coverage_json_path is None or isinstance(collector.coverage_json_path, str)
 
     def test_collector_with_specific_path(self) -> None:
         """Test initializing collector with specific coverage file path."""
@@ -225,9 +220,7 @@ class TestCoverageCollector:
             },
         }
 
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(coverage_data, f)
             temp_path = f.name
 
@@ -241,9 +234,7 @@ class TestCoverageCollector:
 
     def test_load_coverage_snapshot_invalid_json(self) -> None:
         """Test loading coverage snapshot with invalid JSON."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             f.write("{ invalid json")
             temp_path = f.name
 
@@ -298,7 +289,7 @@ class TestCoverageCollector:
     def test_collect_signal_unavailable(self) -> None:
         """Test collecting coverage signal when data is unavailable."""
         collector = CoverageCollector(coverage_json_path="/nonexistent/file.json")
-        context = new_observer_context()
+        context = MagicMock()
 
         signal = collector.collect(context)
 
@@ -316,15 +307,13 @@ class TestCoverageCollector:
             },
         }
 
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(coverage_data, f)
             temp_path = f.name
 
         try:
             collector = CoverageCollector(coverage_json_path=temp_path)
-            context = new_observer_context()
+            context = MagicMock()
 
             signal = collector.collect(context)
 
@@ -408,15 +397,13 @@ class TestCoverageCollectorEdgeCases:
             },
         }
 
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(coverage_data, f)
             temp_path = f.name
 
         try:
             collector = CoverageCollector(coverage_json_path=temp_path)
-            context = new_observer_context()
+            context = MagicMock()
 
             signal = collector.collect(context)
 
@@ -438,15 +425,13 @@ class TestCoverageCollectorEdgeCases:
             },
         }
 
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(coverage_data, f)
             temp_path = f.name
 
         try:
             collector = CoverageCollector(coverage_json_path=temp_path)
-            context = new_observer_context()
+            context = MagicMock()
 
             signal = collector.collect(context)
 

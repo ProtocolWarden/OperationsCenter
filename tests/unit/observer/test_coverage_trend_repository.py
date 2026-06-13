@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import json
 import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -16,7 +15,6 @@ from operations_center.observer.coverage_models import (
     CoverageAlert,
     CoverageSnapshot,
     CoverageTrendAnalysis,
-    FileCoverage,
     ModuleCoverage,
 )
 from operations_center.observer.coverage_trend_repository import (
@@ -363,8 +361,8 @@ class TestHTTPCoverageTrendRepository:
         assert loaded.run_id == sample_snapshot.run_id
 
     def test_http_requires_requests(self) -> None:
-        """Test that HTTP repository requires requests."""
-        with patch.dict("sys.modules", {"requests": None}):
+        """Test that HTTP repository raises ImportError when requests is unavailable."""
+        with patch("operations_center.observer.coverage_trend_repository.requests", None):
             with pytest.raises(ImportError):
                 HTTPCoverageTrendRepository(base_url="http://api.example.com")
 
@@ -382,6 +380,4 @@ class TestHTTPCoverageTrendRepository:
             token="test-token",
         )
 
-        mock_session.headers.update.assert_called_once_with(
-            {"Authorization": "Bearer test-token"}
-        )
+        mock_session.headers.update.assert_called_once_with({"Authorization": "Bearer test-token"})

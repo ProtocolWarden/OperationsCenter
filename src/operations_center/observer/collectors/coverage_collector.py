@@ -15,10 +15,7 @@ from pathlib import Path
 from typing import Optional
 
 from operations_center.observer.coverage_models import (
-    CoverageAlert,
     CoverageSnapshot,
-    CoverageTrendAnalysis,
-    FileCoverage,
     ModuleCoverage,
 )
 from operations_center.observer.models import CoverageSignal
@@ -150,9 +147,9 @@ class CoverageCollector:
             # Calculate module averages
             for module_path, module_data in module_map.items():
                 if module_data["files"]:
-                    avg_coverage = sum(
-                        f["percent_covered"] for f in module_data["files"]
-                    ) / len(module_data["files"])
+                    avg_coverage = sum(f["percent_covered"] for f in module_data["files"]) / len(
+                        module_data["files"]
+                    )
                     health = self._determine_health(avg_coverage)
                     module_coverages.append(
                         ModuleCoverage(
@@ -177,7 +174,8 @@ class CoverageCollector:
                 module_coverages=module_coverages,
                 file_coverages=[],
                 uncovered_file_count=sum(
-                    1 for f in files.values()
+                    1
+                    for f in files.values()
                     if f.get("summary", {}).get("percent_covered", 100.0) < 80.0
                 ),
             )

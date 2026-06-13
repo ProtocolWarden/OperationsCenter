@@ -1740,8 +1740,7 @@ def _phase1(
             else "  (file list unavailable)"
         )
         diff_excerpt = (
-            diff[:_DIFF_LIMIT]
-            + f"\n\n...[diff truncated at {_DIFF_LIMIT} chars]\n\n"
+            diff[:_DIFF_LIMIT] + f"\n\n...[diff truncated at {_DIFF_LIMIT} chars]\n\n"
             "IMPORTANT — complete list of ALL files changed in this PR "
             "(files listed here ARE modified even if their diffs are not shown above; "
             "do NOT raise 'missing implementation' concerns for files that appear here):\n"

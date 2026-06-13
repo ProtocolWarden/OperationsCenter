@@ -298,9 +298,7 @@ class CoverageAlertManager:
             if trend_analysis.days_of_decline >= self.config.trend_degradation_days:
                 current = snapshot.overall_statement_coverage_pct
                 severity = self.config.classify_severity(current)
-                velocity_pct = (
-                    trend_analysis.trend_pct if trend_analysis.trend_pct else 0
-                )
+                velocity_pct = trend_analysis.trend_pct if trend_analysis.trend_pct else 0
                 alert = CoverageAlert(
                     alert_id=str(uuid4()),
                     timestamp=snapshot.timestamp,
@@ -367,9 +365,7 @@ class CoverageAlertManager:
         """
         return severity in [AlertSeverity.CRITICAL.value, AlertSeverity.EMERGENCY.value]
 
-    def filter_alerts_by_severity(
-        self, severity: AlertSeverity
-    ) -> list[CoverageAlert]:
+    def filter_alerts_by_severity(self, severity: AlertSeverity) -> list[CoverageAlert]:
         """Filter alerts by severity level.
 
         Args:

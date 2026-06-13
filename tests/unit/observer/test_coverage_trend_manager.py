@@ -7,15 +7,13 @@ from __future__ import annotations
 import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from operations_center.observer.coverage_models import (
     CoverageAlert,
     CoverageSnapshot,
-    CoverageTrendAnalysis,
-    FileCoverage,
     ModuleCoverage,
 )
 from operations_center.observer.coverage_trend_manager import CoverageTrendManager
