@@ -21,106 +21,16 @@ from operations_center.observer.coverage_alerting import (
     AlertType,
     CoverageAlertConfig,
 )
+from operations_center.observer.coverage_alert_channels import (
+    AlertChannelConfig,
+    AlertChannelRoute,
+)
 
 
 class ConfigValidationError(ValueError):
     """Raised when configuration validation fails."""
 
     pass
-
-
-class AlertChannelRoute(BaseModel):
-    """Route configuration for a specific alert channel."""
-
-    channel_name: str = Field(
-        description="Name of the alert channel (e.g., 'slack', 'email', 'github')"
-    )
-    enabled: bool = Field(default=True, description="Whether this route is enabled")
-    alert_types: list[str] = Field(
-        default_factory=list,
-        description="Alert types this channel receives (empty = all types)",
-    )
-    severity_levels: list[str] = Field(
-        default_factory=list,
-        description="Severity levels this channel receives (empty = all levels)",
-    )
-    enabled_modules: list[str] = Field(
-        default_factory=list,
-        description="Modules this channel alerts for (empty = all modules)",
-    )
-
-    def matches_alert(
-        self,
-        alert_type: AlertType,
-        severity: AlertSeverity,
-        module: str | None = None,
-    ) -> bool:
-        """Check if this route should receive the given alert.
-
-        Args:
-            alert_type: Type of the alert
-            severity: Severity level of the alert
-            module: Module the alert is for (optional)
-
-        Returns:
-            True if this route should receive the alert
-        """
-        if not self.enabled:
-            return False
-
-        # Check alert type (empty list = all types)
-        if self.alert_types and alert_type.value not in self.alert_types:
-            return False
-
-        # Check severity (empty list = all levels)
-        if self.severity_levels and severity.value not in self.severity_levels:
-            return False
-
-        # Check module (empty list = all modules; if modules required but none provided, no match)
-        if self.enabled_modules and (not module or module not in self.enabled_modules):
-            return False
-
-        return True
-
-
-class AlertChannelConfig(BaseModel):
-    """Configuration for coverage-specific alert routing."""
-
-    routes: list[AlertChannelRoute] = Field(
-        default_factory=list,
-        description="List of alert channel routes for coverage alerts",
-    )
-    default_channels: list[str] = Field(
-        default_factory=lambda: ["operator"],
-        description="Default channels to use if no specific routes match",
-    )
-
-    def get_routes_for_alert(
-        self,
-        alert_type: AlertType,
-        severity: AlertSeverity,
-        module: str | None = None,
-    ) -> list[str]:
-        """Get channels that should receive the given alert.
-
-        Args:
-            alert_type: Type of the alert
-            severity: Severity level of the alert
-            module: Module the alert is for (optional)
-
-        Returns:
-            List of channel names that should receive this alert
-        """
-        matching_channels: list[str] = [
-            route.channel_name
-            for route in self.routes
-            if route.matches_alert(alert_type, severity, module)
-        ]
-
-        if not matching_channels:
-            return self.default_channels
-
-        return matching_channels
 
 
 class CoverageConfigSchema(BaseModel):
@@ -720,6 +630,4 @@ __all__ = [
     "EnvironmentConfigProvider",
     "CompositeConfigProvider",
     "CoverageConfigManager",
-    "AlertChannelRoute",
-    "AlertChannelConfig",
 ]

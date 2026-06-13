@@ -16,14 +16,16 @@ from unittest.mock import patch
 import pytest
 import yaml
 
+from operations_center.observer.coverage_alert_channels import (
+    AlertChannelConfig,
+    AlertChannelRoute,
+)
 from operations_center.observer.coverage_alerting import (
     AlertSeverity,
     AlertType,
     CoverageAlertConfig,
 )
 from operations_center.observer.coverage_config import (
-    AlertChannelConfig,
-    AlertChannelRoute,
     CompositeConfigProvider,
     ConfigValidationError,
     CoverageConfigManager,
