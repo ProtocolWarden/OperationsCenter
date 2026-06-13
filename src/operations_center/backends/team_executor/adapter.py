@@ -12,7 +12,6 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import Literal, cast
 
 from operations_center.backends.tiering import select_tier
 from operations_center.backends.worker_backend_selector import (
@@ -74,7 +73,7 @@ class TeamExecutorBackendAdapter:
             runner = TeamExecutorRunner(
                 team_name=team_name,
                 working_dir=working_dir,
-                worker_backend=cast(Literal["claude_code", "codex_cli"], worker_backend),
+                worker_backend=worker_backend,
             )
             return runner.run(
                 goal_text=request.goal_text,

@@ -16,7 +16,6 @@ import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Literal, cast
 
 from operations_center.backends.tiering import select_tier, tier_profile
 from operations_center.backends.worker_backend_selector import (
@@ -96,7 +95,7 @@ class DAGExecutorBackendAdapter:
                 artifacts_dir=artifacts_dir,
                 working_directory=str(workspace),
                 timeout_seconds=self._settings.timeout_seconds or None,
-                worker_backend=cast(Literal["claude_code", "codex_cli"], worker_backend),
+                worker_backend=worker_backend,
             )
             if workflow_path.exists():
                 spec = load_graph_file(str(workflow_path), goal_text=request.goal_text)

@@ -115,7 +115,9 @@ def duration_stability(durations: Sequence[float]) -> float | None:
     return math.sqrt(variance) / mean
 
 
-def environment_correlation(failures: Sequence[float], env_values: Sequence[float]) -> float | None:
+def environment_correlation(
+    failures: Sequence[float], env_values: Sequence[float]
+) -> float | None:
     """Pearson correlation between per-run failure indicators and an environment
     metric, in [-1, 1].
 
@@ -227,6 +229,9 @@ def repository_health_score(
     clamped to [0, 1].
     """
     score = (
-        (1.0 - flaky_pct / 0.10) - 0.5 * growth_rate - 2.0 * critical_ratio - 0.3 * unknown_ratio
+        (1.0 - flaky_pct / 0.10)
+        - 0.5 * growth_rate
+        - 2.0 * critical_ratio
+        - 0.3 * unknown_ratio
     )
     return max(0.0, min(1.0, score))
