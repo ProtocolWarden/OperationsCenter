@@ -617,7 +617,7 @@ class TestCoverageAlertFormattersIntegration:
 
     def test_message_content_consistency(self, sample_alert: CoverageAlert) -> None:
         """Test that key information appears in all message formats."""
-        slack_msg = CoverageSlackFormatter.format_alert(sample_alert)
+        _slack_msg = CoverageSlackFormatter.format_alert(sample_alert)
         subject, text, html = CoverageEmailFormatter.format_alert(sample_alert)
         comment = CoverageGitHubFormatter.format_alert(sample_alert)
         log_msg = CoverageOperatorFormatter.format_alert(sample_alert)

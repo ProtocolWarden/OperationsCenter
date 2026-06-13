@@ -1,3 +1,9 @@
+## 2026-06-13 — Watchdog: fixed ruff/ty CI gate failures for PR #275
+
+F841 unused vars in tests, ty dict-key type mismatches (AlertSeverity.value), None guards for
+webhook_url/smtp_host/sender, return type annotations for categorize_alert/summarize_alerts,
+and str cast for metadata["run_id"] in CoverageTrendManager. All checks now pass locally.
+
 ## 2026-06-13 — Watchdog: resolved CoverageAlert field renames and test mismatches
 
 Post autonomy-cycle staged changes had renamed CoverageAlert fields but left

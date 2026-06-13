@@ -375,7 +375,7 @@ class TestHTTPCoverageTrendRepository:
         mock_session = MagicMock()
         mock_requests.Session.return_value = mock_session
 
-        repo = HTTPCoverageTrendRepository(
+        _repo = HTTPCoverageTrendRepository(
             base_url="http://api.example.com",
             token="test-token",
         )

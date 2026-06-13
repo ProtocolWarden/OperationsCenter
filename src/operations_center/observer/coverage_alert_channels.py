@@ -40,11 +40,11 @@ class CoverageSlackFormatter:
         Returns:
             Dictionary formatted for Slack webhook
         """
-        color_map = {
-            AlertSeverity.INFO: "#36a64f",
-            AlertSeverity.WARNING: "#ff9900",
-            AlertSeverity.CRITICAL: "#ff3333",
-            AlertSeverity.EMERGENCY: "#8b0000",
+        color_map: dict[str, str] = {
+            AlertSeverity.INFO.value: "#36a64f",
+            AlertSeverity.WARNING.value: "#ff9900",
+            AlertSeverity.CRITICAL.value: "#ff3333",
+            AlertSeverity.EMERGENCY.value: "#8b0000",
         }
         color = color_map.get(alert.severity, "#cccccc")
 
@@ -269,11 +269,11 @@ class CoverageGitHubFormatter:
         """
         alert_type_readable = alert.alert_type.replace("_", " ").title()
 
-        severity_emoji = {
-            AlertSeverity.INFO: "ℹ️",
-            AlertSeverity.WARNING: "⚠️",
-            AlertSeverity.CRITICAL: "🚨",
-            AlertSeverity.EMERGENCY: "🚨🚨",
+        severity_emoji: dict[str, str] = {
+            AlertSeverity.INFO.value: "ℹ️",
+            AlertSeverity.WARNING.value: "⚠️",
+            AlertSeverity.CRITICAL.value: "🚨",
+            AlertSeverity.EMERGENCY.value: "🚨🚨",
         }
         emoji = severity_emoji.get(alert.severity, "⚠️")
 
@@ -433,7 +433,8 @@ class CoverageAlertRouter:
                 }
                 message = CoverageSlackFormatter.format_alert(alert)
                 try:
-                    self.slack_channel.webhook_url = self.slack_channel.webhook_url
+                    if not self.slack_channel.webhook_url:
+                        raise ValueError("Slack webhook_url is not configured")
                     # Direct webhook call
                     import json
 
@@ -475,22 +476,26 @@ class CoverageAlertRouter:
                     from email.mime.multipart import MIMEMultipart
                     from email.mime.text import MIMEText
 
+                    if not self.email_channel.smtp_host or not self.email_channel.sender:
+                        raise ValueError("Email channel smtp_host or sender not configured")
+                    smtp_host: str = self.email_channel.smtp_host
+                    sender: str = self.email_channel.sender
                     msg = MIMEMultipart("alternative")
                     msg["Subject"] = subject
-                    msg["From"] = self.email_channel.sender
+                    msg["From"] = sender
                     msg["To"] = ", ".join(self.email_channel.recipients)
 
                     msg.attach(MIMEText(text_body, "plain"))
                     msg.attach(MIMEText(html_body, "html"))
 
                     with smtplib.SMTP(
-                        self.email_channel.smtp_host, self.email_channel.smtp_port, timeout=10
+                        smtp_host, self.email_channel.smtp_port, timeout=10
                     ) as server:
                         server.starttls()
                         if self.email_channel.username and self.email_channel.password:
                             server.login(self.email_channel.username, self.email_channel.password)
                         server.sendmail(
-                            self.email_channel.sender,
+                            sender,
                             self.email_channel.recipients,
                             msg.as_string(),
                         )
