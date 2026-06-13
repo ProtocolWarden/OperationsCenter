@@ -46,6 +46,57 @@ module_thresholds:
     branch_coverage_minimum: 75.0
     line_coverage_minimum: 85.0
 
+# Alert Channel Routing Configuration
+#
+# Specifies which alert channels receive which types of coverage alerts.
+# Routes are evaluated in order; the first matching route is used.
+# If no routes match, alerts are sent to default_channels.
+#
+alert_channels:
+  # List of alert routing rules
+  routes:
+    # Critical coverage issues go to Slack and PagerDuty
+    - channel_name: slack
+      enabled: true
+      alert_types:
+        - below_threshold
+        - trend_degrading
+      severity_levels:
+        - critical
+        - emergency
+      enabled_modules: []  # Empty = all modules
+
+    # High-severity regressions go to email
+    - channel_name: email
+      enabled: true
+      alert_types:
+        - regression_detected
+      severity_levels:
+        - warning
+        - critical
+        - emergency
+      enabled_modules: []
+
+    # Module critical coverage gaps go to GitHub (PR comments)
+    - channel_name: github
+      enabled: true
+      alert_types:
+        - critical_module_coverage
+      severity_levels: []  # Empty = all severity levels
+      enabled_modules: []
+
+    # Low-severity info alerts go to operator logs only
+    - channel_name: operator
+      enabled: true
+      alert_types: []  # Empty = all types
+      severity_levels:
+        - info
+      enabled_modules: []
+
+  # Default channels if no routes match
+  default_channels:
+    - operator
+
 # Environment Variable Overrides
 #
 # You can override any setting using environment variables with the COVERAGE_ prefix:

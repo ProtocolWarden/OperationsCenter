@@ -23,6 +23,8 @@ from operations_center.observer.coverage_alerting import (
     CoverageAlertManager,
 )
 from operations_center.observer.coverage_config import (
+    AlertChannelConfig,
+    AlertChannelRoute,
     CompositeConfigProvider,
     ConfigValidationError,
     CoverageConfigManager,
@@ -93,8 +95,10 @@ from operations_center.observer.structured_logging import (
 
 __all__ = [
     "AlertChannel",
+    "AlertChannelConfig",
     "AlertChannelFactory",
     "AlertChannelResult",
+    "AlertChannelRoute",
     "AlertSeverity",
     "AlertThreshold",
     "AlertType",

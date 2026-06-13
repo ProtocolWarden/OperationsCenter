@@ -16,8 +16,14 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-from operations_center.observer.coverage_alerting import CoverageAlertConfig
+from operations_center.observer.coverage_alerting import (
+    AlertSeverity,
+    AlertType,
+    CoverageAlertConfig,
+)
 from operations_center.observer.coverage_config import (
+    AlertChannelConfig,
+    AlertChannelRoute,
     CompositeConfigProvider,
     ConfigValidationError,
     CoverageConfigManager,
@@ -693,5 +699,378 @@ class TestConfigurationIntegration:
                     assert alert_config.statement_coverage_minimum == 76
                     # Other values from YAML or defaults
                     assert alert_config.repo_warning_threshold == 85.0
+            finally:
+                Path(f.name).unlink()
+
+
+class TestAlertChannelRoute:
+    """Tests for AlertChannelRoute configuration and matching."""
+
+    def test_route_initialization(self) -> None:
+        """Test basic AlertChannelRoute initialization."""
+        route = AlertChannelRoute(
+            channel_name="slack",
+            enabled=True,
+            alert_types=["below_threshold"],
+            severity_levels=["critical"],
+        )
+
+        assert route.channel_name == "slack"
+        assert route.enabled is True
+        assert route.alert_types == ["below_threshold"]
+        assert route.severity_levels == ["critical"]
+
+    def test_route_matches_alert_all_types(self) -> None:
+        """Test route matching when alert_types is empty (matches all)."""
+        route = AlertChannelRoute(
+            channel_name="slack", enabled=True, alert_types=[], severity_levels=[]
+        )
+
+        # Should match any alert type when alert_types is empty
+        assert route.matches_alert(AlertType.BELOW_THRESHOLD, AlertSeverity.CRITICAL)
+        assert route.matches_alert(
+            AlertType.REGRESSION_DETECTED, AlertSeverity.WARNING
+        )
+
+    def test_route_matches_alert_specific_type(self) -> None:
+        """Test route matching with specific alert types."""
+        route = AlertChannelRoute(
+            channel_name="email",
+            enabled=True,
+            alert_types=["below_threshold", "regression_detected"],
+            severity_levels=[],
+        )
+
+        # Should match specified types
+        assert route.matches_alert(AlertType.BELOW_THRESHOLD, AlertSeverity.INFO)
+        assert route.matches_alert(AlertType.REGRESSION_DETECTED, AlertSeverity.INFO)
+
+        # Should not match unspecified types
+        assert not route.matches_alert(
+            AlertType.TREND_DEGRADING, AlertSeverity.INFO
+        )
+
+    def test_route_matches_alert_severity_filtering(self) -> None:
+        """Test route matching with severity level filtering."""
+        route = AlertChannelRoute(
+            channel_name="slack",
+            enabled=True,
+            alert_types=[],
+            severity_levels=["critical", "emergency"],
+        )
+
+        # Should match specified severity levels
+        assert route.matches_alert(AlertType.BELOW_THRESHOLD, AlertSeverity.CRITICAL)
+        assert route.matches_alert(AlertType.BELOW_THRESHOLD, AlertSeverity.EMERGENCY)
+
+        # Should not match other severity levels
+        assert not route.matches_alert(AlertType.BELOW_THRESHOLD, AlertSeverity.WARNING)
+        assert not route.matches_alert(AlertType.BELOW_THRESHOLD, AlertSeverity.INFO)
+
+    def test_route_matches_alert_module_filtering(self) -> None:
+        """Test route matching with module filtering."""
+        route = AlertChannelRoute(
+            channel_name="github",
+            enabled=True,
+            alert_types=[],
+            severity_levels=[],
+            enabled_modules=["src/observer", "src/custodian"],
+        )
+
+        # Should match specified modules
+        assert route.matches_alert(
+            AlertType.CRITICAL_MODULE_COVERAGE, AlertSeverity.INFO, "src/observer"
+        )
+        assert route.matches_alert(
+            AlertType.CRITICAL_MODULE_COVERAGE, AlertSeverity.INFO, "src/custodian"
+        )
+
+        # Should not match unspecified modules
+        assert not route.matches_alert(
+            AlertType.CRITICAL_MODULE_COVERAGE,
+            AlertSeverity.INFO,
+            "src/execution",
+        )
+
+        # Should match when module not specified and list not empty
+        assert not route.matches_alert(
+            AlertType.CRITICAL_MODULE_COVERAGE, AlertSeverity.INFO
+        )
+
+    def test_route_disabled_never_matches(self) -> None:
+        """Test that disabled routes never match alerts."""
+        route = AlertChannelRoute(
+            channel_name="slack",
+            enabled=False,
+            alert_types=[],
+            severity_levels=[],
+        )
+
+        # Should never match when disabled
+        assert not route.matches_alert(AlertType.BELOW_THRESHOLD, AlertSeverity.INFO)
+        assert not route.matches_alert(
+            AlertType.REGRESSION_DETECTED, AlertSeverity.EMERGENCY
+        )
+
+    def test_route_combined_matching(self) -> None:
+        """Test route matching with combined criteria."""
+        route = AlertChannelRoute(
+            channel_name="pagerduty",
+            enabled=True,
+            alert_types=["below_threshold", "trend_degrading"],
+            severity_levels=["critical", "emergency"],
+            enabled_modules=["src/observer"],
+        )
+
+        # Should match all criteria
+        assert route.matches_alert(
+            AlertType.BELOW_THRESHOLD, AlertSeverity.CRITICAL, "src/observer"
+        )
+
+        # Should not match wrong alert type
+        assert not route.matches_alert(
+            AlertType.REGRESSION_DETECTED, AlertSeverity.CRITICAL, "src/observer"
+        )
+
+        # Should not match wrong severity
+        assert not route.matches_alert(
+            AlertType.BELOW_THRESHOLD, AlertSeverity.WARNING, "src/observer"
+        )
+
+        # Should not match wrong module
+        assert not route.matches_alert(
+            AlertType.BELOW_THRESHOLD, AlertSeverity.CRITICAL, "src/custodian"
+        )
+
+
+class TestAlertChannelConfig:
+    """Tests for AlertChannelConfig routing resolution."""
+
+    def test_empty_routes_uses_defaults(self) -> None:
+        """Test that alerts with no matching routes use default channels."""
+        config = AlertChannelConfig(routes=[], default_channels=["operator"])
+
+        channels = config.get_routes_for_alert(
+            AlertType.BELOW_THRESHOLD, AlertSeverity.INFO
+        )
+
+        assert channels == ["operator"]
+
+    def test_single_matching_route(self) -> None:
+        """Test that matching route is returned."""
+        route = AlertChannelRoute(
+            channel_name="slack",
+            enabled=True,
+            alert_types=["below_threshold"],
+            severity_levels=[],
+        )
+        config = AlertChannelConfig(
+            routes=[route], default_channels=["operator"]
+        )
+
+        channels = config.get_routes_for_alert(
+            AlertType.BELOW_THRESHOLD, AlertSeverity.INFO
+        )
+
+        assert channels == ["slack"]
+
+    def test_first_matching_route_wins(self) -> None:
+        """Test that first matching route is returned when multiple match."""
+        routes = [
+            AlertChannelRoute(
+                channel_name="slack",
+                enabled=True,
+                alert_types=["below_threshold"],
+                severity_levels=[],
+            ),
+            AlertChannelRoute(
+                channel_name="email",
+                enabled=True,
+                alert_types=["below_threshold"],
+                severity_levels=[],
+            ),
+        ]
+        config = AlertChannelConfig(routes=routes, default_channels=["operator"])
+
+        channels = config.get_routes_for_alert(
+            AlertType.BELOW_THRESHOLD, AlertSeverity.INFO
+        )
+
+        # First matching route should be returned
+        assert channels == ["slack"]
+
+    def test_no_matching_routes_returns_defaults(self) -> None:
+        """Test that no matching routes falls back to defaults."""
+        routes = [
+            AlertChannelRoute(
+                channel_name="slack",
+                enabled=True,
+                alert_types=["regression_detected"],
+                severity_levels=[],
+            ),
+        ]
+        config = AlertChannelConfig(
+            routes=routes, default_channels=["operator", "email"]
+        )
+
+        # Alert type doesn't match route
+        channels = config.get_routes_for_alert(
+            AlertType.BELOW_THRESHOLD, AlertSeverity.INFO
+        )
+
+        assert channels == ["operator", "email"]
+
+    def test_disabled_route_not_matched(self) -> None:
+        """Test that disabled routes are skipped even if they match."""
+        routes = [
+            AlertChannelRoute(
+                channel_name="slack",
+                enabled=False,
+                alert_types=[],
+                severity_levels=[],
+            ),
+            AlertChannelRoute(
+                channel_name="email",
+                enabled=True,
+                alert_types=[],
+                severity_levels=[],
+            ),
+        ]
+        config = AlertChannelConfig(routes=routes, default_channels=["operator"])
+
+        channels = config.get_routes_for_alert(
+            AlertType.BELOW_THRESHOLD, AlertSeverity.INFO
+        )
+
+        # Disabled route should be skipped, email route should match
+        assert channels == ["email"]
+
+    def test_severity_based_routing(self) -> None:
+        """Test routing based on severity levels."""
+        routes = [
+            AlertChannelRoute(
+                channel_name="pagerduty",
+                enabled=True,
+                alert_types=[],
+                severity_levels=["critical", "emergency"],
+            ),
+            AlertChannelRoute(
+                channel_name="slack",
+                enabled=True,
+                alert_types=[],
+                severity_levels=["warning"],
+            ),
+        ]
+        config = AlertChannelConfig(routes=routes, default_channels=["operator"])
+
+        # Critical should go to PagerDuty
+        channels = config.get_routes_for_alert(
+            AlertType.BELOW_THRESHOLD, AlertSeverity.CRITICAL
+        )
+        assert channels == ["pagerduty"]
+
+        # Warning should go to Slack
+        channels = config.get_routes_for_alert(
+            AlertType.BELOW_THRESHOLD, AlertSeverity.WARNING
+        )
+        assert channels == ["slack"]
+
+        # Info should go to default (operator)
+        channels = config.get_routes_for_alert(
+            AlertType.BELOW_THRESHOLD, AlertSeverity.INFO
+        )
+        assert channels == ["operator"]
+
+
+class TestCoverageConfigManagerAlertChannels:
+    """Tests for CoverageConfigManager alert channel configuration loading."""
+
+    def test_get_alert_channel_config_default(self) -> None:
+        """Test getting alert channel config with defaults."""
+        manager = CoverageConfigManager.create_default()
+        channel_config = manager.get_alert_channel_config()
+
+        assert channel_config is not None
+        assert len(channel_config.routes) >= 1
+        assert channel_config.default_channels == ["operator"]
+
+    def test_get_alert_channel_config_from_yaml(self) -> None:
+        """Test loading alert channel config from YAML file."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(
+                {
+                    "alert_channels": {
+                        "routes": [
+                            {
+                                "channel_name": "slack",
+                                "enabled": True,
+                                "alert_types": ["below_threshold"],
+                                "severity_levels": ["critical"],
+                                "enabled_modules": [],
+                            },
+                        ],
+                        "default_channels": ["operator"],
+                    }
+                },
+                f,
+            )
+            f.flush()
+
+            try:
+                manager = CoverageConfigManager.create_with_yaml(f.name)
+                channel_config = manager.get_alert_channel_config()
+
+                assert len(channel_config.routes) == 1
+                assert channel_config.routes[0].channel_name == "slack"
+                assert "below_threshold" in channel_config.routes[0].alert_types
+                assert "critical" in channel_config.routes[0].severity_levels
+            finally:
+                Path(f.name).unlink()
+
+    def test_alert_channel_config_caching(self) -> None:
+        """Test that alert channel config is cached after first load."""
+        manager = CoverageConfigManager.create_default()
+
+        config1 = manager.get_alert_channel_config()
+        config2 = manager.get_alert_channel_config()
+
+        # Should be the same object (cached)
+        assert config1 is config2
+
+    def test_reload_clears_alert_channel_cache(self) -> None:
+        """Test that reload() clears the alert channel config cache."""
+        manager = CoverageConfigManager.create_default()
+
+        config1 = manager.get_alert_channel_config()
+        manager.reload()
+        config2 = manager.get_alert_channel_config()
+
+        # Should be different objects after reload
+        assert config1 is not config2
+
+    def test_alert_channel_config_invalid_yaml(self) -> None:
+        """Test error handling for invalid alert channel config."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(
+                {
+                    "alert_channels": {
+                        "routes": [
+                            {
+                                "channel_name": "slack",
+                                # Missing required fields - this should fail validation
+                            }
+                        ]
+                    }
+                },
+                f,
+            )
+            f.flush()
+
+            try:
+                manager = CoverageConfigManager.create_with_yaml(f.name)
+
+                # Should raise error when trying to get config
+                with pytest.raises(ConfigValidationError):
+                    manager.get_alert_channel_config()
             finally:
                 Path(f.name).unlink()
