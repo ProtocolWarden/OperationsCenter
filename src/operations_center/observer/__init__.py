@@ -9,11 +9,27 @@ from operations_center.observer.alert_channels import (
     SlackChannel,
 )
 from operations_center.observer.collectors.coverage_collector import CoverageCollector
+from operations_center.observer.coverage_alert_channels import (
+    CoverageAlertRouter,
+    CoverageEmailFormatter,
+    CoverageGitHubFormatter,
+    CoverageOperatorFormatter,
+    CoverageSlackFormatter,
+)
 from operations_center.observer.coverage_alerting import (
     AlertSeverity as CoverageAlertSeverity,
     AlertType,
     CoverageAlertConfig,
     CoverageAlertManager,
+)
+from operations_center.observer.coverage_config import (
+    CompositeConfigProvider,
+    ConfigValidationError,
+    CoverageConfigManager,
+    CoverageConfigSchema,
+    DefaultConfigProvider,
+    EnvironmentConfigProvider,
+    YamlConfigProvider,
 )
 from operations_center.observer.collectors.flaky_test_collector import FlakyTestCollector
 from operations_center.observer.coverage_models import (
@@ -85,14 +101,25 @@ __all__ = [
     "CoverageAlert",
     "CoverageAlertConfig",
     "CoverageAlertManager",
+    "CoverageAlertRouter",
     "CoverageAlertSeverity",
     "CoverageCollector",
+    "CoverageConfigManager",
+    "CoverageConfigSchema",
+    "CompositeConfigProvider",
+    "ConfigValidationError",
+    "CoverageEmailFormatter",
+    "CoverageGitHubFormatter",
     "CoverageMetric",
+    "CoverageOperatorFormatter",
+    "CoverageSlackFormatter",
     "CoverageSnapshot",
     "CoverageTrendAnalysis",
     "DashboardProvider",
     "DashboardSnapshot",
+    "DefaultConfigProvider",
     "EmailChannel",
+    "EnvironmentConfigProvider",
     "FileCoverage",
     "FlakyTestAggregationReport",
     "FlakyTestAggregator",
@@ -130,5 +157,6 @@ __all__ = [
     "SystemHealthReport",
     "TestOutcome",
     "ValidationFailureCategory",
+    "YamlConfigProvider",
     "new_observer_context",
 ]

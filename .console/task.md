@@ -5,7 +5,7 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-**Stage 2: Implement coverage trend storage and historical analysis** ✅ COMPLETE (2026-06-12)
+**Stage 6: Implement coverage threshold configuration system** (In Progress - 2026-06-12)
 
 ## Overall Plan
 
@@ -210,3 +210,59 @@ Stage 2: ✅ COMPLETE (2026-06-12). Implemented CoverageTrendRepository (local/S
 ✅ Module exports added to observer.__init__.py
 ✅ Proper SPDX headers on all files
 ✅ Ready for Stage 4 (dashboard and CI integration)
+
+---
+
+## Stage 6 Acceptance Criteria — IN PROGRESS
+
+1. ⏳ **CoverageConfigProvider system with multiple sources**
+   - Abstract base class with load/validate interface
+   - YamlConfigProvider for .console/coverage-config.yaml files
+   - EnvironmentConfigProvider for env var overrides (COVERAGE_*)
+   - DefaultConfigProvider with built-in defaults
+   - CompositeConfigProvider combining multiple sources with precedence
+
+2. ⏳ **Configuration schema and validation**
+   - YAML schema definition for coverage-config.yaml
+   - Environment variable naming conventions (COVERAGE_*)
+   - Validation methods: type checking, range validation, module path validation
+   - Clear error messages for invalid configurations
+
+3. ⏳ **YAML configuration file structure**
+   - .console/coverage-config.yaml with example content
+   - Support for repository thresholds (minimum, warning, target)
+   - Support for coverage type thresholds (statement, branch, line)
+   - Support for module-level threshold overrides
+   - Support for regression and trend thresholds
+
+4. ⏳ **Configuration loading and initialization**
+   - CoverageConfigManager factory class with create methods
+   - Auto-discovery of .console/coverage-config.yaml
+   - Environment variable override precedence
+   - Configuration caching and reload capabilities
+
+5. ⏳ **Integration with CoverageAlertConfig**
+   - Seamless conversion from loaded config to CoverageAlertConfig
+   - Backward compatibility with existing code
+   - Factory method in CoverageAlertConfig for creating from provider
+
+6. ⏳ **Comprehensive test suite (40+ tests)**
+   - YamlConfigProvider tests (10+ tests)
+   - EnvironmentConfigProvider tests (8+ tests)
+   - DefaultConfigProvider tests (5+ tests)
+   - CompositeConfigProvider tests (10+ tests)
+   - Validation tests (8+ tests)
+   - Integration tests with CoverageAlertConfig
+
+## Definition of Done — Stage 6
+
+⏳ All 6 acceptance criteria (to be completed)
+⏳ CoverageConfigProvider system fully implemented
+⏳ YAML and environment configuration support
+⏳ Configuration validation with clear error messages
+⏳ Comprehensive test suite (40+ tests)
+⏳ Code quality verified: ruff clean, py_compile pass
+⏳ Type annotations complete and valid
+⏳ Module exports added to observer.__init__.py
+⏳ Proper SPDX headers on all files
+⏳ Ready for Stage 7 (dashboard and alert routing)
