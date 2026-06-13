@@ -160,8 +160,8 @@ class CoverageCollector:
                     avg_coverage: float = sum(f["percent_covered"] for f in file_list) / len(
                         file_list
                     )
-                    health: Literal["healthy", "at_risk", "critical"] = (
-                        self._determine_health(avg_coverage)
+                    health: Literal["healthy", "at_risk", "critical"] = self._determine_health(
+                        avg_coverage
                     )
                     module_coverages.append(
                         ModuleCoverage(

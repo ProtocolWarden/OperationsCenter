@@ -244,14 +244,17 @@ class TestMergeDecisionMetrics:
 
         # Record retry decision
         start_time = time.time()
-        with patch.object(
-            watcher,
-            "_run_direct_review",
-            return_value={"result": "CONCERNS", "summary": "Fix linting"},
-        ), patch.object(
-            watcher,
-            "_run_fix_pass",
-            return_value=False,
+        with (
+            patch.object(
+                watcher,
+                "_run_direct_review",
+                return_value={"result": "CONCERNS", "summary": "Fix linting"},
+            ),
+            patch.object(
+                watcher,
+                "_run_fix_pass",
+                return_value=False,
+            ),
         ):
             watcher._phase1(
                 state,

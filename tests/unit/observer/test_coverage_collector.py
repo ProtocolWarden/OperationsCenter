@@ -1032,9 +1032,7 @@ class TestFindCoverageFile:
     def test_collector_with_none_coverage_path(self) -> None:
         """Test collector when no coverage file is found."""
         collector = CoverageCollector(coverage_json_path=None)
-        assert collector.coverage_json_path is None or isinstance(
-            collector.coverage_json_path, str
-        )
+        assert collector.coverage_json_path is None or isinstance(collector.coverage_json_path, str)
 
 
 class TestParseJsonErrorHandling:

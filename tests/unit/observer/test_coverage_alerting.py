@@ -124,7 +124,6 @@ def below_threshold_snapshot() -> CoverageSnapshot:
     )
 
 
-
 @pytest.fixture
 def degrading_trend_analysis() -> CoverageTrendAnalysis:
     """Create a trend analysis showing degradation."""
@@ -767,9 +766,7 @@ class TestUtilityFunctions:
 
     def test_get_alert_priority_critical(self) -> None:
         """Test priority calculation for critical severity."""
-        priority = get_alert_priority(
-            AlertType.BELOW_THRESHOLD.value, AlertSeverity.CRITICAL.value
-        )
+        priority = get_alert_priority(AlertType.BELOW_THRESHOLD.value, AlertSeverity.CRITICAL.value)
         assert priority == 7
 
     def test_get_alert_priority_warning(self) -> None:

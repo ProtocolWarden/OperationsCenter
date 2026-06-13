@@ -269,7 +269,9 @@ class TestFlakyMetricsIntegrationWithCoverageAlerting:
         # Should map to healthy (>0.8) which correlates to coverage_alerting INFO level
         assert health >= 0.8
         config = CoverageAlertConfig()
-        assert config.repo_minimum_threshold >= 75.0  # Coverage threshold aligns with flakiness health
+        assert (
+            config.repo_minimum_threshold >= 75.0
+        )  # Coverage threshold aligns with flakiness health
 
     def test_flaky_metrics_degraded_repository_alert_correlation(self) -> None:
         """Verify degraded health score triggers coverage alerting thresholds."""

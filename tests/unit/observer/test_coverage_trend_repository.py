@@ -1450,10 +1450,7 @@ class TestLargeDataHandling:
         repo = LocalCoverageTrendRepository(root=temp_storage_dir)
 
         now = datetime.now(tz=timezone.utc)
-        measurements = [
-            (now - timedelta(days=i), 80.0 + (i * 0.5))
-            for i in range(90)
-        ]
+        measurements = [(now - timedelta(days=i), 80.0 + (i * 0.5)) for i in range(90)]
 
         analysis = CoverageTrendAnalysis(
             metric_type="line",

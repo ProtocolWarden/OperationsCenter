@@ -41,8 +41,7 @@ class CoverageGapRule:
                         matched_rules=["coverage_gap_low_overall"],
                         confidence="medium",
                         evidence_lines=[
-                            f"Total test coverage is {pct}%, below the {threshold_pct}% "
-                            "threshold.",
+                            f"Total test coverage is {pct}%, below the {threshold_pct}% threshold.",
                             "Add tests for the most critical uncovered paths.",
                         ],
                         risk_class="quality",

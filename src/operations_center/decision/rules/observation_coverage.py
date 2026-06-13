@@ -31,8 +31,7 @@ class ObservationCoverageRule:
                     "the missing visibility."
                 )
                 evidence_line = (
-                    f"Signal '{signal}' unavailable for {consecutive} "
-                    "consecutive snapshots."
+                    f"Signal '{signal}' unavailable for {consecutive} consecutive snapshots."
                 )
                 candidates.append(
                     CandidateSpec(

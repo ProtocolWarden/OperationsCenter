@@ -1112,6 +1112,7 @@ class TestUtilityFunctions:
         assert "operator" in channels
         assert len(channels) == 1
 
+
 class TestCoverageConfigManagerMethods:
     """Tests for additional CoverageConfigManager methods."""
 
@@ -1300,8 +1301,7 @@ class TestCoverageConfigManagerMethods:
             is True
         )
         assert (
-            route.matches_alert(AlertType.BELOW_THRESHOLD, AlertSeverity.INFO, "src/other")
-            is False
+            route.matches_alert(AlertType.BELOW_THRESHOLD, AlertSeverity.INFO, "src/other") is False
         )
         assert route.matches_alert(AlertType.BELOW_THRESHOLD, AlertSeverity.INFO) is False
 
@@ -1363,18 +1363,12 @@ class TestCoverageConfigManagerMethods:
 
         class MockProvider1(CoverageConfigProvider):
             def load(self) -> dict:
-                return {
-                    "module_thresholds": {
-                        "src/observer": {"statement_coverage_minimum": 80.0}
-                    }
-                }
+                return {"module_thresholds": {"src/observer": {"statement_coverage_minimum": 80.0}}}
 
         class MockProvider2(CoverageConfigProvider):
             def load(self) -> dict:
                 return {
-                    "module_thresholds": {
-                        "src/custodian": {"statement_coverage_minimum": 85.0}
-                    }
+                    "module_thresholds": {"src/custodian": {"statement_coverage_minimum": 85.0}}
                 }
 
         composite = CompositeConfigProvider([MockProvider1(), MockProvider2()])
@@ -1409,9 +1403,7 @@ class TestAlertChannelRouteAdvanced:
             alert_types=["below_threshold"],
         )
 
-        assert not route.matches_alert(
-            AlertType.BELOW_THRESHOLD, AlertSeverity.INFO, "module"
-        )
+        assert not route.matches_alert(AlertType.BELOW_THRESHOLD, AlertSeverity.INFO, "module")
 
     def test_matches_alert_with_empty_filters(self) -> None:
         """Test that routes with empty filters match all alerts."""
@@ -1437,9 +1429,7 @@ class TestAlertChannelRouteAdvanced:
         )
 
         assert route.matches_alert(AlertType.BELOW_THRESHOLD, AlertSeverity.INFO)
-        assert not route.matches_alert(
-            AlertType.REGRESSION_DETECTED, AlertSeverity.INFO
-        )
+        assert not route.matches_alert(AlertType.REGRESSION_DETECTED, AlertSeverity.INFO)
 
     def test_matches_alert_with_severity_filter(self) -> None:
         """Test severity level filtering."""
@@ -1451,12 +1441,8 @@ class TestAlertChannelRouteAdvanced:
             enabled_modules=[],
         )
 
-        assert route.matches_alert(
-            AlertType.BELOW_THRESHOLD, AlertSeverity.CRITICAL
-        )
-        assert not route.matches_alert(
-            AlertType.BELOW_THRESHOLD, AlertSeverity.WARNING
-        )
+        assert route.matches_alert(AlertType.BELOW_THRESHOLD, AlertSeverity.CRITICAL)
+        assert not route.matches_alert(AlertType.BELOW_THRESHOLD, AlertSeverity.WARNING)
 
     def test_matches_alert_with_module_filter(self) -> None:
         """Test module filtering."""
@@ -1468,9 +1454,7 @@ class TestAlertChannelRouteAdvanced:
             enabled_modules=["src/observer", "src/custodian"],
         )
 
-        assert route.matches_alert(
-            AlertType.BELOW_THRESHOLD, AlertSeverity.INFO, "src/observer"
-        )
+        assert route.matches_alert(AlertType.BELOW_THRESHOLD, AlertSeverity.INFO, "src/observer")
         assert not route.matches_alert(
             AlertType.BELOW_THRESHOLD, AlertSeverity.INFO, "src/execution"
         )
@@ -1485,9 +1469,7 @@ class TestAlertChannelRouteAdvanced:
             enabled_modules=["src/observer"],
         )
 
-        assert not route.matches_alert(
-            AlertType.BELOW_THRESHOLD, AlertSeverity.INFO, None
-        )
+        assert not route.matches_alert(AlertType.BELOW_THRESHOLD, AlertSeverity.INFO, None)
 
     def test_matches_alert_combined_filters(self) -> None:
         """Test combined type, severity, and module filters."""
@@ -1517,9 +1499,7 @@ class TestAlertChannelConfigAdvanced:
         """Test routing when no routes are configured."""
         config = AlertChannelConfig(routes=[], default_channels=["operator"])
 
-        routes = config.get_routes_for_alert(
-            AlertType.BELOW_THRESHOLD, AlertSeverity.INFO
-        )
+        routes = config.get_routes_for_alert(AlertType.BELOW_THRESHOLD, AlertSeverity.INFO)
 
         assert routes == ["operator"]
 
@@ -1541,9 +1521,7 @@ class TestAlertChannelConfigAdvanced:
             default_channels=["operator"],
         )
 
-        routes = config.get_routes_for_alert(
-            AlertType.BELOW_THRESHOLD, AlertSeverity.INFO
-        )
+        routes = config.get_routes_for_alert(AlertType.BELOW_THRESHOLD, AlertSeverity.INFO)
 
         assert routes == ["slack", "email"]
 
@@ -1560,9 +1538,7 @@ class TestAlertChannelConfigAdvanced:
             default_channels=["operator", "email"],
         )
 
-        routes = config.get_routes_for_alert(
-            AlertType.BELOW_THRESHOLD, AlertSeverity.INFO
-        )
+        routes = config.get_routes_for_alert(AlertType.BELOW_THRESHOLD, AlertSeverity.INFO)
 
         assert routes == ["operator", "email"]
 
@@ -1644,9 +1620,7 @@ class TestCoverageConfigManagerExtended:
 
     def test_create_auto_discovery_with_existing_file(self) -> None:
         """Test auto-discovery when config file exists."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".yaml", delete=False, dir="."
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, dir=".") as f:
             yaml.dump({"repo_minimum_threshold": 82.0}, f)
             f.flush()
 
@@ -1679,9 +1653,7 @@ class TestCoverageConfigManagerExtended:
             try:
                 manager = CoverageConfigManager.create_with_yaml(f.name)
 
-                assert (
-                    manager.get_module_override("src/observer", "statement") == 80.0
-                )
+                assert manager.get_module_override("src/observer", "statement") == 80.0
                 assert manager.get_module_override("src/observer", "branch") == 70.0
                 assert manager.get_module_override("src/observer", "line") == 75.0
             finally:
@@ -1720,9 +1692,7 @@ class TestCoverageConfigManagerExtended:
 
                 assert manager.is_module_threshold_override_present("src/observer")
                 assert manager.is_module_threshold_override_present("src/custodian")
-                assert not manager.is_module_threshold_override_present(
-                    "src/execution"
-                )
+                assert not manager.is_module_threshold_override_present("src/execution")
             finally:
                 Path(f.name).unlink()
 

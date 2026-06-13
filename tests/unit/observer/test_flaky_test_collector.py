@@ -635,9 +635,7 @@ class TestFlakyTestCollectorAndCoverageAlertingIntegration:
         # Verify alert manager can be instantiated with coverage config
         CoverageAlertManager(alert_config)
 
-    def test_high_flakiness_below_coverage_threshold_triggers_alert(
-        self, tmp_path: Path
-    ) -> None:
+    def test_high_flakiness_below_coverage_threshold_triggers_alert(self, tmp_path: Path) -> None:
         """Verify high flakiness combined with low coverage triggers alerts."""
         from operations_center.observer.coverage_alerting import CoverageAlertConfig
 

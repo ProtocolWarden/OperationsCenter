@@ -507,4 +507,6 @@ class TestDependencyReportAndCoverageAlertingIntegration:
 
         assert signal.status == "available"
         elapsed_ms = timer.elapsed() * 1000
-        assert elapsed_ms < 75, f"Collection time with alerting overhead: {elapsed_ms:.2f}ms, expected <75ms"
+        assert elapsed_ms < 75, (
+            f"Collection time with alerting overhead: {elapsed_ms:.2f}ms, expected <75ms"
+        )

@@ -873,9 +873,7 @@ def _make_flaky_snapshot_helper(
 class TestSignalQueryAndCoverageAlertingIntegration:
     """Integration tests between signal queries and coverage alerting system."""
 
-    def test_coverage_change_rate_triggers_alert_conditions(
-        self, tmp_snapshot_root: Path
-    ) -> None:
+    def test_coverage_change_rate_triggers_alert_conditions(self, tmp_snapshot_root: Path) -> None:
         """Verify coverage change rates align with coverage alert thresholds."""
         from operations_center.observer.coverage_alerting import CoverageAlertConfig
 
@@ -1016,9 +1014,7 @@ class TestSignalQueryAndCoverageAlertingIntegration:
         # Composite condition: failing + low coverage + flaky = CRITICAL alert
         # This requires coordination between multiple alert types
 
-    def test_alert_deduplication_across_signal_types(
-        self, tmp_snapshot_root: Path
-    ) -> None:
+    def test_alert_deduplication_across_signal_types(self, tmp_snapshot_root: Path) -> None:
         """Verify coverage alerts deduplicate across related signals."""
         now = datetime.now(UTC)
 

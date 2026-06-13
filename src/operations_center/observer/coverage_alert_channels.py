@@ -429,9 +429,7 @@ Current Measurement: {alert.current_value:.1f}% {threshold_part}
 """
 
         if alert.affected_modules:
-            td_style_vt = (
-                'style="padding: 8px; border: 1px solid #ddd; vertical-align: top;"'
-            )
+            td_style_vt = 'style="padding: 8px; border: 1px solid #ddd; vertical-align: top;"'
             html_body += f"""<tr>
     <td {td_style_vt}><strong>Affected Modules</strong></td>
     <td {td_style}>

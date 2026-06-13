@@ -395,9 +395,7 @@ def compare_snapshots(current: CoverageSnapshot, previous: CoverageSnapshot) -> 
         "branch_delta": (
             current.overall_branch_coverage_pct - previous.overall_branch_coverage_pct
         ),
-        "line_delta": (
-            current.overall_line_coverage_pct - previous.overall_line_coverage_pct
-        ),
+        "line_delta": (current.overall_line_coverage_pct - previous.overall_line_coverage_pct),
     }
     return deltas
 

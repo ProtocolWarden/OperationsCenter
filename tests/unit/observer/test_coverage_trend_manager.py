@@ -943,9 +943,7 @@ class TestCoverageTrendManagerFactories:
 
     def test_create_local_with_custom_retention(self, tmp_path: Path) -> None:
         """Test creating local manager with custom retention."""
-        manager = CoverageTrendManager.create_local(
-            root=tmp_path, retention_days=60
-        )
+        manager = CoverageTrendManager.create_local(root=tmp_path, retention_days=60)
         assert manager is not None
 
     def test_create_s3_with_credentials(self) -> None:
@@ -1052,20 +1050,14 @@ class TestCoverageTrendManagerComprehensive:
         module_statement = manager._extract_metric_value(
             snapshot, "statement", "module", "src/test"
         )
-        module_branch = manager._extract_metric_value(
-            snapshot, "branch", "module", "src/test"
-        )
-        module_line = manager._extract_metric_value(
-            snapshot, "line", "module", "src/test"
-        )
+        module_branch = manager._extract_metric_value(snapshot, "branch", "module", "src/test")
+        module_line = manager._extract_metric_value(snapshot, "line", "module", "src/test")
 
         assert module_statement == 82.0
         assert module_branch == 76.0
         assert module_line == 84.0
 
-    def test_trend_analysis_with_varying_values(
-        self, manager: CoverageTrendManager
-    ) -> None:
+    def test_trend_analysis_with_varying_values(self, manager: CoverageTrendManager) -> None:
         """Test trend analysis with values that vary significantly."""
         base_time = datetime.now(tz=timezone.utc) - timedelta(days=5)
         # Create volatile coverage data
@@ -1124,9 +1116,7 @@ class TestCoverageTrendManagerComprehensive:
         for i in range(len(historical) - 1):
             assert historical[i][0] <= historical[i + 1][0]
 
-    def test_stability_score_calculation_stable(
-        self, manager: CoverageTrendManager
-    ) -> None:
+    def test_stability_score_calculation_stable(self, manager: CoverageTrendManager) -> None:
         """Test stability score for highly stable coverage."""
         base_time = datetime.now(tz=timezone.utc) - timedelta(days=4)
         # Create very stable data (all same value)
@@ -1224,9 +1214,7 @@ class TestCoverageTrendManagerComprehensive:
 
         assert analysis.days_of_decline > 0
 
-    def test_projected_value_none_with_stable_trend(
-        self, manager: CoverageTrendManager
-    ) -> None:
+    def test_projected_value_none_with_stable_trend(self, manager: CoverageTrendManager) -> None:
         """Test that projected value is None when trend is stable."""
         base_time = datetime.now(tz=timezone.utc) - timedelta(days=2)
         coverages = [85.0, 85.0, 85.0]
@@ -1281,9 +1269,7 @@ class TestCoverageTrendManagerComprehensive:
         file_branch = manager._extract_metric_value(
             snapshot, "branch", "file", "src/observer/main.py"
         )
-        file_line = manager._extract_metric_value(
-            snapshot, "line", "file", "src/observer/main.py"
-        )
+        file_line = manager._extract_metric_value(snapshot, "line", "file", "src/observer/main.py")
 
         assert file_statement == 90.0
         assert file_branch == 85.0
@@ -1366,9 +1352,7 @@ class TestCoverageTrendManagerComprehensive:
         critical_alerts = manager.list_alerts(severity="critical")
         assert len(critical_alerts) >= 3
 
-    def test_predict_future_coverage_bounds(
-        self, manager: CoverageTrendManager
-    ) -> None:
+    def test_predict_future_coverage_bounds(self, manager: CoverageTrendManager) -> None:
         """Test that future predictions stay within valid bounds."""
         base_time = datetime.now(tz=timezone.utc) - timedelta(days=5)
         coverages = [95.0, 96.0, 97.0, 98.0, 99.0, 100.0]
@@ -1392,9 +1376,7 @@ class TestCoverageTrendManagerComprehensive:
 
         assert 0.0 <= predicted <= 100.0
 
-    def test_predict_future_coverage_at_module_level(
-        self, manager: CoverageTrendManager
-    ) -> None:
+    def test_predict_future_coverage_at_module_level(self, manager: CoverageTrendManager) -> None:
         """Test future coverage prediction at module level."""
         base_time = datetime.now(tz=timezone.utc) - timedelta(days=4)
 
@@ -1455,9 +1437,7 @@ class TestCoverageTrendManagerComprehensive:
         assert isinstance(rate, float)
         assert rate < 0.0  # Should be negative (degrading)
 
-    def test_critical_modules_at_threshold(
-        self, manager: CoverageTrendManager
-    ) -> None:
+    def test_critical_modules_at_threshold(self, manager: CoverageTrendManager) -> None:
         """Test critical module detection at exact threshold."""
         snapshot = CoverageSnapshot(
             timestamp=datetime.now(tz=timezone.utc),
@@ -1527,9 +1507,7 @@ class TestCoverageTrendManagerComprehensive:
         should_escalate = manager.should_escalate_alert(analysis, alert_count=1)
         assert should_escalate is False  # Low frequency
 
-    def test_trend_analysis_boundary_zero_point_one(
-        self, manager: CoverageTrendManager
-    ) -> None:
+    def test_trend_analysis_boundary_zero_point_one(self, manager: CoverageTrendManager) -> None:
         """Test trend direction detection at 0.1% boundary."""
         base_time = datetime.now(tz=timezone.utc) - timedelta(days=1)
 
