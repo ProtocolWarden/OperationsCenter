@@ -1,3 +1,27 @@
+## 2026-06-13 — Stage 1: Fix .console/backlog.md to restore proper development log format (✅ COMPLETE)
+
+### Objective
+Remove 1,600+ lines of stage completion documentation from .console/backlog.md and restore proper development log format with brief, dated entries.
+
+### Work Completed
+- **Before**: 1,644 lines of detailed stage documentation duplicating content from .console/task.md
+- **After**: 45 lines of concise work inventory entries with proper backlog structure
+- **Changes**:
+  - Consolidated all campaigns (Coverage Alerting, Flaky Reporter, Snapshot Validation, Edge-Case Testing) into single-line summaries
+  - Structured as: In Progress → Recently Completed → Backlog/Future
+  - Removed duplicate stage entries (Stage 0, 1, 3, etc. documentation)
+  - Kept only essential metrics (lines of code, test counts, completion dates)
+
+### Format Restoration
+Per `.console/guidelines.md`:
+- `.console/task.md` — current objective and definition of done
+- `.console/log.md` — recent decisions, stop points, what changed and why
+- `.console/backlog.md` — brief work inventory entries with dates
+
+The backlog now properly documents "In Progress" work (PR review concerns), "Recently Completed" campaigns, and "Backlog/Future" items without duplicating task or log content.
+
+---
+
 ## 2026-06-13 — Watchdog: Add C29 exclusion for github_pr.py after Guard C expansion
 
 PR #277 (guard C) added ~43 lines to github_pr.py pushing it to 506 lines (limit 500). The file
