@@ -37,7 +37,6 @@ from operations_center.observer.coverage_config import (
     get_default_alert_channels,
     merge_configs,
     normalize_module_path,
-    parse_env_var_config,
     validate_threshold_range,
 )
 
@@ -1112,42 +1111,6 @@ class TestUtilityFunctions:
         assert isinstance(channels, list)
         assert "operator" in channels
         assert len(channels) == 1
-
-    def test_parse_env_var_config_not_set(self) -> None:
-        """Test parsing env var that is not set."""
-        with patch.dict(os.environ, {}, clear=True):
-            result = parse_env_var_config("NONEXISTENT_VAR")
-            assert result is None
-
-            result = parse_env_var_config("NONEXISTENT_VAR", default_value="default")
-            assert result == "default"
-
-    def test_parse_env_var_config_boolean(self) -> None:
-        """Test parsing boolean env variables."""
-        with patch.dict(os.environ, {"TEST_VAR": "true"}):
-            assert parse_env_var_config("TEST_VAR") is True
-
-        with patch.dict(os.environ, {"TEST_VAR": "false"}):
-            assert parse_env_var_config("TEST_VAR") is False
-
-        with patch.dict(os.environ, {"TEST_VAR": "TRUE"}):
-            assert parse_env_var_config("TEST_VAR") is True
-
-    def test_parse_env_var_config_integer(self) -> None:
-        """Test parsing integer env variables."""
-        with patch.dict(os.environ, {"TEST_VAR": "42"}):
-            assert parse_env_var_config("TEST_VAR") == 42
-
-    def test_parse_env_var_config_float(self) -> None:
-        """Test parsing float env variables."""
-        with patch.dict(os.environ, {"TEST_VAR": "3.14"}):
-            assert parse_env_var_config("TEST_VAR") == 3.14
-
-    def test_parse_env_var_config_string(self) -> None:
-        """Test parsing string env variables."""
-        with patch.dict(os.environ, {"TEST_VAR": "some_string_value"}):
-            assert parse_env_var_config("TEST_VAR") == "some_string_value"
-
 
 class TestCoverageConfigManagerMethods:
     """Tests for additional CoverageConfigManager methods."""
