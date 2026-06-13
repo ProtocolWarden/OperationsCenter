@@ -818,6 +818,9 @@ class TestDashboardProviderInitialization:
             timestamp=datetime.now(timezone.utc),
             run_id="test",
             source="test",
+            overall_statement_coverage_pct=85.0,
+            overall_branch_coverage_pct=80.0,
+            overall_line_coverage_pct=87.0,
         )
 
         provider = DashboardProvider(
