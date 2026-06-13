@@ -301,6 +301,49 @@ class GitHubPRClient:
                 pending.append(name)
         return pending
 
+    def get_completed_checks(
+        self,
+        owner: str,
+        repo: str,
+        pr_number: int,
+        *,
+        pr_data: dict | None = None,
+        ignored_checks: list[str] | None = None,
+    ) -> list[str]:
+        """Return names of checks in a terminal (``completed``) state for the PR head.
+
+        An EMPTY result means CI has not produced any result on the current head
+        yet — which happens in the window after a branch is pushed or auto-rebased,
+        before its checks register. In that window :meth:`get_failed_checks` and
+        :meth:`get_incomplete_checks` both return empty, so a gate that only asks
+        "nothing failed and nothing pending?" would declare green on a head that
+        has no CI at all. Callers gating a merge MUST additionally require this to
+        be non-empty so the green they merge on is the green of the *current* head.
+        """
+        if pr_data is None:
+            pr_data = self.get_pr(owner, repo, pr_number)
+        head_sha = (pr_data.get("head") or {}).get("sha", "")
+        if not head_sha:
+            return []
+        try:
+            check_runs = self.get_check_runs(owner, repo, head_sha)
+        except Exception:
+            return []
+        ignored = [s.lower() for s in (ignored_checks or [])]
+        latest: dict[str, dict] = {}
+        for cr in check_runs:
+            name = cr.get("name", "unknown")
+            if cr.get("id", 0) > latest.get(name, {}).get("id", 0):
+                latest[name] = cr
+        completed = []
+        for cr in latest.values():
+            if cr.get("status") == "completed":
+                name = cr.get("name", "unknown")
+                if ignored and any(pat in name.lower() for pat in ignored):
+                    continue
+                completed.append(name)
+        return completed
+
     def list_open_prs(self, owner: str, repo: str) -> list[dict]:
         resp = self._request(
             "GET",

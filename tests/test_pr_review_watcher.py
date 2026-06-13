@@ -71,6 +71,9 @@ def _make_gh(*, comment_id: int = 0) -> MagicMock:
     # Default: CI has settled (no checks still running). The premature-green gate
     # treats a non-empty result as "not green yet"; tests override as needed.
     gh.get_incomplete_checks.return_value = []
+    # Default: CI has reported on the current head (Guard C requires ≥1 completed
+    # check before declaring green); the "no CI on this head yet" path overrides [].
+    gh.get_completed_checks.return_value = ["Test (pytest)"]
     return gh
 
 
