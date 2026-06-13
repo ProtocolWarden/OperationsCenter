@@ -119,10 +119,12 @@ class CoverageSignalCollector:
             CoverageSignal with parsed data, or None if XML is invalid/unparseable
         """
         try:
-            tree: ET.ElementTree = ET.parse(path)
+            tree = ET.parse(path)
         except ET.ParseError:
             return None
-        root: ET.Element = tree.getroot()
+        root = tree.getroot()
+        if root is None:
+            return None
         rate_str: str | None = root.get("line-rate")
         if rate_str is None:
             return None
