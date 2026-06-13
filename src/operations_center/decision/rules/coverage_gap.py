@@ -25,6 +25,13 @@ class CoverageGapRule:
         for insight in insights:
             if insight.kind == "coverage_gap/low_overall":
                 pct = insight.evidence.get("total_coverage_pct", 0)
+                threshold_pct = insight.evidence.get("threshold_pct", 60)
+                summary_text = (
+                    f"Test coverage is at {pct}%, below the recommended threshold. "
+                    "Identify the most critical uncovered code paths and add targeted tests. "
+                    "Focus on business logic, error handling, and edge cases rather than "
+                    "trivial getters."
+                )
                 candidates.append(
                     CandidateSpec(
                         family="coverage_gap",
@@ -34,18 +41,15 @@ class CoverageGapRule:
                         matched_rules=["coverage_gap_low_overall"],
                         confidence="medium",
                         evidence_lines=[
-                            f"Total test coverage is {pct}%, below the {insight.evidence.get('threshold_pct', 60)}% threshold.",
+                            f"Total test coverage is {pct}%, below the {threshold_pct}% "
+                            "threshold.",
                             "Add tests for the most critical uncovered paths.",
                         ],
                         risk_class="quality",
                         expires_after_runs=5,
                         proposal_outline=ProposalOutline(
                             title_hint=f"Improve test coverage (currently {pct}%)",
-                            summary_hint=(
-                                f"Test coverage is at {pct}%, below the recommended threshold. "
-                                "Identify the most critical uncovered code paths and add targeted tests. "
-                                "Focus on business logic, error handling, and edge cases rather than trivial getters."
-                            ),
+                            summary_hint=summary_text,
                             labels_hint=["task-kind: improve", "source: proposer"],
                             source_family="coverage_gap",
                         ),
@@ -60,6 +64,12 @@ class CoverageGapRule:
                     ", ".join(str(f) for f in top_files[:3]) if top_files else "several files"
                 )
                 threshold = insight.evidence.get("threshold_pct", 80)
+                summary_text = (
+                    f"{count} file(s) have test coverage below {threshold}%. "
+                    f"Priority files: {files_str}. "
+                    "Add unit or integration tests for the uncovered branches in "
+                    "these files."
+                )
                 candidates.append(
                     CandidateSpec(
                         family="coverage_gap",
@@ -76,11 +86,7 @@ class CoverageGapRule:
                         expires_after_runs=5,
                         proposal_outline=ProposalOutline(
                             title_hint=f"Add tests for {count} under-covered file(s)",
-                            summary_hint=(
-                                f"{count} file(s) have test coverage below {threshold}%. "
-                                f"Priority files: {files_str}. "
-                                "Add unit or integration tests for the uncovered branches in these files."
-                            ),
+                            summary_hint=summary_text,
                             labels_hint=["task-kind: improve", "source: proposer"],
                             source_family="coverage_gap",
                         ),

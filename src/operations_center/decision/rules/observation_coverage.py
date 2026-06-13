@@ -25,6 +25,15 @@ class ObservationCoverageRule:
             ):
                 signal = str(insight.evidence.get("signal", insight.subject))
                 consecutive = int(insight.evidence.get("consecutive_snapshots", 0))
+                summary_text = (
+                    "Observer coverage shows this signal has remained unavailable "
+                    "across repeated runs. Create one bounded follow-up to restore "
+                    "the missing visibility."
+                )
+                evidence_line = (
+                    f"Signal '{signal}' unavailable for {consecutive} "
+                    "consecutive snapshots."
+                )
                 candidates.append(
                     CandidateSpec(
                         family="observation_coverage",
@@ -36,17 +45,12 @@ class ObservationCoverageRule:
                             "candidate_not_seen_in_cooldown_window",
                         ],
                         confidence="high" if consecutive >= 3 else "medium",
-                        evidence_lines=[
-                            f"Signal '{signal}' unavailable for {consecutive} consecutive snapshots.",
-                        ],
+                        evidence_lines=[evidence_line],
                         risk_class="logic",
                         expires_after_runs=5,
                         proposal_outline=ProposalOutline(
                             title_hint=f"Restore repeated missing {signal} coverage",
-                            summary_hint=(
-                                "Observer coverage shows this signal has remained unavailable across repeated runs. "
-                                "Create one bounded follow-up to restore the missing visibility."
-                            ),
+                            summary_hint=summary_text,
                             labels_hint=["task-kind: improve", "source: proposer"],
                             source_family="observation_coverage",
                         ),

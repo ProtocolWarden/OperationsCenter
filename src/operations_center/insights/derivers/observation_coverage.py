@@ -44,7 +44,8 @@ class ObservationCoverageDeriver:
             suffix = "persistent_unavailable" if consecutive >= 2 else "unavailable"
             first_seen = matching[-1].observed_at
             last_seen = matching[0].observed_at
-            # Use signal-level observed_at if available (for CheckSignal and other signals with optional observed_at)
+            # Use signal-level observed_at if available for signals with optional
+            # timestamps (e.g., CheckSignal)
             if signal == "test_signal" and matching[-1].signals.test_signal.observed_at:
                 first_seen = matching[-1].signals.test_signal.observed_at
             if signal == "test_signal" and matching[0].signals.test_signal.observed_at:
