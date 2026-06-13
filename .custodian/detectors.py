@@ -94,7 +94,7 @@ def _detect_r2_console_budget(ctx: AuditContext) -> DetectorResult:
 
         if path.stat().st_size > _CONSOLE_SIZE_LIMIT:
             samples.append(
-                f".console/{filename} exceeds 100KB budget ({path.stat().st_size} bytes)"
+                f".console/{filename} exceeds 200KB budget ({path.stat().st_size} bytes)"
             )
 
         try:
