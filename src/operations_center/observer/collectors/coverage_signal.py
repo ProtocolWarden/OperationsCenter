@@ -144,7 +144,10 @@ class CoverageSignalCollector:
 
         uncovered.sort(key=lambda u: u.coverage_pct)
         top: list[UncoveredFile] = uncovered[:_MAX_UNCOVERED_LISTED]
-        summary: str = f"{total_pct}% overall coverage; {len(uncovered)} file(s) below {_UNCOVERED_THRESHOLD_PCT}%"
+        summary: str = (
+            f"{total_pct}% overall coverage; {len(uncovered)} file(s) "
+            f"below {_UNCOVERED_THRESHOLD_PCT}%"
+        )
         return CoverageSignal(
             status="measured",
             total_coverage_pct=total_pct,
@@ -187,7 +190,8 @@ class CoverageSignalCollector:
     def _parse_html(self, path: Path) -> CoverageSignal | None:
         """Parse HTML coverage report (htmlcov/index.html).
 
-        Extracts overall coverage percentage from HTML title or body text matching percentage patterns.
+        Extracts overall coverage percentage from HTML title or body text
+        matching percentage patterns.
 
         Args:
             path: Path to htmlcov/index.html file
@@ -227,7 +231,9 @@ class CoverageSignalCollector:
         is_acceptable: bool = coverage_pct >= threshold_pct
         return is_acceptable
 
-    def _get_coverage_status(self, coverage_pct: float) -> Literal["excellent", "good", "fair", "poor"]:
+    def _get_coverage_status(
+        self, coverage_pct: float
+    ) -> Literal["excellent", "good", "fair", "poor"]:
         """Classify coverage level based on percentage.
 
         Args:
@@ -273,7 +279,9 @@ class CoverageSignalCollector:
             "fair": fair_count,
         }
 
-    def _get_coverage_improvement_suggestion(self, current_coverage: float, target_coverage: float = 80.0) -> str:
+    def _get_coverage_improvement_suggestion(
+        self, current_coverage: float, target_coverage: float = 80.0
+    ) -> str:
         """Generate suggestion for coverage improvement.
 
         Args:
