@@ -1,3 +1,12 @@
+## 2026-06-13 — fix(spec-hygiene): active.json projects only active campaigns (campaign GC)
+
+_rebuild_active_projection wrote every campaign — incl. complete/cancelled — to state/campaigns/
+active.json, which OperatorConsole's campaign pane reads. Terminal campaigns are history (their
+record lives in Plane) but accumulated forever in the projection (observed: 11 records, 10 terminal,
+0 truly active — cluttering the pane). Fix: skip non-active campaigns when rebuilding the projection.
++1 test. (A one-time prune of active.json doesn't stick — it's rebuilt each spec-hygiene cycle — so
+the projection filter IS the durable prune.)
+
 ## 2026-06-13 — fix(reviewer): gate merge on the full required-check set (guard D)
 
 #272 + Guard C close "merge on red/incomplete/no-checks CI", but a hole remained: a required check

@@ -147,6 +147,14 @@ def _rebuild_active_projection(
         else:
             status = "active"
 
+        # active.json is the ACTIVE projection (OperatorConsole's campaign pane
+        # reads it). Terminal campaigns (complete/cancelled) are history — their
+        # record lives in Plane — so they are not projected here. Without this the
+        # projection accumulates every finished campaign indefinitely, cluttering
+        # the status pane (observed: 11 records, 10 terminal, only 0 truly active).
+        if status != "active":
+            continue
+
         # Pull slug + spec_file + created_at from the parent issue when we can.
         parent = next(
             (i for i in issues if str(i.get("name", "")).startswith("[Campaign]")),
