@@ -1,3 +1,10 @@
+---
+title: "Coverage Threshold Alerting System: User Guide"
+status: production-ready
+version: "1.0"
+date: "2026-06-12"
+---
+
 # Coverage Threshold Alerting System: User Guide
 
 **Version**: 1.0  

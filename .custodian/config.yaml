@@ -509,6 +509,20 @@ audit:
       # self-contained; splitting by channel would scatter the shared AlertResult
       # and factory in ways that add indirection without clarity.
       - src/operations_center/observer/alert_channels.py
+      # coverage_alert_channels.py implements all coverage-specific alert channel
+      # backends (Slack, Email, GitHub, OperatorLog) plus router — same rationale
+      # as alert_channels.py above.
+      - src/operations_center/observer/coverage_alert_channels.py
+      # coverage_trend_repository.py implements 3 distinct backend adapters (local,
+      # S3, HTTP) behind a unified abstract interface — same rationale as
+      # snapshot_repository.py above.
+      - src/operations_center/observer/coverage_trend_repository.py
+      # coverage_config.py is the canonical coverage alerting configuration registry
+      # — all coverage thresholds and channel config live in one module by design.
+      - src/operations_center/observer/coverage_config.py
+      # models.py consolidates coverage-domain Pydantic models (snapshot, module,
+      # file, trend, alert) — single-responsibility, cannot cleanly split.
+      - src/operations_center/observer/models.py
     C11:
       # Agent-spawning entrypoints: board_worker, intake, pr_review_watcher invoke
       # the coding backend (team_executor, aider, etc.) which runs for an unbounded
@@ -705,6 +719,14 @@ audit:
     # ADR 0002 backend card axis vocabulary (orchestration / mechanism labels).
     - local_subprocess
     - single_agent
+    # Coverage alerting design doc references — config keys, threshold names,
+    # and tool names that are not Python def/class names. K1/OC8 false positives.
+    - branch_minimum
+    - istanbul
+    - minimum_threshold_pct
+    - module_critical_gap
+    - regression_detected
+    - trend_degrading
 
   # F3-exempt field names: schema/documentation fields never accessed by dot
   # notation because they're serialized to JSON and consumed by external readers,
@@ -724,6 +746,12 @@ audit:
     # TestSignalQuery readers via model_validate_json(), not attribute access.
     - skip_count
     - xfailed_count
+    # CoverageAlertConfig fields — consumed via config YAML loading and
+    # model_dump(); never accessed as dot-notation attributes at callsites.
+    - alert_channels
+    - regression_30day_threshold_pct
+    - regression_7day_threshold_pct
+    - trend_degradation_velocity_pct
 
   # Plugin-defined audit config keys — suppresses unknown-key warnings in doctor.
   plugin_audit_keys:
@@ -786,6 +814,15 @@ doc_conventions:
     - docs/specs/scene-timing-audit-test-hardening.md
     # Auto-generated spec-author queue-drain task docs — not linked from parent index by design
     - docs/specs/queue-drain-*.md
+    # Coverage alerting documentation suite (PR #275) — supplementary reference
+    # and design docs, not nav-linked from the main docs index by design
+    - docs/design/COVERAGE_THRESHOLD_ALERTING_USER_GUIDE.md
+    - docs/design/STAGE0_COVERAGE_THRESHOLD_ALERTING_SYSTEM.md
+    - docs/guides/COVERAGE_ALERTING_CONFIGURATION.md
+    - docs/guides/COVERAGE_ALERTING_INTEGRATION.md
+    - docs/guides/COVERAGE_ALERTING_TROUBLESHOOTING.md
+    - docs/guides/COVERAGE_ALERTING_USAGE.md
+    - docs/reference/COVERAGE_ALERTING_API_REFERENCE.md
 
 architecture:
   layers:
