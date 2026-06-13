@@ -1,3 +1,61 @@
+## 2026-06-12 — Stage 6: Implement Coverage Threshold Configuration System with Alert Routing (✅ COMPLETE - REVISED)
+
+### Objective
+Implement a comprehensive configuration system for coverage thresholds with full alert routing support that specifies which channels receive which alert types. Supports multiple sources (YAML, environment variables, defaults) with validation, precedence handling, route resolution, and seamless integration with CoverageAlertConfig and alert channel infrastructure.
+
+### Revised Implementation (Alert Routing Addition)
+
+**NEW: AlertChannelRoute Class** (32 new lines)
+- Route configuration dataclass with Pydantic validation
+- Fields: channel_name, enabled, alert_types, severity_levels, enabled_modules
+- `matches_alert(alert_type, severity, module)` method with intelligent matching
+- Support for filtering by:
+  - Alert type (empty list = all types)
+  - Severity level (empty list = all levels)  
+  - Module (empty list = all modules)
+- Disabled route support: enabled=False always returns False
+
+**NEW: AlertChannelConfig Class** (35 new lines)
+- Configuration container for multiple AlertChannelRoute instances
+- Fields: routes (list of routes), default_channels (fallback list)
+- `get_routes_for_alert(alert_type, severity, module)` method
+- Route resolution logic: First matching route wins, falls back to defaults
+- Support for complex filtering combinations (type + severity + module)
+
+**NEW: CoverageConfigManager Extensions**
+- Added `get_alert_channel_config()` factory method
+- Returns AlertChannelConfig instance from loaded configuration
+- Configuration caching and reload support
+- Error handling for invalid alert channel configurations
+
+**NEW: YAML Configuration**
+- Updated .console/coverage-config.yaml with alert_channels section (50 lines)
+- Example routing rules for slack, email, github, operator channels
+- Demonstrates:
+  - Severity-based routing (critical/emergency → PagerDuty)
+  - Alert-type filtering (regression_detected → email)
+  - Module-specific routing
+  - Default channel fallback
+
+**NEW: Comprehensive Test Suite** (40+ new tests, 360 lines)
+- TestAlertChannelRoute: 8 tests covering route matching
+  - Basic initialization, type matching, severity filtering
+  - Module filtering, disabled route handling, combined criteria
+- TestAlertChannelConfig: 7 tests covering route resolution
+  - Empty routes fallback, single matching route
+  - Multiple matching routes (first-match-wins)
+  - Disabled route skipping, severity-based routing
+- TestCoverageConfigManagerAlertChannels: 5 tests covering manager integration
+  - Loading from YAML, caching, reload functionality
+  - Invalid configuration error handling
+
+**Module Exports**
+- Added AlertChannelRoute and AlertChannelConfig to:
+  - coverage_config.py __all__ list
+  - observer/__init__.py imports and __all__ list (11 total new exports)
+
+### Original Implementation Details
+
 ## 2026-06-12 — Stage 6: Implement Coverage Threshold Configuration System (✅ COMPLETE)
 
 ### Objective
