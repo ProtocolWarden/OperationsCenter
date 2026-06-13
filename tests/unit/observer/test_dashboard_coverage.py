@@ -664,6 +664,8 @@ class TestDashboardCoveragePanels:
             run_id="test",
             source="coverage.py",
             overall_statement_coverage_pct=80.0,
+            overall_branch_coverage_pct=78.0,
+            overall_line_coverage_pct=81.0,
             module_coverages=[
                 ModuleCoverage(
                     module_path="src/healthy",
