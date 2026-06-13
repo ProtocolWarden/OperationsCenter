@@ -1,3 +1,11 @@
+## 2026-06-13 — Watchdog: Fix R2 integration test and fixture for 200KB threshold
+
+Commit 3dbd6823 (prior cycle) raised the R2 budget limit from 100→200KB but did not
+update the integration test assertion (still checked "100KB") or expand the fixture
+(still 103KB, below new 200KB threshold). This caused 2 CI failures on PR #275.
+Fixed: fixture padded to 221KB, integration test updated to check "200KB", unused
+`from typing import Any` removed from test_coverage_models.py (ruff F401).
+
 ## 2026-06-13 — Stage 6: Fix Documentation Contradictions and Update Status ✅ COMPLETE
 
 ### Objective

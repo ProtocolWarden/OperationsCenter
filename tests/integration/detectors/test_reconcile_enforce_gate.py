@@ -160,8 +160,8 @@ def test_r2_integration_oversized_task_md(r2_oversized_task_md: Path) -> None:
 
     assert result.count >= 1, "Should detect at least one R2 violation: oversized file"
     # Find the sample about task.md size
-    size_violation = [s for s in result.samples if "task.md" in s and "100KB" in s]
-    assert len(size_violation) > 0, "Should have error about task.md exceeding 100KB budget"
+    size_violation = [s for s in result.samples if "task.md" in s and "200KB" in s]
+    assert len(size_violation) > 0, "Should have error about task.md exceeding 200KB budget"
 
 
 def test_r2_integration_missing_task_section(r2_missing_task_section: Path) -> None:
