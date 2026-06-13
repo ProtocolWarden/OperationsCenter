@@ -1,3 +1,9 @@
+## 2026-06-13 — Watchdog: Add C29 exclusion for github_pr.py after Guard C expansion
+
+PR #277 (guard C) added ~43 lines to github_pr.py pushing it to 506 lines (limit 500). The file
+is the canonical GitHub API adapter — splitting by operation type would scatter the shared client.
+Added C29 exclusion with rationale. Also required to unblock PR #279 push.
+
 ## 2026-06-13 — feat(custodian): OC13 — test re-implements a metric inline without calling production (guard B)
 
 New LOW custodian detector flagging a test that computes a metric formula inline (math.log/log2/log10

@@ -504,6 +504,11 @@ audit:
       # health, log, and flaky-test panels in one cohesive module — splitting by
       # panel type would fragment the shared snapshot generation and helper logic.
       - src/operations_center/observer/dashboard.py
+      # github_pr.py is the canonical GitHub API adapter — all PR status checks,
+      # check runs, review calls, and merge operations in one cohesive module.
+      # Guard C (require ≥1 completed check) pushed it past 500 lines; splitting
+      # by operation type would scatter the shared client and pagination helpers.
+      - src/operations_center/adapters/github_pr.py
       # alert_channels.py implements all alert channel backends (Slack, Email,
       # GitHub, Plane, OperatorLog) plus the factory — each channel class is
       # self-contained; splitting by channel would scatter the shared AlertResult
