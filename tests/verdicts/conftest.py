@@ -275,6 +275,9 @@ def mock_github_client() -> MagicMock:
     # Default: CI has settled (no checks still running). Tests exercising the
     # "CI still in progress" path override this with a non-empty list.
     gh.get_incomplete_checks.return_value = []
+    # Default: CI has reported on the current head (≥1 completed check). Tests
+    # exercising the "no CI on this head yet" path override with an empty list.
+    gh.get_completed_checks.return_value = ["Test (pytest)"]
     return gh
 
 

@@ -131,6 +131,52 @@ class TestCIGreenGateValidation:
         state_after = load_pr_state(state_path)
         assert state_after["ci_wait_cycles"] == 1
 
+    def test_ci_with_no_checks_on_head_defers(
+        self,
+        tmp_path: Path,
+        audit_verdict_builder: AuditVerdictBuilder,
+    ):
+        """Guard C: no failed and no pending, but ZERO completed checks on the head
+        → defer, do NOT declare green.
+
+        This is the window right after a push or auto-rebase, before CI registers
+        on the new head: get_failed_checks and get_incomplete_checks both return []
+        for a head with no check runs, so a gate that only asks "nothing failed,
+        nothing pending?" would merge on a head with no CI at all (a stale
+        pre-rebase green carrying straight through).
+        """
+        settings = mock_settings()
+        gh = mock_github_client()
+
+        state = create_pr_state(
+            repo_key="TestRepo",
+            pr_number=42,
+            phase="self_review",
+            self_review_loops=0,
+        )
+        state_path = save_pr_state(tmp_path, state)
+
+        gh.get_failed_checks.return_value = []
+        gh.get_incomplete_checks.return_value = []
+        gh.get_completed_checks.return_value = []  # CI has not reported on this head
+
+        with patch.object(watcher, "_run_pipeline") as mock_pipeline:
+            watcher._phase1(
+                state,
+                state_path,
+                {"number": 42, "title": "Test PR", "draft": False, "head": {"ref": "goal/42"}},
+                gh,
+                "owner",
+                "TestRepo",
+                tmp_path,
+                tmp_path / "cfg.yaml",
+                settings,
+            )
+
+        mock_pipeline.assert_not_called()
+        gh.merge_pr.assert_not_called()
+        assert load_pr_state(state_path)["ci_wait_cycles"] == 1
+
     def test_ci_red_then_green_allows_merge_after_fix(
         self,
         tmp_path: Path,

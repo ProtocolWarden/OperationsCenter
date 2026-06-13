@@ -381,6 +381,32 @@ def test_get_incomplete_checks_honors_ignored_and_latest_run(client):
     assert out == []
 
 
+def test_get_completed_checks_lists_terminal_runs(client):
+    runs = [
+        {"id": 1, "name": "lint", "status": "completed", "conclusion": "success"},
+        {"id": 2, "name": "Test (pytest)", "status": "in_progress", "conclusion": None},
+    ]
+    with mock.patch.object(client, "get_check_runs", return_value=runs):
+        out = client.get_completed_checks("o", "r", 1, pr_data={"head": {"sha": "x"}})
+    assert out == ["lint"]
+
+
+def test_get_completed_checks_empty_when_no_runs(client):
+    # The Guard C window: head pushed/rebased, no check runs registered yet.
+    with mock.patch.object(client, "get_check_runs", return_value=[]):
+        out = client.get_completed_checks("o", "r", 1, pr_data={"head": {"sha": "x"}})
+    assert out == []
+
+
+def test_get_completed_checks_honors_ignored(client):
+    runs = [{"id": 1, "name": "Snapshot validation", "status": "completed", "conclusion": "success"}]
+    with mock.patch.object(client, "get_check_runs", return_value=runs):
+        out = client.get_completed_checks(
+            "o", "r", 1, pr_data={"head": {"sha": "x"}}, ignored_checks=["snapshot"]
+        )
+    assert out == []
+
+
 def test_get_incomplete_checks_no_head_sha(client):
     assert client.get_incomplete_checks("o", "r", 1, pr_data={"head": {}}) == []
 
