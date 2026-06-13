@@ -8,7 +8,16 @@ from operations_center.observer.alert_channels import (
     GitHubChannel,
     SlackChannel,
 )
+from operations_center.observer.collectors.coverage_collector import CoverageCollector
 from operations_center.observer.collectors.flaky_test_collector import FlakyTestCollector
+from operations_center.observer.coverage_models import (
+    CoverageAlert,
+    CoverageMetric,
+    CoverageSnapshot,
+    CoverageTrendAnalysis,
+    FileCoverage,
+    ModuleCoverage,
+)
 from operations_center.observer.dashboard import DashboardProvider, DashboardSnapshot
 from operations_center.observer.flaky_test_aggregator import FlakyTestAggregator
 from operations_center.observer.flaky_test_alert_config import (
@@ -66,9 +75,15 @@ __all__ = [
     "AlertChannelResult",
     "AlertSeverity",
     "AlertThreshold",
+    "CoverageAlert",
+    "CoverageCollector",
+    "CoverageMetric",
+    "CoverageSnapshot",
+    "CoverageTrendAnalysis",
     "DashboardProvider",
     "DashboardSnapshot",
     "EmailChannel",
+    "FileCoverage",
     "FlakyTestAggregationReport",
     "FlakyTestAggregator",
     "FlakyTestAlert",
@@ -88,6 +103,7 @@ __all__ = [
     "HTTPSnapshotRepository",
     "LocalSnapshotRepository",
     "MetricsCollector",
+    "ModuleCoverage",
     "ObservabilityService",
     "ObserverContext",
     "RepoObserverService",

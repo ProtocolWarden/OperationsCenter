@@ -6,8 +6,10 @@ This module contains collector implementations that gather signals from
 various sources for integration into repository observation snapshots.
 """
 
+from operations_center.observer.collectors.coverage_collector import CoverageCollector
 from operations_center.observer.collectors.flaky_test_collector import FlakyTestCollector
 
 __all__ = [
+    "CoverageCollector",
     "FlakyTestCollector",
 ]
