@@ -139,15 +139,26 @@ class FlakyTestReporter:
         duration_stability = flaky_metrics.duration_stability(durations)
 
         last_failure_reason = ""
+        last_assertion_message = ""
         for r in reversed(runs):
             if r.outcome == TestOutcome.FAILED and r.exception_type:
                 last_failure_reason = f"{r.exception_type}: {r.exception_message}"[:100]
+                if not last_assertion_message and r.assertion_message:
+                    last_assertion_message = r.assertion_message
+                break
+
+        test_name = ""
+        for r in runs:
+            if r.test_name:
+                test_name = r.test_name
                 break
 
         return FlakyTestMetric(
             nodeid=nodeid,
             failure_rate=failure_rate,
             run_count=run_count,
+            test_name=test_name,
+            assertion_message=last_assertion_message,
             retry_success_count=retry_success_count,
             duration_mean=duration_mean,
             duration_variance=duration_variance,

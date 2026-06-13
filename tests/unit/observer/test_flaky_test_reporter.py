@@ -903,3 +903,484 @@ class TestEdgeCasesAndBoundaries:
         assert data["min_run_count"] == 5
         assert data["historical_window_days"] == 60
         assert data["storage_root"] == "/tmp/metrics"
+
+
+class TestTestNameExtraction:
+    """Tests for test_name extraction in FlakyTestResult and FlakyTestMetric."""
+
+    def test_result_with_test_name(self) -> None:
+        result = FlakyTestResult(
+            nodeid="tests/unit/test_foo.py::test_method",
+            outcome="passed",
+            duration=1.0,
+            test_name="test_method",
+        )
+        assert result.test_name == "test_method"
+        data = result.to_dict()
+        assert data["test_name"] == "test_method"
+
+    def test_metric_with_test_name(self) -> None:
+        metric = FlakyTestMetric(
+            nodeid="tests/unit/test_foo.py::TestClass::test_method",
+            failure_rate=0.5,
+            run_count=2,
+            test_name="test_method",
+        )
+        assert metric.test_name == "test_method"
+        data = metric.to_dict()
+        assert data["test_name"] == "test_method"
+
+    def test_metric_extracts_test_name_from_runs(self) -> None:
+        reporter = FlakyTestReporter()
+        runs = [
+            FlakyTestResult(
+                nodeid="tests/unit/test_foo.py::test_method",
+                outcome="passed",
+                duration=1.0,
+                test_name="test_method",
+            ),
+            FlakyTestResult(
+                nodeid="tests/unit/test_foo.py::test_method",
+                outcome="failed",
+                duration=1.5,
+                test_name="test_method",
+            ),
+        ]
+        metric = reporter._analyze_test_runs("tests/unit/test_foo.py::test_method", runs)
+        assert metric.test_name == "test_method"
+
+    def test_metric_uses_first_test_name(self) -> None:
+        reporter = FlakyTestReporter()
+        runs = [
+            FlakyTestResult(
+                nodeid="tests/unit/test_foo.py::test_method",
+                outcome="passed",
+                duration=1.0,
+                test_name="test_method",
+            ),
+            FlakyTestResult(
+                nodeid="tests/unit/test_foo.py::test_method",
+                outcome="failed",
+                duration=1.5,
+                test_name="test_method",
+            ),
+        ]
+        metric = reporter._analyze_test_runs("tests/unit/test_foo.py::test_method", runs)
+        assert metric.test_name == "test_method"
+
+    def test_metric_handles_missing_test_name(self) -> None:
+        reporter = FlakyTestReporter()
+        runs = [
+            FlakyTestResult(
+                nodeid="tests/unit/test_foo.py::test_method",
+                outcome="passed",
+                duration=1.0,
+                test_name="",
+            ),
+            FlakyTestResult(
+                nodeid="tests/unit/test_foo.py::test_method",
+                outcome="failed",
+                duration=1.5,
+                test_name="",
+            ),
+        ]
+        metric = reporter._analyze_test_runs("tests/unit/test_foo.py::test_method", runs)
+        assert metric.test_name == ""
+
+    def test_result_serialization_includes_test_name(self) -> None:
+        result = FlakyTestResult(
+            nodeid="tests/unit/test_foo.py::test_method",
+            outcome="failed",
+            duration=1.0,
+            test_name="test_method",
+            exception_type="AssertionError",
+            exception_message="Expected 5 but got 3",
+        )
+        data = result.to_dict()
+        assert data["test_name"] == "test_method"
+        assert data["exception_type"] == "AssertionError"
+
+
+class TestAssertionMessageExtraction:
+    """Tests for assertion_message extraction in FlakyTestResult and FlakyTestMetric."""
+
+    def test_result_with_assertion_message(self) -> None:
+        result = FlakyTestResult(
+            nodeid="tests/unit/test_foo.py::test_method",
+            outcome="failed",
+            duration=1.0,
+            assertion_message="Expected 5 but got 3",
+        )
+        assert result.assertion_message == "Expected 5 but got 3"
+        data = result.to_dict()
+        assert data["assertion_message"] == "Expected 5 but got 3"
+
+    def test_metric_with_assertion_message(self) -> None:
+        metric = FlakyTestMetric(
+            nodeid="tests/unit/test_foo.py::TestClass::test_method",
+            failure_rate=0.5,
+            run_count=2,
+            assertion_message="Expected True but got False",
+        )
+        assert metric.assertion_message == "Expected True but got False"
+        data = metric.to_dict()
+        assert data["assertion_message"] == "Expected True but got False"
+
+    def test_metric_extracts_assertion_message_from_failure(self) -> None:
+        reporter = FlakyTestReporter()
+        runs = [
+            FlakyTestResult(
+                nodeid="tests/unit/test_foo.py::test_method",
+                outcome="passed",
+                duration=1.0,
+                assertion_message="",
+            ),
+            FlakyTestResult(
+                nodeid="tests/unit/test_foo.py::test_method",
+                outcome="failed",
+                duration=1.5,
+                assertion_message="Expected 5 but got 3",
+                exception_type="AssertionError",
+            ),
+        ]
+        metric = reporter._analyze_test_runs("tests/unit/test_foo.py::test_method", runs)
+        assert metric.assertion_message == "Expected 5 but got 3"
+
+    def test_metric_uses_last_failure_assertion_message(self) -> None:
+        reporter = FlakyTestReporter()
+        runs = [
+            FlakyTestResult(
+                nodeid="tests/unit/test_foo.py::test_method",
+                outcome="failed",
+                duration=1.0,
+                assertion_message="First failure message",
+                exception_type="AssertionError",
+            ),
+            FlakyTestResult(
+                nodeid="tests/unit/test_foo.py::test_method",
+                outcome="passed",
+                duration=1.5,
+                assertion_message="",
+            ),
+            FlakyTestResult(
+                nodeid="tests/unit/test_foo.py::test_method",
+                outcome="failed",
+                duration=1.2,
+                assertion_message="Second failure message",
+                exception_type="AssertionError",
+            ),
+        ]
+        metric = reporter._analyze_test_runs("tests/unit/test_foo.py::test_method", runs)
+        assert metric.assertion_message == "Second failure message"
+
+    def test_metric_handles_missing_assertion_message(self) -> None:
+        reporter = FlakyTestReporter()
+        runs = [
+            FlakyTestResult(
+                nodeid="tests/unit/test_foo.py::test_method",
+                outcome="passed",
+                duration=1.0,
+                assertion_message="",
+            ),
+            FlakyTestResult(
+                nodeid="tests/unit/test_foo.py::test_method",
+                outcome="failed",
+                duration=1.5,
+                assertion_message="",
+                exception_type="ValueError",
+            ),
+        ]
+        metric = reporter._analyze_test_runs("tests/unit/test_foo.py::test_method", runs)
+        assert metric.assertion_message == ""
+
+    def test_result_serialization_includes_assertion_message(self) -> None:
+        result = FlakyTestResult(
+            nodeid="tests/unit/test_foo.py::test_method",
+            outcome="failed",
+            duration=1.0,
+            assertion_message="Expected 5 but got 3",
+        )
+        data = result.to_dict()
+        assert data["assertion_message"] == "Expected 5 but got 3"
+
+
+class TestStage4Serialization:
+    """Stage 4: Comprehensive tests for serialization and persistence of new fields.
+
+    Validates that test_name and assertion_message fields are properly serialized
+    in JSON/JSONL output and persisted across different storage backends.
+    """
+
+    def test_metric_serialization_includes_all_new_fields(self) -> None:
+        """Verify FlakyTestMetric.to_dict() includes test_name and assertion_message."""
+        metric = FlakyTestMetric(
+            nodeid="tests/unit/test_foo.py::TestClass::test_method",
+            failure_rate=0.5,
+            run_count=2,
+            test_name="test_method",
+            assertion_message="Expected True but got False",
+        )
+        data = metric.to_dict()
+        assert "test_name" in data
+        assert "assertion_message" in data
+        assert data["test_name"] == "test_method"
+        assert data["assertion_message"] == "Expected True but got False"
+
+    def test_result_serialization_includes_all_new_fields(self) -> None:
+        """Verify FlakyTestResult.to_dict() includes test_name and assertion_message."""
+        result = FlakyTestResult(
+            nodeid="tests/unit/test_foo.py::TestClass::test_method",
+            outcome="failed",
+            duration=1.5,
+            test_name="test_method",
+            assertion_message="Expected value == 5 but got 3",
+        )
+        data = result.to_dict()
+        assert "test_name" in data
+        assert "assertion_message" in data
+        assert data["test_name"] == "test_method"
+        assert data["assertion_message"] == "Expected value == 5 but got 3"
+
+    def test_session_report_includes_metric_fields_in_serialization(self, tmp_path: Path) -> None:
+        """Verify FlakyTestSessionReport serialization includes new fields."""
+        metric = FlakyTestMetric(
+            nodeid="tests/unit/test_foo.py::test_method",
+            failure_rate=0.5,
+            run_count=2,
+            test_name="test_method",
+            assertion_message="Expected 5 but got 3",
+        )
+        report = FlakyTestSessionReport(
+            session_id="test-session",
+            timestamp=datetime.now(UTC),
+            run_count=1,
+            total_tests=1,
+            flaky_candidates=[metric],
+        )
+        data = report.to_dict()
+        assert len(data["flaky_candidates"]) == 1
+        flaky_data = data["flaky_candidates"][0]
+        assert "test_name" in flaky_data
+        assert "assertion_message" in flaky_data
+        assert flaky_data["test_name"] == "test_method"
+        assert flaky_data["assertion_message"] == "Expected 5 but got 3"
+
+    def test_save_test_results_preserves_new_fields_in_jsonl(self, tmp_path: Path) -> None:
+        """Verify save_test_results() includes new fields in JSONL output."""
+        reporter = FlakyTestReporter.create_local(tmp_path)
+        result1 = FlakyTestResult(
+            nodeid="tests/unit/test_foo.py::test_method1",
+            outcome="passed",
+            duration=1.0,
+            test_name="test_method1",
+        )
+        result2 = FlakyTestResult(
+            nodeid="tests/unit/test_foo.py::test_method2",
+            outcome="failed",
+            duration=1.5,
+            test_name="test_method2",
+            assertion_message="Expected 10 but got 5",
+        )
+        reporter.track_test(result1)
+        reporter.track_test(result2)
+
+        path = reporter.save_test_results()
+        assert path is not None
+        assert path.exists()
+
+        # Read and verify JSONL content
+        lines = path.read_text().strip().split("\n")
+        assert len(lines) == 2
+
+        data1 = json.loads(lines[0])
+        assert data1["test_name"] == "test_method1"
+        assert "assertion_message" in data1
+
+        data2 = json.loads(lines[1])
+        assert data2["test_name"] == "test_method2"
+        assert data2["assertion_message"] == "Expected 10 but got 5"
+
+    def test_save_session_report_preserves_new_fields_in_json(self, tmp_path: Path) -> None:
+        """Verify save_session_report() includes new fields in JSON output."""
+        reporter = FlakyTestReporter.create_local(tmp_path)
+        metric = FlakyTestMetric(
+            nodeid="tests/unit/test_foo.py::TestClass::test_method",
+            failure_rate=0.5,
+            run_count=4,
+            test_name="test_method",
+            assertion_message="Expected status == OK but got ERROR",
+        )
+        report = FlakyTestSessionReport(
+            session_id="test-session-001",
+            timestamp=datetime.now(UTC),
+            run_count=4,
+            total_tests=1,
+            flaky_candidates=[metric],
+        )
+
+        path = reporter.save_session_report(report)
+        assert path is not None
+        assert path.exists()
+
+        # Read and verify JSON content
+        data = json.loads(path.read_text())
+        assert data["session"] == "test-session-001"
+        assert len(data["flaky_candidates"]) == 1
+
+        flaky_data = data["flaky_candidates"][0]
+        assert flaky_data["test_name"] == "test_method"
+        assert flaky_data["assertion_message"] == "Expected status == OK but got ERROR"
+
+    def test_backward_compatibility_empty_new_fields(self) -> None:
+        """Verify backward compatibility when new fields are not provided."""
+        # Old code that doesn't set the new fields
+        metric = FlakyTestMetric(
+            nodeid="tests/unit/test_foo.py::test_method",
+            failure_rate=0.3,
+            run_count=3,
+        )
+        assert metric.test_name == ""
+        assert metric.assertion_message == ""
+
+        data = metric.to_dict()
+        assert data["test_name"] == ""
+        assert data["assertion_message"] == ""
+
+    def test_backward_compatibility_result_serialization(self) -> None:
+        """Verify FlakyTestResult backward compatibility with missing fields."""
+        result = FlakyTestResult(
+            nodeid="tests/unit/test_foo.py::test_method",
+            outcome="passed",
+            duration=1.0,
+        )
+        assert result.test_name == ""
+        assert result.assertion_message == ""
+
+        data = result.to_dict()
+        assert data["test_name"] == ""
+        assert data["assertion_message"] == ""
+
+    def test_persistence_and_retrieval_roundtrip(self, tmp_path: Path) -> None:
+        """Verify new fields survive serialization roundtrip (write and read)."""
+        reporter = FlakyTestReporter.create_local(tmp_path)
+
+        # Create result with new fields populated
+        original_result = FlakyTestResult(
+            nodeid="tests/unit/test_foo.py::test_method",
+            outcome="failed",
+            duration=2.5,
+            test_name="test_method",
+            assertion_message="Expected kwargs={'a': 1} but got kwargs={'a': 2}",
+            exception_type="AssertionError",
+            exception_message="Assertion failed",
+        )
+
+        reporter.track_test(original_result)
+        path = reporter.save_test_results()
+
+        # Read back from file
+        lines = path.read_text().strip().split("\n")
+        retrieved_data = json.loads(lines[0])
+
+        # Verify fields are preserved
+        assert retrieved_data["nodeid"] == "tests/unit/test_foo.py::test_method"
+        assert retrieved_data["test_name"] == "test_method"
+        assert (
+            retrieved_data["assertion_message"]
+            == "Expected kwargs={'a': 1} but got kwargs={'a': 2}"
+        )
+        assert retrieved_data["exception_type"] == "AssertionError"
+        assert retrieved_data["duration"] == 2.5
+
+    def test_local_storage_backend_persistence(self, tmp_path: Path) -> None:
+        """Verify new fields are persisted with local file storage backend."""
+        reporter = FlakyTestReporter.create_local(tmp_path)
+
+        results = [
+            FlakyTestResult(
+                nodeid=f"tests/unit/test_{i}.py::test_{i}",
+                outcome="failed" if i % 2 == 0 else "passed",
+                duration=float(i),
+                test_name=f"test_{i}",
+                assertion_message=f"Message {i}" if i % 2 == 0 else "",
+            )
+            for i in range(5)
+        ]
+
+        for result in results:
+            reporter.track_test(result)
+
+        results_path = reporter.save_test_results()
+        assert results_path is not None
+
+        lines = results_path.read_text().strip().split("\n")
+        assert len(lines) == 5
+
+        for i, line in enumerate(lines):
+            data = json.loads(line)
+            assert data["test_name"] == f"test_{i}"
+            if i % 2 == 0:
+                assert data["assertion_message"] == f"Message {i}"
+
+    def test_remote_storage_backend_returns_none(self) -> None:
+        """Verify remote backends (S3, HTTP) return None (deferred)."""
+        # S3 backend
+        s3_reporter = FlakyTestReporter.create_s3("my-bucket")
+        report = FlakyTestSessionReport(
+            session_id="test",
+            timestamp=datetime.now(UTC),
+            run_count=1,
+            total_tests=1,
+        )
+        assert s3_reporter.save_session_report(report) is None
+
+        # HTTP backend
+        http_reporter = FlakyTestReporter.create_http("http://api.example.com")
+        assert http_reporter.save_test_results() is None
+
+    def test_serialization_with_special_characters(self, tmp_path: Path) -> None:
+        """Verify serialization handles special characters in new fields."""
+        reporter = FlakyTestReporter.create_local(tmp_path)
+
+        result = FlakyTestResult(
+            nodeid="tests/unit/test_foo.py::test_method",
+            outcome="failed",
+            duration=1.0,
+            test_name="test_special_chars_™",
+            assertion_message="Expected \"quoted\" and 'single' and 中文 but got something else",
+        )
+
+        reporter.track_test(result)
+        path = reporter.save_test_results()
+
+        data = json.loads(path.read_text())
+        assert data["test_name"] == "test_special_chars_™"
+        assert "中文" in data["assertion_message"]
+        assert '"quoted"' in data["assertion_message"]
+
+    def test_session_report_with_empty_new_fields(self, tmp_path: Path) -> None:
+        """Verify session reports work with empty new fields."""
+        reporter = FlakyTestReporter.create_local(tmp_path)
+
+        metric = FlakyTestMetric(
+            nodeid="tests/unit/test_foo.py::test_method",
+            failure_rate=0.2,
+            run_count=5,
+            test_name="",
+            assertion_message="",
+        )
+
+        report = FlakyTestSessionReport(
+            session_id="test-session",
+            timestamp=datetime.now(UTC),
+            run_count=5,
+            total_tests=1,
+            unstable_candidates=[metric],
+        )
+
+        path = reporter.save_session_report(report)
+        data = json.loads(path.read_text())
+
+        unstable_data = data["unstable_candidates"][0]
+        assert unstable_data["test_name"] == ""
+        assert unstable_data["assertion_message"] == ""

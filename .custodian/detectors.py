@@ -582,7 +582,11 @@ def _accepts_extra_kwargs(node: ast.ClassDef) -> bool:
         # model_config = ConfigDict(extra="allow")  or  class Config: extra = "allow"
         if isinstance(stmt, ast.Assign) and isinstance(stmt.value, ast.Call):
             for kw in stmt.value.keywords:
-                if kw.arg == "extra" and isinstance(kw.value, ast.Constant) and kw.value.value == "allow":
+                if (
+                    kw.arg == "extra"
+                    and isinstance(kw.value, ast.Constant)
+                    and kw.value.value == "allow"
+                ):
                     return True
         if isinstance(stmt, ast.ClassDef) and stmt.name == "Config":
             for s in stmt.body:
@@ -694,8 +698,10 @@ def _detect_oc12_model_field_mismatch(ctx: AuditContext) -> DetectorResult:
                     ce = item.context_expr
                     fn = ce.func if isinstance(ce, ast.Call) else None
                     fn_name = (
-                        fn.attr if isinstance(fn, ast.Attribute)
-                        else fn.id if isinstance(fn, ast.Name)
+                        fn.attr
+                        if isinstance(fn, ast.Attribute)
+                        else fn.id
+                        if isinstance(fn, ast.Name)
                         else None
                     )
                     if fn_name == "raises":
@@ -785,8 +791,10 @@ def _calls_production_metric(fn: ast.AST, production: set[str]) -> bool:
             continue
         callee = node.func
         name = (
-            callee.attr if isinstance(callee, ast.Attribute)
-            else callee.id if isinstance(callee, ast.Name)
+            callee.attr
+            if isinstance(callee, ast.Attribute)
+            else callee.id
+            if isinstance(callee, ast.Name)
             else None
         )
         if name and (name in production or _PRODUCTION_METRIC_RE.match(name)):

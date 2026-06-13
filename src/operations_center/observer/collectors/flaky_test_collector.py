@@ -163,6 +163,8 @@ class FlakyTestCollector:
                 confidence=float(data.get("confidence", 0.0)),
                 markers=data.get("markers", []),
                 last_failure_reason=data.get("last_failure_reason", ""),
+                test_name=data.get("test_name", ""),
+                assertion_message=data.get("assertion_message", ""),
             )
         except (TypeError, ValueError, KeyError) as e:
             logger.debug("Failed to convert metric data: %s", e)

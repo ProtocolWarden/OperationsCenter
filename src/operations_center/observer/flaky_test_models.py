@@ -32,11 +32,35 @@ class TestOutcome(Enum):
 
 @dataclass
 class FlakyTestMetric:
-    """Structured metrics for a single flaky test."""
+    """Structured metrics for a single flaky test.
+
+    Attributes:
+        nodeid: Full pytest test path (e.g., "tests/unit/test_foo.py::TestClass::test_method").
+        failure_rate: Proportion of failed runs [0.0, 1.0].
+        run_count: Total number of test executions analyzed.
+        test_name: Test function name extracted from nodeid or pytest Item (e.g., "test_method").
+        assertion_message: Last assertion message when test failed, empty if test hasn't failed.
+        retry_success_count: Number of successful retries after initial failure.
+        duration_mean: Mean execution duration in seconds.
+        duration_variance: Variance of execution duration.
+        pattern_entropy: Entropy of pass/fail pattern [0.0, 1.0], measures randomness.
+        streak_length: Length of current failure streak.
+        recovery_time_days: Days since last failure (None if test still failing).
+        suspected_category: Primary root cause category (intermittent, environment, infrastructure, unknown).
+        markers: pytest markers applied to test.
+        last_failure_reason: String representation of most recent failure.
+        flakiness_score: Overall flakiness score [0.0, 1.0].
+        confidence: Confidence in categorization [0.0, 1.0].
+        failure_entropy: Normalized pass/fail entropy [0.0, 1.0].
+        streak_variance: Variance of streak lengths, None if undefined.
+        duration_stability: Coefficient of variation of durations, None if undefined.
+    """
 
     nodeid: str
     failure_rate: float
     run_count: int
+    test_name: str = ""
+    assertion_message: str = ""
     retry_success_count: int = 0
     duration_mean: float = 0.0
     duration_variance: float = 0.0
@@ -59,8 +83,10 @@ class FlakyTestMetric:
         """Convert metric to dictionary for JSON serialization."""
         return {
             "nodeid": self.nodeid,
+            "test_name": self.test_name,
             "failure_rate": round(self.failure_rate, 4),
             "run_count": self.run_count,
+            "assertion_message": self.assertion_message,
             "retry_success_count": self.retry_success_count,
             "duration_mean": round(self.duration_mean, 4),
             "duration_variance": round(self.duration_variance, 4),
@@ -86,11 +112,29 @@ class FlakyTestMetric:
 
 @dataclass
 class FlakyTestResult:
-    """Result of a single test execution (Tier 1 observation)."""
+    """Result of a single test execution (Tier 1 observation).
+
+    Attributes:
+        nodeid: Full pytest test path (e.g., "tests/unit/test_foo.py::TestClass::test_method").
+        outcome: Test outcome (PASSED, FAILED, SKIPPED, XFAILED, XPASSED).
+        duration: Execution duration in seconds.
+        test_name: Test function name extracted from nodeid or pytest Item (e.g., "test_method").
+        assertion_message: Assertion message from failure, empty if test passed or failed with non-assertion error.
+        markers: pytest markers applied to test.
+        exception_type: Exception class name if test failed (e.g., "AssertionError", "TimeoutError").
+        exception_message: Exception message or string representation of exception.
+        output_lines: Captured stdout/stderr output lines.
+        run_id: Unique identifier for this test execution run.
+        environment: Environment where test ran (e.g., "local", "ci", "staging").
+        python_version: Python version used for test execution.
+        timestamp: When the test was executed.
+    """
 
     nodeid: str
     outcome: TestOutcome | str
     duration: float
+    test_name: str = ""
+    assertion_message: str = ""
     markers: list[str] = field(default_factory=list)
     exception_type: str = ""
     exception_message: str = ""
@@ -110,10 +154,12 @@ class FlakyTestResult:
         """Convert result to dictionary for JSONL output."""
         return {
             "nodeid": self.nodeid,
+            "test_name": self.test_name,
             "outcome": (
                 self.outcome.value if isinstance(self.outcome, TestOutcome) else self.outcome
             ),
             "duration": round(self.duration, 4),
+            "assertion_message": self.assertion_message,
             "markers": self.markers,
             "exception_type": self.exception_type,
             "exception_message": self.exception_message,

@@ -119,7 +119,6 @@ def below_threshold_snapshot() -> CoverageSnapshot:
     )
 
 
-
 @pytest.fixture
 def degrading_trend_analysis() -> CoverageTrendAnalysis:
     """Create a trend analysis showing degradation."""
@@ -314,9 +313,7 @@ class TestCriticalModuleDetection:
         manager = CoverageAlertManager(config=default_config)
         alerts = manager.generate_alerts(below_threshold_snapshot)
 
-        module_alerts = [
-            a for a in alerts if a.alert_type == AlertType.MODULE_GAP.value
-        ]
+        module_alerts = [a for a in alerts if a.alert_type == AlertType.MODULE_GAP.value]
         assert len(module_alerts) > 0
 
     def test_critical_module_gap_calculation(
@@ -326,9 +323,7 @@ class TestCriticalModuleDetection:
         manager = CoverageAlertManager(config=default_config)
         alerts = manager.generate_alerts(below_threshold_snapshot)
 
-        module_alerts = [
-            a for a in alerts if a.alert_type == AlertType.MODULE_GAP.value
-        ]
+        module_alerts = [a for a in alerts if a.alert_type == AlertType.MODULE_GAP.value]
         alert = module_alerts[0]
 
         expected_gap = default_config.repo_minimum_threshold - 45.0
@@ -342,9 +337,7 @@ class TestCriticalModuleDetection:
         manager = CoverageAlertManager(config=default_config)
         alerts = manager.generate_alerts(healthy_snapshot)
 
-        module_alerts = [
-            a for a in alerts if a.alert_type == AlertType.MODULE_GAP.value
-        ]
+        module_alerts = [a for a in alerts if a.alert_type == AlertType.MODULE_GAP.value]
         assert len(module_alerts) == 0
 
 

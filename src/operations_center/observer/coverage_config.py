@@ -690,6 +690,7 @@ def parse_env_var_config(env_var_name: str, default_value: Any = None) -> Any:
         Parsed configuration value
     """
     import os
+
     value: str | None = os.environ.get(env_var_name)
     if value is None:
         return default_value

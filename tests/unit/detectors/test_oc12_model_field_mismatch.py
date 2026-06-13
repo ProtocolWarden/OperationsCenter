@@ -28,7 +28,9 @@ def ctx(tmp_path: Path) -> AuditContext:
     tests = tmp_path / "tests"
     src.mkdir(parents=True)
     tests.mkdir(parents=True)
-    return AuditContext(repo_root=tmp_path, src_root=src, tests_root=tests, config={}, plugin_modules=[])
+    return AuditContext(
+        repo_root=tmp_path, src_root=src, tests_root=tests, config={}, plugin_modules=[]
+    )
 
 
 def _write(root: Path, name: str, text: str) -> None:
@@ -59,8 +61,7 @@ def test_clean_construction_not_flagged(ctx: AuditContext) -> None:
     _write(
         ctx.src_root,
         "models.py",
-        "from dataclasses import dataclass\n\n"
-        "@dataclass\nclass M:\n    a: int\n    b: int = 0\n",
+        "from dataclasses import dataclass\n\n@dataclass\nclass M:\n    a: int\n    b: int = 0\n",
     )
     _write(ctx.tests_root, "test_ok.py", "from x import M\nm = M(a=1, b=2)\n")
     assert _detect(ctx).count == 0

@@ -4,9 +4,24 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## In Progress
 
-(Currently no active work items — Stage 9 campaign complete)
+_(none)_
 
 ## Recently Completed
+
+### 2026-06-13: Test Failure Extraction Campaign — Stages 0-7 (✅ COMPLETE)
+- **Objective**: Extend failure categorization to extract test names and assertion messages
+- **Status**: ✅ All 7 stages complete, branch ready for code review and merge
+- **Key Deliverables**:
+  - 15+ implementation files created/enhanced
+  - 10+ test files with 214 new tests (100% passing)
+  - New fields: `test_name` and `assertion_message` in failure models
+  - New utilities module: `assertion_extractor.py` with robust parsing
+  - Enhanced pytest plugin and artifact writer integration
+  - Complete design documentation: `docs/design/STAGE0_TEST_FAILURE_EXTRACTION.md`
+- **Test Results**: 8,731 total tests passing (11 skipped, 2 xfailed)
+- **Quality Metrics**: 0 linting violations, 100% type compliance, zero regressions
+- **Branch**: goal/3a044753 with 8 commits (Stages 0-7)
+- **Status**: Production-ready, CHANGELOG updated, all changes committed
 
 ### 2026-06-13: PR Review Concerns Resolution — Stages 0-9 (✅ COMPLETE)
 - **All 9 stages complete**: Full implementation, testing, documentation, and deployment preparation

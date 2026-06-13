@@ -758,12 +758,8 @@ class TestAlertChannelRoute:
         )
 
         # Should match specified modules
-        assert route.matches_alert(
-            AlertType.MODULE_GAP, AlertSeverity.INFO, "src/observer"
-        )
-        assert route.matches_alert(
-            AlertType.MODULE_GAP, AlertSeverity.INFO, "src/custodian"
-        )
+        assert route.matches_alert(AlertType.MODULE_GAP, AlertSeverity.INFO, "src/observer")
+        assert route.matches_alert(AlertType.MODULE_GAP, AlertSeverity.INFO, "src/custodian")
 
         # Should not match unspecified modules
         assert not route.matches_alert(
