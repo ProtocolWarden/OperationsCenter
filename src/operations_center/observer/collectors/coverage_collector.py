@@ -93,20 +93,18 @@ class CoverageCollector:
         if not self.coverage_json_path:
             logger.debug("Coverage file not found: %s", self.coverage_json_path)
             return None
-        try:
-            path_exists = Path(self.coverage_json_path).exists()
-        except PermissionError:
-            logger.error("Permission denied accessing coverage file: %s", self.coverage_json_path)
-            return None
-        if not path_exists:
+
+        if not Path(self.coverage_json_path).exists():
             logger.debug("Coverage file not found: %s", self.coverage_json_path)
             return None
 
         try:
             with open(self.coverage_json_path, encoding="utf-8") as f:
                 data: dict[str, Any] = json.load(f)
-
             return self._parse_coverage_json(data)
+        except PermissionError:
+            logger.error("Permission denied accessing coverage file: %s", self.coverage_json_path)
+            return None
         except (json.JSONDecodeError, KeyError, TypeError) as e:
             logger.error("Failed to parse coverage file: %s", e)
             return None
