@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field, ValidationError, field_validator
@@ -111,13 +111,12 @@ class AlertChannelConfig(BaseModel):
         Returns:
             List of channel names that should receive this alert
         """
-        matching_channels = [
+        matching_channels: list[str] = [
             route.channel_name
             for route in self.routes
             if route.matches_alert(alert_type, severity, module)
         ]
 
-        # Fall back to default channels if no matches
         if not matching_channels:
             return self.default_channels
 
@@ -293,8 +292,7 @@ class YamlConfigProvider(CoverageConfigProvider):
 
         try:
             with open(self.path, encoding="utf-8") as f:
-                data = yaml.safe_load(f) or {}
-                # Filter out None values
+                data: dict[str, Any] = yaml.safe_load(f) or {}
                 return {k: v for k, v in data.items() if v is not None}
         except yaml.YAMLError as e:
             raise ConfigValidationError(f"Invalid YAML in {self.path}: {e}") from e
@@ -370,8 +368,7 @@ class CompositeConfigProvider(CoverageConfigProvider):
         config: dict[str, Any] = {}
 
         for provider in self.providers:
-            provider_config = provider.load()
-            # Merge dicts, with special handling for nested dicts
+            provider_config: dict[str, Any] = provider.load()
             for key, value in provider_config.items():
                 if key == "module_thresholds" and isinstance(value, dict):
                     if "module_thresholds" not in config:
@@ -491,10 +488,8 @@ class CoverageConfigManager:
             ConfigValidationError: If configuration is invalid
         """
         if self._alert_config is None:
-            config = self.load_config()
-            # Create CoverageAlertConfig with loaded values
-            # Only pass values that are in the config and not None
-            alert_config_dict = {k: v for k, v in config.items() if v is not None and k != "config"}
+            config: dict[str, Any] = self.load_config()
+            alert_config_dict: dict[str, Any] = {k: v for k, v in config.items() if v is not None and k != "config"}
             self._alert_config = CoverageAlertConfig(**alert_config_dict)
 
         return self._alert_config
@@ -509,16 +504,14 @@ class CoverageConfigManager:
             ConfigValidationError: If configuration is invalid
         """
         if self._alert_channel_config is None:
-            config = self.load_config()
-            alert_channels_config = config.get("alert_channels", {})
+            config: dict[str, Any] = self.load_config()
+            alert_channels_config: dict[str, Any] = config.get("alert_channels", {})
 
             if not alert_channels_config:
-                # Use default empty config
                 self._alert_channel_config = AlertChannelConfig()
             else:
                 try:
-                    # Build AlertChannelRoute objects from config
-                    routes = []
+                    routes: list[AlertChannelRoute] = []
                     for route_config in alert_channels_config.get("routes", []):
                         routes.append(AlertChannelRoute(**route_config))
 
@@ -538,6 +531,176 @@ class CoverageConfigManager:
         self._config = None
         self._alert_config = None
         self._alert_channel_config = None
+
+    def get_module_override(self, module_path: str, metric_type: Literal["statement", "branch", "line"]) -> float | None:
+        """Get module-specific threshold override if configured.
+
+        Args:
+            module_path: Path to the module
+            metric_type: Type of coverage metric
+
+        Returns:
+            Threshold value if override exists, None otherwise
+        """
+        config: dict[str, Any] = self.load_config()
+        module_thresholds: dict[str, Any] = config.get("module_thresholds", {})
+
+        if module_path not in module_thresholds:
+            return None
+
+        module_config: dict[str, Any] = module_thresholds[module_path]
+        threshold_key: str = f"{metric_type}_coverage_minimum"
+        return module_config.get(threshold_key)
+
+    def validate_threshold_value(self, value: float, threshold_type: str = "general") -> bool:
+        """Validate that a threshold value is in acceptable range.
+
+        Args:
+            value: Threshold value to validate
+            threshold_type: Type of threshold (general, regression, trend)
+
+        Returns:
+            True if value is valid
+        """
+        if threshold_type == "general":
+            return 0.0 <= value <= 100.0
+        elif threshold_type == "regression":
+            return 0.0 <= value <= 50.0
+        elif threshold_type == "trend":
+            return 0 <= value <= 30
+        return False
+
+    def get_route_for_alert_type(self, alert_type: str) -> list[str]:
+        """Get configured alert channels for a specific alert type.
+
+        Args:
+            alert_type: Type of alert (below_threshold, regression_detected, etc.)
+
+        Returns:
+            List of channel names configured for this alert type
+        """
+        channel_config: AlertChannelConfig = self.get_alert_channel_config()
+        routes: list[str] = []
+
+        for route in channel_config.routes:
+            if not route.alert_types or alert_type in route.alert_types:
+                routes.append(route.channel_name)
+
+        if not routes:
+            routes = channel_config.default_channels
+
+        return routes
+
+    def get_severity_threshold_map(self) -> dict[str, float]:
+        """Get mapping of severity levels to coverage thresholds.
+
+        Returns:
+            Dictionary mapping severity level names to coverage thresholds
+        """
+        alert_config: CoverageAlertConfig = self.get_alert_config()
+        severity_map: dict[str, float] = {
+            "emergency": alert_config.severity_critical_threshold,
+            "critical": alert_config.severity_high_threshold,
+            "warning": alert_config.severity_medium_threshold,
+            "info": 100.0,
+        }
+        return severity_map
+
+    def is_module_threshold_override_present(self, module_path: str) -> bool:
+        """Check if a module has threshold overrides configured.
+
+        Args:
+            module_path: Path to check
+
+        Returns:
+            True if module has custom thresholds
+        """
+        config: dict[str, Any] = self.load_config()
+        module_thresholds: dict[str, Any] = config.get("module_thresholds", {})
+        return module_path in module_thresholds
+
+
+def merge_configs(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """Merge two configuration dictionaries with override taking precedence.
+
+    Args:
+        base: Base configuration dictionary
+        override: Override configuration dictionary
+
+    Returns:
+        Merged configuration dictionary
+    """
+    merged: dict[str, Any] = dict(base)
+    for key, value in override.items():
+        if value is not None:
+            merged[key] = value
+    return merged
+
+
+def validate_threshold_range(value: float, min_val: float = 0.0, max_val: float = 100.0) -> bool:
+    """Validate that a threshold value is within acceptable range.
+
+    Args:
+        value: Value to validate
+        min_val: Minimum acceptable value
+        max_val: Maximum acceptable value
+
+    Returns:
+        True if value is within range
+    """
+    is_valid: bool = min_val <= value <= max_val
+    return is_valid
+
+
+def normalize_module_path(module_path: str) -> str:
+    """Normalize a module path for consistent comparison.
+
+    Args:
+        module_path: Module path to normalize
+
+    Returns:
+        Normalized module path
+    """
+    normalized: str = module_path.strip().lower()
+    return normalized
+
+
+def get_default_alert_channels() -> list[str]:
+    """Get default alert channels when no specific routing is configured.
+
+    Returns:
+        List of default channel names
+    """
+    defaults: list[str] = ["operator"]
+    return defaults
+
+
+def parse_env_var_config(env_var_name: str, default_value: Any = None) -> Any:
+    """Parse configuration value from environment variable.
+
+    Args:
+        env_var_name: Name of environment variable to read
+        default_value: Default value if variable not set
+
+    Returns:
+        Parsed configuration value
+    """
+    import os
+    value: str | None = os.environ.get(env_var_name)
+    if value is None:
+        return default_value
+
+    if value.lower() in ("true", "false"):
+        return value.lower() == "true"
+    try:
+        return int(value)
+    except ValueError:
+        pass
+    try:
+        return float(value)
+    except ValueError:
+        pass
+    return value
 
 
 __all__ = [

@@ -780,3 +780,67 @@ class HTTPCoverageTrendRepository(CoverageTrendRepository):
         response.raise_for_status()
 
         return response.json().get("deleted", [])
+
+
+def validate_snapshot_data(snapshot: CoverageSnapshot) -> bool:
+    """Validate that a snapshot has all required fields and valid values.
+
+    Args:
+        snapshot: Snapshot to validate
+
+    Returns:
+        True if snapshot is valid
+    """
+    has_valid_coverage: bool = (
+        0.0 <= snapshot.overall_statement_coverage_pct <= 100.0
+        and 0.0 <= snapshot.overall_branch_coverage_pct <= 100.0
+        and 0.0 <= snapshot.overall_line_coverage_pct <= 100.0
+    )
+
+    has_modules: bool = len(snapshot.module_coverages) >= 0
+    has_timestamp: bool = snapshot.timestamp is not None
+    has_source: bool = len(snapshot.source) > 0
+
+    return has_valid_coverage and has_modules and has_timestamp and has_source
+
+
+def validate_trend_analysis(analysis: CoverageTrendAnalysis) -> bool:
+    """Validate that trend analysis has all required fields.
+
+    Args:
+        analysis: Trend analysis to validate
+
+    Returns:
+        True if analysis is valid
+    """
+    has_measurements: bool = len(analysis.measurements) >= 0
+    has_valid_direction: bool = analysis.trend_direction in ("improving", "stable", "degrading")
+    has_valid_values: bool = (
+        0.0 <= analysis.current_value <= 100.0
+        and 0.0 <= analysis.average_value <= 100.0
+        and analysis.min_value <= analysis.max_value
+    )
+
+    return has_measurements and has_valid_direction and has_valid_values
+
+
+def validate_alert(alert: CoverageAlert) -> bool:
+    """Validate that an alert has all required fields.
+
+    Args:
+        alert: Alert to validate
+
+    Returns:
+        True if alert is valid
+    """
+    has_valid_type: bool = alert.alert_type in (
+        "below_threshold",
+        "regression_detected",
+        "trend_degrading",
+        "module_gap",
+    )
+    has_valid_severity: bool = alert.severity in ("info", "warning", "critical", "emergency")
+    has_valid_value: bool = 0.0 <= alert.current_value <= 100.0
+    has_id: bool = len(alert.alert_id) > 0
+
+    return has_valid_type and has_valid_severity and has_valid_value and has_id

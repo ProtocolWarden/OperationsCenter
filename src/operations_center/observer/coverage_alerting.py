@@ -8,8 +8,9 @@ coverage metrics at repository, module, and file granularities.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -37,6 +38,99 @@ class AlertSeverity(str, Enum):
     WARNING = "warning"
     CRITICAL = "critical"
     EMERGENCY = "emergency"
+
+
+def calculate_coverage_gap(current: float, target: float) -> float:
+    """Calculate the gap between current and target coverage.
+
+    Args:
+        current: Current coverage percentage
+        target: Target coverage percentage
+
+    Returns:
+        Gap percentage (can be negative if exceeds target)
+    """
+    gap: float = target - current
+    return gap
+
+
+def is_coverage_critical(coverage: float) -> bool:
+    """Determine if coverage percentage indicates critical status.
+
+    Args:
+        coverage: Coverage percentage
+
+    Returns:
+        True if coverage is critically low
+    """
+    is_critical: bool = coverage < 50.0
+    return is_critical
+
+
+def format_coverage_value(coverage: float, precision: int = 1) -> str:
+    """Format coverage value with specified decimal precision.
+
+    Args:
+        coverage: Coverage percentage value
+        precision: Number of decimal places
+
+    Returns:
+        Formatted coverage string
+    """
+    formatted: str = f"{coverage:.{precision}f}%"
+    return formatted
+
+
+def get_alert_priority(alert_type: str, severity: str) -> int:
+    """Calculate priority score for an alert (higher = more urgent).
+
+    Args:
+        alert_type: Type of alert
+        severity: Severity level
+
+    Returns:
+        Priority score (0-10)
+    """
+    base_priority: int = 0
+
+    severity_weights: dict[str, int] = {
+        AlertSeverity.EMERGENCY.value: 10,
+        AlertSeverity.CRITICAL.value: 7,
+        AlertSeverity.WARNING.value: 4,
+        AlertSeverity.INFO.value: 1,
+    }
+    base_priority = severity_weights.get(severity, 0)
+
+    type_weights: dict[str, int] = {
+        AlertType.CRITICAL_MODULE_COVERAGE.value: 3,
+        AlertType.REGRESSION_DETECTED.value: 2,
+        AlertType.TREND_DEGRADING.value: 1,
+        AlertType.BELOW_THRESHOLD.value: 0,
+    }
+    type_bonus: int = type_weights.get(alert_type, 0)
+
+    priority: int = min(10, base_priority + type_bonus)
+    return priority
+
+
+def calculate_coverage_trend_direction(previous: float, current: float) -> Literal["improving", "stable", "degrading"]:
+    """Determine coverage trend direction based on previous and current values.
+
+    Args:
+        previous: Previous coverage value
+        current: Current coverage value
+
+    Returns:
+        Trend direction string
+    """
+    delta: float = current - previous
+    if delta > 0.5:
+        direction: Literal["improving", "stable", "degrading"] = "improving"
+    elif delta < -0.5:
+        direction = "degrading"
+    else:
+        direction = "stable"
+    return direction
 
 
 class CoverageAlertConfig(BaseModel):
@@ -155,16 +249,16 @@ class CoverageAlertManager:
         Args:
             snapshot: Coverage snapshot to analyze
         """
-        coverage_pct = snapshot.overall_statement_coverage_pct
-        threshold = self.config.repo_minimum_threshold
+        coverage_pct: float = snapshot.overall_statement_coverage_pct
+        threshold: float = self.config.repo_minimum_threshold
 
         if coverage_pct < threshold:
-            severity = self.config.classify_severity(coverage_pct)
-            recommendation = (
+            severity: AlertSeverity = self.config.classify_severity(coverage_pct)
+            recommendation: str = (
                 f"Coverage {coverage_pct:.1f}% is below minimum threshold of {threshold:.1f}%. "
                 "Add tests to increase coverage."
             )
-            alert = CoverageAlert(
+            alert: CoverageAlert = CoverageAlert(
                 alert_id=str(uuid4()),
                 timestamp=snapshot.timestamp,
                 alert_type=AlertType.BELOW_THRESHOLD.value,
@@ -180,9 +274,8 @@ class CoverageAlertManager:
             )
             self.alerts.append(alert)
 
-        # Also check branch coverage
-        branch_coverage = snapshot.overall_branch_coverage_pct
-        branch_threshold = self.config.branch_coverage_minimum
+        branch_coverage: float = snapshot.overall_branch_coverage_pct
+        branch_threshold: float = self.config.branch_coverage_minimum
         if branch_coverage < branch_threshold:
             severity = self.config.classify_severity(branch_coverage)
             recommendation = (
@@ -205,9 +298,8 @@ class CoverageAlertManager:
             )
             self.alerts.append(alert)
 
-        # Also check line coverage
-        line_coverage = snapshot.overall_line_coverage_pct
-        line_threshold = self.config.line_coverage_minimum
+        line_coverage: float = snapshot.overall_line_coverage_pct
+        line_threshold: float = self.config.line_coverage_minimum
         if line_coverage < line_threshold:
             severity = self.config.classify_severity(line_coverage)
             recommendation = (
@@ -237,14 +329,19 @@ class CoverageAlertManager:
             snapshot: Coverage snapshot to analyze
         """
         for module in snapshot.module_coverages:
-            threshold = self.config.get_module_threshold(module.module_path, "statement")
-            coverage_pct = module.statement_coverage_pct
+            threshold: float = self.config.get_module_threshold(module.module_path, "statement")
+            coverage_pct: float = module.statement_coverage_pct
 
             if coverage_pct < threshold:
-                gap = threshold - coverage_pct
+                gap: float = threshold - coverage_pct
                 if gap >= 15.0:
-                    severity = self.config.classify_severity(coverage_pct)
-                    alert = CoverageAlert(
+                    severity: AlertSeverity = self.config.classify_severity(coverage_pct)
+                    recommendation: str = (
+                        f"Module {module.module_path} has critical coverage gap of {gap:.1f}%. "
+                        f"Current coverage {coverage_pct:.1f}% vs target {threshold:.1f}%. "
+                        "Prioritize tests for this module."
+                    )
+                    alert: CoverageAlert = CoverageAlert(
                         alert_id=str(uuid4()),
                         timestamp=snapshot.timestamp,
                         alert_type=AlertType.CRITICAL_MODULE_COVERAGE.value,
@@ -257,11 +354,7 @@ class CoverageAlertManager:
                         delta_pct=-gap,
                         baseline_type="minimum_threshold",
                         affected_modules=[module.module_path],
-                        recommendation=(
-                            f"Module {module.module_path} has critical coverage gap of {gap:.1f}%. "
-                            f"Current coverage {coverage_pct:.1f}% vs target {threshold:.1f}%. "
-                            "Prioritize tests for this module."
-                        ),
+                        recommendation=recommendation,
                     )
                     self.alerts.append(alert)
 
@@ -274,13 +367,17 @@ class CoverageAlertManager:
             snapshot: Current coverage snapshot
             previous_snapshot: Previous coverage snapshot
         """
-        current = snapshot.overall_statement_coverage_pct
-        previous = previous_snapshot.overall_statement_coverage_pct
-        delta = current - previous
+        current: float = snapshot.overall_statement_coverage_pct
+        previous: float = previous_snapshot.overall_statement_coverage_pct
+        delta: float = current - previous
 
         if delta <= -self.config.regression_threshold_pct:
-            severity = self.config.classify_severity(current)
-            alert = CoverageAlert(
+            severity: AlertSeverity = self.config.classify_severity(current)
+            recommendation: str = (
+                f"Coverage regressed from {previous:.1f}% to {current:.1f}% "
+                f"({delta:.1f}%). Investigate recent changes that may have reduced coverage."
+            )
+            alert: CoverageAlert = CoverageAlert(
                 alert_id=str(uuid4()),
                 timestamp=snapshot.timestamp,
                 alert_type=AlertType.REGRESSION_DETECTED.value,
@@ -292,8 +389,7 @@ class CoverageAlertManager:
                 threshold_or_baseline=previous,
                 delta_pct=abs(delta),
                 baseline_type="previous_run",
-                recommendation=f"Coverage regressed from {previous:.1f}% to {current:.1f}% "
-                f"({delta:.1f}%). Investigate recent changes that may have reduced coverage.",
+                recommendation=recommendation,
             )
             self.alerts.append(alert)
 
@@ -308,20 +404,20 @@ class CoverageAlertManager:
         """
         if trend_analysis.trend_direction == "degrading":
             if trend_analysis.days_of_decline >= self.config.trend_degradation_days:
-                current = snapshot.overall_statement_coverage_pct
-                severity = self.config.classify_severity(current)
-                velocity_pct = trend_analysis.trend_pct if trend_analysis.trend_pct else 0
-                days_decline = trend_analysis.days_of_decline
-                avg_val = trend_analysis.average_value
-                proj_val = trend_analysis.projected_value_7days or "N/A"
-                recommendation = (
+                current: float = snapshot.overall_statement_coverage_pct
+                severity: AlertSeverity = self.config.classify_severity(current)
+                velocity_pct: float = trend_analysis.trend_pct if trend_analysis.trend_pct else 0.0
+                days_decline: int = trend_analysis.days_of_decline
+                avg_val: float = trend_analysis.average_value
+                proj_val: float | str = trend_analysis.projected_value_7days or "N/A"
+                recommendation: str = (
                     f"Coverage is in sustained decline ({days_decline} days). "
                     f"Current {current:.1f}% vs {days_decline}-day average {avg_val:.1f}%. "
                     f"Trending down at {velocity_pct:.2f}% per day. "
                     f"Projected value in 7 days: {proj_val}%. "
                     "Review recent test changes and coverage improvements."
                 )
-                alert = CoverageAlert(
+                alert: CoverageAlert = CoverageAlert(
                     alert_id=str(uuid4()),
                     timestamp=snapshot.timestamp,
                     alert_type=AlertType.TREND_DEGRADING.value,
@@ -331,7 +427,7 @@ class CoverageAlertManager:
                     scope_id="",
                     current_value=current,
                     threshold_or_baseline=trend_analysis.average_value,
-                    delta_pct=-velocity_pct if velocity_pct > 0 else 0,
+                    delta_pct=-velocity_pct if velocity_pct > 0 else 0.0,
                     baseline_type="trend",
                     recommendation=recommendation,
                 )
@@ -362,15 +458,13 @@ class CoverageAlertManager:
         Returns:
             Category description
         """
-        if alert_type == AlertType.BELOW_THRESHOLD.value:
-            return "Threshold Breach"
-        elif alert_type == AlertType.REGRESSION_DETECTED.value:
-            return "Regression"
-        elif alert_type == AlertType.TREND_DEGRADING.value:
-            return "Trend Decline"
-        elif alert_type == AlertType.CRITICAL_MODULE_COVERAGE.value:
-            return "Module Critical"
-        return "Unknown"
+        category_map: dict[str, str] = {
+            AlertType.BELOW_THRESHOLD.value: "Threshold Breach",
+            AlertType.REGRESSION_DETECTED.value: "Regression",
+            AlertType.TREND_DEGRADING.value: "Trend Decline",
+            AlertType.CRITICAL_MODULE_COVERAGE.value: "Module Critical",
+        }
+        return category_map.get(alert_type, "Unknown")
 
     def _is_action_required(self, severity: str) -> bool:
         """Determine if alert requires immediate action.
@@ -381,7 +475,8 @@ class CoverageAlertManager:
         Returns:
             True if action is required
         """
-        return severity in [AlertSeverity.CRITICAL.value, AlertSeverity.EMERGENCY.value]
+        action_required_severities: set[str] = {AlertSeverity.CRITICAL.value, AlertSeverity.EMERGENCY.value}
+        return severity in action_required_severities
 
     def filter_alerts_by_severity(self, severity: AlertSeverity) -> list[CoverageAlert]:
         """Filter alerts by severity level.
@@ -411,14 +506,14 @@ class CoverageAlertManager:
         Returns:
             Dictionary with alert counts
         """
-        summary = {
+        summary: dict[str, Any] = {
             "total": len(self.alerts),
             "by_type": {},
             "by_severity": {},
         }
 
         for alert_type in AlertType:
-            count = len(self.filter_alerts_by_type(alert_type))
+            count: int = len(self.filter_alerts_by_type(alert_type))
             if count > 0:
                 summary["by_type"][alert_type.value] = count
 
@@ -428,3 +523,73 @@ class CoverageAlertManager:
                 summary["by_severity"][severity.value] = count
 
         return summary
+
+    def get_action_required_alerts(self) -> list[CoverageAlert]:
+        """Get all alerts requiring immediate action.
+
+        Returns:
+            List of alerts with critical or emergency severity
+        """
+        action_alerts: list[CoverageAlert] = [
+            alert for alert in self.alerts if self._is_action_required(alert.severity)
+        ]
+        return action_alerts
+
+    def get_alerts_by_module(self, module_path: str) -> list[CoverageAlert]:
+        """Get alerts affecting a specific module.
+
+        Args:
+            module_path: Module path to filter by
+
+        Returns:
+            List of alerts affecting this module
+        """
+        module_alerts: list[CoverageAlert] = [
+            alert for alert in self.alerts if module_path in alert.affected_modules
+        ]
+        return module_alerts
+
+    def clear_alerts(self) -> int:
+        """Clear all stored alerts.
+
+        Returns:
+            Number of alerts cleared
+        """
+        count: int = len(self.alerts)
+        self.alerts = []
+        return count
+
+    def acknowledge_alert(self, alert_id: str, acknowledged_by: str, reason: str | None = None) -> bool:
+        """Mark an alert as acknowledged.
+
+        Args:
+            alert_id: ID of alert to acknowledge
+            acknowledged_by: User/system acknowledging the alert
+            reason: Optional acknowledgment reason
+
+        Returns:
+            True if alert was found and updated
+        """
+        for alert in self.alerts:
+            if alert.alert_id == alert_id:
+                alert.acknowledged = True
+                alert.acknowledged_by = acknowledged_by
+                alert.acknowledged_at = datetime.now(timezone.utc)
+                return True
+        return False
+
+    def dismiss_alert(self, alert_id: str, reason: str) -> bool:
+        """Mark an alert as dismissed.
+
+        Args:
+            alert_id: ID of alert to dismiss
+            reason: Reason for dismissal
+
+        Returns:
+            True if alert was found and updated
+        """
+        for alert in self.alerts:
+            if alert.alert_id == alert_id:
+                alert.dismissal_reason = reason
+                return True
+        return False
