@@ -287,7 +287,11 @@ class YamlConfigProvider(CoverageConfigProvider):
         Raises:
             ConfigValidationError: If file not found or invalid YAML
         """
-        if not self.path.exists():
+        try:
+            path_exists = self.path.exists()
+        except PermissionError as e:
+            raise ConfigValidationError(f"Configuration file not found: {self.path}") from e
+        if not path_exists:
             raise ConfigValidationError(f"Configuration file not found: {self.path}")
 
         try:

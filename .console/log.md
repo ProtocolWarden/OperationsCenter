@@ -1,3 +1,11 @@
+## 2026-06-13 — Watchdog: Fix PermissionError in coverage Path.exists() calls
+
+CI runners (non-root) raise PermissionError on Path.exists() for paths under /root/.
+Neither _load_coverage_snapshot() nor YamlConfigProvider.load() caught PermissionError,
+only FileNotFoundError. Fixed by wrapping Path.exists() in try/except PermissionError
+in both locations. Fixes 2 failing CI checks on PR #275 (test_load_coverage_file_
+permission_error, test_yaml_provider_with_oserror).
+
 ## 2026-06-13 — Watchdog: Fix R2 integration test and fixture for 200KB threshold
 
 Commit 3dbd6823 (prior cycle) raised the R2 budget limit from 100→200KB but did not

@@ -90,7 +90,15 @@ class CoverageCollector:
         Returns:
             CoverageSnapshot if data is available, None otherwise.
         """
-        if not self.coverage_json_path or not Path(self.coverage_json_path).exists():
+        if not self.coverage_json_path:
+            logger.debug("Coverage file not found: %s", self.coverage_json_path)
+            return None
+        try:
+            path_exists = Path(self.coverage_json_path).exists()
+        except PermissionError:
+            logger.error("Permission denied accessing coverage file: %s", self.coverage_json_path)
+            return None
+        if not path_exists:
             logger.debug("Coverage file not found: %s", self.coverage_json_path)
             return None
 
