@@ -2,13 +2,58 @@
 
 _Durable work inventory. Update after each meaningful chunk of progress._
 
-## Campaign: Coverage Threshold Alerting System — ✅ STAGE 0 COMPLETE (2026-06-12)
+## Campaign: Coverage Threshold Alerting System — ✅ STAGE 2 COMPLETE (2026-06-12)
 
-**Status**: 🎯 **STAGE 0 DESIGN COMPLETE** — Comprehensive specification for coverage threshold alerting system (2026-06-12)
+**Status**: 🎯 **STAGES 0-2 COMPLETE** — Design complete, storage and trend analysis fully implemented (2026-06-12)
 
 ### Overall Campaign Summary
 
 **Objective**: Design and implement a comprehensive coverage threshold alerting system that detects coverage degradation, regressions, and trend declines at repository, module, and file levels. Extend existing CoverageSignal with threshold-based alerts and trend analysis.
+
+### Stage 2: Implement Coverage Trend Storage and Historical Analysis ✅ COMPLETE (2026-06-12)
+
+**Objective**: Implement storage backends and trend analysis capabilities for coverage data.
+
+**Deliverables**:
+- ✅ **CoverageTrendRepository** (3 implementations):
+  - `LocalCoverageTrendRepository`: Filesystem JSONL storage with retention policies
+  - `S3CoverageTrendRepository`: AWS S3 cloud storage with configurable bucket/prefix
+  - `HTTPCoverageTrendRepository`: RESTful API backend with bearer token auth
+  
+- ✅ **CoverageTrendManager**:
+  - Factory methods: `create_local()`, `create_s3()`, `create_http()`
+  - CRUD operations: save, get, list, delete snapshots/trends/alerts
+  - Trend analysis: compute trends, detect regressions, calculate slope/volatility
+  - Query APIs: historical data retrieval by metric/scope/time range
+  
+- ✅ **36 Comprehensive Tests**:
+  - Local repository: 9 tests (store, load, list, delete, cleanup)
+  - S3 repository: 4 tests (mocked S3 operations)
+  - HTTP repository: 4 tests (mocked HTTP operations)
+  - Manager CRUD: 15 tests (snapshots, alerts, trends)
+  - Factory methods: 3 tests (local, S3, HTTP)
+  - Edge cases: 1 test (empty snapshots, date filtering)
+
+**Key Features**:
+- Timezone-aware datetime handling (UTC)
+- Date range filtering for historical queries
+- Retention policy enforcement (configurable days)
+- Multi-format support (JSON, JSONL)
+- Remote backend support (S3, HTTP)
+- Trend computation with 7/30-day windows
+- Regression detection and volatility scoring
+- 7-day value projection
+
+**Acceptance Criteria — ALL MET** ✅:
+1. ✅ CoverageTrendRepository created with local/S3/HTTP backends
+2. ✅ CoverageTrendManager implemented with CRUD and analysis operations
+3. ✅ Trend analysis methods: regression, slope, volatility, projection
+4. ✅ Query APIs for historical data by module, time period, metric type
+5. ✅ 36 tests verify storage and analysis operations (100% pass rate)
+
+**Status**: ✅ **STAGE 2 COMPLETE** — Storage and trend analysis fully functional
+
+---
 
 ### Stage 0: Design Coverage Threshold Alerting System ✅ COMPLETE (2026-06-12)
 
