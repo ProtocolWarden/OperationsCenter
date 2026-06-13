@@ -1859,6 +1859,10 @@ def _phase1(
                 current_head_sha=current_head_sha,
             )
             state["backend_error_passes"] = 0
+            # Reset the CI-green retraction budget: the prior retraction was consumed
+            # by a backend availability failure, not a genuine review concern, so it
+            # should not permanently exhaust the WO-3 retry path.
+            state["ci_green_retraction_count"] = 0
         _save_state(state_path, state)
         return
 
