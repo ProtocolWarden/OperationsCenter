@@ -3,6 +3,8 @@ title: "Coverage Threshold Alerting System: User Guide"
 status: production-ready
 version: "1.0"
 date: "2026-06-12"
+spdx-license-identifier: "AGPL-3.0-or-later"
+copyright: "Copyright (C) 2026 ProtocolWarden"
 ---
 
 # Coverage Threshold Alerting System: User Guide
