@@ -784,12 +784,16 @@ class TestUtilityFunctions:
 
     def test_get_alert_priority_with_type_bonus(self) -> None:
         """Test priority calculation with type-based bonus."""
-        priority = get_alert_priority(AlertType.CRITICAL_MODULE_COVERAGE.value, AlertSeverity.CRITICAL.value)
+        alert_type = AlertType.CRITICAL_MODULE_COVERAGE.value
+        severity = AlertSeverity.CRITICAL.value
+        priority = get_alert_priority(alert_type, severity)
         assert priority == 10
 
     def test_get_alert_priority_caps_at_ten(self) -> None:
         """Test that priority caps at 10."""
-        priority = get_alert_priority(AlertType.CRITICAL_MODULE_COVERAGE.value, AlertSeverity.EMERGENCY.value)
+        alert_type = AlertType.CRITICAL_MODULE_COVERAGE.value
+        severity = AlertSeverity.EMERGENCY.value
+        priority = get_alert_priority(alert_type, severity)
         assert priority == 10
 
     def test_calculate_trend_direction_improving(self) -> None:

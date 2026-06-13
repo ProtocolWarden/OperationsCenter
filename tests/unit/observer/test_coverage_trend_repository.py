@@ -609,7 +609,8 @@ class TestS3RepositoryEdgeCases:
         mock_boto3.client.return_value = mock_client
 
         existing_content = '{"trend": "old"}'
-        mock_client.get_object.return_value = {"Body": MagicMock(read=lambda: existing_content.encode())}
+        body_mock = MagicMock(read=lambda: existing_content.encode())
+        mock_client.get_object.return_value = {"Body": body_mock}
 
         now = datetime.now(tz=timezone.utc)
         analysis = CoverageTrendAnalysis(
@@ -657,7 +658,8 @@ class TestS3RepositoryEdgeCases:
             }
         ]
 
-        mock_client.get_object.return_value = {"Body": MagicMock(read=lambda: alert_content.encode())}
+        body_mock = MagicMock(read=lambda: alert_content.encode())
+        mock_client.get_object.return_value = {"Body": body_mock}
 
         repo = S3CoverageTrendRepository(bucket="test-bucket")
         alerts = repo.list_alerts()
@@ -1124,10 +1126,11 @@ class TestS3RepositoryErrorScenarios:
         mock_client.get_paginator.return_value = paginator
 
         # Mock paginate response with one valid and one invalid file
+        now = datetime.now(tz=timezone.utc)
         paginator.paginate.return_value = [
             {
                 "Contents": [
-                    {"Key": "alerts/2026-06-13/alerts.jsonl", "LastModified": datetime.now(tz=timezone.utc)},
+                    {"Key": "alerts/2026-06-13/alerts.jsonl", "LastModified": now},
                 ]
             }
         ]
@@ -1617,7 +1620,8 @@ class TestRecoveryAndResilience:
         repo = LocalCoverageTrendRepository(root=temp_storage_dir)
         repo.store_alert(sample_alert)
 
-        alerts_file = temp_storage_dir / "alerts" / sample_alert.timestamp.strftime("%Y-%m-%d") / "alerts.jsonl"
+        date_str = sample_alert.timestamp.strftime("%Y-%m-%d")
+        alerts_file = temp_storage_dir / "alerts" / date_str / "alerts.jsonl"
         content = alerts_file.read_text(encoding="utf-8")
         alerts_file.write_text(content + "\n{invalid json line}\n", encoding="utf-8")
 
