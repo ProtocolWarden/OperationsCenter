@@ -489,7 +489,9 @@ class CoverageConfigManager:
         """
         if self._alert_config is None:
             config: dict[str, Any] = self.load_config()
-            alert_config_dict: dict[str, Any] = {k: v for k, v in config.items() if v is not None and k != "config"}
+            alert_config_dict: dict[str, Any] = {
+                k: v for k, v in config.items() if v is not None and k != "config"
+            }
             self._alert_config = CoverageAlertConfig(**alert_config_dict)
 
         return self._alert_config
@@ -532,7 +534,9 @@ class CoverageConfigManager:
         self._alert_config = None
         self._alert_channel_config = None
 
-    def get_module_override(self, module_path: str, metric_type: Literal["statement", "branch", "line"]) -> float | None:
+    def get_module_override(
+        self, module_path: str, metric_type: Literal["statement", "branch", "line"]
+    ) -> float | None:
         """Get module-specific threshold override if configured.
 
         Args:

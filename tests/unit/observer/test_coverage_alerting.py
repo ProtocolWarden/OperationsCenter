@@ -315,7 +315,7 @@ class TestCriticalModuleDetection:
         alerts = manager.generate_alerts(below_threshold_snapshot)
 
         module_alerts = [
-            a for a in alerts if a.alert_type == AlertType.CRITICAL_MODULE_COVERAGE.value
+            a for a in alerts if a.alert_type == AlertType.MODULE_GAP.value
         ]
         assert len(module_alerts) > 0
 
@@ -327,7 +327,7 @@ class TestCriticalModuleDetection:
         alerts = manager.generate_alerts(below_threshold_snapshot)
 
         module_alerts = [
-            a for a in alerts if a.alert_type == AlertType.CRITICAL_MODULE_COVERAGE.value
+            a for a in alerts if a.alert_type == AlertType.MODULE_GAP.value
         ]
         alert = module_alerts[0]
 
@@ -343,7 +343,7 @@ class TestCriticalModuleDetection:
         alerts = manager.generate_alerts(healthy_snapshot)
 
         module_alerts = [
-            a for a in alerts if a.alert_type == AlertType.CRITICAL_MODULE_COVERAGE.value
+            a for a in alerts if a.alert_type == AlertType.MODULE_GAP.value
         ]
         assert len(module_alerts) == 0
 

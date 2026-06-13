@@ -28,7 +28,7 @@ class AlertType(str, Enum):
     BELOW_THRESHOLD = "below_threshold"
     REGRESSION_DETECTED = "regression_detected"
     TREND_DEGRADING = "trend_degrading"
-    CRITICAL_MODULE_COVERAGE = "critical_module_coverage"
+    MODULE_GAP = "module_gap"
 
 
 class AlertSeverity(str, Enum):
@@ -102,7 +102,7 @@ def get_alert_priority(alert_type: str, severity: str) -> int:
     base_priority = severity_weights.get(severity, 0)
 
     type_weights: dict[str, int] = {
-        AlertType.CRITICAL_MODULE_COVERAGE.value: 3,
+        AlertType.MODULE_GAP.value: 3,
         AlertType.REGRESSION_DETECTED.value: 2,
         AlertType.TREND_DEGRADING.value: 1,
         AlertType.BELOW_THRESHOLD.value: 0,
@@ -113,7 +113,9 @@ def get_alert_priority(alert_type: str, severity: str) -> int:
     return priority
 
 
-def calculate_coverage_trend_direction(previous: float, current: float) -> Literal["improving", "stable", "degrading"]:
+def calculate_coverage_trend_direction(
+    previous: float, current: float
+) -> Literal["improving", "stable", "degrading"]:
     """Determine coverage trend direction based on previous and current values.
 
     Args:
@@ -344,7 +346,7 @@ class CoverageAlertManager:
                     alert: CoverageAlert = CoverageAlert(
                         alert_id=str(uuid4()),
                         timestamp=snapshot.timestamp,
-                        alert_type=AlertType.CRITICAL_MODULE_COVERAGE.value,
+                        alert_type=AlertType.MODULE_GAP.value,
                         severity=severity.value,
                         metric_type="statement",
                         granularity="module",
@@ -462,7 +464,7 @@ class CoverageAlertManager:
             AlertType.BELOW_THRESHOLD.value: "Threshold Breach",
             AlertType.REGRESSION_DETECTED.value: "Regression",
             AlertType.TREND_DEGRADING.value: "Trend Decline",
-            AlertType.CRITICAL_MODULE_COVERAGE.value: "Module Critical",
+            AlertType.MODULE_GAP.value: "Module Critical",
         }
         return category_map.get(alert_type, "Unknown")
 
@@ -475,7 +477,10 @@ class CoverageAlertManager:
         Returns:
             True if action is required
         """
-        action_required_severities: set[str] = {AlertSeverity.CRITICAL.value, AlertSeverity.EMERGENCY.value}
+        action_required_severities: set[str] = {
+            AlertSeverity.CRITICAL.value,
+            AlertSeverity.EMERGENCY.value,
+        }
         return severity in action_required_severities
 
     def filter_alerts_by_severity(self, severity: AlertSeverity) -> list[CoverageAlert]:
@@ -559,7 +564,9 @@ class CoverageAlertManager:
         self.alerts = []
         return count
 
-    def acknowledge_alert(self, alert_id: str, acknowledged_by: str, reason: str | None = None) -> bool:
+    def acknowledge_alert(
+        self, alert_id: str, acknowledged_by: str, reason: str | None = None
+    ) -> bool:
         """Mark an alert as acknowledged.
 
         Args:

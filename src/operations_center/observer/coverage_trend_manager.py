@@ -164,7 +164,9 @@ class CoverageTrendManager:
         end_date: datetime = datetime.now(tz=timezone.utc)
         start_date: datetime = end_date - timedelta(days=window_days)
 
-        snapshots: list[CoverageSnapshot] = self.list_snapshots(start_date=start_date, end_date=end_date)
+        snapshots: list[CoverageSnapshot] = self.list_snapshots(
+            start_date=start_date, end_date=end_date
+        )
 
         measurements: list[tuple[datetime, float]] = []
 
@@ -343,7 +345,9 @@ class CoverageTrendManager:
         end_date: datetime | None = None,
     ) -> list[tuple[datetime, float]]:
         """Get historical coverage data for a metric."""
-        snapshots: list[CoverageSnapshot] = self.list_snapshots(start_date=start_date, end_date=end_date)
+        snapshots: list[CoverageSnapshot] = self.list_snapshots(
+            start_date=start_date, end_date=end_date
+        )
 
         data: list[tuple[datetime, float]] = []
         for snapshot in snapshots:
@@ -397,7 +401,9 @@ class CoverageTrendManager:
         """Clean up old data based on retention policy."""
         return self.repository.cleanup(retention_days=retention_days)
 
-    def is_trend_stable(self, metric_type: Literal["statement", "branch", "line"], threshold: float = 1.0) -> bool:
+    def is_trend_stable(
+        self, metric_type: Literal["statement", "branch", "line"], threshold: float = 1.0
+    ) -> bool:
         """Determine if trend is stable (low variance).
 
         Args:
@@ -407,7 +413,9 @@ class CoverageTrendManager:
         Returns:
             True if trend variance is below threshold
         """
-        analysis: CoverageTrendAnalysis = self.compute_trend_analysis(metric_type=metric_type, granularity="repository")
+        analysis: CoverageTrendAnalysis = self.compute_trend_analysis(
+            metric_type=metric_type, granularity="repository"
+        )
         is_stable_trend: bool = analysis.stability_score >= (1.0 - threshold / 100.0)
         return is_stable_trend
 
@@ -471,7 +479,9 @@ class CoverageTrendManager:
         rate: float = (values[-1] - values[0]) / len(values)
         return rate
 
-    def get_critical_modules(self, snapshot: CoverageSnapshot, threshold: float = 70.0) -> list[str]:
+    def get_critical_modules(
+        self, snapshot: CoverageSnapshot, threshold: float = 70.0
+    ) -> list[str]:
         """Get list of modules below critical threshold.
 
         Args:

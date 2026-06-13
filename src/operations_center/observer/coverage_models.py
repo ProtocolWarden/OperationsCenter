@@ -384,9 +384,15 @@ def compare_snapshots(current: CoverageSnapshot, previous: CoverageSnapshot) -> 
         Dictionary with coverage changes for each metric type
     """
     deltas: dict[str, float] = {
-        "statement_delta": current.overall_statement_coverage_pct - previous.overall_statement_coverage_pct,
-        "branch_delta": current.overall_branch_coverage_pct - previous.overall_branch_coverage_pct,
-        "line_delta": current.overall_line_coverage_pct - previous.overall_line_coverage_pct,
+        "statement_delta": (
+            current.overall_statement_coverage_pct - previous.overall_statement_coverage_pct
+        ),
+        "branch_delta": (
+            current.overall_branch_coverage_pct - previous.overall_branch_coverage_pct
+        ),
+        "line_delta": (
+            current.overall_line_coverage_pct - previous.overall_line_coverage_pct
+        ),
     }
     return deltas
 

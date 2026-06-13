@@ -738,7 +738,9 @@ class CoverageAlertRouter:
 
         return channels
 
-    def _is_channel_configured(self, channel_name: Literal["slack", "email", "github", "operator"]) -> bool:
+    def _is_channel_configured(
+        self, channel_name: Literal["slack", "email", "github", "operator"]
+    ) -> bool:
         """Check if a channel is configured.
 
         Args:
@@ -757,7 +759,9 @@ class CoverageAlertRouter:
             return self.operator_channel is not None
         return False
 
-    def _should_route_to_channel(self, alert: CoverageAlert, channel_name: Literal["slack", "email", "github", "operator"]) -> bool:
+    def _should_route_to_channel(
+        self, alert: CoverageAlert, channel_name: Literal["slack", "email", "github", "operator"]
+    ) -> bool:
         """Determine if alert should be routed to channel based on severity and type.
 
         Args:
@@ -767,7 +771,10 @@ class CoverageAlertRouter:
         Returns:
             True if alert should be routed to this channel
         """
-        is_critical: bool = alert.severity in (AlertSeverity.CRITICAL.value, AlertSeverity.EMERGENCY.value)
+        is_critical: bool = alert.severity in (
+            AlertSeverity.CRITICAL.value,
+            AlertSeverity.EMERGENCY.value,
+        )
         is_warning: bool = alert.severity == AlertSeverity.WARNING.value
         is_regression: bool = alert.alert_type == AlertType.REGRESSION_DETECTED.value
 
