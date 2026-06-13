@@ -838,7 +838,7 @@ def validate_alert(alert: CoverageAlert) -> bool:
         "below_threshold",
         "regression_detected",
         "trend_degrading",
-        "module_gap",
+        "critical_module_coverage",
     )
     has_valid_severity: bool = alert.severity in ("info", "warning", "critical", "emergency")
     has_valid_value: bool = 0.0 <= alert.current_value <= 100.0

@@ -263,7 +263,12 @@ class CoverageAlert(BaseModel):
 
     alert_id: str
     timestamp: datetime
-    alert_type: Literal["below_threshold", "regression_detected", "trend_degrading", "critical_module_coverage"]
+    alert_type: Literal[
+        "below_threshold",
+        "regression_detected",
+        "trend_degrading",
+        "critical_module_coverage",
+    ]
     severity: Literal["info", "warning", "critical", "emergency"]
 
     metric_type: Literal["statement", "branch", "line"]
