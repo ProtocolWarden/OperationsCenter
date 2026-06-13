@@ -349,6 +349,7 @@ audit:
       # not OC src packages. No src import is structurally correct for these files.
       - tests/unit/detectors/test_r1_console_presence_validator.py
       - tests/unit/detectors/test_r2_console_budget_validator.py
+      - tests/unit/detectors/test_oc12_model_field_mismatch.py
     C1:
       - src/operations_center/observer/collectors/todo_signal.py
       - src/operations_center/observer/artifact_writer.py
