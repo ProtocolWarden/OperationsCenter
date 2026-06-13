@@ -472,3 +472,343 @@ class TestDashboardCoveragePanels:
         assert provider._get_coverage_health_status(85.0) == "NOMINAL"
         assert provider._get_coverage_health_status(75.0) == "DEGRADED"
         assert provider._get_coverage_health_status(65.0) == "CRITICAL"
+
+    def test_panel_coverage_summary_with_all_metrics(
+        self,
+        mock_health_checker: MagicMock,
+        mock_metrics_collector: MagicMock,
+    ) -> None:
+        """Test coverage summary includes statement, branch, and line metrics."""
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(timezone.utc),
+            run_id="test-run",
+            source="coverage.py",
+            overall_statement_coverage_pct=85.0,
+            overall_branch_coverage_pct=80.0,
+            overall_line_coverage_pct=88.0,
+            uncovered_file_count=2,
+        )
+        provider = DashboardProvider(
+            metrics_collector=mock_metrics_collector,
+            health_checker=mock_health_checker,
+            coverage_snapshot=snapshot,
+        )
+
+        panel = provider._panel_coverage_summary()
+
+        metric_names = {m.name for m in panel.metrics}
+        assert "Overall Coverage" in metric_names
+        assert "Branch Coverage" in metric_names
+        assert "Line Coverage" in metric_names
+        assert "Uncovered Files" in metric_names
+
+    def test_panel_coverage_trend_with_projections(
+        self,
+        mock_health_checker: MagicMock,
+        mock_metrics_collector: MagicMock,
+    ) -> None:
+        """Test coverage trend panel includes projections and stability scores."""
+        trends = CoverageTrendAnalysis(
+            metric_type="statement",
+            granularity="repository",
+            scope_id="",
+            window_start=datetime(2026, 6, 5, tzinfo=timezone.utc),
+            window_end=datetime(2026, 6, 12, tzinfo=timezone.utc),
+            measurements=[],
+            current_value=88.5,
+            average_value=87.0,
+            min_value=85.0,
+            max_value=90.0,
+            trend_direction="improving",
+            trend_pct=0.5,
+            regression_count=0,
+            standard_deviation=1.2,
+            stability_score=0.95,
+            days_of_decline=0,
+            projected_value_7days=91.5,
+        )
+        provider = DashboardProvider(
+            metrics_collector=mock_metrics_collector,
+            health_checker=mock_health_checker,
+            coverage_trends=trends,
+        )
+
+        panel = provider._panel_coverage_trend()
+
+        metric_names = {m.name for m in panel.metrics}
+        assert "Current Value" in metric_names
+        assert "Trend Direction" in metric_names
+        assert "7-Day Projection" in metric_names
+        assert "Stability Score" in metric_names
+
+        stability = next(m for m in panel.metrics if m.name == "Stability Score")
+        assert stability.value == 0.95
+
+    def test_coverage_alerts_integration_with_signal(
+        self,
+        mock_health_checker: MagicMock,
+        mock_metrics_collector: MagicMock,
+    ) -> None:
+        """Integration test: Coverage signal alerts appear in dashboard alerts panel."""
+        coverage_signal = CoverageSignal(
+            status="measured",
+            total_coverage_pct=78.0,
+            statement_coverage_pct=78.0,
+            branch_coverage_pct=72.0,
+            line_coverage_pct=80.0,
+            uncovered_file_count=4,
+            active_alerts=[
+                {
+                    "alert_type": "below_threshold",
+                    "severity": "warning",
+                    "scope_id": "src/observer",
+                    "current_value": 78.0,
+                    "threshold": 80.0,
+                },
+                {
+                    "alert_type": "regression_detected",
+                    "severity": "critical",
+                    "scope_id": "src/api",
+                    "current_value": 72.0,
+                    "previous_value": 85.0,
+                },
+            ],
+        )
+        provider = DashboardProvider(
+            metrics_collector=mock_metrics_collector,
+            health_checker=mock_health_checker,
+            coverage_signal=coverage_signal,
+        )
+
+        panel = provider._panel_coverage_alerts()
+
+        assert len(panel.metrics) >= 2
+        assert any("below_threshold" in m.name for m in panel.metrics)
+        assert any("regression_detected" in m.name for m in panel.metrics)
+
+    def test_coverage_alerts_severity_mapping(
+        self,
+        mock_health_checker: MagicMock,
+        mock_metrics_collector: MagicMock,
+    ) -> None:
+        """Test that coverage alert severities map to correct dashboard statuses."""
+        coverage_signal = CoverageSignal(
+            status="measured",
+            total_coverage_pct=70.0,
+            statement_coverage_pct=70.0,
+            branch_coverage_pct=65.0,
+            line_coverage_pct=72.0,
+            active_alerts=[
+                {"alert_type": "test1", "severity": "info", "scope_id": "s1", "current_value": 70.0},
+                {"alert_type": "test2", "severity": "warning", "scope_id": "s2", "current_value": 70.0},
+                {"alert_type": "test3", "severity": "critical", "scope_id": "s3", "current_value": 70.0},
+                {"alert_type": "test4", "severity": "emergency", "scope_id": "s4", "current_value": 70.0},
+            ],
+        )
+        provider = DashboardProvider(
+            metrics_collector=mock_metrics_collector,
+            health_checker=mock_health_checker,
+            coverage_signal=coverage_signal,
+        )
+
+        panel = provider._panel_coverage_alerts()
+
+        assert any(m.status == "NOMINAL" for m in panel.metrics if "test1" in m.name)
+        assert any(m.status == "WARNING" for m in panel.metrics if "test2" in m.name)
+        assert any(m.status == "CRITICAL" for m in panel.metrics if "test3" in m.name)
+        assert any(m.status == "CRITICAL" for m in panel.metrics if "test4" in m.name)
+
+    def test_dashboard_snapshot_with_complete_coverage_data(
+        self,
+        mock_health_checker: MagicMock,
+        mock_metrics_collector: MagicMock,
+        coverage_snapshot: CoverageSnapshot,
+        coverage_trends: CoverageTrendAnalysis,
+    ) -> None:
+        """Integration test: Dashboard snapshot includes coverage, trends, and alerts."""
+        coverage_signal = CoverageSignal(
+            status="measured",
+            total_coverage_pct=85.5,
+            statement_coverage_pct=85.5,
+            branch_coverage_pct=78.2,
+            line_coverage_pct=87.1,
+            active_alerts=[],
+        )
+        provider = DashboardProvider(
+            metrics_collector=mock_metrics_collector,
+            health_checker=mock_health_checker,
+            coverage_snapshot=coverage_snapshot,
+            coverage_trends=coverage_trends,
+            coverage_signal=coverage_signal,
+        )
+
+        snapshot = provider.generate_snapshot()
+
+        panel_titles = {p.title for p in snapshot.panels}
+        assert "Coverage Summary" in panel_titles
+        assert "Coverage by Module" in panel_titles
+        assert "Coverage Trend" in panel_titles
+        assert "Coverage Alerts" in panel_titles
+
+        coverage_summary = next(p for p in snapshot.panels if p.title == "Coverage Summary")
+        assert len(coverage_summary.metrics) >= 4
+
+    def test_module_coverage_health_status_mapping(
+        self,
+        mock_health_checker: MagicMock,
+        mock_metrics_collector: MagicMock,
+    ) -> None:
+        """Test that module health statuses map correctly to dashboard statuses."""
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(timezone.utc),
+            run_id="test",
+            source="coverage.py",
+            overall_statement_coverage_pct=80.0,
+            module_coverages=[
+                ModuleCoverage(
+                    module_path="src/healthy",
+                    statement_coverage_pct=92.0,
+                    branch_coverage_pct=90.0,
+                    line_coverage_pct=93.0,
+                    statement_count=100,
+                    branch_count=50,
+                    line_count=100,
+                    health_status="healthy",
+                ),
+                ModuleCoverage(
+                    module_path="src/at_risk",
+                    statement_coverage_pct=75.0,
+                    branch_coverage_pct=72.0,
+                    line_coverage_pct=76.0,
+                    statement_count=100,
+                    branch_count=50,
+                    line_count=100,
+                    health_status="at_risk",
+                ),
+                ModuleCoverage(
+                    module_path="src/critical",
+                    statement_coverage_pct=55.0,
+                    branch_coverage_pct=50.0,
+                    line_coverage_pct=56.0,
+                    statement_count=100,
+                    branch_count=50,
+                    line_count=100,
+                    health_status="critical",
+                ),
+            ],
+        )
+        provider = DashboardProvider(
+            metrics_collector=mock_metrics_collector,
+            health_checker=mock_health_checker,
+            coverage_snapshot=snapshot,
+        )
+
+        panel = provider._panel_coverage_by_module()
+
+        healthy_metric = next(m for m in panel.metrics if "healthy" in m.name)
+        assert healthy_metric.status == "HEALTHY"
+
+        at_risk_metric = next(m for m in panel.metrics if "at_risk" in m.name)
+        assert at_risk_metric.status == "DEGRADED"
+
+        critical_metric = next(m for m in panel.metrics if "critical" in m.name)
+        assert critical_metric.status == "CRITICAL"
+
+    def test_coverage_regression_detection_in_trends(
+        self,
+        mock_health_checker: MagicMock,
+        mock_metrics_collector: MagicMock,
+    ) -> None:
+        """Test that coverage regressions are properly detected and displayed."""
+        trends = CoverageTrendAnalysis(
+            metric_type="statement",
+            granularity="repository",
+            scope_id="",
+            window_start=datetime(2026, 6, 5, tzinfo=timezone.utc),
+            window_end=datetime(2026, 6, 12, tzinfo=timezone.utc),
+            measurements=[],
+            current_value=75.0,
+            average_value=82.0,
+            min_value=75.0,
+            max_value=88.0,
+            trend_direction="degrading",
+            trend_pct=-1.0,
+            regression_count=5,
+            standard_deviation=2.0,
+            stability_score=0.6,
+            days_of_decline=5,
+            projected_value_7days=70.0,
+        )
+        provider = DashboardProvider(
+            metrics_collector=mock_metrics_collector,
+            health_checker=mock_health_checker,
+            coverage_trends=trends,
+        )
+
+        panel = provider._panel_coverage_trend()
+
+        regression_metric = next(
+            (m for m in panel.metrics if m.name == "Regressions Detected"),
+            None,
+        )
+        assert regression_metric is not None
+        assert regression_metric.value == 5
+        assert regression_metric.status == "CRITICAL"
+
+        projection = next(
+            (m for m in panel.metrics if m.name == "7-Day Projection"),
+            None,
+        )
+        assert projection is not None
+        assert projection.value == 70.0
+
+    def test_coverage_alert_filtering_by_type(
+        self,
+        mock_health_checker: MagicMock,
+        mock_metrics_collector: MagicMock,
+    ) -> None:
+        """Test filtering coverage alerts by type in dashboard display."""
+        coverage_signal = CoverageSignal(
+            status="measured",
+            total_coverage_pct=75.0,
+            statement_coverage_pct=75.0,
+            branch_coverage_pct=70.0,
+            line_coverage_pct=74.0,
+            active_alerts=[
+                {
+                    "alert_type": "below_threshold",
+                    "severity": "warning",
+                    "scope_id": "module1",
+                    "current_value": 75.0,
+                },
+                {
+                    "alert_type": "below_threshold",
+                    "severity": "warning",
+                    "scope_id": "module2",
+                    "current_value": 74.0,
+                },
+                {
+                    "alert_type": "regression_detected",
+                    "severity": "critical",
+                    "scope_id": "module3",
+                    "current_value": 70.0,
+                },
+            ],
+        )
+        provider = DashboardProvider(
+            metrics_collector=mock_metrics_collector,
+            health_checker=mock_health_checker,
+            coverage_signal=coverage_signal,
+        )
+
+        panel = provider._panel_coverage_alerts()
+
+        below_threshold_alerts = [
+            m for m in panel.metrics if "below_threshold" in m.name
+        ]
+        assert len(below_threshold_alerts) >= 2
+
+        regression_alerts = [
+            m for m in panel.metrics if "regression_detected" in m.name
+        ]
+        assert len(regression_alerts) >= 1
