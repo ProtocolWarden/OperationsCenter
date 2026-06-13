@@ -457,3 +457,54 @@ class TestDependencyReportPerformanceRegression:
         # Verify it picked the newer one (harder to test exactly which,
         # but at least verify it picked one)
         assert signal.source is not None
+
+
+# ========================================================================
+# Coverage Alerting Integration Tests
+# ========================================================================
+@pytest.mark.perf
+class TestDependencyReportAndCoverageAlertingIntegration:
+    """Integration tests between dependency report collection and coverage alerting."""
+
+    def test_dependency_report_collection_with_coverage_alerting_context(
+        self, baseline_report_on_disk: tuple[Path, dict[str, Any]]
+    ) -> None:
+        """Assert dependency report collection works with coverage alerting enabled."""
+        from operations_center.observer.coverage_config import CoverageConfigManager
+
+        report_path, _ = baseline_report_on_disk
+        report_root = report_path.parent.parent
+        ctx = _make_observer_context(report_root)
+
+        # Verify coverage config is available
+        config_manager = CoverageConfigManager.create_auto_discovery()
+        assert config_manager is not None
+
+        # Collect dependency report
+        signal = DependencyDriftCollector().collect(ctx)
+        assert signal.status == "available"
+
+    def test_collection_time_under_alert_generation_overhead(
+        self, baseline_report_on_disk: tuple[Path, dict[str, Any]]
+    ) -> None:
+        """Assert collection time remains acceptable even with coverage alert generation."""
+        from operations_center.observer.coverage_alerting import CoverageAlertManager
+        from operations_center.observer.coverage_config import CoverageConfigManager
+
+        report_path, _ = baseline_report_on_disk
+        report_root = report_path.parent.parent
+        ctx = _make_observer_context(report_root)
+
+        # Load coverage config and alert manager
+        config_manager = CoverageConfigManager.create_auto_discovery()
+        config = config_manager.load_config()
+        # Verify alert manager can be instantiated with coverage config
+        CoverageAlertManager(config)
+
+        # Measure collection time
+        with Timing() as timer:
+            signal = DependencyDriftCollector().collect(ctx)
+
+        assert signal.status == "available"
+        elapsed_ms = timer.elapsed() * 1000
+        assert elapsed_ms < 75, f"Collection time with alerting overhead: {elapsed_ms:.2f}ms, expected <75ms"

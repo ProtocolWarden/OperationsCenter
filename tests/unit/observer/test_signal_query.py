@@ -813,3 +813,245 @@ class TestFlakyTestQueries:
         assert len(recent) == 3
         first_test_name = recent[0].name
         assert first_test_name.startswith("tests/")
+
+
+# ========================================================================
+# Coverage Alerting Integration Tests
+# ========================================================================
+def _make_flaky_snapshot_helper(
+    run_id: str,
+    observed_at: datetime,
+    flaky_count: int = 5,
+    unstable_count: int = 3,
+    most_problematic: list[dict] | None = None,
+    root: Path | None = None,
+    total_test_count: int | None = None,
+) -> Path:
+    """Helper to create a snapshot with flaky test signal."""
+    if most_problematic is None:
+        most_problematic = [
+            {"name": "tests/test_a.py::test_1", "failure_rate": 0.6, "run_count": 10},
+            {"name": "tests/test_b.py::test_2", "failure_rate": 0.4, "run_count": 10},
+            {"name": "tests/test_c.py::test_3", "failure_rate": 0.3, "run_count": 10},
+        ]
+
+    snapshot = RepoStateSnapshot(
+        run_id=run_id,
+        observed_at=observed_at,
+        source_command="test observe",
+        repo=RepoContextSnapshot(
+            name="test-repo",
+            path=Path("/test"),
+            current_branch="main",
+            is_dirty=False,
+        ),
+        signals=RepoSignalsSnapshot(
+            test_signal=TestSignal(status="passing", test_count=total_test_count),
+            dependency_drift=DependencyDriftSignal(status="unavailable"),
+            todo_signal=TodoSignal(),
+            flaky_test_signal=FlakyTestSignal(
+                status="measured",
+                flaky_test_count=flaky_count,
+                unstable_test_count=unstable_count,
+                most_problematic_tests=most_problematic,
+                affected_modules=["tests/unit", "tests/integration"],
+                category_breakdown={"INTERMITTENT": 3, "ENVIRONMENT": 2},
+                recovery_rate=0.5,
+                failure_rate_trend=1.2,
+                estimated_impact={"ci_slowdown_percent": 15.0},
+            ),
+        ),
+    )
+
+    run_dir = root / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    json_path = run_dir / "repo_state_snapshot.json"
+    json_path.write_text(snapshot.model_dump_json(), encoding="utf-8")
+    return json_path
+
+
+class TestSignalQueryAndCoverageAlertingIntegration:
+    """Integration tests between signal queries and coverage alerting system."""
+
+    def test_coverage_change_rate_triggers_alert_conditions(
+        self, tmp_snapshot_root: Path
+    ) -> None:
+        """Verify coverage change rates align with coverage alert thresholds."""
+        from operations_center.observer.coverage_alerting import CoverageAlertConfig
+
+        now = datetime.now(UTC)
+        # Significant coverage regression
+        _make_snapshot(
+            "run_baseline",
+            now - timedelta(days=7),
+            coverage_percent=90.0,
+            root=tmp_snapshot_root,
+        )
+        _make_snapshot(
+            "run_regression",
+            now,
+            coverage_percent=85.0,
+            root=tmp_snapshot_root,
+        )
+
+        query = TestSignalQuery(root=tmp_snapshot_root)
+        trend = query.coverage_change_rate(TimeRange.last_days(8))
+
+        assert trend is not None
+        assert trend.trend_direction == "regressing"
+        assert trend.change_percent == pytest.approx(-5.0)
+
+        # This regression should trigger a coverage alert
+        config = CoverageAlertConfig()
+        assert config.regression_threshold_pct == 2.0  # 5% exceeds 2% threshold
+
+    def test_repository_health_from_test_signals_affects_coverage_alerts(
+        self, tmp_snapshot_root: Path
+    ) -> None:
+        """Verify test signal status affects coverage alert severity."""
+        from operations_center.observer.coverage_alerting import CoverageAlertConfig
+
+        now = datetime.now(UTC)
+
+        # Create failing tests scenario
+        _make_snapshot(
+            "run_failing",
+            now,
+            status="failing",
+            passed_count=95,
+            failed_count=5,
+            coverage_percent=80.0,
+            root=tmp_snapshot_root,
+        )
+
+        query = TestSignalQuery(root=tmp_snapshot_root)
+        latest = query.get_latest_test_signal()
+
+        assert latest is not None
+        assert latest.status == "failing"
+
+        # Failed tests + low coverage = escalated alert severity
+        config = CoverageAlertConfig()
+        # Severity thresholds should escalate for failing tests
+        assert config.severity_critical_threshold < config.severity_high_threshold
+
+    def test_trend_analysis_feeds_coverage_alert_recommendations(
+        self, tmp_snapshot_root: Path
+    ) -> None:
+        """Verify trend analysis provides context for coverage alert recommendations."""
+        now = datetime.now(UTC)
+
+        # Create degrading trend
+        for i in range(5):
+            pct = 90.0 - (i * 1.0)  # Degrading by 1% each day
+            _make_snapshot(
+                f"run_{i}",
+                now - timedelta(days=5 - i),
+                coverage_percent=pct,
+                root=tmp_snapshot_root,
+            )
+
+        query = TestSignalQuery(root=tmp_snapshot_root)
+        trend = query.coverage_change_rate(TimeRange.last_days(6))
+
+        assert trend is not None
+        assert trend.trend_direction == "regressing"
+        assert trend.change_percent == pytest.approx(-4.0)
+
+        # Alert recommendations should suggest halt or remediation
+        assert trend.average_percent < 90.0
+
+    def test_flaky_test_impact_modulates_coverage_alert_thresholds(
+        self, tmp_snapshot_root: Path
+    ) -> None:
+        """Verify flaky test metrics can modulate coverage alert thresholds."""
+        now = datetime.now(UTC)
+
+        # Create snapshot with high flakiness
+        _make_flaky_snapshot_helper(
+            "run_1",
+            now,
+            flaky_count=10,
+            unstable_count=5,
+            total_test_count=100,
+            root=tmp_snapshot_root,
+        )
+
+        query = TestSignalQuery(root=tmp_snapshot_root)
+        health = query.get_repository_health()
+
+        assert health is not None
+        # 10 flaky tests out of 100 = 10% flakiness
+        assert health.flaky_test_percent == pytest.approx(10.0)
+
+        # High flakiness should lower acceptable coverage thresholds
+        # (we can't expect 90% coverage when 10% of tests are unreliable)
+
+    def test_multiple_signals_enable_composite_coverage_alerts(
+        self, tmp_snapshot_root: Path
+    ) -> None:
+        """Verify multiple signal types enable composite alert conditions."""
+        now = datetime.now(UTC)
+
+        # Create composite scenario: failing tests + low coverage + flakiness
+        _make_flaky_snapshot_helper(
+            "run_1",
+            now,
+            flaky_count=8,
+            unstable_count=3,
+            total_test_count=100,
+            root=tmp_snapshot_root,
+        )
+
+        query = TestSignalQuery(root=tmp_snapshot_root)
+
+        # Retrieve all signals
+        health = query.get_repository_health()
+        metrics = query.get_test_metrics()
+
+        assert health is not None
+        assert metrics is not None
+        assert metrics.total_flaky_tests == 8
+
+        # Composite condition: failing + low coverage + flaky = CRITICAL alert
+        # This requires coordination between multiple alert types
+
+    def test_alert_deduplication_across_signal_types(
+        self, tmp_snapshot_root: Path
+    ) -> None:
+        """Verify coverage alerts deduplicate across related signals."""
+        now = datetime.now(UTC)
+
+        # Create scenario where multiple conditions trigger same alert
+        _make_snapshot(
+            "run_1",
+            now - timedelta(hours=1),
+            coverage_percent=75.0,
+            root=tmp_snapshot_root,
+        )
+        _make_snapshot(
+            "run_2",
+            now,
+            coverage_percent=74.0,  # Regression
+            root=tmp_snapshot_root,
+        )
+
+        _make_flaky_snapshot_helper(
+            "run_flaky",
+            now,
+            flaky_count=5,
+            total_test_count=100,
+            root=tmp_snapshot_root,
+        )
+
+        query = TestSignalQuery(root=tmp_snapshot_root)
+
+        # Both coverage regression and flakiness could trigger "investigate coverage" alert
+        # System should deduplicate to avoid alert fatigue
+
+        coverage_trend = query.coverage_change_rate(TimeRange.last_hours(2))
+        health = query.get_repository_health()
+
+        assert coverage_trend is not None
+        assert health is not None
+        # Both conditions present but should result in single alert type

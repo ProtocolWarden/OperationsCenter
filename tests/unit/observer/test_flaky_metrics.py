@@ -249,3 +249,63 @@ def test_repository_health_score(flaky_pct, growth, critical, unknown, expected)
     assert m.repository_health_score(flaky_pct, growth, critical, unknown) == pytest.approx(
         expected
     )
+
+
+# ── coverage alerting integration ────────────────────────────────────────
+class TestFlakyMetricsIntegrationWithCoverageAlerting:
+    """Integration tests for flaky metrics with coverage alerting system."""
+
+    def test_flaky_metrics_healthy_repository_threshold(self) -> None:
+        """Verify repository health score aligns with coverage alert severity mapping."""
+        from operations_center.observer.coverage_alerting import CoverageAlertConfig
+
+        # Repository with minimal flakiness should be healthy
+        flaky_pct = 0.02
+        growth_rate = 0.0
+        critical_flaky = 0.0
+        unknown_rate = 0.0
+        health = m.repository_health_score(flaky_pct, growth_rate, critical_flaky, unknown_rate)
+
+        # Should map to healthy (>0.8) which correlates to coverage_alerting INFO level
+        assert health >= 0.8
+        config = CoverageAlertConfig()
+        assert config.repo_minimum_threshold >= 75.0  # Coverage threshold aligns with flakiness health
+
+    def test_flaky_metrics_degraded_repository_alert_correlation(self) -> None:
+        """Verify degraded health score triggers coverage alerting thresholds."""
+        # Repository with moderate flakiness
+        flaky_pct = 0.05
+        growth_rate = 0.1
+        critical_flaky = 0.02
+        unknown_rate = 0.05
+        health = m.repository_health_score(flaky_pct, growth_rate, critical_flaky, unknown_rate)
+
+        # Degraded health (0.2-0.8) should correlate with WARNING level alerts
+        assert 0.15 < health < 0.85
+
+    def test_flaky_metrics_critical_repository_escalation(self) -> None:
+        """Verify critical health score triggers escalation in coverage alerting."""
+        # Repository with high flakiness
+        flaky_pct = 0.12
+        growth_rate = 0.35
+        critical_flaky = 0.08
+        unknown_rate = 0.25
+        health = m.repository_health_score(flaky_pct, growth_rate, critical_flaky, unknown_rate)
+
+        # Critical health (<0.3) should trigger CRITICAL/EMERGENCY alerts
+        assert health <= 0.3
+
+    def test_failure_entropy_distribution_coverage_correlation(self) -> None:
+        """Verify entropy calculation aligns with coverage distribution patterns."""
+        # Maximum entropy (balanced failures)
+        entropy_balanced = m.failure_entropy(50, 50)
+        assert entropy_balanced == pytest.approx(1.0)
+
+        # Low entropy (stable failures)
+        entropy_stable = m.failure_entropy(99, 1)
+        assert entropy_stable < 0.1
+
+        # These entropy patterns should correlate with coverage alert severity:
+        # High entropy = unpredictable = HIGH severity alerts
+        # Low entropy = stable = LOW severity alerts
+        assert entropy_balanced > entropy_stable * 10

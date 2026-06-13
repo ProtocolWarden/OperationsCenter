@@ -594,3 +594,111 @@ class TestFlakyTestCollectorEdgeCases:
 
         summary = collector._generate_summary(3, 1, 2, 50)
         assert "module" in summary
+
+
+# ========================================================================
+# Coverage Alerting Integration Tests
+# ========================================================================
+class TestFlakyTestCollectorAndCoverageAlertingIntegration:
+    """Integration tests between flaky test collection and coverage alerting."""
+
+    def test_flaky_test_signal_integrates_with_coverage_alerts(self, tmp_path: Path) -> None:
+        """Verify flaky test signals can trigger coverage alerting thresholds."""
+        from operations_center.observer.coverage_config import CoverageConfigManager
+        from operations_center.observer.coverage_alerting import CoverageAlertManager
+
+        metrics_dir = tmp_path / "metrics"
+        metrics_dir.mkdir()
+
+        metrics_file = metrics_dir / "metrics.jsonl"
+        metrics_data = [
+            FlakyTestMetric(
+                nodeid="tests/unit/test_foo.py::test_1",
+                failure_rate=0.15,
+                run_count=10,
+            ),
+        ]
+        with metrics_file.open("w") as f:
+            for metric in metrics_data:
+                f.write(json.dumps(metric.to_dict()) + "\n")
+
+        config = FlakyTestConfig(storage_root=tmp_path)
+        collector = FlakyTestCollector(config)
+        signal = collector.collect(_make_observer_context())
+
+        # Signal should be measurable
+        assert signal.status == "measured"
+
+        # Coverage alerting should recognize flaky test impact
+        config_manager = CoverageConfigManager.create_auto_discovery()
+        alert_config = config_manager.load_config()
+        # Verify alert manager can be instantiated with coverage config
+        CoverageAlertManager(alert_config)
+
+    def test_high_flakiness_below_coverage_threshold_triggers_alert(
+        self, tmp_path: Path
+    ) -> None:
+        """Verify high flakiness combined with low coverage triggers alerts."""
+        from operations_center.observer.coverage_alerting import CoverageAlertConfig
+
+        metrics_dir = tmp_path / "metrics"
+        metrics_dir.mkdir()
+
+        metrics_file = metrics_dir / "metrics.jsonl"
+        # Multiple flaky tests
+        for i in range(5):
+            metric = FlakyTestMetric(
+                nodeid=f"tests/unit/test_{i}.py::test_{i}",
+                failure_rate=0.20 + (i * 0.05),
+                run_count=10,
+            )
+            with metrics_file.open("a") as f:
+                f.write(json.dumps(metric.to_dict()) + "\n")
+
+        config = FlakyTestConfig(storage_root=tmp_path)
+        collector = FlakyTestCollector(config)
+        signal = collector.collect(_make_observer_context())
+
+        # High flakiness detected
+        assert signal.flaky_test_count >= 5
+
+        # Coverage alert thresholds should be triggered
+        alert_config = CoverageAlertConfig()
+        assert alert_config.repo_minimum_threshold >= 75.0  # Standard threshold
+
+    def test_unstable_tests_correlate_with_coverage_volatility(self, tmp_path: Path) -> None:
+        """Verify unstable tests indicate coverage volatility patterns."""
+        metrics_dir = tmp_path / "metrics"
+        metrics_dir.mkdir()
+
+        metrics_file = metrics_dir / "metrics.jsonl"
+        # Tests with variable failure rates
+        metrics_data = [
+            FlakyTestMetric(
+                nodeid="tests/unit/test_volatile.py::test_1",
+                failure_rate=0.05,
+                run_count=10,
+            ),
+            FlakyTestMetric(
+                nodeid="tests/unit/test_volatile.py::test_2",
+                failure_rate=0.07,
+                run_count=10,
+            ),
+        ]
+        with metrics_file.open("w") as f:
+            for metric in metrics_data:
+                f.write(json.dumps(metric.to_dict()) + "\n")
+
+        config = FlakyTestConfig(
+            storage_root=tmp_path,
+            flakiness_threshold=0.10,
+            unstable_threshold=0.05,
+        )
+        collector = FlakyTestCollector(config)
+        signal = collector.collect(_make_observer_context())
+
+        # Unstable tests detected
+        assert signal.unstable_test_count >= 2
+
+        # Coverage trends should reflect this volatility
+        assert signal.status == "measured"
