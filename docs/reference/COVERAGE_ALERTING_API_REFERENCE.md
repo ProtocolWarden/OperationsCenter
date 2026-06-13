@@ -567,16 +567,16 @@ class CoverageAlertManager:
     def generate_alerts(
         self,
         snapshot: CoverageSnapshot,
-        config: "CoverageAlertConfig",
-        history: CoverageTrendAnalysis | None = None
+        previous_snapshot: CoverageSnapshot | None = None,
+        trend_analysis: CoverageTrendAnalysis | None = None
     ) -> list[CoverageAlert]:
         """
         Generate all active alerts for current state.
         
         Parameters:
             snapshot: Current coverage snapshot
-            config: Alert configuration with thresholds
-            history: Optional trend analysis for trend alerts
+            previous_snapshot: Previous snapshot for regression detection
+            trend_analysis: Optional trend analysis for trend-based alerts
         
         Returns: List of CoverageAlert objects
         
@@ -587,7 +587,11 @@ class CoverageAlertManager:
         4. Module critical gap: Module coverage vs. target
         
         Example:
-            alerts = manager.generate_alerts(snapshot, config, history)
+            alerts = manager.generate_alerts(
+                snapshot=snapshot,
+                previous_snapshot=previous_snapshot,
+                trend_analysis=trend
+            )
             for alert in alerts:
                 if alert.severity in ["critical", "emergency"]:
                     # Route to immediate channels
