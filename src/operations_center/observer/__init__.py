@@ -9,6 +9,12 @@ from operations_center.observer.alert_channels import (
     SlackChannel,
 )
 from operations_center.observer.collectors.coverage_collector import CoverageCollector
+from operations_center.observer.coverage_alerting import (
+    AlertSeverity as CoverageAlertSeverity,
+    AlertType,
+    CoverageAlertConfig,
+    CoverageAlertManager,
+)
 from operations_center.observer.collectors.flaky_test_collector import FlakyTestCollector
 from operations_center.observer.coverage_models import (
     CoverageAlert,
@@ -75,7 +81,11 @@ __all__ = [
     "AlertChannelResult",
     "AlertSeverity",
     "AlertThreshold",
+    "AlertType",
     "CoverageAlert",
+    "CoverageAlertConfig",
+    "CoverageAlertManager",
+    "CoverageAlertSeverity",
     "CoverageCollector",
     "CoverageMetric",
     "CoverageSnapshot",
