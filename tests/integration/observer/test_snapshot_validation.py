@@ -208,7 +208,7 @@ class TestSnapshotAccuracyValidation:
                 status="healthy",
                 summary="No critical issues",
             ),
-            todo_signal=TodoSignal(count=10, summary="10 todos"),
+            todo_signal=TodoSignal(todo_count=10),
         )
 
         snapshot = RepoStateSnapshot(

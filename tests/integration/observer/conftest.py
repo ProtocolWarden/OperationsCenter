@@ -58,11 +58,10 @@ def minimal_snapshot() -> RepoStateSnapshot:
         ),
         dependency_drift=DependencyDriftSignal(
             status="healthy",
-            critical_issues=0,
             observed_at=now,
             summary="No critical issues",
         ),
-        todo_signal=TodoSignal(count=5, summary="5 todos/fixmes"),
+        todo_signal=TodoSignal(todo_count=5),
     )
 
     snapshot = RepoStateSnapshot(
@@ -101,11 +100,10 @@ def snapshot_with_errors() -> RepoStateSnapshot:
         ),
         dependency_drift=DependencyDriftSignal(
             status="degraded",
-            critical_issues=2,
             observed_at=now,
             summary="2 critical vulnerabilities",
         ),
-        todo_signal=TodoSignal(count=50, summary="50 todos/fixmes"),
+        todo_signal=TodoSignal(todo_count=50),
     )
 
     snapshot = RepoStateSnapshot(
@@ -145,7 +143,7 @@ def snapshot_with_limited_signals() -> RepoStateSnapshot:
             status="unavailable",
             summary="Not analyzed",
         ),
-        todo_signal=TodoSignal(count=0, summary="None"),
+        todo_signal=TodoSignal(todo_count=0),
     )
 
     snapshot = RepoStateSnapshot(
@@ -183,12 +181,11 @@ def snapshot_with_inconsistent_signals() -> RepoStateSnapshot:
             summary="0 passed",
         ),
         dependency_drift=DependencyDriftSignal(
-            status="healthy",
-            critical_issues=5,  # Inconsistent: healthy but has critical issues
+            status="healthy",  # Inconsistent: healthy but has critical issues
             observed_at=now,
             summary="5 critical issues",
         ),
-        todo_signal=TodoSignal(count=10, summary="10 todos"),
+        todo_signal=TodoSignal(todo_count=10),
     )
 
     snapshot = RepoStateSnapshot(
@@ -256,11 +253,10 @@ def baseline_snapshot() -> RepoStateSnapshot:
         ),
         dependency_drift=DependencyDriftSignal(
             status="healthy",
-            critical_issues=0,
             observed_at=now,
             summary="No critical issues",
         ),
-        todo_signal=TodoSignal(count=10, summary="10 todos"),
+        todo_signal=TodoSignal(todo_count=10),
         coverage_signal=CoverageSignal(
             status="good",
             total_coverage_pct=85.0,

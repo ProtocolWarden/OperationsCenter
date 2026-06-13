@@ -33,6 +33,7 @@ Superseded and removed (native Custodian covers them):
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -524,6 +525,219 @@ def _detect_oc11_schema_sync(ctx: AuditContext) -> DetectorResult:
     return DetectorResult(count=len(missing), samples=samples[:10])
 
 
+# ── OC12: domain-model construction field mismatch ───────────────────────────
+#
+# Flags constructing a local @dataclass / Pydantic BaseModel with a keyword
+# argument that is not one of its fields. This is the observable symptom of a
+# divergent definition: PR #269 constructed FlakyTestMetric(failure_entropy=...)
+# against a model whose real field was pattern_entropy; commit 0cb06e0e renamed
+# CoverageAlert fields while consumers still passed the old names. Both are
+# textually clean but raise TypeError at runtime — caught here as a static fact
+# before CI/merge.
+#
+# Conservative by construction (the adversarial review flagged false positives as
+# the failure mode for this class of detector). A class is only CHECKED when its
+# full field set can be resolved with certainty; anything ambiguous is skipped:
+#   - only @dataclass classes and BaseModel subclasses are candidates;
+#   - a custom __init__, **kwargs, or Pydantic extra="allow" → skip (accepts more);
+#   - an unresolved (non-local, non-terminal) base class → skip (fields unknown);
+#   - only bare-Name constructor calls with explicit keyword args are inspected
+#     (module.Model(...), Model(**d), positional args are not flagged).
+# It does NOT key on name similarity — FlakyTestMetric vs FlakyTestMetrics is an
+# intentional, documented pair and must never be flagged.
+
+_TERMINAL_BASES = {"object", "BaseModel", "Enum", "IntEnum", "StrEnum", "Exception"}
+_DATACLASS_DECORATORS = {"dataclass", "dataclasses.dataclass"}
+
+
+def _decorator_names(node: ast.ClassDef) -> set[str]:
+    names: set[str] = set()
+    for dec in node.decorator_list:
+        target = dec.func if isinstance(dec, ast.Call) else dec
+        if isinstance(target, ast.Name):
+            names.add(target.id)
+        elif isinstance(target, ast.Attribute):
+            names.add(target.attr)
+    return names
+
+
+def _class_own_fields(node: ast.ClassDef) -> set[str]:
+    fields: set[str] = set()
+    for stmt in node.body:
+        if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
+            fields.add(stmt.target.id)
+    return fields
+
+
+def _accepts_extra_kwargs(node: ast.ClassDef) -> bool:
+    """True if the class can accept keyword args beyond its declared fields:
+    a custom __init__, an explicit **kwargs, or Pydantic extra='allow'."""
+    for stmt in node.body:
+        if isinstance(stmt, ast.FunctionDef) and stmt.name == "__init__":
+            return True
+        # model_config = ConfigDict(extra="allow")  or  class Config: extra = "allow"
+        if isinstance(stmt, ast.Assign) and isinstance(stmt.value, ast.Call):
+            for kw in stmt.value.keywords:
+                if kw.arg == "extra" and isinstance(kw.value, ast.Constant) and kw.value.value == "allow":
+                    return True
+        if isinstance(stmt, ast.ClassDef) and stmt.name == "Config":
+            for s in stmt.body:
+                if (
+                    isinstance(s, ast.Assign)
+                    and isinstance(s.value, ast.Constant)
+                    and s.value.value == "allow"
+                ):
+                    return True
+    return False
+
+
+def _detect_oc12_model_field_mismatch(ctx: AuditContext) -> DetectorResult:
+    src = ctx.src_root
+    if not src.is_dir():
+        return DetectorResult(count=0, samples=[])
+
+    # Pass 1: collect every class def in src/ with its own fields, bases, decorators.
+    own_fields: dict[str, set[str]] = {}
+    bases: dict[str, list[str]] = {}
+    is_dataclass: dict[str, bool] = {}
+    inherits_basemodel: dict[str, bool] = {}
+    extra_ok: dict[str, bool] = {}
+    module_stem: dict[str, str] = {}  # class name → defining file stem (e.g. flaky_test_models)
+    defining_file: dict[str, Path] = {}  # class name → defining file path
+    duplicate_names: set[str] = set()
+
+    for py in src.rglob("*.py"):
+        try:
+            tree = ast.parse(py.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError):
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            name = node.name
+            if name in own_fields:
+                duplicate_names.add(name)  # same name in two modules → can't resolve safely
+            base_names = [b.id for b in node.bases if isinstance(b, ast.Name)]
+            own_fields[name] = _class_own_fields(node)
+            bases[name] = base_names
+            decs = _decorator_names(node)
+            is_dataclass[name] = bool(decs & _DATACLASS_DECORATORS)
+            inherits_basemodel[name] = "BaseModel" in base_names
+            extra_ok[name] = _accepts_extra_kwargs(node)
+            module_stem[name] = py.stem
+            defining_file[name] = py
+
+    def resolve(name: str, seen: set[str]) -> set[str] | None:
+        """Full field set incl. local bases, or None if not safely resolvable."""
+        if name in seen or name in duplicate_names:
+            return None
+        seen = seen | {name}
+        fields = set(own_fields.get(name, set()))
+        for base in bases.get(name, []):
+            if base in _TERMINAL_BASES:
+                continue
+            if base not in own_fields:
+                return None  # base is external / unknown → cannot be sure of full field set
+            sub = resolve(base, seen)
+            if sub is None:
+                return None
+            fields |= sub
+        return fields
+
+    # A class is checkable iff: dataclass or BaseModel subclass, no extra-kwargs
+    # escape hatch, and a fully-resolvable field set.
+    checkable: dict[str, set[str]] = {}
+    for name in own_fields:
+        if name in duplicate_names or extra_ok.get(name):
+            continue
+        model_like = is_dataclass.get(name) or inherits_basemodel.get(name)
+        # also treat a class that inherits (transitively, locally) from BaseModel as model-like
+        if not model_like:
+            continue
+        resolved = resolve(name, set())
+        if resolved is None:
+            continue
+        checkable[name] = resolved
+
+    if not checkable:
+        return DetectorResult(count=0, samples=[])
+
+    # Pass 2: scan src + tests for bare Model(field=...) calls with unknown kwargs.
+    # A construction is only checked when we can confirm the bare Name binds to OUR
+    # registered class (and not a same-named class imported from another package —
+    # e.g. OC's own ghost_audit.AuditContext vs custodian's AuditContext). The bind
+    # is confirmed iff the call-site file imports the name from a module whose final
+    # component matches the class's defining file stem, OR the call site is in the
+    # defining file itself with no shadowing import.
+    samples: list[str] = []
+    roots = [src]
+    if ctx.tests_root.is_dir():
+        roots.append(ctx.tests_root)
+    for root in roots:
+        for py in root.rglob("*.py"):
+            try:
+                tree = ast.parse(py.read_text(encoding="utf-8"))
+            except (OSError, SyntaxError):
+                continue
+            rel = py.relative_to(ctx.repo_root)
+            # Lines inside a `with pytest.raises(...)` / `with raises(...)` block are
+            # negative tests asserting the model REJECTS bad input — never flag them.
+            raises_lines: set[int] = set()
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.With):
+                    continue
+                for item in node.items:
+                    ce = item.context_expr
+                    fn = ce.func if isinstance(ce, ast.Call) else None
+                    fn_name = (
+                        fn.attr if isinstance(fn, ast.Attribute)
+                        else fn.id if isinstance(fn, ast.Name)
+                        else None
+                    )
+                    if fn_name == "raises":
+                        for inner in ast.walk(node):
+                            ln = getattr(inner, "lineno", None)
+                            if isinstance(ln, int):
+                                raises_lines.add(ln)
+            # name → imported module's final component (for `from a.b.c import Name`
+            # → "c"; for `import a.b as Name` → "b"); None marks "imported but
+            # un-stemmable" which we treat as a non-match (skip).
+            imported_from_stem: dict[str, str | None] = {}
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom):
+                    stem = node.module.rsplit(".", 1)[-1] if node.module else None
+                    for alias in node.names:
+                        imported_from_stem[alias.asname or alias.name] = stem
+                elif isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if alias.asname:
+                            imported_from_stem[alias.asname] = alias.name.rsplit(".", 1)[-1]
+            for node in ast.walk(tree):
+                if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)):
+                    continue
+                cls = node.func.id
+                if cls not in checkable:
+                    continue
+                if node.lineno in raises_lines:
+                    continue  # negative test asserting rejection
+                if cls in imported_from_stem:
+                    if imported_from_stem[cls] != module_stem.get(cls):
+                        continue  # same name, different module → not our class
+                elif py != defining_file.get(cls):
+                    continue  # not imported and not the defining file → can't confirm
+                fields = checkable[cls]
+                for kw in node.keywords:
+                    if kw.arg is None:  # **kwargs expansion — can't tell
+                        continue
+                    if kw.arg not in fields:
+                        samples.append(
+                            f"{rel}:{node.lineno}: {cls}({kw.arg}=...) — '{kw.arg}' is not a "
+                            f"field of {cls} (fields: {', '.join(sorted(fields)) or 'none'})"
+                        )
+
+    return DetectorResult(count=len(samples), samples=samples[:20])
+
+
 # ── contributor entry point ───────────────────────────────────────────────────
 
 
@@ -554,5 +768,12 @@ def build_oc_detectors() -> list[Detector]:
         ),
         Detector(
             "OC11", "managed-repo config schema sync", "open", _detect_oc11_schema_sync, MEDIUM
+        ),
+        Detector(
+            "OC12",
+            "domain-model constructed with a non-field keyword argument",
+            "open",
+            _detect_oc12_model_field_mismatch,
+            MEDIUM,
         ),
     ]
