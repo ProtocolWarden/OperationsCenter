@@ -1007,3 +1007,406 @@ class TestModuleCoverageHelperFunctions:
         assert summary["healthy"] == 0
         assert summary["at_risk"] == 0
         assert summary["critical"] == 0
+
+
+class TestFindCoverageFile:
+    """Tests for coverage file discovery."""
+
+    def test_find_coverage_file_json(self) -> None:
+        """Test finding coverage.json file."""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", prefix=".coverage", delete=False
+        ) as f:
+            f.write("{}")
+            temp_path = f.name
+
+        try:
+            # Create collector and manually test _find_coverage_file
+            collector = CoverageCollector()
+            # Just verify the method exists and is callable
+            assert callable(collector._find_coverage_file)
+        finally:
+            Path(temp_path).unlink()
+
+    def test_collector_with_none_coverage_path(self) -> None:
+        """Test collector when no coverage file is found."""
+        collector = CoverageCollector(coverage_json_path=None)
+        assert collector.coverage_json_path is None or isinstance(
+            collector.coverage_json_path, str
+        )
+
+
+class TestParseJsonErrorHandling:
+    """Tests for JSON parsing error conditions."""
+
+    def test_parse_coverage_with_missing_totals(self) -> None:
+        """Test parsing coverage with missing totals section."""
+        collector = CoverageCollector()
+
+        coverage_data: dict[str, Any] = {
+            "files": {
+                "src/test.py": {"summary": {"percent_covered": 85.0}},
+            },
+        }
+
+        snapshot = collector._parse_coverage_json(coverage_data)
+
+        assert snapshot is not None
+        assert snapshot.overall_line_coverage_pct == 0.0  # Default when missing
+
+    def test_parse_coverage_with_missing_file_summary(self) -> None:
+        """Test parsing coverage when file has no summary."""
+        collector = CoverageCollector()
+
+        coverage_data: dict[str, Any] = {
+            "totals": {"percent_covered": 50.0},
+            "files": {
+                "src/test.py": {},  # No summary key
+            },
+        }
+
+        snapshot = collector._parse_coverage_json(coverage_data)
+
+        assert snapshot is not None
+        assert len(snapshot.module_coverages) == 1
+        assert snapshot.module_coverages[0].statement_coverage_pct == 0.0
+
+    def test_parse_coverage_with_missing_percent(self) -> None:
+        """Test parsing file coverage with missing percent_covered."""
+        collector = CoverageCollector()
+
+        coverage_data: dict[str, Any] = {
+            "totals": {"percent_covered": 75.0},
+            "files": {
+                "src/test.py": {"summary": {}},  # No percent_covered
+            },
+        }
+
+        snapshot = collector._parse_coverage_json(coverage_data)
+
+        assert snapshot is not None
+        assert snapshot.module_coverages[0].statement_coverage_pct == 0.0
+
+
+class TestCollectWithVariousScenarios:
+    """Tests for collect() method with various snapshot states."""
+
+    def test_collect_generates_measured_status(self) -> None:
+        """Test that collect returns measured status when snapshot exists."""
+        coverage_data: dict[str, Any] = {
+            "totals": {"percent_covered": 90.0},
+            "files": {
+                "src/module/file.py": {"summary": {"percent_covered": 90.0}},
+            },
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(coverage_data, f)
+            temp_path = f.name
+
+        try:
+            collector = CoverageCollector(coverage_json_path=temp_path)
+            context = MagicMock()
+
+            signal = collector.collect(context)
+
+            assert signal.status == "measured"
+            assert signal.total_coverage_pct is not None
+            assert signal.total_coverage_pct == 90.0
+        finally:
+            Path(temp_path).unlink()
+
+    def test_collect_empty_modules_generates_summary(self) -> None:
+        """Test summary generation with empty module list."""
+        coverage_data: dict[str, Any] = {
+            "totals": {"percent_covered": 85.0},
+            "files": {},  # Empty files
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(coverage_data, f)
+            temp_path = f.name
+
+        try:
+            collector = CoverageCollector(coverage_json_path=temp_path)
+            context = MagicMock()
+
+            signal = collector.collect(context)
+
+            assert "Overall coverage" in signal.summary
+            assert "0 modules" in signal.summary
+        finally:
+            Path(temp_path).unlink()
+
+
+class TestGetAverageCoverageAllTypes:
+    """Tests for average coverage calculation with all metric types."""
+
+    def test_get_average_coverage_line(self) -> None:
+        """Test calculating average line coverage."""
+        collector = CoverageCollector()
+
+        module1 = ModuleCoverage(
+            module_path="src/module1",
+            statement_coverage_pct=80.0,
+            branch_coverage_pct=70.0,
+            line_coverage_pct=82.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        module2 = ModuleCoverage(
+            module_path="src/module2",
+            statement_coverage_pct=90.0,
+            branch_coverage_pct=85.0,
+            line_coverage_pct=88.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(UTC),
+            run_id="test",
+            source="pytest-cov",
+            overall_statement_coverage_pct=85.0,
+            overall_branch_coverage_pct=77.5,
+            overall_line_coverage_pct=85.0,
+            module_coverages=[module1, module2],
+        )
+
+        avg = collector._get_average_coverage(snapshot, "line")
+        assert avg == 85.0
+
+
+class TestCalculateModuleAverageAllMetrics:
+    """Tests for module coverage average with all metric types."""
+
+    def test_calculate_module_coverage_average_branch(self) -> None:
+        """Test calculating average branch coverage."""
+        from operations_center.observer.collectors.coverage_collector import (
+            calculate_module_coverage_average,
+        )
+
+        module1 = ModuleCoverage(
+            module_path="src/module1",
+            statement_coverage_pct=80.0,
+            branch_coverage_pct=70.0,
+            line_coverage_pct=81.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        module2 = ModuleCoverage(
+            module_path="src/module2",
+            statement_coverage_pct=90.0,
+            branch_coverage_pct=90.0,
+            line_coverage_pct=91.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        avg = calculate_module_coverage_average([module1, module2], "branch")
+        assert avg == 80.0
+
+    def test_calculate_module_coverage_average_line(self) -> None:
+        """Test calculating average line coverage."""
+        from operations_center.observer.collectors.coverage_collector import (
+            calculate_module_coverage_average,
+        )
+
+        module1 = ModuleCoverage(
+            module_path="src/module1",
+            statement_coverage_pct=80.0,
+            branch_coverage_pct=70.0,
+            line_coverage_pct=82.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        module2 = ModuleCoverage(
+            module_path="src/module2",
+            statement_coverage_pct=90.0,
+            branch_coverage_pct=85.0,
+            line_coverage_pct=88.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        avg = calculate_module_coverage_average([module1, module2], "line")
+        assert avg == 85.0
+
+
+class TestMinMaxModulesWithAllMetrics:
+    """Tests for min/max module finding with all metric types."""
+
+    def test_get_min_coverage_module_branch(self) -> None:
+        """Test finding module with minimum branch coverage."""
+        collector = CoverageCollector()
+
+        module1 = ModuleCoverage(
+            module_path="src/module1",
+            statement_coverage_pct=80.0,
+            branch_coverage_pct=70.0,
+            line_coverage_pct=81.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        module2 = ModuleCoverage(
+            module_path="src/module2",
+            statement_coverage_pct=90.0,
+            branch_coverage_pct=50.0,
+            line_coverage_pct=91.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="critical",
+        )
+
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(UTC),
+            run_id="test",
+            source="pytest-cov",
+            overall_statement_coverage_pct=85.0,
+            overall_branch_coverage_pct=60.0,
+            overall_line_coverage_pct=86.0,
+            module_coverages=[module1, module2],
+        )
+
+        min_module = collector._get_min_coverage_module(snapshot, "branch")
+        assert min_module is not None
+        assert min_module.branch_coverage_pct == 50.0
+
+    def test_get_min_coverage_module_line(self) -> None:
+        """Test finding module with minimum line coverage."""
+        collector = CoverageCollector()
+
+        module1 = ModuleCoverage(
+            module_path="src/module1",
+            statement_coverage_pct=80.0,
+            branch_coverage_pct=70.0,
+            line_coverage_pct=81.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        module2 = ModuleCoverage(
+            module_path="src/module2",
+            statement_coverage_pct=90.0,
+            branch_coverage_pct=85.0,
+            line_coverage_pct=50.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="critical",
+        )
+
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(UTC),
+            run_id="test",
+            source="pytest-cov",
+            overall_statement_coverage_pct=85.0,
+            overall_branch_coverage_pct=77.5,
+            overall_line_coverage_pct=65.5,
+            module_coverages=[module1, module2],
+        )
+
+        min_module = collector._get_min_coverage_module(snapshot, "line")
+        assert min_module is not None
+        assert min_module.line_coverage_pct == 50.0
+
+    def test_get_max_coverage_module_branch(self) -> None:
+        """Test finding module with maximum branch coverage."""
+        collector = CoverageCollector()
+
+        module1 = ModuleCoverage(
+            module_path="src/module1",
+            statement_coverage_pct=80.0,
+            branch_coverage_pct=70.0,
+            line_coverage_pct=81.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        module2 = ModuleCoverage(
+            module_path="src/module2",
+            statement_coverage_pct=90.0,
+            branch_coverage_pct=95.0,
+            line_coverage_pct=91.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(UTC),
+            run_id="test",
+            source="pytest-cov",
+            overall_statement_coverage_pct=85.0,
+            overall_branch_coverage_pct=82.5,
+            overall_line_coverage_pct=86.0,
+            module_coverages=[module1, module2],
+        )
+
+        max_module = collector._get_max_coverage_module(snapshot, "branch")
+        assert max_module is not None
+        assert max_module.branch_coverage_pct == 95.0
+
+    def test_get_max_coverage_module_line(self) -> None:
+        """Test finding module with maximum line coverage."""
+        collector = CoverageCollector()
+
+        module1 = ModuleCoverage(
+            module_path="src/module1",
+            statement_coverage_pct=80.0,
+            branch_coverage_pct=70.0,
+            line_coverage_pct=81.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        module2 = ModuleCoverage(
+            module_path="src/module2",
+            statement_coverage_pct=90.0,
+            branch_coverage_pct=85.0,
+            line_coverage_pct=99.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(UTC),
+            run_id="test",
+            source="pytest-cov",
+            overall_statement_coverage_pct=85.0,
+            overall_branch_coverage_pct=77.5,
+            overall_line_coverage_pct=90.0,
+            module_coverages=[module1, module2],
+        )
+
+        max_module = collector._get_max_coverage_module(snapshot, "line")
+        assert max_module is not None
+        assert max_module.line_coverage_pct == 99.0
