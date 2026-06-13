@@ -34,7 +34,7 @@ class CoverageTrendManager:
     def __init__(
         self,
         repository: CoverageTrendRepository,
-    ):
+    ) -> None:
         self.repository = repository
 
     @classmethod

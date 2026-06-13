@@ -270,7 +270,7 @@ class DefaultConfigProvider(CoverageConfigProvider):
 class YamlConfigProvider(CoverageConfigProvider):
     """Provider that loads configuration from YAML files."""
 
-    def __init__(self, path: str | Path):
+    def __init__(self, path: str | Path) -> None:
         """Initialize provider with file path.
 
         Args:
@@ -349,7 +349,7 @@ class EnvironmentConfigProvider(CoverageConfigProvider):
 class CompositeConfigProvider(CoverageConfigProvider):
     """Provider that combines multiple providers with precedence ordering."""
 
-    def __init__(self, providers: list[CoverageConfigProvider]):
+    def __init__(self, providers: list[CoverageConfigProvider]) -> None:
         """Initialize with ordered list of providers.
 
         Providers are applied in order, with later providers overriding earlier ones.
@@ -383,7 +383,7 @@ class CompositeConfigProvider(CoverageConfigProvider):
 class CoverageConfigManager:
     """Manager for loading, validating, and applying coverage configuration."""
 
-    def __init__(self, providers: CoverageConfigProvider | list[CoverageConfigProvider]):
+    def __init__(self, providers: CoverageConfigProvider | list[CoverageConfigProvider]) -> None:
         """Initialize manager with configuration provider(s).
 
         Args:

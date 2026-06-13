@@ -202,7 +202,7 @@ class CoverageAlertConfig(BaseModel):
 class CoverageAlertManager:
     """Generates and manages coverage alerts for threshold breaches and regressions."""
 
-    def __init__(self, config: CoverageAlertConfig | None = None):
+    def __init__(self, config: CoverageAlertConfig | None = None) -> None:
         """Initialize alert manager with optional configuration.
 
         Args:
