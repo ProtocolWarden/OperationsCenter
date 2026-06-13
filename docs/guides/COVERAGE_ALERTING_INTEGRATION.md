@@ -126,7 +126,7 @@ Coverage Tool Output (.coverage.json)
     ↓
 CoverageCollector.collect(context)
     ↓
-CoverageSignal → CoverageMetricsSnapshot
+CoverageSignal → CoverageSnapshot
     ↓
 CoverageTrendManager.save_snapshot()
     ↓
@@ -508,7 +508,7 @@ coverage:
 import pytest
 from operations_center.observer import (
     CoverageAlertManager,
-    CoverageMetricsSnapshot,
+    CoverageSnapshot,
     CoverageAlertConfig
 )
 
@@ -519,7 +519,7 @@ def test_coverage_alerts_generated():
     config = CoverageAlertConfig(minimum_threshold_pct=80.0)
     manager = CoverageAlertManager()
     
-    snapshot = CoverageMetricsSnapshot(
+    snapshot = CoverageSnapshot(
         timestamp=datetime.now(timezone.utc),
         run_id="test-123",
         source="coverage.py",

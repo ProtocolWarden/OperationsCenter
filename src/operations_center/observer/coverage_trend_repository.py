@@ -44,6 +44,99 @@ class CoverageTrendFormat(str, Enum):
     JSONL = "jsonl"
 
 
+def _generate_checksum(content: str) -> str:
+    """Generate SHA-256 checksum for content.
+
+    Args:
+        content: Content to checksum
+
+    Returns:
+        Hexadecimal SHA-256 hash
+    """
+    return hashlib.sha256(content.encode()).hexdigest()
+
+
+def _create_snapshot_metadata(
+    snapshot: CoverageSnapshot,
+    path: str,
+    checksum: str | None = None,
+) -> dict[str, str | int]:
+    """Create metadata dictionary for stored snapshot.
+
+    Args:
+        snapshot: Snapshot that was stored
+        path: Path or URL where snapshot is stored
+        checksum: Optional checksum of snapshot content
+
+    Returns:
+        Metadata dictionary
+    """
+    if checksum is None:
+        checksum = _generate_checksum(snapshot.model_dump_json())
+
+    return {
+        "run_id": snapshot.run_id,
+        "observed_at": snapshot.timestamp.isoformat(),
+        "version": 1,
+        "path": path,
+        "checksum": checksum,
+    }
+
+
+def _create_trend_metadata(
+    analysis: CoverageTrendAnalysis,
+    path: str,
+    checksum: str | None = None,
+) -> dict[str, str | int]:
+    """Create metadata dictionary for stored trend analysis.
+
+    Args:
+        analysis: Trend analysis that was stored
+        path: Path or URL where analysis is stored
+        checksum: Optional checksum of analysis content
+
+    Returns:
+        Metadata dictionary
+    """
+    if checksum is None:
+        checksum = _generate_checksum(analysis.model_dump_json())
+
+    return {
+        "run_id": f"{analysis.metric_type}_{analysis.granularity}",
+        "observed_at": analysis.window_end.isoformat(),
+        "version": 1,
+        "path": path,
+        "checksum": checksum,
+    }
+
+
+def _create_alert_metadata(
+    alert: CoverageAlert,
+    path: str,
+    checksum: str | None = None,
+) -> dict[str, str | int]:
+    """Create metadata dictionary for stored alert.
+
+    Args:
+        alert: Alert that was stored
+        path: Path or URL where alert is stored
+        checksum: Optional checksum of alert content
+
+    Returns:
+        Metadata dictionary
+    """
+    if checksum is None:
+        checksum = _generate_checksum(alert.model_dump_json())
+
+    return {
+        "run_id": alert.alert_id,
+        "observed_at": alert.timestamp.isoformat(),
+        "version": 1,
+        "path": path,
+        "checksum": checksum,
+    }
+
+
 class CoverageTrendRepository(ABC):
     """Abstract base class for coverage trend storage backends."""
 
@@ -161,15 +254,8 @@ class LocalCoverageTrendRepository(CoverageTrendRepository):
         file_path = run_dir / "snapshot.json"
         file_path.write_text(content, encoding="utf-8")
 
-        checksum = hashlib.sha256(content.encode()).hexdigest()
-
-        metadata: dict[str, str | int] = {
-            "run_id": snapshot.run_id,
-            "observed_at": snapshot.timestamp.isoformat(),
-            "version": 1,
-            "path": str(file_path),
-            "checksum": checksum,
-        }
+        checksum = _generate_checksum(content)
+        metadata = _create_snapshot_metadata(snapshot, str(file_path), checksum)
 
         self._index[snapshot.run_id] = metadata
         self._save_index()
@@ -254,15 +340,8 @@ class LocalCoverageTrendRepository(CoverageTrendRepository):
         with open(file_path, "a", encoding="utf-8") as f:
             f.write(content + "\n")
 
-        checksum = hashlib.sha256(content.encode()).hexdigest()
-
-        return {
-            "run_id": f"{analysis.metric_type}_{analysis.granularity}",
-            "observed_at": analysis.window_end.isoformat(),
-            "version": 1,
-            "path": str(file_path),
-            "checksum": checksum,
-        }
+        checksum = _generate_checksum(content)
+        return _create_trend_metadata(analysis, str(file_path), checksum)
 
     def load_trend_analysis(
         self,
@@ -300,15 +379,8 @@ class LocalCoverageTrendRepository(CoverageTrendRepository):
         with open(alerts_file, "a", encoding="utf-8") as f:
             f.write(content + "\n")
 
-        checksum = hashlib.sha256(content.encode()).hexdigest()
-
-        return {
-            "run_id": alert.alert_id,
-            "observed_at": alert.timestamp.isoformat(),
-            "version": 1,
-            "path": str(alerts_file),
-            "checksum": checksum,
-        }
+        checksum = _generate_checksum(content)
+        return _create_alert_metadata(alert, str(alerts_file), checksum)
 
     def list_alerts(
         self,
@@ -401,15 +473,8 @@ class S3CoverageTrendRepository(CoverageTrendRepository):
             ContentType="application/json",
         )
 
-        checksum = hashlib.sha256(content.encode()).hexdigest()
-
-        return {
-            "run_id": snapshot.run_id,
-            "observed_at": snapshot.timestamp.isoformat(),
-            "version": 1,
-            "path": f"s3://{self.bucket}/{key}",
-            "checksum": checksum,
-        }
+        checksum = _generate_checksum(content)
+        return _create_snapshot_metadata(snapshot, f"s3://{self.bucket}/{key}", checksum)
 
     def load_snapshot(self, run_id: str) -> CoverageSnapshot:
         """Load a snapshot from S3."""
@@ -495,15 +560,8 @@ class S3CoverageTrendRepository(CoverageTrendRepository):
             ContentType="application/jsonl",
         )
 
-        checksum = hashlib.sha256(content.encode()).hexdigest()
-
-        return {
-            "run_id": f"{analysis.metric_type}_{analysis.granularity}",
-            "observed_at": analysis.window_end.isoformat(),
-            "version": 1,
-            "path": f"s3://{self.bucket}/{key}",
-            "checksum": checksum,
-        }
+        checksum = _generate_checksum(content)
+        return _create_trend_metadata(analysis, f"s3://{self.bucket}/{key}", checksum)
 
     def load_trend_analysis(
         self,
@@ -545,15 +603,8 @@ class S3CoverageTrendRepository(CoverageTrendRepository):
             ContentType="application/jsonl",
         )
 
-        checksum = hashlib.sha256(content.encode()).hexdigest()
-
-        return {
-            "run_id": alert.alert_id,
-            "observed_at": alert.timestamp.isoformat(),
-            "version": 1,
-            "path": f"s3://{self.bucket}/{key}",
-            "checksum": checksum,
-        }
+        checksum = _generate_checksum(content)
+        return _create_alert_metadata(alert, f"s3://{self.bucket}/{key}", checksum)
 
     def list_alerts(
         self,
@@ -640,15 +691,8 @@ class HTTPCoverageTrendRepository(CoverageTrendRepository):
         response = self.session.put(url, data=data, headers={"Content-Type": "application/json"})
         response.raise_for_status()
 
-        checksum = hashlib.sha256(data.encode()).hexdigest()
-
-        return {
-            "run_id": snapshot.run_id,
-            "observed_at": snapshot.timestamp.isoformat(),
-            "version": 1,
-            "path": url,
-            "checksum": checksum,
-        }
+        checksum = _generate_checksum(data)
+        return _create_snapshot_metadata(snapshot, url, checksum)
 
     def load_snapshot(self, run_id: str) -> CoverageSnapshot:
         """Load a snapshot via HTTP."""
@@ -706,15 +750,8 @@ class HTTPCoverageTrendRepository(CoverageTrendRepository):
         response = self.session.put(url, data=data, headers={"Content-Type": "application/json"})
         response.raise_for_status()
 
-        checksum = hashlib.sha256(data.encode()).hexdigest()
-
-        return {
-            "run_id": f"{analysis.metric_type}_{analysis.granularity}",
-            "observed_at": analysis.window_end.isoformat(),
-            "version": 1,
-            "path": url,
-            "checksum": checksum,
-        }
+        checksum = _generate_checksum(data)
+        return _create_trend_metadata(analysis, url, checksum)
 
     def load_trend_analysis(
         self,
@@ -740,15 +777,8 @@ class HTTPCoverageTrendRepository(CoverageTrendRepository):
         response = self.session.post(url, data=data, headers={"Content-Type": "application/json"})
         response.raise_for_status()
 
-        checksum = hashlib.sha256(data.encode()).hexdigest()
-
-        return {
-            "run_id": alert.alert_id,
-            "observed_at": alert.timestamp.isoformat(),
-            "version": 1,
-            "path": f"{url}/{alert.alert_id}",
-            "checksum": checksum,
-        }
+        checksum = _generate_checksum(data)
+        return _create_alert_metadata(alert, f"{url}/{alert.alert_id}", checksum)
 
     def list_alerts(
         self,

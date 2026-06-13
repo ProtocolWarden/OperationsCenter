@@ -589,34 +589,6 @@ def get_default_alert_channels() -> list[str]:
     return defaults
 
 
-def parse_env_var_config(env_var_name: str, default_value: Any = None) -> Any:
-    """Parse configuration value from environment variable.
-
-    Args:
-        env_var_name: Name of environment variable to read
-        default_value: Default value if variable not set
-
-    Returns:
-        Parsed configuration value
-    """
-    import os
-    value: str | None = os.environ.get(env_var_name)
-    if value is None:
-        return default_value
-
-    if value.lower() in ("true", "false"):
-        return value.lower() == "true"
-    try:
-        return int(value)
-    except ValueError:
-        pass
-    try:
-        return float(value)
-    except ValueError:
-        pass
-    return value
-
-
 __all__ = [
     "ConfigValidationError",
     "CoverageConfigSchema",

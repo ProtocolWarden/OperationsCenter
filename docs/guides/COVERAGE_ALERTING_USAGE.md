@@ -59,7 +59,7 @@ else:  # unavailable
 ```python
 from operations_center.observer import (
     CoverageTrendManager,
-    CoverageMetricsSnapshot
+    CoverageSnapshot
 )
 from datetime import datetime, timezone
 
@@ -67,7 +67,7 @@ from datetime import datetime, timezone
 manager = CoverageTrendManager.create_local(base_path=".coverage_data")
 
 # Create snapshot from current measurement
-snapshot = CoverageMetricsSnapshot(
+snapshot = CoverageSnapshot(
     timestamp=datetime.now(timezone.utc),
     run_id="abc123def456",  # Git commit SHA
     source="coverage.py",

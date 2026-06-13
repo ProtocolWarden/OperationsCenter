@@ -21,12 +21,12 @@
 
 ## Core Data Models
 
-### CoverageMetricsSnapshot
+### CoverageSnapshot
 
 Point-in-time measurement of code coverage.
 
 ```python
-class CoverageMetricsSnapshot(BaseModel):
+class CoverageSnapshot(BaseModel):
     """A single point-in-time coverage measurement."""
     
     timestamp: datetime
@@ -71,7 +71,7 @@ class CoverageMetricsSnapshot(BaseModel):
 
 **Usage Example**:
 ```python
-snapshot = CoverageMetricsSnapshot(
+snapshot = CoverageSnapshot(
     timestamp=datetime.now(timezone.utc),
     run_id="abc123def456",
     source="coverage.py",
@@ -349,12 +349,12 @@ class CoverageTrendRepository(ABC):
     """Abstract base for coverage trend storage backends."""
     
     @abstractmethod
-    def save_snapshot(self, snapshot: CoverageMetricsSnapshot) -> None:
+    def save_snapshot(self, snapshot: CoverageSnapshot) -> None:
         """
         Store a coverage metrics snapshot.
         
         Parameters:
-            snapshot: CoverageMetricsSnapshot to persist
+            snapshot: CoverageSnapshot to persist
         
         Implementation:
         - Serialize to JSON/JSONL
@@ -363,11 +363,11 @@ class CoverageTrendRepository(ABC):
         """
     
     @abstractmethod
-    def get_snapshot(self, run_id: str) -> CoverageMetricsSnapshot | None:
+    def get_snapshot(self, run_id: str) -> CoverageSnapshot | None:
         """
         Retrieve a snapshot by run ID.
         
-        Returns: CoverageMetricsSnapshot or None if not found
+        Returns: CoverageSnapshot or None if not found
         """
     
     @abstractmethod
@@ -474,11 +474,11 @@ class CoverageTrendManager:
             snapshot: CoverageMetricsSnapshot to store
         """
     
-    def get_latest_snapshot(self) -> CoverageMetricsSnapshot:
+    def get_latest_snapshot(self) -> CoverageSnapshot:
         """
         Retrieve most recent coverage measurement.
         
-        Returns: Latest CoverageMetricsSnapshot
+        Returns: Latest CoverageSnapshot
         Raises: CoverageTrendError if no snapshots exist
         """
     
@@ -511,7 +511,7 @@ class CoverageTrendManager:
     
     def detect_regression(
         self,
-        current: CoverageMetricsSnapshot,
+        current: CoverageSnapshot,
         baseline: str = "previous_run"  # or "7day_avg", "30day_avg"
     ) -> bool:
         """
@@ -566,7 +566,7 @@ class CoverageAlertManager:
     
     def generate_alerts(
         self,
-        snapshot: CoverageMetricsSnapshot,
+        snapshot: CoverageSnapshot,
         config: "CoverageAlertConfig",
         history: CoverageTrendAnalysis | None = None
     ) -> list[CoverageAlert]:
