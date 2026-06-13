@@ -292,7 +292,7 @@ class YamlConfigProvider(CoverageConfigProvider):
             raise ConfigValidationError(f"Configuration file not found: {self.path}")
 
         try:
-            with open(self.path) as f:
+            with open(self.path, encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
                 # Filter out None values
                 return {k: v for k, v in data.items() if v is not None}

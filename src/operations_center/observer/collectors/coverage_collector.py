@@ -94,7 +94,7 @@ class CoverageCollector:
             return None
 
         try:
-            with open(self.coverage_json_path) as f:
+            with open(self.coverage_json_path, encoding="utf-8") as f:
                 data = json.load(f)
 
             return self._parse_coverage_json(data)

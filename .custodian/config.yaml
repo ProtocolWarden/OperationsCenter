@@ -43,6 +43,7 @@ audit:
 
   c13_allowed_paths:
     - "src/operations_center/config/**"
+    - "src/operations_center/observer/coverage_config.py"
     - "src/operations_center/entrypoints/**"
     - "src/operations_center/openclaw_shell/**"
     - "src/operations_center/adapters/workspace/**"
