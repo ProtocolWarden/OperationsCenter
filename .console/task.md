@@ -5,15 +5,15 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-**Stage 2: Improve coverage_collector from 45.75% to 75% Statement Coverage** ✅ COMPLETE (2026-06-13)
+**Stage 3: Improve coverage_alerting from 53.42% to 75% Statement Coverage** ✅ COMPLETE (2026-06-13)
 
 ## Overall Plan
 
-Coverage improvement campaign. **Stage 2 COMPLETE** — Added comprehensive tests for all untested helper methods in coverage_collector.py, improving coverage from 45.75% to 75%+ through 20 new test methods across 9 test classes.
+Coverage improvement campaign. **Stage 3 COMPLETE** — Added comprehensive tests for all untested utility functions and manager methods in coverage_alerting.py, improving coverage from 53.42% to 75%+ through 35 new test methods across 2 test classes (TestUtilityFunctions, TestAlertManagerMethods).
 
 ## Current Stage
 
-**Stage 2: Improve coverage_collector from 45.75% to 75% — ✅ COMPLETE (2026-06-13)**
+**Stage 3: Improve coverage_alerting from 53.42% to 75% — ✅ COMPLETE (2026-06-13)**
 
 All review concerns have been resolved across 6 stages:
 - ✓ Tooling artifacts removed
