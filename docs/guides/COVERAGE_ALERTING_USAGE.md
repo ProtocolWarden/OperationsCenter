@@ -195,7 +195,7 @@ if trend.trend_direction == "stable":
 ```python
 from operations_center.observer import (
     CoverageAlertManager,
-    CoverageMetricsSnapshot,
+    CoverageSnapshot,
     CoverageAlertConfig
 )
 
@@ -432,7 +432,7 @@ class RepoObserverService:
 
 ```python
 # Dashboard panel for coverage alerts
-def render_coverage_panel(snapshot: CoverageMetricsSnapshot):
+def render_coverage_panel(snapshot: CoverageSnapshot):
     return {
         "title": "Coverage Status",
         "metrics": {

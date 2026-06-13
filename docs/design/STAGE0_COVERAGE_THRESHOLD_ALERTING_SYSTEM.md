@@ -385,7 +385,7 @@ coverage_alerts:
 For historical tracking and trend analysis, we define a persistent record:
 
 ```python
-class CoverageMetricsSnapshot(BaseModel):
+class CoverageSnapshot(BaseModel):
     """A single point-in-time coverage measurement."""
     
     timestamp: datetime
@@ -514,7 +514,7 @@ Coverage trends are stored in a time-series optimized backend:
 ```
 .coverage_data/
 ├── 2026-06-01/
-│   ├── run-abc123.jsonl  (CoverageMetricsSnapshot)
+│   ├── run-abc123.jsonl  (CoverageSnapshot)
 │   ├── trends-daily.jsonl (CoverageTrendAnalysis)
 │   └── alerts-daily.jsonl (CoverageAlert)
 ├── 2026-06-02/
@@ -545,7 +545,7 @@ s3://ops-center-coverage/
 class CoverageTrendCollector:
     """Query and aggregate coverage trend data."""
     
-    def get_latest_snapshot(self) -> CoverageMetricsSnapshot:
+    def get_latest_snapshot(self) -> CoverageSnapshot:
         """Most recent coverage measurement."""
         
     def get_historical_data(
@@ -675,7 +675,7 @@ class CoverageTrendCollector:
     
     def collect_signal(
         self,
-        latest_snapshot: CoverageMetricsSnapshot
+        latest_snapshot: CoverageSnapshot
     ) -> CoverageSignal:
         """Generate CoverageSignal with trends and alerts."""
         
@@ -712,7 +712,7 @@ class CoverageTrendCollector:
     
     def _generate_alerts(
         self,
-        snapshot: CoverageMetricsSnapshot,
+        snapshot: CoverageSnapshot,
         trend_7day: CoverageTrendAnalysis,
         trend_30day: CoverageTrendAnalysis
     ) -> list[CoverageAlert]:
@@ -995,7 +995,7 @@ This Stage 0 design document specifies:
 ✅ **Coverage metrics** at three granularities (repository, module, file) and three types (statement, branch, line)  
 ✅ **Threshold definitions** with configurable minimums, warnings, and targets  
 ✅ **Four alert types**: below-threshold, regression, trend degradation, module gaps  
-✅ **Data model** for historical tracking with `CoverageMetricsSnapshot`, `CoverageTrendAnalysis`, `CoverageAlert`  
+✅ **Data model** for historical tracking with `CoverageSnapshot`, `CoverageTrendAnalysis`, `CoverageAlert`  
 ✅ **Observer integration** with extended `CoverageSignal` and `CoverageTrendCollector`  
 ✅ **Detection criteria** with accuracy specifications and edge case handling  
 ✅ **Implementation roadmap** across 8 stages with risk mitigation  
@@ -1017,7 +1017,7 @@ The data collection layer gathers raw coverage metrics from test execution tools
 **Responsibilities**:
 - Parse coverage tool output (coverage.py JSON, jacoco XML, istanbul JSON)
 - Extract metrics at repository, module, and file granularities
-- Normalize data into `CoverageMetricsSnapshot` format
+- Normalize data into `CoverageSnapshot` format
 - Handle tool failures and partial data gracefully
 
 **Key Classes**:
@@ -1026,7 +1026,7 @@ class CoverageCollector:
     def collect(context: ObserverContext) -> CoverageSignal
     # Parses coverage.py output and returns structured signal
     
-class CoverageMetricsSnapshot:
+class CoverageSnapshot:
     timestamp: datetime
     overall_statement_coverage_pct: float
     overall_branch_coverage_pct: float
@@ -1053,7 +1053,7 @@ This layer persists historical data and computes trend analytics:
 **Storage Backends**:
 ```python
 class CoverageTrendRepository:
-    def save_snapshot(snapshot: CoverageMetricsSnapshot) -> None
+    def save_snapshot(snapshot: CoverageSnapshot) -> None
     def get_historical_data(metric_type, granularity, scope_id, start_date, end_date) -> list[tuple[datetime, float]]
     
 # Implementations:
@@ -1073,7 +1073,7 @@ class CoverageTrendManager:
     def compute_trend_analysis(metric_type, granularity, scope_id, window_days) -> CoverageTrendAnalysis:
         # Returns: trend direction, slope (%/day), volatility score, 7-day projection
         
-    def detect_regression(current_snapshot: CoverageMetricsSnapshot, baseline: CoverageMetricsSnapshot) -> bool:
+    def detect_regression(current_snapshot: CoverageSnapshot, baseline: CoverageSnapshot) -> bool:
         # Compares current vs. previous measurement
         # Returns true if delta >= threshold_pct
         
@@ -1101,7 +1101,7 @@ This layer detects alert conditions and generates actionable alerts:
 ```python
 class CoverageAlertManager:
     def generate_alerts(
-        snapshot: CoverageMetricsSnapshot,
+        snapshot: CoverageSnapshot,
         config: CoverageAlertConfig,
         history: CoverageTrendAnalysis
     ) -> list[CoverageAlert]:
@@ -1196,7 +1196,7 @@ Coverage Tool Output (coverage.py, jacoco, etc.)
         ↓
 [CoverageCollector] ← parses raw data
         ↓
-CoverageMetricsSnapshot
+CoverageSnapshot
         ↓
 [CoverageTrendRepository] ← persists to storage
         ↓
@@ -1497,7 +1497,7 @@ Condition: Project upgrades coverage.py from 6.0 to 7.0
 Handling:
   - Coverage calculation may change (e.g., branch calculation)
   - Historical data remains valid but not directly comparable
-  - Store "source_version" in CoverageMetricsSnapshot
+  - Store "source_version" in CoverageSnapshot
   - Apply version-specific normalization if needed
   - Document change in alert notes
 ```

@@ -10,6 +10,8 @@ from operations_center.observer.alert_channels import (
 )
 from operations_center.observer.collectors.coverage_collector import CoverageCollector
 from operations_center.observer.coverage_alert_channels import (
+    AlertChannelConfig,
+    AlertChannelRoute,
     CoverageAlertRouter,
     CoverageEmailFormatter,
     CoverageGitHubFormatter,
@@ -23,8 +25,6 @@ from operations_center.observer.coverage_alerting import (
     CoverageAlertManager,
 )
 from operations_center.observer.coverage_config import (
-    AlertChannelConfig,
-    AlertChannelRoute,
     CompositeConfigProvider,
     ConfigValidationError,
     CoverageConfigManager,

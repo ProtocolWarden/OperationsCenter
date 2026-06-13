@@ -466,12 +466,12 @@ class CoverageTrendManager:
     def create_s3(bucket: str, prefix: str, region: str) -> "CoverageTrendManager":
         """Create manager with S3 storage."""
     
-    def save_snapshot(self, snapshot: CoverageMetricsSnapshot) -> None:
+    def save_snapshot(self, snapshot: CoverageSnapshot) -> None:
         """
         Persist a coverage metrics snapshot.
         
         Parameters:
-            snapshot: CoverageMetricsSnapshot to store
+            snapshot: CoverageSnapshot to store
         """
     
     def get_latest_snapshot(self) -> CoverageSnapshot:
