@@ -1450,3 +1450,366 @@ class TestCoverageConfigManagerMethods:
                 assert config == {}
             finally:
                 Path(f.name).unlink()
+
+
+class TestAlertChannelRouteAdvanced:
+    """Advanced tests for AlertChannelRoute matching logic."""
+
+    def test_matches_alert_with_disabled_route(self) -> None:
+        """Test that disabled routes never match."""
+        route = AlertChannelRoute(
+            channel_name="slack",
+            enabled=False,
+            alert_types=["below_threshold"],
+        )
+
+        assert not route.matches_alert(
+            AlertType.BELOW_THRESHOLD, AlertSeverity.INFO, "module"
+        )
+
+    def test_matches_alert_with_empty_filters(self) -> None:
+        """Test that routes with empty filters match all alerts."""
+        route = AlertChannelRoute(
+            channel_name="slack",
+            enabled=True,
+            alert_types=[],
+            severity_levels=[],
+            enabled_modules=[],
+        )
+
+        assert route.matches_alert(AlertType.BELOW_THRESHOLD, AlertSeverity.CRITICAL)
+        assert route.matches_alert(AlertType.REGRESSION_DETECTED, AlertSeverity.INFO)
+
+    def test_matches_alert_with_type_filter(self) -> None:
+        """Test alert type filtering."""
+        route = AlertChannelRoute(
+            channel_name="slack",
+            enabled=True,
+            alert_types=["below_threshold"],
+            severity_levels=[],
+            enabled_modules=[],
+        )
+
+        assert route.matches_alert(AlertType.BELOW_THRESHOLD, AlertSeverity.INFO)
+        assert not route.matches_alert(
+            AlertType.REGRESSION_DETECTED, AlertSeverity.INFO
+        )
+
+    def test_matches_alert_with_severity_filter(self) -> None:
+        """Test severity level filtering."""
+        route = AlertChannelRoute(
+            channel_name="slack",
+            enabled=True,
+            alert_types=[],
+            severity_levels=["critical", "emergency"],
+            enabled_modules=[],
+        )
+
+        assert route.matches_alert(
+            AlertType.BELOW_THRESHOLD, AlertSeverity.CRITICAL
+        )
+        assert not route.matches_alert(
+            AlertType.BELOW_THRESHOLD, AlertSeverity.WARNING
+        )
+
+    def test_matches_alert_with_module_filter(self) -> None:
+        """Test module filtering."""
+        route = AlertChannelRoute(
+            channel_name="slack",
+            enabled=True,
+            alert_types=[],
+            severity_levels=[],
+            enabled_modules=["src/observer", "src/custodian"],
+        )
+
+        assert route.matches_alert(
+            AlertType.BELOW_THRESHOLD, AlertSeverity.INFO, "src/observer"
+        )
+        assert not route.matches_alert(
+            AlertType.BELOW_THRESHOLD, AlertSeverity.INFO, "src/execution"
+        )
+
+    def test_matches_alert_module_filter_no_module_provided(self) -> None:
+        """Test module filter when no module is provided."""
+        route = AlertChannelRoute(
+            channel_name="slack",
+            enabled=True,
+            alert_types=[],
+            severity_levels=[],
+            enabled_modules=["src/observer"],
+        )
+
+        assert not route.matches_alert(
+            AlertType.BELOW_THRESHOLD, AlertSeverity.INFO, None
+        )
+
+    def test_matches_alert_combined_filters(self) -> None:
+        """Test combined type, severity, and module filters."""
+        route = AlertChannelRoute(
+            channel_name="slack",
+            enabled=True,
+            alert_types=["below_threshold", "regression_detected"],
+            severity_levels=["critical"],
+            enabled_modules=["src/observer"],
+        )
+
+        assert route.matches_alert(
+            AlertType.BELOW_THRESHOLD, AlertSeverity.CRITICAL, "src/observer"
+        )
+        assert not route.matches_alert(
+            AlertType.BELOW_THRESHOLD, AlertSeverity.WARNING, "src/observer"
+        )
+        assert not route.matches_alert(
+            AlertType.BELOW_THRESHOLD, AlertSeverity.CRITICAL, "src/custodian"
+        )
+
+
+class TestAlertChannelConfigAdvanced:
+    """Advanced tests for AlertChannelConfig routing."""
+
+    def test_get_routes_for_alert_empty_routes(self) -> None:
+        """Test routing when no routes are configured."""
+        config = AlertChannelConfig(routes=[], default_channels=["operator"])
+
+        routes = config.get_routes_for_alert(
+            AlertType.BELOW_THRESHOLD, AlertSeverity.INFO
+        )
+
+        assert routes == ["operator"]
+
+    def test_get_routes_for_alert_multiple_matching_routes(self) -> None:
+        """Test that first matching route wins."""
+        config = AlertChannelConfig(
+            routes=[
+                AlertChannelRoute(
+                    channel_name="slack",
+                    enabled=True,
+                    alert_types=["below_threshold"],
+                ),
+                AlertChannelRoute(
+                    channel_name="email",
+                    enabled=True,
+                    alert_types=["below_threshold"],
+                ),
+            ],
+            default_channels=["operator"],
+        )
+
+        routes = config.get_routes_for_alert(
+            AlertType.BELOW_THRESHOLD, AlertSeverity.INFO
+        )
+
+        assert routes == ["slack"]
+
+    def test_get_routes_for_alert_no_match_uses_default(self) -> None:
+        """Test fallback to defaults when no routes match."""
+        config = AlertChannelConfig(
+            routes=[
+                AlertChannelRoute(
+                    channel_name="slack",
+                    enabled=True,
+                    alert_types=["regression_detected"],
+                ),
+            ],
+            default_channels=["operator", "email"],
+        )
+
+        routes = config.get_routes_for_alert(
+            AlertType.BELOW_THRESHOLD, AlertSeverity.INFO
+        )
+
+        assert routes == ["operator", "email"]
+
+
+class TestCoverageConfigSchemaValidation:
+    """Tests for schema validation edge cases."""
+
+    def test_validate_with_all_none_values(self) -> None:
+        """Test schema validation with all None values."""
+        schema = CoverageConfigSchema()
+
+        assert schema.repo_minimum_threshold is None
+        assert schema.statement_coverage_minimum is None
+        assert schema.module_thresholds is None
+
+    def test_validate_percentage_at_boundaries(self) -> None:
+        """Test percentage validation at 0 and 100."""
+        schema1 = CoverageConfigSchema(
+            repo_minimum_threshold=0.0,
+            statement_coverage_minimum=100.0,
+        )
+
+        assert schema1.repo_minimum_threshold == 0.0
+        assert schema1.statement_coverage_minimum == 100.0
+
+    def test_validate_percentage_above_100_fails(self) -> None:
+        """Test that percentages > 100 fail validation."""
+        with pytest.raises(Exception):
+            CoverageConfigSchema(repo_minimum_threshold=101.0)
+
+    def test_validate_percentage_below_0_fails(self) -> None:
+        """Test that percentages < 0 fail validation."""
+        with pytest.raises(Exception):
+            CoverageConfigSchema(repo_minimum_threshold=-0.1)
+
+    def test_validate_days_must_be_positive(self) -> None:
+        """Test that days must be positive."""
+        with pytest.raises(Exception):
+            CoverageConfigSchema(trend_degradation_days=0)
+
+        with pytest.raises(Exception):
+            CoverageConfigSchema(trend_degradation_days=-1)
+
+    def test_validate_module_thresholds_structure(self) -> None:
+        """Test module threshold structure validation."""
+        schema = CoverageConfigSchema(
+            module_thresholds={
+                "src/observer": {
+                    "statement_coverage_minimum": 80.0,
+                    "branch_coverage_minimum": 70.0,
+                }
+            }
+        )
+
+        assert "src/observer" in schema.module_thresholds
+        assert schema.module_thresholds["src/observer"]["statement_coverage_minimum"] == 80.0
+
+    def test_validate_alert_channels_structure(self) -> None:
+        """Test alert channels structure in schema."""
+        schema = CoverageConfigSchema(
+            alert_channels={
+                "routes": [
+                    {
+                        "channel_name": "slack",
+                        "enabled": True,
+                        "alert_types": ["below_threshold"],
+                    }
+                ],
+                "default_channels": ["operator"],
+            }
+        )
+
+        assert schema.alert_channels is not None
+        assert "routes" in schema.alert_channels
+
+
+class TestCoverageConfigManagerExtended:
+    """Extended tests for CoverageConfigManager functionality."""
+
+    def test_create_auto_discovery_with_existing_file(self) -> None:
+        """Test auto-discovery when config file exists."""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".yaml", delete=False, dir="."
+        ) as f:
+            yaml.dump({"repo_minimum_threshold": 82.0}, f)
+            f.flush()
+
+            try:
+                manager = CoverageConfigManager.create_auto_discovery([f.name])
+                config = manager.load_config()
+
+                # Should find and load the file
+                assert config.get("repo_minimum_threshold") == 82.0
+            finally:
+                Path(f.name).unlink()
+
+    def test_get_module_override_with_all_metric_types(self) -> None:
+        """Test getting module overrides for all metric types."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(
+                {
+                    "module_thresholds": {
+                        "src/observer": {
+                            "statement_coverage_minimum": 80.0,
+                            "branch_coverage_minimum": 70.0,
+                            "line_coverage_minimum": 75.0,
+                        }
+                    }
+                },
+                f,
+            )
+            f.flush()
+
+            try:
+                manager = CoverageConfigManager.create_with_yaml(f.name)
+
+                assert (
+                    manager.get_module_override("src/observer", "statement") == 80.0
+                )
+                assert manager.get_module_override("src/observer", "branch") == 70.0
+                assert manager.get_module_override("src/observer", "line") == 75.0
+            finally:
+                Path(f.name).unlink()
+
+    def test_get_severity_threshold_map_values(self) -> None:
+        """Test severity threshold map contains all levels."""
+        manager = CoverageConfigManager.create_default()
+        threshold_map = manager.get_severity_threshold_map()
+
+        assert "emergency" in threshold_map
+        assert "critical" in threshold_map
+        assert "warning" in threshold_map
+        assert "info" in threshold_map
+        assert threshold_map["emergency"] == 50.0
+        assert threshold_map["info"] == 100.0
+
+    def test_is_module_threshold_override_present_with_multiple_modules(
+        self,
+    ) -> None:
+        """Test checking for override presence with multiple modules."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(
+                {
+                    "module_thresholds": {
+                        "src/observer": {"statement_coverage_minimum": 80.0},
+                        "src/custodian": {"statement_coverage_minimum": 85.0},
+                    }
+                },
+                f,
+            )
+            f.flush()
+
+            try:
+                manager = CoverageConfigManager.create_with_yaml(f.name)
+
+                assert manager.is_module_threshold_override_present("src/observer")
+                assert manager.is_module_threshold_override_present("src/custodian")
+                assert not manager.is_module_threshold_override_present(
+                    "src/execution"
+                )
+            finally:
+                Path(f.name).unlink()
+
+    def test_get_route_for_alert_type_with_multiple_matching_routes(self) -> None:
+        """Test getting routes when multiple routes match alert type."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(
+                {
+                    "alert_channels": {
+                        "routes": [
+                            {
+                                "channel_name": "slack",
+                                "enabled": True,
+                                "alert_types": ["below_threshold"],
+                            },
+                            {
+                                "channel_name": "email",
+                                "enabled": True,
+                                "alert_types": ["below_threshold"],
+                            },
+                        ],
+                        "default_channels": ["operator"],
+                    }
+                },
+                f,
+            )
+            f.flush()
+
+            try:
+                manager = CoverageConfigManager.create_with_yaml(f.name)
+                routes = manager.get_route_for_alert_type("below_threshold")
+
+                assert "slack" in routes
+                assert "email" in routes
+            finally:
+                Path(f.name).unlink()
