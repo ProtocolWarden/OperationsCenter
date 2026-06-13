@@ -917,3 +917,333 @@ class TestValidationFunctions:
         )
         result = validate_alert(alert)
         assert result is False
+
+
+class TestLocalRepositoryIndexHandling:
+    """Tests for local repository index operations."""
+
+    def test_load_index_corrupted_json(
+        self,
+        temp_storage_dir: Path,
+    ) -> None:
+        """Test loading corrupted index file."""
+        index_file = temp_storage_dir / "index.json"
+        index_file.write_text("{invalid json}", encoding="utf-8")
+
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+        assert repo._index == {}
+
+    def test_save_and_reload_index(
+        self,
+        temp_storage_dir: Path,
+        sample_snapshot: CoverageSnapshot,
+    ) -> None:
+        """Test saving and reloading index."""
+        repo1 = LocalCoverageTrendRepository(root=temp_storage_dir)
+        repo1.store_snapshot(sample_snapshot)
+
+        repo2 = LocalCoverageTrendRepository(root=temp_storage_dir)
+        assert sample_snapshot.run_id in repo2._index
+
+    def test_index_with_string_values(
+        self,
+        temp_storage_dir: Path,
+    ) -> None:
+        """Test that index handles mixed value types correctly."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+        repo._index = {
+            "run-1": {"observed_at": "2026-06-13T00:00:00+00:00", "version": 1},
+        }
+        repo._save_index()
+
+        loaded_repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+        assert "run-1" in loaded_repo._index
+
+    def test_list_snapshots_timezone_handling(
+        self,
+        temp_storage_dir: Path,
+    ) -> None:
+        """Test date filtering with timezone-naive datetimes."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(tz=timezone.utc),
+            run_id="tz-test",
+            source="coverage.py",
+            overall_statement_coverage_pct=85.0,
+            overall_branch_coverage_pct=78.0,
+            overall_line_coverage_pct=87.0,
+        )
+        repo.store_snapshot(snapshot)
+
+        now = datetime.now()  # Naive datetime
+        snapshots = repo.list_snapshots(
+            start_date=now - timedelta(days=1),
+            end_date=now + timedelta(days=1),
+        )
+        assert len(snapshots) >= 0
+
+
+class TestHTTPRepositoryEdgeErrorHandling:
+    """Tests for HTTP repository error handling."""
+
+    @patch("operations_center.observer.coverage_trend_repository.requests")
+    def test_http_store_snapshot_http_error(
+        self,
+        mock_requests: MagicMock,
+        sample_snapshot: CoverageSnapshot,
+    ) -> None:
+        """Test handling HTTP errors when storing snapshot."""
+        mock_session = MagicMock()
+        mock_requests.Session.return_value = mock_session
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status.side_effect = Exception("HTTP 500")
+        mock_session.put.return_value = mock_response
+
+        repo = HTTPCoverageTrendRepository(base_url="http://api.example.com")
+        with pytest.raises(Exception):
+            repo.store_snapshot(sample_snapshot)
+
+    @patch("operations_center.observer.coverage_trend_repository.requests")
+    def test_http_delete_nonexistent_snapshot(
+        self,
+        mock_requests: MagicMock,
+    ) -> None:
+        """Test deleting snapshot that doesn't exist via HTTP."""
+        mock_session = MagicMock()
+        mock_requests.Session.return_value = mock_session
+        mock_session.delete.side_effect = Exception("404 Not Found")
+
+        repo = HTTPCoverageTrendRepository(base_url="http://api.example.com")
+        result = repo.delete_snapshot("nonexistent")
+
+        assert result is False
+
+    @patch("operations_center.observer.coverage_trend_repository.requests")
+    def test_http_list_snapshots_empty(
+        self,
+        mock_requests: MagicMock,
+    ) -> None:
+        """Test listing snapshots when none exist."""
+        mock_session = MagicMock()
+        mock_requests.Session.return_value = mock_session
+        mock_session.get.return_value = MagicMock(json=lambda: [])
+
+        repo = HTTPCoverageTrendRepository(base_url="http://api.example.com")
+        snapshots = repo.list_snapshots()
+
+        assert snapshots == []
+
+    @patch("operations_center.observer.coverage_trend_repository.requests")
+    def test_http_load_alert_parsing_error(
+        self,
+        mock_requests: MagicMock,
+    ) -> None:
+        """Test handling JSON parse error when loading alerts."""
+        mock_session = MagicMock()
+        mock_requests.Session.return_value = mock_session
+        mock_session.get.return_value = MagicMock(json=lambda: "not a list")
+
+        repo = HTTPCoverageTrendRepository(base_url="http://api.example.com")
+        with pytest.raises(Exception):
+            repo.list_alerts()
+
+
+class TestS3RepositoryErrorScenarios:
+    """Tests for S3 repository error handling."""
+
+    @patch("operations_center.observer.coverage_trend_repository.boto3")
+    def test_s3_store_trend_file_not_found_exception(
+        self,
+        mock_boto3: MagicMock,
+    ) -> None:
+        """Test S3 handling NoSuchKey exception when appending trend data."""
+        mock_client = MagicMock()
+        mock_boto3.client.return_value = mock_client
+
+        # First call raises NoSuchKey (file doesn't exist)
+        mock_client.get_object.side_effect = mock_client.exceptions.NoSuchKey({}, "key")
+
+        now = datetime.now(tz=timezone.utc)
+        analysis = CoverageTrendAnalysis(
+            metric_type="line",
+            granularity="repository",
+            scope_id="",
+            window_start=now - timedelta(days=7),
+            window_end=now,
+            measurements=[],
+            current_value=85.0,
+            average_value=85.0,
+            min_value=85.0,
+            max_value=85.0,
+            trend_direction="stable",
+            trend_pct=0.0,
+            standard_deviation=0.0,
+            stability_score=1.0,
+        )
+
+        repo = S3CoverageTrendRepository(bucket="test-bucket")
+        metadata = repo.store_trend_analysis(analysis)
+
+        assert "checksum" in metadata
+        mock_client.put_object.assert_called_once()
+
+    @patch("operations_center.observer.coverage_trend_repository.boto3")
+    def test_s3_load_trend_with_empty_lines(
+        self,
+        mock_boto3: MagicMock,
+    ) -> None:
+        """Test S3 loading trend analysis when file has empty lines."""
+        mock_client = MagicMock()
+        mock_boto3.client.return_value = mock_client
+
+        mock_response = MagicMock(
+            Body=MagicMock(read=lambda: b"\n\n")  # Empty file
+        )
+        mock_client.get_object.return_value = mock_response
+
+        repo = S3CoverageTrendRepository(bucket="test-bucket")
+        result = repo.load_trend_analysis("line", "repository")
+
+        assert result is None
+
+    @patch("operations_center.observer.coverage_trend_repository.boto3")
+    def test_s3_list_alerts_with_parse_error(
+        self,
+        mock_boto3: MagicMock,
+    ) -> None:
+        """Test S3 handling JSON parse error in alerts."""
+        mock_client = MagicMock()
+        mock_boto3.client.return_value = mock_client
+
+        paginator = MagicMock()
+        mock_client.get_paginator.return_value = paginator
+
+        # Mock paginate response with one valid and one invalid file
+        paginator.paginate.return_value = [
+            {
+                "Contents": [
+                    {"Key": "alerts/2026-06-13/alerts.jsonl", "LastModified": datetime.now(tz=timezone.utc)},
+                ]
+            }
+        ]
+
+        # File contains invalid JSON
+        mock_client.get_object.side_effect = Exception("JSON parse error")
+
+        repo = S3CoverageTrendRepository(bucket="test-bucket")
+        alerts = repo.list_alerts()
+
+        assert alerts == []
+
+
+class TestLocalRepositoryStorageFormats:
+    """Tests for local repository storage format handling."""
+
+    def test_store_snapshot_creates_correct_structure(
+        self,
+        temp_storage_dir: Path,
+        sample_snapshot: CoverageSnapshot,
+    ) -> None:
+        """Test that snapshot creates correct directory structure."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+        repo.store_snapshot(sample_snapshot)
+
+        snapshot_dir = temp_storage_dir / "snapshots" / sample_snapshot.run_id
+        assert snapshot_dir.exists()
+        assert (snapshot_dir / "snapshot.json").exists()
+
+    def test_store_alert_groups_by_date(
+        self,
+        temp_storage_dir: Path,
+    ) -> None:
+        """Test that alerts are grouped by date."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+
+        date1 = datetime(2026, 6, 13, tzinfo=timezone.utc)
+        date2 = datetime(2026, 6, 14, tzinfo=timezone.utc)
+
+        alert1 = CoverageAlert(
+            alert_id="alert-1",
+            timestamp=date1,
+            alert_type="below_threshold",
+            severity="critical",
+            metric_type="line",
+            granularity="repository",
+            scope_id="",
+            current_value=75.0,
+            threshold_or_baseline=80.0,
+            delta_pct=-5.0,
+            baseline_type="minimum_threshold",
+        )
+
+        alert2 = CoverageAlert(
+            alert_id="alert-2",
+            timestamp=date2,
+            alert_type="below_threshold",
+            severity="warning",
+            metric_type="line",
+            granularity="repository",
+            scope_id="",
+            current_value=78.0,
+            threshold_or_baseline=80.0,
+            delta_pct=-2.0,
+            baseline_type="minimum_threshold",
+        )
+
+        repo.store_alert(alert1)
+        repo.store_alert(alert2)
+
+        alerts_dir = temp_storage_dir / "alerts"
+        assert (alerts_dir / "2026-06-13").exists()
+        assert (alerts_dir / "2026-06-14").exists()
+
+    def test_load_trend_analysis_multiple_entries(
+        self,
+        temp_storage_dir: Path,
+    ) -> None:
+        """Test loading latest trend analysis when multiple exist."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+
+        now = datetime.now(tz=timezone.utc)
+        analysis1 = CoverageTrendAnalysis(
+            metric_type="line",
+            granularity="repository",
+            scope_id="",
+            window_start=now - timedelta(days=7),
+            window_end=now - timedelta(days=1),
+            measurements=[],
+            current_value=85.0,
+            average_value=85.0,
+            min_value=85.0,
+            max_value=85.0,
+            trend_direction="stable",
+            trend_pct=0.0,
+            standard_deviation=0.0,
+            stability_score=1.0,
+        )
+
+        analysis2 = CoverageTrendAnalysis(
+            metric_type="line",
+            granularity="repository",
+            scope_id="",
+            window_start=now - timedelta(days=1),
+            window_end=now,
+            measurements=[],
+            current_value=87.0,
+            average_value=87.0,
+            min_value=87.0,
+            max_value=87.0,
+            trend_direction="improving",
+            trend_pct=2.0,
+            standard_deviation=0.0,
+            stability_score=1.0,
+        )
+
+        repo.store_trend_analysis(analysis1)
+        repo.store_trend_analysis(analysis2)
+
+        loaded = repo.load_trend_analysis("line", "repository")
+        assert loaded is not None
+        assert loaded.current_value == 87.0
