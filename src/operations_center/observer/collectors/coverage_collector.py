@@ -148,7 +148,9 @@ class CoverageCollector:
                     avg_coverage: float = sum(f["percent_covered"] for f in file_list) / len(
                         file_list
                     )
-                    health: Literal["healthy", "at_risk", "critical"] = self._determine_health(avg_coverage)
+                    health: Literal["healthy", "at_risk", "critical"] = (
+                        self._determine_health(avg_coverage)
+                    )
                     module_coverages.append(
                         ModuleCoverage(
                             module_path=module_path,
@@ -311,7 +313,11 @@ class CoverageCollector:
                 health_counts[module.health_status] += 1
         return health_counts
 
-    def _get_average_coverage(self, snapshot: CoverageSnapshot, metric_type: Literal["statement", "branch", "line"]) -> float:
+    def _get_average_coverage(
+        self,
+        snapshot: CoverageSnapshot,
+        metric_type: Literal["statement", "branch", "line"],
+    ) -> float:
         """Calculate average coverage across all modules for a metric type.
 
         Args:
@@ -333,7 +339,11 @@ class CoverageCollector:
 
         return sum(values) / len(values) if values else 0.0
 
-    def _get_min_coverage_module(self, snapshot: CoverageSnapshot, metric_type: Literal["statement", "branch", "line"]) -> ModuleCoverage | None:
+    def _get_min_coverage_module(
+        self,
+        snapshot: CoverageSnapshot,
+        metric_type: Literal["statement", "branch", "line"],
+    ) -> ModuleCoverage | None:
         """Find module with lowest coverage for a metric type.
 
         Args:
@@ -347,15 +357,28 @@ class CoverageCollector:
             return None
 
         if metric_type == "statement":
-            min_module: ModuleCoverage = min(snapshot.module_coverages, key=lambda m: m.statement_coverage_pct)
+            min_module: ModuleCoverage = min(
+                snapshot.module_coverages,
+                key=lambda m: m.statement_coverage_pct,
+            )
         elif metric_type == "branch":
-            min_module = min(snapshot.module_coverages, key=lambda m: m.branch_coverage_pct)
+            min_module = min(
+                snapshot.module_coverages,
+                key=lambda m: m.branch_coverage_pct,
+            )
         else:
-            min_module = min(snapshot.module_coverages, key=lambda m: m.line_coverage_pct)
+            min_module = min(
+                snapshot.module_coverages,
+                key=lambda m: m.line_coverage_pct,
+            )
 
         return min_module
 
-    def _get_max_coverage_module(self, snapshot: CoverageSnapshot, metric_type: Literal["statement", "branch", "line"]) -> ModuleCoverage | None:
+    def _get_max_coverage_module(
+        self,
+        snapshot: CoverageSnapshot,
+        metric_type: Literal["statement", "branch", "line"],
+    ) -> ModuleCoverage | None:
         """Find module with highest coverage for a metric type.
 
         Args:
@@ -369,11 +392,20 @@ class CoverageCollector:
             return None
 
         if metric_type == "statement":
-            max_module: ModuleCoverage = max(snapshot.module_coverages, key=lambda m: m.statement_coverage_pct)
+            max_module: ModuleCoverage = max(
+                snapshot.module_coverages,
+                key=lambda m: m.statement_coverage_pct,
+            )
         elif metric_type == "branch":
-            max_module = max(snapshot.module_coverages, key=lambda m: m.branch_coverage_pct)
+            max_module = max(
+                snapshot.module_coverages,
+                key=lambda m: m.branch_coverage_pct,
+            )
         else:
-            max_module = max(snapshot.module_coverages, key=lambda m: m.line_coverage_pct)
+            max_module = max(
+                snapshot.module_coverages,
+                key=lambda m: m.line_coverage_pct,
+            )
 
         return max_module
 
@@ -392,7 +424,10 @@ class CoverageCollector:
         return is_critical and is_below_threshold
 
 
-def calculate_module_coverage_average(modules: list[ModuleCoverage], metric_type: Literal["statement", "branch", "line"]) -> float:
+def calculate_module_coverage_average(
+    modules: list[ModuleCoverage],
+    metric_type: Literal["statement", "branch", "line"],
+) -> float:
     """Calculate average coverage across modules for a metric type.
 
     Args:
