@@ -979,3 +979,15 @@ class TestAlertManagerMethods:
         if trend_alerts:
             categorization = manager.categorize_alert(trend_alerts[0])
             assert categorization["category"] == "Trend Decline"
+
+    def test_complex_alert_generation(
+        self,
+        default_config: CoverageAlertConfig,
+        below_threshold_snapshot: CoverageSnapshot,
+    ) -> None:
+        """Test complex alert generation with multiple modules and conditions."""
+        manager = CoverageAlertManager(config=default_config)
+        alerts = manager.generate_alerts(below_threshold_snapshot)
+        assert len(alerts) > 0
+        assert any(a.alert_type == AlertType.BELOW_THRESHOLD.value for a in alerts)
+        assert any(a.alert_type == AlertType.MODULE_GAP.value for a in alerts)
