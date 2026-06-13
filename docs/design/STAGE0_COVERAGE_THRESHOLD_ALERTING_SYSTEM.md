@@ -995,4 +995,616 @@ This Stage 0 design document specifies:
 
 ---
 
-**Document prepared for Stage 1 implementation handoff.**
+## Deep Dive: Architecture and System Design
+
+### System Components Overview
+
+The coverage threshold alerting system is composed of four major architectural layers:
+
+#### 1. **Data Collection Layer** (CoverageCollector)
+
+The data collection layer gathers raw coverage metrics from test execution tools:
+
+**Responsibilities**:
+- Parse coverage tool output (coverage.py JSON, jacoco XML, istanbul JSON)
+- Extract metrics at repository, module, and file granularities
+- Normalize data into `CoverageMetricsSnapshot` format
+- Handle tool failures and partial data gracefully
+
+**Key Classes**:
+```python
+class CoverageCollector:
+    def collect(context: ObserverContext) -> CoverageSignal
+    # Parses coverage.py output and returns structured signal
+    
+class CoverageMetricsSnapshot:
+    timestamp: datetime
+    overall_statement_coverage_pct: float
+    overall_branch_coverage_pct: float
+    overall_line_coverage_pct: float
+    module_coverages: list[ModuleCoverage]
+    file_coverages: list[FileCoverage]
+```
+
+**Tool Integration Pattern**:
+- Each tool produces output in standard format (JSON/XML)
+- Collector adapters normalize to internal representation
+- Missing metrics default to None (graceful degradation)
+
+#### 2. **Storage and Trend Analysis Layer** (CoverageTrendRepository & CoverageTrendManager)
+
+This layer persists historical data and computes trend analytics:
+
+**Responsibilities**:
+- Store snapshots in time-series backend (JSONL, S3, InfluxDB)
+- Query historical data by metric type, granularity, and time window
+- Compute trend metrics: slope, volatility, regression detection
+- Manage retention policies (30-90 day retention with archival)
+
+**Storage Backends**:
+```python
+class CoverageTrendRepository:
+    def save_snapshot(snapshot: CoverageMetricsSnapshot) -> None
+    def get_historical_data(metric_type, granularity, scope_id, start_date, end_date) -> list[tuple[datetime, float]]
+    
+# Implementations:
+class LocalCoverageTrendRepository(CoverageTrendRepository)
+    # JSONL files on disk (.coverage_data/)
+    
+class S3CoverageTrendRepository(CoverageTrendRepository)
+    # S3 bucket with prefix-based organization
+    
+class HTTPCoverageTrendRepository(CoverageTrendRepository)
+    # RESTful API backend with bearer token auth
+```
+
+**Trend Analysis Methods**:
+```python
+class CoverageTrendManager:
+    def compute_trend_analysis(metric_type, granularity, scope_id, window_days) -> CoverageTrendAnalysis:
+        # Returns: trend direction, slope (%/day), volatility score, 7-day projection
+        
+    def detect_regression(current_snapshot: CoverageMetricsSnapshot, baseline: CoverageMetricsSnapshot) -> bool:
+        # Compares current vs. previous measurement
+        # Returns true if delta >= threshold_pct
+        
+    def calculate_trend_slope(measurements: list[tuple[datetime, float]]) -> float:
+        # Linear regression: (% change) / (days elapsed)
+        # Positive = improving, Negative = degrading
+        
+    def calculate_volatility_score(measurements: list[tuple[datetime, float]]) -> float:
+        # 0-1 score: 1.0 = stable, 0.0 = highly volatile
+        # Formula: 1 - (std_dev / mean)
+```
+
+#### 3. **Alert Generation Layer** (CoverageAlertManager)
+
+This layer detects alert conditions and generates actionable alerts:
+
+**Responsibilities**:
+- Apply threshold rules to current and historical data
+- Detect regressions by comparing baselines
+- Identify negative trends (5+ consecutive declines)
+- Rank module-level critical gaps by priority
+- Generate structured `CoverageAlert` objects
+
+**Alert Generation Logic**:
+```python
+class CoverageAlertManager:
+    def generate_alerts(
+        snapshot: CoverageMetricsSnapshot,
+        config: CoverageAlertConfig,
+        history: CoverageTrendAnalysis
+    ) -> list[CoverageAlert]:
+        # Checks:
+        # 1. Below-threshold: snapshot.metric < config.minimum_threshold
+        # 2. Regression: snapshot.metric < previous.metric by >= threshold
+        # 3. Trend degrading: 5+ consecutive declines at >= 1% per day
+        # 4. Module critical gap: module.coverage < (target - 15%) AND (recent_changes > 3 OR touch_count > 20)
+        
+    def compute_alert_severity(alert_type: str, gap: float, trend_velocity: float) -> str:
+        # Maps numeric metrics to severity levels (info, warning, critical, emergency)
+        # Examples:
+        #   below_threshold: coverage < 50% → emergency, < 70% → critical, < 80% → warning
+        #   trend_degrading: -2%/day → critical, -1%/day → warning, < -0.5%/day → info
+```
+
+**Alert Attributes**:
+- `alert_id`: Unique identifier for tracking/deduplication
+- `alert_type`: Enumerated type (below_threshold, regression_detected, trend_degrading, module_critical_gap)
+- `severity`: info/warning/critical/emergency
+- `metric_type`: statement/branch/line
+- `granularity`: repository/module/file
+- `scope_id`: Module path or file path (empty for repo-level)
+- `current_value`: Current measurement
+- `threshold_or_baseline`: For comparison
+- `delta_pct`: Change from baseline
+- `recommendation`: Actionable remediation step
+- `affected_modules`: List of module paths
+- `affected_files`: List of source files
+
+#### 4. **Notification and Configuration Layer** (CoverageAlertRouter & CoverageAlertConfig)
+
+This layer routes alerts to notification channels and manages configuration:
+
+**Responsibilities**:
+- Configure thresholds, alert types, module overrides
+- Route alerts to appropriate channels (Slack, Email, GitHub, Operator)
+- Format alerts per channel conventions
+- Suppress/deduplicate alerts based on rules
+
+**Configuration System**:
+```python
+class CoverageAlertConfig:
+    # Repository-level thresholds
+    minimum_threshold_pct: float = 80.0
+    warning_threshold_pct: float = 85.0
+    target_threshold_pct: float = 90.0
+    
+    # Coverage-type specific
+    statement_minimum: float = 75.0
+    branch_minimum: float = 65.0
+    line_minimum: float = 75.0
+    
+    # Regression detection
+    run_to_run_threshold_pct: float = 2.0
+    window_7day_threshold_pct: float = 3.0
+    window_30day_threshold_pct: float = 5.0
+    
+    # Trend detection
+    min_consecutive_declining_runs: int = 5
+    min_trend_pct_per_day: float = -1.0
+    
+    # Module overrides
+    module_thresholds: dict[str, dict[str, float]]  # {module_path: {metric_type: threshold}}
+    
+    # Alert routing
+    alert_routes: list[AlertChannelRoute]
+    default_channels: list[str]
+```
+
+**Alert Routing**:
+```python
+class AlertChannelRoute:
+    channel_name: str  # "slack", "email", "github", "operator"
+    enabled: bool = True
+    alert_types: list[str] = []  # Empty = all types
+    severity_levels: list[str] = []  # Empty = all severities
+    enabled_modules: list[str] = []  # Empty = all modules
+    
+    def matches_alert(alert: CoverageAlert) -> bool:
+        # Returns true if alert matches route criteria
+        
+class CoverageAlertRouter:
+    def route_alert(alert: CoverageAlert, config: CoverageAlertConfig) -> list[AlertChannelResult]:
+        # Returns list of channels where alert was successfully routed
+```
+
+### Data Flow Diagram
+
+```
+Coverage Tool Output (coverage.py, jacoco, etc.)
+        ↓
+[CoverageCollector] ← parses raw data
+        ↓
+CoverageMetricsSnapshot
+        ↓
+[CoverageTrendRepository] ← persists to storage
+        ↓
+Historical Time-Series Data
+        ↓
+[CoverageTrendManager] ← computes trends, detects regressions
+        ↓
+CoverageTrendAnalysis (slope, volatility, projection)
+        ↓
+[CoverageAlertManager] ← applies threshold rules
+        ↓
+CoverageAlert[] (structured alerts)
+        ↓
+[CoverageAlertRouter] ← routes to channels
+        ↓
+[Slack] [Email] [GitHub] [Operator Log]
+        ↓
+Notifications delivered to users
+```
+
+### Configuration Hierarchy
+
+Thresholds are applied in order of specificity:
+
+1. **Module-level override** (most specific): If `module_thresholds["src/observer"]` is set, use it
+2. **Coverage-type default**: e.g., `branch_minimum` (75%)
+3. **Repository default**: e.g., `minimum_threshold_pct` (80%)
+
+Example resolution:
+```
+Config: minimum_threshold = 80%, branch_minimum = 65%, 
+        module_thresholds["src/observer"]["statement"] = 85%
+
+For "src/observer" statement coverage:
+  → Use module override: 85%
+
+For "src/observer" branch coverage:
+  → No module override, use coverage-type default: 65%
+
+For "src/custodian" statement coverage:
+  → No module override, use repository default: 80%
+```
+
+### Alert Deduplication and Suppression
+
+To prevent alert fatigue, the system implements:
+
+**Time-based Suppression**:
+- Same alert type for same scope: suppress duplicates within 24 hours
+- Only emit if metric changed by >0.5% or severity increased
+
+**Severity Escalation**:
+- If same alert with higher severity: emit immediately (don't suppress)
+- Track escalation history in `CoverageAlert.escalation_chain`
+
+**Module-level Grouping**:
+- Group multiple module gaps into weekly digest
+- Send below-threshold alerts individually, but trend alerts weekly
+
+**False Positive Filtering**:
+- Regression detected: require >0.5% change (ignore measurement noise)
+- Trend degrading: require 5+ consecutive measurements (don't alert on 1-2 bad days)
+
+---
+
+## Advanced Trend Analysis
+
+### Trend Direction Computation
+
+The system classifies trend direction based on weighted measurement analysis:
+
+```python
+def compute_trend_direction(measurements: list[tuple[datetime, float]], window_days: int) -> str:
+    """
+    Returns: "improving", "stable", or "degrading"
+    
+    Logic:
+    1. Perform linear regression on measurements within window
+    2. Compute slope (% change per day)
+    3. Classify:
+       - slope > +0.5%/day: "improving"
+       - slope between -0.5% and +0.5%/day: "stable"
+       - slope < -0.5%/day: "degrading"
+    
+    Note: Slope is computed as (current - 7day_avg) / 7 to smooth noise
+    """
+```
+
+### Projection Algorithm
+
+Forward-looking projections estimate future coverage:
+
+```python
+def project_value(measurements: list[tuple[datetime, float]], days_ahead: int) -> float:
+    """
+    Projects coverage N days in the future using linear regression.
+    
+    Steps:
+    1. Fit linear model: coverage = slope * days + intercept
+    2. Compute slope from measurements
+    3. Project: projected_value = current_value + (slope * days_ahead)
+    4. Bound to [0%, 100%]
+    
+    Example:
+      Current: 85%, Slope: -0.7% per day
+      Projected 7 days: 85% - (0.7 * 7) = 80.1%
+      
+    Confidence:
+      - ±2% for 7-day projection (reasonably stable coverage)
+      - ±5% for 30-day projection (longer term, less accurate)
+    """
+```
+
+### Regression Detection Algorithm
+
+The system compares current measurement against multiple baselines:
+
+```python
+def detect_regression(current: float, baselines: dict[str, float], thresholds: dict[str, float]) -> list[str]:
+    """
+    Returns list of regression types detected.
+    
+    Baselines and thresholds:
+    - "previous_run": 2% threshold
+    - "7day_avg": 3% threshold
+    - "30day_avg": 5% threshold
+    - "main_branch": custom threshold (e.g., 1% for strict CI gate)
+    
+    Example:
+      current=82%, previous_run=85% (delta=-3%)
+      → Detects "previous_run" regression (3% >= 2% threshold) ✓
+      
+      current=82%, 7day_avg=84% (delta=-2%)
+      → Does NOT detect "7day_avg" regression (2% < 3% threshold) ✗
+    """
+```
+
+### Volatility and Stability Scoring
+
+Coverage metrics naturally fluctuate due to test flakiness and code changes. The stability score quantifies this:
+
+```python
+def calculate_stability_score(measurements: list[tuple[datetime, float]]) -> float:
+    """
+    Returns 0-1 score: 1.0 = perfectly stable, 0.0 = highly volatile.
+    
+    Calculation:
+    1. Compute mean of measurements
+    2. Compute standard deviation
+    3. stability_score = 1.0 - (std_dev / mean)
+    
+    Examples:
+      measurements = [85%, 85%, 85%, 85%] → std_dev ≈ 0 → score = 1.0
+      measurements = [80%, 85%, 90%, 75%] → std_dev ≈ 6.3 → score ≈ 0.93
+      measurements = [50%, 75%, 60%, 90%] → std_dev ≈ 16.5 → score ≈ 0.80
+    
+    Usage:
+    - High volatility (score < 0.80): suppress trend alerts (too noisy)
+    - Medium volatility (0.80-0.95): apply stricter trend criteria
+    - Low volatility (>0.95): trigger alerts on smaller changes
+    """
+```
+
+---
+
+## Appendix: Mathematical Formulas
+
+### Trend Slope (Linear Regression)
+
+```
+slope = Σ((x_i - x̄) * (y_i - ȳ)) / Σ((x_i - x̄)²)
+
+Where:
+  x_i = days since first measurement
+  y_i = coverage percentage
+  x̄ = mean of x values
+  ȳ = mean of y values
+  Σ = sum over all measurements
+
+Interpretation:
+  slope = +1.5% means coverage increases 1.5% per day
+  slope = -0.8% means coverage decreases 0.8% per day
+```
+
+### Standard Deviation
+
+```
+σ = √(Σ(x_i - μ)² / N)
+
+Where:
+  x_i = individual measurement
+  μ = mean of all measurements
+  N = number of measurements
+
+Usage:
+  - Stability score calculation
+  - Volatility-based alert threshold adjustment
+```
+
+### Rolling Average
+
+```
+rolling_avg(t, window_days) = Σ(values[t-window_days:t]) / window_days
+
+Usage:
+  - 7-day rolling average: smooths day-to-day noise
+  - 30-day rolling average: smooths weekly patterns
+  - Enables fair regression detection against stable baseline
+```
+
+---
+
+## Edge Cases and Special Handling
+
+### Coverage Data Gaps and Unavailability
+
+The system must gracefully handle scenarios where coverage data is unavailable or incomplete:
+
+#### Scenario 1: Coverage Tool Fails
+```
+Condition: Coverage tool (coverage.py) exits with error
+Handling:
+  - Set CoverageSignal.status = "unavailable"
+  - Set metrics to None
+  - Do NOT generate alerts (no valid data)
+  - Log error for operations team
+  - Previous snapshot remains cached for dashboard (shows stale state)
+  - Retry on next test run
+```
+
+#### Scenario 2: Partial Coverage (Some Files Missing)
+```
+Condition: Coverage tool produces output but some files weren't analyzed
+Handling:
+  - Set CoverageSignal.status = "partial"
+  - Include available metrics with lower confidence
+  - Generate alerts but mark with "partial_data" flag
+  - Include caveat in alert: "Based on incomplete coverage data"
+  - Recommend re-running tests if critical files are missing
+```
+
+#### Scenario 3: First Measurement (No History)
+```
+Condition: First test run, no baseline for regression comparison
+Handling:
+  - Do NOT generate regression alerts (no previous measurement)
+  - DO generate below-threshold alerts (absolute rule)
+  - Store snapshot for future baseline comparisons
+  - Trend direction = "unknown" (need min 3-5 measurements)
+```
+
+#### Scenario 4: Module Path Changes
+```
+Condition: Module was renamed (src/old_module → src/new_module)
+Handling:
+  - Query both old and new paths for historical data
+  - Treat as separate modules (different scope_id)
+  - Alert on below-threshold for new module (no history yet)
+  - No regression detected (no direct predecessor)
+  - Document module rename in alert notes
+```
+
+### Measurement Noise and Flakiness
+
+Coverage measurements can fluctuate due to test flakiness and natural variance:
+
+#### Natural Variance (0.5-2%)
+```
+Causes:
+  - Test flakiness (failing/passing non-deterministically)
+  - Timing-dependent code paths
+  - Platform-specific behavior (OS, Python version)
+
+Handling:
+  - Ignore variance < 0.5% (treat as "no change")
+  - Require 5+ consecutive measurements before declaring trend
+  - Use 7-day rolling average for smoothing (not raw daily value)
+  - Only escalate to severity if trend persists multiple days
+```
+
+#### Extreme Outliers (e.g., -20% in one run)
+```
+Causes:
+  - Infrastructure issue (test runner error)
+  - Corrupted coverage data
+  - Major test suite failure
+
+Handling:
+  - Detect outliers: values > 3σ from rolling mean
+  - Flag as "anomaly" in alert
+  - Include only in history if confirmed by next measurement
+  - Alert with "investigate_infrastructure" recommendation
+```
+
+#### Coverage Tool Version Changes
+```
+Condition: Project upgrades coverage.py from 6.0 to 7.0
+Handling:
+  - Coverage calculation may change (e.g., branch calculation)
+  - Historical data remains valid but not directly comparable
+  - Store "source_version" in CoverageMetricsSnapshot
+  - Apply version-specific normalization if needed
+  - Document change in alert notes
+```
+
+### Threshold Edge Cases
+
+#### Boundary Conditions
+```
+Thresholds: minimum=80%, warning=85%, target=90%
+
+Test case: coverage = 80.00%
+  - Does coverage = 80% trigger alert?
+  - Decision: No (≥ threshold_min, not < threshold_min)
+  - Use consistent comparison: current < threshold (not <=)
+
+Test case: coverage = 79.99%
+  - Result: Triggers alert (just below threshold)
+
+Test case: coverage = 85.00%
+  - Does this trigger warning alert?
+  - Decision: Warning is informational (not blocking)
+  - Only below-threshold alerts block merges
+```
+
+#### Very High Thresholds (>95%)
+```
+Risk: Setting minimum=95% is impractical
+  - Code will nearly never reach 95% statement coverage
+  - Constant false alerts → alert fatigue
+  - Example: some branches naturally untestable (error handling)
+
+Recommendation:
+  - Maximum practical minimum: 85-90% for critical modules
+  - Use branch coverage (stricter) rather than statement (easier)
+  - For untestable code, use pragma: # pragma: no cover
+```
+
+#### Very Low Thresholds (<50%)
+```
+Risk: Minimum < 50% defeats purpose of alerting
+Recommendation:
+  - Minimum < 50% only for exceptional legacy code
+  - Include exemption reason in config comments
+  - Plan migration path to higher threshold
+```
+
+### Time-Series Continuity
+
+#### Gaps in Measurement History
+```
+Scenario: No test run for 5 days (deployment freeze)
+Handling:
+  - Trend analysis skips days without measurements
+  - Compute slope using only available data points
+  - Projection accuracy lower (sparse data)
+  - Continue alerting when test runs resume
+```
+
+#### Timezone and Clock Skew
+```
+Handling:
+  - Store all timestamps in UTC (never local time)
+  - Measurements from different timezones normalized to UTC
+  - Clock skew: if measurement timestamp is in future, log warning
+  - Use duration (not wall-clock time) for trend calculations
+```
+
+#### Retroactive Data Updates
+```
+Scenario: Coverage service corrects a historical measurement
+  Timestamp: 2026-06-01 10:00 UTC
+  Original value: 84%
+  Corrected value: 86%
+
+Handling:
+  - Update stored snapshot
+  - Recompute trends that include this timestamp
+  - Check if retractive change affects active alerts
+  - Audit log entry: "Coverage corrected: 84% → 86%"
+```
+
+---
+
+## Security and Compliance Considerations
+
+### Data Sensitivity
+
+Coverage data is generally non-sensitive, but system handles:
+
+- **Code patterns**: Coverage reveals which code paths are tested
+- **Module importance**: Emphasis on certain modules reveals architecture
+- **Change patterns**: Trends show which modules are actively developed
+
+**Mitigation**: Access controls on coverage data storage, similar to other metrics
+
+### Alert Routing Security
+
+When routing alerts to external channels:
+
+- **Slack webhooks**: TLS-encrypted, webhook URLs stored in secure configuration
+- **Email**: SMTP with TLS, credentials in secure vault (not code)
+- **GitHub**: API tokens with scope limited to "repo:status" (read-only)
+- **Operator log**: Internal only, no external routing
+
+**Configuration best practice**:
+```yaml
+alert_channels:
+  slack:
+    webhook_url: !vault /secret/slack/coverage-alerts-webhook
+    enabled: true
+  email:
+    smtp_url: !vault /secret/email/smtp-connection
+    from_address: coverage-alerts@ops.internal
+```
+
+---
+
+**Document Version**: 1.0 (1,500+ lines)  
+**Document prepared for Stage 8 implementation and comprehensive documentation.**
