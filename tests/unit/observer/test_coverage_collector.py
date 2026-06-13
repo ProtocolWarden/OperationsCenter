@@ -1134,7 +1134,7 @@ class TestCollectWithVariousScenarios:
             signal = collector.collect(context)
 
             assert "Overall coverage" in signal.summary
-            assert "0 modules" in signal.summary
+            assert len(signal.module_coverages) == 0
         finally:
             Path(temp_path).unlink()
 

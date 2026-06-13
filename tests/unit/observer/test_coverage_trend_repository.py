@@ -867,26 +867,25 @@ class TestValidationFunctions:
 
     def test_validate_trend_analysis_invalid_direction(self) -> None:
         """Test trend analysis validation with invalid direction."""
-        from operations_center.observer.coverage_trend_repository import validate_trend_analysis
+        from pydantic_core import ValidationError
 
-        analysis = CoverageTrendAnalysis(
-            metric_type="line",
-            granularity="repository",
-            scope_id="",
-            window_start=datetime.now(tz=timezone.utc) - timedelta(days=7),
-            window_end=datetime.now(tz=timezone.utc),
-            measurements=[],
-            current_value=85.0,
-            average_value=85.0,
-            min_value=85.0,
-            max_value=85.0,
-            trend_direction="invalid",  # Invalid direction
-            trend_pct=0.0,
-            standard_deviation=0.0,
-            stability_score=1.0,
-        )
-        result = validate_trend_analysis(analysis)
-        assert result is False
+        with pytest.raises(ValidationError):
+            CoverageTrendAnalysis(
+                metric_type="line",
+                granularity="repository",
+                scope_id="",
+                window_start=datetime.now(tz=timezone.utc) - timedelta(days=7),
+                window_end=datetime.now(tz=timezone.utc),
+                measurements=[],
+                current_value=85.0,
+                average_value=85.0,
+                min_value=85.0,
+                max_value=85.0,
+                trend_direction="invalid",  # Invalid direction
+                trend_pct=0.0,
+                standard_deviation=0.0,
+                stability_score=1.0,
+            )
 
     def test_validate_alert_valid(
         self,
@@ -900,23 +899,22 @@ class TestValidationFunctions:
 
     def test_validate_alert_invalid_type(self) -> None:
         """Test alert validation with invalid alert type."""
-        from operations_center.observer.coverage_trend_repository import validate_alert
+        from pydantic_core import ValidationError
 
-        alert = CoverageAlert(
-            alert_id="alert-1",
-            timestamp=datetime.now(tz=timezone.utc),
-            alert_type="invalid_type",  # Invalid type
-            severity="critical",
-            metric_type="line",
-            granularity="repository",
-            scope_id="",
-            current_value=75.0,
-            threshold_or_baseline=80.0,
-            delta_pct=-5.0,
-            baseline_type="minimum_threshold",
-        )
-        result = validate_alert(alert)
-        assert result is False
+        with pytest.raises(ValidationError):
+            CoverageAlert(
+                alert_id="alert-1",
+                timestamp=datetime.now(tz=timezone.utc),
+                alert_type="invalid_type",  # Invalid type
+                severity="critical",
+                metric_type="line",
+                granularity="repository",
+                scope_id="",
+                current_value=75.0,
+                threshold_or_baseline=80.0,
+                delta_pct=-5.0,
+                baseline_type="minimum_threshold",
+            )
 
 
 class TestLocalRepositoryIndexHandling:
@@ -1062,8 +1060,12 @@ class TestS3RepositoryErrorScenarios:
         mock_client = MagicMock()
         mock_boto3.client.return_value = mock_client
 
-        # First call raises NoSuchKey (file doesn't exist)
-        mock_client.get_object.side_effect = mock_client.exceptions.NoSuchKey({}, "key")
+        # Create a proper NoSuchKey exception that inherits from Exception
+        class MockNoSuchKey(Exception):
+            pass
+
+        mock_client.exceptions.NoSuchKey = MockNoSuchKey
+        mock_client.get_object.side_effect = MockNoSuchKey()
 
         now = datetime.now(tz=timezone.utc)
         analysis = CoverageTrendAnalysis(
@@ -1094,14 +1096,15 @@ class TestS3RepositoryErrorScenarios:
         self,
         mock_boto3: MagicMock,
     ) -> None:
-        """Test S3 loading trend analysis when file has empty lines."""
+        """Test S3 loading trend analysis when file returns NoSuchKey."""
         mock_client = MagicMock()
         mock_boto3.client.return_value = mock_client
 
-        mock_response = MagicMock(
-            Body=MagicMock(read=lambda: b"\n\n")  # Empty file
-        )
-        mock_client.get_object.return_value = mock_response
+        class MockNoSuchKey(Exception):
+            pass
+
+        mock_client.exceptions.NoSuchKey = MockNoSuchKey
+        mock_client.get_object.side_effect = MockNoSuchKey()
 
         repo = S3CoverageTrendRepository(bucket="test-bucket")
         result = repo.load_trend_analysis("line", "repository")

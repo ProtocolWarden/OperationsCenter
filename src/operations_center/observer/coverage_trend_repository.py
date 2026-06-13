@@ -591,7 +591,7 @@ class S3CoverageTrendRepository(CoverageTrendRepository):
 
     def cleanup(self, retention_days: int = 30) -> list[str]:
         """Clean up old snapshots from S3 based on retention policy."""
-        cutoff_date = datetime.now(tz=timezone.utc) - timedelta(days=retention_days)
+        cutoff_date = (datetime.now(tz=timezone.utc) - timedelta(days=retention_days)).replace(tzinfo=None)
         deleted = []
 
         prefix = f"{self.prefix}/snapshots/"

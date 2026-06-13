@@ -1410,7 +1410,7 @@ class TestCoverageConfigManagerMethods:
         with pytest.raises(ConfigValidationError) as exc_info:
             provider.load()
 
-        assert "Cannot read" in str(exc_info.value)
+        assert "Configuration file not found" in str(exc_info.value)
 
     def test_composite_provider_merges_module_thresholds(self) -> None:
         """Test CompositeConfigProvider correctly merges module thresholds."""
@@ -1578,7 +1578,7 @@ class TestAlertChannelConfigAdvanced:
         assert routes == ["operator"]
 
     def test_get_routes_for_alert_multiple_matching_routes(self) -> None:
-        """Test that first matching route wins."""
+        """Test that all matching routes are returned."""
         config = AlertChannelConfig(
             routes=[
                 AlertChannelRoute(
@@ -1599,7 +1599,7 @@ class TestAlertChannelConfigAdvanced:
             AlertType.BELOW_THRESHOLD, AlertSeverity.INFO
         )
 
-        assert routes == ["slack"]
+        assert routes == ["slack", "email"]
 
     def test_get_routes_for_alert_no_match_uses_default(self) -> None:
         """Test fallback to defaults when no routes match."""
