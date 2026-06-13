@@ -5,7 +5,7 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-**Stage 3: Verify type annotation completeness** ✅ COMPLETE (2026-06-13)
+**Stage 4: Search for and resolve TODOs** ✅ COMPLETE (2026-06-13)
 
 ## Overall Plan
 
