@@ -1,3 +1,10 @@
+## 2026-06-13 — chore(custodian): C29-exempt github_pr.py (API adapter, 506 lines)
+
+Guard C's get_completed_checks pushed src/operations_center/adapters/github_pr.py to 506 lines
+(>500), tripping C29. It is the GitHub PR REST client — one responsibility, many small request
+methods — the same cohesive-adapter category C29 already exempts (usage_store.py). Exempted with
+rationale. (Landed via #277 whose audit ran red; this restores a clean audit on main.)
+
 ## 2026-06-13 — feat(custodian): OC13 — test re-implements a metric inline without calling production (guard B)
 
 New LOW custodian detector flagging a test that computes a metric formula inline (math.log/log2/log10

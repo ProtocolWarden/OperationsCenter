@@ -508,6 +508,12 @@ audit:
       # self-contained; splitting by channel would scatter the shared AlertResult
       # and factory in ways that add indirection without clarity.
       - src/operations_center/observer/alert_channels.py
+      # github_pr.py is the GitHub PR API client adapter — one responsibility (the
+      # REST surface) with many small request methods (get_pr, get_*_checks,
+      # merge_pr, list_open_prs, ...). A clean boundary that grows by one method as
+      # the API surface does; splitting would scatter a cohesive client. Same
+      # rationale as usage_store.py above.
+      - src/operations_center/adapters/github_pr.py
     C11:
       # Agent-spawning entrypoints: board_worker, intake, pr_review_watcher invoke
       # the coding backend (team_executor, aider, etc.) which runs for an unbounded
