@@ -238,6 +238,10 @@ class TestMergeDecisionMetrics:
 
         gh.get_failed_checks.return_value = []
 
+        # Create a dummy config file (needed for fix pass)
+        cfg_path = tmp_path / "cfg.yaml"
+        cfg_path.write_text("repos: {TestRepo: {}}\n")
+
         # Record retry decision
         start_time = time.time()
         with patch.object(
@@ -253,7 +257,7 @@ class TestMergeDecisionMetrics:
                 "owner",
                 "TestRepo",
                 tmp_path,
-                tmp_path / "cfg.yaml",
+                cfg_path,
                 settings,
             )
         latency_ms = (time.time() - start_time) * 1000

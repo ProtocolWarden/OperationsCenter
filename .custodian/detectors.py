@@ -67,6 +67,7 @@ def _detect_r1_console_presence(ctx: AuditContext) -> DetectorResult:
 
 # ── R2: .console/ file budget and structure ───────────────────────────────────
 
+_TASK_SIZE_LIMIT = 100 * 1024  # 100 KB (task.md should remain concise)
 _CONSOLE_SIZE_LIMIT = 200 * 1024  # 200 KB (log.md grows through legitimate operational history)
 _TASK_REQUIRED_SECTIONS = ["## Objective", "## Overall Plan", "## Current Stage"]
 _BACKLOG_STANDARD_SECTIONS = ["## In Progress", "## Up Next", "## Done"]
@@ -92,9 +93,11 @@ def _detect_r2_console_budget(ctx: AuditContext) -> DetectorResult:
             file_texts[filename] = None
             continue
 
-        if path.stat().st_size > _CONSOLE_SIZE_LIMIT:
+        size_limit = _TASK_SIZE_LIMIT if filename == "task.md" else _CONSOLE_SIZE_LIMIT
+        if path.stat().st_size > size_limit:
+            limit_kb = size_limit // 1024
             samples.append(
-                f".console/{filename} exceeds 200KB budget ({path.stat().st_size} bytes)"
+                f".console/{filename} exceeds {limit_kb}KB budget ({path.stat().st_size} bytes)"
             )
 
         try:
@@ -202,16 +205,17 @@ def _detect_r2_console_budget(ctx: AuditContext) -> DetectorResult:
     if not console_root.exists() or not console_root.is_dir():
         return DetectorResult(count=0, samples=[])
 
-    # Budget: 200KB max per file (log.md grows through legitimate operational history)
-    max_size_bytes = 200 * 1024
+    # Budget: task.md limited to 100KB (should be concise), others to 200KB
     for filename in ["task.md", "guidelines.md", "backlog.md", "log.md"]:
         filepath = console_root / filename
         if not filepath.exists():
             continue
         try:
             size = filepath.stat().st_size
-            if size > max_size_bytes:
-                samples.append(f".console/{filename} exceeds 200KB budget ({size} bytes)")
+            size_limit = _TASK_SIZE_LIMIT if filename == "task.md" else 200 * 1024
+            limit_kb = size_limit // 1024
+            if size > size_limit:
+                samples.append(f".console/{filename} exceeds {limit_kb}KB budget ({size} bytes)")
         except OSError:
             samples.append(f".console/{filename} cannot be read (permission denied)")
 
