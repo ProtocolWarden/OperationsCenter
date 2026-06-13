@@ -13,7 +13,7 @@ Provides:
 from __future__ import annotations
 
 import smtplib
-from typing import Any
+from typing import Any, Literal
 from urllib.request import Request, urlopen
 
 from operations_center.observer.alert_channels import (
@@ -25,6 +25,130 @@ from operations_center.observer.alert_channels import (
 )
 from operations_center.observer.coverage_alerting import AlertSeverity, AlertType
 from operations_center.observer.coverage_models import CoverageAlert
+
+
+def get_severity_color(severity: str) -> str:
+    """Get hex color code for alert severity level.
+
+    Args:
+        severity: Severity level string
+
+    Returns:
+        Hex color code
+    """
+    color_map: dict[str, str] = {
+        "info": "#36a64f",
+        "warning": "#ff9900",
+        "critical": "#ff3333",
+        "emergency": "#8b0000",
+    }
+    return color_map.get(severity, "#cccccc")
+
+
+def format_metric_display(metric_type: str, granularity: str) -> str:
+    """Format metric type and granularity for display.
+
+    Args:
+        metric_type: Type of metric
+        granularity: Granularity level
+
+    Returns:
+        Formatted display string
+    """
+    display_str: str = f"{metric_type.capitalize()} ({granularity})"
+    return display_str
+
+
+def create_alert_summary(alert: CoverageAlert) -> dict[str, Any]:
+    """Create a summary dictionary of an alert for quick access to key fields.
+
+    Args:
+        alert: Alert to summarize
+
+    Returns:
+        Dictionary with key alert fields
+    """
+    summary: dict[str, Any] = {
+        "id": alert.alert_id,
+        "type": alert.alert_type,
+        "severity": alert.severity,
+        "metric": alert.metric_type,
+        "scope": alert.scope_id,
+        "value": alert.current_value,
+        "threshold": alert.threshold_or_baseline,
+        "delta": alert.delta_pct,
+    }
+    return summary
+
+
+def should_notify_immediately(alert: CoverageAlert) -> bool:
+    """Determine if an alert warrants immediate notification.
+
+    Args:
+        alert: Alert to evaluate
+
+    Returns:
+        True if alert should be notified immediately
+    """
+    immediate_severity: bool = alert.severity in ("critical", "emergency")
+    return immediate_severity
+
+
+def get_alert_action_items(alert: CoverageAlert) -> list[str]:
+    """Get recommended action items for an alert.
+
+    Args:
+        alert: Alert to get actions for
+
+    Returns:
+        List of recommended actions
+    """
+    actions: list[str] = []
+
+    if alert.alert_type == "below_threshold":
+        actions = [
+            "Review untested code paths",
+            "Add tests for critical functionality",
+            "Validate coverage measurement tools",
+        ]
+    elif alert.alert_type == "regression_detected":
+        actions = [
+            "Review recent code changes",
+            "Add tests for new code",
+            "Investigate coverage decrease root cause",
+        ]
+    elif alert.alert_type == "trend_degrading":
+        actions = [
+            "Analyze why coverage is declining",
+            "Prioritize testing of new features",
+            "Set team coverage goals",
+        ]
+    elif alert.alert_type == "module_gap":
+        actions = [
+            "Focus on critical modules first",
+            "Add tests for frequently changed files",
+            "Track module-level metrics",
+        ]
+
+    return actions
+
+
+def calculate_alert_notification_delay(severity: str) -> int:
+    """Calculate appropriate notification delay based on severity.
+
+    Args:
+        severity: Alert severity level
+
+    Returns:
+        Notification delay in seconds
+    """
+    delays: dict[str, int] = {
+        "emergency": 0,
+        "critical": 60,
+        "warning": 300,
+        "info": 900,
+    }
+    return delays.get(severity, 600)
 
 
 class CoverageSlackFormatter:
@@ -433,7 +557,6 @@ class CoverageAlertRouter:
         Returns:
             Dictionary mapping channel names to AlertChannelResult instances
         """
-        # Default routing strategy based on severity and type
         if channels is None:
             channels = self._determine_channels(alert)
 
@@ -599,22 +722,61 @@ class CoverageAlertRouter:
         Returns:
             List of channel names to use
         """
-        channels = ["operator"]  # Always log to operator
+        channels: list[str] = ["operator"]
 
-        # Route based on severity
         if alert.severity in (AlertSeverity.CRITICAL.value, AlertSeverity.EMERGENCY.value):
-            # High severity: use multiple channels
             if self.slack_channel:
                 channels.append("slack")
             if self.email_channel:
                 channels.append("email")
         elif alert.severity == AlertSeverity.WARNING.value:
-            # Medium severity: use primary channel
             if self.slack_channel:
                 channels.append("slack")
 
-        # GitHub channel for regression alerts (if PR context available)
         if alert.alert_type == AlertType.REGRESSION_DETECTED.value and self.github_channel:
             channels.append("github")
 
         return channels
+
+    def _is_channel_configured(self, channel_name: Literal["slack", "email", "github", "operator"]) -> bool:
+        """Check if a channel is configured.
+
+        Args:
+            channel_name: Channel name to check
+
+        Returns:
+            True if channel is available
+        """
+        if channel_name == "slack":
+            return self.slack_channel is not None
+        elif channel_name == "email":
+            return self.email_channel is not None
+        elif channel_name == "github":
+            return self.github_channel is not None
+        elif channel_name == "operator":
+            return self.operator_channel is not None
+        return False
+
+    def _should_route_to_channel(self, alert: CoverageAlert, channel_name: Literal["slack", "email", "github", "operator"]) -> bool:
+        """Determine if alert should be routed to channel based on severity and type.
+
+        Args:
+            alert: Alert to evaluate
+            channel_name: Channel to check
+
+        Returns:
+            True if alert should be routed to this channel
+        """
+        is_critical: bool = alert.severity in (AlertSeverity.CRITICAL.value, AlertSeverity.EMERGENCY.value)
+        is_warning: bool = alert.severity == AlertSeverity.WARNING.value
+        is_regression: bool = alert.alert_type == AlertType.REGRESSION_DETECTED.value
+
+        if channel_name == "operator":
+            return True
+        elif channel_name == "slack":
+            return is_critical or is_warning
+        elif channel_name == "email":
+            return is_critical
+        elif channel_name == "github":
+            return is_regression
+        return False
