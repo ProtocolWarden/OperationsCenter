@@ -110,7 +110,7 @@ class CoverageTrendManager:
         snapshots = []
         for metadata in metadata_list:
             try:
-                snapshot = self.repository.load_snapshot(metadata["run_id"])
+                snapshot = self.repository.load_snapshot(str(metadata["run_id"]))
                 snapshots.append(snapshot)
             except FileNotFoundError:
                 continue

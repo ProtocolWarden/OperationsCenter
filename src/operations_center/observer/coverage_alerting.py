@@ -9,6 +9,7 @@ coverage metrics at repository, module, and file granularities.
 from __future__ import annotations
 
 from enum import Enum
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -319,7 +320,7 @@ class CoverageAlertManager:
                 )
                 self.alerts.append(alert)
 
-    def categorize_alert(self, alert: CoverageAlert) -> dict[str, str]:
+    def categorize_alert(self, alert: CoverageAlert) -> dict[str, Any]:
         """Categorize an alert by type and severity.
 
         Args:
@@ -387,7 +388,7 @@ class CoverageAlertManager:
         """
         return [alert for alert in self.alerts if alert.alert_type == alert_type.value]
 
-    def summarize_alerts(self) -> dict[str, int]:
+    def summarize_alerts(self) -> dict[str, Any]:
         """Summarize alerts by type and severity.
 
         Returns:
