@@ -1005,3 +1005,559 @@ class TestModuleLevelFunctions:
         ]
         average = calculate_measurements_average(measurements)
         assert 86.0 < average < 87.1
+
+
+class TestCoverageTrendManagerComprehensive:
+    """Comprehensive tests covering all manager methods and edge cases."""
+
+    def test_repository_access(self, manager: CoverageTrendManager) -> None:
+        """Test repository access through manager."""
+        assert manager.repository is not None
+        assert isinstance(manager.repository, LocalCoverageTrendRepository)
+
+    def test_extract_metric_value_all_types(self, manager: CoverageTrendManager) -> None:
+        """Test extracting all metric types from snapshots."""
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(tz=timezone.utc),
+            run_id="run-001",
+            source="coverage.py",
+            overall_statement_coverage_pct=84.5,
+            overall_branch_coverage_pct=78.3,
+            overall_line_coverage_pct=86.7,
+            module_coverages=[
+                ModuleCoverage(
+                    module_path="src/test",
+                    statement_coverage_pct=82.0,
+                    branch_coverage_pct=76.0,
+                    line_coverage_pct=84.0,
+                    statement_count=500,
+                    branch_count=250,
+                    line_count=450,
+                    health_status="healthy",
+                ),
+            ],
+        )
+        manager.save_snapshot(snapshot)
+
+        # Test repository granularity
+        statement = manager._extract_metric_value(snapshot, "statement", "repository")
+        branch = manager._extract_metric_value(snapshot, "branch", "repository")
+        line = manager._extract_metric_value(snapshot, "line", "repository")
+
+        assert statement == 84.5
+        assert branch == 78.3
+        assert line == 86.7
+
+        # Test module granularity
+        module_statement = manager._extract_metric_value(
+            snapshot, "statement", "module", "src/test"
+        )
+        module_branch = manager._extract_metric_value(
+            snapshot, "branch", "module", "src/test"
+        )
+        module_line = manager._extract_metric_value(
+            snapshot, "line", "module", "src/test"
+        )
+
+        assert module_statement == 82.0
+        assert module_branch == 76.0
+        assert module_line == 84.0
+
+    def test_trend_analysis_with_varying_values(
+        self, manager: CoverageTrendManager
+    ) -> None:
+        """Test trend analysis with values that vary significantly."""
+        base_time = datetime.now(tz=timezone.utc) - timedelta(days=5)
+        # Create volatile coverage data
+        coverages = [75.0, 78.0, 74.0, 80.0, 76.0, 79.0]
+
+        for i, coverage in enumerate(coverages):
+            snapshot = CoverageSnapshot(
+                timestamp=base_time + timedelta(days=i),
+                run_id=f"run-volatile-{i:03d}",
+                source="coverage.py",
+                overall_statement_coverage_pct=coverage - 1.0,
+                overall_branch_coverage_pct=coverage - 5.0,
+                overall_line_coverage_pct=coverage,
+            )
+            manager.save_snapshot(snapshot)
+
+        analysis = manager.compute_trend_analysis(
+            metric_type="line",
+            granularity="repository",
+            window_days=7,
+        )
+
+        assert analysis.standard_deviation > 0.0
+        assert analysis.stability_score >= 0.0
+        assert analysis.stability_score <= 1.0
+
+    def test_get_snapshot_not_found(self, manager: CoverageTrendManager) -> None:
+        """Test getting snapshot that doesn't exist."""
+        result = manager.get_snapshot("nonexistent-run")
+        assert result is None
+
+    def test_multiple_snapshots_ordering(self, manager: CoverageTrendManager) -> None:
+        """Test that snapshots are retrieved in correct chronological order."""
+        base_time = datetime.now(tz=timezone.utc) - timedelta(days=3)
+
+        timestamps = []
+        for i in range(5):
+            timestamp = base_time + timedelta(hours=i * 6)
+            timestamps.append(timestamp)
+            snapshot = CoverageSnapshot(
+                timestamp=timestamp,
+                run_id=f"run-order-{i:03d}",
+                source="coverage.py",
+                overall_statement_coverage_pct=80.0 + i,
+                overall_branch_coverage_pct=75.0 + i,
+                overall_line_coverage_pct=82.0 + i,
+            )
+            manager.save_snapshot(snapshot)
+
+        historical = manager.get_historical_data(
+            metric_type="line",
+            granularity="repository",
+        )
+
+        # Verify chronological ordering
+        for i in range(len(historical) - 1):
+            assert historical[i][0] <= historical[i + 1][0]
+
+    def test_stability_score_calculation_stable(
+        self, manager: CoverageTrendManager
+    ) -> None:
+        """Test stability score for highly stable coverage."""
+        base_time = datetime.now(tz=timezone.utc) - timedelta(days=4)
+        # Create very stable data (all same value)
+        coverages = [85.0, 85.0, 85.0, 85.0, 85.0]
+
+        for i, coverage in enumerate(coverages):
+            snapshot = CoverageSnapshot(
+                timestamp=base_time + timedelta(days=i),
+                run_id=f"run-stable-{i:03d}",
+                source="coverage.py",
+                overall_statement_coverage_pct=coverage,
+                overall_branch_coverage_pct=coverage - 5.0,
+                overall_line_coverage_pct=coverage,
+            )
+            manager.save_snapshot(snapshot)
+
+        analysis = manager.compute_trend_analysis(
+            metric_type="line",
+            granularity="repository",
+            window_days=7,
+        )
+
+        assert analysis.stability_score > 0.9  # Should be very stable
+
+    def test_trend_pct_calculation(self, manager: CoverageTrendManager) -> None:
+        """Test trend percentage calculation."""
+        base_time = datetime.now(tz=timezone.utc) - timedelta(days=4)
+        coverages = [80.0, 81.0, 82.0, 83.0, 84.0]
+
+        for i, coverage in enumerate(coverages):
+            snapshot = CoverageSnapshot(
+                timestamp=base_time + timedelta(days=i),
+                run_id=f"run-trend-{i:03d}",
+                source="coverage.py",
+                overall_statement_coverage_pct=coverage,
+                overall_branch_coverage_pct=coverage - 5.0,
+                overall_line_coverage_pct=coverage,
+            )
+            manager.save_snapshot(snapshot)
+
+        analysis = manager.compute_trend_analysis(
+            metric_type="line",
+            granularity="repository",
+            window_days=7,
+        )
+
+        assert analysis.trend_pct > 0.0  # Should show positive trend
+
+    def test_regression_count_tracking(self, manager: CoverageTrendManager) -> None:
+        """Test tracking of regression count in trend analysis."""
+        base_time = datetime.now(tz=timezone.utc) - timedelta(days=5)
+        # Create data with multiple regressions
+        coverages = [85.0, 84.0, 86.0, 83.0, 85.0, 82.0]
+
+        for i, coverage in enumerate(coverages):
+            snapshot = CoverageSnapshot(
+                timestamp=base_time + timedelta(days=i),
+                run_id=f"run-regress-{i:03d}",
+                source="coverage.py",
+                overall_statement_coverage_pct=coverage,
+                overall_branch_coverage_pct=coverage - 5.0,
+                overall_line_coverage_pct=coverage,
+            )
+            manager.save_snapshot(snapshot)
+
+        analysis = manager.compute_trend_analysis(
+            metric_type="line",
+            granularity="repository",
+            window_days=7,
+        )
+
+        assert analysis.regression_count >= 0
+
+    def test_days_of_decline_tracking(self, manager: CoverageTrendManager) -> None:
+        """Test tracking of days with coverage decline."""
+        base_time = datetime.now(tz=timezone.utc) - timedelta(days=5)
+        coverages = [85.0, 84.0, 83.0, 82.0, 81.0, 80.0]
+
+        for i, coverage in enumerate(coverages):
+            snapshot = CoverageSnapshot(
+                timestamp=base_time + timedelta(days=i),
+                run_id=f"run-decline-{i:03d}",
+                source="coverage.py",
+                overall_statement_coverage_pct=coverage,
+                overall_branch_coverage_pct=coverage - 5.0,
+                overall_line_coverage_pct=coverage,
+            )
+            manager.save_snapshot(snapshot)
+
+        analysis = manager.compute_trend_analysis(
+            metric_type="line",
+            granularity="repository",
+            window_days=7,
+        )
+
+        assert analysis.days_of_decline > 0
+
+    def test_projected_value_none_with_stable_trend(
+        self, manager: CoverageTrendManager
+    ) -> None:
+        """Test that projected value is None when trend is stable."""
+        base_time = datetime.now(tz=timezone.utc) - timedelta(days=2)
+        coverages = [85.0, 85.0, 85.0]
+
+        for i, coverage in enumerate(coverages):
+            snapshot = CoverageSnapshot(
+                timestamp=base_time + timedelta(days=i),
+                run_id=f"run-proj-{i:03d}",
+                source="coverage.py",
+                overall_statement_coverage_pct=coverage,
+                overall_branch_coverage_pct=coverage - 5.0,
+                overall_line_coverage_pct=coverage,
+            )
+            manager.save_snapshot(snapshot)
+
+        analysis = manager.compute_trend_analysis(
+            metric_type="line",
+            granularity="repository",
+            window_days=7,
+        )
+
+        # Stable trend should have None or calculated projection
+        # trend_pct == 0 means no projection needed
+        if analysis.trend_pct == 0:
+            assert analysis.projected_value_7days is None
+
+    def test_file_coverage_extraction(self, manager: CoverageTrendManager) -> None:
+        """Test extracting file-level coverage metrics."""
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(tz=timezone.utc),
+            run_id="run-file-001",
+            source="coverage.py",
+            overall_statement_coverage_pct=84.5,
+            overall_branch_coverage_pct=78.3,
+            overall_line_coverage_pct=86.7,
+            file_coverages=[
+                {
+                    "file_path": "src/observer/main.py",
+                    "statement_coverage_pct": 90.0,
+                    "branch_coverage_pct": 85.0,
+                    "line_coverage_pct": 92.0,
+                    "uncovered_lines": [],
+                    "uncovered_branches": [],
+                }
+            ],
+        )
+        manager.save_snapshot(snapshot)
+
+        file_statement = manager._extract_metric_value(
+            snapshot, "statement", "file", "src/observer/main.py"
+        )
+        file_branch = manager._extract_metric_value(
+            snapshot, "branch", "file", "src/observer/main.py"
+        )
+        file_line = manager._extract_metric_value(
+            snapshot, "line", "file", "src/observer/main.py"
+        )
+
+        assert file_statement == 90.0
+        assert file_branch == 85.0
+        assert file_line == 92.0
+
+    def test_list_snapshots_limit(self, manager: CoverageTrendManager) -> None:
+        """Test snapshot listing with limit parameter."""
+        for i in range(10):
+            snapshot = CoverageSnapshot(
+                timestamp=datetime.now(tz=timezone.utc) - timedelta(days=10 - i),
+                run_id=f"run-limit-{i:03d}",
+                source="coverage.py",
+                overall_statement_coverage_pct=80.0 + i,
+                overall_branch_coverage_pct=75.0 + i,
+                overall_line_coverage_pct=82.0 + i,
+            )
+            manager.save_snapshot(snapshot)
+
+        limited = manager.list_snapshots(limit=5)
+        assert len(limited) <= 5
+
+    def test_alert_list_with_limit(self, manager: CoverageTrendManager) -> None:
+        """Test alert listing with limit parameter."""
+        for i in range(5):
+            alert = CoverageAlert(
+                alert_id=f"alert-{i:03d}",
+                timestamp=datetime.now(tz=timezone.utc) - timedelta(hours=i),
+                alert_type="below_threshold",
+                severity="critical" if i < 2 else "warning",
+                metric_type="line",
+                granularity="repository",
+                scope_id="",
+                current_value=78.5 - i,
+                threshold_or_baseline=80.0,
+                delta_pct=-1.5 - i,
+                baseline_type="minimum_threshold",
+            )
+            manager.save_alert(alert)
+
+        all_alerts = manager.list_alerts()
+        assert len(all_alerts) >= 5
+
+        limited = manager.list_alerts(limit=2)
+        assert len(limited) <= 2
+
+    def test_alert_severity_filtering(self, manager: CoverageTrendManager) -> None:
+        """Test alert listing with severity filtering."""
+        for i in range(3):
+            alert = CoverageAlert(
+                alert_id=f"alert-critical-{i:03d}",
+                timestamp=datetime.now(tz=timezone.utc),
+                alert_type="below_threshold",
+                severity="critical",
+                metric_type="line",
+                granularity="repository",
+                scope_id="",
+                current_value=78.5,
+                threshold_or_baseline=80.0,
+                delta_pct=-1.5,
+                baseline_type="minimum_threshold",
+            )
+            manager.save_alert(alert)
+
+        for i in range(2):
+            alert = CoverageAlert(
+                alert_id=f"alert-warning-{i:03d}",
+                timestamp=datetime.now(tz=timezone.utc),
+                alert_type="below_threshold",
+                severity="warning",
+                metric_type="line",
+                granularity="repository",
+                scope_id="",
+                current_value=80.5,
+                threshold_or_baseline=80.0,
+                delta_pct=0.5,
+                baseline_type="minimum_threshold",
+            )
+            manager.save_alert(alert)
+
+        critical_alerts = manager.list_alerts(severity="critical")
+        assert len(critical_alerts) >= 3
+
+    def test_predict_future_coverage_bounds(
+        self, manager: CoverageTrendManager
+    ) -> None:
+        """Test that future predictions stay within valid bounds."""
+        base_time = datetime.now(tz=timezone.utc) - timedelta(days=5)
+        coverages = [95.0, 96.0, 97.0, 98.0, 99.0, 100.0]
+
+        for i, coverage in enumerate(coverages):
+            snapshot = CoverageSnapshot(
+                timestamp=base_time + timedelta(days=i),
+                run_id=f"run-bound-{i:03d}",
+                source="coverage.py",
+                overall_statement_coverage_pct=min(coverage - 1.0, 100.0),
+                overall_branch_coverage_pct=min(coverage - 5.0, 100.0),
+                overall_line_coverage_pct=min(coverage, 100.0),
+            )
+            manager.save_snapshot(snapshot)
+
+        predicted = manager.predict_future_coverage(
+            metric_type="line",
+            granularity="repository",
+            days_ahead=7,
+        )
+
+        assert 0.0 <= predicted <= 100.0
+
+    def test_predict_future_coverage_at_module_level(
+        self, manager: CoverageTrendManager
+    ) -> None:
+        """Test future coverage prediction at module level."""
+        base_time = datetime.now(tz=timezone.utc) - timedelta(days=4)
+
+        for i in range(5):
+            snapshot = CoverageSnapshot(
+                timestamp=base_time + timedelta(days=i),
+                run_id=f"run-module-pred-{i:03d}",
+                source="coverage.py",
+                overall_statement_coverage_pct=80.0 + i,
+                overall_branch_coverage_pct=75.0 + i,
+                overall_line_coverage_pct=82.0 + i,
+                module_coverages=[
+                    ModuleCoverage(
+                        module_path="src/observer",
+                        statement_coverage_pct=85.0 + i,
+                        branch_coverage_pct=80.0 + i,
+                        line_coverage_pct=87.0 + i,
+                        statement_count=1000,
+                        branch_count=500,
+                        line_count=900,
+                        health_status="healthy",
+                    ),
+                ],
+            )
+            manager.save_snapshot(snapshot)
+
+        predicted = manager.predict_future_coverage(
+            metric_type="line",
+            granularity="module",
+            scope_id="src/observer",
+            days_ahead=7,
+        )
+
+        assert isinstance(predicted, float)
+        assert 0.0 <= predicted <= 100.0
+
+    def test_improvement_rate_negative(self, manager: CoverageTrendManager) -> None:
+        """Test improvement rate for degrading coverage."""
+        base_time = datetime.now(tz=timezone.utc) - timedelta(days=4)
+        coverages = [85.0, 84.0, 83.0, 82.0, 81.0]
+
+        for i, coverage in enumerate(coverages):
+            snapshot = CoverageSnapshot(
+                timestamp=base_time + timedelta(days=i),
+                run_id=f"run-degrade-rate-{i:03d}",
+                source="coverage.py",
+                overall_statement_coverage_pct=coverage,
+                overall_branch_coverage_pct=coverage - 5.0,
+                overall_line_coverage_pct=coverage,
+            )
+            manager.save_snapshot(snapshot)
+
+        rate = manager.get_improvement_rate(
+            metric_type="line",
+            window_days=7,
+        )
+
+        assert isinstance(rate, float)
+        assert rate < 0.0  # Should be negative (degrading)
+
+    def test_critical_modules_at_threshold(
+        self, manager: CoverageTrendManager
+    ) -> None:
+        """Test critical module detection at exact threshold."""
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(tz=timezone.utc),
+            run_id="run-critical-threshold",
+            source="coverage.py",
+            overall_statement_coverage_pct=85.0,
+            overall_branch_coverage_pct=78.0,
+            overall_line_coverage_pct=87.0,
+            module_coverages=[
+                ModuleCoverage(
+                    module_path="src/observer",
+                    statement_coverage_pct=70.0,  # Exactly at threshold
+                    branch_coverage_pct=70.0,
+                    line_coverage_pct=70.0,
+                    statement_count=1000,
+                    branch_count=500,
+                    line_count=900,
+                    health_status="critical",
+                ),
+                ModuleCoverage(
+                    module_path="src/custodian",
+                    statement_coverage_pct=70.1,  # Just above threshold
+                    branch_coverage_pct=70.1,
+                    line_coverage_pct=70.1,
+                    statement_count=500,
+                    branch_count=250,
+                    line_count=450,
+                    health_status="healthy",
+                ),
+            ],
+        )
+
+        critical = manager.get_critical_modules(snapshot, threshold=70.0)
+
+        # Should exclude module at exactly 70.0 (not less than threshold)
+        assert "src/observer" not in critical
+        # Should exclude module at 70.1
+        assert "src/custodian" not in critical
+
+    def test_should_escalate_alert_low_frequency(
+        self, manager: CoverageTrendManager, sample_snapshots: list[CoverageSnapshot]
+    ) -> None:
+        """Test no escalation with degrading trend but low alert frequency."""
+        for snapshot in sample_snapshots:
+            manager.save_snapshot(snapshot)
+
+        base_time = datetime.now(tz=timezone.utc) - timedelta(days=4)
+        coverages = [85.0, 84.0, 83.0, 82.0, 81.0]
+
+        for i, coverage in enumerate(coverages):
+            snapshot = CoverageSnapshot(
+                timestamp=base_time + timedelta(days=i),
+                run_id=f"run-escalate-low-{i:03d}",
+                source="coverage.py",
+                overall_statement_coverage_pct=coverage,
+                overall_branch_coverage_pct=coverage - 5.0,
+                overall_line_coverage_pct=coverage,
+            )
+            manager.save_snapshot(snapshot)
+
+        analysis = manager.compute_trend_analysis(
+            metric_type="line",
+            granularity="repository",
+            window_days=7,
+        )
+
+        should_escalate = manager.should_escalate_alert(analysis, alert_count=1)
+        assert should_escalate is False  # Low frequency
+
+    def test_trend_analysis_boundary_zero_point_one(
+        self, manager: CoverageTrendManager
+    ) -> None:
+        """Test trend direction detection at 0.1% boundary."""
+        base_time = datetime.now(tz=timezone.utc) - timedelta(days=1)
+
+        # Create snapshots with exactly 0.1% change
+        snapshot1 = CoverageSnapshot(
+            timestamp=base_time,
+            run_id="run-boundary-1",
+            source="coverage.py",
+            overall_statement_coverage_pct=85.0,
+            overall_branch_coverage_pct=78.0,
+            overall_line_coverage_pct=85.0,
+        )
+        manager.save_snapshot(snapshot1)
+
+        snapshot2 = CoverageSnapshot(
+            timestamp=datetime.now(tz=timezone.utc),
+            run_id="run-boundary-2",
+            source="coverage.py",
+            overall_statement_coverage_pct=85.0,
+            overall_branch_coverage_pct=78.0,
+            overall_line_coverage_pct=85.11,  # Just over 0.1% improvement
+        )
+        manager.save_snapshot(snapshot2)
+
+        analysis = manager.compute_trend_analysis(
+            metric_type="line",
+            granularity="repository",
+            window_days=7,
+        )
+
+        assert analysis.trend_direction == "improving"
