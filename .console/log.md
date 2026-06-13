@@ -1,3 +1,15 @@
+## 2026-06-13 — fix(reviewer): gate merge on the full required-check set (guard D)
+
+#272 + Guard C close "merge on red/incomplete/no-checks CI", but a hole remained: a required check
+in a SEPARATE workflow that registers later than the main CI workflow is invisible to both the
+failed and incomplete lists, so the gate sees the main-workflow checks green and merges before the
+late check (e.g. the `audit` job) ever runs. This is how #277/#278 reached main with red audit (the
+very job that surfaces the OC12/OC13 divergence guards). Fix: new per-repo required_checks config;
+the self-review gate and the no-progress merge path now require every required check PRESENT and
+passing on the current head before green (a required check missing from the completed set defers via
+the existing ci_wait_cycles machinery). +2 gate tests; mock repo_cfg defaults required_checks=[].
+Activate per-repo by setting required_checks (e.g. [audit]) in the local config.
+
 ## 2026-06-13 — Stage 9: Commit and push to existing branch (✅ COMPLETE)
 
 ### Objective

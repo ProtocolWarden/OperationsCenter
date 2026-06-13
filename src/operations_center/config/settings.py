@@ -345,6 +345,13 @@ class RepoSettings(BaseModel):
     # (e.g. a file-tag linter that was broken before the PR landed).  Checks
     # whose names contain any of these strings are excluded from the failed list.
     ci_ignored_checks: list[str] = Field(default_factory=list)
+    # CI check names that MUST be present, completed, and passing before the
+    # reviewer treats CI as green.  A check name "satisfies" an entry if it
+    # contains the entry (case-insensitive).  This closes the late-registering
+    # check hole: a required check that lives in a separate workflow and has not
+    # registered yet would otherwise be invisible to the failed/incomplete lists,
+    # letting a PR merge before that check runs (e.g. the `audit` job).
+    required_checks: list[str] = Field(default_factory=list)
     # Executor selection hint for this repo. Valid values: ``"team_executor"``,
     # ``"dag_executor"``, ``"critique_executor"``.
     # Routing decisions are made by SwitchBoard; this is an operator preference hint only.
