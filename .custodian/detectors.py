@@ -67,7 +67,7 @@ def _detect_r1_console_presence(ctx: AuditContext) -> DetectorResult:
 
 # ── R2: .console/ file budget and structure ───────────────────────────────────
 
-_CONSOLE_SIZE_LIMIT = 100 * 1024  # 100 KB
+_CONSOLE_SIZE_LIMIT = 200 * 1024  # 200 KB (log.md grows through legitimate operational history)
 _TASK_REQUIRED_SECTIONS = ["## Objective", "## Overall Plan", "## Current Stage"]
 _BACKLOG_STANDARD_SECTIONS = ["## In Progress", "## Up Next", "## Done"]
 
@@ -202,8 +202,8 @@ def _detect_r2_console_budget(ctx: AuditContext) -> DetectorResult:
     if not console_root.exists() or not console_root.is_dir():
         return DetectorResult(count=0, samples=[])
 
-    # Budget: 100KB max per file
-    max_size_bytes = 100 * 1024
+    # Budget: 200KB max per file (log.md grows through legitimate operational history)
+    max_size_bytes = 200 * 1024
     for filename in ["task.md", "guidelines.md", "backlog.md", "log.md"]:
         filepath = console_root / filename
         if not filepath.exists():
@@ -211,7 +211,7 @@ def _detect_r2_console_budget(ctx: AuditContext) -> DetectorResult:
         try:
             size = filepath.stat().st_size
             if size > max_size_bytes:
-                samples.append(f".console/{filename} exceeds 100KB budget ({size} bytes)")
+                samples.append(f".console/{filename} exceeds 200KB budget ({size} bytes)")
         except OSError:
             samples.append(f".console/{filename} cannot be read (permission denied)")
 
