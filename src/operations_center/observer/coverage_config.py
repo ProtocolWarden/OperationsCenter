@@ -3,6 +3,7 @@
 """Coverage threshold configuration system for loading and managing configuration from multiple sources.
 
 Supports YAML files, environment variables, and defaults with composition and precedence.
+Includes alert routing configuration for specifying which channels receive which alert types.
 """
 
 from __future__ import annotations
@@ -15,13 +16,112 @@ from typing import Any
 import yaml
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from operations_center.observer.coverage_alerting import CoverageAlertConfig
+from operations_center.observer.coverage_alerting import (
+    AlertSeverity,
+    AlertType,
+    CoverageAlertConfig,
+)
 
 
 class ConfigValidationError(ValueError):
     """Raised when configuration validation fails."""
 
     pass
+
+
+class AlertChannelRoute(BaseModel):
+    """Route configuration for a specific alert channel."""
+
+    channel_name: str = Field(
+        description="Name of the alert channel (e.g., 'slack', 'email', 'github')"
+    )
+    enabled: bool = Field(default=True, description="Whether this route is enabled")
+    alert_types: list[str] = Field(
+        default_factory=list,
+        description="Alert types this channel receives (empty = all types)",
+    )
+    severity_levels: list[str] = Field(
+        default_factory=list,
+        description="Severity levels this channel receives (empty = all levels)",
+    )
+    enabled_modules: list[str] = Field(
+        default_factory=list,
+        description="Modules this channel alerts for (empty = all modules)",
+    )
+
+    def matches_alert(
+        self,
+        alert_type: AlertType,
+        severity: AlertSeverity,
+        module: str | None = None,
+    ) -> bool:
+        """Check if this route should receive the given alert.
+
+        Args:
+            alert_type: Type of the alert
+            severity: Severity level of the alert
+            module: Module the alert is for (optional)
+
+        Returns:
+            True if this route should receive the alert
+        """
+        if not self.enabled:
+            return False
+
+        # Check alert type (empty list = all types)
+        if self.alert_types and alert_type.value not in self.alert_types:
+            return False
+
+        # Check severity (empty list = all levels)
+        if self.severity_levels and severity.value not in self.severity_levels:
+            return False
+
+        # Check module (empty list = all modules)
+        if module and self.enabled_modules and module not in self.enabled_modules:
+            return False
+
+        return True
+
+
+class AlertChannelConfig(BaseModel):
+    """Configuration for coverage-specific alert routing."""
+
+    routes: list[AlertChannelRoute] = Field(
+        default_factory=list,
+        description="List of alert channel routes for coverage alerts",
+    )
+    default_channels: list[str] = Field(
+        default_factory=lambda: ["operator"],
+        description="Default channels to use if no specific routes match",
+    )
+
+    def get_routes_for_alert(
+        self,
+        alert_type: AlertType,
+        severity: AlertSeverity,
+        module: str | None = None,
+    ) -> list[str]:
+        """Get channels that should receive the given alert.
+
+        Args:
+            alert_type: Type of the alert
+            severity: Severity level of the alert
+            module: Module the alert is for (optional)
+
+        Returns:
+            List of channel names that should receive this alert
+        """
+        matching_channels = [
+            route.channel_name
+            for route in self.routes
+            if route.matches_alert(alert_type, severity, module)
+        ]
+
+        # Fall back to default channels if no matches
+        if not matching_channels:
+            return self.default_channels
+
+        return matching_channels
 
 
 class CoverageConfigSchema(BaseModel):
@@ -54,6 +154,11 @@ class CoverageConfigSchema(BaseModel):
     # Module-level thresholds
     module_thresholds: dict[str, dict[str, float]] | None = Field(
         default=None, description="Per-module threshold overrides"
+    )
+
+    # Alert routing configuration
+    alert_channels: dict[str, Any] | None = Field(
+        default=None, description="Alert channel routing configuration"
     )
 
     @field_validator("*", mode="before")
@@ -148,6 +253,18 @@ class DefaultConfigProvider(CoverageConfigProvider):
             "severity_high_threshold": 70.0,
             "severity_medium_threshold": 80.0,
             "module_thresholds": {},
+            "alert_channels": {
+                "routes": [
+                    {
+                        "channel_name": "operator",
+                        "enabled": True,
+                        "alert_types": [],
+                        "severity_levels": [],
+                        "enabled_modules": [],
+                    }
+                ],
+                "default_channels": ["operator"],
+            },
         }
 
 
@@ -285,6 +402,7 @@ class CoverageConfigManager:
 
         self._config: dict[str, Any] | None = None
         self._alert_config: CoverageAlertConfig | None = None
+        self._alert_channel_config: AlertChannelConfig | None = None
 
     @classmethod
     def create_default(cls) -> CoverageConfigManager:
@@ -383,10 +501,47 @@ class CoverageConfigManager:
 
         return self._alert_config
 
+    def get_alert_channel_config(self) -> AlertChannelConfig:
+        """Get AlertChannelConfig instance from loaded configuration.
+
+        Returns:
+            AlertChannelConfig instance with routing configuration
+
+        Raises:
+            ConfigValidationError: If configuration is invalid
+        """
+        if self._alert_channel_config is None:
+            config = self.load_config()
+            alert_channels_config = config.get("alert_channels", {})
+
+            if not alert_channels_config:
+                # Use default empty config
+                self._alert_channel_config = AlertChannelConfig()
+            else:
+                try:
+                    # Build AlertChannelRoute objects from config
+                    routes = []
+                    for route_config in alert_channels_config.get("routes", []):
+                        routes.append(AlertChannelRoute(**route_config))
+
+                    self._alert_channel_config = AlertChannelConfig(
+                        routes=routes,
+                        default_channels=alert_channels_config.get(
+                            "default_channels", ["operator"]
+                        ),
+                    )
+                except ValidationError as e:
+                    raise ConfigValidationError(
+                        f"Invalid alert channel configuration: {e}"
+                    ) from e
+
+        return self._alert_channel_config
+
     def reload(self) -> None:
         """Clear cached configuration to force reload on next access."""
         self._config = None
         self._alert_config = None
+        self._alert_channel_config = None
 
 
 __all__ = [
@@ -398,4 +553,6 @@ __all__ = [
     "EnvironmentConfigProvider",
     "CompositeConfigProvider",
     "CoverageConfigManager",
+    "AlertChannelRoute",
+    "AlertChannelConfig",
 ]
