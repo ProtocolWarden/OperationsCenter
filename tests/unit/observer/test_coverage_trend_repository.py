@@ -1280,6 +1280,7 @@ class TestChecksumVerification:
 
         assert len(checksum1) == 64
         assert checksum1.isalnum()
+        assert checksum1 != checksum2
 
     def test_alert_checksum_present(
         self,
@@ -1468,7 +1469,7 @@ class TestLargeDataHandling:
             stability_score=0.85,
         )
 
-        metadata = repo.store_trend_analysis(analysis)
+        repo.store_trend_analysis(analysis)
         loaded = repo.load_trend_analysis("line", "repository")
 
         assert loaded is not None

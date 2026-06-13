@@ -16,11 +16,7 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from operations_center.observer.coverage_alerting import (
-    AlertSeverity,
-    AlertType,
-    CoverageAlertConfig,
-)
+from operations_center.observer.coverage_alerting import CoverageAlertConfig
 from operations_center.observer.coverage_alert_channels import (
     AlertChannelConfig,
     AlertChannelRoute,
