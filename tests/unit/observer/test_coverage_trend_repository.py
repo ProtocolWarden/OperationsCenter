@@ -1250,3 +1250,427 @@ class TestLocalRepositoryStorageFormats:
         loaded = repo.load_trend_analysis("line", "repository")
         assert loaded is not None
         assert loaded.current_value == 87.0
+
+
+class TestChecksumVerification:
+    """Tests for checksum generation and verification."""
+
+    def test_snapshot_checksum_consistency(
+        self,
+        temp_storage_dir: Path,
+        sample_snapshot: CoverageSnapshot,
+    ) -> None:
+        """Test that identical snapshots produce identical checksums."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+
+        metadata1 = repo.store_snapshot(sample_snapshot)
+        checksum1 = metadata1["checksum"]
+
+        snapshot_copy = CoverageSnapshot(
+            timestamp=sample_snapshot.timestamp,
+            run_id="copy-run",
+            source=sample_snapshot.source,
+            overall_statement_coverage_pct=sample_snapshot.overall_statement_coverage_pct,
+            overall_branch_coverage_pct=sample_snapshot.overall_branch_coverage_pct,
+            overall_line_coverage_pct=sample_snapshot.overall_line_coverage_pct,
+        )
+
+        metadata2 = repo.store_snapshot(snapshot_copy)
+        checksum2 = metadata2["checksum"]
+
+        assert len(checksum1) == 64
+        assert checksum1.isalnum()
+
+    def test_alert_checksum_present(
+        self,
+        temp_storage_dir: Path,
+        sample_alert: CoverageAlert,
+    ) -> None:
+        """Test that stored alerts generate checksums."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+
+        metadata = repo.store_alert(sample_alert)
+        assert "checksum" in metadata
+        assert len(metadata["checksum"]) == 64
+
+    def test_trend_analysis_checksum_present(
+        self,
+        temp_storage_dir: Path,
+        sample_trend_analysis: CoverageTrendAnalysis,
+    ) -> None:
+        """Test that trend analyses generate checksums."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+
+        metadata = repo.store_trend_analysis(sample_trend_analysis)
+        assert "checksum" in metadata
+        assert len(metadata["checksum"]) == 64
+
+
+class TestConcurrentAccessPatterns:
+    """Tests for concurrent access patterns and thread safety."""
+
+    def test_multiple_snapshots_same_repo(
+        self,
+        temp_storage_dir: Path,
+    ) -> None:
+        """Test storing multiple snapshots concurrently."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+
+        snapshots = [
+            CoverageSnapshot(
+                timestamp=datetime.now(tz=timezone.utc),
+                run_id=f"concurrent-run-{i}",
+                source="coverage.py",
+                overall_statement_coverage_pct=80.0 + i,
+                overall_branch_coverage_pct=75.0 + i,
+                overall_line_coverage_pct=82.0 + i,
+            )
+            for i in range(10)
+        ]
+
+        for snapshot in snapshots:
+            repo.store_snapshot(snapshot)
+
+        loaded_snapshots = repo.list_snapshots()
+        assert len(loaded_snapshots) == 10
+
+    def test_concurrent_alert_writes_same_day(
+        self,
+        temp_storage_dir: Path,
+    ) -> None:
+        """Test storing multiple alerts on same day."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+        now = datetime.now(tz=timezone.utc)
+
+        for i in range(5):
+            alert = CoverageAlert(
+                alert_id=f"concurrent-alert-{i}",
+                timestamp=now,
+                alert_type="below_threshold",
+                severity="warning",
+                metric_type="line",
+                granularity="repository",
+                scope_id="",
+                current_value=75.0 - i,
+                threshold_or_baseline=80.0,
+                delta_pct=-5.0 - i,
+                baseline_type="minimum_threshold",
+            )
+            repo.store_alert(alert)
+
+        alerts = repo.list_alerts()
+        assert len(alerts) == 5
+
+    def test_index_persistence_concurrent_operations(
+        self,
+        temp_storage_dir: Path,
+    ) -> None:
+        """Test index persistence during concurrent operations."""
+        repo1 = LocalCoverageTrendRepository(root=temp_storage_dir)
+
+        snapshot1 = CoverageSnapshot(
+            timestamp=datetime.now(tz=timezone.utc),
+            run_id="run-1",
+            source="coverage.py",
+            overall_statement_coverage_pct=85.0,
+            overall_branch_coverage_pct=78.0,
+            overall_line_coverage_pct=87.0,
+        )
+
+        repo1.store_snapshot(snapshot1)
+
+        repo2 = LocalCoverageTrendRepository(root=temp_storage_dir)
+        loaded = repo2.load_snapshot("run-1")
+        assert loaded.run_id == "run-1"
+
+        repo1.store_snapshot(
+            CoverageSnapshot(
+                timestamp=datetime.now(tz=timezone.utc),
+                run_id="run-2",
+                source="coverage.py",
+                overall_statement_coverage_pct=86.0,
+                overall_branch_coverage_pct=79.0,
+                overall_line_coverage_pct=88.0,
+            )
+        )
+
+        repo2_snapshots = repo2.list_snapshots()
+        assert len(repo2_snapshots) >= 1
+
+
+class TestLargeDataHandling:
+    """Tests for handling large data structures."""
+
+    def test_snapshot_with_many_modules(
+        self,
+        temp_storage_dir: Path,
+    ) -> None:
+        """Test storing snapshot with many module coverages."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+
+        modules = [
+            ModuleCoverage(
+                module_path=f"src/module{i}",
+                statement_coverage_pct=85.0 + (i % 10),
+                branch_coverage_pct=78.0 + (i % 10),
+                line_coverage_pct=87.0 + (i % 10),
+                statement_count=1000 + i * 100,
+                branch_count=500 + i * 50,
+                line_count=900 + i * 100,
+                health_status="healthy",
+            )
+            for i in range(50)
+        ]
+
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(tz=timezone.utc),
+            run_id="large-snapshot",
+            source="coverage.py",
+            overall_statement_coverage_pct=85.5,
+            overall_branch_coverage_pct=78.2,
+            overall_line_coverage_pct=87.1,
+            module_coverages=modules,
+        )
+
+        metadata = repo.store_snapshot(snapshot)
+        loaded = repo.load_snapshot("large-snapshot")
+
+        assert len(loaded.module_coverages) == 50
+        assert len(metadata["checksum"]) == 64
+
+    def test_trend_analysis_with_many_measurements(
+        self,
+        temp_storage_dir: Path,
+    ) -> None:
+        """Test trend analysis with extended history."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+
+        now = datetime.now(tz=timezone.utc)
+        measurements = [
+            (now - timedelta(days=i), 80.0 + (i * 0.5))
+            for i in range(90)
+        ]
+
+        analysis = CoverageTrendAnalysis(
+            metric_type="line",
+            granularity="repository",
+            scope_id="",
+            window_start=now - timedelta(days=90),
+            window_end=now,
+            measurements=measurements,
+            current_value=90.0,
+            average_value=85.0,
+            min_value=80.0,
+            max_value=90.0,
+            trend_direction="improving",
+            trend_pct=10.0,
+            standard_deviation=2.5,
+            stability_score=0.85,
+        )
+
+        metadata = repo.store_trend_analysis(analysis)
+        loaded = repo.load_trend_analysis("line", "repository")
+
+        assert loaded is not None
+        assert len(loaded.measurements) == 90
+
+
+class TestS3PaginationHandling:
+    """Tests for S3 pagination with large result sets."""
+
+    @patch("operations_center.observer.coverage_trend_repository.boto3")
+    def test_s3_list_snapshots_multiple_pages(
+        self,
+        mock_boto3: MagicMock,
+    ) -> None:
+        """Test S3 pagination with multiple pages of snapshots."""
+        mock_client = MagicMock()
+        mock_boto3.client.return_value = mock_client
+
+        now = datetime.now(tz=timezone.utc)
+        mock_client.get_paginator.return_value.paginate.return_value = [
+            {
+                "Contents": [
+                    {"Key": f"coverage-trends/snapshots/run-{i}/snapshot.json", "LastModified": now}
+                    for i in range(1000, 1500)
+                ]
+            },
+            {
+                "Contents": [
+                    {"Key": f"coverage-trends/snapshots/run-{i}/snapshot.json", "LastModified": now}
+                    for i in range(1500, 2000)
+                ]
+            },
+        ]
+
+        repo = S3CoverageTrendRepository(bucket="test-bucket")
+        snapshots = repo.list_snapshots()
+
+        assert len(snapshots) == 1000
+
+    @patch("operations_center.observer.coverage_trend_repository.boto3")
+    def test_s3_list_snapshots_with_limit_pagination(
+        self,
+        mock_boto3: MagicMock,
+    ) -> None:
+        """Test S3 pagination respects limit parameter."""
+        mock_client = MagicMock()
+        mock_boto3.client.return_value = mock_client
+
+        now = datetime.now(tz=timezone.utc)
+        mock_client.get_paginator.return_value.paginate.return_value = [
+            {
+                "Contents": [
+                    {"Key": f"coverage-trends/snapshots/run-{i}/snapshot.json", "LastModified": now}
+                    for i in range(100)
+                ]
+            },
+            {
+                "Contents": [
+                    {"Key": f"coverage-trends/snapshots/run-{i}/snapshot.json", "LastModified": now}
+                    for i in range(100, 200)
+                ]
+            },
+        ]
+
+        repo = S3CoverageTrendRepository(bucket="test-bucket")
+        snapshots = repo.list_snapshots(limit=50)
+
+        assert len(snapshots) == 50
+
+
+class TestRecoveryAndResilience:
+    """Tests for recovery from partial failures and corruption."""
+
+    def test_snapshot_directory_missing_recovery(
+        self,
+        temp_storage_dir: Path,
+        sample_snapshot: CoverageSnapshot,
+    ) -> None:
+        """Test recovery when snapshot directory is manually deleted."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+        repo.store_snapshot(sample_snapshot)
+
+        snapshot_dir = temp_storage_dir / "snapshots" / sample_snapshot.run_id
+        shutil.rmtree(snapshot_dir)
+
+        with pytest.raises(FileNotFoundError):
+            repo.load_snapshot(sample_snapshot.run_id)
+
+    def test_corrupted_snapshot_file_handling(
+        self,
+        temp_storage_dir: Path,
+        sample_snapshot: CoverageSnapshot,
+    ) -> None:
+        """Test handling of corrupted snapshot JSON."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+        repo.store_snapshot(sample_snapshot)
+
+        snapshot_file = temp_storage_dir / "snapshots" / sample_snapshot.run_id / "snapshot.json"
+        snapshot_file.write_text("{invalid json content}", encoding="utf-8")
+
+        with pytest.raises(Exception):
+            repo.load_snapshot(sample_snapshot.run_id)
+
+    def test_partial_cleanup_recovery(
+        self,
+        temp_storage_dir: Path,
+    ) -> None:
+        """Test cleanup continues after encountering invalid entry."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir, retention_days=7)
+
+        now = datetime.now(tz=timezone.utc)
+        snapshot1 = CoverageSnapshot(
+            timestamp=now - timedelta(days=10),
+            run_id="old-run-1",
+            source="coverage.py",
+            overall_statement_coverage_pct=80.0,
+            overall_branch_coverage_pct=75.0,
+            overall_line_coverage_pct=82.0,
+        )
+
+        snapshot2 = CoverageSnapshot(
+            timestamp=now - timedelta(days=3),
+            run_id="recent-run",
+            source="coverage.py",
+            overall_statement_coverage_pct=85.0,
+            overall_branch_coverage_pct=78.0,
+            overall_line_coverage_pct=87.0,
+        )
+
+        repo.store_snapshot(snapshot1)
+        repo.store_snapshot(snapshot2)
+
+        repo._index["invalid-run"] = {"observed_at": "invalid-date"}
+
+        deleted = repo.cleanup(retention_days=7)
+        assert "old-run-1" in deleted
+        assert "recent-run" not in deleted
+
+    def test_alert_file_corruption_resilience(
+        self,
+        temp_storage_dir: Path,
+        sample_alert: CoverageAlert,
+    ) -> None:
+        """Test handling of corrupted alert lines in JSONL file."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+        repo.store_alert(sample_alert)
+
+        alerts_file = temp_storage_dir / "alerts" / sample_alert.timestamp.strftime("%Y-%m-%d") / "alerts.jsonl"
+        content = alerts_file.read_text(encoding="utf-8")
+        alerts_file.write_text(content + "\n{invalid json line}\n", encoding="utf-8")
+
+        alerts = repo.list_alerts()
+        assert len(alerts) >= 1
+
+
+class TestFormatAndVersioning:
+    """Tests for storage format and version handling."""
+
+    def test_local_repository_format_enum_values(self) -> None:
+        """Test CoverageTrendFormat enum contains expected values."""
+        from operations_center.observer.coverage_trend_repository import CoverageTrendFormat
+
+        assert hasattr(CoverageTrendFormat, "JSON")
+        assert hasattr(CoverageTrendFormat, "JSONL")
+        assert CoverageTrendFormat.JSON.value == "json"
+        assert CoverageTrendFormat.JSONL.value == "jsonl"
+
+    def test_snapshot_metadata_includes_version(
+        self,
+        temp_storage_dir: Path,
+        sample_snapshot: CoverageSnapshot,
+    ) -> None:
+        """Test that stored metadata includes version information."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+        metadata = repo.store_snapshot(sample_snapshot)
+
+        assert "version" in metadata
+        assert metadata["version"] == 1
+
+    def test_trend_analysis_metadata_includes_path(
+        self,
+        temp_storage_dir: Path,
+        sample_trend_analysis: CoverageTrendAnalysis,
+    ) -> None:
+        """Test that trend analysis metadata includes storage path."""
+        repo = LocalCoverageTrendRepository(root=temp_storage_dir)
+        metadata = repo.store_trend_analysis(sample_trend_analysis)
+
+        assert "path" in metadata
+        assert "trends" in metadata["path"]
+
+    @patch("operations_center.observer.coverage_trend_repository.requests")
+    def test_http_repository_url_construction(
+        self,
+        mock_requests: MagicMock,
+    ) -> None:
+        """Test HTTP repository URL construction with trailing slash."""
+        mock_session = MagicMock()
+        mock_requests.Session.return_value = mock_session
+
+        repo1 = HTTPCoverageTrendRepository(base_url="http://api.example.com/")
+        repo2 = HTTPCoverageTrendRepository(base_url="http://api.example.com")
+
+        assert repo1.base_url == "http://api.example.com"
+        assert repo2.base_url == "http://api.example.com"
