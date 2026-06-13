@@ -5,15 +5,15 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-**Stage 1: Implement coverage metrics collection in observer service** ✅ COMPLETE (2026-06-12)
+**Stage 3: Implement coverage threshold alerting engine** ✅ COMPLETE (2026-06-12)
 
 ## Overall Plan
 
-Coverage threshold alerting system design and implementation. Stage 0 (design) complete. Stage 1 (collector implementation) complete. Stages 2-8 planned for remaining implementation phases.
+Coverage threshold alerting system design and implementation. Stages 0-3 complete. Stages 4-8 planned for remaining implementation phases (dashboard, CI integration, documentation, testing).
 
 ## Current Stage
 
-Stage 1: COMPLETE (2026-06-12). Implemented CoverageCollector with coverage metrics extraction, module-level breakdown calculation, and comprehensive tests. Ready for Stage 2 (storage and trends).
+Stage 3: COMPLETE (2026-06-12). Implemented CoverageAlertConfig, CoverageAlertManager with all alert types, severity classification, categorization logic, and comprehensive 37-test suite. Ready for Stage 4 (dashboard and CI integration).
 
 ## Stage 0 Acceptance Criteria — ALL MET ✅
 
@@ -143,3 +143,70 @@ Stage 1: COMPLETE (2026-06-12). Implemented CoverageCollector with coverage metr
 ✅ All files have SPDX headers and docstrings
 ✅ All files syntax-checked with py_compile
 ✅ Ready for Stage 2 (storage backends and trend analysis)
+
+---
+
+## Stage 3 Acceptance Criteria — ALL MET ✅
+
+1. ✅ **CoverageAlertConfig class with threshold definitions**
+   - File: `src/operations_center/observer/coverage_alerting.py`
+   - Repository-level thresholds: minimum (80%), warning (85%), target (90%)
+   - Coverage type thresholds: statement (75%), branch (65%), line (75%)
+   - Regression thresholds: run-to-run (2%), 7-day (3%), 30-day (5%)
+   - Trend detection: 5+ days of decline at -1% per day
+   - Module-level threshold overrides with per-module customization
+   - Severity mapping: critical (<50%), high (<70%), medium (<80%), info (≥80%)
+   - Methods: get_module_threshold(), classify_severity()
+
+2. ✅ **CoverageAlertManager that generates alerts**
+   - Full alert generation pipeline: generate_alerts()
+   - Repository-level threshold checking for statement/branch/line coverage
+   - Module-level critical gap detection (gaps ≥15%)
+   - Regression detection against previous snapshot (2%+ drops)
+   - Trend degradation detection (5+ days decline)
+   - Alert filtering and summarization methods
+   - Categorization logic for all alert types and severity levels
+
+3. ✅ **Alert types defined and implemented**
+   - AlertType enum: BELOW_THRESHOLD, REGRESSION_DETECTED, TREND_DEGRADING, CRITICAL_MODULE_COVERAGE
+   - AlertSeverity enum: INFO, WARNING, CRITICAL, EMERGENCY
+   - Each alert includes: id, timestamp, type, severity, metric type, granularity, scope, measurements, delta, threshold, baseline, affected modules, recommendation
+
+4. ✅ **Alert severity classification logic**
+   - classify_severity(): Maps coverage percentage to severity level
+   - Emergency: <50% (critical coverage failure)
+   - Critical: 50-70% (significant coverage issue)
+   - Warning: 70-80% (coverage below target)
+   - Info: ≥80% (coverage acceptable)
+   - Customizable severity thresholds via CoverageAlertConfig
+
+5. ✅ **Categorization logic for all alert conditions**
+   - categorize_alert(): Returns alert_type, severity, category, action_required
+   - filter_alerts_by_severity(): Get alerts at specific severity levels
+   - filter_alerts_by_type(): Get alerts of specific types
+   - summarize_alerts(): Count alerts by type and severity
+   - _is_action_required(): Determine if action needed (CRITICAL/EMERGENCY)
+
+6. ✅ **Comprehensive test suite (37 tests, 100% pass rate)**
+   - TestCoverageAlertConfig (9 tests): Thresholds, overrides, severity classification
+   - TestCoverageAlertManager (7 tests): Initialization, alert generation, threshold detection
+   - TestCriticalModuleDetection (3 tests): Module gap detection, calculation, minimum threshold
+   - TestRegressionDetection (4 tests): Regression detection, delta calculation, threshold boundary
+   - TestTrendDetection (3 tests): Trend detection, minimum days requirement, stable trends
+   - TestAlertSeverityMapping (3 tests): Severity classification for all levels
+   - TestAlertCategorization (5 tests): Categorization, filtering, action required
+   - TestAlertSummarization (3 tests): Empty/populated alerts, action classification
+
+## Definition of Done — Stage 3
+
+✅ All 6 acceptance criteria met (see above)
+✅ CoverageAlertConfig fully implemented with all threshold options
+✅ CoverageAlertManager generates all 4 alert types correctly
+✅ Alert severity classification: INFO, WARNING, CRITICAL, EMERGENCY
+✅ Comprehensive categorization and filtering logic
+✅ 37 comprehensive tests with 100% pass rate
+✅ Code quality verified: ruff clean, py_compile pass
+✅ Type annotations complete and valid
+✅ Module exports added to observer.__init__.py
+✅ Proper SPDX headers on all files
+✅ Ready for Stage 4 (dashboard and CI integration)
