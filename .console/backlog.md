@@ -4,7 +4,7 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## In Progress
 
-(Currently no active work items — Stage 9 campaign complete)
+(Currently no active work items — Stage 7 campaign complete)
 
 ## Recently Completed
 
