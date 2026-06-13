@@ -94,7 +94,13 @@ class CoverageCollector:
             logger.debug("Coverage file not found: %s", self.coverage_json_path)
             return None
 
-        if not Path(self.coverage_json_path).exists():
+        try:
+            exists = Path(self.coverage_json_path).exists()
+        except PermissionError:
+            logger.error("Permission denied accessing coverage file: %s", self.coverage_json_path)
+            return None
+
+        if not exists:
             logger.debug("Coverage file not found: %s", self.coverage_json_path)
             return None
 
