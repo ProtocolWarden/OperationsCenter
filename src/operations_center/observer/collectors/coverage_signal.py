@@ -38,12 +38,35 @@ class CoverageSignalCollector:
     """
 
     def collect(self, context: ObserverContext) -> CoverageSignal:
+        """Collect coverage data from pre-existing reports in the repository.
+
+        Searches for coverage reports in priority order:
+        1. coverage.xml (Cobertura XML format from coverage.py)
+        2. coverage.txt or pytest-coverage.txt (text summary)
+        3. htmlcov/index.html (HTML coverage report)
+
+        Args:
+            context: ObserverContext with repo path and logs root
+
+        Returns:
+            CoverageSignal with status (measured/partial/unavailable) and coverage data
+        """
         try:
             return self._analyze(context)
         except Exception:
             return CoverageSignal(status="unavailable")
 
     def _analyze(self, context: ObserverContext) -> CoverageSignal:
+        """Analyze coverage data from available reports.
+
+        Searches both repo_path and logs_root for coverage files in priority order.
+
+        Args:
+            context: ObserverContext with repo path and logs root
+
+        Returns:
+            CoverageSignal with measured coverage data or unavailable status
+        """
         search_roots = [context.repo_path]
         if context.logs_root.is_dir():
             search_roots.append(context.logs_root)
@@ -88,6 +111,16 @@ class CoverageSignalCollector:
     # ------------------------------------------------------------------
 
     def _parse_xml(self, path: Path) -> CoverageSignal | None:
+        """Parse Cobertura XML coverage report (coverage.xml).
+
+        Extracts overall line coverage percentage and identifies files below threshold.
+
+        Args:
+            path: Path to coverage.xml file
+
+        Returns:
+            CoverageSignal with parsed data, or None if XML is invalid/unparseable
+        """
         try:
             tree = ET.parse(path)
         except ET.ParseError:
@@ -127,6 +160,16 @@ class CoverageSignalCollector:
         )
 
     def _parse_text(self, path: Path) -> CoverageSignal | None:
+        """Parse text-based coverage report (coverage.txt or pytest-coverage.txt).
+
+        Extracts overall coverage percentage from text summary lines matching "TOTAL X% Y%".
+
+        Args:
+            path: Path to coverage text file
+
+        Returns:
+            CoverageSignal with parsed coverage percentage, or None if no data found
+        """
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
@@ -145,6 +188,16 @@ class CoverageSignalCollector:
         )
 
     def _parse_html(self, path: Path) -> CoverageSignal | None:
+        """Parse HTML coverage report (htmlcov/index.html).
+
+        Extracts overall coverage percentage from HTML title or body text matching percentage patterns.
+
+        Args:
+            path: Path to htmlcov/index.html file
+
+        Returns:
+            CoverageSignal with parsed coverage percentage, or None if no valid data found
+        """
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
