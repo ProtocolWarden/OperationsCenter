@@ -143,7 +143,8 @@ class LocalCoverageTrendRepository(CoverageTrendRepository):
         """Save the index of stored snapshots."""
         index_file = self.root / "index.json"
         data = {k: dict(v) if isinstance(v, dict) else v for k, v in self._index.items()}
-        index_file.write_text(json.dumps(data, indent=2, default=str, ensure_ascii=False), encoding="utf-8")
+        json_str = json.dumps(data, indent=2, default=str, ensure_ascii=False)
+        index_file.write_text(json_str, encoding="utf-8")
 
     def store_snapshot(
         self,

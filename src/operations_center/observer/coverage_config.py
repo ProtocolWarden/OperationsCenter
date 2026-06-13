@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-"""Coverage threshold configuration system for loading and managing configuration from multiple sources.
+"""Coverage threshold configuration system for loading and managing configuration.
 
 Supports YAML files, environment variables, and defaults with composition and precedence.
 Includes alert routing configuration for specifying which channels receive which alert types.

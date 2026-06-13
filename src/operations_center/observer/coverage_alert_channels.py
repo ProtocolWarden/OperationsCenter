@@ -56,19 +56,23 @@ class CoverageSlackFormatter:
         ]
 
         if alert.current_value is not None and alert.threshold_or_baseline is not None:
+            cov_val = alert.current_value
+            thresh_val = alert.threshold_or_baseline
             fields.append(
                 {
                     "title": "Coverage",
-                    "value": f"{alert.current_value:.1f}% (threshold: {alert.threshold_or_baseline:.1f}%)",
+                    "value": f"{cov_val:.1f}% (threshold: {thresh_val:.1f}%)",
                     "short": False,
                 }
             )
 
         if alert.delta_pct is not None and alert.alert_type == AlertType.REGRESSION_DETECTED.value:
+            delta = alert.delta_pct
+            baseline = alert.threshold_or_baseline or 0
             fields.append(
                 {
                     "title": "Regression",
-                    "value": f"{alert.delta_pct:+.1f}% from baseline {alert.threshold_or_baseline or 0:.1f}%",
+                    "value": f"{delta:+.1f}% from baseline {baseline:.1f}%",
                     "short": False,
                 }
             )
@@ -114,6 +118,11 @@ class CoverageEmailFormatter:
         alert_type_readable: str = alert.alert_type.replace("_", " ").title()
         subject: str = f"[{alert.severity.upper()}] Coverage Alert: {alert_type_readable}"
 
+        threshold_part = (
+            f"(threshold: {alert.threshold_or_baseline:.1f}%)"
+            if alert.threshold_or_baseline
+            else ""
+        )
         text_body: str = f"""
 Coverage Alert Notification
 ============================
@@ -124,11 +133,13 @@ Metric Type: {alert.metric_type}
 Granularity: {alert.granularity}
 Scope: {alert.scope_id}
 
-Current Measurement: {alert.current_value:.1f}% {f"(threshold: {alert.threshold_or_baseline:.1f}%)" if alert.threshold_or_baseline else ""}
+Current Measurement: {alert.current_value:.1f}% {threshold_part}
 """
 
         if alert.alert_type == AlertType.REGRESSION_DETECTED.value and alert.delta_pct is not None:
-            text_body += f"\nRegression: {alert.delta_pct:+.1f}% from baseline {alert.threshold_or_baseline or 0:.1f}%\n"
+            delta = alert.delta_pct
+            baseline = alert.threshold_or_baseline or 0
+            text_body += f"\nRegression: {delta:+.1f}% from baseline {baseline:.1f}%\n"
 
         if alert.affected_modules:
             text_body += "\nAffected Modules:\n"
@@ -161,6 +172,10 @@ Current Measurement: {alert.current_value:.1f}% {f"(threshold: {alert.threshold_
             text_body += "2. Add tests for frequently changed files\n"
             text_body += "3. Track module-level coverage metrics\n"
 
+        td_style = 'style="padding: 8px; border: 1px solid #ddd;"'
+        severity_span = (
+            f'<span style="color: red; font-weight: bold;">{alert.severity.upper()}</span>'
+        )
         html_body: str = f"""
 <html>
 <body style="font-family: Arial, sans-serif; color: #333;">
@@ -168,34 +183,37 @@ Current Measurement: {alert.current_value:.1f}% {f"(threshold: {alert.threshold_
 
 <table style="border-collapse: collapse; margin: 20px 0;">
 <tr style="background-color: #f5f5f5;">
-    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Alert Type</strong></td>
-    <td style="padding: 8px; border: 1px solid #ddd;">{alert_type_readable}</td>
+    <td {td_style}><strong>Alert Type</strong></td>
+    <td {td_style}>{alert_type_readable}</td>
 </tr>
 <tr>
-    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Severity</strong></td>
-    <td style="padding: 8px; border: 1px solid #ddd;"><span style="color: red; font-weight: bold;">{alert.severity.upper()}</span></td>
+    <td {td_style}><strong>Severity</strong></td>
+    <td {td_style}>{severity_span}</td>
 </tr>
 <tr style="background-color: #f5f5f5;">
-    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Metric Type</strong></td>
-    <td style="padding: 8px; border: 1px solid #ddd;">{alert.metric_type}</td>
+    <td {td_style}><strong>Metric Type</strong></td>
+    <td {td_style}>{alert.metric_type}</td>
 </tr>
 <tr>
-    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Current Measurement</strong></td>
-    <td style="padding: 8px; border: 1px solid #ddd;">{alert.current_value:.1f}%</td>
+    <td {td_style}><strong>Current Measurement</strong></td>
+    <td {td_style}>{alert.current_value:.1f}%</td>
 </tr>
 """
 
         if alert.threshold_or_baseline is not None:
             html_body += f"""<tr style="background-color: #f5f5f5;">
-    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Threshold</strong></td>
-    <td style="padding: 8px; border: 1px solid #ddd;">{alert.threshold_or_baseline:.1f}%</td>
+    <td {td_style}><strong>Threshold</strong></td>
+    <td {td_style}>{alert.threshold_or_baseline:.1f}%</td>
 </tr>
 """
 
         if alert.affected_modules:
-            html_body += """<tr>
-    <td style="padding: 8px; border: 1px solid #ddd; vertical-align: top;"><strong>Affected Modules</strong></td>
-    <td style="padding: 8px; border: 1px solid #ddd;">
+            td_style_vt = (
+                'style="padding: 8px; border: 1px solid #ddd; vertical-align: top;"'
+            )
+            html_body += f"""<tr>
+    <td {td_style_vt}><strong>Affected Modules</strong></td>
+    <td {td_style}>
         <ul style="margin: 0; padding-left: 20px;">
 """
             for module in sorted(alert.affected_modules)[:10]:
@@ -289,7 +307,9 @@ class CoverageGitHubFormatter:
             comment += f"**Threshold:** {alert.threshold_or_baseline:.1f}%\n"
 
         if alert.alert_type == AlertType.REGRESSION_DETECTED.value and alert.delta_pct is not None:
-            comment += f"**Change:** {alert.delta_pct:+.1f}% from baseline {alert.threshold_or_baseline or 0:.1f}%\n"
+            delta = alert.delta_pct
+            baseline = alert.threshold_or_baseline or 0
+            comment += f"**Change:** {delta:+.1f}% from baseline {baseline:.1f}%\n"
 
         # Module-specific section for file-level alerts
         if alert.granularity == "file" and alert.affected_modules:
@@ -500,10 +520,11 @@ class CoverageAlertRouter:
                             msg.as_string(),
                         )
 
+                    recipient_count = len(self.email_channel.recipients)
                     results[channel_name] = AlertChannelResult(
                         channel=channel_name,
                         success=True,
-                        message=f"Coverage alert sent to {len(self.email_channel.recipients)} recipient(s)",
+                        message=f"Coverage alert sent to {recipient_count} recipient(s)",
                     )
                 except Exception as e:
                     results[channel_name] = AlertChannelResult(

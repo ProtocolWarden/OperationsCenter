@@ -160,6 +160,10 @@ class CoverageAlertManager:
 
         if coverage_pct < threshold:
             severity = self.config.classify_severity(coverage_pct)
+            recommendation = (
+                f"Coverage {coverage_pct:.1f}% is below minimum threshold of {threshold:.1f}%. "
+                "Add tests to increase coverage."
+            )
             alert = CoverageAlert(
                 alert_id=str(uuid4()),
                 timestamp=snapshot.timestamp,
@@ -172,8 +176,7 @@ class CoverageAlertManager:
                 threshold_or_baseline=threshold,
                 delta_pct=threshold - coverage_pct,
                 baseline_type="minimum_threshold",
-                recommendation=f"Coverage {coverage_pct:.1f}% is below minimum threshold of {threshold:.1f}%. "
-                f"Add tests to increase coverage.",
+                recommendation=recommendation,
             )
             self.alerts.append(alert)
 
@@ -182,6 +185,10 @@ class CoverageAlertManager:
         branch_threshold = self.config.branch_coverage_minimum
         if branch_coverage < branch_threshold:
             severity = self.config.classify_severity(branch_coverage)
+            recommendation = (
+                f"Branch coverage {branch_coverage:.1f}% is below minimum threshold of "
+                f"{branch_threshold:.1f}%. Add condition tests."
+            )
             alert = CoverageAlert(
                 alert_id=str(uuid4()),
                 timestamp=snapshot.timestamp,
@@ -194,8 +201,7 @@ class CoverageAlertManager:
                 threshold_or_baseline=branch_threshold,
                 delta_pct=branch_threshold - branch_coverage,
                 baseline_type="minimum_threshold",
-                recommendation=f"Branch coverage {branch_coverage:.1f}% is below minimum threshold of {branch_threshold:.1f}%. "
-                f"Add condition tests.",
+                recommendation=recommendation,
             )
             self.alerts.append(alert)
 
@@ -204,6 +210,10 @@ class CoverageAlertManager:
         line_threshold = self.config.line_coverage_minimum
         if line_coverage < line_threshold:
             severity = self.config.classify_severity(line_coverage)
+            recommendation = (
+                f"Line coverage {line_coverage:.1f}% is below minimum threshold of "
+                f"{line_threshold:.1f}%. Add tests for uncovered lines."
+            )
             alert = CoverageAlert(
                 alert_id=str(uuid4()),
                 timestamp=snapshot.timestamp,
@@ -216,8 +226,7 @@ class CoverageAlertManager:
                 threshold_or_baseline=line_threshold,
                 delta_pct=line_threshold - line_coverage,
                 baseline_type="minimum_threshold",
-                recommendation=f"Line coverage {line_coverage:.1f}% is below minimum threshold of {line_threshold:.1f}%. "
-                f"Add tests for uncovered lines.",
+                recommendation=recommendation,
             )
             self.alerts.append(alert)
 
@@ -248,9 +257,11 @@ class CoverageAlertManager:
                         delta_pct=-gap,
                         baseline_type="minimum_threshold",
                         affected_modules=[module.module_path],
-                        recommendation=f"Module {module.module_path} has critical coverage gap of {gap:.1f}%. "
-                        f"Current coverage {coverage_pct:.1f}% vs target {threshold:.1f}%. "
-                        f"Prioritize tests for this module.",
+                        recommendation=(
+                            f"Module {module.module_path} has critical coverage gap of {gap:.1f}%. "
+                            f"Current coverage {coverage_pct:.1f}% vs target {threshold:.1f}%. "
+                            "Prioritize tests for this module."
+                        ),
                     )
                     self.alerts.append(alert)
 
@@ -300,6 +311,16 @@ class CoverageAlertManager:
                 current = snapshot.overall_statement_coverage_pct
                 severity = self.config.classify_severity(current)
                 velocity_pct = trend_analysis.trend_pct if trend_analysis.trend_pct else 0
+                days_decline = trend_analysis.days_of_decline
+                avg_val = trend_analysis.average_value
+                proj_val = trend_analysis.projected_value_7days or "N/A"
+                recommendation = (
+                    f"Coverage is in sustained decline ({days_decline} days). "
+                    f"Current {current:.1f}% vs {days_decline}-day average {avg_val:.1f}%. "
+                    f"Trending down at {velocity_pct:.2f}% per day. "
+                    f"Projected value in 7 days: {proj_val}%. "
+                    "Review recent test changes and coverage improvements."
+                )
                 alert = CoverageAlert(
                     alert_id=str(uuid4()),
                     timestamp=snapshot.timestamp,
@@ -312,11 +333,7 @@ class CoverageAlertManager:
                     threshold_or_baseline=trend_analysis.average_value,
                     delta_pct=-velocity_pct if velocity_pct > 0 else 0,
                     baseline_type="trend",
-                    recommendation=f"Coverage is in sustained decline ({trend_analysis.days_of_decline} days). "
-                    f"Current {current:.1f}% vs {trend_analysis.days_of_decline}-day average {trend_analysis.average_value:.1f}%. "
-                    f"Trending down at {velocity_pct:.2f}% per day. "
-                    f"Projected value in 7 days: {trend_analysis.projected_value_7days or 'N/A'}%. "
-                    f"Review recent test changes and coverage improvements.",
+                    recommendation=recommendation,
                 )
                 self.alerts.append(alert)
 

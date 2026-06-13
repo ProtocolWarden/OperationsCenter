@@ -164,12 +164,14 @@ class CoverageTrendManager:
         end_date: datetime = datetime.now(tz=timezone.utc)
         start_date: datetime = end_date - timedelta(days=window_days)
 
-        snapshots: list[CoverageSnapshot] = self.list_snapshots(start_date=start_date, end_date=end_date)
+        snapshots = self.list_snapshots(start_date=start_date, end_date=end_date)
 
         measurements: list[tuple[datetime, float]] = []
 
         for snapshot in snapshots:
-            value: float | None = self._extract_metric_value(snapshot, metric_type, granularity, scope_id)
+            value = self._extract_metric_value(
+                snapshot, metric_type, granularity, scope_id
+            )
             if value is not None:
                 measurements.append((snapshot.timestamp, value))
 
@@ -268,8 +270,12 @@ class CoverageTrendManager:
         previous: CoverageSnapshot = snapshots[1]
         current: CoverageSnapshot = snapshots[0]
 
-        current_value: float | None = self._extract_metric_value(current, metric_type, "repository", None)
-        previous_value: float | None = self._extract_metric_value(previous, metric_type, "repository", None)
+        current_value = self._extract_metric_value(
+            current, metric_type, "repository", None
+        )
+        previous_value = self._extract_metric_value(
+            previous, metric_type, "repository", None
+        )
 
         if current_value is None or previous_value is None:
             return False
@@ -332,11 +338,13 @@ class CoverageTrendManager:
         end_date: datetime | None = None,
     ) -> list[tuple[datetime, float]]:
         """Get historical coverage data for a metric."""
-        snapshots: list[CoverageSnapshot] = self.list_snapshots(start_date=start_date, end_date=end_date)
+        snapshots = self.list_snapshots(start_date=start_date, end_date=end_date)
 
         data: list[tuple[datetime, float]] = []
         for snapshot in snapshots:
-            value: float | None = self._extract_metric_value(snapshot, metric_type, granularity, scope_id)
+            value = self._extract_metric_value(
+                snapshot, metric_type, granularity, scope_id
+            )
             if value is not None:
                 data.append((snapshot.timestamp, value))
 
