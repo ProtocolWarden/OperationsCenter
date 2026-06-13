@@ -5,7 +5,7 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-**Stage 7: Run repository tests** ✅ COMPLETE (2026-06-13)
+**Stage 8: Run repository linters** ✅ COMPLETE (2026-06-13)
 
 ## Overall Plan
 
