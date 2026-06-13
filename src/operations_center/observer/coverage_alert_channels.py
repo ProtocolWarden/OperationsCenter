@@ -12,6 +12,7 @@ Provides:
 
 from __future__ import annotations
 
+import json
 import smtplib
 from typing import Any, Literal
 from urllib.request import Request, urlopen
@@ -674,9 +675,6 @@ class CoverageAlertRouter:
                 try:
                     if not self.slack_channel.webhook_url:
                         raise ValueError("Slack webhook_url is not configured")
-                    # Direct webhook call
-                    import json
-
                     request = Request(
                         self.slack_channel.webhook_url,
                         data=json.dumps(message, ensure_ascii=False).encode(),
@@ -760,8 +758,6 @@ class CoverageAlertRouter:
                 }
                 comment_body = CoverageGitHubFormatter.format_alert(alert, pr_number)
                 try:
-                    import json
-
                     endpoint = (
                         f"/repos/{self.github_channel.repo_owner}/"
                         f"{self.github_channel.repo_name}/issues/{pr_number}/comments"

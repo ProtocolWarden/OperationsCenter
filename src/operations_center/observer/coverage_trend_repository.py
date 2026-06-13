@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from operations_center.observer.coverage_models import (
     CoverageAlert,
@@ -22,19 +22,15 @@ from operations_center.observer.coverage_models import (
 logger = logging.getLogger(__name__)
 
 # Optional imports for remote backends
-if TYPE_CHECKING:
-    import boto3  # ty: ignore[unresolved-import]  # type: ignore[import-not-found,import-untyped]
-    import requests  # ty: ignore[unresolved-import]  # type: ignore[import-untyped]
-else:
-    try:
-        import boto3
-    except ImportError:
-        boto3 = None  # type: ignore[assignment,no-redef]
+try:
+    import boto3
+except ImportError:
+    boto3 = None  # type: ignore[assignment,no-redef]
 
-    try:
-        import requests
-    except ImportError:
-        requests = None  # type: ignore[assignment,no-redef]
+try:
+    import requests
+except ImportError:
+    requests = None  # type: ignore[assignment,no-redef]
 
 
 class CoverageTrendFormat(str, Enum):

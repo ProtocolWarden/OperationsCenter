@@ -411,12 +411,13 @@ class CoverageAlertManager:
                 velocity_pct: float = trend_analysis.trend_pct if trend_analysis.trend_pct else 0.0
                 days_decline: int = trend_analysis.days_of_decline
                 avg_val: float = trend_analysis.average_value
-                proj_val: float | str = trend_analysis.projected_value_7days or "N/A"
+                proj_val: float | None = trend_analysis.projected_value_7days
+                proj_str: str = f"{proj_val:.1f}" if proj_val is not None else "N/A"
                 recommendation: str = (
                     f"Coverage is in sustained decline ({days_decline} days). "
                     f"Current {current:.1f}% vs {days_decline}-day average {avg_val:.1f}%. "
                     f"Trending down at {velocity_pct:.2f}% per day. "
-                    f"Projected value in 7 days: {proj_val}%. "
+                    f"Projected value in 7 days: {proj_str}%. "
                     "Review recent test changes and coverage improvements."
                 )
                 alert: CoverageAlert = CoverageAlert(
