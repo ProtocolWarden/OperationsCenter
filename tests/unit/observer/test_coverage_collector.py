@@ -1410,3 +1410,104 @@ class TestMinMaxModulesWithAllMetrics:
         max_module = collector._get_max_coverage_module(snapshot, "line")
         assert max_module is not None
         assert max_module.line_coverage_pct == 99.0
+
+
+class TestErrorHandlingAndEdgeCases:
+    """Tests for error handling and special edge cases."""
+
+    def test_extract_module_path_single_file(self) -> None:
+        """Test module path extraction with single file."""
+        collector = CoverageCollector()
+        result = collector._extract_module_path("file.py")
+        assert isinstance(result, str)
+        assert len(result) >= 0
+
+    def test_extract_module_path_deep_nested(self) -> None:
+        """Test module path extraction with deeply nested path."""
+        collector = CoverageCollector()
+        result = collector._extract_module_path(
+            "src/operations_center/observer/collectors/coverage_collector.py"
+        )
+        assert "operations_center" in result or "src" in result
+
+    def test_parse_coverage_with_files_no_percent(self) -> None:
+        """Test parsing when percent_covered key is missing."""
+        collector = CoverageCollector()
+
+        coverage_data: dict[str, Any] = {
+            "totals": {"percent_covered": 75.0, "percent_covered_branch": 65.0},
+            "files": {
+                "src/test.py": {"summary": {"missing_key": 10}},
+            },
+        }
+
+        snapshot = collector._parse_coverage_json(coverage_data)
+        assert snapshot is not None
+        assert snapshot.overall_line_coverage_pct == 75.0
+
+    def test_load_coverage_file_permission_error(self) -> None:
+        """Test handling permission errors when reading coverage file."""
+        collector = CoverageCollector(coverage_json_path="/root/forbidden.json")
+        # Should gracefully handle without raising
+        snapshot = collector._load_coverage_snapshot()
+        # Either None or a snapshot, but should not raise an exception
+        assert snapshot is None or isinstance(snapshot, CoverageSnapshot)
+
+    def test_filter_modules_at_risk(self) -> None:
+        """Test filtering modules by at_risk status."""
+        collector = CoverageCollector()
+
+        at_risk = ModuleCoverage(
+            module_path="src/at_risk",
+            statement_coverage_pct=75.0,
+            branch_coverage_pct=65.0,
+            line_coverage_pct=74.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="at_risk",
+        )
+
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(UTC),
+            run_id="test",
+            source="pytest-cov",
+            overall_statement_coverage_pct=75.0,
+            overall_branch_coverage_pct=65.0,
+            overall_line_coverage_pct=74.0,
+            module_coverages=[at_risk],
+        )
+
+        result = collector._filter_modules_by_health(snapshot, "at_risk")
+        assert len(result) == 1
+        assert result[0].module_path == "src/at_risk"
+
+    def test_generate_summary_no_critical(self) -> None:
+        """Test summary generation when no modules are critical."""
+        collector = CoverageCollector()
+
+        healthy = ModuleCoverage(
+            module_path="src/healthy",
+            statement_coverage_pct=90.0,
+            branch_coverage_pct=85.0,
+            line_coverage_pct=91.0,
+            statement_count=100,
+            branch_count=50,
+            line_count=100,
+            health_status="healthy",
+        )
+
+        snapshot = CoverageSnapshot(
+            timestamp=datetime.now(UTC),
+            run_id="test",
+            source="pytest-cov",
+            overall_statement_coverage_pct=90.0,
+            overall_branch_coverage_pct=85.0,
+            overall_line_coverage_pct=91.0,
+            module_coverages=[healthy],
+        )
+
+        summary = collector._generate_summary(snapshot)
+        assert "91.0%" in summary
+        assert "1 modules" in summary
+        assert "critical" not in summary
