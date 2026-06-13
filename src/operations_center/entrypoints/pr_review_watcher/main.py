@@ -1667,13 +1667,27 @@ def _phase1(
                     pr_data=pr_data,
                     ignored_checks=ignored,
                 )
-                if pending or not completed:
+                # Guard D: every configured required check must be PRESENT and passing
+                # on the current head. `failed` is already empty here (the failed-checks
+                # branch above returned), so a required check is satisfied iff it appears
+                # in `completed`. This closes the late-registering-check hole: a required
+                # check living in a separate workflow that has not registered yet is
+                # invisible to both failed and pending, so without this a PR could merge
+                # before that check (e.g. the `audit` job) ever runs.
+                required = list(getattr(repo_cfg, "required_checks", []) or [])
+                missing_required = [
+                    rc
+                    for rc in required
+                    if not any(rc.lower() in name.lower() for name in completed)
+                ]
+                if pending or not completed or missing_required:
                     state["ci_wait_cycles"] = state.get("ci_wait_cycles", 0) + 1
-                    _why = (
-                        f"{len(pending)} still running: {', '.join(pending[:5])}"
-                        if pending
-                        else "no checks have reported on the current head yet"
-                    )
+                    if pending:
+                        _why = f"{len(pending)} still running: {', '.join(pending[:5])}"
+                    elif not completed:
+                        _why = "no checks have reported on the current head yet"
+                    else:
+                        _why = f"required checks not yet reported: {', '.join(missing_required)}"
                     if state["ci_wait_cycles"] >= _MAX_CI_WAIT_CYCLES:
                         detail = (
                             f"CI has not settled-green on the current head after "
@@ -1996,7 +2010,14 @@ def _phase1(
                     _completed_np = gh_client.get_completed_checks(
                         owner, repo, pr_number, pr_data=pr_data, ignored_checks=_ign_np
                     )
-                    if not _failed_np and not _pending_np and _completed_np:
+                    # Guard D: every required check must be present and passing too.
+                    _required_np = list(getattr(_rcfg_np, "required_checks", []) or [])
+                    _missing_np = [
+                        rc
+                        for rc in _required_np
+                        if not any(rc.lower() in name.lower() for name in _completed_np)
+                    ]
+                    if not _failed_np and not _pending_np and _completed_np and not _missing_np:
                         logger.info(
                             "pr_review_watcher: PR #%d repeated no-progress after "
                             "CI-green retraction budget exhausted; CI still green — "

@@ -300,6 +300,7 @@ def mock_settings(
     repo_cfg = MagicMock(
         auto_merge_on_ci_green=True,
         ci_ignored_checks=[],
+        required_checks=[],
         clone_url=f"git@github.com:owner/{repo_key}.git",
         default_branch="main",
         await_review=True,

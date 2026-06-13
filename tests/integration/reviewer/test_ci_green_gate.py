@@ -177,6 +177,95 @@ class TestCIGreenGateValidation:
         gh.merge_pr.assert_not_called()
         assert load_pr_state(state_path)["ci_wait_cycles"] == 1
 
+    def test_required_check_not_yet_reported_defers(
+        self,
+        tmp_path: Path,
+        audit_verdict_builder: AuditVerdictBuilder,
+    ):
+        """Guard D: a configured required check that hasn't registered on the head
+        (e.g. a separate-workflow `audit` job that starts later) → defer.
+
+        Without this, the gate would see the main-workflow checks completed+green
+        and the audit check simply absent (not failed, not pending) and merge before
+        audit ever runs — which is how red-audit PRs reached main.
+        """
+        settings = mock_settings()
+        settings.repos["TestRepo"].required_checks = ["audit"]
+        gh = mock_github_client()
+
+        state = create_pr_state(
+            repo_key="TestRepo",
+            pr_number=42,
+            phase="self_review",
+            self_review_loops=0,
+        )
+        state_path = save_pr_state(tmp_path, state)
+
+        gh.get_failed_checks.return_value = []
+        gh.get_incomplete_checks.return_value = []
+        # main-workflow checks done & green, but `audit` has not registered yet.
+        gh.get_completed_checks.return_value = ["Test (pytest)", "Lint (ruff)"]
+
+        with patch.object(watcher, "_run_pipeline") as mock_pipeline:
+            watcher._phase1(
+                state,
+                state_path,
+                {"number": 42, "title": "Test PR", "draft": False, "head": {"ref": "goal/42"}},
+                gh,
+                "owner",
+                "TestRepo",
+                tmp_path,
+                tmp_path / "cfg.yaml",
+                settings,
+            )
+
+        mock_pipeline.assert_not_called()
+        gh.merge_pr.assert_not_called()
+        assert load_pr_state(state_path)["ci_wait_cycles"] == 1
+
+    def test_required_check_present_and_green_proceeds(
+        self,
+        tmp_path: Path,
+        audit_verdict_builder: AuditVerdictBuilder,
+    ):
+        """Guard D: once the required check has reported (and passed), proceed."""
+        settings = mock_settings()
+        settings.repos["TestRepo"].required_checks = ["audit"]
+        gh = mock_github_client()
+
+        state = create_pr_state(
+            repo_key="TestRepo",
+            pr_number=42,
+            phase="self_review",
+            self_review_loops=0,
+        )
+        state_path = save_pr_state(tmp_path, state)
+
+        gh.get_failed_checks.return_value = []
+        gh.get_incomplete_checks.return_value = []
+        gh.get_completed_checks.return_value = ["Test (pytest)", "audit"]
+        gh.get_mergeable.return_value = True
+
+        with patch.object(
+            watcher,
+            "_run_direct_review",
+            return_value={"result": "LGTM", "summary": "All checks passed"},
+        ):
+            watcher._phase1(
+                state,
+                state_path,
+                {"number": 42, "title": "Test PR", "draft": False, "head": {"ref": "goal/42"}},
+                gh,
+                "owner",
+                "TestRepo",
+                tmp_path,
+                tmp_path / "cfg.yaml",
+                settings,
+            )
+
+        # required check satisfied → CI green → self-review LGTM → merge
+        gh.merge_pr.assert_called_once_with("owner", "TestRepo", 42, merge_method="squash")
+
     def test_ci_red_then_green_allows_merge_after_fix(
         self,
         tmp_path: Path,

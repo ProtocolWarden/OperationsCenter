@@ -587,6 +587,7 @@ def _settings_with_ci_green_repo() -> MagicMock:
     repo_cfg = MagicMock(
         auto_merge_on_ci_green=True,
         ci_ignored_checks=[],
+        required_checks=[],
         clone_url=f"git@github.com:owner/{REPO_KEY}.git",
         default_branch="main",
         await_review=True,
