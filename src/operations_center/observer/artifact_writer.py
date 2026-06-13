@@ -45,16 +45,10 @@ class ObserverArtifactWriter:
             or ["- none"]
         )
         test_signal = snapshot.signals.test_signal
-        test_observed = (
-            test_signal.observed_at.isoformat()
-            if test_signal.observed_at
-            else "none"
-        )
+        test_observed = test_signal.observed_at.isoformat() if test_signal.observed_at else "none"
         dependency_drift = snapshot.signals.dependency_drift
         drift_observed = (
-            dependency_drift.observed_at.isoformat()
-            if dependency_drift.observed_at
-            else "none"
+            dependency_drift.observed_at.isoformat() if dependency_drift.observed_at else "none"
         )
         md_lines.extend(
             [

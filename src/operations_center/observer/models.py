@@ -358,9 +358,16 @@ class CoverageSignal(BaseModel):
     Attributes:
         status: Coverage measurement status ("measured", "partial", "unavailable", etc.)
         total_coverage_pct: Overall code coverage percentage (0-100)
+        statement_coverage_pct: Overall statement coverage percentage
+        branch_coverage_pct: Overall branch coverage percentage
+        line_coverage_pct: Overall line coverage percentage
         uncovered_file_count: Number of files below the uncovered_threshold_pct
         uncovered_threshold_pct: Threshold for marking files as under-covered (default 80%)
         top_uncovered: List of files with lowest coverage, for focused improvement effort
+        module_coverages: List of module-level coverage metrics with health status
+        coverage_trend_pct: Trend in coverage over time (positive = improving)
+        regression_delta_pct: Change from previous measurement (negative = regression)
+        active_alerts: List of active coverage alerts
         source: Name of the coverage tool (e.g., "coverage.py", "jacoco", "nyc", "llvm-cov")
         observed_at: Timestamp when coverage was measured. Optional because:
             - Coverage tools may not record measurement timestamps
@@ -377,9 +384,16 @@ class CoverageSignal(BaseModel):
 
     status: str  # "measured", "partial", "unavailable"
     total_coverage_pct: float | None = None
+    statement_coverage_pct: float | None = None
+    branch_coverage_pct: float | None = None
+    line_coverage_pct: float | None = None
     uncovered_file_count: int = 0
     uncovered_threshold_pct: float = 80.0
     top_uncovered: list[UncoveredFile] = Field(default_factory=list)
+    module_coverages: list[dict] = Field(default_factory=list)
+    coverage_trend_pct: float = 0.0
+    regression_delta_pct: float = 0.0
+    active_alerts: list[dict] = Field(default_factory=list)
     source: str | None = None
     observed_at: datetime | None = None
     summary: str | None = None

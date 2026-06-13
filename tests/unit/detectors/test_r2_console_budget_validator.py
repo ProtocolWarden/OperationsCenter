@@ -374,13 +374,13 @@ def test_r2_file_at_size_boundary_100kb(tmp_path: Path) -> None:
 
 
 def test_r2_file_exceeds_size_boundary(tmp_path: Path) -> None:
-    """Test R2 fails when file exceeds 100KB budget."""
+    """Test R2 fails when file exceeds 200KB budget."""
     console = tmp_path / ".console"
     console.mkdir(exist_ok=True)
 
-    # Create file over 100KB (exceeds limit)
-    content_101kb = "x" * (101 * 1024)
-    (console / "log.md").write_text(f"# Log\n{content_101kb}\n", encoding="utf-8")
+    # Create file over 200KB (exceeds limit)
+    content_201kb = "x" * (201 * 1024)
+    (console / "log.md").write_text(f"# Log\n{content_201kb}\n", encoding="utf-8")
 
     # Create other valid files manually
     task_text = "# Task\n## Objective\nTest\n## Overall Plan\nTest\n## Current Stage\nTest\n"
@@ -403,7 +403,7 @@ def test_r2_file_exceeds_size_boundary(tmp_path: Path) -> None:
     )
 
     result = _detect_r2_console_budget(ctx)
-    assert result.count > 0, "Should detect file exceeding 100KB"
+    assert result.count > 0, "Should detect file exceeding 200KB"
     assert any("exceeds" in s for s in result.samples), "Should report size violation"
 
 

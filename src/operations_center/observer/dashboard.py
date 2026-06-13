@@ -16,10 +16,13 @@ from dataclasses import field as dataclass_field
 from datetime import datetime, timezone
 from typing import Optional
 
+from .coverage_models import CoverageSnapshot, CoverageTrendAnalysis
 from .health_checks import HealthChecker
 from .metrics import MetricsCollector
-from .models import FlakyTestSignal
+from .models import CoverageSignal, FlakyTestSignal
 from .structured_logging import StructuredLogReader
+
+# Note: CoverageSignal can also be used for alerts via its active_alerts field
 
 
 @dataclass
@@ -91,11 +94,17 @@ class DashboardProvider:
         health_checker: HealthChecker,
         log_reader: Optional[StructuredLogReader] = None,
         flaky_test_signal: Optional[FlakyTestSignal] = None,
+        coverage_snapshot: Optional[CoverageSnapshot] = None,
+        coverage_trends: Optional[CoverageTrendAnalysis] = None,
+        coverage_signal: Optional[CoverageSignal] = None,
     ) -> None:
         self.metrics_collector = metrics_collector
         self.health_checker = health_checker
         self.log_reader = log_reader
         self.flaky_test_signal = flaky_test_signal
+        self.coverage_snapshot = coverage_snapshot
+        self.coverage_trends = coverage_trends
+        self.coverage_signal = coverage_signal
 
     def generate_snapshot(self) -> DashboardSnapshot:
         """Generate complete dashboard snapshot."""
@@ -115,6 +124,16 @@ class DashboardProvider:
             panels.append(self._panel_flaky_test_summary())
             panels.append(self._panel_flaky_test_categories())
             panels.append(self._panel_most_problematic_tests())
+
+        if self.coverage_snapshot:
+            panels.append(self._panel_coverage_summary())
+            panels.append(self._panel_coverage_by_module())
+
+        if self.coverage_trends:
+            panels.append(self._panel_coverage_trend())
+
+        if self.coverage_snapshot:
+            panels.append(self._panel_coverage_alerts())
 
         alerts = [issue for issue in health_report.critical_issues] + [
             warning for warning in health_report.warnings
@@ -479,6 +498,250 @@ class DashboardProvider:
             metrics=metrics,
         )
 
+    def _panel_coverage_summary(self) -> DashboardPanel:
+        """Coverage summary panel with overall metrics and health score."""
+        if not self.coverage_snapshot:
+            return DashboardPanel(
+                title="Coverage Summary",
+                description="Overall code coverage metrics and health",
+                metrics=[
+                    DashboardMetric(
+                        name="Coverage",
+                        value="Unavailable",
+                        unit="",
+                        status="UNKNOWN",
+                    ),
+                ],
+            )
+
+        metrics = []
+        overall_coverage = self.coverage_snapshot.overall_statement_coverage_pct or 0.0
+
+        health_status = self._get_coverage_health_status(overall_coverage)
+        metrics.append(
+            DashboardMetric(
+                name="Overall Coverage",
+                value=round(overall_coverage, 1),
+                unit="%",
+                status=health_status,
+                threshold_warning=80.0,
+                threshold_critical=70.0,
+            )
+        )
+
+        if self.coverage_snapshot.overall_branch_coverage_pct is not None:
+            metrics.append(
+                DashboardMetric(
+                    name="Branch Coverage",
+                    value=round(self.coverage_snapshot.overall_branch_coverage_pct, 1),
+                    unit="%",
+                    status=self._get_coverage_health_status(
+                        self.coverage_snapshot.overall_branch_coverage_pct
+                    ),
+                    threshold_warning=75.0,
+                    threshold_critical=60.0,
+                )
+            )
+
+        if self.coverage_snapshot.overall_line_coverage_pct is not None:
+            metrics.append(
+                DashboardMetric(
+                    name="Line Coverage",
+                    value=round(self.coverage_snapshot.overall_line_coverage_pct, 1),
+                    unit="%",
+                    status=self._get_coverage_health_status(
+                        self.coverage_snapshot.overall_line_coverage_pct
+                    ),
+                    threshold_warning=80.0,
+                    threshold_critical=70.0,
+                )
+            )
+
+        metrics.append(
+            DashboardMetric(
+                name="Uncovered Files",
+                value=self.coverage_snapshot.uncovered_file_count,
+                unit="count",
+                status="HEALTHY" if self.coverage_snapshot.uncovered_file_count == 0 else "WARNING",
+            )
+        )
+
+        return DashboardPanel(
+            title="Coverage Summary",
+            description="Overall code coverage metrics and health",
+            metrics=metrics,
+        )
+
+    def _panel_coverage_by_module(self) -> DashboardPanel:
+        """Coverage by module panel showing top 10 modules and gaps."""
+        if not self.coverage_snapshot or not self.coverage_snapshot.module_coverages:
+            return DashboardPanel(
+                title="Coverage by Module",
+                description="Top modules by coverage and critical gaps",
+                metrics=[],
+            )
+
+        metrics = []
+        sorted_modules = sorted(
+            self.coverage_snapshot.module_coverages,
+            key=lambda m: m.statement_coverage_pct,
+        )
+
+        for module in sorted_modules[:10]:
+            coverage_pct = module.statement_coverage_pct
+            health = module.health_status or self._get_coverage_health_status(coverage_pct)
+            status_map = {"healthy": "HEALTHY", "at_risk": "DEGRADED", "critical": "CRITICAL"}
+
+            metrics.append(
+                DashboardMetric(
+                    name=module.module_path,
+                    value=round(coverage_pct, 1),
+                    unit="%",
+                    status=status_map.get(health, "NOMINAL"),
+                    threshold_warning=80.0,
+                    threshold_critical=70.0,
+                )
+            )
+
+        return DashboardPanel(
+            title="Coverage by Module",
+            description="Top modules with lowest coverage and critical gaps",
+            metrics=metrics,
+        )
+
+    def _panel_coverage_trend(self) -> DashboardPanel:
+        """Coverage trend panel showing historical trend and regression detection."""
+        if not self.coverage_trends:
+            return DashboardPanel(
+                title="Coverage Trend",
+                description="Historical coverage trend and regression detection",
+                metrics=[],
+            )
+
+        metrics = []
+
+        metrics.append(
+            DashboardMetric(
+                name="Current Value",
+                value=round(self.coverage_trends.current_value, 1),
+                unit="%",
+                status=self._get_coverage_health_status(self.coverage_trends.current_value),
+            )
+        )
+
+        metrics.append(
+            DashboardMetric(
+                name="Trend Direction",
+                value=self.coverage_trends.trend_direction.upper(),
+                unit="",
+                status="HEALTHY"
+                if self.coverage_trends.trend_direction == "improving"
+                else "DEGRADED"
+                if self.coverage_trends.trend_direction == "degrading"
+                else "NOMINAL",
+            )
+        )
+
+        if self.coverage_trends.trend_pct != 0:
+            metrics.append(
+                DashboardMetric(
+                    name="Trend Rate",
+                    value=round(self.coverage_trends.trend_pct, 2),
+                    unit="%/day",
+                    status="HEALTHY" if self.coverage_trends.trend_pct > 0 else "DEGRADED",
+                )
+            )
+
+        if self.coverage_trends.regression_count > 0:
+            metrics.append(
+                DashboardMetric(
+                    name="Regressions Detected",
+                    value=self.coverage_trends.regression_count,
+                    unit="count",
+                    status="CRITICAL" if self.coverage_trends.regression_count >= 2 else "WARNING",
+                )
+            )
+
+        if self.coverage_trends.projected_value_7days is not None:
+            metrics.append(
+                DashboardMetric(
+                    name="7-Day Projection",
+                    value=round(self.coverage_trends.projected_value_7days, 1),
+                    unit="%",
+                    status=self._get_coverage_health_status(
+                        self.coverage_trends.projected_value_7days
+                    ),
+                )
+            )
+
+        metrics.append(
+            DashboardMetric(
+                name="Stability Score",
+                value=round(self.coverage_trends.stability_score, 2),
+                unit="",
+                status="HEALTHY" if self.coverage_trends.stability_score > 0.8 else "NOMINAL",
+            )
+        )
+
+        return DashboardPanel(
+            title="Coverage Trend",
+            description="Historical coverage trend, regressions, and projections",
+            metrics=metrics,
+        )
+
+    def _panel_coverage_alerts(self) -> DashboardPanel:
+        """Coverage alerts panel showing active coverage alerts and conditions."""
+        if not self.coverage_signal and not self.coverage_snapshot:
+            return DashboardPanel(
+                title="Coverage Alerts",
+                description="Active coverage alerts and threshold violations",
+                metrics=[],
+            )
+
+        metrics = []
+
+        if self.coverage_signal and self.coverage_signal.active_alerts:
+            active_alerts = self.coverage_signal.active_alerts or []
+            if isinstance(active_alerts, list) and len(active_alerts) > 0:
+                for alert in active_alerts[:5]:
+                    if isinstance(alert, dict):
+                        alert_type = alert.get("alert_type", "Unknown")
+                        severity = alert.get("severity", "info").upper()
+                        scope = alert.get("scope_id", "Repository")
+
+                        severity_status_map = {
+                            "EMERGENCY": "CRITICAL",
+                            "CRITICAL": "CRITICAL",
+                            "WARNING": "WARNING",
+                            "INFO": "NOMINAL",
+                        }
+                        status = severity_status_map.get(severity, "NOMINAL")
+
+                        metrics.append(
+                            DashboardMetric(
+                                name=f"{alert_type}: {scope}",
+                                value=f"{severity}",
+                                unit="alert",
+                                status=status,
+                            )
+                        )
+
+        if not metrics:
+            metrics.append(
+                DashboardMetric(
+                    name="Status",
+                    value="No Active Alerts",
+                    unit="",
+                    status="HEALTHY",
+                )
+            )
+
+        return DashboardPanel(
+            title="Coverage Alerts",
+            description="Active coverage alerts and threshold violations",
+            metrics=metrics,
+        )
+
     @staticmethod
     def _get_error_rate_status(rate: float) -> str:
         """Determine status based on error rate."""
@@ -509,5 +772,16 @@ class DashboardProvider:
         if test_count <= 5:
             return "NOMINAL"
         if test_count <= 10:
+            return "DEGRADED"
+        return "CRITICAL"
+
+    @staticmethod
+    def _get_coverage_health_status(coverage_pct: float) -> str:
+        """Determine status based on coverage percentage."""
+        if coverage_pct >= 90:
+            return "HEALTHY"
+        if coverage_pct >= 80:
+            return "NOMINAL"
+        if coverage_pct >= 70:
             return "DEGRADED"
         return "CRITICAL"

@@ -730,7 +730,10 @@ class TestFlakyTestQueries:
         now = datetime.now(UTC)
         crit = [{"name": "tests/t.py::crit", "failure_rate": 0.8, "run_count": 10}]
         self._make_flaky_snapshot(
-            "run_1", now - timedelta(hours=1), flaky_count=1, most_problematic=crit,
+            "run_1",
+            now - timedelta(hours=1),
+            flaky_count=1,
+            most_problematic=crit,
             root=tmp_snapshot_root,
         )
         self._make_flaky_snapshot(
