@@ -169,9 +169,7 @@ class CoverageTrendManager:
         measurements: list[tuple[datetime, float]] = []
 
         for snapshot in snapshots:
-            value = self._extract_metric_value(
-                snapshot, metric_type, granularity, scope_id
-            )
+            value = self._extract_metric_value(snapshot, metric_type, granularity, scope_id)
             if value is not None:
                 measurements.append((snapshot.timestamp, value))
 
@@ -217,7 +215,11 @@ class CoverageTrendManager:
             elif current_value > first_value + 0.1:
                 trend_direction = "improving"
 
-            trend_pct = ((current_value - average_value) / average_value * 100) if average_value > 0 else 0.0
+            trend_pct = (
+                ((current_value - average_value) / average_value * 100)
+                if average_value > 0
+                else 0.0
+            )
 
             for i in range(1, len(values)):
                 if values[i] < values[i - 1]:
@@ -266,12 +268,8 @@ class CoverageTrendManager:
         previous = snapshots[1]
         current = snapshots[0]
 
-        current_value = self._extract_metric_value(
-            current, metric_type, "repository", None
-        )
-        previous_value = self._extract_metric_value(
-            previous, metric_type, "repository", None
-        )
+        current_value = self._extract_metric_value(current, metric_type, "repository", None)
+        previous_value = self._extract_metric_value(previous, metric_type, "repository", None)
 
         if current_value is None or previous_value is None:
             return False
@@ -338,9 +336,7 @@ class CoverageTrendManager:
 
         data = []
         for snapshot in snapshots:
-            value = self._extract_metric_value(
-                snapshot, metric_type, granularity, scope_id
-            )
+            value = self._extract_metric_value(snapshot, metric_type, granularity, scope_id)
             if value is not None:
                 data.append((snapshot.timestamp, value))
 

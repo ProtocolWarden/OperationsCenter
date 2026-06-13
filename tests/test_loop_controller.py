@@ -549,15 +549,11 @@ def test_restart_watchers_bounces_child_not_wrapper(monkeypatch, tmp_path: Path)
     monkeypatch.setattr(controller.os, "kill", lambda pid, sig: None)  # wrapper alive
 
     calls: list[list[str]] = []
-    monkeypatch.setattr(
-        controller.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or None
-    )
+    monkeypatch.setattr(controller.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or None)
 
     controller._restart_watchers()
 
-    assert calls == [
-        ["pkill", "-TERM", "-P", "4242", "-f", controller._WATCHER_CHILD_MATCH]
-    ]
+    assert calls == [["pkill", "-TERM", "-P", "4242", "-f", controller._WATCHER_CHILD_MATCH]]
 
 
 def test_restart_watchers_never_touches_watchdog(monkeypatch, tmp_path: Path) -> None:
@@ -585,9 +581,7 @@ def test_restart_watchers_skips_dead_wrapper(monkeypatch, tmp_path: Path) -> Non
 
     monkeypatch.setattr(controller.os, "kill", _dead)
     calls: list[list[str]] = []
-    monkeypatch.setattr(
-        controller.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or None
-    )
+    monkeypatch.setattr(controller.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or None)
 
     controller._restart_watchers()
 
@@ -599,9 +593,7 @@ def test_restart_watchers_skips_missing_pidfile(monkeypatch, tmp_path: Path) -> 
 
     monkeypatch.setattr(controller.os, "kill", lambda pid, sig: None)
     calls: list[list[str]] = []
-    monkeypatch.setattr(
-        controller.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or None
-    )
+    monkeypatch.setattr(controller.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or None)
 
     controller._restart_watchers()
 

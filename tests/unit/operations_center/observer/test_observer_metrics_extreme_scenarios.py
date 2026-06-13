@@ -54,7 +54,9 @@ class TestHealthStatusThresholds:
             (100.0, "CRITICAL"),
         ],
     )
-    def test_error_rate_health_status_mapping(self, error_rate: float, expected_status: str) -> None:
+    def test_error_rate_health_status_mapping(
+        self, error_rate: float, expected_status: str
+    ) -> None:
         """Verify error rate correctly maps to health status across all boundaries."""
         cm = CollectorMetrics(collector_name="test")
         cm.total_runs = 1
@@ -146,9 +148,9 @@ class TestLatencyEdgeCases:
         "total_latency,processed,expected_throughput",
         [
             (1000.0, 100, 100.0),  # 100 artifacts / 1 second
-            (500.0, 50, 100.0),    # 50 artifacts / 0.5 seconds
-            (2000.0, 10, 5.0),     # 10 artifacts / 2 seconds
-            (100.0, 5, 50.0),      # 5 artifacts / 0.1 seconds
+            (500.0, 50, 100.0),  # 50 artifacts / 0.5 seconds
+            (2000.0, 10, 5.0),  # 10 artifacts / 2 seconds
+            (100.0, 5, 50.0),  # 5 artifacts / 0.1 seconds
         ],
     )
     def test_throughput_calculation_correctness(
@@ -158,9 +160,7 @@ class TestLatencyEdgeCases:
         cm = CollectorMetrics(collector_name="test")
         # Accumulate latency and processed across multiple runs
         for _ in range(5):
-            cm.update_from_run(
-                total_latency / 5.0, processed // 5, 0, 0, 0, 0, True
-            )
+            cm.update_from_run(total_latency / 5.0, processed // 5, 0, 0, 0, 0, True)
 
         assert cm.throughput_artifacts_per_sec == pytest.approx(expected_throughput, rel=1e-5)
 
@@ -218,18 +218,23 @@ class TestErrorRateCalculation:
     @pytest.mark.parametrize(
         "processed,skipped,parse,struct,io,expected_error_rate",
         [
-            (10, 0, 0, 0, 0, 0.0),           # zero errors
-            (100, 0, 5, 0, 0, 5.0),          # 5%
-            (100, 0, 0, 5, 0, 5.0),          # struct errors
-            (100, 0, 0, 0, 5, 5.0),          # io errors
-            (100, 0, 1, 2, 2, 5.0),          # mixed error types
-            (100, 100, 10, 10, 10, 15.0),   # 30 errors / 200 total = 15%
+            (10, 0, 0, 0, 0, 0.0),  # zero errors
+            (100, 0, 5, 0, 0, 5.0),  # 5%
+            (100, 0, 0, 5, 0, 5.0),  # struct errors
+            (100, 0, 0, 0, 5, 5.0),  # io errors
+            (100, 0, 1, 2, 2, 5.0),  # mixed error types
+            (100, 100, 10, 10, 10, 15.0),  # 30 errors / 200 total = 15%
             (1000000, 1000000, 500000, 500000, 500000, 75.0),  # 1.5M / 2M = 75%
         ],
     )
     def test_error_rate_calculation(
-        self, processed: int, skipped: int, parse: int, struct: int, io: int,
-        expected_error_rate: float
+        self,
+        processed: int,
+        skipped: int,
+        parse: int,
+        struct: int,
+        io: int,
+        expected_error_rate: float,
     ) -> None:
         """Verify error_rate = (total_errors / total_attempted) * 100."""
         cm = CollectorMetrics(collector_name="test")
@@ -284,10 +289,7 @@ class TestSystemHealthPrecedence:
 
     def test_system_all_healthy_collectors_is_healthy(self) -> None:
         """Verify system is HEALTHY when all collectors are HEALTHY."""
-        collectors = {
-            f"c{i}": self._make_collector(f"c{i}", "HEALTHY")
-            for i in range(3)
-        }
+        collectors = {f"c{i}": self._make_collector(f"c{i}", "HEALTHY") for i in range(3)}
         sm = SystemMetrics()
         sm.update_from_collectors(collectors)
         assert sm.healthy_collectors == 3
@@ -341,13 +343,10 @@ class TestSystemHealthPrecedence:
             (["CRITICAL", "DEGRADED"], "CRITICAL"),
         ],
     )
-    def test_system_health_precedence_matrix(
-        self, statuses: list[str], expected: str
-    ) -> None:
+    def test_system_health_precedence_matrix(self, statuses: list[str], expected: str) -> None:
         """Parametrized test of system health precedence rules."""
         collectors = {
-            f"c{i}": self._make_collector(f"c{i}", status)
-            for i, status in enumerate(statuses)
+            f"c{i}": self._make_collector(f"c{i}", status) for i, status in enumerate(statuses)
         }
         sm = SystemMetrics()
         sm.update_from_collectors(collectors)
@@ -433,9 +432,7 @@ class TestSystemErrorRateCalculation:
         assert sm.overall_error_rate_percent == pytest.approx(expected_rate, rel=1e-5)
 
     @staticmethod
-    def _make_collector(
-        name: str, health: str, processed: int, errors: int
-    ) -> CollectorMetrics:
+    def _make_collector(name: str, health: str, processed: int, errors: int) -> CollectorMetrics:
         """Helper to create a collector with specified error count."""
         cm = CollectorMetrics(collector_name=name)
         cm.health_status = health
@@ -679,10 +676,7 @@ class TestLargeNumbersAndPrecision:
 
     def test_system_level_large_scale_aggregation(self) -> None:
         """Verify system metrics aggregate large-scale data correctly."""
-        collectors = {
-            f"c{i}": self._make_large_collector(f"c{i}")
-            for i in range(10)
-        }
+        collectors = {f"c{i}": self._make_large_collector(f"c{i}") for i in range(10)}
         sm = SystemMetrics()
         sm.update_from_collectors(collectors)
 

@@ -76,8 +76,8 @@ class AlertChannelRoute(BaseModel):
         if self.severity_levels and severity.value not in self.severity_levels:
             return False
 
-        # Check module (empty list = all modules)
-        if module and self.enabled_modules and module not in self.enabled_modules:
+        # Check module (empty list = all modules; if modules required but none provided, no match)
+        if self.enabled_modules and (not module or module not in self.enabled_modules):
             return False
 
         return True
@@ -494,9 +494,7 @@ class CoverageConfigManager:
             config = self.load_config()
             # Create CoverageAlertConfig with loaded values
             # Only pass values that are in the config and not None
-            alert_config_dict = {
-                k: v for k, v in config.items() if v is not None and k != "config"
-            }
+            alert_config_dict = {k: v for k, v in config.items() if v is not None and k != "config"}
             self._alert_config = CoverageAlertConfig(**alert_config_dict)
 
         return self._alert_config
@@ -531,9 +529,7 @@ class CoverageConfigManager:
                         ),
                     )
                 except ValidationError as e:
-                    raise ConfigValidationError(
-                        f"Invalid alert channel configuration: {e}"
-                    ) from e
+                    raise ConfigValidationError(f"Invalid alert channel configuration: {e}") from e
 
         return self._alert_channel_config
 

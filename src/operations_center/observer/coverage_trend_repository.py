@@ -204,7 +204,9 @@ class LocalCoverageTrendRepository(CoverageTrendRepository):
                     continue
 
                 if start_date:
-                    start_cmp = start_date if start_date.tzinfo else start_date.replace(tzinfo=timezone.utc)
+                    start_cmp = (
+                        start_date if start_date.tzinfo else start_date.replace(tzinfo=timezone.utc)
+                    )
                     if observed_at < start_cmp:
                         continue
                 if end_date:
@@ -214,9 +216,7 @@ class LocalCoverageTrendRepository(CoverageTrendRepository):
 
             snapshots.append(metadata)
 
-        snapshots.sort(
-            key=lambda m: m.get("observed_at", ""), reverse=True
-        )
+        snapshots.sort(key=lambda m: m.get("observed_at", ""), reverse=True)
 
         if limit:
             return snapshots[:limit]
@@ -445,12 +445,14 @@ class S3CoverageTrendRepository(CoverageTrendRepository):
                     if end_date and observed_at > end_date:
                         continue
 
-                    snapshots.append({
-                        "run_id": run_id,
-                        "observed_at": observed_at.isoformat(),
-                        "version": 1,
-                        "path": f"s3://{self.bucket}/{obj['Key']}",
-                    })
+                    snapshots.append(
+                        {
+                            "run_id": run_id,
+                            "observed_at": observed_at.isoformat(),
+                            "version": 1,
+                            "path": f"s3://{self.bucket}/{obj['Key']}",
+                        }
+                    )
 
         snapshots.sort(key=lambda m: m.get("observed_at", ""), reverse=True)
 
@@ -509,10 +511,7 @@ class S3CoverageTrendRepository(CoverageTrendRepository):
         scope_id: str | None = None,
     ) -> CoverageTrendAnalysis | None:
         """Load the latest trend analysis from S3."""
-        key = (
-            f"{self.prefix}/trends/{metric_type}/"
-            f"{granularity}_{scope_id or 'repo'}.jsonl"
-        )
+        key = f"{self.prefix}/trends/{metric_type}/{granularity}_{scope_id or 'repo'}.jsonl"
 
         try:
             response = self.s3_client.get_object(Bucket=self.bucket, Key=key)
@@ -722,10 +721,7 @@ class HTTPCoverageTrendRepository(CoverageTrendRepository):
         scope_id: str | None = None,
     ) -> CoverageTrendAnalysis | None:
         """Load trend analysis via HTTP."""
-        url = (
-            f"{self.base_url}/trends/{metric_type}/"
-            f"{granularity}/{scope_id or 'repo'}"
-        )
+        url = f"{self.base_url}/trends/{metric_type}/{granularity}/{scope_id or 'repo'}"
 
         try:
             response = self.session.get(url)

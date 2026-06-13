@@ -574,10 +574,7 @@ class DashboardProvider:
 
     def _panel_coverage_by_module(self) -> DashboardPanel:
         """Coverage by module panel showing top 10 modules and gaps."""
-        if (
-            not self.coverage_snapshot
-            or not self.coverage_snapshot.module_coverages
-        ):
+        if not self.coverage_snapshot or not self.coverage_snapshot.module_coverages:
             return DashboardPanel(
                 title="Coverage by Module",
                 description="Top modules by coverage and critical gaps",

@@ -41,7 +41,9 @@ class TestCollectorMetricsHealthStatusBands:
             (1000, 1000, "CRITICAL", 100.0),
         ],
     )
-    def test_health_status_bands(self, artifacts_processed, parse_errors, expected_health, expected_rate):
+    def test_health_status_bands(
+        self, artifacts_processed, parse_errors, expected_health, expected_rate
+    ):
         """Verify health status classification at all threshold boundaries."""
         collector = CollectorMetrics("test_collector")
 

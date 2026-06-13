@@ -246,4 +246,6 @@ def test_flaky_velocity(new, window, expected):
     ],
 )
 def test_repository_health_score(flaky_pct, growth, critical, unknown, expected):
-    assert m.repository_health_score(flaky_pct, growth, critical, unknown) == pytest.approx(expected)
+    assert m.repository_health_score(flaky_pct, growth, critical, unknown) == pytest.approx(
+        expected
+    )

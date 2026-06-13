@@ -286,8 +286,7 @@ class TestCoverageAlertManager:
         statement_alerts = [
             a
             for a in alerts
-            if a.metric_type == "statement"
-            and a.alert_type == AlertType.BELOW_THRESHOLD.value
+            if a.metric_type == "statement" and a.alert_type == AlertType.BELOW_THRESHOLD.value
         ]
         assert len(statement_alerts) > 0
         alert = statement_alerts[0]
@@ -302,7 +301,9 @@ class TestCoverageAlertManager:
         alerts = manager.generate_alerts(below_threshold_snapshot)
 
         branch_alerts = [
-            a for a in alerts if a.metric_type == "branch" and a.alert_type == AlertType.BELOW_THRESHOLD.value
+            a
+            for a in alerts
+            if a.metric_type == "branch" and a.alert_type == AlertType.BELOW_THRESHOLD.value
         ]
         assert len(branch_alerts) > 0
         alert = branch_alerts[0]
@@ -317,7 +318,9 @@ class TestCoverageAlertManager:
         alerts = manager.generate_alerts(below_threshold_snapshot)
 
         line_alerts = [
-            a for a in alerts if a.metric_type == "line" and a.alert_type == AlertType.BELOW_THRESHOLD.value
+            a
+            for a in alerts
+            if a.metric_type == "line" and a.alert_type == AlertType.BELOW_THRESHOLD.value
         ]
         assert len(line_alerts) > 0
         alert = line_alerts[0]
@@ -335,7 +338,9 @@ class TestCriticalModuleDetection:
         manager = CoverageAlertManager(config=default_config)
         alerts = manager.generate_alerts(below_threshold_snapshot)
 
-        module_alerts = [a for a in alerts if a.alert_type == AlertType.CRITICAL_MODULE_COVERAGE.value]
+        module_alerts = [
+            a for a in alerts if a.alert_type == AlertType.CRITICAL_MODULE_COVERAGE.value
+        ]
         assert len(module_alerts) > 0
 
     def test_critical_module_gap_calculation(
@@ -345,7 +350,9 @@ class TestCriticalModuleDetection:
         manager = CoverageAlertManager(config=default_config)
         alerts = manager.generate_alerts(below_threshold_snapshot)
 
-        module_alerts = [a for a in alerts if a.alert_type == AlertType.CRITICAL_MODULE_COVERAGE.value]
+        module_alerts = [
+            a for a in alerts if a.alert_type == AlertType.CRITICAL_MODULE_COVERAGE.value
+        ]
         alert = module_alerts[0]
 
         expected_gap = default_config.repo_minimum_threshold - 45.0
@@ -359,16 +366,16 @@ class TestCriticalModuleDetection:
         manager = CoverageAlertManager(config=default_config)
         alerts = manager.generate_alerts(healthy_snapshot)
 
-        module_alerts = [a for a in alerts if a.alert_type == AlertType.CRITICAL_MODULE_COVERAGE.value]
+        module_alerts = [
+            a for a in alerts if a.alert_type == AlertType.CRITICAL_MODULE_COVERAGE.value
+        ]
         assert len(module_alerts) == 0
 
 
 class TestRegressionDetection:
     """Tests for regression detection."""
 
-    def test_regression_detected(
-        self, default_config: CoverageAlertConfig
-    ) -> None:
+    def test_regression_detected(self, default_config: CoverageAlertConfig) -> None:
         """Test detection of coverage regression."""
         previous = CoverageSnapshot(
             timestamp=datetime.now() - timedelta(hours=1),
@@ -390,12 +397,12 @@ class TestRegressionDetection:
         manager = CoverageAlertManager(config=default_config)
         alerts = manager.generate_alerts(current, previous_snapshot=previous)
 
-        regression_alerts = [a for a in alerts if a.alert_type == AlertType.REGRESSION_DETECTED.value]
+        regression_alerts = [
+            a for a in alerts if a.alert_type == AlertType.REGRESSION_DETECTED.value
+        ]
         assert len(regression_alerts) > 0
 
-    def test_regression_delta_calculation(
-        self, default_config: CoverageAlertConfig
-    ) -> None:
+    def test_regression_delta_calculation(self, default_config: CoverageAlertConfig) -> None:
         """Test correct regression delta calculation."""
         previous = CoverageSnapshot(
             timestamp=datetime.now() - timedelta(hours=1),
@@ -417,7 +424,9 @@ class TestRegressionDetection:
         manager = CoverageAlertManager(config=default_config)
         alerts = manager.generate_alerts(current, previous_snapshot=previous)
 
-        regression_alerts = [a for a in alerts if a.alert_type == AlertType.REGRESSION_DETECTED.value]
+        regression_alerts = [
+            a for a in alerts if a.alert_type == AlertType.REGRESSION_DETECTED.value
+        ]
         assert len(regression_alerts) > 0
         alert = regression_alerts[0]
         assert abs(alert.delta_pct - 2.5) < 0.01
@@ -444,7 +453,9 @@ class TestRegressionDetection:
         manager = CoverageAlertManager(config=default_config)
         alerts = manager.generate_alerts(current, previous_snapshot=previous)
 
-        regression_alerts = [a for a in alerts if a.alert_type == AlertType.REGRESSION_DETECTED.value]
+        regression_alerts = [
+            a for a in alerts if a.alert_type == AlertType.REGRESSION_DETECTED.value
+        ]
         assert len(regression_alerts) == 0
 
     def test_regression_threshold_boundary(self, default_config: CoverageAlertConfig) -> None:
@@ -469,7 +480,9 @@ class TestRegressionDetection:
         manager = CoverageAlertManager(config=default_config)
         alerts = manager.generate_alerts(current, previous_snapshot=previous)
 
-        regression_alerts = [a for a in alerts if a.alert_type == AlertType.REGRESSION_DETECTED.value]
+        regression_alerts = [
+            a for a in alerts if a.alert_type == AlertType.REGRESSION_DETECTED.value
+        ]
         assert len(regression_alerts) > 0
 
 
@@ -477,14 +490,14 @@ class TestTrendDetection:
     """Tests for trend degradation detection."""
 
     def test_trend_degradation_detected(
-        self, default_config: CoverageAlertConfig, healthy_snapshot: CoverageSnapshot,
-        degrading_trend_analysis: CoverageTrendAnalysis
+        self,
+        default_config: CoverageAlertConfig,
+        healthy_snapshot: CoverageSnapshot,
+        degrading_trend_analysis: CoverageTrendAnalysis,
     ) -> None:
         """Test detection of trend degradation."""
         manager = CoverageAlertManager(config=default_config)
-        alerts = manager.generate_alerts(
-            healthy_snapshot, trend_analysis=degrading_trend_analysis
-        )
+        alerts = manager.generate_alerts(healthy_snapshot, trend_analysis=degrading_trend_analysis)
 
         trend_alerts = [a for a in alerts if a.alert_type == AlertType.TREND_DEGRADING.value]
         assert len(trend_alerts) > 0
@@ -529,10 +542,7 @@ class TestTrendDetection:
             scope_id="",
             window_start=datetime.now() - timedelta(days=5),
             window_end=datetime.now(),
-            measurements=[
-                (datetime.now() - timedelta(days=i), 90.0 + i * 0.05)
-                for i in range(5)
-            ],
+            measurements=[(datetime.now() - timedelta(days=i), 90.0 + i * 0.05) for i in range(5)],
             current_value=90.2,
             average_value=90.1,
             min_value=90.0,
@@ -581,9 +591,7 @@ class TestAlertSeverityMapping:
         emergency_alerts = [a for a in alerts if a.severity == AlertSeverity.EMERGENCY.value]
         assert len(emergency_alerts) > 0
 
-    def test_alert_severity_for_warning_coverage(
-        self, default_config: CoverageAlertConfig
-    ) -> None:
+    def test_alert_severity_for_warning_coverage(self, default_config: CoverageAlertConfig) -> None:
         """Test severity mapping for warning coverage levels."""
         snapshot = CoverageSnapshot(
             timestamp=datetime.now(),
@@ -654,7 +662,9 @@ class TestAlertCategorization:
         manager = CoverageAlertManager(config=default_config)
         alerts = manager.generate_alerts(current, previous_snapshot=previous)
 
-        regression_alert = [a for a in alerts if a.alert_type == AlertType.REGRESSION_DETECTED.value]
+        regression_alert = [
+            a for a in alerts if a.alert_type == AlertType.REGRESSION_DETECTED.value
+        ]
         if regression_alert:
             categorization = manager.categorize_alert(regression_alert[0])
             assert categorization["category"] == "Regression"

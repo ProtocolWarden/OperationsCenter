@@ -12,7 +12,9 @@ Provides:
 
 from __future__ import annotations
 
+import smtplib
 from typing import Any
+from urllib.request import Request, urlopen
 
 from operations_center.observer.alert_channels import (
     AlertChannelResult,
@@ -47,26 +49,26 @@ class CoverageSlackFormatter:
         color = color_map.get(alert.severity, "#cccccc")
 
         fields = [
-            {"title": "Alert Type", "value": alert.type.value, "short": True},
-            {"title": "Severity", "value": alert.severity.value.upper(), "short": True},
+            {"title": "Alert Type", "value": alert.alert_type, "short": True},
+            {"title": "Severity", "value": alert.severity.upper(), "short": True},
             {"title": "Metric", "value": alert.metric_type, "short": True},
             {"title": "Granularity", "value": alert.granularity, "short": True},
         ]
 
-        if alert.current_measurement is not None and alert.threshold is not None:
+        if alert.current_value is not None and alert.threshold_or_baseline is not None:
             fields.append(
                 {
                     "title": "Coverage",
-                    "value": f"{alert.current_measurement:.1f}% (threshold: {alert.threshold:.1f}%)",
+                    "value": f"{alert.current_value:.1f}% (threshold: {alert.threshold_or_baseline:.1f}%)",
                     "short": False,
                 }
             )
 
-        if alert.delta is not None and alert.type == AlertType.REGRESSION_DETECTED:
+        if alert.delta_pct is not None and alert.alert_type == AlertType.REGRESSION_DETECTED:
             fields.append(
                 {
                     "title": "Regression",
-                    "value": f"{alert.delta:+.1f}% from baseline {alert.baseline_measurement or 0:.1f}%",
+                    "value": f"{alert.delta_pct:+.1f}% from baseline {alert.threshold_or_baseline or 0:.1f}%",
                     "short": False,
                 }
             )
@@ -78,14 +80,16 @@ class CoverageSlackFormatter:
             fields.append({"title": "Affected Modules", "value": modules_str, "short": False})
 
         if alert.recommendation:
-            fields.append({"title": "Recommendation", "value": alert.recommendation, "short": False})
+            fields.append(
+                {"title": "Recommendation", "value": alert.recommendation, "short": False}
+            )
 
         return {
             "attachments": [
                 {
-                    "fallback": f"Coverage Alert: {alert.type.value}",
+                    "fallback": f"Coverage Alert: {alert.alert_type}",
                     "color": color,
-                    "title": f"📊 Coverage Alert: {alert.type.value.replace('_', ' ').title()}",
+                    "title": f"📊 Coverage Alert: {alert.alert_type.replace('_', ' ').title()}",
                     "fields": fields,
                     "footer": "Coverage Threshold Alerter",
                     "ts": int(alert.timestamp.timestamp()) if alert.timestamp else 0,
@@ -107,24 +111,24 @@ class CoverageEmailFormatter:
         Returns:
             Tuple of (subject, text_body, html_body)
         """
-        alert_type_readable = alert.type.value.replace("_", " ").title()
-        subject = f"[{alert.severity.value.upper()}] Coverage Alert: {alert_type_readable}"
+        alert_type_readable = alert.alert_type.replace("_", " ").title()
+        subject = f"[{alert.severity.upper()}] Coverage Alert: {alert_type_readable}"
 
         text_body = f"""
 Coverage Alert Notification
 ============================
 
 Alert Type: {alert_type_readable}
-Severity: {alert.severity.value.upper()}
+Severity: {alert.severity.upper()}
 Metric Type: {alert.metric_type}
 Granularity: {alert.granularity}
-Scope: {alert.scope}
+Scope: {alert.scope_id}
 
-Current Measurement: {alert.current_measurement:.1f}% {f"(threshold: {alert.threshold:.1f}%)" if alert.threshold else ""}
+Current Measurement: {alert.current_value:.1f}% {f"(threshold: {alert.threshold_or_baseline:.1f}%)" if alert.threshold_or_baseline else ""}
 """
 
-        if alert.type == AlertType.REGRESSION_DETECTED and alert.delta is not None:
-            text_body += f"\nRegression: {alert.delta:+.1f}% from baseline {alert.baseline_measurement or 0:.1f}%\n"
+        if alert.alert_type == AlertType.REGRESSION_DETECTED and alert.delta_pct is not None:
+            text_body += f"\nRegression: {alert.delta_pct:+.1f}% from baseline {alert.threshold_or_baseline or 0:.1f}%\n"
 
         if alert.affected_modules:
             text_body += "\nAffected Modules:\n"
@@ -140,19 +144,19 @@ Current Measurement: {alert.current_measurement:.1f}% {f"(threshold: {alert.thre
             text_body += "Review coverage metrics and adjust testing strategy accordingly.\n"
 
         text_body += "\nAction Items:\n"
-        if alert.type == AlertType.BELOW_THRESHOLD:
+        if alert.alert_type == AlertType.BELOW_THRESHOLD:
             text_body += "1. Review untested code paths\n"
             text_body += "2. Add tests for critical paths\n"
             text_body += "3. Validate test coverage tools\n"
-        elif alert.type == AlertType.REGRESSION_DETECTED:
+        elif alert.alert_type == AlertType.REGRESSION_DETECTED:
             text_body += "1. Review recent code changes\n"
             text_body += "2. Add tests for new code\n"
             text_body += "3. Block PR merge if below threshold\n"
-        elif alert.type == AlertType.TREND_DEGRADING:
+        elif alert.alert_type == AlertType.TREND_DEGRADING:
             text_body += "1. Identify root cause of degradation\n"
             text_body += "2. Prioritize coverage improvements\n"
             text_body += "3. Establish coverage goals\n"
-        elif alert.type == AlertType.CRITICAL_MODULE_COVERAGE:
+        elif alert.alert_type == AlertType.CRITICAL_MODULE_COVERAGE:
             text_body += "1. Focus on high-touch modules\n"
             text_body += "2. Add tests for frequently changed files\n"
             text_body += "3. Track module-level coverage metrics\n"
@@ -169,7 +173,7 @@ Current Measurement: {alert.current_measurement:.1f}% {f"(threshold: {alert.thre
 </tr>
 <tr>
     <td style="padding: 8px; border: 1px solid #ddd;"><strong>Severity</strong></td>
-    <td style="padding: 8px; border: 1px solid #ddd;"><span style="color: red; font-weight: bold;">{alert.severity.value.upper()}</span></td>
+    <td style="padding: 8px; border: 1px solid #ddd;"><span style="color: red; font-weight: bold;">{alert.severity.upper()}</span></td>
 </tr>
 <tr style="background-color: #f5f5f5;">
     <td style="padding: 8px; border: 1px solid #ddd;"><strong>Metric Type</strong></td>
@@ -177,19 +181,19 @@ Current Measurement: {alert.current_measurement:.1f}% {f"(threshold: {alert.thre
 </tr>
 <tr>
     <td style="padding: 8px; border: 1px solid #ddd;"><strong>Current Measurement</strong></td>
-    <td style="padding: 8px; border: 1px solid #ddd;">{alert.current_measurement:.1f}%</td>
+    <td style="padding: 8px; border: 1px solid #ddd;">{alert.current_value:.1f}%</td>
 </tr>
 """
 
-        if alert.threshold is not None:
+        if alert.threshold_or_baseline is not None:
             html_body += f"""<tr style="background-color: #f5f5f5;">
     <td style="padding: 8px; border: 1px solid #ddd;"><strong>Threshold</strong></td>
-    <td style="padding: 8px; border: 1px solid #ddd;">{alert.threshold:.1f}%</td>
+    <td style="padding: 8px; border: 1px solid #ddd;">{alert.threshold_or_baseline:.1f}%</td>
 </tr>
 """
 
         if alert.affected_modules:
-            html_body += f"""<tr>
+            html_body += """<tr>
     <td style="padding: 8px; border: 1px solid #ddd; vertical-align: top;"><strong>Affected Modules</strong></td>
     <td style="padding: 8px; border: 1px solid #ddd;">
         <ul style="margin: 0; padding-left: 20px;">
@@ -197,7 +201,9 @@ Current Measurement: {alert.current_measurement:.1f}% {f"(threshold: {alert.thre
             for module in sorted(alert.affected_modules)[:10]:
                 html_body += f"            <li>{module}</li>\n"
             if len(alert.affected_modules) > 10:
-                html_body += f"            <li>... and {len(alert.affected_modules) - 10} more</li>\n"
+                html_body += (
+                    f"            <li>... and {len(alert.affected_modules) - 10} more</li>\n"
+                )
             html_body += """        </ul>
     </td>
 </tr>
@@ -212,25 +218,25 @@ Current Measurement: {alert.current_measurement:.1f}% {f"(threshold: {alert.thre
 <ol>
 """
 
-        if alert.type == AlertType.BELOW_THRESHOLD:
+        if alert.alert_type == AlertType.BELOW_THRESHOLD:
             html_body += """
     <li>Review untested code paths</li>
     <li>Add tests for critical paths</li>
     <li>Validate test coverage tools</li>
 """
-        elif alert.type == AlertType.REGRESSION_DETECTED:
+        elif alert.alert_type == AlertType.REGRESSION_DETECTED:
             html_body += """
     <li>Review recent code changes</li>
     <li>Add tests for new code</li>
     <li>Block PR merge if below threshold</li>
 """
-        elif alert.type == AlertType.TREND_DEGRADING:
+        elif alert.alert_type == AlertType.TREND_DEGRADING:
             html_body += """
     <li>Identify root cause of degradation</li>
     <li>Prioritize coverage improvements</li>
     <li>Establish coverage goals</li>
 """
-        elif alert.type == AlertType.CRITICAL_MODULE_COVERAGE:
+        elif alert.alert_type == AlertType.CRITICAL_MODULE_COVERAGE:
             html_body += """
     <li>Focus on high-touch modules</li>
     <li>Add tests for frequently changed files</li>
@@ -261,7 +267,7 @@ class CoverageGitHubFormatter:
         Returns:
             Markdown-formatted comment body
         """
-        alert_type_readable = alert.type.value.replace("_", " ").title()
+        alert_type_readable = alert.alert_type.replace("_", " ").title()
 
         severity_emoji = {
             AlertSeverity.INFO: "ℹ️",
@@ -274,16 +280,16 @@ class CoverageGitHubFormatter:
         comment = f"""
 {emoji} **Coverage Alert: {alert_type_readable}**
 
-**Severity:** `{alert.severity.value.upper()}`
+**Severity:** `{alert.severity.upper()}`
 **Metric:** `{alert.metric_type}` ({alert.granularity})
-**Measurement:** {alert.current_measurement:.1f}%
+**Measurement:** {alert.current_value:.1f}%
 """
 
-        if alert.threshold:
-            comment += f"**Threshold:** {alert.threshold:.1f}%\n"
+        if alert.threshold_or_baseline:
+            comment += f"**Threshold:** {alert.threshold_or_baseline:.1f}%\n"
 
-        if alert.type == AlertType.REGRESSION_DETECTED and alert.delta is not None:
-            comment += f"**Change:** {alert.delta:+.1f}% from baseline {alert.baseline_measurement or 0:.1f}%\n"
+        if alert.alert_type == AlertType.REGRESSION_DETECTED and alert.delta_pct is not None:
+            comment += f"**Change:** {alert.delta_pct:+.1f}% from baseline {alert.threshold_or_baseline or 0:.1f}%\n"
 
         # Module-specific section for file-level alerts
         if alert.granularity == "file" and alert.affected_modules:
@@ -302,22 +308,22 @@ class CoverageGitHubFormatter:
 
         comment += "\n### Remediation\n\n"
 
-        if alert.type == AlertType.BELOW_THRESHOLD:
+        if alert.alert_type == AlertType.BELOW_THRESHOLD:
             comment += """- **Review untested code** — Check what's not covered by tests
 - **Add test cases** — Focus on critical paths first
 - **Validate tools** — Ensure coverage measurement is accurate
 """
-        elif alert.type == AlertType.REGRESSION_DETECTED:
+        elif alert.alert_type == AlertType.REGRESSION_DETECTED:
             comment += """- **Review PR changes** — Check what new code was added
 - **Add tests** — Test all new code paths
 - **Check baseline** — Ensure comparison baseline is correct
 """
-        elif alert.type == AlertType.TREND_DEGRADING:
+        elif alert.alert_type == AlertType.TREND_DEGRADING:
             comment += """- **Analyze trend** — Determine why coverage is declining
 - **Add tests** — Increase test coverage for new code
 - **Set goals** — Establish team coverage targets
 """
-        elif alert.type == AlertType.CRITICAL_MODULE_COVERAGE:
+        elif alert.alert_type == AlertType.CRITICAL_MODULE_COVERAGE:
             comment += """- **Focus on modules** — Prioritize listed files for testing
 - **Add tests** — Test high-touch modules thoroughly
 - **Track progress** — Monitor module-level metrics
@@ -344,19 +350,19 @@ class CoverageOperatorFormatter:
         Returns:
             Formatted log message
         """
-        alert_type_readable = alert.type.value.replace("_", " ").title()
-        severity = alert.severity.value.upper()
+        alert_type_readable = alert.alert_type.replace("_", " ").title()
+        severity = alert.severity.upper()
 
         message = (
             f"COVERAGE_ALERT [{severity}] {alert_type_readable} — "
-            f"{alert.metric_type} ({alert.granularity}): {alert.current_measurement:.1f}%"
+            f"{alert.metric_type} ({alert.granularity}): {alert.current_value:.1f}%"
         )
 
-        if alert.threshold is not None:
-            message += f" (threshold: {alert.threshold:.1f}%)"
+        if alert.threshold_or_baseline is not None:
+            message += f" (threshold: {alert.threshold_or_baseline:.1f}%)"
 
-        if alert.type == AlertType.REGRESSION_DETECTED and alert.delta is not None:
-            message += f" [regressed {alert.delta:+.1f}%]"
+        if alert.alert_type == AlertType.REGRESSION_DETECTED and alert.delta_pct is not None:
+            message += f" [regressed {alert.delta_pct:+.1f}%]"
 
         if alert.affected_modules:
             modules_preview = ", ".join(sorted(alert.affected_modules)[:3])
@@ -416,12 +422,12 @@ class CoverageAlertRouter:
         for channel_name in channels:
             if channel_name == "slack" and self.slack_channel:
                 context = {
-                    "alert_type": alert.type.value,
-                    "severity": alert.severity.value,
+                    "alert_type": alert.alert_type,
+                    "severity": alert.severity,
                     "metric_type": alert.metric_type,
-                    "current_measurement": alert.current_measurement,
-                    "threshold": alert.threshold,
-                    "delta": alert.delta,
+                    "current_measurement": alert.current_value,
+                    "threshold": alert.threshold_or_baseline,
+                    "delta": alert.delta_pct,
                     "affected_modules": alert.affected_modules,
                     "recommendation": alert.recommendation,
                 }
@@ -430,7 +436,6 @@ class CoverageAlertRouter:
                     self.slack_channel.webhook_url = self.slack_channel.webhook_url
                     # Direct webhook call
                     import json
-                    from urllib.request import Request, urlopen
 
                     request = Request(
                         self.slack_channel.webhook_url,
@@ -443,7 +448,7 @@ class CoverageAlertRouter:
                             results[channel_name] = AlertChannelResult(
                                 channel=channel_name,
                                 success=True,
-                                message=f"Coverage alert sent to Slack",
+                                message="Coverage alert sent to Slack",
                             )
                         else:
                             results[channel_name] = AlertChannelResult(
@@ -460,14 +465,13 @@ class CoverageAlertRouter:
 
             elif channel_name == "email" and self.email_channel:
                 context = {
-                    "alert_type": alert.type.value,
-                    "severity": alert.severity.value,
+                    "alert_type": alert.alert_type,
+                    "severity": alert.severity,
                     "metric_type": alert.metric_type,
-                    "current_measurement": alert.current_measurement,
+                    "current_measurement": alert.current_value,
                 }
                 subject, text_body, html_body = CoverageEmailFormatter.format_alert(alert)
                 try:
-                    import smtplib
                     from email.mime.multipart import MIMEMultipart
                     from email.mime.text import MIMEText
 
@@ -486,7 +490,9 @@ class CoverageAlertRouter:
                         if self.email_channel.username and self.email_channel.password:
                             server.login(self.email_channel.username, self.email_channel.password)
                         server.sendmail(
-                            self.email_channel.sender, self.email_channel.recipients, msg.as_string()
+                            self.email_channel.sender,
+                            self.email_channel.recipients,
+                            msg.as_string(),
                         )
 
                     results[channel_name] = AlertChannelResult(
@@ -503,14 +509,13 @@ class CoverageAlertRouter:
 
             elif channel_name == "github" and self.github_channel and pr_number:
                 context = {
-                    "alert_type": alert.type.value,
-                    "severity": alert.severity.value,
+                    "alert_type": alert.alert_type,
+                    "severity": alert.severity,
                     "pr_number": pr_number,
                 }
                 comment_body = CoverageGitHubFormatter.format_alert(alert, pr_number)
                 try:
                     import json
-                    from urllib.request import Request, urlopen
 
                     endpoint = (
                         f"/repos/{self.github_channel.repo_owner}/"
@@ -550,8 +555,8 @@ class CoverageAlertRouter:
             elif channel_name == "operator":
                 message = CoverageOperatorFormatter.format_alert(alert)
                 context = {
-                    "alert_type": alert.type.value,
-                    "severity": alert.severity.value,
+                    "alert_type": alert.alert_type,
+                    "severity": alert.severity,
                     "message": message,
                 }
                 result = self.operator_channel.notify(context)
@@ -583,7 +588,7 @@ class CoverageAlertRouter:
                 channels.append("slack")
 
         # GitHub channel for regression alerts (if PR context available)
-        if alert.type == AlertType.REGRESSION_DETECTED and self.github_channel:
+        if alert.alert_type == AlertType.REGRESSION_DETECTED and self.github_channel:
             channels.append("github")
 
         return channels

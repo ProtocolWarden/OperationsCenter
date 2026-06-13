@@ -311,9 +311,7 @@ class SlackChannel(AlertChannel):
             test_list = ", ".join(
                 test["name"] for test in context.get("most_problematic_tests", [])[:3]
             )
-            fields.append(
-                {"title": "Top Problematic Tests", "value": test_list, "short": False}
-            )
+            fields.append({"title": "Top Problematic Tests", "value": test_list, "short": False})
 
         return {
             "attachments": [
@@ -381,7 +379,9 @@ class EmailChannel(AlertChannel):
                 server.starttls()
                 if self.username and self.password:
                     server.login(self.username, self.password)
-                server.sendmail(cast(str, self.sender), cast(list[str], self.recipients), msg.as_string())
+                server.sendmail(
+                    cast(str, self.sender), cast(list[str], self.recipients), msg.as_string()
+                )
 
             return AlertChannelResult(
                 channel=self.name,

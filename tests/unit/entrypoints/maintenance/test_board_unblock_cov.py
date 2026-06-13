@@ -878,11 +878,15 @@ def _make_store_with_events(events: list[dict]) -> mock.Mock:
     return store
 
 
-def _started_event(task_id: str, backend: str = "team_executor", ts: str = "2026-05-28T12:00:00+00:00") -> dict:
+def _started_event(
+    task_id: str, backend: str = "team_executor", ts: str = "2026-05-28T12:00:00+00:00"
+) -> dict:
     return {"kind": "execution_started", "task_id": task_id, "backend": backend, "timestamp": ts}
 
 
-def _finished_event(task_id: str, backend: str = "team_executor", ts: str = "2026-05-28T12:01:00+00:00") -> dict:
+def _finished_event(
+    task_id: str, backend: str = "team_executor", ts: str = "2026-05-28T12:01:00+00:00"
+) -> dict:
     return {"kind": "execution_finished", "task_id": task_id, "backend": backend, "timestamp": ts}
 
 
@@ -954,10 +958,12 @@ def test_rule10_skips_active_task():
 def test_rule10_skips_balanced_events():
     """Started + finished pair → not in_flight, not cleared."""
     client = _FakeClient()
-    store = _make_store_with_events([
-        _started_event("t-balanced"),
-        _finished_event("t-balanced"),
-    ])
+    store = _make_store_with_events(
+        [
+            _started_event("t-balanced"),
+            _finished_event("t-balanced"),
+        ]
+    )
 
     cleared = bu._clear_orphaned_in_flight_events(client, store, now=_NOW, apply=True)
 
@@ -995,11 +1001,13 @@ def test_rule10_handles_fetch_error_gracefully():
 def test_rule10_multiple_backends():
     """Each (backend, task_id) pair tracked independently."""
     client = _FakeClient()
-    store = _make_store_with_events([
-        _started_event("t1", backend="team_executor"),
-        _started_event("t1", backend="dag_executor"),  # same task, different backend
-        _finished_event("t1", backend="team_executor"),  # closes team_executor slot
-    ])
+    store = _make_store_with_events(
+        [
+            _started_event("t1", backend="team_executor"),
+            _started_event("t1", backend="dag_executor"),  # same task, different backend
+            _finished_event("t1", backend="team_executor"),  # closes team_executor slot
+        ]
+    )
 
     cleared = bu._clear_orphaned_in_flight_events(client, store, now=_NOW, apply=True)
 

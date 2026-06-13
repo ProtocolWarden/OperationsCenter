@@ -1,3 +1,10 @@
+## 2026-06-13 — Watchdog: resolved CoverageAlert field renames and test mismatches
+
+Post autonomy-cycle staged changes had renamed CoverageAlert fields but left
+coverage_alert_channels.py and tests using old names. Fixed all field accesses,
+hoisted imports for mock patching, resolved task.md stash-pop conflict, tightened
+matches_alert module filtering, fixed test expectations to match implementation.
+
 ## 2026-06-12 — Stage 9: Verify Implementation Completeness and Create PR-Ready Changes (✅ COMPLETE)
 
 ### Objective

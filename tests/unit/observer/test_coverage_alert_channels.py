@@ -12,14 +12,12 @@ Tests:
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from operations_center.observer.alert_channels import (
-    AlertChannelResult,
     EmailChannel,
     GitHubChannel,
     OperatorLogChannel,
@@ -40,16 +38,16 @@ from operations_center.observer.coverage_models import CoverageAlert
 def sample_alert() -> CoverageAlert:
     """Create a sample coverage alert for testing."""
     return CoverageAlert(
-        id="test-alert-1",
-        type=AlertType.BELOW_THRESHOLD,
+        alert_id="test-alert-1",
+        alert_type=AlertType.BELOW_THRESHOLD,
         severity=AlertSeverity.WARNING,
         metric_type="statement",
         granularity="repository",
-        scope="src/operations_center",
-        current_measurement=78.5,
-        threshold=80.0,
-        delta=None,
-        baseline_measurement=None,
+        scope_id="src/operations_center",
+        current_value=78.5,
+        threshold_or_baseline=80.0,
+        delta_pct=0.0,
+        baseline_type="minimum_threshold",
         affected_modules=["src/operations_center/observer", "src/operations_center/core"],
         recommendation="Add tests for uncovered code paths",
         timestamp=datetime(2026, 6, 12, 10, 30, 0, tzinfo=timezone.utc),
@@ -60,16 +58,16 @@ def sample_alert() -> CoverageAlert:
 def regression_alert() -> CoverageAlert:
     """Create a regression coverage alert."""
     return CoverageAlert(
-        id="test-alert-2",
-        type=AlertType.REGRESSION_DETECTED,
+        alert_id="test-alert-2",
+        alert_type=AlertType.REGRESSION_DETECTED,
         severity=AlertSeverity.CRITICAL,
         metric_type="line",
         granularity="repository",
-        scope="src/operations_center",
-        current_measurement=82.1,
-        threshold=85.0,
-        delta=-2.9,
-        baseline_measurement=85.0,
+        scope_id="src/operations_center",
+        current_value=82.1,
+        threshold_or_baseline=85.0,
+        delta_pct=-2.9,
+        baseline_type="previous_run",
         affected_modules=["src/new_feature.py"],
         recommendation="Review recent PR changes and add tests for new code",
         timestamp=datetime(2026, 6, 12, 10, 30, 0, tzinfo=timezone.utc),
@@ -80,16 +78,16 @@ def regression_alert() -> CoverageAlert:
 def trend_alert() -> CoverageAlert:
     """Create a trend degradation alert."""
     return CoverageAlert(
-        id="test-alert-3",
-        type=AlertType.TREND_DEGRADING,
+        alert_id="test-alert-3",
+        alert_type=AlertType.TREND_DEGRADING,
         severity=AlertSeverity.WARNING,
         metric_type="branch",
         granularity="repository",
-        scope="src/operations_center",
-        current_measurement=73.5,
-        threshold=75.0,
-        delta=-4.5,
-        baseline_measurement=78.0,
+        scope_id="src/operations_center",
+        current_value=73.5,
+        threshold_or_baseline=78.0,
+        delta_pct=-4.5,
+        baseline_type="7day_avg",
         affected_modules=["src/operations_center/observer", "src/operations_center/core"],
         recommendation="Coverage trending down. Increase test writing or reduce scope",
         timestamp=datetime(2026, 6, 12, 10, 30, 0, tzinfo=timezone.utc),
@@ -100,16 +98,16 @@ def trend_alert() -> CoverageAlert:
 def module_alert() -> CoverageAlert:
     """Create a module critical gap alert."""
     return CoverageAlert(
-        id="test-alert-4",
-        type=AlertType.CRITICAL_MODULE_COVERAGE,
+        alert_id="test-alert-4",
+        alert_type=AlertType.CRITICAL_MODULE_COVERAGE,
         severity=AlertSeverity.CRITICAL,
         metric_type="statement",
         granularity="module",
-        scope="src/operations_center/alert_channels.py",
-        current_measurement=62.5,
-        threshold=85.0,
-        delta=-22.5,
-        baseline_measurement=None,
+        scope_id="src/operations_center/alert_channels.py",
+        current_value=62.5,
+        threshold_or_baseline=85.0,
+        delta_pct=-22.5,
+        baseline_type="minimum_threshold",
         affected_modules=["src/operations_center/alert_channels.py"],
         recommendation="Focus on testing high-touch modules",
         timestamp=datetime(2026, 6, 12, 10, 30, 0, tzinfo=timezone.utc),
@@ -158,16 +156,16 @@ class TestCoverageSlackFormatter:
     def test_format_info_alert_color(self, sample_alert: CoverageAlert) -> None:
         """Test that info/warning severity uses appropriate colors."""
         alert = CoverageAlert(
-            id="test-info",
-            type=AlertType.BELOW_THRESHOLD,
+            alert_id="test-info",
+            alert_type=AlertType.BELOW_THRESHOLD,
             severity=AlertSeverity.INFO,
             metric_type="statement",
             granularity="repository",
-            scope="src",
-            current_measurement=85.0,
-            threshold=80.0,
-            delta=None,
-            baseline_measurement=None,
+            scope_id="src",
+            current_value=85.0,
+            threshold_or_baseline=80.0,
+            delta_pct=0.0,
+            baseline_type="minimum_threshold",
             affected_modules=[],
             recommendation=None,
             timestamp=datetime.now(timezone.utc),
@@ -179,16 +177,16 @@ class TestCoverageSlackFormatter:
     def test_format_alert_with_no_modules(self) -> None:
         """Test formatting alert with no affected modules."""
         alert = CoverageAlert(
-            id="test-no-modules",
-            type=AlertType.BELOW_THRESHOLD,
+            alert_id="test-no-modules",
+            alert_type=AlertType.BELOW_THRESHOLD,
             severity=AlertSeverity.WARNING,
             metric_type="statement",
             granularity="repository",
-            scope="src",
-            current_measurement=78.5,
-            threshold=80.0,
-            delta=None,
-            baseline_measurement=None,
+            scope_id="src",
+            current_value=78.5,
+            threshold_or_baseline=80.0,
+            delta_pct=0.0,
+            baseline_type="minimum_threshold",
             affected_modules=[],
             recommendation=None,
             timestamp=datetime.now(timezone.utc),
@@ -279,16 +277,16 @@ class TestCoverageGitHubFormatter:
     def test_format_info_alert_emoji(self) -> None:
         """Test that info alerts use info emoji."""
         alert = CoverageAlert(
-            id="test-info",
-            type=AlertType.BELOW_THRESHOLD,
+            alert_id="test-info",
+            alert_type=AlertType.BELOW_THRESHOLD,
             severity=AlertSeverity.INFO,
             metric_type="statement",
             granularity="repository",
-            scope="src",
-            current_measurement=85.0,
-            threshold=80.0,
-            delta=None,
-            baseline_measurement=None,
+            scope_id="src",
+            current_value=85.0,
+            threshold_or_baseline=80.0,
+            delta_pct=0.0,
+            baseline_type="minimum_threshold",
             affected_modules=[],
             recommendation=None,
             timestamp=datetime.now(timezone.utc),
@@ -401,16 +399,16 @@ class TestCoverageAlertRouter:
 
         # Critical severity should add more channels
         critical_alert = CoverageAlert(
-            id="test-critical",
-            type=AlertType.BELOW_THRESHOLD,
+            alert_id="test-critical",
+            alert_type=AlertType.BELOW_THRESHOLD,
             severity=AlertSeverity.CRITICAL,
             metric_type="statement",
             granularity="repository",
-            scope="src",
-            current_measurement=45.0,
-            threshold=80.0,
-            delta=None,
-            baseline_measurement=None,
+            scope_id="src",
+            current_value=45.0,
+            threshold_or_baseline=80.0,
+            delta_pct=0.0,
+            baseline_type="minimum_threshold",
             affected_modules=[],
             recommendation=None,
             timestamp=datetime.now(timezone.utc),
@@ -441,7 +439,9 @@ class TestCoverageAlertRouter:
         assert "operator" in results
 
     @patch("operations_center.observer.coverage_alert_channels.urlopen")
-    def test_slack_channel_delivery(self, mock_urlopen: MagicMock, sample_alert: CoverageAlert) -> None:
+    def test_slack_channel_delivery(
+        self, mock_urlopen: MagicMock, sample_alert: CoverageAlert
+    ) -> None:
         """Test Slack channel delivery."""
         mock_response = MagicMock()
         mock_response.status = 200
@@ -457,7 +457,9 @@ class TestCoverageAlertRouter:
         assert results["slack"].success is True
 
     @patch("operations_center.observer.coverage_alert_channels.smtplib.SMTP")
-    def test_email_channel_delivery(self, mock_smtp: MagicMock, sample_alert: CoverageAlert) -> None:
+    def test_email_channel_delivery(
+        self, mock_smtp: MagicMock, sample_alert: CoverageAlert
+    ) -> None:
         """Test email channel delivery."""
         mock_server = MagicMock()
         mock_smtp.return_value.__enter__.return_value = mock_server
@@ -532,61 +534,61 @@ class TestCoverageAlertFormattersIntegration:
         """Test that all alert types can be formatted by all formatters."""
         alerts = [
             CoverageAlert(
-                id="test-1",
-                type=AlertType.BELOW_THRESHOLD,
+                alert_id="test-1",
+                alert_type=AlertType.BELOW_THRESHOLD,
                 severity=AlertSeverity.WARNING,
                 metric_type="statement",
                 granularity="repository",
-                scope="src",
-                current_measurement=78.5,
-                threshold=80.0,
-                delta=None,
-                baseline_measurement=None,
+                scope_id="src",
+                current_value=78.5,
+                threshold_or_baseline=80.0,
+                delta_pct=0.0,
+                baseline_type="minimum_threshold",
                 affected_modules=[],
                 recommendation="Add tests",
                 timestamp=datetime.now(timezone.utc),
             ),
             CoverageAlert(
-                id="test-2",
-                type=AlertType.REGRESSION_DETECTED,
+                alert_id="test-2",
+                alert_type=AlertType.REGRESSION_DETECTED,
                 severity=AlertSeverity.CRITICAL,
                 metric_type="line",
                 granularity="repository",
-                scope="src",
-                current_measurement=82.1,
-                threshold=85.0,
-                delta=-2.9,
-                baseline_measurement=85.0,
+                scope_id="src",
+                current_value=82.1,
+                threshold_or_baseline=85.0,
+                delta_pct=-2.9,
+                baseline_type="previous_run",
                 affected_modules=["src/new.py"],
                 recommendation="Review changes",
                 timestamp=datetime.now(timezone.utc),
             ),
             CoverageAlert(
-                id="test-3",
-                type=AlertType.TREND_DEGRADING,
+                alert_id="test-3",
+                alert_type=AlertType.TREND_DEGRADING,
                 severity=AlertSeverity.WARNING,
                 metric_type="branch",
                 granularity="repository",
-                scope="src",
-                current_measurement=73.5,
-                threshold=75.0,
-                delta=-4.5,
-                baseline_measurement=78.0,
+                scope_id="src",
+                current_value=73.5,
+                threshold_or_baseline=78.0,
+                delta_pct=-4.5,
+                baseline_type="7day_avg",
                 affected_modules=[],
                 recommendation="Increase tests",
                 timestamp=datetime.now(timezone.utc),
             ),
             CoverageAlert(
-                id="test-4",
-                type=AlertType.CRITICAL_MODULE_COVERAGE,
+                alert_id="test-4",
+                alert_type=AlertType.CRITICAL_MODULE_COVERAGE,
                 severity=AlertSeverity.CRITICAL,
                 metric_type="statement",
                 granularity="module",
-                scope="src/observer",
-                current_measurement=62.5,
-                threshold=85.0,
-                delta=-22.5,
-                baseline_measurement=None,
+                scope_id="src/observer",
+                current_value=62.5,
+                threshold_or_baseline=85.0,
+                delta_pct=-22.5,
+                baseline_type="minimum_threshold",
                 affected_modules=["src/observer.py"],
                 recommendation="Test modules",
                 timestamp=datetime.now(timezone.utc),

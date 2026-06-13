@@ -495,9 +495,7 @@ class TestFlakyTestCollectorEdgeCases:
             "flakiness_score": 0.6,
             "confidence": 0.7,
         }
-        (metrics_dir / "metrics.jsonl").write_text(
-            "\n" + json.dumps(entry) + "\n\n"
-        )
+        (metrics_dir / "metrics.jsonl").write_text("\n" + json.dumps(entry) + "\n\n")
 
         metrics = collector._load_metrics()
         assert len(metrics) == 1
@@ -513,6 +511,7 @@ class TestFlakyTestCollectorEdgeCases:
         metrics_file.write_text("")
 
         import builtins
+
         real_open = builtins.open
 
         def failing_open(path, *args, **kwargs):
