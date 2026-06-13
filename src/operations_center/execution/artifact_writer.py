@@ -64,7 +64,8 @@ class RunArtifactWriter:
             "written_at": datetime.now(timezone.utc).isoformat(),
         }
         if result.failure_category is not None:
-            metadata["failure_category"] = result.failure_category.value
+            fc = result.failure_category
+            metadata["failure_category"] = fc.value if hasattr(fc, "value") else str(fc)
         if extra_metadata:
             metadata.update(extra_metadata)
 

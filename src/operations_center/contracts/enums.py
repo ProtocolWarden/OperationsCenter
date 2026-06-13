@@ -146,6 +146,7 @@ class FailureReasonCategory(str, Enum):
     POLICY_BLOCKED = "policy_blocked"
     BUDGET_EXHAUSTED = "budget_exhausted"
     ROUTING_ERROR = "routing_error"
+    SCOPE_TOO_WIDE = "scope_too_wide"
     UNKNOWN = "unknown"
 
 
