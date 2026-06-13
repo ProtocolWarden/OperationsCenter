@@ -1,3 +1,11 @@
+## 2026-06-13 — Watchdog: resolved ty type errors blocking PR #275 CI
+
+dag_executor/adapter.py and team_executor/adapter.py: cast worker_backend str → Literal to
+satisfy updated DAGExecutorRunner/TeamExecutorRunner type contracts. coverage_trend_repository.py:
+added ty: ignore[unresolved-import] for boto3 in TYPE_CHECKING block (ty sees the type-check
+branch; boto3 is an optional runtime dep). All three were pre-existing mismatches surfaced after
+downstream packages introduced stricter Literal type annotations.
+
 ## 2026-06-13 — Watchdog: resolved custodian pre-push gate (28 findings → 0)
 
 C29: added 4 coverage files to c29 allowlist. C41: ensure_ascii=False in coverage_trend_repository.py.
