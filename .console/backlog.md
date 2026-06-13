@@ -2,9 +2,9 @@
 
 _Durable work inventory. Update after each meaningful chunk of progress._
 
-## Campaign: Coverage Threshold Alerting System — ✅ STAGE 5 COMPLETE (2026-06-12)
+## Campaign: Coverage Threshold Alerting System — ✅ STAGE 6 COMPLETE (2026-06-12)
 
-**Status**: 🎯 **STAGES 0-3, 5 COMPLETE** — Design, collection, storage, alerting engine, and alert channels fully implemented (2026-06-12)
+**Status**: 🎯 **STAGES 0-3, 6 COMPLETE** — Design, collection, storage, alerting engine, and configuration system fully implemented (2026-06-12)
 
 ### Overall Campaign Summary
 
@@ -87,6 +87,78 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 - `tests/unit/observer/test_coverage_alert_channels.py` (750+ lines)
 
 **Status**: ✅ **STAGE 5 COMPLETE** — Alert channels fully implemented and tested
+
+---
+
+### Stage 6: Implement Coverage Threshold Configuration System ✅ COMPLETE (2026-06-12)
+
+**Objective**: Implement flexible configuration system for coverage thresholds supporting YAML files and environment variables with validation and precedence handling.
+
+**Deliverables**:
+- ✅ **CoverageConfigProvider System** (403 lines, `src/operations_center/observer/coverage_config.py`):
+  - `CoverageConfigProvider`: Abstract base class with load/validate interface
+  - `DefaultConfigProvider`: Built-in defaults (repo min/warn/target, coverage types, regression, trend, severity)
+  - `YamlConfigProvider`: Load from .console/coverage-config.yaml files
+  - `EnvironmentConfigProvider`: Load from environment variables (COVERAGE_* pattern)
+  - `CompositeConfigProvider`: Combine multiple providers with precedence (defaults < YAML < env vars)
+
+- ✅ **Configuration Schema** (`CoverageConfigSchema`):
+  - Pydantic model with full validation
+  - Type checking (float/int/dict), range validation (0-100%), module path validation
+  - Clear error messages via `ConfigValidationError`
+
+- ✅ **YAML Configuration File** (`.console/coverage-config.yaml`, 80+ lines):
+  - Repository thresholds: minimum (80%), warning (85%), target (90%)
+  - Coverage type thresholds: statement (75%), branch (65%), line (75%)
+  - Regression thresholds: per-run (2%), 7-day (3%), 30-day (5%)
+  - Trend thresholds: days (5), velocity (1%)
+  - Severity thresholds: critical (50%), high (70%), medium (80%)
+  - Module-level overrides: src/observer, src/custodian, src/execution
+  - Documented environment variable overrides
+
+- ✅ **CoverageConfigManager** (High-level API):
+  - `create_default()`: Use built-in defaults only
+  - `create_with_yaml()`: YAML + env overrides (YAML takes precedence)
+  - `create_auto_discovery()`: Auto-discover .console/coverage-config.yaml with fallback
+  - Configuration caching with `reload()` capability
+  - Seamless conversion to `CoverageAlertConfig` via `get_alert_config()`
+
+- ✅ **46 Comprehensive Tests** (`tests/unit/observer/test_coverage_config.py`, 880+ lines):
+  - DefaultConfigProvider: 4 tests (defaults, keys, validation)
+  - YamlConfigProvider: 7 tests (valid/invalid YAML, module overrides, empty files)
+  - EnvironmentConfigProvider: 7 tests (parsing, float/bool/empty values, non-COVERAGE vars)
+  - CoverageConfigSchema: 11 tests (valid percentages, edge cases, validation errors, module thresholds)
+  - CompositeConfigProvider: 5 tests (merging, overrides, module threshold merging)
+  - CoverageConfigManager: 8 tests (factory methods, caching, reload, module thresholds)
+  - Integration tests: 4 tests (full workflows: defaults→alert, YAML→alert, YAML+env→alert)
+
+**Key Features**:
+- ✅ Multiple configuration sources with clear precedence: env vars > YAML > defaults
+- ✅ YAML file-based configuration with sensible defaults
+- ✅ Environment variable overrides (COVERAGE_<KEY> pattern)
+- ✅ Pydantic-based validation with type checking and range validation
+- ✅ Auto-discovery of .console/coverage-config.yaml in standard locations
+- ✅ Configuration caching with manual reload capability
+- ✅ Seamless integration with CoverageAlertConfig (existing code unchanged)
+- ✅ Module-level threshold overrides for per-package customization
+
+**Acceptance Criteria — ALL MET** ✅:
+1. ✅ CoverageConfigProvider system with multiple sources (abstract + 4 implementations)
+2. ✅ Configuration schema and validation (CoverageConfigSchema with Pydantic)
+3. ✅ YAML configuration file structure (.console/coverage-config.yaml with all settings)
+4. ✅ Configuration loading and initialization (CoverageConfigManager factory)
+5. ✅ Integration with CoverageAlertConfig (seamless conversion, backward compatible)
+6. ✅ Comprehensive test suite (46 tests exceeding 40+ requirement)
+
+**Files Created**:
+- `src/operations_center/observer/coverage_config.py` (403 lines)
+- `.console/coverage-config.yaml` (80+ lines)
+- `tests/unit/observer/test_coverage_config.py` (880+ lines, 46 tests)
+
+**Files Modified**:
+- `src/operations_center/observer/__init__.py` (added 9 new exports)
+
+**Status**: ✅ **STAGE 6 COMPLETE** — Configuration system fully implemented and tested
 
 ---
 
