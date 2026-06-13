@@ -1,0 +1,57 @@
+# Coverage Threshold Configuration
+#
+# This file defines coverage thresholds for the coverage alerting system.
+# Values can be overridden using environment variables with prefix COVERAGE_
+# (e.g., COVERAGE_REPO_MINIMUM_THRESHOLD=82.5)
+
+# Repository-level thresholds (apply to whole repository aggregate)
+repo_minimum_threshold: 80.0        # Minimum coverage required
+repo_warning_threshold: 85.0        # Warning level when coverage falls below this
+repo_target_threshold: 90.0         # Target coverage goal
+
+# Coverage type-specific thresholds
+statement_coverage_minimum: 75.0    # Minimum statement coverage
+branch_coverage_minimum: 65.0       # Minimum branch coverage
+line_coverage_minimum: 75.0         # Minimum line coverage
+
+# Regression detection thresholds
+regression_threshold_pct: 2.0       # Alert if coverage drops 2% from previous run
+regression_7day_threshold_pct: 3.0  # Alert if coverage drops 3% from 7-day average
+regression_30day_threshold_pct: 5.0 # Alert if coverage drops 5% from 30-day average
+
+# Trend detection thresholds
+trend_degradation_days: 5           # Number of consecutive days to consider a trend
+trend_degradation_velocity_pct: 1.0 # Percentage drop per day to trigger trend alert
+
+# Severity classification thresholds
+severity_critical_threshold: 50.0   # Coverage below this is EMERGENCY
+severity_high_threshold: 70.0       # Coverage 50-70% is CRITICAL
+severity_medium_threshold: 80.0     # Coverage 70-80% is WARNING
+
+# Module-level threshold overrides
+# Allows different thresholds for specific modules/packages
+module_thresholds:
+  "src/operations_center/observer":
+    statement_coverage_minimum: 85.0
+    branch_coverage_minimum: 75.0
+    line_coverage_minimum: 85.0
+
+  "src/operations_center/custodian":
+    statement_coverage_minimum: 80.0
+    branch_coverage_minimum: 70.0
+    line_coverage_minimum: 80.0
+
+  "src/operations_center/execution":
+    statement_coverage_minimum: 85.0
+    branch_coverage_minimum: 75.0
+    line_coverage_minimum: 85.0
+
+# Environment Variable Overrides
+#
+# You can override any setting using environment variables with the COVERAGE_ prefix:
+#
+#   export COVERAGE_REPO_MINIMUM_THRESHOLD=82
+#   export COVERAGE_STATEMENT_COVERAGE_MINIMUM=78
+#   export COVERAGE_MODULE_THRESHOLDS_SRC_CUSTOM_STATEMENT_COVERAGE_MINIMUM=90
+#
+# Environment variables take precedence over values in this file.
