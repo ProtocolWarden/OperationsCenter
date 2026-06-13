@@ -42,6 +42,13 @@ from operations_center.observer.coverage_models import (
     FileCoverage,
     ModuleCoverage,
 )
+from operations_center.observer.coverage_trend_manager import CoverageTrendManager
+from operations_center.observer.coverage_trend_repository import (
+    CoverageTrendRepository,
+    LocalCoverageTrendRepository,
+    S3CoverageTrendRepository,
+    HTTPCoverageTrendRepository,
+)
 from operations_center.observer.dashboard import DashboardProvider, DashboardSnapshot
 from operations_center.observer.flaky_test_aggregator import FlakyTestAggregator
 from operations_center.observer.flaky_test_alert_config import (
@@ -119,6 +126,9 @@ __all__ = [
     "CoverageSlackFormatter",
     "CoverageSnapshot",
     "CoverageTrendAnalysis",
+    "CoverageTrendManager",
+    "CoverageTrendRepository",
+    "HTTPCoverageTrendRepository",
     "DashboardProvider",
     "DashboardSnapshot",
     "DefaultConfigProvider",
@@ -142,6 +152,7 @@ __all__ = [
     "GitHubChannel",
     "HealthChecker",
     "HTTPSnapshotRepository",
+    "LocalCoverageTrendRepository",
     "LocalSnapshotRepository",
     "MetricsCollector",
     "ModuleCoverage",
@@ -149,6 +160,7 @@ __all__ = [
     "ObserverContext",
     "RepoObserverService",
     "RepoStateSnapshot",
+    "S3CoverageTrendRepository",
     "S3SnapshotRepository",
     "SlackChannel",
     "SnapshotManager",
