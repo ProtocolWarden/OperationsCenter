@@ -1,3 +1,9 @@
+## 2026-06-13 — Watchdog: resolved custodian pre-push gate (28 findings → 0)
+
+C29: added 4 coverage files to c29 allowlist. C41: ensure_ascii=False in coverage_trend_repository.py.
+F3: 4 CoverageAlertConfig fields added to f3_exempt. K1/OC8: 6 coverage doc symbols added to common_words.
+DC1: YAML front matter added to 2 design docs. DC7: 7 coverage docs added to exclude_path_patterns.
+
 ## 2026-06-13 — Watchdog: fixed ruff/ty CI gate failures for PR #275
 
 F841 unused vars in tests, ty dict-key type mismatches (AlertSeverity.value), None guards for

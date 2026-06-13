@@ -1,3 +1,10 @@
+---
+title: "Stage 0: Coverage Threshold Alerting System Design"
+status: stage-0-design
+version: "1.0"
+date: "2026-06-12"
+---
+
 # Stage 0: Coverage Threshold Alerting System Design
 
 **Status**: Stage 0 Design (2026-06-12)  
