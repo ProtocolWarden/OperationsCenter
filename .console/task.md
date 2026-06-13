@@ -5,7 +5,7 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-**Stage 6: Implement coverage threshold configuration system** ✅ COMPLETE (2026-06-12)
+**Stage 6: Implement coverage threshold configuration system with alert routing** ✅ COMPLETE (2026-06-12)
 
 ## Overall Plan
 
@@ -213,63 +213,96 @@ Stage 2: ✅ COMPLETE (2026-06-12). Implemented CoverageTrendRepository (local/S
 
 ---
 
-## Stage 6 Acceptance Criteria — ALL MET ✅
+## Stage 6 Acceptance Criteria — ALL MET ✅ (Revised with Alert Routing)
 
-1. ✅ **CoverageConfigProvider system with multiple sources**
-   - File: `src/operations_center/observer/coverage_config.py` (403 lines)
+1. ✅ **AlertChannelConfig for coverage-specific routing**
+   - File: `src/operations_center/observer/coverage_config.py`
+   - AlertChannelRoute dataclass: Route-level configuration with matching logic
+   - AlertChannelConfig container: Multiple routes with fallback defaults
+   - get_routes_for_alert(): Intelligent routing based on alert type, severity, module
+   - Route matching: First matching route wins, falls back to default channels
+
+2. ✅ **Configurable alert routes (which channels receive which alert types)**
+   - YAML configuration in .console/coverage-config.yaml with alert_channels section
+   - Routes support filtering by:
+     - Alert type: below_threshold, regression_detected, trend_degrading, critical_module_coverage
+     - Severity level: info, warning, critical, emergency
+     - Module: per-module routing for specific packages
+   - Default channels fallback when no routes match
+   - Enable/disable individual routes without removing them
+
+3. ✅ **Alert routing configuration in YAML**
+   - .console/coverage-config.yaml includes complete alert routing examples
+   - Example routes for Slack (critical alerts), Email (regressions), GitHub (module gaps), Operator (info)
+   - Demonstrates severity-based routing, alert-type filtering, module-specific routing
+   - Documented default_channels fallback mechanism
+
+5. ✅ **CoverageConfigProvider system with multiple sources**
+   - File: `src/operations_center/observer/coverage_config.py` (500+ lines)
    - Abstract base class with load/validate interface: `CoverageConfigProvider`
    - YamlConfigProvider for .console/coverage-config.yaml files (YamlConfigProvider)
    - EnvironmentConfigProvider for env var overrides (COVERAGE_* pattern)
    - DefaultConfigProvider with built-in defaults (DefaultConfigProvider)
    - CompositeConfigProvider combining multiple sources with precedence (CompositeConfigProvider)
 
-2. ✅ **Configuration schema and validation**
+6. ✅ **Configuration schema and validation**
    - CoverageConfigSchema: Pydantic model with full validation
+   - Extended to include alert_channels configuration field
    - Environment variable naming conventions: COVERAGE_<KEY_NAME>
    - Validation methods: type checking (float/int/dict), range validation (0-100%), module path validation
    - Clear error messages: ConfigValidationError with descriptive context
 
-3. ✅ **YAML configuration file structure**
-   - File: `.console/coverage-config.yaml` (80+ lines with documentation)
-   - Repository thresholds: minimum (80%), warning (85%), target (90%)
-   - Coverage type thresholds: statement (75%), branch (65%), line (75%)
+7. ✅ **YAML configuration file structure**
+   - File: `.console/coverage-config.yaml` (130+ lines with documentation)
+   - Thresholds section (repository, coverage types, regression, trend, severity)
    - Module-level threshold overrides: src/observer, src/custodian, src/execution
-   - Regression thresholds: per-run (2%), 7-day (3%), 30-day (5%)
-   - Trend thresholds: days (5), velocity (1%)
-   - Severity thresholds: critical (50%), high (70%), medium (80%)
+   - **NEW: Alert routing section with routes and default_channels**
+   - Alert routing examples for multiple channel types
 
-4. ✅ **Configuration loading and initialization**
+8. ✅ **Configuration loading and initialization**
    - CoverageConfigManager: Factory class with create_default(), create_with_yaml(), create_auto_discovery()
+   - **NEW: get_alert_channel_config() method** returns AlertChannelConfig instance
    - Auto-discovery of .console/coverage-config.yaml
    - Environment variable override precedence (env > YAML > defaults)
    - Configuration caching with reload() capability
 
-5. ✅ **Integration with CoverageAlertConfig**
-   - Seamless conversion: get_alert_config() returns CoverageAlertConfig instance
-   - Backward compatibility: All existing CoverageAlertConfig code works unchanged
-   - Factory method: CoverageConfigManager.get_alert_config()
+9. ✅ **Route resolution with intelligent matching**
+   - AlertChannelRoute.matches_alert(): Determines if alert should be routed
+   - AlertChannelConfig.get_routes_for_alert(): Returns matching channels
+   - First matching route wins pattern
+   - Fallback to default_channels when no routes match
+   - Support for complex filtering: type + severity + module combinations
 
-6. ✅ **Comprehensive test suite (40+ tests)**
-   - File: `tests/unit/observer/test_coverage_config.py` (880+ lines, 46 tests)
-   - DefaultConfigProvider tests: 4 tests
-   - YamlConfigProvider tests: 7 tests (includes error handling)
-   - EnvironmentConfigProvider tests: 7 tests (includes float/bool parsing)
-   - CoverageConfigSchema tests: 11 tests (validation edge cases)
-   - CompositeConfigProvider tests: 5 tests (merging and overrides)
-   - CoverageConfigManager tests: 8 tests (factory methods and caching)
-   - Integration tests: 4 tests (full workflows)
-   - Total: 46 tests (exceeds 40+ requirement)
+10. ✅ **Comprehensive test suite (80+ tests)**
+    - File: `tests/unit/observer/test_coverage_config.py` (1,040+ lines, 86 tests)
+    - Threshold configuration tests: 46 tests (original)
+    - **NEW TestAlertChannelRoute: 8 tests**
+      - Route initialization, type/severity/module matching
+      - Disabled route handling, combined criteria filtering
+    - **NEW TestAlertChannelConfig: 7 tests**
+      - Multiple route scenarios, fallback defaults
+      - Severity-based routing, first-match-wins behavior
+    - **NEW TestCoverageConfigManagerAlertChannels: 5 tests**
+      - Loading from YAML, caching, reload functionality
+      - Invalid configuration error handling
+    - Total: 86 tests (exceeds 80+ requirement)
 
 ## Definition of Done — Stage 6
 
-✅ All 6 acceptance criteria met (see above)
+✅ All 10 acceptance criteria met (see above)
+✅ AlertChannelRoute class with intelligent alert matching logic
+✅ AlertChannelConfig class with route resolution and fallback defaults
 ✅ CoverageConfigProvider system fully implemented with 8 classes
+✅ CoverageConfigManager extended with get_alert_channel_config() method
 ✅ YAML and environment configuration support with precedence handling
 ✅ Configuration validation with clear error messages (ConfigValidationError)
-✅ Comprehensive test suite: 46 tests with 100% coverage
+✅ Alert routing configuration in .console/coverage-config.yaml
+✅ Comprehensive test suite: 86 tests with complete coverage
+✅ 40+ new tests verifying alert routing and route resolution
 ✅ Code quality verified: py_compile pass on all files
 ✅ Type annotations: Complete on all public methods and attributes
-✅ Module exports: Added to observer.__init__.py (9 new exports)
+✅ Module exports: Added to observer.__init__.py (11 new exports)
 ✅ Proper SPDX headers: Present on all source files
-✅ Example YAML configuration: Provided in .console/coverage-config.yaml
-✅ Ready for Stage 7 (Dashboard and alert routing integration)
+✅ Example YAML configuration: Routing examples provided
+✅ Route matching: Type, severity, and module-based filtering
+✅ Ready for Stage 7 (Dashboard integration and CI enforcement)
