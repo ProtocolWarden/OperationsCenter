@@ -27,10 +27,16 @@ from operations_center.observer.coverage_config import (
     CompositeConfigProvider,
     ConfigValidationError,
     CoverageConfigManager,
+    CoverageConfigProvider,
     CoverageConfigSchema,
     DefaultConfigProvider,
     EnvironmentConfigProvider,
     YamlConfigProvider,
+    get_default_alert_channels,
+    merge_configs,
+    normalize_module_path,
+    parse_env_var_config,
+    validate_threshold_range,
 )
 
 
@@ -1031,31 +1037,6 @@ class TestCoverageConfigManagerAlertChannels:
                     manager.get_alert_channel_config()
             finally:
                 Path(f.name).unlink()
-from pathlib import Path
-from unittest.mock import patch
-
-import pytest
-import yaml
-
-from operations_center.observer.coverage_alerting import (
-    AlertSeverity,
-    AlertType,
-)
-from operations_center.observer.coverage_config import (
-    AlertChannelRoute,
-    CompositeConfigProvider,
-    ConfigValidationError,
-    CoverageConfigProvider,
-    CoverageConfigManager,
-    DefaultConfigProvider,
-    EnvironmentConfigProvider,
-    YamlConfigProvider,
-    get_default_alert_channels,
-    merge_configs,
-    normalize_module_path,
-    parse_env_var_config,
-    validate_threshold_range,
-)
 
 
 class TestUtilityFunctions:

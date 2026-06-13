@@ -1061,11 +1061,11 @@ class TestS3RepositoryErrorScenarios:
         mock_boto3.client.return_value = mock_client
 
         # Create a proper NoSuchKey exception that inherits from Exception
-        class MockNoSuchKey(Exception):
+        class NoSuchKeyError(Exception):
             pass
 
-        mock_client.exceptions.NoSuchKey = MockNoSuchKey
-        mock_client.get_object.side_effect = MockNoSuchKey()
+        mock_client.exceptions.NoSuchKey = NoSuchKeyError
+        mock_client.get_object.side_effect = NoSuchKeyError()
 
         now = datetime.now(tz=timezone.utc)
         analysis = CoverageTrendAnalysis(
@@ -1100,11 +1100,11 @@ class TestS3RepositoryErrorScenarios:
         mock_client = MagicMock()
         mock_boto3.client.return_value = mock_client
 
-        class MockNoSuchKey(Exception):
+        class NoSuchKeyError(Exception):
             pass
 
-        mock_client.exceptions.NoSuchKey = MockNoSuchKey
-        mock_client.get_object.side_effect = MockNoSuchKey()
+        mock_client.exceptions.NoSuchKey = NoSuchKeyError
+        mock_client.get_object.side_effect = NoSuchKeyError()
 
         repo = S3CoverageTrendRepository(bucket="test-bucket")
         result = repo.load_trend_analysis("line", "repository")
