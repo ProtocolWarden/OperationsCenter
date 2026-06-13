@@ -521,6 +521,15 @@ audit:
       # models.py consolidates coverage-domain Pydantic models (snapshot, module,
       # file, trend, alert) — single-responsibility, cannot cleanly split.
       - src/operations_center/observer/models.py
+      # coverage_trend_manager.py is the high-level trend analysis API — factory
+      # methods, trend computation, historical queries, and alert integration are
+      # all cohesively grouped; splitting by method type would scatter context.
+      - src/operations_center/observer/coverage_trend_manager.py
+      # coverage_alerting.py implements the full alert generation pipeline (threshold,
+      # regression, trend, module-gap detection) plus categorization/filtering helpers
+      # — single responsibility; splitting by alert type would break the shared config
+      # and severity-mapping logic.
+      - src/operations_center/observer/coverage_alerting.py
     C11:
       # Agent-spawning entrypoints: board_worker, intake, pr_review_watcher invoke
       # the coding backend (team_executor, aider, etc.) which runs for an unbounded
