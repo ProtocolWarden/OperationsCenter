@@ -1031,3 +1031,422 @@ class TestCoverageConfigManagerAlertChannels:
                     manager.get_alert_channel_config()
             finally:
                 Path(f.name).unlink()
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+import yaml
+
+from operations_center.observer.coverage_alerting import (
+    AlertSeverity,
+    AlertType,
+)
+from operations_center.observer.coverage_config import (
+    AlertChannelRoute,
+    CompositeConfigProvider,
+    ConfigValidationError,
+    CoverageConfigProvider,
+    CoverageConfigManager,
+    DefaultConfigProvider,
+    EnvironmentConfigProvider,
+    YamlConfigProvider,
+    get_default_alert_channels,
+    merge_configs,
+    normalize_module_path,
+    parse_env_var_config,
+    validate_threshold_range,
+)
+
+
+class TestUtilityFunctions:
+    """Tests for utility functions in coverage_config module."""
+
+    def test_merge_configs_basic(self) -> None:
+        """Test basic config merging."""
+        base = {"a": 1, "b": 2}
+        override = {"b": 3, "c": 4}
+        result = merge_configs(base, override)
+
+        assert result["a"] == 1
+        assert result["b"] == 3
+        assert result["c"] == 4
+
+    def test_merge_configs_with_none_values(self) -> None:
+        """Test that None values in override don't override base values."""
+        base = {"a": 1, "b": 2}
+        override = {"b": None, "c": 3}
+        result = merge_configs(base, override)
+
+        assert result["a"] == 1
+        assert result["b"] == 2
+        assert result["c"] == 3
+
+    def test_merge_configs_empty_override(self) -> None:
+        """Test merge with empty override dictionary."""
+        base = {"a": 1, "b": 2}
+        override = {}
+        result = merge_configs(base, override)
+
+        assert result == base
+
+    def test_validate_threshold_range_valid(self) -> None:
+        """Test threshold validation with valid values."""
+        assert validate_threshold_range(50.0, 0.0, 100.0) is True
+        assert validate_threshold_range(0.0, 0.0, 100.0) is True
+        assert validate_threshold_range(100.0, 0.0, 100.0) is True
+
+    def test_validate_threshold_range_invalid(self) -> None:
+        """Test threshold validation with invalid values."""
+        assert validate_threshold_range(-1.0, 0.0, 100.0) is False
+        assert validate_threshold_range(101.0, 0.0, 100.0) is False
+
+    def test_validate_threshold_range_custom_bounds(self) -> None:
+        """Test threshold validation with custom bounds."""
+        assert validate_threshold_range(25.0, 10.0, 50.0) is True
+        assert validate_threshold_range(10.0, 10.0, 50.0) is True
+        assert validate_threshold_range(50.0, 10.0, 50.0) is True
+        assert validate_threshold_range(9.9, 10.0, 50.0) is False
+        assert validate_threshold_range(50.1, 10.0, 50.0) is False
+
+    def test_normalize_module_path_basic(self) -> None:
+        """Test basic module path normalization."""
+        assert normalize_module_path("MyModule") == "mymodule"
+        assert normalize_module_path("src/operations_center") == "src/operations_center"
+
+    def test_normalize_module_path_with_whitespace(self) -> None:
+        """Test module path normalization with whitespace."""
+        assert normalize_module_path("  my_module  ") == "my_module"
+        assert normalize_module_path("\tmodule_name\n") == "module_name"
+
+    def test_normalize_module_path_mixed_case(self) -> None:
+        """Test module path with mixed case."""
+        assert normalize_module_path("MyModule.SubModule") == "mymodule.submodule"
+
+    def test_get_default_alert_channels(self) -> None:
+        """Test getting default alert channels."""
+        channels = get_default_alert_channels()
+
+        assert isinstance(channels, list)
+        assert "operator" in channels
+        assert len(channels) == 1
+
+    def test_parse_env_var_config_not_set(self) -> None:
+        """Test parsing env var that is not set."""
+        with patch.dict(os.environ, {}, clear=True):
+            result = parse_env_var_config("NONEXISTENT_VAR")
+            assert result is None
+
+            result = parse_env_var_config("NONEXISTENT_VAR", default_value="default")
+            assert result == "default"
+
+    def test_parse_env_var_config_boolean(self) -> None:
+        """Test parsing boolean env variables."""
+        with patch.dict(os.environ, {"TEST_VAR": "true"}):
+            assert parse_env_var_config("TEST_VAR") is True
+
+        with patch.dict(os.environ, {"TEST_VAR": "false"}):
+            assert parse_env_var_config("TEST_VAR") is False
+
+        with patch.dict(os.environ, {"TEST_VAR": "TRUE"}):
+            assert parse_env_var_config("TEST_VAR") is True
+
+    def test_parse_env_var_config_integer(self) -> None:
+        """Test parsing integer env variables."""
+        with patch.dict(os.environ, {"TEST_VAR": "42"}):
+            assert parse_env_var_config("TEST_VAR") == 42
+
+    def test_parse_env_var_config_float(self) -> None:
+        """Test parsing float env variables."""
+        with patch.dict(os.environ, {"TEST_VAR": "3.14"}):
+            assert parse_env_var_config("TEST_VAR") == 3.14
+
+    def test_parse_env_var_config_string(self) -> None:
+        """Test parsing string env variables."""
+        with patch.dict(os.environ, {"TEST_VAR": "some_string_value"}):
+            assert parse_env_var_config("TEST_VAR") == "some_string_value"
+
+
+class TestCoverageConfigManagerMethods:
+    """Tests for additional CoverageConfigManager methods."""
+
+    def test_validate_threshold_value_general(self) -> None:
+        """Test validate_threshold_value for general thresholds."""
+        manager = CoverageConfigManager.create_default()
+
+        assert manager.validate_threshold_value(50.0, threshold_type="general") is True
+        assert manager.validate_threshold_value(0.0, threshold_type="general") is True
+        assert manager.validate_threshold_value(100.0, threshold_type="general") is True
+        assert manager.validate_threshold_value(-1.0, threshold_type="general") is False
+        assert manager.validate_threshold_value(101.0, threshold_type="general") is False
+
+    def test_validate_threshold_value_regression(self) -> None:
+        """Test validate_threshold_value for regression thresholds."""
+        manager = CoverageConfigManager.create_default()
+
+        assert manager.validate_threshold_value(2.0, threshold_type="regression") is True
+        assert manager.validate_threshold_value(0.0, threshold_type="regression") is True
+        assert manager.validate_threshold_value(50.0, threshold_type="regression") is True
+        assert manager.validate_threshold_value(-1.0, threshold_type="regression") is False
+        assert manager.validate_threshold_value(51.0, threshold_type="regression") is False
+
+    def test_validate_threshold_value_trend(self) -> None:
+        """Test validate_threshold_value for trend thresholds."""
+        manager = CoverageConfigManager.create_default()
+
+        assert manager.validate_threshold_value(5.0, threshold_type="trend") is True
+        assert manager.validate_threshold_value(0, threshold_type="trend") is True
+        assert manager.validate_threshold_value(30, threshold_type="trend") is True
+        assert manager.validate_threshold_value(-1, threshold_type="trend") is False
+        assert manager.validate_threshold_value(31, threshold_type="trend") is False
+
+    def test_validate_threshold_value_invalid_type(self) -> None:
+        """Test validate_threshold_value with invalid threshold type."""
+        manager = CoverageConfigManager.create_default()
+
+        result = manager.validate_threshold_value(50.0, threshold_type="invalid_type")
+        assert result is False
+
+    def test_get_route_for_alert_type_matching_route(self) -> None:
+        """Test get_route_for_alert_type with matching route."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(
+                {
+                    "alert_channels": {
+                        "routes": [
+                            {
+                                "channel_name": "slack",
+                                "enabled": True,
+                                "alert_types": ["below_threshold"],
+                                "severity_levels": [],
+                                "enabled_modules": [],
+                            },
+                        ],
+                        "default_channels": ["operator"],
+                    }
+                },
+                f,
+            )
+            f.flush()
+
+            try:
+                manager = CoverageConfigManager.create_with_yaml(f.name)
+                routes = manager.get_route_for_alert_type("below_threshold")
+
+                assert "slack" in routes
+            finally:
+                Path(f.name).unlink()
+
+    def test_get_route_for_alert_type_default_route(self) -> None:
+        """Test get_route_for_alert_type returns default when no matching route."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(
+                {
+                    "alert_channels": {
+                        "routes": [
+                            {
+                                "channel_name": "slack",
+                                "enabled": True,
+                                "alert_types": ["below_threshold"],
+                                "severity_levels": [],
+                                "enabled_modules": [],
+                            },
+                        ],
+                        "default_channels": ["email", "operator"],
+                    }
+                },
+                f,
+            )
+            f.flush()
+
+            try:
+                manager = CoverageConfigManager.create_with_yaml(f.name)
+                routes = manager.get_route_for_alert_type("trend_degrading")
+
+                assert routes == ["email", "operator"]
+            finally:
+                Path(f.name).unlink()
+
+    def test_get_severity_threshold_map(self) -> None:
+        """Test get_severity_threshold_map returns correct mapping."""
+        manager = CoverageConfigManager.create_default()
+        threshold_map = manager.get_severity_threshold_map()
+
+        assert "emergency" in threshold_map
+        assert "critical" in threshold_map
+        assert "warning" in threshold_map
+        assert "info" in threshold_map
+
+        assert threshold_map["emergency"] == 50.0
+        assert threshold_map["critical"] == 70.0
+        assert threshold_map["warning"] == 80.0
+        assert threshold_map["info"] == 100.0
+
+    def test_is_module_threshold_override_present_true(self) -> None:
+        """Test is_module_threshold_override_present when override exists."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(
+                {
+                    "module_thresholds": {
+                        "src/observer": {
+                            "statement_coverage_minimum": 85.0,
+                        },
+                    }
+                },
+                f,
+            )
+            f.flush()
+
+            try:
+                manager = CoverageConfigManager.create_with_yaml(f.name)
+                assert manager.is_module_threshold_override_present("src/observer") is True
+                assert manager.is_module_threshold_override_present("src/unknown") is False
+            finally:
+                Path(f.name).unlink()
+
+    def test_is_module_threshold_override_present_false(self) -> None:
+        """Test is_module_threshold_override_present when no override."""
+        manager = CoverageConfigManager.create_default()
+        assert manager.is_module_threshold_override_present("any_module") is False
+
+    def test_get_module_override_with_override(self) -> None:
+        """Test get_module_override returns override when present."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(
+                {
+                    "module_thresholds": {
+                        "src/observer": {
+                            "statement_coverage_minimum": 85.0,
+                            "branch_coverage_minimum": 75.0,
+                        },
+                    }
+                },
+                f,
+            )
+            f.flush()
+
+            try:
+                manager = CoverageConfigManager.create_with_yaml(f.name)
+                result = manager.get_module_override("src/observer", "statement")
+
+                assert result == 85.0
+            finally:
+                Path(f.name).unlink()
+
+    def test_get_module_override_no_override(self) -> None:
+        """Test get_module_override returns None when no override."""
+        manager = CoverageConfigManager.create_default()
+        result = manager.get_module_override("src/observer", "statement")
+
+        assert result is None
+
+    def test_alert_channel_route_matches_alert_module_filtering(self) -> None:
+        """Test AlertChannelRoute module filtering."""
+        route = AlertChannelRoute(
+            channel_name="slack",
+            enabled=True,
+            alert_types=[],
+            severity_levels=[],
+            enabled_modules=["src/observer", "src/custodian"],
+        )
+
+        assert (
+            route.matches_alert(AlertType.BELOW_THRESHOLD, AlertSeverity.INFO, "src/observer")
+            is True
+        )
+        assert (
+            route.matches_alert(AlertType.BELOW_THRESHOLD, AlertSeverity.INFO, "src/other")
+            is False
+        )
+        assert route.matches_alert(AlertType.BELOW_THRESHOLD, AlertSeverity.INFO) is False
+
+    def test_create_auto_discovery_with_no_config(self) -> None:
+        """Test create_auto_discovery uses defaults when no config found."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manager = CoverageConfigManager.create_auto_discovery(
+                search_paths=[Path(tmpdir) / "nonexistent.yaml"]
+            )
+            config = manager.load_config()
+
+            assert config.get("repo_minimum_threshold") == 80.0
+
+    def test_manager_with_single_provider(self) -> None:
+        """Test CoverageConfigManager initialized with single provider."""
+        provider = DefaultConfigProvider()
+        manager = CoverageConfigManager(provider)
+
+        config = manager.load_config()
+        assert config.get("repo_minimum_threshold") == 80.0
+
+    def test_manager_with_provider_list(self) -> None:
+        """Test CoverageConfigManager initialized with provider list."""
+        providers = [DefaultConfigProvider(), EnvironmentConfigProvider()]
+        manager = CoverageConfigManager(providers)
+
+        config = manager.load_config()
+        assert config is not None
+
+    def test_manager_with_invalid_provider_type(self) -> None:
+        """Test CoverageConfigManager raises TypeError with invalid provider."""
+        with pytest.raises(TypeError):
+            CoverageConfigManager("not a provider")  # type: ignore
+
+    def test_environment_config_provider_case_insensitive(self) -> None:
+        """Test EnvironmentConfigProvider handles case correctly."""
+        with patch.dict(
+            os.environ,
+            {"COVERAGE_REPO_MINIMUM_THRESHOLD": "85"},
+            clear=True,
+        ):
+            provider = EnvironmentConfigProvider()
+            config = provider.load()
+
+            assert "repo_minimum_threshold" in config
+            assert config["repo_minimum_threshold"] == 85
+
+    def test_yaml_provider_with_oserror(self) -> None:
+        """Test YamlConfigProvider handles OSError gracefully."""
+        provider = YamlConfigProvider("/root/nonexistent/path/config.yaml")
+
+        with pytest.raises(ConfigValidationError) as exc_info:
+            provider.load()
+
+        assert "Cannot read" in str(exc_info.value)
+
+    def test_composite_provider_merges_module_thresholds(self) -> None:
+        """Test CompositeConfigProvider correctly merges module thresholds."""
+
+        class MockProvider1(CoverageConfigProvider):
+            def load(self) -> dict:
+                return {
+                    "module_thresholds": {
+                        "src/observer": {"statement_coverage_minimum": 80.0}
+                    }
+                }
+
+        class MockProvider2(CoverageConfigProvider):
+            def load(self) -> dict:
+                return {
+                    "module_thresholds": {
+                        "src/custodian": {"statement_coverage_minimum": 85.0}
+                    }
+                }
+
+        composite = CompositeConfigProvider([MockProvider1(), MockProvider2()])
+        config = composite.load()
+
+        assert "src/observer" in config["module_thresholds"]
+        assert "src/custodian" in config["module_thresholds"]
+
+    def test_yaml_provider_returns_empty_dict_for_empty_file(self) -> None:
+        """Test YamlConfigProvider returns empty dict for empty YAML file."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write("")
+            f.flush()
+
+            try:
+                provider = YamlConfigProvider(f.name)
+                config = provider.load()
+
+                assert config == {}
+            finally:
+                Path(f.name).unlink()
