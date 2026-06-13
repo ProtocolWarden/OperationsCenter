@@ -101,16 +101,16 @@ class CoverageTrendManager:
         end_date: datetime | None = None,
     ) -> list[CoverageSnapshot]:
         """List snapshots within optional date range."""
-        metadata_list = self.repository.list_snapshots(
+        metadata_list: list[dict[str, str | int]] = self.repository.list_snapshots(
             limit=limit,
             start_date=start_date,
             end_date=end_date,
         )
 
-        snapshots = []
+        snapshots: list[CoverageSnapshot] = []
         for metadata in metadata_list:
             try:
-                snapshot = self.repository.load_snapshot(str(metadata["run_id"]))
+                snapshot: CoverageSnapshot = self.repository.load_snapshot(str(metadata["run_id"]))
                 snapshots.append(snapshot)
             except FileNotFoundError:
                 continue
@@ -161,15 +161,15 @@ class CoverageTrendManager:
         window_days: int = 7,
     ) -> CoverageTrendAnalysis:
         """Compute trend analysis for a metric and scope over a time window."""
-        end_date = datetime.now(tz=timezone.utc)
-        start_date = end_date - timedelta(days=window_days)
+        end_date: datetime = datetime.now(tz=timezone.utc)
+        start_date: datetime = end_date - timedelta(days=window_days)
 
-        snapshots = self.list_snapshots(start_date=start_date, end_date=end_date)
+        snapshots: list[CoverageSnapshot] = self.list_snapshots(start_date=start_date, end_date=end_date)
 
         measurements: list[tuple[datetime, float]] = []
 
         for snapshot in snapshots:
-            value = self._extract_metric_value(snapshot, metric_type, granularity, scope_id)
+            value: float | None = self._extract_metric_value(snapshot, metric_type, granularity, scope_id)
             if value is not None:
                 measurements.append((snapshot.timestamp, value))
 
@@ -193,23 +193,23 @@ class CoverageTrendManager:
                 stability_score=0.0,
             )
 
-        values = [v for _, v in measurements]
-        current_value = values[-1]
-        average_value = mean(values)
-        min_value = min(values)
-        max_value = max(values)
+        values: list[float] = [v for _, v in measurements]
+        current_value: float = values[-1]
+        average_value: float = mean(values)
+        min_value: float = min(values)
+        max_value: float = max(values)
 
-        std_dev = stdev(values) if len(values) > 1 else 0.0
-        stability_score = 1.0 - (std_dev / average_value) if average_value > 0 else 0.0
+        std_dev: float = stdev(values) if len(values) > 1 else 0.0
+        stability_score: float = 1.0 - (std_dev / average_value) if average_value > 0 else 0.0
         stability_score = max(0.0, min(1.0, stability_score))
 
-        trend_direction = "stable"
-        trend_pct = 0.0
-        regression_count = 0
-        days_of_decline = 0
+        trend_direction: str = "stable"
+        trend_pct: float = 0.0
+        regression_count: int = 0
+        days_of_decline: int = 0
 
         if len(measurements) > 1:
-            first_value = values[0]
+            first_value: float = values[0]
             if current_value < first_value - 0.1:
                 trend_direction = "degrading"
             elif current_value > first_value + 0.1:
@@ -229,9 +229,9 @@ class CoverageTrendManager:
                 if values[i] < values[i - 1]:
                     days_of_decline += 1
 
-        projected_value_7days = None
+        projected_value_7days: float | None = None
         if len(values) >= 2 and trend_pct != 0:
-            slope = (values[-1] - values[0]) / max(len(values) - 1, 1)
+            slope: float = (values[-1] - values[0]) / max(len(values) - 1, 1)
             projected_value_7days = current_value + (slope * 7)
 
         return CoverageTrendAnalysis(
@@ -261,20 +261,20 @@ class CoverageTrendManager:
         threshold_pct: float = 2.0,
     ) -> bool:
         """Detect if coverage has regressed compared to previous measurement."""
-        snapshots = self.list_snapshots(limit=2)
+        snapshots: list[CoverageSnapshot] = self.list_snapshots(limit=2)
         if len(snapshots) < 2:
             return False
 
-        previous = snapshots[1]
-        current = snapshots[0]
+        previous: CoverageSnapshot = snapshots[1]
+        current: CoverageSnapshot = snapshots[0]
 
-        current_value = self._extract_metric_value(current, metric_type, "repository", None)
-        previous_value = self._extract_metric_value(previous, metric_type, "repository", None)
+        current_value: float | None = self._extract_metric_value(current, metric_type, "repository", None)
+        previous_value: float | None = self._extract_metric_value(previous, metric_type, "repository", None)
 
         if current_value is None or previous_value is None:
             return False
 
-        delta = current_value - previous_value
+        delta: float = current_value - previous_value
         return delta < -threshold_pct
 
     def calculate_trend_slope(
@@ -285,7 +285,7 @@ class CoverageTrendManager:
         window_days: int = 7,
     ) -> float:
         """Calculate the slope of coverage trend (% per day)."""
-        analysis = self.compute_trend_analysis(
+        analysis: CoverageTrendAnalysis = self.compute_trend_analysis(
             metric_type=metric_type,
             granularity=granularity,
             scope_id=scope_id,
@@ -295,8 +295,8 @@ class CoverageTrendManager:
         if len(analysis.measurements) < 2:
             return 0.0
 
-        values = [v for _, v in analysis.measurements]
-        days = len(analysis.measurements) - 1
+        values: list[float] = [v for _, v in analysis.measurements]
+        days: int = len(analysis.measurements) - 1
         if days <= 0:
             return 0.0
 
@@ -310,7 +310,7 @@ class CoverageTrendManager:
         window_days: int = 7,
     ) -> float:
         """Calculate volatility score (0-1, higher = more volatile)."""
-        analysis = self.compute_trend_analysis(
+        analysis: CoverageTrendAnalysis = self.compute_trend_analysis(
             metric_type=metric_type,
             granularity=granularity,
             scope_id=scope_id,
@@ -320,7 +320,7 @@ class CoverageTrendManager:
         if analysis.average_value == 0:
             return 0.0
 
-        cv = (analysis.standard_deviation / analysis.average_value) * 100
+        cv: float = (analysis.standard_deviation / analysis.average_value) * 100
         return min(1.0, cv / 100.0)
 
     def get_historical_data(
@@ -332,11 +332,11 @@ class CoverageTrendManager:
         end_date: datetime | None = None,
     ) -> list[tuple[datetime, float]]:
         """Get historical coverage data for a metric."""
-        snapshots = self.list_snapshots(start_date=start_date, end_date=end_date)
+        snapshots: list[CoverageSnapshot] = self.list_snapshots(start_date=start_date, end_date=end_date)
 
-        data = []
+        data: list[tuple[datetime, float]] = []
         for snapshot in snapshots:
-            value = self._extract_metric_value(snapshot, metric_type, granularity, scope_id)
+            value: float | None = self._extract_metric_value(snapshot, metric_type, granularity, scope_id)
             if value is not None:
                 data.append((snapshot.timestamp, value))
 

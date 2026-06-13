@@ -46,9 +46,9 @@ class CoverageSlackFormatter:
             AlertSeverity.CRITICAL.value: "#ff3333",
             AlertSeverity.EMERGENCY.value: "#8b0000",
         }
-        color = color_map.get(alert.severity, "#cccccc")
+        color: str = color_map.get(alert.severity, "#cccccc")
 
-        fields = [
+        fields: list[dict[str, Any]] = [
             {"title": "Alert Type", "value": alert.alert_type, "short": True},
             {"title": "Severity", "value": alert.severity.upper(), "short": True},
             {"title": "Metric", "value": alert.metric_type, "short": True},
@@ -111,10 +111,10 @@ class CoverageEmailFormatter:
         Returns:
             Tuple of (subject, text_body, html_body)
         """
-        alert_type_readable = alert.alert_type.replace("_", " ").title()
-        subject = f"[{alert.severity.upper()}] Coverage Alert: {alert_type_readable}"
+        alert_type_readable: str = alert.alert_type.replace("_", " ").title()
+        subject: str = f"[{alert.severity.upper()}] Coverage Alert: {alert_type_readable}"
 
-        text_body = f"""
+        text_body: str = f"""
 Coverage Alert Notification
 ============================
 
@@ -161,7 +161,7 @@ Current Measurement: {alert.current_value:.1f}% {f"(threshold: {alert.threshold_
             text_body += "2. Add tests for frequently changed files\n"
             text_body += "3. Track module-level coverage metrics\n"
 
-        html_body = f"""
+        html_body: str = f"""
 <html>
 <body style="font-family: Arial, sans-serif; color: #333;">
 <h2>📊 Coverage Alert Notification</h2>
@@ -267,7 +267,7 @@ class CoverageGitHubFormatter:
         Returns:
             Markdown-formatted comment body
         """
-        alert_type_readable = alert.alert_type.replace("_", " ").title()
+        alert_type_readable: str = alert.alert_type.replace("_", " ").title()
 
         severity_emoji: dict[str, str] = {
             AlertSeverity.INFO.value: "ℹ️",
@@ -275,9 +275,9 @@ class CoverageGitHubFormatter:
             AlertSeverity.CRITICAL.value: "🚨",
             AlertSeverity.EMERGENCY.value: "🚨🚨",
         }
-        emoji = severity_emoji.get(alert.severity, "⚠️")
+        emoji: str = severity_emoji.get(alert.severity, "⚠️")
 
-        comment = f"""
+        comment: str = f"""
 {emoji} **Coverage Alert: {alert_type_readable}**
 
 **Severity:** `{alert.severity.upper()}`
@@ -350,10 +350,10 @@ class CoverageOperatorFormatter:
         Returns:
             Formatted log message
         """
-        alert_type_readable = alert.alert_type.replace("_", " ").title()
-        severity = alert.severity.upper()
+        alert_type_readable: str = alert.alert_type.replace("_", " ").title()
+        severity: str = alert.severity.upper()
 
-        message = (
+        message: str = (
             f"COVERAGE_ALERT [{severity}] {alert_type_readable} — "
             f"{alert.metric_type} ({alert.granularity}): {alert.current_value:.1f}%"
         )
@@ -365,7 +365,7 @@ class CoverageOperatorFormatter:
             message += f" [regressed {alert.delta_pct:+.1f}%]"
 
         if alert.affected_modules:
-            modules_preview = ", ".join(sorted(alert.affected_modules)[:3])
+            modules_preview: str = ", ".join(sorted(alert.affected_modules)[:3])
             if len(alert.affected_modules) > 3:
                 modules_preview += f" (+{len(alert.affected_modules) - 3} more)"
             message += f" [modules: {modules_preview}]"
@@ -417,11 +417,11 @@ class CoverageAlertRouter:
         if channels is None:
             channels = self._determine_channels(alert)
 
-        results = {}
+        results: dict[str, AlertChannelResult] = {}
 
         for channel_name in channels:
             if channel_name == "slack" and self.slack_channel:
-                context = {
+                context: dict[str, Any] = {
                     "alert_type": alert.alert_type,
                     "severity": alert.severity,
                     "metric_type": alert.metric_type,
