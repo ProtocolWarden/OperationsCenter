@@ -14,7 +14,6 @@ import pytest
 from operations_center.observer.coverage_models import (
     CoverageAlert,
     CoverageSnapshot,
-    CoverageTrendAnalysis,
     ModuleCoverage,
 )
 from operations_center.observer.coverage_trend_manager import (
