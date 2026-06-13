@@ -1,13 +1,25 @@
-## 2026-06-13 — fix(reviewer): gate merge on the rebased head's CI (divergence guard C)
+## 2026-06-13 — feat(custodian): OC13 — test re-implements a metric inline without calling production (guard B)
 
-#272 stopped merging on incomplete/red CI, but left a window: a freshly pushed/auto-rebased head
-has no check runs yet, so get_failed_checks and get_incomplete_checks both return [] and the gate
-would declare green on a head with NO CI — a stale pre-rebase green carrying a self-review LGTM
-straight to merge (the clean-but-semantically-broken merge that the goal/3476567d divergence rode).
-Fix: new GitHubPRClient.get_completed_checks; the self-review gate and the WO-3 no-progress
-direct-merge now additionally require ≥1 completed check on the current head (failed==[] AND
-pending==[] AND completed!=[]) before green/merge; otherwise defer via the existing ci_wait_cycles
-machinery. +4 tests (adapter + gate defers-on-no-checks) + mock defaults.
+New LOW custodian detector flagging a test that computes a metric formula inline (math.log/log2/log10
+entropy signature) and asserts on it, while never calling a production metric function. This is the
+#269 anti-pattern: tests recomputed Shannon entropy inline and asserted constants that didn't match
+their own formula (0.081296 vs correct 0.080793), never exercising production. Per the adversarial
+review it deliberately does NOT fire on the legitimate golden-value cross-check (where the test CALLS
+the production function — e.g. reporter._compute_pattern_entropy — and uses inline math only as a
+reference): a production-metric call in the same function suppresses the finding. Keyed on inline-
+formula + call-absence, never on literal values. Zero findings on main; +5 unit tests.
+
+## 2026-06-13 — feat(custodian): OC12 detector — model construction field mismatch (divergence guard A)
+
+New static-AST custodian detector flagging construction of a local @dataclass / Pydantic BaseModel
+with a keyword arg that isn't one of its fields — the observable symptom of divergent definitions
+(#269: FlakyTestMetric(failure_entropy=...) vs real pattern_entropy; 0cb06e0e: CoverageAlert field
+rename). Conservative by construction (resolves which same-named class each call site imports to
+avoid the OC-AuditContext vs custodian-AuditContext collision; skips negative pytest.raises tests,
+extra='allow' models, external bases, **kwargs, subclasses; never keys on name similarity so the
+intentional FlakyTestMetric/FlakyTestMetrics pair is safe). Found and fixed 16 real latent drifts
+on main: integration fixtures built TodoSignal(count=,summary=) and DependencyDriftSignal(critical_
+issues=) — fields Pydantic v2 silently drops — now todo_count / dropped non-fields. +7 unit tests.
 
 ## 2026-06-12 — Stage 4: Verify implementation completeness and create PR-ready commit (✅ COMPLETE)
 
