@@ -124,6 +124,7 @@ shape, not any particular bound repo.
 - [design/autonomy/repo_aware_autonomy.md](design/autonomy/repo_aware_autonomy.md)
 - [design/execution_budget_and_safety_controls.md](design/execution_budget_and_safety_controls.md)
 - [design/observer-race-condition-guard.md](design/observer-race-condition-guard.md) — TOCTOU hardening for CheckSignal and DependencyDrift collectors
+- [design/CAMPAIGN_SPECIFICATION_STAGES_0-9.md](design/CAMPAIGN_SPECIFICATION_STAGES_0-9.md) — Campaign specification: Coverage Threshold Alerting System (Stages 0-9), complete
 - [design/STAGE0_FLAKY_TEST_REPORTER_ARCHITECTURE.md](design/STAGE0_FLAKY_TEST_REPORTER_ARCHITECTURE.md) — Flaky test reporter architecture: 4-tier detection, 14 metrics, observer integration
 - [design/STAGE1_CI_INTEGRATION_TEST_RUNNER_DESIGN.md](design/STAGE1_CI_INTEGRATION_TEST_RUNNER_DESIGN.md) — CI integration test runner architecture design
 - [design/deriver-coverage/DERIVER_REVERSE_TRANSITION_COVERAGE_ANALYSIS.md](design/deriver-coverage/DERIVER_REVERSE_TRANSITION_COVERAGE_ANALYSIS.md) — Deriver reverse transition coverage analysis
