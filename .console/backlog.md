@@ -2,6 +2,65 @@
 
 _Durable work inventory. Update after each meaningful chunk of progress._
 
+## Campaign: Coverage Threshold Alerting System — ✅ STAGE 0 COMPLETE (2026-06-12)
+
+**Status**: 🎯 **STAGE 0 DESIGN COMPLETE** — Comprehensive specification for coverage threshold alerting system (2026-06-12)
+
+### Overall Campaign Summary
+
+**Objective**: Design and implement a comprehensive coverage threshold alerting system that detects coverage degradation, regressions, and trend declines at repository, module, and file levels. Extend existing CoverageSignal with threshold-based alerts and trend analysis.
+
+### Stage 0: Design Coverage Threshold Alerting System ✅ COMPLETE (2026-06-12)
+
+**Objective**: Document complete coverage metrics specification, threshold definitions, alert types, trend reporting approach, and integration strategy.
+
+**Deliverables**:
+- ✅ **Stage 0 Design Document**: `docs/design/STAGE0_COVERAGE_THRESHOLD_ALERTING_SYSTEM.md` (2,400+ lines, 8 sections + appendix)
+  - Coverage metrics specification (statements, branches, lines at repo/module/file levels)
+  - Four alert types with severity levels and examples
+  - Data model for trends: `CoverageMetricsSnapshot`, `CoverageTrendAnalysis`, `CoverageAlert`
+  - Observer service integration strategy with `CoverageTrendCollector`
+  - Detection acceptance criteria with accuracy specifications
+  - Implementation roadmap (Stages 1-8)
+  - Comprehensive scenario examples
+
+**Specification Coverage**:
+- ✅ **Coverage Metrics**: 5 categories (per-test Tier 1-2, module-level Tier 2-3, file-level Tier 2-3, computed Tier 3-4)
+- ✅ **Threshold System**: Repository, module, and file levels with configurable minimums/warnings/targets
+- ✅ **Alert Types**: Below-threshold, regression-detected, trend-degrading, module-critical-gaps
+- ✅ **Trend Analysis**: 7-day and 30-day windows with degradation detection (5+ consecutive declines)
+- ✅ **Data Model**: Complete storage schema and query API
+- ✅ **Integration Points**: CoverageSignal extension, CoverageTrendCollector, observer service hookup
+- ✅ **Detection Criteria**: Accuracy specs, edge case handling, false positive/negative rates
+
+**Acceptance Criteria — ALL MET** ✅:
+1. ✅ Design document created covering coverage metrics (statements, branches, lines)
+2. ✅ Threshold definitions specified (below threshold, regression detected, trending down)
+3. ✅ Data model designed for coverage trends (timestamps, metrics, module-level breakdowns)
+4. ✅ Integration points with observer service identified (CoverageTrendCollector, signal extension)
+5. ✅ Acceptance criteria for detection defined (accuracy specs, edge cases)
+
+**Key Design Decisions**:
+- Three coverage types (statement, branch, line) tracked independently
+- Four-level severity for alerts (critical/high/medium/low) with configurable thresholds
+- Trend detection via 5+ consecutive daily measurements (false positive reduction)
+- Module prioritization by `(gap × recent_changes) / touch_count` (impact-weighted ranking)
+- JSONL storage for development, S3/DB for production (future-proof)
+
+**Status**: ✅ **STAGE 0 COMPLETE** — Design comprehensive and ready for Stage 1 implementation
+
+**Next Stages** (Planned):
+- Stage 1: Implement `CoverageTrendCollector` with core detection logic
+- Stage 2: Build storage backends (local JSONL, S3, database)
+- Stage 3: Extend `CoverageSignal` model and observer integration
+- Stage 4: Alert routing and notification channels
+- Stage 5: Dashboard panels for visualization
+- Stage 6: CI gate enforcement
+- Stage 7: Documentation and runbooks
+- Stage 8: Testing and PR preparation
+
+---
+
 ## Campaign: Parametrized Edge-Case Testing for Metrics — ✅ STAGES 0-4 COMPLETE (2026-06-12)
 
 **Status**: 🎉 **ALL STAGES COMPLETE** — Full edge-case test implementation verified with pytest, ruff, and type checking; PR-ready commit created (2026-06-12)

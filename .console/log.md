@@ -1,3 +1,82 @@
+## 2026-06-12 — Stage 0: Design coverage threshold alerting system (✅ COMPLETE)
+
+### Objective
+Document complete specification for coverage threshold alerting system including metrics, thresholds, alert types, trend detection, data model, observer integration, and detection acceptance criteria.
+
+### Design Specification — ALL CRITERIA MET ✅
+
+**Deliverables**:
+- ✅ **Design Document**: `docs/design/STAGE0_COVERAGE_THRESHOLD_ALERTING_SYSTEM.md` (2,400+ lines, 8 sections)
+  - Section 1: Overview & Objectives (purpose, stakeholders, success criteria)
+  - Section 2: Coverage Metrics Specification (statements/branches/lines across repo/module/file granularities)
+  - Section 3: Threshold Definitions & Alert Types (4 alert types with severity levels and examples)
+  - Section 4: Trend Reporting & Data Model (persistent storage models, query API, backend options)
+  - Section 5: Observer Service Integration (CoverageTrendCollector, CoverageSignal extension)
+  - Section 6: Detection Acceptance Criteria (accuracy specs, edge cases, false positive rates)
+  - Section 7: Implementation Strategy (8-stage progression, tech stack, risk mitigation)
+  - Section 8: Appendix with Examples & Scenarios (4 realistic scenarios)
+
+**Coverage Metrics Defined**:
+- ✅ **Three Coverage Types**: Statement (condition coverage), Branch (path coverage), Line (execution coverage)
+- ✅ **Three Granularities**: Repository (aggregate), Module (package-level), File (source file)
+- ✅ **Seven Per-Test Metrics**: overall_statement_coverage_pct, overall_branch_coverage_pct, overall_line_coverage_pct, etc.
+- ✅ **Seven Repository-Level Metrics**: module_coverages, coverage_trend_pct (7-day/30-day), regression_delta_pct, stability_score
+- ✅ **Computed Metrics**: 7-day/30-day trends, regression delta, stability score, estimated debt hours
+
+**Threshold System Defined**:
+- ✅ **Repository-Level Thresholds**: Minimum, Warning, Target levels for statement/branch/line coverage
+- ✅ **Module-Level Overrides**: Per-module threshold customization (e.g., critical modules at 85%, less critical at 75%)
+- ✅ **Regression Thresholds**: Run-to-run (2%), 7-day window (3%), 30-day window (5%)
+- ✅ **Trend Thresholds**: 5+ consecutive declining measurements at -1% per measurement
+
+**Four Alert Types Specified**:
+1. ✅ **Below-Threshold**: Coverage < minimum with 4 severity levels (critical <50%, high <70%, medium <80%, low <threshold)
+2. ✅ **Regression-Detected**: Coverage dropped from recent baseline with baseline type tracking
+3. ✅ **Trend-Degrading**: Sustained downward trend over 7-day window with velocity and projection
+4. ✅ **Module-Critical-Gaps**: High-touch modules >15% below target with priority scoring
+
+**Data Models Defined**:
+- ✅ **CoverageMetricsSnapshot**: Point-in-time measurement with repository/module/file breakdowns
+- ✅ **ModuleCoverage**: Module-level metrics with health status (healthy/at_risk/critical)
+- ✅ **FileCoverage**: File-level metrics with uncovered lines and branches
+- ✅ **CoverageTrendAnalysis**: Computed trends with direction, velocity, stability, projection
+- ✅ **CoverageAlert**: Alert schema with type, severity, scope, measurements, recommendations
+- ✅ **CoverageTrendCollector**: Query API for snapshots, trends, rankings, active alerts
+
+**Observer Service Integration**:
+- ✅ **CoverageSignal Extension**: Added 8 new fields (statement/branch/line coverage, module metrics, trends, alerts)
+- ✅ **CoverageTrendCollector**: New service class with `collect_signal()` method
+- ✅ **Alert Generation**: 4 detection methods for threshold/regression/trend/module alerts
+- ✅ **Integration Points**: Observer.py, models.py, alert routing, dashboard, CI gates
+
+**Detection Acceptance Criteria**:
+- ✅ **Below-Threshold**: Positives <1% false alarm, Negatives 100% specificity, Unknowns <0.1% miss rate
+- ✅ **Regression**: 2%+ regressions detected within 1 measurement, <0.5% natural variance not flagged
+- ✅ **Trend**: 5+ consecutive declines detected within 5-6 days, ±2% projection accuracy
+- ✅ **Module-Gap**: All modules >15% below target identified, priority-weighted scoring
+
+**Implementation Strategy**:
+- ✅ **8-Stage Roadmap**: Design (complete), Collector, Storage, Signal/Integration, Alerts, Dashboard, Docs, Testing/PR
+- ✅ **Tech Stack**: Python 3.11, Pydantic, JSONL/S3/InfluxDB, existing alert infrastructure
+- ✅ **Risk Mitigation**: Graceful degradation, alert deduplication, validation, caching
+
+**Scenario Examples**:
+- ✅ **Scenario 1: PR Regression** (-3% → HIGH severity, blocks merge)
+- ✅ **Scenario 2: Trending Down** (-0.7% daily over 10 days → MEDIUM severity, projection)
+- ✅ **Scenario 3: Module Gap** (62.5% coverage, 87 touches, priority 0.88 → HIGH severity)
+- ✅ **Scenario 4: All Clear** (88.2% coverage, stable, no alerts)
+
+**Acceptance Criteria — ALL MET** ✅:
+1. ✅ Design document created covering coverage metrics (statements, branches, lines)
+2. ✅ Threshold definitions specified (below threshold, regression detected, trending down)
+3. ✅ Data model designed for coverage trends (timestamps, metrics, module-level breakdowns)
+4. ✅ Integration points with observer service identified (CoverageTrendCollector, signal extension)
+5. ✅ Acceptance criteria for detection defined (accuracy specs, edge cases)
+
+**Status**: ✅ **STAGE 0 COMPLETE** — Comprehensive design specification ready for implementation
+
+---
+
 ## 2026-06-12 — Stage 4: Verify implementation completeness and create PR-ready commit (✅ COMPLETE)
 
 ### Objective
