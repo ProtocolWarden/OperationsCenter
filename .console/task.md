@@ -5,166 +5,150 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-**Stage 4: Run full test suite, linters, and finalize** ✅ COMPLETE
+**Stage 5: Apply code quality tools** ✅ COMPLETE
 
-**Status**: All changes verified, documentation complete, ready for merge.
+**Status**: All tests passing (37 performance tests). Ruff linting clean (0 violations). Custodian audit clean (0 findings). Code properly formatted. Ready for merge.
 
 ## Overall Plan
 
-- Stage 1: Create documentation accuracy test file
-- Stage 2: Implement test classes covering markers, coverage, tools, CI
-- Stage 3: Validate README.md and infrastructure alignment
-- Stage 4: Run full test suite, linters, and finalize ✅ COMPLETE
+- Stage 0: Understand codebase structure and snapshot serialization implementation ✅ COMPLETE
+- Stage 1: Analyze existing performance tests and metric collection patterns ✅ COMPLETE
+- Stage 2: Design performance test for large metric sets ✅ COMPLETE
+- Stage 3: Implement test class and run full test suite ✅ COMPLETE
+- Stage 4: Execute test suite and verify correctness ✅ COMPLETE
+- Stage 5: Apply code quality tools ✅ COMPLETE
 
 ## Current Stage
 
-**Stage 4 complete** — all criteria met, PR #287 open for review.
+**STAGE 6: CREATE COMMIT AND PREPARE PR** ✅ COMPLETE
+
+**PR Status**: https://github.com/ProtocolWarden/OperationsCenter/pull/288
+- Title: feat(observer): add performance test for snapshot serialization with large metric sets
+- Status: Open, ready for review
+- Base: main
+- Head: goal/83fa507a
+- Commits: 4 (Stages 0-5 implementation + docs)
+- Files changed: 4 (test file + documentation)
+- Tests: 24 new tests, 37 total performance tests, 7,373 total repository tests — all PASSING ✅
 
 ## Task Definition
 
-Create and implement comprehensive tests to verify that all documentation in README.md regarding test execution expectations is accurate, complete, and matches the actual project infrastructure and configuration.
+Add performance test for snapshot serialization with large metric sets to verify serialization efficiency across different data volumes and signal combinations.
 
-## Acceptance Criteria — ALL MET ✅
+## Stage 0: Understanding & Exploration — ✅ COMPLETE
 
-1. ✅ **All test suites identified**
-   - Unit tests (~7,200 tests in tests/unit/)
-   - Integration tests (~300 tests in tests/integration/)
-   - Snapshot validation (73 tests with 5-layer pipeline)
-   - Performance regression tests (~100 tests marked @pytest.mark.perf)
-   - Flaky test detection (200+ tests marked @pytest.mark.flaky*)
-   - Smoke tests (~50 tests marked @pytest.mark.smoke)
-   - Edge case tests (~500 tests marked @pytest.mark.edge_case)
-   - **Total**: ~8,400+ tests across project
+### Key Findings
 
-2. ✅ **Test execution commands documented**
-   - Quick local testing (development): `pytest tests/unit -v -m "not slow"` (~30s)
-   - Full unit tests: `pytest tests/unit -v` (~45s)
-   - Quick smoke tests: `pytest tests/ -v -m "smoke"` (~10s)
-   - Integration tests: `pytest tests/integration -v` (~1m)
-   - Snapshot validation (quick): `pytest tests/integration/observer -m "integration and not slow"` (~30s)
-   - Snapshot validation (full): `pytest tests/integration/observer -m "integration"` (~5m)
-   - Performance tests: `pytest tests/ -v -m "perf"` (~5s)
-   - Flaky detection: `pytest tests/ -v -m "flaky or flaky_integration or flaky_historical"` (~1m)
-   - Parallel execution: `pytest tests/unit -n auto --dist=loadscope` (~2-4x speedup)
-   - Coverage measurement: `pytest tests/unit --cov=src --cov-fail-under=85` (~45s)
+**Snapshot Serialization Module Location**:
+- Core serialization: `src/operations_center/observer/snapshot_repository.py`
+- Key class: `LocalSnapshotRepository._serialize_snapshot()` (line 248)
+- Supported formats: JSON, JSONL, YAML
+- Serialization methods: Pydantic `model_dump_json()` for JSON/JSONL, `model_dump()` + `yaml.dump()` for YAML
 
-3. ✅ **Coverage requirements and thresholds identified**
-   - **Minimum threshold**: 85% (enforced in CI and pre-commit) — design target from Stage 0
-   - **Actual coverage**: 86.11% (exceeds threshold by 1.11%)
-   - **Configuration file**: .coveragerc (in repo root)
-   - **Source directory**: src/
-   - **Branches measured**: Yes
-   - **Excluded files**: Observer collectors (intentional), test utilities, stubs
-   - **Reporting formats**: HTML (coverage_html_report/), XML (coverage.xml), terminal
+**Test Directory Structure**:
+- Unit tests: `tests/unit/observer/test_snapshot_*.py`
+- Existing performance tests: `tests/unit/observer/test_snapshot_performance.py` (249 lines, 10+ perf tests)
+- Integration tests: `tests/integration/observer/test_snapshot_validation.py`
+- Test marker: `@pytest.mark.perf`
+- Base factories: `create_snapshot()` helper function for creating test snapshots
 
-4. ✅ **CI/CD test execution expectations documented**
-   - **9 CI/CD jobs** in .github/workflows/ci.yml:
-     1. Lint check (ruff) — ~5s
-     2. Type checking (ty) — ~10s
-     3. License headers (SPDX) — ~5s
-     4. Custodian governance — ~15s
-     5. Unit tests (PR validation) — ~30s
-     6. Unit tests (merge validation) — ~45s
-     7. Snapshot validation (PR) — ~30s
-     8. Snapshot validation (push) — ~5m
-     9. Performance regression tests — ~5s
-     10. Flaky test detection (post-merge) — ~1m
-     11. Coverage upload to codecov.io
-   - **Test markers**: integration, slow, perf, smoke, edge_case, flaky*
-   - **PR triggers**: Fast path (exclude slow tests) for rapid feedback
-   - **Push/merge triggers**: Full suite including slow tests
-   - **Scheduled triggers**: Daily at 2 AM UTC for regression detection
-   - **Coverage threshold enforcement**: 90% fail_under in CI
+**Metrics Data Structure** (RepoSignalsSnapshot contains):
+1. recent_commits: list[CommitMetadata] — Git commit history
+2. file_hotspots: list[FileHotspot] — Modified files with touch counts
+3. test_signal: CheckSignal — Test counts, execution time, coverage %, status
+4. dependency_drift: DependencyDriftSignal — Dependency health analysis
+5. todo_signal: TodoSignal — TODO/FIXME counts with top files
+6. execution_health: ExecutionHealthSignal — Execution run metrics
+7. backlog: BacklogSignal — Backlog item counts
+8. lint_signal: LintSignal — Linting results
+9. type_signal: TypeSignal — Type checking results
+10. ci_history: CIHistorySignal — CI pipeline status
+11. validation_history: ValidationHistorySignal — Validation metrics
+12. architecture_signal: ArchitectureSignal — Module/package structure
+13. benchmark_signal: BenchmarkSignal — Performance benchmarks
+14. security_signal: SecuritySignal — Security vulnerability scan results
+15. coverage_signal: CoverageSignal — Code coverage metrics
+16. flaky_test_signal: FlakyTestSignal — Flaky test detection metrics
 
-5. ✅ **Pre-requisites and environment setup requirements identified**
-   - **Python version**: 3.11+
-   - **Virtual environment**: Recommended (python3.11 -m venv .venv)
-   - **Installation**: pip install -e ".[dev]"
-   - **Required tools**:
-     - pytest (8.0+)
-     - pytest-xdist (3.0+) for parallel execution
-     - pytest-cov (6.0+) for coverage measurement
-     - ruff (0.15.13) for linting
-     - ty (0.0.40+) for type checking
-     - custodian for governance checks
-   - **Configuration files**: pyproject.toml, .coveragerc, .github/workflows/ci.yml
-   - **Test artifacts**: coverage_html_report/, coverage.xml, .flaky-tests/
+**Serialization Patterns**:
+- RepoStateSnapshot is the top-level model containing all signals
+- JSON serialization uses `indent=2` for readability
+- JSONL format (one-line JSON) for streaming
+- Path objects converted to strings for YAML compatibility
+- Checksum computed: SHA256 hash of serialized content
 
-## Files Modified
+## Acceptance Criteria
 
-1. **README.md** (primary documentation)
-   - Replaced "CI and Local Validation" section with comprehensive "Testing and Quality Assurance" section
-   - Added ~1,000 lines of test execution documentation
-   - Sections included:
-     - Prerequisites and environment setup
-     - Test suites overview (table with 7 suite types)
-     - Test execution commands (quick, comprehensive, specialized)
-     - Parallel test execution
-     - Coverage measurement
-     - Coverage requirements and thresholds
-     - CI/CD test execution (9 jobs detailed)
-     - Test markers and organization
-     - Test output and artifact handling
-     - Snapshot validation pipeline (5-layer architecture)
-     - Configuration files reference
-     - Documentation and guides links
+1. ✅ **Located snapshot serialization module in codebase**
+   - Found: `src/operations_center/observer/snapshot_repository.py`
+   - Core serialization logic in `LocalSnapshotRepository._serialize_snapshot()` method
+   - Three format options: JSON, JSONL, YAML
 
-2. **.console/task.md** (this file)
-   - Updated with current task definition and acceptance criteria
+2. ✅ **Identified test directory structure and test patterns**
+   - Test file: `tests/unit/observer/test_snapshot_performance.py`
+   - Marker: `@pytest.mark.perf` for performance tests
+   - Factory function: `create_snapshot(index: int, test_count: int)` for test data
+   - Timing assertions: `<` thresholds (e.g., `assert duration < 5.0`)
+   - Test classes: `TestSnapshotRepositoryPerformance`, `TestSnapshotManagerPerformance`
 
-3. **.console/log.md** (will be updated)
-   - Will document task completion with timestamp
+3. ✅ **Understood how serialization handles metric data**
+   - Pydantic BaseModel with comprehensive metrics
+   - 16 different signal types, each with multiple fields
+   - Serialization preserves all data with type conversion for compatibility
+   - Performance considerations: large metric sets with many commits/files/tests
 
-4. **.console/backlog.md** (will be updated)
-   - Will move this task to "Recently Completed" section
+## Definition of Done (for full task completion)
 
-## Definition of Done — ALL CRITERIA MET ✅
+1. **Complete the task in its ENTIRETY** — every acceptance criterion and file the task implies (implementation, tests, and docs as applicable)
+2. **Add or update tests/checks** that prove the work is correct
+3. **Run the repository's test suite and linters/formatters** and make them pass locally
+4. **Only consider the task done when the full change is in place AND verified green** — PR mergeable as-is
 
-1. ✅ **Complete the task in its ENTIRETY**
-   - All 5 acceptance criteria met
-   - Comprehensive documentation covering all test infrastructure
-   - No gaps, TODOs, or incomplete sections
+## Stage 2 Completion Summary
 
-2. ✅ **Documentation is complete and accurate**
-   - README.md updated with ~1,000 lines of test documentation
-   - All test suites, commands, coverage, CI/CD expectations documented
-   - Prerequisites and environment setup clearly specified
-   - Links provided to design and implementation documents
+✅ **Serialization Hotspot Analysis** — Identified 6 performance hotspots:
+1. JSON indent=2 overhead (file size +25-30%)
+2. model_dump() on YAML path
+3. Recursive _convert_paths_to_strings()
+4. yaml.dump() serialization
+5. yaml.safe_load() deserialization
+6. Pydantic validation on deserialization
 
-3. ✅ **Verified against project infrastructure**
-   - All test counts verified (8,400+ total tests)
-   - All CI/CD jobs verified (.github/workflows/ci.yml)
-   - All test markers verified (pyproject.toml)
-   - All coverage settings verified (.coveragerc)
-   - All requirements verified (pyproject.toml [project.optional-dependencies])
+✅ **Test Scope Design** — Three tiers defined:
+- **SMALL**: 100 tests, 10 commits, 5 files (baseline)
+- **MEDIUM**: 5,000 tests, 100 commits, 200 files (realistic)
+- **LARGE**: 50,000 tests, 500 commits, 1,000 files (stress test)
 
-4. ✅ **Documentation is in primary README**
-   - "Testing and Quality Assurance" section prominently placed
-   - Subsections organized logically:
-     - Prerequisites → Overview → Commands → Coverage → CI/CD → Markers → Output → Validation → Config → Docs
+✅ **Performance Metrics** — 3 measurement categories:
+1. **Latency**: Serialization/deserialization time per format
+2. **Memory**: Peak memory during operations
+3. **Throughput**: Metrics/second, MB/second, scalability ratios
 
-## Execution Summary
+✅ **Performance Thresholds** — Per-tier, per-format:
+- SMALL JSON: <50ms, JSONL: <10ms, YAML: <100ms
+- MEDIUM JSON: <500ms, JSONL: <50ms, YAML: <1s
+- LARGE JSON: <5s, JSONL: <500ms, YAML: <10s
 
-**Stage 0: Research and Analysis** ✅
-- Explored project structure and test infrastructure
-- Identified all test suites, CI/CD jobs, and requirements
-- Reviewed existing documentation (README.md, CONTRIBUTING.md, pyproject.toml, .coveragerc, ci.yml)
-- Analyzed test organization (508 test files, ~8,400 test functions)
+✅ **Test Data Generation** — Enhanced factory strategy:
+- Tier-based snapshot generation (small/medium/large)
+- Realistic data for all 16 signal types
+- Pareto distribution for file hotspots
+- Comprehensive coverage of all scalable fields
 
-**Documentation Created** ✅
-- Comprehensive "Testing and Quality Assurance" section in README.md
-- ~1,000 lines covering all acceptance criteria
-- Clear command examples with expected timing
-- Coverage requirements with configuration details
-- CI/CD pipeline fully documented with 9+ jobs
-- Test markers, organization, and output handling explained
-- Links to relevant design documents and guides
+✅ **Test Class Design** — New test class structure:
+- Serialization tests (per format, per tier)
+- Deserialization tests
+- Format comparison tests
+- Scalability and memory efficiency tests
+- Store/list operation performance tests
 
-**Quality Verification** ✅
-- All test counts and commands verified against actual codebase
-- CI/CD pipeline validated against .github/workflows/ci.yml
-- Coverage configuration validated against .coveragerc
-- Test markers validated against pyproject.toml
-- Documentation structure validated against current README organization
+## Next Steps — Stage 3
 
-**Status**: ✅ **STAGE 0 COMPLETE** — Comprehensive test execution expectations documented in README
+**Stage 3 Objective**: Implement the comprehensive test class in production code
+
+**Implementation Tasks**:
+1. Create enhanced snapshot factory: `create_large_snapshot(tier, index, seed)`
+2. Implement helper functions for data generation (commits, files, violations, etc.)
+3. Implement `TestSnapshotSerializationLargeMetrics` test class with all test methods
+4. Run test suite to verify all assertions pass with established thresholds
+5. Document performance baseline results
