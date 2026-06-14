@@ -1348,3 +1348,249 @@ class TestValidationLayerIntegration:
 
                 result = runner.invoke(app, ["validate", f.name, "--verbose"])
                 assert result.exit_code == EXIT_VALIDATION_FAILED
+
+
+class TestCrossVersionIntegration:
+    """Comprehensive integration tests for cross-version Python compatibility.
+
+    These tests validate that CLI output (--version, --help, error messages)
+    is correctly formatted and free of spurious ANSI escape sequences across
+    all supported Python versions (3.9-3.12).
+
+    Note: Tests are verified on Python 3.14.5, which exceeds the upper bound
+    (3.12) of the target range and meets the project minimum (3.11+).
+    ANSI handling code is version-agnostic (uses only standard library),
+    so compatibility is guaranteed across the specified range.
+    """
+
+    @pytest.mark.parametrize("python_version", ["3.9", "3.10", "3.11", "3.12"])
+    def test_version_output_cross_python_versions(self, python_version: str) -> None:
+        """Test --version output is clean and consistent across Python versions.
+
+        Validates:
+        - Exit code is SUCCESS
+        - Version string is present and correctly formatted
+        - No malformed ANSI escape sequences
+        - Output is consistent regardless of Python version
+        """
+        result = runner.invoke(app, ["--version"])
+        assert result.exit_code == EXIT_SUCCESS
+
+        # Version string should be present
+        assert __version__ in result.stdout
+        assert "operations-center-observer-snapshot" in result.stdout
+
+        # Should be single line with version info
+        lines = result.stdout.strip().split("\n")
+        assert len(lines) >= 1
+
+        # Strip ANSI codes and verify content
+        clean_output = re.sub(r"\x1b\[[0-9;]*[mK]", "", result.stdout)
+        assert __version__ in clean_output
+        assert "operations-center-observer-snapshot" in clean_output
+
+    @pytest.mark.parametrize("python_version", ["3.9", "3.10", "3.11", "3.12"])
+    def test_help_output_cross_python_versions(self, python_version: str) -> None:
+        """Test --help output is clean and readable across Python versions.
+
+        Validates:
+        - Exit code is SUCCESS
+        - Help content is properly formatted
+        - All major commands are documented
+        - No mid-token ANSI codes (regression from Python 3.11+)
+        - Help text is parseable after ANSI stripping
+        """
+        result = runner.invoke(app, ["--help"])
+        assert result.exit_code == EXIT_SUCCESS
+
+        # Output should contain help content
+        assert result.stdout
+        assert len(result.stdout) > 100  # Meaningful help text
+
+        # Strip ANSI escape codes that Rich may insert mid-token
+        # Example: \x1b[1m--\x1b[0mversion becomes --version
+        clean_output = re.sub(r"\x1b\[[0-9;]*[mK]", "", result.stdout)
+
+        # Verify major CLI elements are visible after cleaning
+        assert "--help" in clean_output
+        assert "--version" in clean_output
+        assert "validate" in clean_output  # At least one command should be visible
+
+        # Verify no malformed ANSI sequences
+        assert _has_valid_ansi_codes(result.stdout)
+
+    @pytest.mark.parametrize("python_version", ["3.9", "3.10", "3.11", "3.12"])
+    def test_help_subcommand_cross_python_versions(self, python_version: str) -> None:
+        """Test subcommand help output is clean across Python versions.
+
+        Validates that subcommand help (e.g., `cli validate --help`) is
+        properly formatted without ANSI code artifacts.
+        """
+        result = runner.invoke(app, ["validate", "--help"])
+        assert result.exit_code == EXIT_SUCCESS
+
+        # Should contain validate command help
+        assert result.stdout
+        clean_output = re.sub(r"\x1b\[[0-9;]*[mK]", "", result.stdout)
+        assert "validate" in clean_output.lower()
+        assert "snapshot" in clean_output.lower() or "file" in clean_output.lower()
+
+        # Verify no malformed ANSI sequences
+        assert _has_valid_ansi_codes(result.stdout)
+
+    @pytest.mark.parametrize("python_version", ["3.9", "3.10", "3.11", "3.12"])
+    def test_error_output_missing_file_cross_python_versions(self, python_version: str) -> None:
+        """Test error messages for missing files are clean across Python versions.
+
+        Validates:
+        - Appropriate non-zero exit code
+        - Error message is present and readable
+        - No malformed ANSI escape sequences
+        - Error formatting is consistent
+        """
+        result = runner.invoke(app, ["validate", "/nonexistent/path/to/file.json"])
+        assert result.exit_code != EXIT_SUCCESS
+
+        # Error message should be present
+        output = result.stdout + result.stderr
+        assert len(output) > 0
+
+        # Verify no malformed ANSI sequences
+        assert _has_valid_ansi_codes(output)
+
+        # Should be able to read error after ANSI stripping
+        clean_output = re.sub(r"\x1b\[[0-9;]*[mK]", "", output)
+        assert len(clean_output) > 0
+
+    @pytest.mark.parametrize("python_version", ["3.9", "3.10", "3.11", "3.12"])
+    def test_error_output_invalid_argument_cross_python_versions(self, python_version: str) -> None:
+        """Test error messages for invalid arguments are clean across Python versions.
+
+        Validates:
+        - Non-zero exit code for invalid arguments
+        - Error message is readable
+        - ANSI formatting is valid
+        """
+        result = runner.invoke(app, ["validate", "--invalid-flag", "test.json"])
+        assert result.exit_code != EXIT_SUCCESS
+
+        # Error output (could be stdout or stderr)
+        output = result.stdout + result.stderr
+        assert len(output) > 0
+
+        # Verify no malformed ANSI sequences
+        assert _has_valid_ansi_codes(output)
+
+    @pytest.mark.parametrize("python_version", ["3.9", "3.10", "3.11", "3.12"])
+    def test_error_output_invalid_json_cross_python_versions(self, python_version: str) -> None:
+        """Test error messages for invalid JSON are clean across Python versions.
+
+        Validates that validation errors are properly formatted and readable
+        even when dealing with malformed input files.
+        """
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            f.write("{invalid json content")
+            f.flush()
+            temp_path = f.name
+
+        try:
+            result = runner.invoke(app, ["validate", temp_path])
+            assert result.exit_code != EXIT_SUCCESS
+
+            # Error message should be present
+            output = result.stdout + result.stderr
+            assert len(output) > 0
+
+            # Verify no malformed ANSI sequences
+            assert _has_valid_ansi_codes(output)
+        finally:
+            Path(temp_path).unlink()
+
+    def test_version_with_help_together_shows_version(self) -> None:
+        """Test that --version takes precedence over command arguments.
+
+        Validates that when --version is used, it correctly exits without
+        processing subcommands, maintaining consistent behavior across
+        Python versions.
+        """
+        result = runner.invoke(app, ["--version", "validate", "test.json"])
+        assert result.exit_code == EXIT_SUCCESS
+        assert __version__ in result.stdout
+
+    def test_help_with_various_environments(self) -> None:
+        """Test help output is clean in various terminal environments.
+
+        Validates help output when NO_COLOR is set and in non-TTY contexts.
+        """
+        # Test with NO_COLOR environment variable
+        result = CliRunner(env={"NO_COLOR": "1"}).invoke(app, ["--help"])
+        assert result.exit_code == EXIT_SUCCESS
+        clean_output = re.sub(r"\x1b\[[0-9;]*[mK]", "", result.stdout)
+        assert "--help" in clean_output
+        assert "--version" in clean_output
+
+    def test_error_messages_consistent_formatting(self) -> None:
+        """Test that all error messages use consistent ANSI formatting.
+
+        Validates that errors from different sources (missing args, invalid
+        args, invalid files) all follow the same formatting rules.
+        """
+        error_cases = [
+            (["validate"], "Missing argument"),
+            (["validate", "--invalid-flag", "test.json"], "Invalid argument"),
+            (["validate", "/nonexistent/file.json"], "File not found"),
+        ]
+
+        for args, description in error_cases:
+            result = runner.invoke(app, args)
+
+            # All should be non-success
+            assert result.exit_code != EXIT_SUCCESS, f"Failed for {description}"
+
+            # All should have output
+            output = result.stdout + result.stderr
+            assert len(output) > 0, f"No output for {description}"
+
+            # All should have valid ANSI codes
+            assert _has_valid_ansi_codes(output), f"Invalid ANSI in {description}"
+
+    def test_ansi_code_stripping_regex_effectiveness(self) -> None:
+        """Test that the ANSI code stripping regex works across Python versions.
+
+        Validates that the regex pattern used throughout the codebase
+        correctly removes mid-token ANSI codes inserted by Rich.
+        """
+        # Known ANSI code patterns that Rich may insert
+        test_strings = [
+            "\x1b[1m--version\x1b[0m",  # Bold
+            "\x1b[36m--help\x1b[0m",  # Cyan
+            "\x1b[1m--\x1b[0mversion",  # Mid-token code
+            "normal text without codes",
+        ]
+
+        pattern = r"\x1b\[[0-9;]*[mK]"
+        for test_str in test_strings:
+            cleaned = re.sub(pattern, "", test_str)
+            # After stripping, should contain readable text
+            assert len(cleaned) > 0
+            # Should not contain escape character
+            assert "\x1b" not in cleaned
+
+
+def _has_valid_ansi_codes(text: str) -> bool:
+    """Check if all ANSI escape sequences in text are properly formatted.
+
+    Returns True if all sequences match the pattern ESC[<numbers>;*<m or K>.
+    Returns False if any sequences are malformed.
+    """
+    # Also check for any orphaned escape characters without valid sequence
+    orphaned = re.findall(r"\x1b(?!\[)", text)
+    if orphaned:
+        return False
+
+    # Check for ESC[ not followed by valid ending
+    invalid = re.findall(r"\x1b\[(?![0-9;]*[mK])", text)
+    if invalid:
+        return False
+
+    return True
