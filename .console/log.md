@@ -1,11 +1,12 @@
-## 2026-06-13 — fix(reviewer): GC orphaned PR-review state files
+## 2026-06-13 — fix(tests): date-bomb snapshot/session retention tests (main was red)
 
-state/pr_reviews/<repo>-<n>.json is unlinked by _merge_and_done / _close_and_requeue, but only when
-THIS watcher terminates the PR. PRs merged/closed by other means (manual gh merge, another host, or
-while the watcher was down/stale) leave their state files behind forever (observed: 73 files, ~41 for
-already-terminal OC PRs from May). Added _prune_orphan_state_files, called each _poll_once after a
-SUCCESSFUL list_open_prs: any state file for that repo whose PR isn't in the open set is pruned. A
-false prune is self-healing (next poll re-discovers the open PR and re-creates state). +2 tests.
+3 observer tests hardcoded observed_at/session dates as 2026-06-07 and asserted retention/recency
+counts that only hold within a fixed window. As wall-clock passed 2026-06-14 those dates aged past
+the cutoffs (load_recent_sessions(days=7), retention_days), so cleanup deleted more / loaded fewer
+than the hardcoded expectations — turning main's full pytest RED (and blocking every PR from merging
+green). Fixed: anchor the dates to now (now-1day+i*hours, preserving relative order so sort tests
+still pass; today's date dir for the session test). Full unit suite green (7007). These are time-bomb
+tests; using relative dates is the durable fix.
 
 ## 2026-06-13 — fix(spec-hygiene): active.json projects only active campaigns (campaign GC)
 

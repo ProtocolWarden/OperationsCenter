@@ -2,7 +2,7 @@
 # Copyright (C) 2026 ProtocolWarden
 """Tests for snapshot manager."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import pytest
@@ -152,9 +152,10 @@ class TestSnapshotManagerGet:
     ) -> None:
         """Test getting snapshots with a limit."""
         for i in range(5):
+            ts = datetime.now(timezone.utc) - timedelta(days=1) + timedelta(hours=i)
             snap = RepoStateSnapshot(
-                run_id=f"test_obs_20260607T{i:02d}0000Z_abc123_x7k9m",
-                observed_at=datetime(2026, 6, 7, i, 0, 0, tzinfo=timezone.utc),
+                run_id=f"test_obs_{ts.strftime('%Y%m%dT%H%M%S')}Z_abc123_x7k9m",
+                observed_at=ts,
                 observer_version=1,
                 source_command="test",
                 repo=test_snapshot.repo,
@@ -266,9 +267,10 @@ class TestSnapshotManagerCleanup:
         )
 
         for i in range(4):
+            ts = datetime.now(timezone.utc) - timedelta(days=1) + timedelta(hours=i)
             snap = RepoStateSnapshot(
-                run_id=f"test_obs_20260607T{i:02d}0000Z_abc123_x7k9m",
-                observed_at=datetime(2026, 6, 7, i, 0, 0, tzinfo=timezone.utc),
+                run_id=f"test_obs_{ts.strftime('%Y%m%dT%H%M%S')}Z_abc123_x7k9m",
+                observed_at=ts,
                 observer_version=1,
                 source_command="test",
                 repo=test_snapshot.repo,

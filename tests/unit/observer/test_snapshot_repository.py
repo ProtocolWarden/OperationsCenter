@@ -3,7 +3,7 @@
 """Tests for snapshot repository implementations."""
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import pytest
@@ -227,9 +227,10 @@ class TestLocalSnapshotRepositoryList:
     ) -> None:
         """Test listing snapshots with a limit."""
         for i in range(5):
+            ts = datetime.now(timezone.utc) - timedelta(days=1) + timedelta(hours=i)
             snap = RepoStateSnapshot(
-                run_id=f"test_obs_20260607T{i:02d}0000Z_abc123_x7k9m",
-                observed_at=datetime(2026, 6, 7, i, 0, 0, tzinfo=timezone.utc),
+                run_id=f"test_obs_{ts.strftime('%Y%m%dT%H%M%S')}Z_abc123_x7k9m",
+                observed_at=ts,
                 observer_version=1,
                 source_command="test",
                 repo=test_snapshot.repo,
@@ -246,9 +247,10 @@ class TestLocalSnapshotRepositoryList:
         """Test that snapshots are listed in reverse chronological order."""
         snaps = []
         for i in range(3):
+            ts = datetime.now(timezone.utc) - timedelta(days=1) + timedelta(hours=i)
             snap = RepoStateSnapshot(
-                run_id=f"test_obs_20260607T{i:02d}0000Z_abc123_x7k9m",
-                observed_at=datetime(2026, 6, 7, i, 0, 0, tzinfo=timezone.utc),
+                run_id=f"test_obs_{ts.strftime('%Y%m%dT%H%M%S')}Z_abc123_x7k9m",
+                observed_at=ts,
                 observer_version=1,
                 source_command="test",
                 repo=test_snapshot.repo,
@@ -356,9 +358,10 @@ class TestLocalSnapshotRepositoryCleanup:
         """Test that recent snapshots are retained."""
         # Store snapshots within retention period
         for i in range(3):
+            ts = datetime.now(timezone.utc) - timedelta(days=1) + timedelta(hours=i)
             snap = RepoStateSnapshot(
-                run_id=f"test_obs_20260607T{i:02d}0000Z_abc123_x7k9m",
-                observed_at=datetime(2026, 6, 7, i, 0, 0, tzinfo=timezone.utc),
+                run_id=f"test_obs_{ts.strftime('%Y%m%dT%H%M%S')}Z_abc123_x7k9m",
+                observed_at=ts,
                 observer_version=1,
                 source_command="test",
                 repo=test_snapshot.repo,
@@ -384,9 +387,10 @@ class TestLocalSnapshotRepositoryCleanup:
 
         # Store 5 snapshots
         for i in range(5):
+            ts = datetime.now(timezone.utc) - timedelta(days=1) + timedelta(hours=i)
             snap = RepoStateSnapshot(
-                run_id=f"test_obs_20260607T{i:02d}0000Z_abc123_x7k9m",
-                observed_at=datetime(2026, 6, 7, i, 0, 0, tzinfo=timezone.utc),
+                run_id=f"test_obs_{ts.strftime('%Y%m%dT%H%M%S')}Z_abc123_x7k9m",
+                observed_at=ts,
                 observer_version=1,
                 source_command="test",
                 repo=test_snapshot.repo,
