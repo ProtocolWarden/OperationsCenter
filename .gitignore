@@ -5,6 +5,7 @@
 !.console/log.md
 !.console/STAGE0_PYTHON311_COMPATIBILITY_ANALYSIS.md
 !.console/STAGE2_PYTHON_VERSION_CONSTRAINT_ANALYSIS.md
+!.console/STAGE5_CI_CONFIGURATION_VALIDATION.md
 !.console/validation/
 !.console/validation/**
 # P3: OC-local operational config and runtime state (migrated from .context/)

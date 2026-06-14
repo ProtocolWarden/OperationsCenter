@@ -67,13 +67,17 @@ jobs:
           fi
 
   test:
-    name: Test (pytest)
+    name: Test (pytest) - Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: pip install -e .[dev]
       - name: Run unit tests excluding slow (PR validation)
@@ -87,6 +91,7 @@ jobs:
         # observer package at pytest startup, BEFORE coverage instrumentation,
         # marking every module-level line uncovered. The plugin is opt-in by
         # design; coverage jobs don't need it loaded.
+        # Tests run across Python 3.9-3.12 for cross-version compatibility validation.
         run: pytest -q tests/unit -m "not slow" -p no:flaky-detection --cov=src --cov-report=html --cov-report=xml --cov-report=term-missing --cov-fail-under=85
       - name: Run full unit test suite including slow (main/merge)
         if: github.event_name == 'push'
@@ -96,9 +101,10 @@ jobs:
         # Coverage threshold of 85% is the design target from Stage 0.
         # CI will fail until coverage improves to meet this target.
         # -p no:flaky-detection — see PR-validation step above.
+        # Tests run across Python 3.9-3.12 for cross-version compatibility validation.
         run: pytest -q tests/unit -p no:flaky-detection --cov=src --cov-report=html --cov-report=xml --cov-report=term-missing --cov-fail-under=85
-      - name: Upload coverage to Codecov
-        if: always()
+      - name: Upload coverage to Codecov (Python 3.11 only)
+        if: always() && matrix.python-version == '3.11'
         uses: codecov/codecov-action@v4
         with:
           file: ./coverage.xml
@@ -110,7 +116,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-reports-${{ github.event_name }}
+          name: coverage-reports-py${{ matrix.python-version }}-${{ github.event_name }}
           path: |
             coverage_html_report/
             coverage.xml
@@ -133,13 +139,17 @@ jobs:
         run: pytest -q tests/unit -m "perf" --no-header -rN
 
   snapshot:
-    name: Snapshot validation
+    name: Snapshot validation - Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: pip install -e .[dev]
       - name: Run snapshot validation tests (PR — quick, excluding slow)
@@ -154,28 +164,29 @@ jobs:
         # PR runs exclude slow tests for quick feedback.
         # All validation checks must pass; structural failures trigger job failure.
         # Transient failures (network, timeouts) are retried up to 3 times.
+        # Tests run across Python 3.9-3.12 for cross-version compatibility validation.
         run: pytest -q tests/integration/observer -m "integration and not slow" --no-header -rN
       - name: Run snapshot validation tests (push — full, including slow)
         if: github.event_name == 'push'
         # Full validation including real-world accuracy (Layer 4) and regression detection (Layer 5).
         # These layers test against actual repository state and may take longer.
+        # Tests run across Python 3.9-3.12 for cross-version compatibility validation.
         run: pytest -q tests/integration/observer -m "integration" --no-header -rN
       - name: Run snapshot validation tests (scheduled — full, including slow)
         if: github.event_name == 'schedule'
         # Scheduled runs execute comprehensive validation without time constraints.
         # Full validation detects regressions in repository state snapshots,
         # even when no new code changes occur. Failures trigger immediate alerts.
+        # Tests run across Python 3.9-3.12 for cross-version compatibility validation.
         run: pytest -q tests/integration/observer -m "integration" --no-header -rN
       - name: Upload snapshot validation reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: snapshot-validation-reports-${{ github.event_name }}
+          name: snapshot-validation-reports-py${{ matrix.python-version }}-${{ github.event_name }}
           path: |
             tests/integration/observer/validation_reports/
           retention-days: 30
-    strategy:
-      fail-fast: true
 
   flaky-test-detection:
     name: Flaky test detection
