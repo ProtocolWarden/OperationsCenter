@@ -12,9 +12,6 @@ import json
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
-
-import pytest
 
 from operations_center.observer.assertion_extractor import extract_assertion_from_excinfo
 from operations_center.observer.pytest_flaky_plugin import FlakyTestDetectionPlugin
