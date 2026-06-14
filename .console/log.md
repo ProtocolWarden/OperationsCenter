@@ -1,3 +1,12 @@
+## 2026-06-13 — fix(reviewer): GC orphaned PR-review state files
+
+state/pr_reviews/<repo>-<n>.json is unlinked by _merge_and_done / _close_and_requeue, but only when
+THIS watcher terminates the PR. PRs merged/closed by other means (manual gh merge, another host, or
+while the watcher was down/stale) leave their state files behind forever (observed: 73 files, ~41 for
+already-terminal OC PRs from May). Added _prune_orphan_state_files, called each _poll_once after a
+SUCCESSFUL list_open_prs: any state file for that repo whose PR isn't in the open set is pruned. A
+false prune is self-healing (next poll re-discovers the open PR and re-creates state). +2 tests.
+
 ## 2026-06-13 — fix(spec-hygiene): active.json projects only active campaigns (campaign GC)
 
 _rebuild_active_projection wrote every campaign — incl. complete/cancelled — to state/campaigns/
