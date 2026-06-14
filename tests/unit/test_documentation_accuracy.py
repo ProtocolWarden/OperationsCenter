@@ -199,9 +199,9 @@ class TestTestSuiteExistence:
 
     def test_snapshot_validation_tests_exist(self):
         """Snapshot validation tests exist at tests/integration/observer/."""
-        assert (
-            Path("tests/integration/observer").is_dir()
-        ), "tests/integration/observer/ directory does not exist"
+        assert Path("tests/integration/observer").is_dir(), (
+            "tests/integration/observer/ directory does not exist"
+        )
 
     def test_unit_tests_contain_test_files(self):
         """Unit tests directory contains Python test files."""
@@ -246,9 +246,7 @@ class TestTestCommandExecutability:
             text=True,
             timeout=30,
         )
-        assert (
-            result.returncode == 0
-        ), f"Integration test collection failed: {result.stderr}"
+        assert result.returncode == 0, f"Integration test collection failed: {result.stderr}"
 
     def test_pytest_markers_filter_works(self):
         """Pytest marker filters work correctly."""
@@ -360,8 +358,8 @@ class TestDocumentationCompleteness:
         content = readme_path.read_text()
 
         commands = [
-            "pytest tests/unit -v -m \"not slow\"",
-            "pytest tests/ -v -m \"smoke\"",
+            'pytest tests/unit -v -m "not slow"',
+            'pytest tests/ -v -m "smoke"',
             "pytest tests/ -v",
             "--cov=src",
             "--cov-fail-under=85",
@@ -437,9 +435,7 @@ class TestDocumentationAccuracySynthesis:
         # Find all pytest command examples
         pytest_commands = re.findall(r"pytest [\w\s\-=./,\"]*", content)
 
-        assert len(pytest_commands) > 5, (
-            "Expected multiple pytest command examples in README"
-        )
+        assert len(pytest_commands) > 5, "Expected multiple pytest command examples in README"
 
         # Verify command patterns
         has_verbose = any("-v" in cmd for cmd in pytest_commands)
