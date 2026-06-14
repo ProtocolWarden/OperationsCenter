@@ -125,7 +125,9 @@ class SnapshotOutputFormatter:
         Returns:
             Formatted JSON string
         """
-        return json.dumps(report.to_dict(), indent=2, default=self._json_serializer, ensure_ascii=False)
+        return json.dumps(
+            report.to_dict(), indent=2, default=self._json_serializer, ensure_ascii=False
+        )
 
     def format_markdown(self, report: SnapshotValidationReport) -> str:
         """Format report as Markdown.

@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -16,10 +17,12 @@ from operations_center.observer.cli import (
     EXIT_CONFIG_ERROR,
     EXIT_LOAD_ERROR,
     EXIT_SUCCESS,
+    __version__,
     app,
-    _parse_layers,
     _build_tolerance_dict,
     _format_duration,
+    _get_env_or_default,
+    _parse_layers,
 )
 from operations_center.observer.snapshot_validator import SnapshotValidationReport
 
@@ -245,7 +248,8 @@ class TestExportCommand:
         """Test export to JSON format: missing source returns load error."""
         with tempfile.TemporaryDirectory() as tmpdir:
             result = runner.invoke(
-                app, ["export", "nonexistent_id", str(Path(tmpdir) / "out.json"), "--format", "json"]
+                app,
+                ["export", "nonexistent_id", str(Path(tmpdir) / "out.json"), "--format", "json"],
             )
             assert result.exit_code == EXIT_LOAD_ERROR
 
@@ -466,3 +470,834 @@ class TestLayersOption:
 
                 result = runner.invoke(app, ["validate", f.name, "--layers", "1,2,3,4,5"])
                 assert result.exit_code == EXIT_SUCCESS
+
+
+class TestVersionOption:
+    """Tests for version flag."""
+
+    def test_version_flag_with_command(self) -> None:
+        """Test --version flag works before commands."""
+        result = runner.invoke(app, ["--version", "validate", "test.json"])
+        assert result.exit_code == EXIT_SUCCESS
+        assert __version__ in result.stdout
+        assert "operations-center-observer-snapshot" in result.stdout
+
+    def test_version_in_help(self) -> None:
+        """Test version is documented in help."""
+        result = runner.invoke(app, ["--help"])
+        assert result.exit_code == EXIT_SUCCESS
+        # Check that the --version option is documented
+        assert "--version" in result.stdout
+
+
+class TestEnvironmentVariables:
+    """Tests for environment variable configuration."""
+
+    def test_get_env_or_default_found(self) -> None:
+        """Test _get_env_or_default when env var is set."""
+        with patch.dict(os.environ, {"OC_SNAPSHOT_REPO_PATH": "/test/path"}):
+            result = _get_env_or_default("REPO_PATH")
+            assert result == "/test/path"
+
+    def test_get_env_or_default_not_found(self) -> None:
+        """Test _get_env_or_default when env var is not set."""
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("OC_SNAPSHOT_MISSING", None)
+            result = _get_env_or_default("MISSING", "default_value")
+            assert result == "default_value"
+
+    def test_get_env_or_default_no_default(self) -> None:
+        """Test _get_env_or_default with no default value."""
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("OC_SNAPSHOT_MISSING", None)
+            result = _get_env_or_default("MISSING")
+            assert result is None
+
+    def test_log_level_from_env(self) -> None:
+        """Test log level from environment variable."""
+        with patch.dict(os.environ, {"OC_SNAPSHOT_LOG_LEVEL": "debug"}):
+            result = runner.invoke(app, ["--help"])
+            assert result.exit_code == EXIT_SUCCESS
+
+    def test_tolerance_from_env(self) -> None:
+        """Test tolerance configuration from environment variable."""
+        with patch("operations_center.observer.cli.SnapshotValidationEngine") as mock_engine:
+            mock_report = MagicMock(spec=SnapshotValidationReport)
+            mock_report.passed = True
+            mock_report.to_dict.return_value = {}
+            mock_report.snapshot_id = "test"
+            mock_report.observed_at = MagicMock()
+            mock_report.overall_duration_ms = 100
+            mock_report.results = []
+
+            mock_engine_instance = MagicMock()
+            mock_engine_instance.validate_with_retry.return_value = (mock_report, False)
+            mock_engine.return_value = mock_engine_instance
+
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as f:
+                json.dump(
+                    {
+                        "run_id": "test",
+                        "observed_at": "2026-06-14T00:00:00",
+                        "observer_version": 1,
+                        "source_command": "test",
+                        "repo": {},
+                        "signals": {},
+                        "collector_errors": {},
+                    },
+                    f,
+                )
+                f.flush()
+
+                with patch.dict(os.environ, {"OC_SNAPSHOT_TOLERANCE": "0.02"}):
+                    result = runner.invoke(app, ["validate", f.name, "--quiet"])
+                    assert result.exit_code == EXIT_SUCCESS
+
+    def test_repo_path_from_env(self) -> None:
+        """Test repo path from environment variable."""
+        with patch("operations_center.observer.cli.SnapshotValidationEngine") as mock_engine:
+            mock_report = MagicMock(spec=SnapshotValidationReport)
+            mock_report.passed = True
+            mock_report.to_dict.return_value = {}
+            mock_report.snapshot_id = "test"
+            mock_report.observed_at = MagicMock()
+            mock_report.overall_duration_ms = 100
+            mock_report.results = []
+
+            mock_engine_instance = MagicMock()
+            mock_engine_instance.validate_with_retry.return_value = (mock_report, False)
+            mock_engine.return_value = mock_engine_instance
+
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as f:
+                json.dump(
+                    {
+                        "run_id": "test",
+                        "observed_at": "2026-06-14T00:00:00",
+                        "observer_version": 1,
+                        "source_command": "test",
+                        "repo": {},
+                        "signals": {},
+                        "collector_errors": {},
+                    },
+                    f,
+                )
+                f.flush()
+
+                with patch.dict(os.environ, {"OC_SNAPSHOT_REPO_PATH": "/tmp"}):
+                    result = runner.invoke(app, ["validate", f.name, "--quiet"])
+                    assert result.exit_code == EXIT_SUCCESS
+
+    def test_timeout_from_env(self) -> None:
+        """Test timeout from environment variable."""
+        with patch("operations_center.observer.cli.SnapshotValidationEngine") as mock_engine:
+            mock_report = MagicMock(spec=SnapshotValidationReport)
+            mock_report.passed = True
+            mock_report.to_dict.return_value = {}
+            mock_report.snapshot_id = "test"
+            mock_report.observed_at = MagicMock()
+            mock_report.overall_duration_ms = 100
+            mock_report.results = []
+
+            mock_engine_instance = MagicMock()
+            mock_engine_instance.validate_with_retry.return_value = (mock_report, False)
+            mock_engine.return_value = mock_engine_instance
+
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as f:
+                json.dump(
+                    {
+                        "run_id": "test",
+                        "observed_at": "2026-06-14T00:00:00",
+                        "observer_version": 1,
+                        "source_command": "test",
+                        "repo": {},
+                        "signals": {},
+                        "collector_errors": {},
+                    },
+                    f,
+                )
+                f.flush()
+
+                with patch.dict(os.environ, {"OC_SNAPSHOT_TIMEOUT": "120"}):
+                    result = runner.invoke(app, ["validate", f.name, "--quiet"])
+                    assert result.exit_code == EXIT_SUCCESS
+
+    def test_layers_from_env(self) -> None:
+        """Test layers from environment variable."""
+        with patch("operations_center.observer.cli.SnapshotValidationEngine") as mock_engine:
+            mock_report = MagicMock(spec=SnapshotValidationReport)
+            mock_report.passed = True
+            mock_report.to_dict.return_value = {}
+            mock_report.snapshot_id = "test"
+            mock_report.observed_at = MagicMock()
+            mock_report.overall_duration_ms = 100
+            mock_report.results = []
+
+            mock_engine_instance = MagicMock()
+            mock_engine_instance.validate_with_retry.return_value = (mock_report, False)
+            mock_engine.return_value = mock_engine_instance
+
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as f:
+                json.dump(
+                    {
+                        "run_id": "test",
+                        "observed_at": "2026-06-14T00:00:00",
+                        "observer_version": 1,
+                        "source_command": "test",
+                        "repo": {},
+                        "signals": {},
+                        "collector_errors": {},
+                    },
+                    f,
+                )
+                f.flush()
+
+                with patch.dict(os.environ, {"OC_SNAPSHOT_LAYERS": "1,2"}):
+                    result = runner.invoke(app, ["validate", f.name, "--quiet"])
+                    assert result.exit_code == EXIT_SUCCESS
+
+
+class TestSmokeTests:
+    """Basic smoke tests for CLI functionality."""
+
+    def test_help_command(self) -> None:
+        """Test help command displays usage information."""
+        result = runner.invoke(app, ["--help"])
+        assert result.exit_code == EXIT_SUCCESS
+        assert "Snapshot validator CLI" in result.stdout or "validate" in result.stdout
+
+    def test_help_validate_command(self) -> None:
+        """Test help for validate command."""
+        result = runner.invoke(app, ["validate", "--help"])
+        assert result.exit_code == EXIT_SUCCESS
+        assert "snapshot" in result.stdout.lower() or "path" in result.stdout.lower()
+
+    def test_invalid_command(self) -> None:
+        """Test invalid command returns error."""
+        result = runner.invoke(app, ["invalid-command"])
+        assert result.exit_code != EXIT_SUCCESS
+
+    def test_missing_required_argument(self) -> None:
+        """Test validate without required snapshot path."""
+        result = runner.invoke(app, ["validate"])
+        assert result.exit_code != EXIT_SUCCESS
+
+
+class TestValidationLayerIntegration:
+    """Tests for validation layer integration in CLI."""
+
+    def test_validate_layer_1_schema(self) -> None:
+        """Test Layer 1 schema validation through CLI."""
+        with patch("operations_center.observer.cli.SnapshotValidationEngine") as mock_engine:
+            from operations_center.observer.snapshot_validator import ValidationResult
+
+            mock_report = MagicMock(spec=SnapshotValidationReport)
+            mock_report.passed = True
+            mock_report.snapshot_id = "test-run-001"
+            mock_report.observed_at = MagicMock()
+            mock_report.overall_duration_ms = 50.0
+            mock_report.layers_checked = [1]
+
+            result1 = ValidationResult(
+                passed=True,
+                check_name="schema_validation",
+                message="Schema validation passed",
+                errors=[],
+                duration_ms=45.0,
+            )
+            mock_report.results = [result1]
+            mock_report.to_dict.return_value = {
+                "snapshot_id": "test-run-001",
+                "layers_checked": [1],
+                "passed": True,
+                "results": [result1.to_dict()],
+            }
+            mock_report.get_retryable_errors.return_value = []
+
+            mock_engine_instance = MagicMock()
+            mock_engine_instance.validate_with_retry.return_value = (mock_report, False)
+            mock_engine.return_value = mock_engine_instance
+
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as f:
+                json.dump(
+                    {
+                        "run_id": "test-run-001",
+                        "observed_at": "2026-06-14T00:00:00",
+                        "observer_version": 1,
+                        "source_command": "test",
+                        "repo": {},
+                        "signals": {},
+                        "collector_errors": {},
+                    },
+                    f,
+                )
+                f.flush()
+
+                result = runner.invoke(app, ["validate", f.name, "--layers", "1"])
+                assert result.exit_code == EXIT_SUCCESS
+
+    def test_validate_layer_2_completeness(self) -> None:
+        """Test Layer 2 completeness validation through CLI."""
+        with patch("operations_center.observer.cli.SnapshotValidationEngine") as mock_engine:
+            from operations_center.observer.snapshot_validator import ValidationResult
+
+            mock_report = MagicMock(spec=SnapshotValidationReport)
+            mock_report.passed = True
+            mock_report.snapshot_id = "test-run-002"
+            mock_report.observed_at = MagicMock()
+            mock_report.overall_duration_ms = 75.0
+            mock_report.layers_checked = [2]
+
+            result2 = ValidationResult(
+                passed=True,
+                check_name="completeness_validation",
+                message="Completeness validation passed",
+                errors=[],
+                duration_ms=70.0,
+            )
+            mock_report.results = [result2]
+            mock_report.to_dict.return_value = {
+                "snapshot_id": "test-run-002",
+                "layers_checked": [2],
+                "passed": True,
+                "results": [result2.to_dict()],
+            }
+            mock_report.get_retryable_errors.return_value = []
+
+            mock_engine_instance = MagicMock()
+            mock_engine_instance.validate_with_retry.return_value = (mock_report, False)
+            mock_engine.return_value = mock_engine_instance
+
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as f:
+                json.dump(
+                    {
+                        "run_id": "test-run-002",
+                        "observed_at": "2026-06-14T00:00:00",
+                        "observer_version": 1,
+                        "source_command": "test",
+                        "repo": {},
+                        "signals": {},
+                        "collector_errors": {},
+                    },
+                    f,
+                )
+                f.flush()
+
+                result = runner.invoke(app, ["validate", f.name, "--layers", "2"])
+                assert result.exit_code == EXIT_SUCCESS
+
+    def test_validate_layer_3_consistency(self) -> None:
+        """Test Layer 3 consistency validation through CLI."""
+        with patch("operations_center.observer.cli.SnapshotValidationEngine") as mock_engine:
+            from operations_center.observer.snapshot_validator import ValidationResult
+
+            mock_report = MagicMock(spec=SnapshotValidationReport)
+            mock_report.passed = True
+            mock_report.snapshot_id = "test-run-003"
+            mock_report.observed_at = MagicMock()
+            mock_report.overall_duration_ms = 90.0
+            mock_report.layers_checked = [3]
+
+            result3 = ValidationResult(
+                passed=True,
+                check_name="consistency_validation",
+                message="Consistency validation passed",
+                errors=[],
+                duration_ms=85.0,
+            )
+            mock_report.results = [result3]
+            mock_report.to_dict.return_value = {
+                "snapshot_id": "test-run-003",
+                "layers_checked": [3],
+                "passed": True,
+                "results": [result3.to_dict()],
+            }
+            mock_report.get_retryable_errors.return_value = []
+
+            mock_engine_instance = MagicMock()
+            mock_engine_instance.validate_with_retry.return_value = (mock_report, False)
+            mock_engine.return_value = mock_engine_instance
+
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as f:
+                json.dump(
+                    {
+                        "run_id": "test-run-003",
+                        "observed_at": "2026-06-14T00:00:00",
+                        "observer_version": 1,
+                        "source_command": "test",
+                        "repo": {},
+                        "signals": {},
+                        "collector_errors": {},
+                    },
+                    f,
+                )
+                f.flush()
+
+                result = runner.invoke(app, ["validate", f.name, "--layers", "3"])
+                assert result.exit_code == EXIT_SUCCESS
+
+    def test_validate_all_layers_passing(self) -> None:
+        """Test all 5 layers passing validation."""
+        with patch("operations_center.observer.cli.SnapshotValidationEngine") as mock_engine:
+            from operations_center.observer.snapshot_validator import ValidationResult
+
+            mock_report = MagicMock(spec=SnapshotValidationReport)
+            mock_report.passed = True
+            mock_report.snapshot_id = "test-run-all"
+            mock_report.observed_at = MagicMock()
+            mock_report.overall_duration_ms = 5000.0
+            mock_report.layers_checked = [1, 2, 3, 4, 5]
+
+            results = []
+            for layer in [1, 2, 3, 4, 5]:
+                check_names = {
+                    1: "schema_validation",
+                    2: "completeness_validation",
+                    3: "consistency_validation",
+                    4: "accuracy_validation",
+                    5: "regression_validation",
+                }
+                result = ValidationResult(
+                    passed=True,
+                    check_name=check_names[layer],
+                    message=f"Layer {layer} passed",
+                    errors=[],
+                    duration_ms=1000.0,
+                )
+                results.append(result)
+
+            mock_report.results = results
+            mock_report.to_dict.return_value = {
+                "snapshot_id": "test-run-all",
+                "layers_checked": [1, 2, 3, 4, 5],
+                "passed": True,
+                "results": [r.to_dict() for r in results],
+            }
+            mock_report.get_retryable_errors.return_value = []
+
+            mock_engine_instance = MagicMock()
+            mock_engine_instance.validate_with_retry.return_value = (mock_report, False)
+            mock_engine.return_value = mock_engine_instance
+
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as f:
+                json.dump(
+                    {
+                        "run_id": "test-run-all",
+                        "observed_at": "2026-06-14T00:00:00",
+                        "observer_version": 1,
+                        "source_command": "test",
+                        "repo": {},
+                        "signals": {},
+                        "collector_errors": {},
+                    },
+                    f,
+                )
+                f.flush()
+
+                result = runner.invoke(app, ["validate", f.name, "--layers", "1,2,3,4,5"])
+                assert result.exit_code == EXIT_SUCCESS
+
+    def test_validate_failing_validation(self) -> None:
+        """Test validation failure returns correct exit code."""
+        with patch("operations_center.observer.cli.SnapshotValidationEngine") as mock_engine:
+            from operations_center.observer.snapshot_validator import (
+                ValidationError,
+                ValidationFailureCategory,
+                ValidationResult,
+            )
+
+            mock_report = MagicMock(spec=SnapshotValidationReport)
+            mock_report.passed = False
+            mock_report.snapshot_id = "test-run-fail"
+            mock_report.observed_at = MagicMock()
+            mock_report.overall_duration_ms = 100.0
+            mock_report.layers_checked = [1, 2]
+
+            error = ValidationError(
+                layer=2,
+                category=ValidationFailureCategory.STRUCTURAL,
+                message="Missing required signal",
+                details={"signal_name": "test_signal"},
+                is_retryable=False,
+            )
+
+            result1 = ValidationResult(
+                passed=True,
+                check_name="schema_validation",
+                message="Schema validation passed",
+                errors=[],
+                duration_ms=50.0,
+            )
+            result2 = ValidationResult(
+                passed=False,
+                check_name="completeness_validation",
+                message="Completeness validation failed",
+                errors=[error],
+                duration_ms=50.0,
+            )
+            mock_report.results = [result1, result2]
+            mock_report.to_dict.return_value = {
+                "snapshot_id": "test-run-fail",
+                "layers_checked": [1, 2],
+                "passed": False,
+                "results": [result1.to_dict(), result2.to_dict()],
+            }
+            mock_report.get_retryable_errors.return_value = []
+
+            mock_engine_instance = MagicMock()
+            mock_engine_instance.validate_with_retry.return_value = (mock_report, False)
+            mock_engine.return_value = mock_engine_instance
+
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as f:
+                json.dump(
+                    {
+                        "run_id": "test-run-fail",
+                        "observed_at": "2026-06-14T00:00:00",
+                        "observer_version": 1,
+                        "source_command": "test",
+                        "repo": {},
+                        "signals": {},
+                        "collector_errors": {},
+                    },
+                    f,
+                )
+                f.flush()
+
+                from operations_center.observer.cli import EXIT_VALIDATION_FAILED
+
+                result = runner.invoke(app, ["validate", f.name, "--layers", "1,2"])
+                assert result.exit_code == EXIT_VALIDATION_FAILED
+
+    def test_validate_with_baseline_for_regression(self) -> None:
+        """Test Layer 5 regression detection with baseline."""
+        with patch("operations_center.observer.cli.SnapshotValidationEngine") as mock_engine:
+            from operations_center.observer.snapshot_validator import ValidationResult
+
+            mock_report = MagicMock(spec=SnapshotValidationReport)
+            mock_report.passed = True
+            mock_report.snapshot_id = "test-run-current"
+            mock_report.observed_at = MagicMock()
+            mock_report.overall_duration_ms = 200.0
+            mock_report.layers_checked = [5]
+
+            result5 = ValidationResult(
+                passed=True,
+                check_name="regression_validation",
+                message="No regressions detected",
+                errors=[],
+                duration_ms=190.0,
+            )
+            mock_report.results = [result5]
+            mock_report.to_dict.return_value = {
+                "snapshot_id": "test-run-current",
+                "layers_checked": [5],
+                "passed": True,
+                "results": [result5.to_dict()],
+            }
+            mock_report.get_retryable_errors.return_value = []
+
+            mock_engine_instance = MagicMock()
+            mock_engine_instance.validate_with_retry.return_value = (mock_report, False)
+            mock_engine.return_value = mock_engine_instance
+
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as f1:
+                with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as f2:
+                    json.dump(
+                        {
+                            "run_id": "test-run-current",
+                            "observed_at": "2026-06-14T00:00:00",
+                            "observer_version": 1,
+                            "source_command": "test",
+                            "repo": {},
+                            "signals": {},
+                            "collector_errors": {},
+                        },
+                        f1,
+                    )
+                    f1.flush()
+
+                    json.dump(
+                        {
+                            "run_id": "test-run-baseline",
+                            "observed_at": "2026-06-13T00:00:00",
+                            "observer_version": 1,
+                            "source_command": "test",
+                            "repo": {},
+                            "signals": {},
+                            "collector_errors": {},
+                        },
+                        f2,
+                    )
+                    f2.flush()
+
+                    result = runner.invoke(
+                        app,
+                        [
+                            "validate",
+                            f1.name,
+                            "--layers",
+                            "5",
+                            "--baseline",
+                            f2.name,
+                        ],
+                    )
+                    assert result.exit_code == EXIT_SUCCESS
+
+    def test_validate_output_formats(self) -> None:
+        """Test different output formats for validation results."""
+        formats = ["table", "json", "markdown", "text"]
+
+        for fmt in formats:
+            with patch("operations_center.observer.cli.SnapshotValidationEngine") as mock_engine:
+                from operations_center.observer.snapshot_validator import ValidationResult
+
+                mock_report = MagicMock(spec=SnapshotValidationReport)
+                mock_report.passed = True
+                mock_report.snapshot_id = f"test-run-{fmt}"
+                mock_report.observed_at = MagicMock()
+                mock_report.overall_duration_ms = 100.0
+                mock_report.layers_checked = [1]
+
+                result = ValidationResult(
+                    passed=True,
+                    check_name="schema_validation",
+                    message="Schema validation passed",
+                    errors=[],
+                    duration_ms=95.0,
+                )
+                mock_report.results = [result]
+                mock_report.to_dict.return_value = {
+                    "snapshot_id": f"test-run-{fmt}",
+                    "layers_checked": [1],
+                    "passed": True,
+                    "results": [result.to_dict()],
+                }
+                mock_report.get_retryable_errors.return_value = []
+
+                mock_engine_instance = MagicMock()
+                mock_engine_instance.validate_with_retry.return_value = (
+                    mock_report,
+                    False,
+                )
+                mock_engine.return_value = mock_engine_instance
+
+                with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as f:
+                    json.dump(
+                        {
+                            "run_id": f"test-run-{fmt}",
+                            "observed_at": "2026-06-14T00:00:00",
+                            "observer_version": 1,
+                            "source_command": "test",
+                            "repo": {},
+                            "signals": {},
+                            "collector_errors": {},
+                        },
+                        f,
+                    )
+                    f.flush()
+
+                    cmd_result = runner.invoke(
+                        app,
+                        ["validate", f.name, "--format", fmt],
+                    )
+                    assert cmd_result.exit_code == EXIT_SUCCESS
+
+    def test_validate_with_output_file(self) -> None:
+        """Test saving validation report to file."""
+        with patch("operations_center.observer.cli.SnapshotValidationEngine") as mock_engine:
+            from operations_center.observer.snapshot_validator import ValidationResult
+
+            mock_report = MagicMock(spec=SnapshotValidationReport)
+            mock_report.passed = True
+            mock_report.snapshot_id = "test-run-output"
+            mock_report.observed_at = MagicMock()
+            mock_report.overall_duration_ms = 100.0
+            mock_report.layers_checked = [1, 2, 3]
+
+            results = []
+            for layer in [1, 2, 3]:
+                check_names = {
+                    1: "schema_validation",
+                    2: "completeness_validation",
+                    3: "consistency_validation",
+                }
+                result = ValidationResult(
+                    passed=True,
+                    check_name=check_names[layer],
+                    message=f"Layer {layer} passed",
+                    errors=[],
+                    duration_ms=30.0,
+                )
+                results.append(result)
+
+            mock_report.results = results
+            mock_report.to_dict.return_value = {
+                "snapshot_id": "test-run-output",
+                "layers_checked": [1, 2, 3],
+                "passed": True,
+                "results": [r.to_dict() for r in results],
+            }
+            mock_report.get_retryable_errors.return_value = []
+
+            mock_engine_instance = MagicMock()
+            mock_engine_instance.validate_with_retry.return_value = (mock_report, False)
+            mock_engine.return_value = mock_engine_instance
+
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as f_input:
+                with tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".json", delete=False
+                ) as f_output:
+                    json.dump(
+                        {
+                            "run_id": "test-run-output",
+                            "observed_at": "2026-06-14T00:00:00",
+                            "observer_version": 1,
+                            "source_command": "test",
+                            "repo": {},
+                            "signals": {},
+                            "collector_errors": {},
+                        },
+                        f_input,
+                    )
+                    f_input.flush()
+
+                    output_path = f_output.name
+
+                try:
+                    result = runner.invoke(
+                        app,
+                        [
+                            "validate",
+                            f_input.name,
+                            "--output",
+                            output_path,
+                        ],
+                    )
+                    assert result.exit_code == EXIT_SUCCESS
+                finally:
+                    Path(output_path).unlink(missing_ok=True)
+
+    def test_validate_with_tolerance_options(self) -> None:
+        """Test validation with custom tolerance thresholds."""
+        with patch("operations_center.observer.cli.SnapshotValidationEngine") as mock_engine:
+            from operations_center.observer.snapshot_validator import ValidationResult
+
+            mock_report = MagicMock(spec=SnapshotValidationReport)
+            mock_report.passed = True
+            mock_report.snapshot_id = "test-run-tol"
+            mock_report.observed_at = MagicMock()
+            mock_report.overall_duration_ms = 100.0
+            mock_report.layers_checked = [4]
+
+            result = ValidationResult(
+                passed=True,
+                check_name="accuracy_validation",
+                message="Accuracy validation passed",
+                errors=[],
+                duration_ms=95.0,
+            )
+            mock_report.results = [result]
+            mock_report.to_dict.return_value = {
+                "snapshot_id": "test-run-tol",
+                "layers_checked": [4],
+                "passed": True,
+                "results": [result.to_dict()],
+            }
+            mock_report.get_retryable_errors.return_value = []
+
+            mock_engine_instance = MagicMock()
+            mock_engine_instance.validate_with_retry.return_value = (mock_report, False)
+            mock_engine.return_value = mock_engine_instance
+
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as f:
+                json.dump(
+                    {
+                        "run_id": "test-run-tol",
+                        "observed_at": "2026-06-14T00:00:00",
+                        "observer_version": 1,
+                        "source_command": "test",
+                        "repo": {},
+                        "signals": {},
+                        "collector_errors": {},
+                    },
+                    f,
+                )
+                f.flush()
+
+                result = runner.invoke(
+                    app,
+                    [
+                        "validate",
+                        f.name,
+                        "--tolerance",
+                        "0.02",
+                        "--coverage-tolerance",
+                        "0.03",
+                        "--test-count-tolerance",
+                        "0.01",
+                    ],
+                )
+                assert result.exit_code == EXIT_SUCCESS
+
+    def test_validate_with_verbose_output(self) -> None:
+        """Test validation with verbose output for detailed error info."""
+        with patch("operations_center.observer.cli.SnapshotValidationEngine") as mock_engine:
+            from operations_center.observer.snapshot_validator import (
+                ValidationError,
+                ValidationFailureCategory,
+                ValidationResult,
+            )
+
+            mock_report = MagicMock(spec=SnapshotValidationReport)
+            mock_report.passed = False
+            mock_report.snapshot_id = "test-run-verbose"
+            mock_report.observed_at = MagicMock()
+            mock_report.overall_duration_ms = 100.0
+            mock_report.layers_checked = [1]
+
+            error = ValidationError(
+                layer=1,
+                category=ValidationFailureCategory.STRUCTURAL,
+                message="Schema validation failed",
+                details={"error_type": "ValueError", "reason": "Invalid JSON"},
+                is_retryable=False,
+            )
+
+            result = ValidationResult(
+                passed=False,
+                check_name="schema_validation",
+                message="Schema validation failed",
+                errors=[error],
+                duration_ms=50.0,
+            )
+            mock_report.results = [result]
+            mock_report.to_dict.return_value = {
+                "snapshot_id": "test-run-verbose",
+                "layers_checked": [1],
+                "passed": False,
+                "results": [result.to_dict()],
+            }
+            mock_report.get_retryable_errors.return_value = []
+
+            mock_engine_instance = MagicMock()
+            mock_engine_instance.validate_with_retry.return_value = (mock_report, False)
+            mock_engine.return_value = mock_engine_instance
+
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as f:
+                json.dump(
+                    {
+                        "run_id": "test-run-verbose",
+                        "observed_at": "2026-06-14T00:00:00",
+                        "observer_version": 1,
+                        "source_command": "test",
+                        "repo": {},
+                        "signals": {},
+                        "collector_errors": {},
+                    },
+                    f,
+                )
+                f.flush()
+
+                from operations_center.observer.cli import EXIT_VALIDATION_FAILED
+
+                result = runner.invoke(app, ["validate", f.name, "--verbose"])
+                assert result.exit_code == EXIT_VALIDATION_FAILED
