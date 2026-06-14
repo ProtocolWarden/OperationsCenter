@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
 
 from operations_center.config import Settings, load_settings
@@ -18,6 +19,8 @@ from operations_center.observer.collectors.todo_signal import TodoSignalCollecto
 from operations_center.observer.exporters import ValidationMetricsExporter
 from operations_center.observer.service import RepoObserverService, new_observer_context
 from operations_center.observer.snapshot_builder import SnapshotBuilder
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_name(value: str) -> str:
@@ -60,6 +63,7 @@ def ensure_git_repo(repo_path: Path) -> None:
 
 
 def main() -> None:
+    logger.debug("Observer entry point invoked")
     parser = argparse.ArgumentParser(
         description="Collect a read-only repo snapshot for downstream autonomy"
     )
@@ -71,14 +75,43 @@ def main() -> None:
     parser.add_argument("--todo-limit", type=int, default=5)
     args = parser.parse_args()
 
+    logger.debug("Configuration file: %s", args.config)
     settings = load_settings(args.config)
+    logger.debug("Configuration loaded from %s", args.config)
+
+    logger.debug("Resolving repository path")
     repo_path, repo_name = resolve_repo_path(args.repo, settings)
+    logger.debug("Repository path resolved: %s", repo_path)
+
     ensure_git_repo(repo_path)
+    logger.debug("Git repository verified: %s", repo_path)
+
     configured_key, configured_base_branch = configured_repo_match(settings, repo_path)
     base_branch = args.base_branch or configured_base_branch
+    logger.debug("Base branch determined: %s", base_branch)
 
     metrics_export_dir = Path(".operations_center/metrics")
     metrics_exporter = ValidationMetricsExporter(export_dir=metrics_export_dir)
+    logger.debug("Metrics exporter initialized: %s", metrics_export_dir)
+
+    logger.debug("Initializing RepoObserverService with collectors")
+    logger.debug("  Required: repo_collector (%s)", GitContextCollector.__name__)
+    logger.debug("  Required: recent_commits_collector (%s)", RecentCommitsCollector.__name__)
+    logger.debug("  Required: file_hotspots_collector (%s)", FileHotspotsCollector.__name__)
+    logger.debug("  Required: test_signal_collector (%s)", CheckSignalCollector.__name__)
+    logger.debug("  Required: dependency_drift_collector (%s)", DependencyDriftCollector.__name__)
+    logger.debug("  Required: todo_signal_collector (%s)", TodoSignalCollector.__name__)
+    logger.debug("  Optional: execution_health_collector (%s)", ExecutionArtifactCollector.__name__)
+    logger.debug("  Optional: backlog_collector (%s)", BacklogCollector.__name__)
+    logger.debug("  Skipped: lint_signal_collector [not configured for observer CLI]")
+    logger.debug("  Skipped: type_signal_collector [not configured for observer CLI]")
+    logger.debug("  Skipped: ci_history_collector [not configured for observer CLI]")
+    logger.debug("  Skipped: validation_history_collector [not configured for observer CLI]")
+    logger.debug("  Skipped: architecture_signal_collector [not configured for observer CLI]")
+    logger.debug("  Skipped: benchmark_signal_collector [not configured for observer CLI]")
+    logger.debug("  Skipped: security_signal_collector [not configured for observer CLI]")
+    logger.debug("  Skipped: coverage_signal_collector [not configured for observer CLI]")
+    logger.debug("  Skipped: flaky_test_collector [not configured for observer CLI]")
 
     service = RepoObserverService(
         repo_collector=GitContextCollector(),
@@ -93,6 +126,9 @@ def main() -> None:
         artifact_writer=ObserverArtifactWriter(),
         metrics_exporter=metrics_exporter,
     )
+    logger.debug("RepoObserverService ready: 6 required, 2 optional collectors")
+
+    logger.debug("Creating observer context for repo: %s", repo_name)
     context = new_observer_context(
         repo_path=repo_path,
         repo_name=configured_key if configured_key else repo_name,
@@ -105,7 +141,19 @@ def main() -> None:
         logs_root=Path("logs/local"),
         metrics_exporter=metrics_exporter,
     )
+    logger.debug("Observer context created: run_id=%s", context.run_id)
+
+    logger.debug("Starting snapshot collection for run_id: %s", context.run_id)
     snapshot, artifacts = service.observe(context)
+    logger.debug(
+        "Snapshot collection complete: run_id=%s, artifacts=%d", context.run_id, len(artifacts)
+    )
+
+    if snapshot.collector_errors:
+        logger.warning("Collector errors recorded: %d", len(snapshot.collector_errors))
+        for error_name, error_msg in snapshot.collector_errors.items():
+            logger.debug("  Collector %r error: %s", error_name, error_msg)
+
     print(f"Observer snapshot written: {artifacts[0]}")
     if snapshot.collector_errors:
         print(f"Collector warnings: {len(snapshot.collector_errors)}")

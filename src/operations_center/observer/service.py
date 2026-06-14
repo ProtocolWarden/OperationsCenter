@@ -81,28 +81,159 @@ class RepoObserverService:
         artifact_writer: ObserverArtifactWriter | None = None,
         metrics_exporter: ValidationMetricsExporter | None = None,
     ) -> None:
+        logger.debug("Initializing RepoObserverService")
         self.repo_collector = repo_collector
+        logger.debug("  Required collector: repo_collector (%s)", type(repo_collector).__name__)
         self.recent_commits_collector = recent_commits_collector
+        logger.debug(
+            "  Required collector: recent_commits_collector (%s)",
+            type(recent_commits_collector).__name__,
+        )
         self.file_hotspots_collector = file_hotspots_collector
+        logger.debug(
+            "  Required collector: file_hotspots_collector (%s)",
+            type(file_hotspots_collector).__name__,
+        )
         self.test_signal_collector = test_signal_collector
+        logger.debug(
+            "  Required collector: test_signal_collector (%s)", type(test_signal_collector).__name__
+        )
         self.dependency_drift_collector = dependency_drift_collector
+        logger.debug(
+            "  Required collector: dependency_drift_collector (%s)",
+            type(dependency_drift_collector).__name__,
+        )
         self.todo_signal_collector = todo_signal_collector
+        logger.debug(
+            "  Required collector: todo_signal_collector (%s)", type(todo_signal_collector).__name__
+        )
         self.execution_health_collector = execution_health_collector
+        if execution_health_collector is not None:
+            logger.debug(
+                "  Optional collector: execution_health_collector (%s)",
+                type(execution_health_collector).__name__,
+            )
+        else:
+            logger.debug("  Optional collector: execution_health_collector [SKIPPED]")
         self.backlog_collector = backlog_collector
+        if backlog_collector is not None:
+            logger.debug(
+                "  Optional collector: backlog_collector (%s)", type(backlog_collector).__name__
+            )
+        else:
+            logger.debug("  Optional collector: backlog_collector [SKIPPED]")
         self.lint_signal_collector = lint_signal_collector
+        if lint_signal_collector is not None:
+            logger.debug(
+                "  Optional collector: lint_signal_collector (%s)",
+                type(lint_signal_collector).__name__,
+            )
+        else:
+            logger.debug("  Optional collector: lint_signal_collector [SKIPPED]")
         self.type_signal_collector = type_signal_collector
+        if type_signal_collector is not None:
+            logger.debug(
+                "  Optional collector: type_signal_collector (%s)",
+                type(type_signal_collector).__name__,
+            )
+        else:
+            logger.debug("  Optional collector: type_signal_collector [SKIPPED]")
         self.ci_history_collector = ci_history_collector
+        if ci_history_collector is not None:
+            logger.debug(
+                "  Optional collector: ci_history_collector (%s)",
+                type(ci_history_collector).__name__,
+            )
+        else:
+            logger.debug("  Optional collector: ci_history_collector [SKIPPED]")
         self.validation_history_collector = validation_history_collector
+        if validation_history_collector is not None:
+            logger.debug(
+                "  Optional collector: validation_history_collector (%s)",
+                type(validation_history_collector).__name__,
+            )
+        else:
+            logger.debug("  Optional collector: validation_history_collector [SKIPPED]")
         self.architecture_signal_collector = architecture_signal_collector
+        if architecture_signal_collector is not None:
+            logger.debug(
+                "  Optional collector: architecture_signal_collector (%s)",
+                type(architecture_signal_collector).__name__,
+            )
+        else:
+            logger.debug("  Optional collector: architecture_signal_collector [SKIPPED]")
         self.benchmark_signal_collector = benchmark_signal_collector
+        if benchmark_signal_collector is not None:
+            logger.debug(
+                "  Optional collector: benchmark_signal_collector (%s)",
+                type(benchmark_signal_collector).__name__,
+            )
+        else:
+            logger.debug("  Optional collector: benchmark_signal_collector [SKIPPED]")
         self.security_signal_collector = security_signal_collector
+        if security_signal_collector is not None:
+            logger.debug(
+                "  Optional collector: security_signal_collector (%s)",
+                type(security_signal_collector).__name__,
+            )
+        else:
+            logger.debug("  Optional collector: security_signal_collector [SKIPPED]")
         self.coverage_signal_collector = coverage_signal_collector
+        if coverage_signal_collector is not None:
+            logger.debug(
+                "  Optional collector: coverage_signal_collector (%s)",
+                type(coverage_signal_collector).__name__,
+            )
+        else:
+            logger.debug("  Optional collector: coverage_signal_collector [SKIPPED]")
         self.flaky_test_collector = flaky_test_collector
+        if flaky_test_collector is not None:
+            logger.debug(
+                "  Optional collector: flaky_test_collector (%s)",
+                type(flaky_test_collector).__name__,
+            )
+        else:
+            logger.debug("  Optional collector: flaky_test_collector [SKIPPED]")
         self.snapshot_builder = snapshot_builder or SnapshotBuilder()
+        logger.debug(
+            "  Infrastructure: snapshot_builder (%s)", type(self.snapshot_builder).__name__
+        )
         self.artifact_writer = artifact_writer or ObserverArtifactWriter()
+        logger.debug("  Infrastructure: artifact_writer (%s)", type(self.artifact_writer).__name__)
         self.metrics_exporter = metrics_exporter
+        if metrics_exporter is not None:
+            logger.debug("  Infrastructure: metrics_exporter (%s)", type(metrics_exporter).__name__)
+        required_count = 6
+        optional_count = sum(
+            1
+            for c in [
+                execution_health_collector,
+                backlog_collector,
+                lint_signal_collector,
+                type_signal_collector,
+                ci_history_collector,
+                validation_history_collector,
+                architecture_signal_collector,
+                benchmark_signal_collector,
+                security_signal_collector,
+                coverage_signal_collector,
+                flaky_test_collector,
+            ]
+            if c is not None
+        )
+        logger.info(
+            "RepoObserverService initialized: %d required, %d optional collectors",
+            required_count,
+            optional_count,
+        )
 
     def observe(self, context: ObserverContext) -> tuple[RepoStateSnapshot, list[str]]:
+        logger.debug(
+            "observe() starting for run_id=%s, repo=%s, source=%s",
+            context.run_id,
+            context.repo_name,
+            context.source_command,
+        )
         collector_errors: dict[str, str] = {}
         repo_snapshot = self._collect_required(
             self.repo_collector, context, "repo_context", collector_errors
@@ -143,7 +274,10 @@ class RepoObserverService:
                 default=ExecutionHealthSignal(),
             )
             if self.execution_health_collector is not None
-            else ExecutionHealthSignal()
+            else (
+                logger.debug("Skipping execution_health collector (not provided)"),
+                ExecutionHealthSignal(),
+            )[1]
         )
         backlog = (
             self._collect_optional(
@@ -154,7 +288,7 @@ class RepoObserverService:
                 default=BacklogSignal(),
             )
             if self.backlog_collector is not None
-            else BacklogSignal()
+            else (logger.debug("Skipping backlog collector (not provided)"), BacklogSignal())[1]
         )
         lint_signal = (
             self._collect_optional(
@@ -165,7 +299,10 @@ class RepoObserverService:
                 default=LintSignal(status="unavailable"),
             )
             if self.lint_signal_collector is not None
-            else LintSignal(status="unavailable")
+            else (
+                logger.debug("Skipping lint_signal collector (not provided)"),
+                LintSignal(status="unavailable"),
+            )[1]
         )
         type_signal = (
             self._collect_optional(
@@ -176,7 +313,10 @@ class RepoObserverService:
                 default=TypeSignal(status="unavailable"),
             )
             if self.type_signal_collector is not None
-            else TypeSignal(status="unavailable")
+            else (
+                logger.debug("Skipping type_signal collector (not provided)"),
+                TypeSignal(status="unavailable"),
+            )[1]
         )
         ci_history = (
             self._collect_optional(
@@ -187,7 +327,10 @@ class RepoObserverService:
                 default=CIHistorySignal(status="unavailable"),
             )
             if self.ci_history_collector is not None
-            else CIHistorySignal(status="unavailable")
+            else (
+                logger.debug("Skipping ci_history collector (not provided)"),
+                CIHistorySignal(status="unavailable"),
+            )[1]
         )
         validation_history = (
             self._collect_optional(
@@ -198,7 +341,10 @@ class RepoObserverService:
                 default=ValidationHistorySignal(status="unavailable"),
             )
             if self.validation_history_collector is not None
-            else ValidationHistorySignal(status="unavailable")
+            else (
+                logger.debug("Skipping validation_history collector (not provided)"),
+                ValidationHistorySignal(status="unavailable"),
+            )[1]
         )
         architecture_signal = (
             self._collect_optional(
@@ -209,7 +355,10 @@ class RepoObserverService:
                 default=ArchitectureSignal(status="unavailable"),
             )
             if self.architecture_signal_collector is not None
-            else ArchitectureSignal(status="unavailable")
+            else (
+                logger.debug("Skipping architecture_signal collector (not provided)"),
+                ArchitectureSignal(status="unavailable"),
+            )[1]
         )
         benchmark_signal = (
             self._collect_optional(
@@ -220,7 +369,10 @@ class RepoObserverService:
                 default=BenchmarkSignal(status="unavailable"),
             )
             if self.benchmark_signal_collector is not None
-            else BenchmarkSignal(status="unavailable")
+            else (
+                logger.debug("Skipping benchmark_signal collector (not provided)"),
+                BenchmarkSignal(status="unavailable"),
+            )[1]
         )
         security_signal = (
             self._collect_optional(
@@ -231,7 +383,10 @@ class RepoObserverService:
                 default=SecuritySignal(status="unavailable"),
             )
             if self.security_signal_collector is not None
-            else SecuritySignal(status="unavailable")
+            else (
+                logger.debug("Skipping security_signal collector (not provided)"),
+                SecuritySignal(status="unavailable"),
+            )[1]
         )
         coverage_signal = (
             self._collect_optional(
@@ -242,7 +397,10 @@ class RepoObserverService:
                 default=CoverageSignal(status="unavailable"),
             )
             if self.coverage_signal_collector is not None
-            else CoverageSignal(status="unavailable")
+            else (
+                logger.debug("Skipping coverage_signal collector (not provided)"),
+                CoverageSignal(status="unavailable"),
+            )[1]
         )
         flaky_test_signal = (
             self._collect_optional(
@@ -253,7 +411,10 @@ class RepoObserverService:
                 default=FlakyTestSignal(status="unavailable"),
             )
             if self.flaky_test_collector is not None
-            else FlakyTestSignal(status="unavailable")
+            else (
+                logger.debug("Skipping flaky_test_signal collector (not provided)"),
+                FlakyTestSignal(status="unavailable"),
+            )[1]
         )
 
         signals = RepoSignalsSnapshot(
@@ -282,7 +443,14 @@ class RepoObserverService:
             signals=signals,
             collector_errors=collector_errors,
         )
+        logger.debug("Aggregating %d signals into snapshot", 16)
         artifacts = self.artifact_writer.write(snapshot)
+        logger.info(
+            "Snapshot complete: run_id=%s, %d artifacts, %d collector errors",
+            context.run_id,
+            len(artifacts),
+            len(collector_errors),
+        )
         return snapshot, artifacts
 
     def query(self, root: Path | None = None) -> TestSignalQuery:
@@ -309,9 +477,12 @@ class RepoObserverService:
         name: str,
         collector_errors: dict[str, str],
     ) -> RepoContextSnapshot:
+        logger.debug("Collecting required signal: %s", name)
         try:
             result = collector.collect(context)
+            logger.debug("  ✓ Collected %s", name)
         except Exception as exc:
+            logger.warning("Required collector %r failed: %s", name, exc)
             collector_errors[name] = str(exc)
             raise
         return result
@@ -325,11 +496,15 @@ class RepoObserverService:
         *,
         default: Any,
     ) -> Any:
+        logger.debug("Collecting optional signal: %s", name)
         try:
-            return collector.collect(context)
+            result = collector.collect(context)
+            logger.debug("  ✓ Collected %s", name)
+            return result
         except Exception as exc:
-            logger.debug("Optional collector %r failed: %s", name, exc)
+            logger.warning("Optional collector %r failed: %s", name, exc)
             collector_errors[name] = str(exc)
+            logger.debug("  ? Using default for %s", name)
             return default
 
 
@@ -346,9 +521,11 @@ def new_observer_context(
     logs_root: Path,
     metrics_exporter: ValidationMetricsExporter | None = None,
 ) -> ObserverContext:
+    logger.debug("Creating observer context: repo=%s, branch=%s", repo_name, base_branch)
     observed_at = datetime.now(UTC)
     run_id = f"obs_{observed_at.strftime('%Y%m%dT%H%M%SZ')}_{observed_at.microsecond:06x}"[-31:]
-    return ObserverContext(
+    logger.debug("  Generated run_id: %s", run_id)
+    context = ObserverContext(
         repo_path=repo_path,
         repo_name=repo_name,
         base_branch=base_branch,
@@ -362,3 +539,5 @@ def new_observer_context(
         logs_root=logs_root,
         metrics_exporter=metrics_exporter,
     )
+    logger.info("Observer context created: %s, base_branch=%s", run_id, base_branch)
+    return context

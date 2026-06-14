@@ -286,3 +286,19 @@ class TestBuildObserverServiceWiring:
         assert service.architecture_signal_collector is not None
         assert service.benchmark_signal_collector is not None
         assert service.security_signal_collector is not None
+
+    def test_build_observer_service_debug_logging(self, caplog) -> None:
+        """Verify that build_observer_service logs debug messages during initialization."""
+        import logging
+        from operations_center.entrypoints.autonomy_cycle.main import build_observer_service
+
+        with caplog.at_level(logging.DEBUG):
+            service = build_observer_service()
+
+        log_text = caplog.text
+        assert "Initializing observer service for autonomy cycle" in log_text
+        assert "Instantiating required collectors" in log_text
+        assert "Instantiating optional collectors" in log_text
+        assert "Observer service initialized with 15 collectors" in log_text
+        assert service.repo_collector is not None
+        assert service.test_signal_collector is not None

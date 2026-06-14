@@ -74,13 +74,22 @@ from operations_center.observer.snapshot_builder import SnapshotBuilder
 from operations_center.proposer import CandidateProposerIntegrationService
 from operations_center.proposer.candidate_integration import new_proposer_integration_context
 
+logger = logging.getLogger(__name__)
+
 __all__ = ["run_pipeline"]
 
 
 def build_observer_service() -> RepoObserverService:
+    logger.debug("Initializing observer service for autonomy cycle")
     metrics_export_dir = Path(".operations_center/metrics")
     metrics_exporter = ValidationMetricsExporter(export_dir=metrics_export_dir)
-    return RepoObserverService(
+    logger.debug(
+        "Instantiating required collectors: repo, recent_commits, file_hotspots, test_signal, dependency_drift, todo_signal"
+    )
+    logger.debug(
+        "Instantiating optional collectors: execution_health, lint_signal, type_signal, ci_history, validation_history, architecture_signal, benchmark_signal, security_signal, coverage_signal"
+    )
+    service = RepoObserverService(
         repo_collector=GitContextCollector(),
         recent_commits_collector=RecentCommitsCollector(),
         file_hotspots_collector=FileHotspotsCollector(),
@@ -100,6 +109,8 @@ def build_observer_service() -> RepoObserverService:
         artifact_writer=ObserverArtifactWriter(),
         metrics_exporter=metrics_exporter,
     )
+    logger.debug("Observer service initialized with 15 collectors (6 required, 9 optional)")
+    return service
 
 
 def build_insight_service() -> InsightEngineService:
