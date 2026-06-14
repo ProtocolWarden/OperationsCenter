@@ -1,3 +1,9 @@
+## 2026-06-14 — fix(custodian): T8 exclusion for documentation-accuracy test + R2 task.md fix
+
+Watchdog cycle fix: CI audit on PR #287 had 3 findings — T8 (test_documentation_accuracy.py
+imports no src, by design) and R2×2 (task.md missing ## Overall Plan and ## Current Stage).
+Added T8 exclusion with explanatory comment; added required sections to task.md.
+
 ## 2026-06-14 — Stage 4: Run full test suite, linters, and finalize (✅ COMPLETE)
 
 ### Objective

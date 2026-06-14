@@ -9,6 +9,17 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 **Status**: All changes verified, documentation complete, ready for merge.
 
+## Overall Plan
+
+- Stage 1: Create documentation accuracy test file
+- Stage 2: Implement test classes covering markers, coverage, tools, CI
+- Stage 3: Validate README.md and infrastructure alignment
+- Stage 4: Run full test suite, linters, and finalize ✅ COMPLETE
+
+## Current Stage
+
+**Stage 4 complete** — all criteria met, PR #287 open for review.
+
 ## Task Definition
 
 Create and implement comprehensive tests to verify that all documentation in README.md regarding test execution expectations is accurate, complete, and matches the actual project infrastructure and configuration.
