@@ -43,11 +43,14 @@ class CheckSignalCollector:
             text = log_path.read_text(encoding="utf-8", errors="replace")
             summary = self._extract_summary_line(text)
             status = self._classify_text(text)
+            test_name, assertion_message = self._extract_failure_details(text)
             return CheckSignal(
                 status=status,
                 source=str(log_path),
                 observed_at=datetime.fromtimestamp(observed_mtime, tz=UTC),
                 summary=summary,
+                test_name=test_name,
+                assertion_message=assertion_message,
             )
         return self._fallback_discovery(context)
 
@@ -140,3 +143,50 @@ class CheckSignalCollector:
         if re.search(r"\b\d+\s+passed\b", lowered):
             return "passed"
         return "unknown"
+
+    def _extract_failure_details(self, text: str) -> tuple[str | None, str | None]:
+        """Extract test name and assertion message from test log output.
+
+        Parses pytest-style test logs to extract:
+        - test_name: The name of the first failing test
+        - assertion_message: The assertion error message from the failure
+
+        Args:
+            text: Test log content (pytest output)
+
+        Returns:
+            Tuple of (test_name, assertion_message) or (None, None) if not found
+        """
+        test_name = None
+        assertion_message = None
+
+        lines = text.splitlines()
+        for i, line in enumerate(lines):
+            # Look for FAILED marker to find test name
+            if "FAILED" in line and "::" in line:
+                # Extract test name from line like: "FAILED tests/unit/test_foo.py::TestClass::test_method"
+                parts = line.split()
+                for part in parts:
+                    if "::" in part:
+                        test_name = part.split("::")[-1]  # Get the test function name
+                        break
+
+            # Look for AssertionError or assert statement with message
+            if test_name and assertion_message is None:
+                if "AssertionError" in line or "assert " in line:
+                    # Extract assertion message
+                    if "AssertionError:" in line:
+                        msg = line.split("AssertionError:", 1)[-1].strip()
+                        if msg:
+                            assertion_message = msg[:200]  # Limit to 200 chars
+                    elif i + 1 < len(lines):
+                        # Look at next line for assertion details
+                        next_line = lines[i + 1].strip()
+                        if next_line and not next_line.startswith("_"):
+                            assertion_message = next_line[:200]
+
+            # Stop if we have both
+            if test_name and assertion_message:
+                break
+
+        return test_name, assertion_message

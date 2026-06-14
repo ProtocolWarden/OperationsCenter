@@ -288,3 +288,242 @@ def test_makereport_empty_assertion_message_on_pass(tmp_path: Path) -> None:
 
     entry = plugin.test_outcomes["tests/a.py::test_pass"]
     assert entry["assertion_message"] == ""
+
+
+class TestExtractTestNameEdgeCases:
+    """Edge case tests for test name extraction."""
+
+    def test_extract_test_name_with_special_chars_in_name(self, tmp_path: Path) -> None:
+        plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+        def test_with_underscore_and_numbers_123():
+            pass
+
+        item = SimpleNamespace(
+            nodeid="tests/a.py::test_with_underscore_and_numbers_123",
+            function=test_with_underscore_and_numbers_123,
+        )
+        name = plugin._extract_test_name(item)
+        assert name == "test_with_underscore_and_numbers_123"
+
+    def test_extract_test_name_deeply_nested_class(self, tmp_path: Path) -> None:
+        plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+        class Outer:
+            class Inner:
+                def test_nested(self):
+                    pass
+
+        item = SimpleNamespace(
+            nodeid="tests/a.py::Outer::Inner::test_nested", function=Outer.Inner.test_nested
+        )
+        name = plugin._extract_test_name(item)
+        assert name == "test_nested"
+
+    def test_extract_test_name_with_multiple_parameters(self, tmp_path: Path) -> None:
+        plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+        def test_parametrized(a, b, c):
+            pass
+
+        item = SimpleNamespace(
+            nodeid="tests/a.py::test_parametrized[1-2-3]", function=test_parametrized
+        )
+        name = plugin._extract_test_name(item)
+        assert name == "test_parametrized"
+
+    def test_extract_test_name_with_special_param_values(self, tmp_path: Path) -> None:
+        plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+        def test_special_params(param):
+            pass
+
+        item = SimpleNamespace(
+            nodeid="tests/a.py::test_special_params[param_with-dashes_and.dots]",
+            function=test_special_params,
+        )
+        name = plugin._extract_test_name(item)
+        assert name == "test_special_params"
+
+    def test_extract_test_name_empty_nodeid(self, tmp_path: Path) -> None:
+        plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+        def test_example():
+            pass
+
+        item = SimpleNamespace(nodeid="", function=test_example)
+        name = plugin._extract_test_name(item)
+        # Should still extract from function
+        assert name == "test_example"
+
+    def test_extract_test_name_missing_function_attribute(self, tmp_path: Path) -> None:
+        plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+        item = SimpleNamespace(nodeid="tests/a.py::test_no_function")
+        name = plugin._extract_test_name(item)
+        assert name == ""
+
+    def test_extract_test_name_none_function(self, tmp_path: Path) -> None:
+        plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+        item = SimpleNamespace(nodeid="tests/a.py::test_none", function=None)
+        name = plugin._extract_test_name(item)
+        assert name == ""
+
+    def test_extract_test_name_lambda_function(self, tmp_path: Path) -> None:
+        plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+        lambda_func = lambda x: x  # noqa: E731
+        item = SimpleNamespace(nodeid="tests/a.py::<lambda>", function=lambda_func)
+        name = plugin._extract_test_name(item)
+        # Lambda functions have __name__ = '<lambda>'
+        assert name == "<lambda>"
+
+    def test_extract_test_name_from_method_with_many_decorators(self, tmp_path: Path) -> None:
+        plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+        class TestClass:
+            def test_decorated(self):
+                pass
+
+        # Decorated methods still have __name__ accessible
+        item = SimpleNamespace(
+            nodeid="tests/a.py::TestClass::test_decorated", function=TestClass.test_decorated
+        )
+        name = plugin._extract_test_name(item)
+        assert name == "test_decorated"
+
+    def test_extract_test_name_unicode_in_name(self, tmp_path: Path) -> None:
+        plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+        # Note: Python allows unicode in function names
+        def test_with_émojis():
+            pass
+
+        item = SimpleNamespace(nodeid="tests/a.py::test_with_émojis", function=test_with_émojis)
+        name = plugin._extract_test_name(item)
+        assert name == "test_with_émojis"
+
+
+class TestExtractAssertionMessageEdgeCases:
+    """Edge case tests for assertion message extraction."""
+
+    def test_extract_assertion_message_with_special_chars(self, tmp_path: Path) -> None:
+        plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+        exc = SimpleNamespace(value=AssertionError("Expected $pecial §chars Ü"), traceback=None)
+        call = _call_info(excinfo=exc)
+        message = plugin._extract_assertion_message(call)
+        assert message == "Expected $pecial §chars Ü"
+
+    def test_extract_assertion_message_with_newlines(self, tmp_path: Path) -> None:
+        plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+        exc = SimpleNamespace(
+            value=AssertionError("Expected:\nline1\nline2\nbut got:\nline3"), traceback=None
+        )
+        call = _call_info(excinfo=exc)
+        message = plugin._extract_assertion_message(call)
+        # Should collapse newlines
+        assert "\n" not in message
+        assert "Expected" in message
+
+    def test_extract_assertion_message_empty_string(self, tmp_path: Path) -> None:
+        plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+        exc = SimpleNamespace(value=AssertionError(""), traceback=None)
+        call = _call_info(excinfo=exc)
+        message = plugin._extract_assertion_message(call)
+        assert message == ""
+
+    def test_extract_assertion_message_whitespace_only(self, tmp_path: Path) -> None:
+        plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+        exc = SimpleNamespace(value=AssertionError("   \n\t\n   "), traceback=None)
+        call = _call_info(excinfo=exc)
+        message = plugin._extract_assertion_message(call)
+        assert message == ""
+
+    def test_extract_assertion_message_none_excinfo(self, tmp_path: Path) -> None:
+        plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+        call = _call_info(excinfo=None)
+        message = plugin._extract_assertion_message(call)
+        assert message == ""
+
+    def test_extract_assertion_message_from_json_error(self, tmp_path: Path) -> None:
+        plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+        exc = SimpleNamespace(value=ValueError('Invalid JSON: {"key": "value"'), traceback=None)
+        call = _call_info(excinfo=exc)
+        message = plugin._extract_assertion_message(call)
+        assert "JSON" in message or "Invalid" in message
+
+    def test_extract_assertion_message_from_timeout(self, tmp_path: Path) -> None:
+        plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+        exc = SimpleNamespace(value=TimeoutError("Test exceeded 30 second timeout"), traceback=None)
+        call = _call_info(excinfo=exc)
+        message = plugin._extract_assertion_message(call)
+        assert "timeout" in message.lower() or "exceeded" in message.lower()
+
+    def test_extract_assertion_message_chained_exception(self, tmp_path: Path) -> None:
+        plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+        try:
+            try:
+                raise ValueError("inner error")
+            except ValueError as e:
+                raise RuntimeError("outer error") from e
+        except RuntimeError as exc:
+            call = _call_info(excinfo=SimpleNamespace(value=exc, tb=None))
+            message = plugin._extract_assertion_message(call)
+            # Should extract something from the chain
+            assert message
+
+
+class TestReportGenerationWithExtraction:
+    """Tests for report generation using extraction."""
+
+    def test_report_includes_test_function_names(self, tmp_path: Path) -> None:
+        storage = tmp_path / "flaky"
+        plugin = FlakyTestDetectionPlugin(str(storage))
+        plugin.pytest_sessionstart(session=SimpleNamespace(name="s"))
+
+        def test_example():
+            pass
+
+        item = SimpleNamespace(nodeid="tests/a.py::test_example", function=test_example)
+        plugin.pytest_runtest_makereport(item, _call_info())
+        plugin.pytest_sessionfinish(session=SimpleNamespace(name="sess-1"), exitstatus=0)
+
+        reports = list(storage.glob("runs/*/*-session.json"))
+        assert len(reports) == 1
+        report = json.loads(reports[0].read_text(encoding="utf-8"))
+
+        assert len(report["test_outcomes"]) == 1
+        outcome = report["test_outcomes"][0]
+        assert outcome["test_function"] == "test_example"
+
+    def test_report_includes_assertion_messages(self, tmp_path: Path) -> None:
+        storage = tmp_path / "flaky"
+        plugin = FlakyTestDetectionPlugin(str(storage))
+        plugin.pytest_sessionstart(session=SimpleNamespace(name="s"))
+
+        def test_with_assertion():
+            pass
+
+        item = SimpleNamespace(
+            nodeid="tests/a.py::test_with_assertion", function=test_with_assertion
+        )
+        exc = SimpleNamespace(value=AssertionError("Expected 42 but got 41"), traceback=None)
+        plugin.pytest_runtest_makereport(item, _call_info(excinfo=exc))
+        plugin.pytest_sessionfinish(session=SimpleNamespace(name="sess-1"), exitstatus=1)
+
+        reports = list(storage.glob("runs/*/*-session.json"))
+        assert len(reports) == 1
+        report = json.loads(reports[0].read_text(encoding="utf-8"))
+
+        assert len(report["test_outcomes"]) == 1
+        outcome = report["test_outcomes"][0]
+        assert "42" in outcome["assertion_message"] or "41" in outcome["assertion_message"]

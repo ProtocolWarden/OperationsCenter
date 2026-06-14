@@ -79,12 +79,29 @@ class FileHotspot(BaseModel):
 
 
 class TestSignal(BaseModel):
-    """Test execution results with breakdown metrics and coverage integration.
+    """Test execution results with breakdown metrics and failure details.
 
     Granular test counts, execution performance, failure categorization, and
-    code coverage. Fields are self-documenting via their annotations below;
-    `status` is one of passing/failing/flaky/partial/unavailable and
-    `failure_category` is the primary failure type (assertion, timeout, …).
+    code coverage. Includes test name and assertion message extraction for
+    detailed failure analysis.
+
+    Fields:
+        status: Overall test status (passing/failing/flaky/partial/unavailable)
+        test_count: Total number of tests executed
+        passed_count: Number of passed tests
+        failed_count: Number of failed tests
+        skip_count: Number of skipped tests
+        xfailed_count: Number of expected failures
+        error_count: Number of test errors
+        execution_time_ms: Total execution time in milliseconds
+        coverage_percent: Code coverage percentage
+        failure_category: Primary failure type (assertion, timeout, exception, etc.)
+        test_name: Name of the first/primary failing test (function name only)
+        assertion_message: Assertion message from the failing test (max 200 chars)
+        test_names: List of all failing test names (for multi-test aggregates)
+        source: Tool/source that produced these results
+        observed_at: When the test execution occurred
+        summary: Human-readable summary of results
     """
 
     status: str
@@ -97,6 +114,9 @@ class TestSignal(BaseModel):
     execution_time_ms: int | None = None
     coverage_percent: float | None = None
     failure_category: str | None = None
+    test_name: str | None = None
+    assertion_message: str | None = None
+    test_names: list[str] | None = None
     source: str | None = None
     observed_at: datetime | None = None
     summary: str | None = None
