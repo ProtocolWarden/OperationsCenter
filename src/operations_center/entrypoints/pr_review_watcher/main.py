@@ -78,6 +78,35 @@ def _state_path(oc_root: Path, repo_key: str, pr_number: int) -> Path:
     return oc_root / _STATE_SUBDIR / f"{_state_key(repo_key, pr_number)}.json"
 
 
+def _prune_orphan_state_files(oc_root: Path, repo_key: str, open_numbers: set[int]) -> None:
+    """Delete review-state files for PRs that are no longer open.
+
+    The per-merge/close unlinks in _merge_and_done / _close_and_requeue only fire
+    when THIS watcher terminates a PR. PRs merged or closed by any other means
+    (a manual ``gh pr merge``, another host, or while this watcher was down/stale)
+    leave their state/pr_reviews/<repo>-<n>.json behind, and they accumulate
+    forever. Callers MUST pass a set built from a SUCCESSFUL list_open_prs — any
+    state file for this repo whose PR is not in that set is for a terminated PR.
+    A false prune (PR open but missing from a partial fetch) is self-healing: the
+    next poll re-discovers the open PR and re-creates its state.
+    """
+    state_dir = oc_root / _STATE_SUBDIR
+    if not state_dir.is_dir():
+        return
+    prefix = f"{repo_key}-"
+    for f in state_dir.glob(f"{repo_key}-*.json"):
+        if not f.stem.startswith(prefix):
+            continue
+        num_part = f.stem[len(prefix):]
+        if not num_part.isdigit() or int(num_part) in open_numbers:
+            continue
+        try:
+            f.unlink(missing_ok=True)
+            logger.info("pr_review_watcher: pruned orphan review-state %s (PR not open)", f.name)
+        except Exception as exc:
+            logger.debug("pr_review_watcher: prune failed for %s — %s", f.name, exc)
+
+
 def _load_state(path: Path) -> dict:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -2299,6 +2328,12 @@ def _poll_once(oc_root: Path, config_path: Path, settings) -> None:
         except Exception as exc:
             logger.warning("pr_review_watcher: failed to list PRs %s/%s — %s", owner, repo, exc)
             continue
+
+        # GC leftover review-state for PRs that terminated outside this watcher's
+        # merge/close path (manual merge, another host, or while it was down).
+        _prune_orphan_state_files(
+            oc_root, repo_key, {int(p["number"]) for p in open_prs if p.get("number") is not None}
+        )
 
         # Build the worklist (discover + load state) before processing, so the
         # sweep can be ordered. A single slow PR (a multi-pass fix battle) must

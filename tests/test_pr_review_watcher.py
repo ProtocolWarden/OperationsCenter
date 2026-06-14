@@ -2190,3 +2190,37 @@ def test_phase1_untruncated_diff_skips_file_list(tmp_path: Path) -> None:
         )
 
     gh.list_pr_files.assert_not_called()
+
+
+def test_prune_orphan_state_files(tmp_path: Path) -> None:
+    """Only state files for PRs not in the open set (and matching this repo, with a
+    numeric suffix) are pruned; other repos and non-numeric files are untouched."""
+    sub = tmp_path / "state" / "pr_reviews"
+    sub.mkdir(parents=True)
+    for name in (
+        "OperationsCenter-100.json",  # open → keep
+        "OperationsCenter-101.json",  # terminal → prune
+        "OperationsCenter-102.json",  # terminal → prune
+        "OtherRepo-100.json",  # different repo → untouched
+        "OperationsCenter-readme.json",  # non-numeric → untouched
+    ):
+        (sub / name).write_text("{}", encoding="utf-8")
+
+    watcher._prune_orphan_state_files(tmp_path, "OperationsCenter", {100})
+
+    remaining = {p.name for p in sub.iterdir()}
+    assert remaining == {
+        "OperationsCenter-100.json",
+        "OtherRepo-100.json",
+        "OperationsCenter-readme.json",
+    }
+
+
+def test_prune_orphan_state_files_empty_open_set_prunes_all_for_repo(tmp_path: Path) -> None:
+    """No open PRs for the repo (all merged) → all its state files pruned."""
+    sub = tmp_path / "state" / "pr_reviews"
+    sub.mkdir(parents=True)
+    (sub / "OperationsCenter-1.json").write_text("{}", encoding="utf-8")
+    (sub / "OperationsCenter-2.json").write_text("{}", encoding="utf-8")
+    watcher._prune_orphan_state_files(tmp_path, "OperationsCenter", set())
+    assert list(sub.iterdir()) == []
