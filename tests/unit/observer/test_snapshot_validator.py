@@ -58,7 +58,6 @@ def valid_snapshot() -> RepoStateSnapshot:
             ),
             dependency_drift=DependencyDriftSignal(
                 status="healthy",
-                critical_count=0,
                 source="pip-audit",
             ),
             todo_signal=TodoSignal(
@@ -83,7 +82,7 @@ def valid_snapshot() -> RepoStateSnapshot:
             ),
             coverage_signal=CoverageSignal(
                 status="healthy",
-                coverage_percent=87.5,
+                total_coverage_pct=87.5,
                 source="pytest-cov",
             ),
         ),
@@ -113,7 +112,6 @@ def incomplete_snapshot() -> RepoStateSnapshot:
             ),
             dependency_drift=DependencyDriftSignal(
                 status="unavailable",
-                critical_count=0,
                 source="pip-audit",
             ),
             todo_signal=TodoSignal(
@@ -152,7 +150,6 @@ def inconsistent_snapshot() -> RepoStateSnapshot:
             ),
             dependency_drift=DependencyDriftSignal(
                 status="healthy",
-                critical_count=5,  # Inconsistent: healthy but has criticals
                 source="pip-audit",
             ),
             todo_signal=TodoSignal(

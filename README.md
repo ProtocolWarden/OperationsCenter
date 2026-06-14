@@ -188,6 +188,7 @@ operations-center-observer-snapshot validate snapshot.json --format text
 
 For comprehensive usage guidance, see:
 - **[User Guide](docs/user-guides/SNAPSHOT_VALIDATION_CLI_GUIDE.md)** — Complete reference for all commands, options, workflows, and troubleshooting
+- **[Quick Reference](docs/user-guides/CLI_QUICK_REFERENCE.md)** — Command cheat sheet for common workflows
 - **[CLI Specification](docs/design/STAGE0_CLI_SPECIFICATION.md)** — Technical design and architecture
 - **[Integration Guide](docs/user-guides/SNAPSHOT_VALIDATION_CLI_GUIDE.md#cicd-integration)** — GitHub Actions, GitLab CI, Jenkins examples
 

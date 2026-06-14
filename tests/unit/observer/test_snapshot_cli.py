@@ -484,9 +484,9 @@ class TestVersionOption:
 
     def test_version_in_help(self) -> None:
         """Test version is documented in help."""
-        result = runner.invoke(app, ["--help"])
+        # Use NO_COLOR to avoid ANSI escape codes that split '--version' on Python 3.11
+        result = CliRunner(env={"NO_COLOR": "1"}).invoke(app, ["--help"])
         assert result.exit_code == EXIT_SUCCESS
-        # Check that the --version option is documented
         assert "--version" in result.stdout
 
 

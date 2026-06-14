@@ -1,3 +1,7 @@
+---
+status: complete
+---
+
 # Stage 0: Observer Snapshot Validation CLI Specification
 
 **Document Status**: Complete specification for manual CI run snapshot validation  
