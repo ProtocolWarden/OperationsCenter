@@ -170,6 +170,8 @@ def config_callback(
         False,
         "--version",
         help="Show version and exit",
+        is_eager=True,
+        callback=_version_callback,
     ),
     log_level: str = typer.Option(
         None,
@@ -183,9 +185,6 @@ def config_callback(
     ),
 ) -> None:
     """Configure CLI globally."""
-    if version:
-        console.print(f"[cyan]operations-center-observer-snapshot[/cyan] {__version__}")
-        raise typer.Exit(0)
 
     final_log_level = log_level or _get_env_or_default("LOG_LEVEL", "info") or "info"
     _setup_logging(final_log_level, debug)

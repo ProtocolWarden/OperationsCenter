@@ -1,3 +1,7 @@
+## 2026-06-14 — fix(observer/cli): add is_eager=True to --version option for Python 3.11 compat
+
+`--version` in `@app.callback()` without `is_eager=True` is not rendered in `--help` on Python 3.11 (Typer + Click rendering diverges from Python 3.14). Added `is_eager=True` and wired the pre-existing `_version_callback` — test `test_version_in_help` now passes in CI.
+
 ## 2026-06-14 — Stage 5: Run full test suite, linters, and fix any issues (✅ COMPLETE)
 
 **Objective**: Execute the full repository test suite, run linters/formatters, fix any issues, and verify all code quality standards are met.
