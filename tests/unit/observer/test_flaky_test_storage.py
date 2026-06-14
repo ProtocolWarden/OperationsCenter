@@ -220,7 +220,7 @@ class TestFlakyTestStorageManager:
         storage = FlakyTestStorageManager(tmp_path)
 
         # Create a corrupted JSON file
-        date_dir = storage.session_dir / "2026-06-07"
+        date_dir = storage.session_dir / datetime.now(UTC).strftime("%Y-%m-%d")
         date_dir.mkdir(parents=True, exist_ok=True)
         corrupted_file = date_dir / "10-00-00-session.json"
         corrupted_file.write_text("{invalid json")

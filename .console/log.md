@@ -1,3 +1,13 @@
+## 2026-06-13 — fix(tests): date-bomb snapshot/session retention tests (main was red)
+
+3 observer tests hardcoded observed_at/session dates as 2026-06-07 and asserted retention/recency
+counts that only hold within a fixed window. As wall-clock passed 2026-06-14 those dates aged past
+the cutoffs (load_recent_sessions(days=7), retention_days), so cleanup deleted more / loaded fewer
+than the hardcoded expectations — turning main's full pytest RED (and blocking every PR from merging
+green). Fixed: anchor the dates to now (now-1day+i*hours, preserving relative order so sort tests
+still pass; today's date dir for the session test). Full unit suite green (7007). These are time-bomb
+tests; using relative dates is the durable fix.
+
 ## 2026-06-13 — fix(spec-hygiene): active.json projects only active campaigns (campaign GC)
 
 _rebuild_active_projection wrote every campaign — incl. complete/cancelled — to state/campaigns/
