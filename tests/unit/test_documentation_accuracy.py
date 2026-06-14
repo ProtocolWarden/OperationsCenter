@@ -360,9 +360,9 @@ class TestDocumentationCompleteness:
         commands = [
             'pytest tests/unit -v -m "not slow"',
             'pytest tests/ -v -m "smoke"',
-            "pytest tests/ -v",
-            "--cov=src",
-            "--cov-fail-under=85",
+            'pytest tests/ -v',
+            '--cov=src',
+            '--cov-fail-under=85',
         ]
 
         for cmd in commands:
