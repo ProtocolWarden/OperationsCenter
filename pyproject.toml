@@ -72,6 +72,8 @@ operations-center-propagation-links = "operations_center.entrypoints.propagation
 # Use the `platform-manifest` CLI directly (provided by that package).
 # ER-002 — Run Memory primitive.
 operations-center-run-memory        = "operations_center.run_memory.cli:app"
+# Snapshot validation CLI — validate observer snapshots for manual CI testing.
+operations-center-observer-snapshot = "operations_center.observer.cli:app"
 # Single-command provenance reader — prints OC↔RxP↔SwitchBoard chain
 # from execution_trace.json alone. Hardening arc item 3.
 operations-center-run-show          = "operations_center.entrypoints.run_show.main:main"
