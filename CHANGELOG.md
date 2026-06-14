@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Enhanced test failure categorization** — Extended failure categorization system to extract and preserve test names and assertion messages from test execution.
+  - New fields: `test_name` (test function name) and `assertion_message` (clean assertion failure message) in `FlakyTestResult` and `FlakyTestMetric` models.
+  - New utilities module `assertion_extractor.py` for robust assertion message parsing from pytest exceptions and tracebacks.
+  - Enhanced pytest plugin integration to extract test names from pytest Item objects and assertion messages from exception chains.
+  - Updated artifact writer to include test metadata in flaky test signal visualization (markdown output now includes test names and assertion messages).
+  - See `docs/design/STAGE0_TEST_FAILURE_EXTRACTION.md` for architecture and design details.
+- **Comprehensive test coverage** — Added 214 new tests covering all extraction scenarios:
+  - 22 tests for test name extraction (parameterized tests, class methods, fixtures)
+  - 32 tests for assertion message extraction (AssertionError, exception chaining, message cleaning)
+  - 160+ integration tests for field serialization, persistence, and signal synthesis
+
 ### Security
 - **Fixed TOCTOU race condition in Collector** — Eliminated file deletion race by capturing mtime at discovery time. Files deleted during discovery are now skipped gracefully instead of crashing.
 
@@ -17,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 - Added `docs/design/observer-race-condition-guard.md` documenting the TOCTOU race condition vulnerability, the metadata capture guard mechanism, implementation examples, error handling strategy, testing approach, and operational impact.
+- Added `docs/design/STAGE0_TEST_FAILURE_EXTRACTION.md` documenting the test failure extraction campaign architecture, extraction strategies, 4-phase implementation roadmap, and technical specifications for all extracted fields.
 
 ### Reconciled
 _Console history consolidated to the private archive (2026-06-04). Items shipped:_

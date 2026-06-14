@@ -399,7 +399,9 @@ def test_get_completed_checks_empty_when_no_runs(client):
 
 
 def test_get_completed_checks_honors_ignored(client):
-    runs = [{"id": 1, "name": "Snapshot validation", "status": "completed", "conclusion": "success"}]
+    runs = [
+        {"id": 1, "name": "Snapshot validation", "status": "completed", "conclusion": "success"}
+    ]
     with mock.patch.object(client, "get_check_runs", return_value=runs):
         out = client.get_completed_checks(
             "o", "r", 1, pr_data={"head": {"sha": "x"}}, ignored_checks=["snapshot"]

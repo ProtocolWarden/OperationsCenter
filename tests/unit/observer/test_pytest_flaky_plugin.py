@@ -152,3 +152,139 @@ def test_configure_skips_when_disabled(tmp_path: Path) -> None:
     )
     pytest_configure(config)
     assert registered == {}
+
+
+def test_extract_test_name_from_function_attribute(tmp_path: Path) -> None:
+    plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+    def test_example():
+        pass
+
+    item = SimpleNamespace(nodeid="tests/a.py::test_example", function=test_example)
+
+    name = plugin._extract_test_name(item)
+    assert name == "test_example"
+
+
+def test_extract_test_name_from_parameterized_test(tmp_path: Path) -> None:
+    plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+    def test_parametrized(param):
+        pass
+
+    item = SimpleNamespace(
+        nodeid="tests/a.py::test_parametrized[param1]", function=test_parametrized
+    )
+
+    name = plugin._extract_test_name(item)
+    assert name == "test_parametrized"
+
+
+def test_extract_test_name_from_class_method(tmp_path: Path) -> None:
+    plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+    class TestClass:
+        def test_method(self):
+            pass
+
+    item = SimpleNamespace(
+        nodeid="tests/a.py::TestClass::test_method", function=TestClass.test_method
+    )
+
+    name = plugin._extract_test_name(item)
+    assert name == "test_method"
+
+
+def test_extract_test_name_returns_empty_for_fixture(tmp_path: Path) -> None:
+    plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+    item = SimpleNamespace(nodeid="tests/a.py::fixture_name", function=None)
+
+    name = plugin._extract_test_name(item)
+    assert name == ""
+
+
+def test_extract_assertion_message_from_assertion_error(tmp_path: Path) -> None:
+    plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+    exc = SimpleNamespace(value=AssertionError("Expected 5 but got 3"), traceback=None)
+    call = _call_info(excinfo=exc)
+
+    message = plugin._extract_assertion_message(call)
+    assert message == "Expected 5 but got 3"
+
+
+def test_extract_assertion_message_truncates_long_messages(tmp_path: Path) -> None:
+    plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+    long_msg = "x" * 300
+    exc = SimpleNamespace(value=AssertionError(long_msg), traceback=None)
+    call = _call_info(excinfo=exc)
+
+    message = plugin._extract_assertion_message(call)
+    assert len(message) <= 200
+    assert message.endswith("...")
+    # First 197 chars should be 'x', then "..."
+    assert message == "x" * 197 + "..."
+
+
+def test_extract_assertion_message_from_other_exception(tmp_path: Path) -> None:
+    plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+    exc = SimpleNamespace(value=TimeoutError("Test took too long"), traceback=None)
+    call = _call_info(excinfo=exc)
+
+    message = plugin._extract_assertion_message(call)
+    assert message == "Test took too long"
+
+
+def test_extract_assertion_message_returns_empty_for_passed_test(tmp_path: Path) -> None:
+    plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+    call = _call_info(excinfo=None)
+
+    message = plugin._extract_assertion_message(call)
+    assert message == ""
+
+
+def test_makereport_populates_test_function_field(tmp_path: Path) -> None:
+    plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+    def test_example():
+        pass
+
+    item = SimpleNamespace(nodeid="tests/a.py::test_example", function=test_example)
+
+    plugin.pytest_runtest_makereport(item, _call_info())
+
+    entry = plugin.test_outcomes["tests/a.py::test_example"]
+    assert entry["test_function"] == "test_example"
+
+
+def test_makereport_populates_assertion_message_on_failure(tmp_path: Path) -> None:
+    plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+    def test_fail():
+        pass
+
+    item = SimpleNamespace(nodeid="tests/a.py::test_fail", function=test_fail)
+    exc = SimpleNamespace(value=AssertionError("Expected True"), traceback=None)
+
+    plugin.pytest_runtest_makereport(item, _call_info(excinfo=exc))
+
+    entry = plugin.test_outcomes["tests/a.py::test_fail"]
+    assert entry["assertion_message"] == "Expected True"
+
+
+def test_makereport_empty_assertion_message_on_pass(tmp_path: Path) -> None:
+    plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
+
+    def test_pass():
+        pass
+
+    item = SimpleNamespace(nodeid="tests/a.py::test_pass", function=test_pass)
+
+    plugin.pytest_runtest_makereport(item, _call_info())
+
+    entry = plugin.test_outcomes["tests/a.py::test_pass"]
+    assert entry["assertion_message"] == ""

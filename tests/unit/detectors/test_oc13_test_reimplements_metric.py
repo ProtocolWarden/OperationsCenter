@@ -33,7 +33,9 @@ def ctx(tmp_path: Path) -> AuditContext:
         "import math\n\ndef failure_entropy(p, q):\n    return -(p*math.log2(p) + q*math.log2(q))\n",
         encoding="utf-8",
     )
-    return AuditContext(repo_root=tmp_path, src_root=src, tests_root=tests, config={}, plugin_modules=[])
+    return AuditContext(
+        repo_root=tmp_path, src_root=src, tests_root=tests, config={}, plugin_modules=[]
+    )
 
 
 def _t(ctx: AuditContext, name: str, body: str) -> None:

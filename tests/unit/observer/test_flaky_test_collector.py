@@ -594,3 +594,157 @@ class TestFlakyTestCollectorEdgeCases:
 
         summary = collector._generate_summary(3, 1, 2, 50)
         assert "module" in summary
+
+
+class TestStage4SignalSerialization:
+    """Stage 4: Tests for new fields in FlakyTestSignal most_problematic_tests.
+
+    Validates that test_name and assertion_message fields are included in
+    the FlakyTestSignal.most_problematic_tests list.
+    """
+
+    def test_most_problematic_tests_includes_test_name_field(self, tmp_path: Path) -> None:
+        """Verify most_problematic_tests includes test_name from metrics."""
+        metrics_dir = tmp_path / "metrics"
+        metrics_dir.mkdir()
+
+        metrics_file = metrics_dir / "metrics.jsonl"
+        with metrics_file.open("w") as f:
+            metric = FlakyTestMetric(
+                nodeid="tests/unit/test_foo.py::TestClass::test_method",
+                failure_rate=0.15,
+                run_count=10,
+                test_name="test_method",
+                flakiness_score=0.8,
+            )
+            f.write(json.dumps(metric.to_dict()) + "\n")
+
+        config = FlakyTestConfig(storage_root=tmp_path)
+        collector = FlakyTestCollector(config)
+        signal = collector.collect(_make_observer_context())
+
+        assert len(signal.most_problematic_tests) > 0
+        test_dict = signal.most_problematic_tests[0]
+        assert "test_name" in test_dict
+        assert test_dict["test_name"] == "test_method"
+
+    def test_most_problematic_tests_includes_assertion_message_field(self, tmp_path: Path) -> None:
+        """Verify most_problematic_tests includes assertion_message from metrics."""
+        metrics_dir = tmp_path / "metrics"
+        metrics_dir.mkdir()
+
+        metrics_file = metrics_dir / "metrics.jsonl"
+        with metrics_file.open("w") as f:
+            metric = FlakyTestMetric(
+                nodeid="tests/unit/test_foo.py::test_method",
+                failure_rate=0.25,
+                run_count=10,
+                test_name="test_method",
+                assertion_message="Expected 42 but got 0",
+                flakiness_score=0.9,
+            )
+            f.write(json.dumps(metric.to_dict()) + "\n")
+
+        config = FlakyTestConfig(storage_root=tmp_path)
+        collector = FlakyTestCollector(config)
+        signal = collector.collect(_make_observer_context())
+
+        assert len(signal.most_problematic_tests) > 0
+        test_dict = signal.most_problematic_tests[0]
+        assert "assertion_message" in test_dict
+        assert test_dict["assertion_message"] == "Expected 42 but got 0"
+
+    def test_most_problematic_tests_all_fields_preserved(self, tmp_path: Path) -> None:
+        """Verify all fields including new ones are preserved in most_problematic_tests."""
+        metrics_dir = tmp_path / "metrics"
+        metrics_dir.mkdir()
+
+        metrics_file = metrics_dir / "metrics.jsonl"
+        with metrics_file.open("w") as f:
+            metric = FlakyTestMetric(
+                nodeid="tests/unit/test_foo.py::TestClass::test_flaky",
+                failure_rate=0.50,
+                run_count=10,
+                test_name="test_flaky",
+                assertion_message="Expected status == OK but got FAILED",
+                flakiness_score=0.95,
+                confidence=0.8,
+                retry_success_count=3,
+            )
+            f.write(json.dumps(metric.to_dict()) + "\n")
+
+        config = FlakyTestConfig(storage_root=tmp_path)
+        collector = FlakyTestCollector(config)
+        signal = collector.collect(_make_observer_context())
+
+        assert len(signal.most_problematic_tests) > 0
+        test_dict = signal.most_problematic_tests[0]
+
+        # Verify new fields
+        assert test_dict["test_name"] == "test_flaky"
+        assert test_dict["assertion_message"] == "Expected status == OK but got FAILED"
+
+        # Verify existing fields still present
+        assert test_dict["nodeid"] == "tests/unit/test_foo.py::TestClass::test_flaky"
+        assert test_dict["failure_rate"] == 0.50
+        assert test_dict["run_count"] == 10
+        assert test_dict["flakiness_score"] == 0.95
+        assert test_dict["retry_success_count"] == 3
+
+    def test_most_problematic_tests_backward_compatibility_missing_fields(
+        self, tmp_path: Path
+    ) -> None:
+        """Verify signal still works if metrics have empty new fields."""
+        metrics_dir = tmp_path / "metrics"
+        metrics_dir.mkdir()
+
+        metrics_file = metrics_dir / "metrics.jsonl"
+        with metrics_file.open("w") as f:
+            metric = FlakyTestMetric(
+                nodeid="tests/unit/test_foo.py::test_method",
+                failure_rate=0.15,
+                run_count=10,
+                test_name="",
+                assertion_message="",
+                flakiness_score=0.7,
+            )
+            f.write(json.dumps(metric.to_dict()) + "\n")
+
+        config = FlakyTestConfig(storage_root=tmp_path)
+        collector = FlakyTestCollector(config)
+        signal = collector.collect(_make_observer_context())
+
+        assert len(signal.most_problematic_tests) > 0
+        test_dict = signal.most_problematic_tests[0]
+        assert test_dict["test_name"] == ""
+        assert test_dict["assertion_message"] == ""
+
+    def test_signal_json_serialization_includes_all_fields(self, tmp_path: Path) -> None:
+        """Verify FlakyTestSignal JSON serialization includes new fields."""
+        metrics_dir = tmp_path / "metrics"
+        metrics_dir.mkdir()
+
+        metrics_file = metrics_dir / "metrics.jsonl"
+        with metrics_file.open("w") as f:
+            metric = FlakyTestMetric(
+                nodeid="tests/unit/test_foo.py::test_method",
+                failure_rate=0.20,
+                run_count=10,
+                test_name="test_method",
+                assertion_message="Expected success but got timeout",
+                flakiness_score=0.8,
+            )
+            f.write(json.dumps(metric.to_dict()) + "\n")
+
+        config = FlakyTestConfig(storage_root=tmp_path)
+        collector = FlakyTestCollector(config)
+        signal = collector.collect(_make_observer_context())
+
+        # Convert to dict for JSON serialization
+        signal_dict = signal.model_dump()
+        assert "most_problematic_tests" in signal_dict
+        assert len(signal_dict["most_problematic_tests"]) > 0
+
+        test_dict = signal_dict["most_problematic_tests"][0]
+        assert test_dict["test_name"] == "test_method"
+        assert test_dict["assertion_message"] == "Expected success but got timeout"

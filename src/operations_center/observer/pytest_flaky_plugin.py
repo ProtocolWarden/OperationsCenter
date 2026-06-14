@@ -25,6 +25,8 @@ from typing import Any
 
 import pytest
 
+from .assertion_extractor import extract_assertion_from_excinfo
+
 
 class FlakyTestDetectionPlugin:
     """Pytest plugin for flaky test detection and metrics collection."""
@@ -59,23 +61,30 @@ class FlakyTestDetectionPlugin:
             call: Call info (setup/call/teardown)
         """
         if call.when == "call":  # Only capture main test execution, not setup/teardown
-            test_name = item.nodeid
+            nodeid = item.nodeid
             outcome = "passed" if call.excinfo is None else "failed"
 
-            if test_name not in self.test_outcomes:
-                self.test_outcomes[test_name] = {
-                    "test_name": test_name,
+            test_name = self._extract_test_name(item)
+            assertion_message = self._extract_assertion_message(call) if call.excinfo else ""
+
+            if nodeid not in self.test_outcomes:
+                self.test_outcomes[nodeid] = {
+                    "test_name": nodeid,
                     "outcome": outcome,
                     "duration": call.duration or 0,
                     "exception": str(call.excinfo.value) if call.excinfo else None,
+                    "test_function": test_name,
+                    "assertion_message": assertion_message,
                 }
             else:
                 # Update with actual result
-                self.test_outcomes[test_name].update(
+                self.test_outcomes[nodeid].update(
                     {
                         "outcome": outcome,
                         "duration": call.duration or 0,
                         "exception": str(call.excinfo.value) if call.excinfo else None,
+                        "test_function": test_name,
+                        "assertion_message": assertion_message,
                     }
                 )
 
@@ -133,6 +142,45 @@ class FlakyTestDetectionPlugin:
 
         # Save to storage
         self._save_session_report(session_report)
+
+    def _extract_test_name(self, item: pytest.Item) -> str:
+        """Extract test function name from pytest Item.
+
+        Handles edge cases:
+        - Parameterized tests: extracts base function name without parameters
+        - Class methods: extracts just the method name
+        - Module-level tests: extracts function name
+        - Fixtures: returns empty string (fixtures don't have function attribute)
+
+        Args:
+            item: Pytest Item object
+
+        Returns:
+            Test function name (e.g., "test_method") or empty string if not extractable
+        """
+        try:
+            func = getattr(item, "function", None)
+            if func is not None:
+                return func.__name__
+        except (AttributeError, TypeError):
+            pass
+
+        return ""
+
+    def _extract_assertion_message(self, call: pytest.CallInfo) -> str:
+        """Extract assertion message from failed test.
+
+        Uses assertion_extractor utilities to parse exception info and extract
+        clean, human-readable assertion messages from both AssertionError and
+        other exception types.
+
+        Args:
+            call: Call info with exception details
+
+        Returns:
+            Clean assertion message or empty string if not found
+        """
+        return extract_assertion_from_excinfo(call.excinfo)
 
     def _save_session_report(self, report: dict) -> None:
         """Save session report to storage.

@@ -46,6 +46,10 @@ class ObserverArtifactWriter:
         )
         test_signal = snapshot.signals.test_signal
         test_observed = test_signal.observed_at.isoformat() if test_signal.observed_at else "none"
+        flaky_signal = snapshot.signals.flaky_test_signal
+        flaky_observed = (
+            flaky_signal.observed_at.isoformat() if flaky_signal.observed_at else "none"
+        )
         dependency_drift = snapshot.signals.dependency_drift
         drift_observed = (
             dependency_drift.observed_at.isoformat() if dependency_drift.observed_at else "none"
@@ -58,6 +62,31 @@ class ObserverArtifactWriter:
                 f"- source: {test_signal.source or 'none'}",
                 f"- observed_at: {test_observed}",
                 f"- summary: {test_signal.summary or 'none'}",
+                "",
+                "## Flaky Test Signal",
+                f"- status: {flaky_signal.status}",
+                f"- flaky_test_count: {flaky_signal.flaky_test_count}",
+                f"- unstable_test_count: {flaky_signal.unstable_test_count}",
+                f"- affected_modules: {', '.join(flaky_signal.affected_modules) or 'none'}",
+                f"- recovery_rate: {flaky_signal.recovery_rate}%",
+                f"- failure_rate_trend: {flaky_signal.failure_rate_trend}%",
+                f"- observed_at: {flaky_observed}",
+                f"- summary: {flaky_signal.summary or 'none'}",
+            ]
+        )
+        if flaky_signal.most_problematic_tests:
+            md_lines.extend(["", "### Most Problematic Tests"])
+            for i, test in enumerate(flaky_signal.most_problematic_tests, 1):
+                md_lines.append(f"{i}. **{test.get('test_name', test.get('nodeid', 'Unknown'))}**")
+                md_lines.append(f"   - nodeid: {test.get('nodeid', 'unknown')}")
+                md_lines.append(f"   - failure_rate: {test.get('failure_rate', 0):.1%}")
+                md_lines.append(f"   - run_count: {test.get('run_count', 0)}")
+                if test.get("assertion_message"):
+                    md_lines.append(f"   - assertion: {test.get('assertion_message')}")
+                md_lines.append(f"   - category: {test.get('suspected_category', 'unknown')}")
+                md_lines.append(f"   - flakiness_score: {test.get('flakiness_score', 0):.2f}")
+        md_lines.extend(
+            [
                 "",
                 "## Dependency Drift",
                 f"- status: {dependency_drift.status}",

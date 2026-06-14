@@ -14,6 +14,7 @@ from operations_center.observer.models import (
     CommitMetadata,
     DependencyDriftSignal,
     FileHotspot,
+    FlakyTestSignal,
     RepoContextSnapshot,
     RepoSignalsSnapshot,
     RepoStateSnapshot,
@@ -33,6 +34,7 @@ def _make_snapshot(
     todo_signal: TodoSignal | None = None,
     test_signal: CheckSignal | None = None,
     dependency_drift: DependencyDriftSignal | None = None,
+    flaky_test_signal: FlakyTestSignal | None = None,
     collector_errors: dict[str, str] | None = None,
 ) -> RepoStateSnapshot:
     repo = RepoContextSnapshot(
@@ -48,6 +50,7 @@ def _make_snapshot(
         test_signal=test_signal or CheckSignal(status="unavailable"),
         dependency_drift=dependency_drift or DependencyDriftSignal(status="unavailable"),
         todo_signal=todo_signal or TodoSignal(),
+        flaky_test_signal=flaky_test_signal or FlakyTestSignal(status="unavailable"),
     )
     return RepoStateSnapshot(
         run_id=run_id,
@@ -252,3 +255,123 @@ def test_default_root_does_not_create_files(monkeypatch: pytest.MonkeyPatch) -> 
     # Constructing with default root must not touch the filesystem.
     writer = ObserverArtifactWriter()
     assert not writer.root.exists() or writer.root.is_dir()
+
+
+def test_md_flaky_test_signal_unavailable(tmp_path: Path) -> None:
+    """Verify artifact writer handles unavailable flaky test signal."""
+    writer = ObserverArtifactWriter(root=tmp_path)
+    snapshot = _make_snapshot(
+        flaky_test_signal=FlakyTestSignal(status="unavailable"),
+    )
+    result = writer.write(snapshot)
+    md = _read_md(result)
+    assert "## Flaky Test Signal" in md
+    assert "status: unavailable" in md
+
+
+def test_md_flaky_test_signal_with_metrics(tmp_path: Path) -> None:
+    """Verify artifact writer includes flaky test metrics in markdown."""
+    writer = ObserverArtifactWriter(root=tmp_path)
+    flaky_signal = FlakyTestSignal(
+        status="measured",
+        flaky_test_count=3,
+        unstable_test_count=2,
+        affected_modules=["tests/unit", "tests/integration"],
+        failure_rate_trend=5.0,
+        recovery_rate=75.0,
+        most_problematic_tests=[
+            {
+                "nodeid": "tests/unit/test_foo.py::test_method",
+                "test_name": "test_method",
+                "assertion_message": "Expected 42 but got 0",
+                "failure_rate": 0.50,
+                "run_count": 10,
+                "suspected_category": "intermittent",
+                "flakiness_score": 0.85,
+            },
+            {
+                "nodeid": "tests/unit/test_bar.py::TestClass::test_other",
+                "test_name": "test_other",
+                "assertion_message": "Expected status == OK but got ERROR",
+                "failure_rate": 0.40,
+                "run_count": 10,
+                "suspected_category": "infrastructure",
+                "flakiness_score": 0.75,
+            },
+        ],
+        observed_at=_TS,
+        summary="3 flaky tests detected across 2 modules",
+    )
+    snapshot = _make_snapshot(flaky_test_signal=flaky_signal)
+    result = writer.write(snapshot)
+    md = _read_md(result)
+
+    # Verify flaky signal header and counts
+    assert "## Flaky Test Signal" in md
+    assert "flaky_test_count: 3" in md
+    assert "unstable_test_count: 2" in md
+    assert "affected_modules: tests/unit, tests/integration" in md
+    assert "recovery_rate: 75.0%" in md
+    assert "failure_rate_trend: 5.0%" in md
+
+    # Verify most problematic tests section
+    assert "### Most Problematic Tests" in md
+    assert "test_method" in md
+    assert "test_other" in md
+    assert "Expected 42 but got 0" in md
+    assert "Expected status == OK but got ERROR" in md
+    assert "failure_rate: 50.0%" in md
+    assert "failure_rate: 40.0%" in md
+    assert "intermittent" in md
+    assert "infrastructure" in md
+
+
+def test_md_flaky_test_signal_empty_most_problematic(tmp_path: Path) -> None:
+    """Verify artifact writer handles flaky signal with no problematic tests."""
+    writer = ObserverArtifactWriter(root=tmp_path)
+    flaky_signal = FlakyTestSignal(
+        status="measured",
+        flaky_test_count=0,
+        unstable_test_count=0,
+        affected_modules=[],
+        most_problematic_tests=[],
+        observed_at=_TS,
+        summary="No flaky tests detected",
+    )
+    snapshot = _make_snapshot(flaky_test_signal=flaky_signal)
+    result = writer.write(snapshot)
+    md = _read_md(result)
+
+    assert "## Flaky Test Signal" in md
+    assert "flaky_test_count: 0" in md
+    assert "### Most Problematic Tests" not in md
+
+
+def test_md_flaky_test_signal_with_special_characters(tmp_path: Path) -> None:
+    """Verify artifact writer handles special characters in assertion messages."""
+    writer = ObserverArtifactWriter(root=tmp_path)
+    flaky_signal = FlakyTestSignal(
+        status="measured",
+        flaky_test_count=1,
+        unstable_test_count=0,
+        affected_modules=["tests"],
+        most_problematic_tests=[
+            {
+                "nodeid": "tests/unit/test_foo.py::test_method",
+                "test_name": "test_method",
+                "assertion_message": 'Expected dict == {"key": "value"} but got {"key": "other"}',
+                "failure_rate": 0.25,
+                "run_count": 8,
+                "suspected_category": "intermittent",
+                "flakiness_score": 0.65,
+            }
+        ],
+        observed_at=_TS,
+        summary="Flaky test with special characters",
+    )
+    snapshot = _make_snapshot(flaky_test_signal=flaky_signal)
+    result = writer.write(snapshot)
+    md = _read_md(result)
+
+    assert '{"key": "value"}' in md
+    assert "test_method" in md
