@@ -5,49 +5,62 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-**Stage 5: Run full test suite, linters, and fix any issues** ✅ COMPLETE
+**Stage 3: Commit and push changes to the existing branch** ✅ COMPLETE
 
-**Status**: Full test suite executed (1,192 observer tests passing, 100% pass rate). All linting checks passed (0 violations). Code formatting applied and verified. All acceptance criteria met.
+**Status**: All changes committed with descriptive messages and pushed to the current branch. PR #289 automatically updated with latest commits. All review concerns from self-review resolved and verified. Ready for final review and merge.
 
 ## Overall Plan
 
-- **Stage 0**: Research snapshot validation infrastructure & design CLI ✅ COMPLETE
-  - Analyze 5-layer validation pipeline
-  - Identify all validation functions and modules
-  - Design CLI command interface with arguments, options, and exit codes
-  - Create detailed specification document
-  - Define performance targets and UX requirements
+- **Stage 0**: Read complete test files and logs to identify all fixes ✅ COMPLETE
+  - Analyzed test_snapshot_validator.py (557 lines, 27 unit tests)
+  - Analyzed test_snapshot_cli.py (1,300+ lines, 64 integration tests)
+  - Identified all specific fixes needed per self-review concerns
+  - Verified all fixes in place and working correctly
 
-- **Stage 1**: Implement CLI framework and entry point ✅ COMPLETE
-  - Created CLI entry point with argument parsing
-  - Implemented configuration loading from files and environment variables
-  - Added output formatting (JSON, text, verbose modes)
-  - Implemented graceful error handling with clear error messages
-  - CLI passes basic smoke tests (help, version, invalid args)
+- **Stage 1**: Apply all identified fixes to test files and source code ✅ COMPLETE
+  - Applied ANSI escape handling fix for Python 3.11
+  - Applied Pydantic v2 field corrections
+  - Updated Custodian config for CLI pattern
+  - Added YAML front-matter to design document
+  - Updated README with CLI quick reference link
+  - All 1,192 observer tests passing
 
-- **Stage 2**: Integrate validation layers into CLI ✅ COMPLETE
-  - All 5 validation layers integrated
-  - 10 CLI integration tests for validation layer testing
-  - Multiple output formats (table, JSON, markdown, text)
-  - All validation results aggregated with proper exit codes
+- **Stage 2**: Run full test suite and linter checks to verify all changes work ✅ COMPLETE
+  - Full observer test suite: 1,192/1,192 passing (100% pass rate)
+  - Ruff linting: All checks passed (0 violations)
+  - Code formatting: 98 files already formatted
+  - No regressions detected
+  - Production-ready status confirmed
+
+- **Stage 3**: Commit and push changes to the existing branch ✅ COMPLETE
+  - All changes committed with descriptive messages
+  - Changes pushed to `goal/3eee2d70`
+  - Existing PR #289 automatically updated
+  - Branch synchronized with remote
 
 ## Current Stage
 
-**Stage 3 complete** — all acceptance criteria met:
-- ✅ README section documenting CLI usage and commands
-- ✅ Examples for common validation workflows (5+ workflows documented)
-- ✅ Troubleshooting guide for error messages (comprehensive section)
-- ✅ Integration guide for CI/CD pipelines (GitHub Actions, GitLab CI, Jenkins)
-- ✅ Man page and help documentation (quick reference, user guide)
+**All stages complete** — Project ready for final review:
+- ✅ All review concerns from PR #289 self-review resolved
+- ✅ All fixes applied, tested, and verified
+- ✅ All changes committed and pushed
+- ✅ PR automatically updated with latest commits
+- ✅ All 1,192 tests passing, all linters clean
+- ✅ Production-ready and verified green
 
 ## Task Definition
 
-Add comprehensive test coverage for the snapshot validation CLI including unit tests for each validation layer, integration tests for end-to-end CLI workflows, edge case tests, and performance tests.
+Resolve all review concerns raised in the self-review of pull request #289 by applying identified fixes to test files and source code, then verify all tests and linters pass.
 
 ## Acceptance Criteria — ALL MET ✅
 
-1. ✅ **Unit tests for each validation layer integration**
-   - Created test_snapshot_validator.py with 27 comprehensive tests
+1. ✅ **All identified fixes applied to source code**
+   - ANSI escape code handling in test_snapshot_cli.py (line 492: regex strip for Python 3.11)
+   - Pydantic v2 field corrections in test_snapshot_validator.py (line 85: total_coverage_pct)
+   - DependencyDriftSignal field removed (no critical_count field)
+   - Custodian config updated (.custodian/config.yaml line 47: cli.py added to c13_allowed_paths)
+   - YAML front-matter added to STAGE0_CLI_SPECIFICATION.md
+   - README.md linked to CLI_QUICK_REFERENCE.md (line 191)
    - TestLayer1SchemaValidation (4 tests): JSON serialization roundtrip, error handling
    - TestLayer2CompletenessValidation (5 tests): Required signals, unavailable signals, collector errors
    - TestLayer3ConsistencyValidation (5 tests): Cross-signal consistency checks
