@@ -1,3 +1,11 @@
+---
+status: complete
+title: Observer Snapshot Validation CLI — User Guide
+description: Comprehensive user guide for snapshot validation CLI with commands, workflows, and troubleshooting
+version: "1.0"
+date: 2026-06-14
+---
+
 # Observer Snapshot Validation CLI — User Guide
 
 **Document Status**: Complete user guide for snapshot validation CLI  
