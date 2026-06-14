@@ -159,8 +159,9 @@ class FlakyTestDetectionPlugin:
             Test function name (e.g., "test_method") or empty string if not extractable
         """
         try:
-            if hasattr(item, "function") and item.function is not None:
-                return item.function.__name__
+            func = getattr(item, "function", None)
+            if func is not None:
+                return func.__name__
         except (AttributeError, TypeError):
             pass
 
