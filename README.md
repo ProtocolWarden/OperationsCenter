@@ -58,9 +58,143 @@ Then:
 ./scripts/operations-center.sh dev-status
 ```
 
+## Snapshot Validation CLI
+
+OperationsCenter includes a **snapshot validation CLI** (`operations-center-observer-snapshot`) for validating repository state snapshots locally and in CI/CD pipelines. The CLI provides a 5-layer validation pipeline with flexible layer selection, configurable tolerances, and multiple output formats.
+
+### Quick Start
+
+```bash
+# Fast validation (default: layers 1-3, ~100ms)
+operations-center-observer-snapshot validate snapshot.json
+
+# Full validation (all layers including accuracy, ~30s)
+operations-center-observer-snapshot validate snapshot.json --layers 1,2,3,4,5
+
+# Regression detection with baseline
+operations-center-observer-snapshot validate snapshot.json \
+  --layers 1,2,3,4,5 \
+  --baseline baseline.json \
+  --coverage-tolerance 0.05
+
+# Save detailed report
+operations-center-observer-snapshot validate snapshot.json \
+  --verbose \
+  --output report.json
+```
+
+### Validation Layers
+
+| Layer | Name | Time | Purpose |
+|-------|------|------|---------|
+| 1 | **Schema** | ~50ms | JSON/YAML structure and Pydantic model validation |
+| 2 | **Completeness** | ~20ms | Required signals present, acceptable error counts |
+| 3 | **Consistency** | ~50ms | Cross-signal semantic validation (status ↔ metrics) |
+| 4 | **Accuracy** | 5-30s | Real-world tool comparison (pytest, ruff, coverage) |
+| 5 | **Regression** | 5-30s | Baseline comparison with configurable tolerances |
+
+### Commands
+
+**Core validation**:
+- `validate` — Validate snapshot against configured layers
+- `observe-and-validate` — Collect snapshot and validate immediately
+- `show` — Display snapshot contents
+- `list` — List stored snapshots
+
+**Advanced**:
+- `compare` — Compare two snapshots (planned)
+- `export` — Export snapshot to JSON/YAML/JSONL
+- `import` — Import snapshot from file (planned)
+- `cleanup` — Remove old snapshots
+
+### Configuration
+
+Use command-line options, environment variables, or both:
+
+```bash
+# Via command-line
+operations-center-observer-snapshot validate snapshot.json \
+  --layers 1,2,3,4,5 \
+  --tolerance 0.05 \
+  --repo-path /path/to/repo
+
+# Via environment variables
+export OC_SNAPSHOT_LAYERS=1,2,3,4,5
+export OC_SNAPSHOT_TOLERANCE=0.05
+export OC_SNAPSHOT_REPO_PATH=/path/to/repo
+operations-center-observer-snapshot validate snapshot.json
+
+# Environment variables: OC_SNAPSHOT_<SETTING>
+# - OC_SNAPSHOT_LAYERS (layers to run)
+# - OC_SNAPSHOT_TOLERANCE (global tolerance: 0.05 = 5%)
+# - OC_SNAPSHOT_BASELINE (baseline snapshot path)
+# - OC_SNAPSHOT_REPO_PATH (repo for accuracy checks)
+# - OC_SNAPSHOT_TIMEOUT (max seconds for layer 4)
+# - OC_SNAPSHOT_LOG_LEVEL (debug|info|warning|error)
+```
+
+### Output Formats
+
+```bash
+# Table (default, human-readable)
+operations-center-observer-snapshot validate snapshot.json --format table
+
+# JSON (machine-readable)
+operations-center-observer-snapshot validate snapshot.json --format json
+
+# Markdown (for documentation)
+operations-center-observer-snapshot validate snapshot.json --format markdown
+
+# Plain text
+operations-center-observer-snapshot validate snapshot.json --format text
+```
+
+### Exit Codes
+
+```
+0 - SUCCESS: All validation layers passed
+1 - VALIDATION_FAILED: One or more layers failed
+2 - NOT_FOUND: Snapshot file not found
+3 - LOAD_ERROR: Failed to load/parse snapshot
+4 - CONFIG_ERROR: Configuration or argument error
+5 - FILE_MISSING: Required file missing
+```
+
+### CI/CD Integration Examples
+
+**GitHub Actions (fast path)**:
+```yaml
+- name: Validate snapshot
+  run: |
+    operations-center-observer-snapshot validate \
+      tools/report/operations_center/observer/*/repo_state_snapshot.json \
+      --format json \
+      --output report.json
+```
+
+**GitHub Actions (full validation)**:
+```yaml
+- name: Full validation with regression detection
+  run: |
+    operations-center-observer-snapshot validate \
+      tools/report/operations_center/observer/*/repo_state_snapshot.json \
+      --layers 1,2,3,4,5 \
+      --baseline baseline.json \
+      --timeout 120 \
+      --output report.json
+```
+
+### Documentation & Guides
+
+For comprehensive usage guidance, see:
+- **[User Guide](docs/user-guides/SNAPSHOT_VALIDATION_CLI_GUIDE.md)** — Complete reference for all commands, options, workflows, and troubleshooting
+- **[Quick Reference](docs/user-guides/CLI_QUICK_REFERENCE.md)** — Command cheat sheet for common workflows
+- **[CLI Specification](docs/design/STAGE0_CLI_SPECIFICATION.md)** — Technical design and architecture
+- **[Integration Guide](docs/user-guides/SNAPSHOT_VALIDATION_CLI_GUIDE.md#cicd-integration)** — GitHub Actions, GitLab CI, Jenkins examples
+
 ## Snapshot Validation Testing
 
-OperationsCenter includes a comprehensive **snapshot validation test runner** that validates repository state through a 5-layer pipeline. This system validates real-world snapshots in CI/CD pipelines and during local development.
+OperationsCenter includes a comprehensive **snapshot validation test runner** that validates repository state through the 5-layer pipeline. This system validates real-world snapshots in CI/CD pipelines and during local development.
 
 ### Quick Snapshot Validation
 

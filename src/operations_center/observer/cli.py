@@ -7,12 +7,14 @@ Command-line interface for validating repository state snapshots with:
 - Multiple output formats: table, JSON, markdown, text
 - Error handling with distinct exit codes for different failure classes
 - Configurable validation layers and tolerance thresholds
+- Configuration from environment variables and command-line options
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 
 import typer
@@ -30,6 +32,9 @@ from operations_center.observer.snapshot_validation_engine import (
     SnapshotValidationEngine,
 )
 
+__version__ = "0.1.0"
+
+
 app = typer.Typer(
     help="Snapshot validator CLI for manual CI run testing.",
     no_args_is_help=True,
@@ -44,6 +49,27 @@ EXIT_NOT_FOUND = 2
 EXIT_LOAD_ERROR = 3
 EXIT_CONFIG_ERROR = 4
 EXIT_FILE_MISSING = 5
+
+
+def _get_env_or_default(key: str, default: str | None = None) -> str | None:
+    """Get configuration value from environment variable.
+
+    Environment variables follow the pattern OC_SNAPSHOT_<SETTING>.
+    Examples:
+    - OC_SNAPSHOT_REPO_PATH: repository path for accuracy checks
+    - OC_SNAPSHOT_TOLERANCE: global tolerance as decimal
+    - OC_SNAPSHOT_TIMEOUT: max seconds for accuracy checks
+    - OC_SNAPSHOT_LOG_LEVEL: logging level
+
+    Args:
+        key: Configuration key (e.g., 'REPO_PATH' → 'OC_SNAPSHOT_REPO_PATH')
+        default: Default value if env var not set
+
+    Returns:
+        Environment variable value or default
+    """
+    env_key = f"OC_SNAPSHOT_{key.upper()}"
+    return os.environ.get(env_key, default)
 
 
 def _setup_logging(log_level: str, debug: bool) -> None:
@@ -67,6 +93,13 @@ def _setup_logging(log_level: str, debug: bool) -> None:
         level=level_map.get(log_level, logging.INFO),
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
+
+
+def _version_callback(value: bool) -> None:
+    """Handle version flag."""
+    if value:
+        console.print(f"[cyan]operations-center-observer-snapshot[/cyan] {__version__}")
+        raise typer.Exit(0)
 
 
 def _parse_layers(layers_str: str | None) -> list[int]:
@@ -133,10 +166,17 @@ def _format_duration(ms: float) -> str:
 
 @app.callback()
 def config_callback(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        help="Show version and exit",
+        is_eager=True,
+        callback=_version_callback,
+    ),
     log_level: str = typer.Option(
-        "info",
+        None,
         "--log-level",
-        help="Logging level: debug|info|warning|error",
+        help="Logging level: debug|info|warning|error (or OC_SNAPSHOT_LOG_LEVEL env var)",
     ),
     debug: bool = typer.Option(
         False,
@@ -145,7 +185,9 @@ def config_callback(
     ),
 ) -> None:
     """Configure CLI globally."""
-    _setup_logging(log_level, debug)
+
+    final_log_level = log_level or _get_env_or_default("LOG_LEVEL", "info") or "info"
+    _setup_logging(final_log_level, debug)
 
 
 @app.command("validate")
@@ -157,37 +199,37 @@ def cmd_validate(
     layers: str | None = typer.Option(
         None,
         "--layers",
-        help="Comma-separated layer numbers (1,2,3,4,5) — default: 1,2,3",
+        help="Comma-separated layer numbers (1,2,3,4,5) — default: 1,2,3 (or OC_SNAPSHOT_LAYERS)",
     ),
     baseline: Path | None = typer.Option(
         None,
         "--baseline",
-        help="Path to baseline snapshot for layer 5 (regression detection)",
+        help="Path to baseline snapshot for layer 5 (or OC_SNAPSHOT_BASELINE)",
     ),
     repo_path: Path | None = typer.Option(
         None,
         "--repo-path",
-        help="Repository path for layer 4 accuracy checks (default: current dir)",
+        help="Repository path for accuracy checks (or OC_SNAPSHOT_REPO_PATH, default: cwd)",
     ),
-    tolerance: float = typer.Option(
-        0.05,
+    tolerance: float | None = typer.Option(
+        None,
         "--tolerance",
-        help="Global tolerance as decimal (0.01 = 1%, 0.05 = 5%)",
+        help="Global tolerance as decimal (or OC_SNAPSHOT_TOLERANCE, default: 0.05)",
     ),
     coverage_tolerance: float | None = typer.Option(
         None,
         "--coverage-tolerance",
-        help="Coverage-specific tolerance (overrides --tolerance)",
+        help="Coverage tolerance (overrides --tolerance or OC_SNAPSHOT_COVERAGE_TOLERANCE)",
     ),
     test_count_tolerance: float | None = typer.Option(
         None,
         "--test-count-tolerance",
-        help="Test count-specific tolerance (overrides --tolerance)",
+        help="Test count tolerance (overrides --tolerance or OC_SNAPSHOT_TEST_COUNT_TOLERANCE)",
     ),
-    timeout: int = typer.Option(
-        60,
+    timeout: int | None = typer.Option(
+        None,
         "--timeout",
-        help="Max seconds for layer 4 (accuracy checks with pytest)",
+        help="Max seconds for layer 4 (or OC_SNAPSHOT_TIMEOUT, default: 60)",
     ),
     verbose: bool = typer.Option(
         False,
@@ -224,26 +266,49 @@ def cmd_validate(
     ),
 ) -> None:
     """Validate snapshot against configured layers."""
+    final_layers = layers or _get_env_or_default("LAYERS")
     try:
-        parsed_layers = _parse_layers(layers)
+        parsed_layers = _parse_layers(final_layers)
     except ValueError as e:
         console.print(f"[red]Error: {e}[/red]")
         raise typer.Exit(EXIT_CONFIG_ERROR)
 
     try:
-        tolerance_dict = _build_tolerance_dict(tolerance, coverage_tolerance, test_count_tolerance)
+        final_tolerance = tolerance
+        if final_tolerance is None:
+            env_tolerance = _get_env_or_default("TOLERANCE")
+            final_tolerance = float(env_tolerance) if env_tolerance else 0.05
+
+        final_repo_path = repo_path
+        if final_repo_path is None:
+            env_repo = _get_env_or_default("REPO_PATH")
+            final_repo_path = Path(env_repo) if env_repo else Path.cwd()
+
+        final_timeout = timeout
+        if final_timeout is None:
+            env_timeout = _get_env_or_default("TIMEOUT")
+            final_timeout = int(env_timeout) if env_timeout else 60
+
+        final_baseline = baseline
+        if final_baseline is None:
+            env_baseline = _get_env_or_default("BASELINE")
+            final_baseline = Path(env_baseline) if env_baseline else None
+
+        tolerance_dict = _build_tolerance_dict(
+            final_tolerance, coverage_tolerance, test_count_tolerance
+        )
 
         config = ValidationConfig(
             layers=parsed_layers,
             tolerance=tolerance_dict,
-            repo_path=repo_path or Path.cwd(),
-            timeout=timeout,
+            repo_path=final_repo_path,
+            timeout=final_timeout,
             retry_on_transient=retry_transient,
             max_retries=max_retries,
         )
 
         engine = SnapshotValidationEngine()
-        baseline_path = str(baseline) if baseline else None
+        baseline_path = str(final_baseline) if final_baseline else None
 
         try:
             report, was_retried = engine.validate_with_retry(
@@ -255,7 +320,9 @@ def cmd_validate(
             if not quiet:
                 console.print(f"[red]Error: {e.message}[/red]")
                 if verbose and e.context:
-                    console.print(f"[dim]{json.dumps(e.context, indent=2, ensure_ascii=False)}[/dim]")
+                    console.print(
+                        f"[dim]{json.dumps(e.context, indent=2, ensure_ascii=False)}[/dim]"
+                    )
             raise typer.Exit(EXIT_LOAD_ERROR)
 
         formatter = SnapshotOutputFormatter()
@@ -266,7 +333,10 @@ def cmd_validate(
 
         if output:
             output.parent.mkdir(parents=True, exist_ok=True)
-            output.write_text(json.dumps(report.to_dict(), indent=2, default=str, ensure_ascii=False), encoding="utf-8")
+            output.write_text(
+                json.dumps(report.to_dict(), indent=2, default=str, ensure_ascii=False),
+                encoding="utf-8",
+            )
             if not quiet:
                 console.print(f"[green]✓[/green] Report saved to {output}")
 
@@ -614,15 +684,23 @@ def cmd_export(
         if format_str == "json":
             import json
 
-            output_path.write_text(json.dumps(snapshot.model_dump(), indent=2, default=str, ensure_ascii=False), encoding="utf-8")
+            output_path.write_text(
+                json.dumps(snapshot.model_dump(), indent=2, default=str, ensure_ascii=False),
+                encoding="utf-8",
+            )
         elif format_str == "yaml":
             import yaml
 
-            output_path.write_text(yaml.dump(snapshot.model_dump(), default_flow_style=False), encoding="utf-8")
+            output_path.write_text(
+                yaml.dump(snapshot.model_dump(), default_flow_style=False), encoding="utf-8"
+            )
         elif format_str == "jsonl":
             import json
 
-            output_path.write_text(json.dumps(snapshot.model_dump(), default=str, ensure_ascii=False) + "\n", encoding="utf-8")
+            output_path.write_text(
+                json.dumps(snapshot.model_dump(), default=str, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
         else:
             if not quiet:
                 console.print(f"[red]Error: unsupported format '{format_str}'[/red]")
