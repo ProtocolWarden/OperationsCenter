@@ -32,7 +32,9 @@ logger = logging.getLogger(__name__)
 class SnapshotLoadError(Exception):
     """Raised when snapshot loading fails."""
 
-    def __init__(self, message: str, source: str | None = None, details: dict[str, Any] | None = None):
+    def __init__(
+        self, message: str, source: str | None = None, details: dict[str, Any] | None = None
+    ):
         """Initialize snapshot load error.
 
         Args:

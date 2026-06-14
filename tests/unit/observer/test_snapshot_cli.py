@@ -7,7 +7,6 @@ from __future__ import annotations
 import json
 import tempfile
 from pathlib import Path
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -15,18 +14,14 @@ from typer.testing import CliRunner
 
 from operations_center.observer.cli import (
     EXIT_CONFIG_ERROR,
-    EXIT_FILE_MISSING,
     EXIT_LOAD_ERROR,
-    EXIT_NOT_FOUND,
     EXIT_SUCCESS,
-    EXIT_VALIDATION_FAILED,
     app,
     _parse_layers,
     _build_tolerance_dict,
     _format_duration,
 )
-from operations_center.observer.models import RepoStateSnapshot
-from operations_center.observer.snapshot_validator import SnapshotValidationReport, ValidationResult
+from operations_center.observer.snapshot_validator import SnapshotValidationReport
 
 runner = CliRunner()
 
@@ -164,15 +159,18 @@ class TestValidateCommand:
             mock_engine.return_value = mock_engine_instance
 
             with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as f:
-                json.dump({
-                    "run_id": "test",
-                    "observed_at": "2026-06-14T00:00:00",
-                    "observer_version": 1,
-                    "source_command": "test",
-                    "repo": {},
-                    "signals": {},
-                    "collector_errors": {},
-                }, f)
+                json.dump(
+                    {
+                        "run_id": "test",
+                        "observed_at": "2026-06-14T00:00:00",
+                        "observer_version": 1,
+                        "source_command": "test",
+                        "repo": {},
+                        "signals": {},
+                        "collector_errors": {},
+                    },
+                    f,
+                )
                 f.flush()
 
                 result = runner.invoke(app, ["validate", f.name, "--quiet"])
@@ -222,10 +220,9 @@ class TestShowCommand:
         assert result.exit_code == EXIT_LOAD_ERROR
 
     def test_show_with_quiet_flag(self) -> None:
-        """Test show with quiet flag."""
-        # This test requires a complete, valid snapshot which is complex to create
-        # The show functionality is tested through integration
-        pass
+        """Test show with quiet flag on non-existent source returns load error."""
+        result = runner.invoke(app, ["show", "nonexistent.json", "--quiet"])
+        assert result.exit_code == EXIT_LOAD_ERROR
 
 
 class TestExportCommand:
@@ -239,20 +236,26 @@ class TestExportCommand:
     def test_export_source_not_found(self) -> None:
         """Test export with non-existent source."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            result = runner.invoke(app, ["export", "nonexistent_id", str(Path(tmpdir) / "output.json")])
+            result = runner.invoke(
+                app, ["export", "nonexistent_id", str(Path(tmpdir) / "output.json")]
+            )
             assert result.exit_code == EXIT_LOAD_ERROR
 
     def test_export_json_format(self) -> None:
-        """Test export to JSON format."""
-        # This test requires complete snapshot object which is complex to create
-        # The export functionality is tested through integration
-        pass
+        """Test export to JSON format: missing source returns load error."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = runner.invoke(
+                app, ["export", "nonexistent_id", str(Path(tmpdir) / "out.json"), "--format", "json"]
+            )
+            assert result.exit_code == EXIT_LOAD_ERROR
 
     def test_export_auto_format_detection(self) -> None:
-        """Test export auto-detects format from extension."""
-        # This test requires complete snapshot object which is complex to create
-        # The export functionality is tested through integration
-        pass
+        """Test export auto-detects format: missing source returns load error."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = runner.invoke(
+                app, ["export", "nonexistent_id", str(Path(tmpdir) / "out.json")]
+            )
+            assert result.exit_code == EXIT_LOAD_ERROR
 
 
 class TestUnimplementedCommands:
@@ -329,22 +332,31 @@ class TestErrorHandling:
             mock_engine.return_value = mock_engine_instance
 
             with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as f:
-                json.dump({
-                    "run_id": "test",
-                    "observed_at": "2026-06-14T00:00:00",
-                    "observer_version": 1,
-                    "source_command": "test",
-                    "repo": {},
-                    "signals": {},
-                    "collector_errors": {},
-                }, f)
+                json.dump(
+                    {
+                        "run_id": "test",
+                        "observed_at": "2026-06-14T00:00:00",
+                        "observer_version": 1,
+                        "source_command": "test",
+                        "repo": {},
+                        "signals": {},
+                        "collector_errors": {},
+                    },
+                    f,
+                )
                 f.flush()
 
-                result = runner.invoke(app, [
-                    "validate", f.name,
-                    "--coverage-tolerance", "0.10",
-                    "--test-count-tolerance", "0.02",
-                ])
+                result = runner.invoke(
+                    app,
+                    [
+                        "validate",
+                        f.name,
+                        "--coverage-tolerance",
+                        "0.10",
+                        "--test-count-tolerance",
+                        "0.02",
+                    ],
+                )
                 assert result.exit_code == EXIT_SUCCESS
 
 
@@ -367,15 +379,18 @@ class TestOutputFormats:
             mock_engine.return_value = mock_engine_instance
 
             with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as f:
-                json.dump({
-                    "run_id": "test",
-                    "observed_at": "2026-06-14T00:00:00",
-                    "observer_version": 1,
-                    "source_command": "test",
-                    "repo": {},
-                    "signals": {},
-                    "collector_errors": {},
-                }, f)
+                json.dump(
+                    {
+                        "run_id": "test",
+                        "observed_at": "2026-06-14T00:00:00",
+                        "observer_version": 1,
+                        "source_command": "test",
+                        "repo": {},
+                        "signals": {},
+                        "collector_errors": {},
+                    },
+                    f,
+                )
                 f.flush()
 
                 result = runner.invoke(app, ["validate", f.name, "--format", "table"])
@@ -397,15 +412,18 @@ class TestOutputFormats:
             mock_engine.return_value = mock_engine_instance
 
             with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as f:
-                json.dump({
-                    "run_id": "test",
-                    "observed_at": "2026-06-14T00:00:00",
-                    "observer_version": 1,
-                    "source_command": "test",
-                    "repo": {},
-                    "signals": {},
-                    "collector_errors": {},
-                }, f)
+                json.dump(
+                    {
+                        "run_id": "test",
+                        "observed_at": "2026-06-14T00:00:00",
+                        "observer_version": 1,
+                        "source_command": "test",
+                        "repo": {},
+                        "signals": {},
+                        "collector_errors": {},
+                    },
+                    f,
+                )
                 f.flush()
 
                 result = runner.invoke(app, ["validate", f.name, "--format", "json"])
@@ -432,15 +450,18 @@ class TestLayersOption:
             mock_engine.return_value = mock_engine_instance
 
             with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as f:
-                json.dump({
-                    "run_id": "test",
-                    "observed_at": "2026-06-14T00:00:00",
-                    "observer_version": 1,
-                    "source_command": "test",
-                    "repo": {},
-                    "signals": {},
-                    "collector_errors": {},
-                }, f)
+                json.dump(
+                    {
+                        "run_id": "test",
+                        "observed_at": "2026-06-14T00:00:00",
+                        "observer_version": 1,
+                        "source_command": "test",
+                        "repo": {},
+                        "signals": {},
+                        "collector_errors": {},
+                    },
+                    f,
+                )
                 f.flush()
 
                 result = runner.invoke(app, ["validate", f.name, "--layers", "1,2,3,4,5"])

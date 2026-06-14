@@ -22,7 +22,6 @@ from operations_center.observer.snapshot_loader import SnapshotLoadError, Snapsh
 from operations_center.observer.snapshot_validator import (
     SnapshotValidator,
     SnapshotValidationReport,
-    ValidationFailureCategory,
 )
 
 logger = logging.getLogger(__name__)
@@ -144,7 +143,6 @@ class SnapshotValidationEngine:
             )
 
             layers = config.get_layers()
-            tolerance = config.get_tolerance()
 
             baseline = None
             if 5 in layers and baseline_source:
@@ -164,7 +162,7 @@ class SnapshotValidationEngine:
             raise
         except Exception as e:
             raise ValidationError(
-                f"Validation failed with unexpected error",
+                "Validation failed with unexpected error",
                 context={
                     "error_type": type(e).__name__,
                     "error_message": str(e),
@@ -296,4 +294,4 @@ class SnapshotValidationEngine:
                 return o.isoformat()
             raise TypeError(f"Object of type {type(o).__name__} is not JSON serializable")
 
-        return json.dumps(obj, indent=2, default=serializer)
+        return json.dumps(obj, indent=2, default=serializer, ensure_ascii=False)

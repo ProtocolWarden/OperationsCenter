@@ -13,24 +13,22 @@ from __future__ import annotations
 
 import json
 import logging
-import sys
-from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
 from operations_center.observer.snapshot_loader import SnapshotLoadError, SnapshotLoader
-from operations_center.observer.snapshot_output_formatter import OutputFormat, SnapshotOutputFormatter
-from operations_center.observer.snapshot_repository import LocalSnapshotRepository
+from operations_center.observer.snapshot_output_formatter import (
+    OutputFormat,
+    SnapshotOutputFormatter,
+)
 from operations_center.observer.snapshot_validation_engine import (
     ValidationConfig,
     ValidationError,
     SnapshotValidationEngine,
 )
-from operations_center.observer.snapshot_validator import ValidationFailureCategory
 
 app = typer.Typer(
     help="Snapshot validator CLI for manual CI run testing.",
@@ -87,7 +85,7 @@ def _parse_layers(layers_str: str | None) -> list[int]:
         return [1, 2, 3]
 
     try:
-        layers = [int(l.strip()) for l in layers_str.split(",")]
+        layers = [int(part.strip()) for part in layers_str.split(",")]
         for layer in layers:
             if layer < 1 or layer > 5:
                 raise ValueError(f"Layer must be 1-5, got {layer}")
@@ -257,7 +255,7 @@ def cmd_validate(
             if not quiet:
                 console.print(f"[red]Error: {e.message}[/red]")
                 if verbose and e.context:
-                    console.print(f"[dim]{json.dumps(e.context, indent=2)}[/dim]")
+                    console.print(f"[dim]{json.dumps(e.context, indent=2, ensure_ascii=False)}[/dim]")
             raise typer.Exit(EXIT_LOAD_ERROR)
 
         formatter = SnapshotOutputFormatter()
@@ -268,7 +266,7 @@ def cmd_validate(
 
         if output:
             output.parent.mkdir(parents=True, exist_ok=True)
-            output.write_text(json.dumps(report.to_dict(), indent=2, default=str), encoding="utf-8")
+            output.write_text(json.dumps(report.to_dict(), indent=2, default=str, ensure_ascii=False), encoding="utf-8")
             if not quiet:
                 console.print(f"[green]✓[/green] Report saved to {output}")
 
@@ -396,7 +394,7 @@ def cmd_list(
 
     if not root.exists():
         if not quiet:
-            console.print(f"[yellow]No snapshots found (directory does not exist)[/yellow]")
+            console.print("[yellow]No snapshots found (directory does not exist)[/yellow]")
         return
 
     try:
@@ -409,7 +407,7 @@ def cmd_list(
 
         if not snapshot_dirs:
             if not quiet:
-                console.print(f"[yellow]No snapshots found[/yellow]")
+                console.print("[yellow]No snapshots found[/yellow]")
             return
 
         if format_str == "table":
@@ -438,7 +436,7 @@ def cmd_list(
         elif format_str == "json":
             snapshots = [{"run_id": d.name} for d in snapshot_dirs]
             if not quiet:
-                console.print(json.dumps(snapshots, indent=2))
+                console.print(json.dumps(snapshots, indent=2, ensure_ascii=False))
 
     except Exception as e:
         if not quiet:
@@ -497,7 +495,7 @@ def cmd_show(
             obj = snapshot.model_dump()
 
         if format_str == "json":
-            output = json.dumps(obj, indent=2, default=str)
+            output = json.dumps(obj, indent=2, default=str, ensure_ascii=False)
         elif format_str == "yaml":
             import yaml
 
@@ -616,15 +614,15 @@ def cmd_export(
         if format_str == "json":
             import json
 
-            output_path.write_text(json.dumps(snapshot.model_dump(), indent=2, default=str))
+            output_path.write_text(json.dumps(snapshot.model_dump(), indent=2, default=str, ensure_ascii=False), encoding="utf-8")
         elif format_str == "yaml":
             import yaml
 
-            output_path.write_text(yaml.dump(snapshot.model_dump(), default_flow_style=False))
+            output_path.write_text(yaml.dump(snapshot.model_dump(), default_flow_style=False), encoding="utf-8")
         elif format_str == "jsonl":
             import json
 
-            output_path.write_text(json.dumps(snapshot.model_dump(), default=str) + "\n")
+            output_path.write_text(json.dumps(snapshot.model_dump(), default=str, ensure_ascii=False) + "\n", encoding="utf-8")
         else:
             if not quiet:
                 console.print(f"[red]Error: unsupported format '{format_str}'[/red]")

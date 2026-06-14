@@ -12,7 +12,6 @@ Provides multiple output formats for validation reports:
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
 from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
@@ -22,8 +21,6 @@ if TYPE_CHECKING:
 
 from operations_center.observer.snapshot_validator import (
     SnapshotValidationReport,
-    ValidationError,
-    ValidationResult,
 )
 
 
@@ -113,7 +110,9 @@ class SnapshotOutputFormatter:
                     lines.append(f"      • {error.message} [{category}]")
 
         lines.append("")
-        lines.append(f"Summary: {len(report.results)} checks run, {len(report.results) - sum(1 for r in report.results if r.passed)} failed")
+        lines.append(
+            f"Summary: {len(report.results)} checks run, {len(report.results) - sum(1 for r in report.results if r.passed)} failed"
+        )
 
         return "\n".join(lines)
 
@@ -126,7 +125,7 @@ class SnapshotOutputFormatter:
         Returns:
             Formatted JSON string
         """
-        return json.dumps(report.to_dict(), indent=2, default=self._json_serializer)
+        return json.dumps(report.to_dict(), indent=2, default=self._json_serializer, ensure_ascii=False)
 
     def format_markdown(self, report: SnapshotValidationReport) -> str:
         """Format report as Markdown.
@@ -189,7 +188,9 @@ class SnapshotOutputFormatter:
         lines.append(f"- **Total Checks**: {total_checks}")
         lines.append(f"- **Failed**: {failed_checks}")
         lines.append(f"- **Retryable Errors**: {len(report.get_retryable_errors())}")
-        lines.append(f"- **Non-Retryable Errors**: {sum(len([e for e in r.errors if not e.is_retryable]) for r in report.results)}")
+        lines.append(
+            f"- **Non-Retryable Errors**: {sum(len([e for e in r.errors if not e.is_retryable]) for r in report.results)}"
+        )
 
         return "\n".join(lines)
 

@@ -383,6 +383,8 @@ audit:
       # them as stubs. Discovered 2026-05-06 during while-away triage sweep.
       - src/operations_center/entrypoints/**
       - src/operations_center/tuning/calibration.py
+      # observer CLI commands follow the same Typer pattern.
+      - src/operations_center/observer/cli.py
     C4:
       # Entrypoints are polling workers — pass-in-except is correct in loops
       # where a single bad item must not abort the whole work cycle.
@@ -544,6 +546,9 @@ audit:
       # — single responsibility; splitting by alert type would break the shared config
       # and severity-mapping logic.
       - src/operations_center/observer/coverage_alerting.py
+      # cli.py implements 8 Typer commands — one command per cohesive operation;
+      # splitting by command would scatter the shared app, console, and exit-code defs.
+      - src/operations_center/observer/cli.py
     C11:
       # Agent-spawning entrypoints: board_worker, intake, pr_review_watcher invoke
       # the coding backend (team_executor, aider, etc.) which runs for an unbounded
