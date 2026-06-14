@@ -1,3 +1,11 @@
+---
+status: complete
+title: Operations Center Snapshot Validation CLI — Quick Reference
+description: Quick reference card for snapshot validation CLI commands, options, and common workflows
+version: "1.0"
+date: 2026-06-14
+---
+
 # Operations Center Snapshot Validation CLI — Quick Reference
 
 **Quick reference card for snapshot validation CLI commands and options.**

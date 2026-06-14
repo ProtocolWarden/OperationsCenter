@@ -449,7 +449,7 @@ class Settings(BaseModel):
     # host headroom for co-tenant workloads sharing the box. Empty by
     # default (no gate). See ResourceGateSettings docstring.
     resource_gate: ResourceGateSettings = Field(default_factory=ResourceGateSettings)
-    repos: dict[str, RepoSettings]
+    repos: dict[str, RepoSettings] = Field(default_factory=dict)
     reviewer: ReviewerSettings = Field(default_factory=ReviewerSettings)
     report_root: Path = Path("tools/report/runs")
     # The repo key that identifies this OperationsCenter installation itself.
