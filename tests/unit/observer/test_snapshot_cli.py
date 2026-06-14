@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -484,10 +485,12 @@ class TestVersionOption:
 
     def test_version_in_help(self) -> None:
         """Test version is documented in help."""
-        # Use NO_COLOR to avoid ANSI escape codes that split '--version' on Python 3.11
-        result = CliRunner(env={"NO_COLOR": "1"}).invoke(app, ["--help"])
+        result = CliRunner().invoke(app, ["--help"])
         assert result.exit_code == EXIT_SUCCESS
-        assert "--version" in result.stdout
+        # Strip ANSI escape codes before checking: Rich may insert codes mid-token
+        # (e.g. \x1b[1m--\x1b[0mversion) on some Python/Rich version combinations.
+        clean = re.sub(r"\x1b\[[0-9;]*[mK]", "", result.stdout)
+        assert "--version" in clean
 
 
 class TestEnvironmentVariables:
