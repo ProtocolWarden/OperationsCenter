@@ -132,6 +132,7 @@ shape, not any particular bound repo.
 - [design/deriver-coverage/STAGE3_COMPLETION_REPORT.md](design/deriver-coverage/STAGE3_COMPLETION_REPORT.md) — Stage 3 testing completion report
 - [design/deriver-coverage/STAGE3_TESTING_VERIFICATION.md](design/deriver-coverage/STAGE3_TESTING_VERIFICATION.md) — Stage 3 testing verification
 - [design/deriver-coverage/STAGE3_TEST_INVENTORY.md](design/deriver-coverage/STAGE3_TEST_INVENTORY.md) — Stage 3 test inventory
+- [design/STAGE0_TEST_FAILURE_EXTRACTION.md](design/STAGE0_TEST_FAILURE_EXTRACTION.md) — Stage 0 investigation: extract test names and assertion messages from pytest failure reports
 - [design/autonomy/autonomy_decision_engine.md](design/autonomy/autonomy_decision_engine.md)
 - [design/autonomy/autonomy_gaps.md](design/autonomy/autonomy_gaps.md)
 - [design/autonomy/autonomy_insight_engine.md](design/autonomy/autonomy_insight_engine.md)

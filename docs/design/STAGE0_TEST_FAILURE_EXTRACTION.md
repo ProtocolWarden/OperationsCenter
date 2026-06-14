@@ -1,3 +1,10 @@
+---
+title: "Stage 0: Test Failure Categorization Extraction"
+status: investigation
+version: "1.0"
+date: "2026-06-13"
+---
+
 # Stage 0: Test Failure Categorization Extraction — Investigation Report
 
 **Date**: 2026-06-13  

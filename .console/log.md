@@ -2875,3 +2875,7 @@ dev-loop controller. They start/stop independently; full pause needs both.
 
 
 <!-- log GC: 20 oldest entries trimmed to keep .console/log.md under the 100KB R2 budget; full history in git. -->
+
+## 2026-06-14 — fix(custodian): T2 exclusion for flaky plugin specimen funcs + DC1/DC7 for design doc
+
+Watchdog direct fix on goal/3a044753. Rebased onto main (picked up 4ac9327f + 5b555e19 date-fix commits). Added T2 exclusion for test_pytest_flaky_plugin.py (specimen test_* functions with no assertions). Added YAML front matter and docs/README.md link for STAGE0_TEST_FAILURE_EXTRACTION.md.
