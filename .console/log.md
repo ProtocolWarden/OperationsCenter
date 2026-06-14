@@ -1,3 +1,13 @@
+## 2026-06-14 — fix(ci): expand custodian-audit push trigger to all branches
+
+GitHub does not send `pull_request:synchronize` events when a PR is CONFLICTING.
+Consequence: CONFLICTING PRs (e.g. spec-author/baf9bfc8 = PR #293) never received
+an "audit" check-run after becoming conflicting, causing the review watcher to wait
+indefinitely at ci_wait_cycles 1-2/20 (deadlock: missing audit → no LGTM → no
+auto-rebase → conflict persists → audit still can't run). Fix: expand push trigger
+from `[main]` to `["**"]` so push events on feature branches also register an audit
+check-run regardless of PR conflict state.
+
 ## 2026-06-14 — fix(observer): resolve CI audit failures on snapshot validation CLI
 
 Cleared 7 custodian findings (C13, DC1, DC7, OC12×4) and fixed test_version_in_help Python 3.11 ANSI escape issue:
