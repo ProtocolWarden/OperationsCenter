@@ -3,7 +3,7 @@
 """Unit tests for flaky test storage manager."""
 
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -134,7 +134,7 @@ class TestFlakyTestStorageManager:
         """Test cleanup of old session reports."""
         storage = FlakyTestStorageManager(tmp_path, session_retention_days=3)
 
-        today = datetime.now(UTC).date()
+        today = datetime.now(timezone.utc).date()
         old_date = (today - timedelta(days=10)).strftime("%Y-%m-%d")
         recent_date = today.strftime("%Y-%m-%d")
 
@@ -162,7 +162,7 @@ class TestFlakyTestStorageManager:
         """Test cleanup of old aggregation reports."""
         storage = FlakyTestStorageManager(tmp_path, aggregation_retention_days=30)
 
-        today = datetime.now(UTC).date()
+        today = datetime.now(timezone.utc).date()
         old_date = (today - timedelta(days=60)).strftime("%Y-%m-%d")
         recent_date = today.strftime("%Y-%m-%d")
 
@@ -220,7 +220,7 @@ class TestFlakyTestStorageManager:
         storage = FlakyTestStorageManager(tmp_path)
 
         # Create a corrupted JSON file
-        date_dir = storage.session_dir / datetime.now(UTC).strftime("%Y-%m-%d")
+        date_dir = storage.session_dir / datetime.now(timezone.utc).strftime("%Y-%m-%d")
         date_dir.mkdir(parents=True, exist_ok=True)
         corrupted_file = date_dir / "10-00-00-session.json"
         corrupted_file.write_text("{invalid json")
@@ -282,7 +282,7 @@ class TestFlakyTestStorageManager:
     def test_load_recent_sessions_skips_old_dates(self, tmp_path):
         """Test load_recent_sessions skips directories older than cutoff."""
         storage = FlakyTestStorageManager(tmp_path)
-        old_date = (datetime.now(UTC).date() - timedelta(days=30)).strftime("%Y-%m-%d")
+        old_date = (datetime.now(timezone.utc).date() - timedelta(days=30)).strftime("%Y-%m-%d")
         old_dir = storage.session_dir / old_date
         old_dir.mkdir(parents=True, exist_ok=True)
         (old_dir / "10-00-00-session.json").write_text('{"session_id": "old"}')
@@ -319,7 +319,7 @@ class TestFlakyTestStorageManager:
         """Test load_recent_aggregations skips files older than cutoff."""
         storage = FlakyTestStorageManager(tmp_path)
         storage.aggregation_dir.mkdir(parents=True, exist_ok=True)
-        old_date = (datetime.now(UTC).date() - timedelta(days=120)).strftime("%Y-%m-%d")
+        old_date = (datetime.now(timezone.utc).date() - timedelta(days=120)).strftime("%Y-%m-%d")
         (storage.aggregation_dir / f"{old_date}-aggregation.json").write_text("{}")
 
         aggs = storage.load_recent_aggregations(days=30)
@@ -338,7 +338,7 @@ class TestFlakyTestStorageManager:
         """Test load_recent_aggregations skips corrupted JSON files."""
         storage = FlakyTestStorageManager(tmp_path)
         storage.aggregation_dir.mkdir(parents=True, exist_ok=True)
-        today = datetime.now(UTC).date().strftime("%Y-%m-%d")
+        today = datetime.now(timezone.utc).date().strftime("%Y-%m-%d")
         (storage.aggregation_dir / f"{today}-aggregation.json").write_text("{bad json")
 
         aggs = storage.load_recent_aggregations(days=30)
