@@ -356,6 +356,9 @@ audit:
       - tests/unit/detectors/test_r2_console_budget_validator.py
       - tests/unit/detectors/test_oc12_model_field_mismatch.py
       - tests/unit/detectors/test_oc13_test_reimplements_metric.py
+      # Documentation accuracy tests validate README/config/CI content against real
+      # artifacts via filesystem reads and subprocess calls — no src imports needed.
+      - tests/unit/test_documentation_accuracy.py
     C1:
       - src/operations_center/observer/collectors/todo_signal.py
       - src/operations_center/observer/artifact_writer.py

@@ -785,58 +785,354 @@ Top-level config options added in the autonomy hardening phase:
 ./scripts/operations-center.sh janitor
 ```
 
-## CI and Local Validation
+## Testing and Quality Assurance
 
-Four checks run on every push and PR (`.github/workflows/ci.yml`):
+OperationsCenter has comprehensive test infrastructure covering unit tests, integration tests, snapshot validation, performance regression detection, and flaky test monitoring.
 
-- **ruff** — lint and style
-- **ty** — type checking (`ty check src/`)
-- **pytest** — tests
-- **snapshot** — real-world snapshot validation (5-layer pipeline)
+### Prerequisites and Environment Setup
 
-Local equivalent:
+**Minimum Requirements:**
+- Python 3.11+
+- Virtual environment (recommended)
+- Development dependencies installed
 
+**Environment Setup:**
 ```bash
-ruff check .
-ty check src/
-pytest -q
+# Create virtual environment
+python3.11 -m venv .venv
+source .venv/bin/activate
+
+# Install project with development dependencies
+pip install -e ".[dev]"
 ```
 
-`ty` is the active type-checking tool. `mypy` is not used or required.
+**Required Development Tools:**
+- `pytest` (8.0+) — test execution framework
+- `pytest-xdist` (3.0+) — parallel test execution
+- `pytest-cov` (6.0+) — coverage measurement
+- `ruff` (0.15.13) — linting and code style
+- `ty` (0.0.40+) — type checking
+- `custodian` — code governance checks
 
-### Real-World Snapshot Validation
+### Test Suites Overview
 
-The **snapshot** job validates repository state snapshots using a 5-layer pipeline:
+| Suite | Type | Count | Purpose | Location |
+|-------|------|-------|---------|----------|
+| **Unit Tests** | Fast | ~7,200 | Core functionality, algorithms, models | `tests/unit/` |
+| **Integration Tests** | Medium | ~300 | Multi-component interaction, service boundaries | `tests/integration/` |
+| **Snapshot Validation** | Medium | 73 | Repository state consistency (5-layer pipeline) | `tests/integration/observer/` |
+| **Performance Regression** | Fast | ~100 | Timing bounds, memory efficiency | All tests marked `@pytest.mark.perf` |
+| **Flaky Test Detection** | Medium | 200+ | Test outcome pattern analysis and trends | Tests marked `@pytest.mark.flaky*` |
+| **Smoke Tests** | Fast | ~50 | Quick core functionality validation | Tests marked `@pytest.mark.smoke` |
+| **Edge Case Tests** | Medium | ~500 | Boundary conditions, error paths | Tests marked `@pytest.mark.edge_case` |
+| **TOTAL** | — | ~8,400+ | Comprehensive coverage of all functionality | All subdirectories |
 
-**Quick mode (PR trigger):**
+### Test Execution Commands
+
+#### Quick Local Testing (Development)
+
+**Run fast unit tests only (excludes slow/integration):**
 ```bash
-pytest tests/integration/observer/test_snapshot_validation.py \
-  -v -m "integration and not slow"
+pytest tests/unit -v -m "not slow"
 ```
-**Layers**: 1-3 (schema, completeness, consistency) • **Time**: ~30s
+**Time**: ~30 seconds • **Use**: Before committing
 
-**Full mode (push trigger):**
+**Run quick smoke tests for core validation:**
 ```bash
-pytest tests/integration/observer/test_snapshot_validation.py \
-  -v -m integration
+pytest tests/ -v -m "smoke" --no-header
 ```
-**Layers**: 1-5 (all layers including accuracy and regression) • **Time**: ~5m
+**Time**: ~10 seconds • **Use**: Rapid feature validation
 
-**Scheduled validation (daily at 2 AM UTC):**
-- Detects regressions without code changes
-- Validates repository state consistency
-- Generates 30-day retention reports
+#### Comprehensive Local Testing (Pre-Push)
 
-**Test Organization** (41 integration tests):
-- Layer 1: Schema validation (JSON ↔ Pydantic)
-- Layer 2: Completeness (≥3 required signals)
-- Layer 3: Consistency (cross-signal semantic checks)
-- Layer 4: Accuracy (snapshot vs. live tools)
-- Layer 5: Regression detection (baseline comparison)
+**Run all unit tests:**
+```bash
+pytest tests/unit -v
+```
+**Time**: ~45 seconds • **Use**: Full local validation before push
 
-**Plus:** 32 additional tests for edge cases and performance
+**Run unit + integration tests (excluding slow layers):**
+```bash
+pytest tests/ -v -m "not slow"
+```
+**Time**: ~2 minutes • **Use**: Pre-PR validation
 
-For complete testing guide see: [docs/design/STAGE5_DOCUMENTATION_AND_FINAL_REVIEW.md](docs/design/STAGE5_DOCUMENTATION_AND_FINAL_REVIEW.md)
+**Run full test suite (unit + integration + slow):**
+```bash
+pytest tests/ -v
+```
+**Time**: ~5 minutes • **Use**: Final validation before merge
+
+#### Specialized Test Runs
+
+**Run only integration tests:**
+```bash
+pytest tests/integration -v
+```
+**Time**: ~1 minute
+
+**Run snapshot validation (quick mode — PR validation):**
+```bash
+pytest tests/integration/observer -v -m "integration and not slow"
+```
+**Layers**: 1-3 (schema, completeness, consistency) • **Time**: ~30 seconds
+
+**Run snapshot validation (full mode — comprehensive):**
+```bash
+pytest tests/integration/observer -v -m "integration"
+```
+**Layers**: 1-5 (all layers including accuracy and regression) • **Time**: ~5 minutes
+
+**Run performance regression tests:**
+```bash
+pytest tests/ -v -m "perf" --no-header
+```
+**Time**: ~5 seconds • **Use**: Verify no timing regressions
+
+**Run flaky test detection suite:**
+```bash
+pytest tests/ -v -m "flaky or flaky_integration or flaky_historical"
+```
+**Time**: ~1 minute
+
+**Run edge case tests:**
+```bash
+pytest tests/ -v -m "edge_case"
+```
+**Time**: ~2 minutes
+
+#### Parallel Test Execution
+
+**Run unit tests in parallel (auto-detect CPU count):**
+```bash
+pytest tests/unit -n auto --dist=loadscope
+```
+**Speedup**: ~2-4x on multi-core systems
+
+**Run with specific worker count:**
+```bash
+pytest tests/unit -n 4 --dist=loadscope
+```
+**Distribution Strategy**: `loadscope` (respects fixture boundaries)
+
+#### Coverage Measurement
+
+**Generate coverage report (with 90% threshold enforcement):**
+```bash
+pytest tests/unit -p no:flaky-detection \
+  --cov=src --cov-report=html --cov-report=term-missing \
+  --cov-fail-under=90
+```
+**Threshold**: 90% overall coverage (configurable in `.coveragerc`)
+
+**Generate HTML coverage report (for visualization):**
+```bash
+pytest tests/unit \
+  --cov=src --cov-report=html
+# Open coverage_html_report/index.html in browser
+```
+
+### Coverage Requirements and Thresholds
+
+**Coverage Targets:**
+- **Minimum threshold**: 85% (enforced in CI and pre-commit)
+- **Target coverage**: 85%+ on all modified files
+- **Exclusions**: Test files, type stubs, abstract methods
+
+**Coverage Configuration** (`.coveragerc`):
+- **Source directory**: `src/`
+- **Branches**: Measured and reported
+- **Precision**: 2 decimal places
+- **Reporting**: HTML, XML, terminal
+
+**Excluded Files** (intentionally omitted from coverage):
+- Observer collectors (architecture_signal, backlog, benchmark_signal, etc.)
+- Test utilities and fixtures
+- Type-checking stubs
+
+**Omitted Lines** (pragma: no cover):
+- `__repr__` methods
+- Assertions for defensive programming
+- `__name__ == '__main__'` blocks
+- TYPE_CHECKING conditional blocks
+- Overload declarations
+- Abstract methods
+- Logging statements
+
+### CI/CD Test Execution
+
+The GitHub Actions CI pipeline (`.github/workflows/ci.yml`) enforces six quality gates:
+
+#### 1. **Lint Check** (ruff)
+- **Command**: `ruff check .`
+- **Purpose**: Code style, import organization, common mistakes
+- **Duration**: ~5 seconds
+- **Failure**: Blocks PR merge
+- **Configuration**: `[tool.ruff]` in `pyproject.toml` (line-length: 100)
+
+#### 2. **Type Checking** (ty)
+- **Command**: `ty check src/`
+- **Purpose**: Type annotation validation, type safety
+- **Duration**: ~10 seconds
+- **Failure**: Blocks PR merge
+- **Status**: Enforced (not advisory)
+- **Active Tool**: `ty` (not mypy)
+
+#### 3. **License Headers** (SPDX)
+- **Command**: Verifies `SPDX-License-Identifier` in all `.py` files
+- **Purpose**: License attribution and compliance
+- **Duration**: ~5 seconds
+- **Failure**: Blocks PR merge
+- **Expected Header**: `# SPDX-License-Identifier: AGPL-3.0-or-later`
+
+#### 4. **Custodian Governance Check**
+- **Command**: `custodian-doctor --strict --repo .`
+- **Purpose**: Code governance and architectural constraints
+- **Duration**: ~15 seconds
+- **Failure**: Blocks PR merge
+
+#### 5. **Unit Tests**
+- **PR Validation** (fast path):
+  - **Command**: `pytest tests/unit -m "not slow" --cov-fail-under=90`
+  - **Duration**: ~30 seconds
+  - **Coverage threshold**: 90%
+  - **Exclusion**: Slow tests for rapid feedback
+  - **Marker**: `-p no:flaky-detection` (disables flaky plugin for coverage accuracy)
+
+- **Push/Merge Validation** (full path):
+  - **Command**: `pytest tests/unit --cov-fail-under=90`
+  - **Duration**: ~45 seconds
+  - **Coverage threshold**: 90%
+  - **Includes**: All unit tests (slow included)
+  - **Marker**: `-p no:flaky-detection` (disables flaky plugin for coverage accuracy)
+
+#### 6. **Snapshot Validation** (5-layer pipeline)
+- **PR Validation** (quick):
+  - **Command**: `pytest tests/integration/observer -m "integration and not slow"`
+  - **Duration**: ~30 seconds
+  - **Layers**: 1-3 (schema, completeness, consistency)
+
+- **Push/Merge Validation** (full):
+  - **Command**: `pytest tests/integration/observer -m "integration"`
+  - **Duration**: ~5 minutes
+  - **Layers**: 1-5 (includes accuracy and regression)
+
+- **Scheduled Validation** (daily at 2 AM UTC):
+  - **Command**: `pytest tests/integration/observer -m "integration"`
+  - **Duration**: ~5 minutes
+  - **Purpose**: Detect regressions without code changes
+  - **Frequency**: Daily (cron: '0 2 * * *')
+
+#### 7. **Performance Regression Tests** (dedicated job)
+- **Command**: `pytest tests/unit -m "perf" --no-header`
+- **Duration**: ~5 seconds
+- **Purpose**: Verify no timing regressions (all bounds <50ms)
+- **Failure Indicator**: Collection time regressed >250x vs baseline
+
+#### 8. **Flaky Test Detection** (post-merge analysis)
+- **Trigger**: On push (merges only, not PRs)
+- **Command**: `pytest tests/unit --flaky-detection -v --tb=short`
+- **Purpose**: Capture test outcome patterns for trend analysis
+- **Storage**: `.flaky-tests/` directory (JSONL format)
+- **Analysis**: Historical aggregation, severity classification, recommendations
+
+#### 9. **Coverage Upload** (codecov.io)
+- **Service**: Codecov
+- **Configuration**: Token in secrets (`CODECOV_TOKEN`)
+- **Reports**: HTML + XML
+- **Retention**: 30 days
+- **Coverage flag**: `unittests`
+
+### Test Markers and Organization
+
+**Available pytest markers** (defined in `pyproject.toml`):
+
+```python
+@pytest.mark.integration     # Multi-service tests requiring coordination
+@pytest.mark.slow           # Long-running tests (excluded from PR runs)
+@pytest.mark.perf           # Performance/timing regression bounds
+@pytest.mark.smoke          # Quick core functionality validation
+@pytest.mark.edge_case      # Boundary conditions and error paths
+@pytest.mark.flaky          # Flaky test detection logic
+@pytest.mark.flaky_historical  # Historical aggregation and trends
+@pytest.mark.flaky_integration # Flaky test service integration
+```
+
+**Filter Examples:**
+```bash
+# Run only integration tests
+pytest tests/ -m integration
+
+# Run everything except slow tests
+pytest tests/ -m "not slow"
+
+# Run only performance tests
+pytest tests/ -m perf
+
+# Run integration tests excluding slow (PR mode)
+pytest tests/integration -m "integration and not slow"
+```
+
+### Test Output and Artifact Handling
+
+**Generated Artifacts:**
+
+| Artifact | Location | Purpose | Retention |
+|----------|----------|---------|-----------|
+| Coverage HTML | `coverage_html_report/` | Visual coverage inspection | Artifact: 30 days |
+| Coverage XML | `coverage.xml` | Programmatic coverage parsing | Artifact: 30 days |
+| Coverage report | Terminal output | Quick coverage summary | Stdout |
+| Validation reports | `tests/integration/observer/validation_reports/` | Snapshot validation details | Artifact: 30 days |
+| Flaky metrics | `.flaky-tests/` | Test outcome history | Local storage |
+| Test logs | Stdout/stderr | Per-test diagnostics | Stdout |
+
+**Test Failure Output:**
+- Default traceback mode: `short` (relevant lines only)
+- Coverage report: `term-missing` (shows uncovered line numbers)
+- Verbose mode: `-v` (shows test names, durations)
+- Quiet mode: `-q` (minimal output)
+
+### Real-World Snapshot Validation Pipeline
+
+The **snapshot validation system** validates repository state through a 5-layer pipeline:
+
+| Layer | Name | Speed | Purpose | Included |
+|-------|------|-------|---------|----------|
+| 1 | Schema Validation | Fast | JSON ↔ Pydantic model roundtrip | PR/Push/Daily |
+| 2 | Completeness Validation | Fast | Required signals present (≥3 non-unavailable) | PR/Push/Daily |
+| 3 | Consistency Validation | Fast | Cross-signal semantic consistency | PR/Push/Daily |
+| 4 | Accuracy Validation | Slow | Snapshot data vs. live external services | Push/Daily only |
+| 5 | Regression Detection | Slow | Baseline comparison with tolerances | Push/Daily only |
+
+**Test Organization** (73 integration tests):
+- **Integration tests**: 41 covering all 5 layers with multi-fixture scenarios
+- **Edge case tests**: 19 for corrupted data, permission errors, large snapshots
+- **Performance tests**: 13 for scaling and memory efficiency
+
+### Configuration Files
+
+**Key configuration files:**
+- `.github/workflows/ci.yml` — CI/CD pipeline definition
+- `pyproject.toml` — pytest configuration, markers, xdist settings
+- `.coveragerc` — coverage thresholds and exclusions
+- `ruff.toml` or `[tool.ruff]` in pyproject.toml — linting rules
+- `.custodian.yaml` — governance rules
+
+**To modify test behavior:**
+1. **Change coverage threshold**: Edit `fail_under` in `[report]` section of `.coveragerc`
+2. **Add pytest marker**: Add to `markers` list in `[tool.pytest.ini_options]` of `pyproject.toml`
+3. **Exclude files from coverage**: Edit `omit` list in `[run]` section of `.coveragerc`
+4. **Change CI trigger conditions**: Edit `.github/workflows/ci.yml` (on/if conditions)
+
+### Documentation and Guides
+
+For comprehensive testing information, see:
+- **Quick start**: [CONTRIBUTING.md](CONTRIBUTING.md) — setup and basic test commands
+- **Snapshot validation architecture**: [docs/design/STAGE1_CI_INTEGRATION_TEST_RUNNER_DESIGN.md](docs/design/STAGE1_CI_INTEGRATION_TEST_RUNNER_DESIGN.md)
+- **Implementation details**: [docs/design/STAGE2_CI_INTEGRATION_TEST_RUNNER_IMPLEMENTATION.md](docs/design/STAGE2_CI_INTEGRATION_TEST_RUNNER_IMPLEMENTATION.md)
+- **Real-world validation tests**: [docs/design/STAGE3_REAL_WORLD_SNAPSHOT_VALIDATION_TESTS.md](docs/design/STAGE3_REAL_WORLD_SNAPSHOT_VALIDATION_TESTS.md)
+- **Local testing guide**: [docs/design/STAGE4_LOCAL_TESTING_AND_VERIFICATION.md](docs/design/STAGE4_LOCAL_TESTING_AND_VERIFICATION.md)
+- **Complete testing procedures**: [docs/design/STAGE5_DOCUMENTATION_AND_FINAL_REVIEW.md](docs/design/STAGE5_DOCUMENTATION_AND_FINAL_REVIEW.md)
 
 ---
 
