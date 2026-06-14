@@ -4678,3 +4678,7 @@ Stage 0 exploration complete. The codebase has:
 
 **Status**: ✅ **STAGE 0 COMPLETE** — All findings documented, ready for Stage 1 test implementation.
 
+
+## 2026-06-14 — fix(custodian): R2 .console limit raised 200KB → 500KB
+
+Platform's automated stage-completion docs regularly push log.md past 200KB. Raised _CONSOLE_SIZE_LIMIT and the inline 200*1024 literal in the active _detect_r2_console_budget to 500KB. PR #291 custodian-audit CI was blocked on this. Test boundary updated.
