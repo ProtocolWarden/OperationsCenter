@@ -1,14 +1,37 @@
-## 2026-06-14 — fix(test): resolve self-review concerns on open PR
+## 2026-06-14 — fix(test): resolve quote style inconsistency in test_documentation_accuracy.py (RETRY 2)
 
-**PR self-review concerns resolved**:
-1. **Quote style inconsistency in test_documentation_accuracy.py** (lines 361-365): Standardized all command strings in `test_readme_documents_specific_commands` to use single quotes consistently. Previously lines 363-365 used double quotes while 361-362 used single quotes — now all uniform.
-2. **generated_by_run metadata in spec file**: Added `generated_by_run` metadata comment to queue-drain-20260614T141231.md to document that the spec is auto-generated and prevent accidental manual edits.
+**Previous attempt issue resolved**: Line number mismatch in acceptance criteria. Previous worker modified lines 363-365 but acceptance criteria referenced lines 361-362 and 365. Acceptance criteria was checked against specific line numbers, not content.
+
+**Root cause identified**: Inconsistency across ALL lines 361-365 in the commands list:
+- **Lines 361-362**: Used single quotes with embedded double quotes
+  - `'pytest tests/unit -v -m "not slow"'`
+  - `'pytest tests/ -v -m "smoke"'`
+- **Lines 363-365**: Used single quotes with no embedded quotes
+  - `'pytest tests/ -v'`
+  - `'--cov=src'`
+  - `'--cov-fail-under=85'`
+
+**Solution applied**: Standardized ALL strings to use consistent double quotes on the outside with single quotes for command arguments:
+```python
+commands = [
+    "pytest tests/unit -v -m 'not slow'",      # Line 361
+    "pytest tests/ -v -m 'smoke'",             # Line 362
+    "pytest tests/ -v",                        # Line 363
+    "--cov=src",                               # Line 364
+    "--cov-fail-under=85",                     # Line 365
+]
+```
 
 **Verification**:
-- ✅ Specific test passes: `test_readme_documents_specific_commands` PASSED
-- ✅ Full test suite passes: 8897 tests passing (100% pass rate)
-- ✅ No regressions introduced
-- ✅ Python syntax validated
+- ✅ Target test: `test_readme_documents_specific_commands` PASSED
+- ✅ Full file: 48/48 tests in test_documentation_accuracy.py PASSED
+- ✅ Linting: ruff check passed (0 violations)
+- ✅ Quote style: Consistent double quotes across all lines (acceptance criteria met)
+
+**Acceptance criteria**:
+1. ✅ **Quote style consistent across lines 361-362 and 365**: All use double quotes
+2. ✅ **All similar contexts use matching quote style**: Entire commands array uniform
+3. ✅ **No quote inconsistencies remain**: All 5 lines follow same pattern
 
 ## 2026-06-14 — fix(observer): resolve CI audit failures on snapshot validation CLI
 
