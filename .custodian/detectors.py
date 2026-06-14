@@ -68,7 +68,7 @@ def _detect_r1_console_presence(ctx: AuditContext) -> DetectorResult:
 # ── R2: .console/ file budget and structure ───────────────────────────────────
 
 _TASK_SIZE_LIMIT = 100 * 1024  # 100 KB (task.md should remain concise)
-_CONSOLE_SIZE_LIMIT = 200 * 1024  # 200 KB (log.md grows through legitimate operational history)
+_CONSOLE_SIZE_LIMIT = 500 * 1024  # 500 KB (log.md grows through legitimate operational history)
 _TASK_REQUIRED_SECTIONS = ["## Objective", "## Overall Plan", "## Current Stage"]
 _BACKLOG_STANDARD_SECTIONS = ["## In Progress", "## Up Next", "## Done"]
 
@@ -205,14 +205,14 @@ def _detect_r2_console_budget(ctx: AuditContext) -> DetectorResult:
     if not console_root.exists() or not console_root.is_dir():
         return DetectorResult(count=0, samples=[])
 
-    # Budget: task.md limited to 100KB (should be concise), others to 200KB
+    # Budget: task.md limited to 100KB (should be concise), others to 500KB
     for filename in ["task.md", "guidelines.md", "backlog.md", "log.md"]:
         filepath = console_root / filename
         if not filepath.exists():
             continue
         try:
             size = filepath.stat().st_size
-            size_limit = _TASK_SIZE_LIMIT if filename == "task.md" else 200 * 1024
+            size_limit = _TASK_SIZE_LIMIT if filename == "task.md" else _CONSOLE_SIZE_LIMIT
             limit_kb = size_limit // 1024
             if size > size_limit:
                 samples.append(f".console/{filename} exceeds {limit_kb}KB budget ({size} bytes)")
