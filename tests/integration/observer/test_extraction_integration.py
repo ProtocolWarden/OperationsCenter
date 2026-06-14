@@ -78,9 +78,18 @@ class TestExtractionIntegration:
             plugin.pytest_runtest_makereport(item3, _call_info(excinfo=exc3))
 
             assert len(plugin.test_outcomes) == 3
-            assert plugin.test_outcomes["tests/test_suite.py::test_assert"]["test_function"] == "test_assert"
-            assert plugin.test_outcomes["tests/test_suite.py::test_timeout"]["test_function"] == "test_timeout"
-            assert plugin.test_outcomes["tests/test_suite.py::test_value"]["test_function"] == "test_value"
+            assert (
+                plugin.test_outcomes["tests/test_suite.py::test_assert"]["test_function"]
+                == "test_assert"
+            )
+            assert (
+                plugin.test_outcomes["tests/test_suite.py::test_timeout"]["test_function"]
+                == "test_timeout"
+            )
+            assert (
+                plugin.test_outcomes["tests/test_suite.py::test_value"]["test_function"]
+                == "test_value"
+            )
 
             # Check that assertion messages were extracted
             assert plugin.test_outcomes["tests/test_suite.py::test_assert"]["assertion_message"]
@@ -128,8 +137,7 @@ class TestExtractionIntegration:
 
             item = _item("tests/unicode.py::test_unicode", test_unicode)
             exc = SimpleNamespace(
-                value=AssertionError("Expected δεσμός but got δεσμό"),
-                traceback=None
+                value=AssertionError("Expected δεσμός but got δεσμό"), traceback=None
             )
             plugin.pytest_runtest_makereport(item, _call_info(excinfo=exc))
 
@@ -293,6 +301,7 @@ class TestExtractionAccuracy:
             ]
 
             for idx, (nodeid, expected_name) in enumerate(test_cases):
+
                 def test_fn():
                     pass
 
