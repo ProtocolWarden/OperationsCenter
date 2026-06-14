@@ -1,3 +1,15 @@
+## 2026-06-14 — fix(test): resolve self-review concerns on open PR
+
+**PR self-review concerns resolved**:
+1. **Quote style inconsistency in test_documentation_accuracy.py** (lines 361-365): Standardized all command strings in `test_readme_documents_specific_commands` to use single quotes consistently. Previously lines 363-365 used double quotes while 361-362 used single quotes — now all uniform.
+2. **generated_by_run metadata in spec file**: Added `generated_by_run` metadata comment to queue-drain-20260614T141231.md to document that the spec is auto-generated and prevent accidental manual edits.
+
+**Verification**:
+- ✅ Specific test passes: `test_readme_documents_specific_commands` PASSED
+- ✅ Full test suite passes: 8897 tests passing (100% pass rate)
+- ✅ No regressions introduced
+- ✅ Python syntax validated
+
 ## 2026-06-14 — fix(observer): resolve CI audit failures on snapshot validation CLI
 
 Cleared 7 custodian findings (C13, DC1, DC7, OC12×4) and fixed test_version_in_help Python 3.11 ANSI escape issue:
