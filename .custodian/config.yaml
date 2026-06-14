@@ -278,6 +278,10 @@ audit:
       # whose names must start with test_ so _extract_test_name() returns realistic values.
       # T2 is a false positive — the outer test functions all have assertions.
       - tests/unit/observer/test_pytest_flaky_plugin.py
+      # Integration tests use the same nested-specimen pattern — local def test_*() stubs
+      # passed to FlakyTestDetectionPlugin to simulate real pytest items.
+      # T2 is a false positive — the outer class test methods all have assertions.
+      - tests/integration/observer/test_extraction_integration.py
     D6:
       # MetricUnit is an Enum — values are accessed as MetricUnit.X, not via constructor.
       # D6 is a false positive for Enum classes used only in type annotations and method signatures.

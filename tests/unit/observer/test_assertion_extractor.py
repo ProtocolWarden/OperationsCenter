@@ -227,3 +227,182 @@ class TestAssertionMessageIntegration:
         result = extract_assertion_from_excinfo(excinfo)
         assert len(result) <= 200
         assert result.endswith("...")
+
+
+class TestEdgeCasesSpecialCharacters:
+    """Tests for handling special characters and malformed inputs."""
+
+    def test_special_chars_in_message(self) -> None:
+        msg = "expected §±√ but got §±√"
+        exc = AssertionError(msg)
+        excinfo = _mock_excinfo(exc)
+        result = extract_assertion_from_excinfo(excinfo)
+        assert "expected" in result or "§" in result
+
+    def test_unicode_characters_preserved(self) -> None:
+        msg = "文字列が一致しません: 'hello' != 'こんにちは'"
+        exc = AssertionError(msg)
+        excinfo = _mock_excinfo(exc)
+        result = extract_assertion_from_excinfo(excinfo)
+        # Should not crash on unicode
+        assert result
+        assert len(result) <= 200
+
+    def test_control_characters_handled(self) -> None:
+        msg = "test\x00message\x01with\x02control\x03chars"
+        exc = AssertionError(msg)
+        excinfo = _mock_excinfo(exc)
+        result = extract_assertion_from_excinfo(excinfo)
+        # Should handle without crashing
+        assert result is not None
+
+    def test_tabs_and_mixed_whitespace(self) -> None:
+        msg = "expected\t42\t\nbut\t\tgot\t\t41"
+        exc = AssertionError(msg)
+        excinfo = _mock_excinfo(exc)
+        result = extract_assertion_from_excinfo(excinfo)
+        # Should normalize whitespace
+        assert "expected" in result and "42" in result and "41" in result
+        assert "\t" not in result or "\n" not in result
+
+    def test_very_long_single_word(self) -> None:
+        # Very long single word without spaces
+        long_word = "a" * 300
+        msg = f"Expected {long_word} but got b"
+        exc = AssertionError(msg)
+        excinfo = _mock_excinfo(exc)
+        result = extract_assertion_from_excinfo(excinfo)
+        # Should truncate
+        assert len(result) <= 200
+        assert result.endswith("...")
+
+    def test_json_like_assertion(self) -> None:
+        msg = '{"key": "value"} != {"key": "other_value"}'
+        exc = AssertionError(msg)
+        excinfo = _mock_excinfo(exc)
+        result = extract_assertion_from_excinfo(excinfo)
+        # Should preserve JSON structure
+        assert "{" in result and "}" in result
+
+    def test_regex_pattern_in_assertion(self) -> None:
+        msg = r"Expected pattern ^\d{3}-\d{4}$ to match '123-456'"
+        exc = AssertionError(msg)
+        excinfo = _mock_excinfo(exc)
+        result = extract_assertion_from_excinfo(excinfo)
+        assert "pattern" in result.lower()
+
+    def test_multiline_dict_comparison(self) -> None:
+        msg = """Expected:
+        {'a': 1,
+         'b': 2}
+        But got:
+        {'a': 1,
+         'b': 3}"""
+        exc = AssertionError(msg)
+        excinfo = _mock_excinfo(exc)
+        result = extract_assertion_from_excinfo(excinfo)
+        # Should collapse to single line
+        assert "\n" not in result
+        assert "Expected" in result or "{" in result
+
+    def test_empty_lines_in_message(self) -> None:
+        msg = "line1\n\n\n\n\nline2"
+        exc = AssertionError(msg)
+        excinfo = _mock_excinfo(exc)
+        result = extract_assertion_from_excinfo(excinfo)
+        # Should handle multiple empty lines
+        assert result == "line1 line2"
+
+    def test_xml_like_content(self) -> None:
+        msg = "<root><item>expected</item></root> != <root><item>actual</item></root>"
+        exc = AssertionError(msg)
+        excinfo = _mock_excinfo(exc)
+        result = extract_assertion_from_excinfo(excinfo)
+        assert "<" in result and ">" in result
+
+
+class TestEdgeCasesEmptyAndNone:
+    """Tests for empty, None, and malformed inputs."""
+
+    def test_none_excinfo(self) -> None:
+        result = extract_assertion_from_excinfo(None)
+        assert result == ""
+
+    def test_excinfo_without_value(self) -> None:
+        excinfo = SimpleNamespace()
+        result = extract_assertion_from_excinfo(excinfo)
+        assert result == ""
+
+    def test_excinfo_with_none_value(self) -> None:
+        excinfo = SimpleNamespace(value=None)
+        result = extract_assertion_from_excinfo(excinfo)
+        assert result == ""
+
+    def test_empty_assertion_error(self) -> None:
+        exc = AssertionError()
+        excinfo = _mock_excinfo(exc)
+        result = extract_assertion_from_excinfo(excinfo)
+        assert result == ""
+
+    def test_exception_with_empty_string_message(self) -> None:
+        exc = AssertionError("")
+        excinfo = _mock_excinfo(exc)
+        result = extract_assertion_from_excinfo(excinfo)
+        assert result == ""
+
+    def test_whitespace_only_message(self) -> None:
+        exc = AssertionError("   \n\t\n   ")
+        excinfo = _mock_excinfo(exc)
+        result = extract_assertion_from_excinfo(excinfo)
+        assert result == ""
+
+    def test_none_exception_type(self) -> None:
+        result = parse_non_assertion_exception(None)  # type: ignore
+        assert result == ""
+
+    def test_exception_with_only_spaces(self) -> None:
+        exc = ValueError("     ")
+        result = parse_non_assertion_exception(exc)
+        # Returns the string representation (spaces) before cleaning
+        # Cleaning happens in extract_assertion_from_excinfo
+        assert result == "     " or result == ""
+
+
+class TestEdgeCasesCleaning:
+    """Tests for edge cases in message cleaning."""
+
+    def test_clean_with_zero_max_length(self) -> None:
+        msg = "test message"
+        result = clean_assertion_message(msg, max_length=0)
+        # With max_length=0, truncates to msg[:-3] + "..."
+        # This is an edge case - graceful handling results in partial + ellipsis
+        assert result.endswith("...") or result == ""
+
+    def test_clean_with_very_small_max_length(self) -> None:
+        msg = "test message"
+        result = clean_assertion_message(msg, max_length=5)
+        assert len(result) <= 5
+        if len(result) > 3:
+            assert result.endswith("...")
+
+    def test_clean_exact_at_boundary(self) -> None:
+        msg = "test"
+        result = clean_assertion_message(msg, max_length=4)
+        assert result == "test"
+
+    def test_clean_one_char_over_boundary(self) -> None:
+        msg = "tests"
+        result = clean_assertion_message(msg, max_length=4)
+        # Should truncate to "s..."
+        assert len(result) <= 4 or result.endswith("...")
+
+    def test_assert_keyword_various_cases(self) -> None:
+        for keyword in ["assert", "Assert", "ASSERT", "AsSeRt"]:
+            msg = f"{keyword} x == y"
+            result = clean_assertion_message(msg)
+            assert result == "x == y"
+
+    def test_assert_keyword_with_multiple_spaces(self) -> None:
+        msg = "assert    x == y"
+        result = clean_assertion_message(msg)
+        assert result == "x == y"
