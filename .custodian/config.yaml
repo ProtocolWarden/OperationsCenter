@@ -550,6 +550,11 @@ audit:
       # cli.py implements 8 Typer commands — one command per cohesive operation;
       # splitting by command would scatter the shared app, console, and exit-code defs.
       - src/operations_center/observer/cli.py
+      # service.py manages the full collector lifecycle (required + optional collectors,
+      # signal aggregation, error handling, debug logging) — single responsibility;
+      # splitting by collector type or signal category would fragment the cohesive
+      # service initialization and error propagation logic.
+      - src/operations_center/observer/service.py
     C11:
       # Agent-spawning entrypoints: board_worker, intake, pr_review_watcher invoke
       # the coding backend (team_executor, aider, etc.) which runs for an unbounded
