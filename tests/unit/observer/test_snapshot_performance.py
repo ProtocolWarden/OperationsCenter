@@ -631,7 +631,7 @@ class TestSnapshotManagerPerformance:
             times.append(end - start)
             assert len(snapshots) == limit
 
-        # All limit queries should be fast (1.0s catches catastrophic regression while tolerating CI runners)
+        # All limit queries should be fast (1.0s catches regressions while tolerating CI runners)
         for duration in times:
             assert duration < 1.0
 
