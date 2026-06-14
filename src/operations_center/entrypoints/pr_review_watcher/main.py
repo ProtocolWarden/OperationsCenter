@@ -97,7 +97,7 @@ def _prune_orphan_state_files(oc_root: Path, repo_key: str, open_numbers: set[in
     for f in state_dir.glob(f"{repo_key}-*.json"):
         if not f.stem.startswith(prefix):
             continue
-        num_part = f.stem[len(prefix):]
+        num_part = f.stem[len(prefix) :]
         if not num_part.isdigit() or int(num_part) in open_numbers:
             continue
         try:
