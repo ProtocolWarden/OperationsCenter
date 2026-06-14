@@ -492,6 +492,50 @@ class TestVersionOption:
         clean = re.sub(r"\x1b\[[0-9;]*[mK]", "", result.stdout)
         assert "--version" in clean
 
+    def test_version_with_no_color_env(self) -> None:
+        """Test version output respects NO_COLOR environment variable."""
+        # With NO_COLOR set, output should not contain ANSI codes
+        with patch.dict(os.environ, {"NO_COLOR": "1"}):
+            # Need to reimport to pick up the env var in module-level console init
+            result = CliRunner(env={"NO_COLOR": "1"}).invoke(app, ["--version"])
+            assert result.exit_code == EXIT_SUCCESS
+            assert __version__ in result.stdout
+            # Should not have bold/cyan ANSI codes
+            assert "\x1b[1m" not in result.stdout or "\x1b[36m" not in result.stdout
+
+    def test_version_without_color_when_no_tty(self) -> None:
+        """Test version output is plain when stdout is not a TTY."""
+        # CliRunner simulates non-TTY output by default
+        result = CliRunner().invoke(app, ["--version"])
+        assert result.exit_code == EXIT_SUCCESS
+        assert __version__ in result.stdout
+        assert "operations-center-observer-snapshot" in result.stdout
+
+    def test_help_output_without_ansi(self) -> None:
+        """Test help output can be processed without ANSI codes on all Python versions."""
+        result = CliRunner().invoke(app, ["--help"])
+        assert result.exit_code == EXIT_SUCCESS
+        # Should be able to strip all ANSI codes and still have valid content
+        clean = re.sub(r"\x1b\[[0-9;]*[mK]", "", result.stdout)
+        assert "validate" in clean  # At least one command should be visible
+        assert "help" in clean.lower()  # Help text should be present
+
+    def test_error_output_formatting(self) -> None:
+        """Test error output formatting without spurious ANSI codes."""
+        # Try to validate a non-existent file
+        result = runner.invoke(app, ["validate", "nonexistent.json"])
+        # Should fail with appropriate exit code
+        assert result.exit_code != EXIT_SUCCESS
+        # Error message should not have malformed ANSI sequences
+        # Check that if there are ANSI codes, they follow valid patterns
+        invalid_ansi_patterns = [
+            r"\x1b\[(?![0-9;]*[mK])",  # ESC[ not followed by valid sequence
+            r"\x1b\[[0-9;]*[^mK\s](?![0-9;])",  # Invalid ending character
+        ]
+        for pattern in invalid_ansi_patterns:
+            matches = re.findall(pattern, result.stdout + result.stderr)
+            assert not matches, f"Found invalid ANSI sequences: {matches}"
+
 
 class TestEnvironmentVariables:
     """Tests for environment variable configuration."""

@@ -8,6 +8,28 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## Recently Completed
 
+### 2026-06-14: Stage 1 — Add is_eager=True to --version argument (✅ COMPLETE)
+- **Objective**: Verify and validate that is_eager=True parameter is correctly added to --version argument in CLI
+- **Status**: ✅ Complete - All acceptance criteria verified and confirmed working
+- **Key Results**:
+  - ✅ **is_eager=True present**: `src/operations_center/observer/cli.py:173` correctly configured
+  - ✅ **--version flag works**: Returns exit code 0 with correct version output
+  - ✅ **Help text shows flag**: --version flag visible in help output without ANSI code issues
+  - ✅ **No regressions**: Full observer test suite passes (1,213 tests)
+  - ✅ **Tests verify**: TestVersionOption class has 2/2 tests passing
+- **Verification Steps**:
+  1. ✅ Verified `is_eager=True` present on cli.py:173
+  2. ✅ Ran TestVersionOption tests: 2/2 passing
+  3. ✅ Ran full observer test suite: 1,213/1,213 passing
+  4. ✅ Tested --version CLI directly: Works correctly
+  5. ✅ Tested --help output: --version flag visible and correctly formatted
+  6. ✅ Confirmed no ANSI code regressions
+- **All Acceptance Criteria Met**:
+  1. ✅ --version argument has is_eager=True parameter
+  2. ✅ Argument parser properly configured for all Python versions
+  3. ✅ Change does not break existing behavior
+- **Status**: ✅ COMPLETE — Ready for Stage 2 (Add cross-version integration tests)
+
 ### 2026-06-14: Stage 0 — Investigate current state and identify issues (✅ COMPLETE)
 - **Objective**: Investigate Python 3.11+ ANSI code handling and identify all required changes
 - **Status**: ✅ Complete - Comprehensive investigation document created

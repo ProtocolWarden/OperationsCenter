@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sys
 from pathlib import Path
 
 import typer
@@ -39,7 +40,12 @@ app = typer.Typer(
     help="Snapshot validator CLI for manual CI run testing.",
     no_args_is_help=True,
 )
-console = Console()
+
+# Initialize console with NO_COLOR support
+# NO_COLOR env var (https://no-color.org/) disables ANSI color output
+_no_color = os.environ.get("NO_COLOR") is not None
+console = Console(no_color=_no_color, force_terminal=None)
+
 logger = logging.getLogger(__name__)
 
 # Exit codes (matching artifact_index precedent)
@@ -95,10 +101,27 @@ def _setup_logging(log_level: str, debug: bool) -> None:
     )
 
 
+def _is_tty_output() -> bool:
+    """Check if stdout is connected to a terminal.
+
+    Returns:
+        True if stdout is a TTY, False otherwise
+    """
+    return sys.stdout.isatty()
+
+
 def _version_callback(value: bool) -> None:
-    """Handle version flag."""
+    """Handle version flag.
+
+    Respects NO_COLOR environment variable and TTY detection for clean output
+    when piped or in non-interactive contexts.
+    """
     if value:
-        console.print(f"[cyan]operations-center-observer-snapshot[/cyan] {__version__}")
+        # Use simple text output if NO_COLOR is set or output is not a TTY
+        if _no_color or not _is_tty_output():
+            console.print(f"operations-center-observer-snapshot {__version__}")
+        else:
+            console.print(f"[cyan]operations-center-observer-snapshot[/cyan] {__version__}")
         raise typer.Exit(0)
 
 
