@@ -1,3 +1,10 @@
+## 2026-06-14 — fix(review-watcher): raise _MAX_CI_GREEN_RETRACTIONS 1→3
+
+Root cause: PR #289 consumed its single WO-3 self-retraction slot on a rebase_conflict
+escalation; the subsequent ci_never_settled escalation (audit check late to appear) could
+not self-clear despite all CI green. Raised to 3 to cover: rebase_conflict + ci_never_settled
++ one genuine concern cycle without enabling runaway loops. Watch-review restarted.
+
 ## 2026-06-14 — Stage 6: Create Commit and Prepare PR (✅ COMPLETE)
 
 **Objective**: Create a comprehensive pull request with all implementation and testing changes ready for review and merge.

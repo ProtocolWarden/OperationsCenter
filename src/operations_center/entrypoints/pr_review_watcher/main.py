@@ -823,10 +823,12 @@ _MAX_REQUEUES = 3
 _MAX_CI_WAIT_CYCLES = 20
 
 # WO-3: when a PR is escalated (same head, no new push) but CI is fully green,
-# retract the escalation once and allow the reviewer to re-evaluate. Bounded to
+# retract the escalation and allow the reviewer to re-evaluate. Bounded to
 # prevent infinite escalation→retraction loops on PRs whose concerns cannot be
 # resolved by automation alone (e.g. diff-truncation false positives).
-_MAX_CI_GREEN_RETRACTIONS = 1
+# 3 allows recovery from: rebase_conflict + ci_never_settled + one genuine
+# concern cycle, without enabling runaway loops.
+_MAX_CI_GREEN_RETRACTIONS = 3
 _DIFF_LIMIT = 60_000
 
 
