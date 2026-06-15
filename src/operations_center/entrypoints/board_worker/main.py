@@ -92,6 +92,36 @@ def _heartbeat_loop(status_dir: Path, role: str, stop_event: threading.Event) ->
         stop_event.wait(60)
 
 
+def _reconcile_in_flight_at_startup(config_path: Path, role: str) -> None:
+    """Reclaim in-flight slots leaked by the restart that just (re)started us.
+
+    A code-pull restart SIGTERMs the watchers mid-dispatch, so the executor that
+    was running can leave an ``execution_started`` event with no matching
+    ``execution_finished`` — a leaked per-backend concurrency slot. board_unblock
+    Rule 10 would clear it, but only on its next watchdog cycle. Running the same
+    reconciliation here closes the gap immediately on restart. Best-effort: a
+    failure must never stop the worker from coming up.
+    """
+    try:
+        from operations_center.execution.usage_store import UsageStore
+        from operations_center.in_flight_reconcile import reconcile_in_flight_on_startup
+
+        settings = _load_settings(config_path)
+        client = _plane_client(settings)
+        try:
+            cleared = reconcile_in_flight_on_startup(UsageStore(), client)
+        finally:
+            client.close()
+        if cleared:
+            logger.info(
+                "board_worker[%s]: startup reconcile cleared %d orphaned in-flight slot(s)",
+                role,
+                len(cleared),
+            )
+    except Exception as exc:  # noqa: BLE001 — startup must not fail on reconciliation
+        logger.warning("board_worker[%s]: startup in-flight reconcile skipped — %s", role, exc)
+
+
 # ── Main poll loop ────────────────────────────────────────────────────────────
 
 
@@ -119,6 +149,8 @@ def main() -> int:
     )
 
     logger.info("board_worker[%s]: starting — poll_interval=%ds", role, args.poll_interval)
+
+    _reconcile_in_flight_at_startup(args.config, role)
 
     while True:
         try:

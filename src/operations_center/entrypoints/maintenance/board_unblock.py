@@ -116,16 +116,17 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 
-import httpx
-
 from operations_center.adapters.plane import PlaneClient
 from operations_center.config import load_settings
 from operations_center.execution.usage_store import UsageStore
+from operations_center.in_flight_reconcile import (
+    clear_orphaned_in_flight,
+    is_terminal as _is_terminal,
+    state_name as _state_name,
+)
 
 _MEM_SKIP_THRESHOLD_GB = 1.7  # skip all rules below this
 _MEM_R4AI_THRESHOLD_GB = 8.0  # skip Rule 4 (requeue to R4AI) below this
-
-_TERMINAL_STATES = {"done", "cancelled", "cancelled by operator", "closed"}
 
 
 def _mem_available_gb() -> float:
@@ -255,13 +256,6 @@ def _labels(issue: dict[str, Any]) -> list[str]:
     return names
 
 
-def _state_name(issue: dict[str, Any]) -> str:
-    state = issue.get("state")
-    if isinstance(state, dict):
-        return str(state.get("name", "")).strip()
-    return str(state or "").strip()
-
-
 def _label_value(labels: list[str], prefix: str) -> str | None:
     for label in labels:
         if label.lower().startswith(prefix.lower()):
@@ -298,10 +292,6 @@ def _retry_count(labels: list[str]) -> int:
         return int(raw)
     except ValueError:
         return 0
-
-
-def _is_terminal(state: str) -> bool:
-    return state.lower() in _TERMINAL_STATES
 
 
 def _blocker_task_id(labels: list[str]) -> str | None:
@@ -669,77 +659,12 @@ def _clear_orphaned_in_flight_events(
     (Done/Cancelled), the slot is leaked and will block dispatch until the 24 h
     stale-event cutoff expires.  This rule writes ``execution_finished`` immediately
     to release the slot.
+
+    The scan itself lives in ``operations_center.in_flight_reconcile`` so the
+    watcher-startup path can run the identical orphan check; this rule is a thin
+    wrapper that preserves the watchdog's call signature and action output.
     """
-    data = usage_store.load()
-    events = data.get("events", [])
-    cutoff = now - timedelta(hours=24)
-
-    in_flight: dict[tuple[str, str], dict[str, Any]] = {}
-    for e in events:
-        ts_raw = e.get("timestamp")
-        if not isinstance(ts_raw, str):
-            continue
-        try:
-            ts = datetime.fromisoformat(ts_raw)
-        except ValueError:
-            continue
-        if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=UTC)
-        if ts < cutoff:
-            continue
-        tid = e.get("task_id")
-        backend = e.get("backend") or ""
-        if not isinstance(tid, str):
-            continue
-        kind = e.get("kind")
-        key = (backend, tid)
-        if kind == "execution_started":
-            in_flight[key] = e
-        elif kind == "execution_finished":
-            in_flight.pop(key, None)
-
-    cleared: list[dict[str, Any]] = []
-    for (backend, task_id), start_event in in_flight.items():
-        try:
-            issue = client.fetch_issue(task_id)
-            task_state = _state_name(issue)
-            is_orphaned = _is_terminal(task_state)
-            reason = f"task {task_id} is in terminal state {task_state!r}"
-        except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 404:
-                is_orphaned = True
-                reason = f"task {task_id} not found in Plane (404 — deleted or never created)"
-            else:
-                continue
-        except Exception:
-            continue
-
-        if not is_orphaned:
-            continue
-
-        entry: dict[str, Any] = {
-            "task_id": task_id,
-            "backend": backend,
-            "started_at": start_event.get("timestamp"),
-            "rule": "ORPHANED_IN_FLIGHT_CLEAR",
-            "reason": reason,
-        }
-        if apply:
-            try:
-                usage_store.record_execution_finished(
-                    task_id=task_id,
-                    backend=backend,
-                    now=now,
-                )
-                entry["action"] = "applied"
-            except Exception as exc:
-                entry["action"] = "error"
-                entry["error"] = str(exc)
-        else:
-            entry["action"] = "would_apply"
-        cleared.append(entry)
-
-    return cleared
+    return clear_orphaned_in_flight(usage_store, client, now=now, apply=apply)
 
 
 def main() -> int:
