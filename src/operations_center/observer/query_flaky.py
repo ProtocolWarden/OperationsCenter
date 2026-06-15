@@ -36,6 +36,8 @@ class FlakyTest:
         run_count: Number of runs analyzed
         category: Flakiness category (INTERMITTENT, ENVIRONMENT, INFRASTRUCTURE, UNKNOWN)
         last_failed: Timestamp of most recent failure (or None)
+        test_name: Extracted test function name (e.g., "test_foo" from full path)
+        assertion_message: Most recent assertion message from failures (max 200 chars)
     """
 
     name: str
@@ -43,6 +45,8 @@ class FlakyTest:
     run_count: int
     category: str | None = None
     last_failed: datetime | None = None
+    test_name: str | None = None
+    assertion_message: str | None = None
 
 
 @dataclass
@@ -105,7 +109,7 @@ class FlakyTestQueryMixin(ABC):
     @abstractmethod
     def _get_recent_snapshots(self, count: int) -> list[RepoStateSnapshot]: ...
 
-    def get_flaky_tests(self, timerange=None) -> list[FlakyTest]:
+    def get_flaky_tests(self, timerange: Any | None = None) -> list[FlakyTest]:
         """Get all flaky tests detected in a time range.
 
         Args:
@@ -133,13 +137,15 @@ class FlakyTestQueryMixin(ABC):
                     run_count=test_dict.get("run_count", 0),
                     category=test_dict.get("category"),
                     last_failed=None,
+                    test_name=test_dict.get("test_name"),
+                    assertion_message=test_dict.get("assertion_message"),
                 )
                 flaky_tests.append(flaky_test)
 
         flaky_tests.sort(key=lambda t: t.failure_rate, reverse=True)
         return flaky_tests
 
-    def get_test_metrics(self, timerange=None) -> FlakyTestMetrics | None:
+    def get_test_metrics(self, timerange: Any | None = None) -> FlakyTestMetrics | None:
         """Get aggregated flaky test metrics for a repository.
 
         Args:
@@ -184,6 +190,8 @@ class FlakyTestQueryMixin(ABC):
                                 failure_rate=test_dict.get("failure_rate", 0.0),
                                 run_count=test_dict.get("run_count", 0),
                                 category=test_dict.get("category"),
+                                test_name=test_dict.get("test_name"),
+                                assertion_message=test_dict.get("assertion_message"),
                             )
                         )
 
@@ -198,7 +206,7 @@ class FlakyTestQueryMixin(ABC):
 
         return metrics if metrics.total_flaky_tests > 0 else None
 
-    def get_repository_health(self, timerange=None) -> RepositoryHealth:
+    def get_repository_health(self, timerange: Any | None = None) -> RepositoryHealth:
         """Get overall repository health assessment.
 
         Args:
@@ -248,7 +256,7 @@ class FlakyTestQueryMixin(ABC):
 
         return health
 
-    def filter_by_category(self, category: str, timerange=None) -> list[FlakyTest]:
+    def filter_by_category(self, category: str, timerange: Any | None = None) -> list[FlakyTest]:
         """Get flaky tests filtered by flakiness category.
 
         Args:
@@ -264,3 +272,46 @@ class FlakyTestQueryMixin(ABC):
 
         filtered = [t for t in flaky_tests if t.category and t.category.upper() == category_upper]
         return sorted(filtered, key=lambda t: t.failure_rate, reverse=True)
+
+    def filter_by_test_name(self, test_name: str, timerange: Any | None = None) -> list[FlakyTest]:
+        """Get flaky tests filtered by extracted test name.
+
+        Args:
+            test_name: Test function name to filter by (case-insensitive, substring match)
+            timerange: TimeRange for analysis. If None, uses most recent snapshot.
+
+        Returns:
+            List of FlakyTest objects matching the test name, sorted by failure_rate.
+            Empty list if no tests match or no snapshots available.
+        """
+        flaky_tests = self.get_flaky_tests(timerange)
+        test_name_lower = test_name.lower()
+
+        filtered = [
+            t for t in flaky_tests if t.test_name and test_name_lower in t.test_name.lower()
+        ]
+        return sorted(filtered, key=lambda t: t.failure_rate, reverse=True)
+
+    def get_assertion_messages(self, timerange: Any | None = None) -> dict[str, list[str]]:
+        """Get aggregated assertion messages grouped by test name.
+
+        Returns a mapping of extracted test names to their assertion messages,
+        enabling autonomy systems to understand common failure patterns.
+
+        Args:
+            timerange: TimeRange for analysis. If None, uses most recent snapshot.
+
+        Returns:
+            Dict mapping test names to list of assertion messages (deduplicated).
+            Empty dict if no flaky tests found or no snapshots available.
+        """
+        flaky_tests = self.get_flaky_tests(timerange)
+        messages_by_test: dict[str, set[str]] = {}
+
+        for test in flaky_tests:
+            if test.test_name and test.assertion_message:
+                if test.test_name not in messages_by_test:
+                    messages_by_test[test.test_name] = set()
+                messages_by_test[test.test_name].add(test.assertion_message)
+
+        return {name: sorted(msgs) for name, msgs in messages_by_test.items()}

@@ -1070,13 +1070,11 @@ class TestSnapshotSerializationLargeMetrics:
 
         # Allow generous margin for non-linear overhead (up to 100x for 50x growth)
         assert ratio_medium_to_small < 100, (
-            f"Medium/small ratio {ratio_medium_to_small:.1f}x indicates "
-            "non-linear degradation"
+            f"Medium/small ratio {ratio_medium_to_small:.1f}x indicates non-linear degradation"
         )
 
         assert ratio_large_to_medium < 20, (
-            f"Large/medium ratio {ratio_large_to_medium:.1f}x indicates "
-            "non-linear degradation"
+            f"Large/medium ratio {ratio_large_to_medium:.1f}x indicates non-linear degradation"
         )
 
     def test_memory_efficiency_large_snapshot(self, tmp_path: Path) -> None:
@@ -1162,6 +1160,4 @@ class TestSnapshotSerializationLargeMetrics:
         jsonl_time = timer_jsonl.elapsed()
 
         # JSONL should complete quickly for 50K metrics
-        assert jsonl_time < 0.1, (
-            f"JSONL serialization {jsonl_time:.3f}s exceeded 100ms threshold"
-        )
+        assert jsonl_time < 0.1, f"JSONL serialization {jsonl_time:.3f}s exceeded 100ms threshold"
