@@ -3,6 +3,15 @@
 _The active assignment. One objective at a time._
 _Replace contents when the objective changes. History belongs in log.md._
 
+## Overall Plan
+
+Extend failure categorization to extract test names and assertion messages from
+flaky test data, then update documentation and commit all changes.
+
+## Current Stage
+
+All stages complete. PR #300 open for review and merge.
+
 ## Objective
 
 **Stage 7: Update documentation and commit all changes** ✅ COMPLETE

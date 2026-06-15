@@ -36,7 +36,7 @@ class TestStage3FullPipeline:
             plugin = FlakyTestDetectionPlugin(str(tmp_path))
             plugin.pytest_sessionstart(session=SimpleNamespace(name="test-session"))
 
-            def test_example():
+            def _example():
                 pass
 
             item = SimpleNamespace(
@@ -127,7 +127,7 @@ class TestStage3FullPipeline:
             plugin.pytest_sessionstart(session=SimpleNamespace(name="session"))
 
             # Test 1: AssertionError
-            def test_assertion():
+            def _assertion():
                 pass
 
             item1 = SimpleNamespace(
@@ -140,7 +140,7 @@ class TestStage3FullPipeline:
             )
 
             # Test 2: TimeoutError
-            def test_timeout():
+            def _timeout():
                 pass
 
             item2 = SimpleNamespace(
@@ -153,7 +153,7 @@ class TestStage3FullPipeline:
             )
 
             # Test 3: ValueError
-            def test_value():
+            def _value():
                 pass
 
             item3 = SimpleNamespace(
@@ -191,7 +191,7 @@ class TestStage3FullPipeline:
             plugin.pytest_sessionstart(session=SimpleNamespace(name="session"))
 
             # Test with special characters
-            def test_unicode():
+            def _unicode():
                 pass
 
             item = SimpleNamespace(

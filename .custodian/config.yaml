@@ -559,6 +559,15 @@ audit:
       # splitting by collector type or signal category would fragment the cohesive
       # service initialization and error propagation logic.
       - src/operations_center/observer/service.py
+      # flaky_test_reporter.py implements the full flakiness detection pipeline (score
+      # computation, entropy, variance, streak, recovery) — single responsibility;
+      # splitting by metric type would fragment the shared reporter state and
+      # session-level aggregation logic.
+      - src/operations_center/observer/flaky_test_reporter.py
+      # query.py implements the full observer query API — test signal, flaky test,
+      # coverage, and snapshot queries in one cohesive module; splitting by signal
+      # type would fragment the shared SnapshotManager and formatting helpers.
+      - src/operations_center/observer/query.py
     C11:
       # Agent-spawning entrypoints: board_worker, intake, pr_review_watcher invoke
       # the coding backend (team_executor, aider, etc.) which runs for an unbounded

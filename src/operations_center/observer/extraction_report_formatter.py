@@ -76,7 +76,7 @@ class ExtractionReportFormatter:
             >>> # Output: {"test_names": [{"name": "test_foo", "count": 3}, ...]}
         """
         if not test_names:
-            return json.dumps({"test_names": [], "total_count": 0}, indent=2)
+            return json.dumps({"test_names": [], "total_count": 0}, indent=2, ensure_ascii=False)
 
         test_list = [
             {
@@ -109,6 +109,7 @@ class ExtractionReportFormatter:
             return json.dumps(
                 {"assertion_messages": [], "total_count": 0},
                 indent=2,
+                ensure_ascii=False,
             )
 
         assertion_list = [
