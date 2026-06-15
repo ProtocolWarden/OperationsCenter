@@ -1,3 +1,25 @@
+## 2026-06-15 — fix: reconcile in-flight ledger at watcher startup
+
+A dispatch records `execution_started` and pairs `execution_finished` in a `finally`
+(coordinator.py) — correct, but a `finally` can't run when the executor *process* dies
+between the markers (session-limit kill, OOM, or the SIGTERM a code-pull restart sends
+mid-dispatch). The slot leaks and counts against the per-backend concurrency cap until
+board_unblock Rule 10 clears it on its next watchdog cycle (~15–30 min latency).
+
+- Extracted the Rule 10 orphan scan into `operations_center/in_flight_reconcile.py`
+  (`find_orphaned_in_flight` / `clear_orphaned_in_flight`) — one definition of "orphan"
+  for both callers. `board_unblock._clear_orphaned_in_flight_events` now delegates; its
+  private `_state_name`/`_is_terminal`/`_TERMINAL_STATES` are imported from the new module
+  (no duplicated bodies → no D11), and the now-unused `httpx` import was dropped.
+- `board_worker` runs `reconcile_in_flight_on_startup` once before its poll loop, so a
+  code-pull restart reclaims slots its own SIGTERM may have leaked, immediately. Serialised
+  across the role processes with an exclusive lock on the usage store; best-effort (never
+  blocks startup). Behaviour/action-output is identical to Rule 10 — existing watchdog
+  logging + tests are unaffected.
+- Tests: `tests/unit/test_in_flight_reconcile.py` (17). 99 pass with the existing
+  board_unblock suite (now exercising the delegation); 366 pass across maintenance +
+  board_worker. ruff clean.
+
 ## 2026-06-15 — fix(custodian): clear CI audit failures on PR #300
 
 Watchdog-applied fixes: C29 exclusions for flaky_test_reporter.py and query.py (cohesive
