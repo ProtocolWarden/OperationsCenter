@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import threading
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from enum import Enum
@@ -118,6 +119,7 @@ class LocalSnapshotRepository(SnapshotRepository):
         self.retention_days = retention_days
         self.retention_count = retention_count
         self.default_format = default_format
+        self._index_lock = threading.Lock()
         self.root.mkdir(parents=True, exist_ok=True)
 
     def store(
@@ -286,18 +288,19 @@ class LocalSnapshotRepository(SnapshotRepository):
         """Update the snapshot index file (JSONL)."""
         index_path = self.root / "snapshots.index"
 
-        existing = {}
-        if index_path.exists():
-            for line in index_path.read_text(encoding="utf-8").strip().split("\n"):
-                if line:
-                    entry = json.loads(line)
-                    existing[entry["run_id"]] = entry
+        with self._index_lock:
+            existing = {}
+            if index_path.exists():
+                for line in index_path.read_text(encoding="utf-8").strip().split("\n"):
+                    if line:
+                        entry = json.loads(line)
+                        existing[entry["run_id"]] = entry
 
-        existing[metadata["run_id"]] = dict(metadata)
+            existing[metadata["run_id"]] = dict(metadata)
 
-        with index_path.open("w") as f:
-            for run_id in sorted(existing.keys()):
-                f.write(json.dumps(existing[run_id], ensure_ascii=False) + "\n")
+            with index_path.open("w") as f:
+                for run_id in sorted(existing.keys()):
+                    f.write(json.dumps(existing[run_id], ensure_ascii=False) + "\n")
 
 
 class S3SnapshotRepository(SnapshotRepository):
