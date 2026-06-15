@@ -444,3 +444,121 @@ class FlakyTestReporter:
             "newly_flaky_tests": newly_flaky,
             "trend": trend,
         }
+
+    def format_flaky_tests_table(self, include_assertions: bool = False) -> str:
+        """Format flaky test metrics as a human-readable table.
+
+        Args:
+            include_assertions: Include assertion messages in output (wider table)
+
+        Returns:
+            Multi-line string formatted as a table with flaky test details.
+        """
+        report = self.analyze_session()
+        if not report.flaky_candidates:
+            return "No flaky tests detected."
+
+        lines = []
+        lines.append("=" * 100)
+        if include_assertions:
+            lines.append(
+                f"{'Test Name':<30} {'Failure Rate':<15} {'Category':<15} {'Assertion Message':<40}"
+            )
+        else:
+            lines.append(
+                f"{'Test Name':<40} {'Failure Rate':<15} {'Category':<15} {'Run Count':<10}"
+            )
+        lines.append("=" * 100)
+
+        for metric in sorted(report.flaky_candidates, key=lambda m: m.failure_rate, reverse=True):
+            test_name = metric.test_name or metric.nodeid.split("::")[-1]
+            failure_pct = f"{metric.failure_rate * 100:.1f}%"
+            category = metric.suspected_category.value if metric.suspected_category else "unknown"
+
+            if include_assertions:
+                assertion = (metric.assertion_message or "")[:40]
+                lines.append(f"{test_name:<30} {failure_pct:<15} {category:<15} {assertion:<40}")
+            else:
+                lines.append(
+                    f"{test_name:<40} {failure_pct:<15} {category:<15} {metric.run_count:<10}"
+                )
+
+        lines.append("=" * 100)
+        return "\n".join(lines)
+
+    def format_flaky_tests_markdown(self, include_assertions: bool = False) -> str:
+        """Format flaky test metrics as markdown.
+
+        Args:
+            include_assertions: Include assertion messages in output
+
+        Returns:
+            Markdown-formatted string with flaky test details.
+        """
+        report = self.analyze_session()
+        if not report.flaky_candidates:
+            return "No flaky tests detected."
+
+        lines = ["## Flaky Tests Report", ""]
+
+        if include_assertions:
+            lines.append("| Test Name | Failure Rate | Category | Assertion Message |")
+            lines.append("|-----------|--------------|----------|-------------------|")
+
+            for metric in sorted(
+                report.flaky_candidates, key=lambda m: m.failure_rate, reverse=True
+            ):
+                test_name = metric.test_name or metric.nodeid.split("::")[-1]
+                failure_pct = f"{metric.failure_rate * 100:.1f}%"
+                category = metric.suspected_category.value if metric.suspected_category else "?"
+                assertion = (metric.assertion_message or "N/A")[:50]
+                lines.append(f"| {test_name} | {failure_pct} | {category} | {assertion} |")
+        else:
+            lines.append("| Test Name | Failure Rate | Category | Run Count |")
+            lines.append("|-----------|--------------|----------|-----------|")
+
+            for metric in sorted(
+                report.flaky_candidates, key=lambda m: m.failure_rate, reverse=True
+            ):
+                test_name = metric.test_name or metric.nodeid.split("::")[-1]
+                failure_pct = f"{metric.failure_rate * 100:.1f}%"
+                category = metric.suspected_category.value if metric.suspected_category else "?"
+                lines.append(f"| {test_name} | {failure_pct} | {category} | {metric.run_count} |")
+
+        return "\n".join(lines)
+
+    def get_extracted_data_summary(self) -> dict[str, Any]:
+        """Get a summary of all extracted test names and assertion messages.
+
+        Returns:
+            Dict with aggregated extraction data for reporting.
+        """
+        test_names_seen: set[str] = set()
+        assertions_seen: set[str] = set()
+        tests_with_data: list[dict[str, Any]] = []
+
+        for result in self.all_results:
+            if result.test_name:
+                test_names_seen.add(result.test_name)
+            if result.assertion_message:
+                assertions_seen.add(result.assertion_message)
+
+        for metric in self.analyze_session().flaky_candidates:
+            test_data = {
+                "nodeid": metric.nodeid,
+                "test_name": metric.test_name,
+                "assertion_message": metric.assertion_message,
+                "failure_rate": metric.failure_rate,
+                "category": metric.suspected_category.value if metric.suspected_category else None,
+            }
+            tests_with_data.append(test_data)
+
+        return {
+            "unique_test_names": sorted(test_names_seen),
+            "unique_assertion_messages": sorted(assertions_seen),
+            "tests_with_extraction_data": tests_with_data,
+            "total_tests_analyzed": len(self.test_runs),
+            "extraction_coverage_percent": (
+                len(tests_with_data) / len(self.test_runs) * 100 if self.test_runs else 0.0
+            ),
+        }

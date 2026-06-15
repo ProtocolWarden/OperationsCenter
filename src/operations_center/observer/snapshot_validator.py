@@ -267,13 +267,14 @@ class SnapshotValidator:
         return result
 
     def validate_layer_3_consistency(self) -> ValidationResult:
-        """Layer 3: Validate cross-signal consistency.
+        """Layer 3: Validate cross-signal consistency and extracted test data.
 
         Checks:
         - Test signal consistency (if passing, test_count > 0)
         - Dependency consistency (if healthy, no critical advisories)
         - Lint consistency (violation count matches status)
         - Coverage consistency (if coverage > 0, has coverage data)
+        - Extraction consistency (if test fails, assertion_message should be populated)
         """
         result = ValidationResult(
             passed=True,
@@ -295,6 +296,36 @@ class SnapshotValidator:
                 )
                 result.errors.append(error)
                 result.passed = False
+
+        # Test extraction consistency - when test signal fails, verify extraction results
+        if signals.test_signal and signals.test_signal.status in ("failing", "flaky", "partial"):
+            failed_count = getattr(signals.test_signal, "failed_count", 0) or 0
+            if failed_count > 0:
+                # When there are failures, extraction results should be populated
+                test_name = getattr(signals.test_signal, "test_name", None)
+                assertion_message = getattr(signals.test_signal, "assertion_message", None)
+                test_names = getattr(signals.test_signal, "test_names", None)
+
+                # At least one extraction result should be present
+                has_extraction = bool(test_name or assertion_message or test_names)
+                if not has_extraction:
+                    error = ValidationError(
+                        layer=3,
+                        category=ValidationFailureCategory.STRUCTURAL,
+                        message=(
+                            f"Test signal has {failed_count} failures but no extraction results "
+                            "(test_name, assertion_message, or test_names)"
+                        ),
+                        details={
+                            "failed_count": failed_count,
+                            "has_test_name": bool(test_name),
+                            "has_assertion_message": bool(assertion_message),
+                            "has_test_names": bool(test_names),
+                        },
+                        is_retryable=False,
+                    )
+                    result.errors.append(error)
+                    result.passed = False
 
         # Lint signal consistency
         if signals.lint_signal:

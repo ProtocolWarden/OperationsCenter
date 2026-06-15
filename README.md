@@ -1035,6 +1035,157 @@ pytest tests/ -v -m "edge_case"
 ```
 **Time**: ~2 minutes
 
+### Test Failure Extraction and Analysis
+
+OperationsCenter extracts and categorizes test failures at multiple levels, enabling deep failure analysis and patterns understanding. When tests fail, the system extracts:
+
+- **Test names** — function names of failing tests (with parameterized test support)
+- **Assertion messages** — extracted exception messages and error details (200 char max)
+- **Failure categories** — 4-layer categorization system (execution → contracts → validation → test-level)
+
+#### Query Extracted Test Failure Data
+
+**Via CLI:**
+```bash
+# Query failing test names (last 24 hours)
+operations-center-observer query-flaky-tests --format table
+
+# Include detailed assertion messages
+operations-center-observer query-flaky-tests \
+  --format table \
+  --include-assertions \
+  --hours 24
+
+# Output as JSON (for programmatic access)
+operations-center-observer query-flaky-tests --format json
+
+# Output as markdown (for reports)
+operations-center-observer query-flaky-tests --format markdown
+```
+
+**Via Python API:**
+```python
+from operations_center.observer.query_flaky import FlakyTestQueryMixin
+from operations_center.observer.query import TestSignalQuery
+from operations_center.observer.models import TimeRange
+
+# Get failing test names
+query = TestSignalQuery()
+test_names = query.get_failing_test_names(TimeRange.last_hours(24))
+# Returns: {"test_foo": 5, "test_bar": 3, ...}
+
+# Get assertion messages
+assertion_msgs = query.get_failing_assertion_messages(TimeRange.last_hours(24))
+# Returns: {"test_foo": ["assert x == 5", ...], "test_bar": [...], ...}
+
+# Filter by specific test name
+flaky_tests = query.filter_by_test_name("test_foo", TimeRange.last_hours(24))
+```
+
+#### Extraction Process
+
+**1. Pytest Plugin** (`pytest_flaky_plugin.py`)
+- Captures test execution metadata during pytest session
+- Extracts test function names from `pytest.Item` objects
+- Parses exception information to extract assertion messages
+- Handles parameterized tests, class methods, and edge cases
+
+**2. Assertion Message Extraction** (`assertion_extractor.py`)
+- Parses `AssertionError` messages with context
+- Extracts timeout/connection errors and their messages
+- Handles nested exceptions and exception chaining
+- Normalizes messages: whitespace collapse, 200 char truncation, special char handling
+
+**3. Data Flow**
+```
+Pytest Execution
+  ↓ (extract_assertion_from_excinfo)
+Test Outcomes JSON
+  ↓ (FlakyTestReporter aggregation)
+FlakyTestMetric
+  ↓ (FlakyTestCollector)
+FlakyTestSignal
+  ↓ (RepoStateSnapshot)
+Query & Reporting
+```
+
+**4. Storage & Retrieval**
+- Test names and assertion messages persisted in metrics storage (JSONL format)
+- Queryable via TimeRange filters (last N hours/days/weeks)
+- Aggregated into flaky test reports with counts and patterns
+- Included in repository state snapshots for historical analysis
+
+#### Example Query Output
+
+**Table Format:**
+```
+Test Failures (Last 24 Hours)
+┌────────────────────────────────────┬────────┬──────────────┐
+│ Test Name                          │ Count  │ Percentage   │
+├────────────────────────────────────┼────────┼──────────────┤
+│ test_observer_initialization       │ 12     │ 25.5%        │
+│ test_snapshot_validation           │ 8      │ 17.0%        │
+│ test_metrics_aggregation           │ 7      │ 14.9%        │
+│ test_data_persistence              │ 5      │ 10.6%        │
+└────────────────────────────────────┴────────┴──────────────┘
+
+Assertion Messages
+┌──────────────────────────────────────────────────────────┬───────┐
+│ Message                                                  │ Count │
+├──────────────────────────────────────────────────────────┼───────┤
+│ assert signal.status == 'passing' (got 'flaky')          │ 8     │
+│ assert len(metrics) > 0 (got 0)                          │ 5     │
+│ TimeoutError: test execution exceeded 30s                │ 4     │
+└──────────────────────────────────────────────────────────┴───────┘
+```
+
+**JSON Format:**
+```json
+{
+  "test_names": [
+    {
+      "name": "test_observer_initialization",
+      "count": 12,
+      "percentage": "25.5%"
+    },
+    {
+      "name": "test_snapshot_validation",
+      "count": 8,
+      "percentage": "17.0%"
+    }
+  ],
+  "total_count": 47,
+  "unique_tests": 7,
+  "assertion_messages": {
+    "test_observer_initialization": [
+      "assert signal.status == 'passing' (got 'flaky')",
+      "KeyError: 'test_metrics'"
+    ],
+    "test_snapshot_validation": [
+      "assert len(metrics) > 0 (got 0)"
+    ]
+  }
+}
+```
+
+#### Inline Documentation
+
+All extraction functions include comprehensive docstrings explaining:
+
+- **Purpose**: What the function extracts and why
+- **Parameters**: Input types and expected formats
+- **Returns**: Output structure and semantics
+- **Examples**: Usage patterns with expected outputs
+- **Edge cases**: Special handling (parameterized tests, exception chaining, etc.)
+
+Key documented functions:
+
+- `extract_assertion_from_excinfo(excinfo)` — Entry point for assertion extraction
+- `parse_assertion_error(msg)` — Parse AssertionError with context
+- `parse_non_assertion_exception(exc)` — Parse timeout/connection errors
+- `clean_assertion_message(msg)` — Normalize and truncate messages
+- `_extract_test_name(item)` — Extract test name from pytest.Item
+
 #### Parallel Test Execution
 
 **Run unit tests in parallel (auto-detect CPU count):**

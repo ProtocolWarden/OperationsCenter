@@ -121,6 +121,9 @@ def clean_assertion_message(raw_msg: str, max_length: int = 200) -> str:
     # Replace newlines with space, but preserve some structure
     msg = re.sub(r"\n+", " ", msg)
 
+    # Collapse any double spaces that resulted from newline replacement
+    msg = re.sub(r" +", " ", msg)
+
     # Remove "assert" keyword if it's at the start (pytest already adds it)
     if msg.lower().startswith("assert "):
         msg = msg[7:].strip()

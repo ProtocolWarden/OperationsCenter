@@ -364,6 +364,132 @@ class TestLayer3ConsistencyValidation:
         assert any("test_count" in e.message for e in result.errors)
         assert any("Lint violations" in e.message for e in result.errors)
 
+    def test_extraction_with_failures_and_assertion_message(
+        self, valid_snapshot: RepoStateSnapshot
+    ) -> None:
+        """Test extraction validation passes when failures have assertion messages."""
+        # Set test signal to failing with extracted assertion message
+        valid_snapshot.signals.test_signal.status = "failing"
+        valid_snapshot.signals.test_signal.failed_count = 5
+        valid_snapshot.signals.test_signal.test_name = "test_critical_feature"
+        valid_snapshot.signals.test_signal.assertion_message = "assert result == expected"
+
+        validator = SnapshotValidator(valid_snapshot)
+        result = validator.validate_layer_3_consistency()
+
+        # Should pass - extraction results are present
+        assert result.passed is True
+        extraction_errors = [e for e in result.errors if "extraction results" in e.message]
+        assert len(extraction_errors) == 0
+
+    def test_extraction_with_failures_and_test_names(
+        self, valid_snapshot: RepoStateSnapshot
+    ) -> None:
+        """Test extraction validation passes when failures have test names list."""
+        # Set test signal to failing with test names extracted
+        valid_snapshot.signals.test_signal.status = "failing"
+        valid_snapshot.signals.test_signal.failed_count = 3
+        valid_snapshot.signals.test_signal.test_names = [
+            "test_foo",
+            "test_bar",
+            "test_baz",
+        ]
+
+        validator = SnapshotValidator(valid_snapshot)
+        result = validator.validate_layer_3_consistency()
+
+        # Should pass - extraction results are present
+        assert result.passed is True
+        extraction_errors = [e for e in result.errors if "extraction results" in e.message]
+        assert len(extraction_errors) == 0
+
+    def test_extraction_with_failures_missing_results(
+        self, valid_snapshot: RepoStateSnapshot
+    ) -> None:
+        """Test extraction validation fails when failures lack extraction results."""
+        # Set test signal to failing but without any extraction results
+        valid_snapshot.signals.test_signal.status = "failing"
+        valid_snapshot.signals.test_signal.failed_count = 5
+        valid_snapshot.signals.test_signal.test_name = None
+        valid_snapshot.signals.test_signal.assertion_message = None
+        valid_snapshot.signals.test_signal.test_names = None
+
+        validator = SnapshotValidator(valid_snapshot)
+        result = validator.validate_layer_3_consistency()
+
+        # Should fail - extraction results missing but we have failures
+        assert result.passed is False
+        extraction_errors = [e for e in result.errors if "extraction results" in e.message]
+        assert len(extraction_errors) > 0
+        assert extraction_errors[0].layer == 3
+        assert extraction_errors[0].is_retryable is False
+
+    def test_extraction_with_flaky_status_and_assertion(
+        self, valid_snapshot: RepoStateSnapshot
+    ) -> None:
+        """Test extraction validation for flaky tests with assertion messages."""
+        # Set test signal to flaky with extraction results
+        valid_snapshot.signals.test_signal.status = "flaky"
+        valid_snapshot.signals.test_signal.failed_count = 2
+        valid_snapshot.signals.test_signal.assertion_message = "timeout after 30s"
+
+        validator = SnapshotValidator(valid_snapshot)
+        result = validator.validate_layer_3_consistency()
+
+        # Should pass - extraction results present for flaky tests
+        assert result.passed is True
+
+    def test_extraction_with_partial_status_no_extraction(
+        self, valid_snapshot: RepoStateSnapshot
+    ) -> None:
+        """Test extraction validation for partial test failures without extraction."""
+        # Set test signal to partial with failures but no extraction
+        valid_snapshot.signals.test_signal.status = "partial"
+        valid_snapshot.signals.test_signal.failed_count = 10
+        valid_snapshot.signals.test_signal.test_name = None
+        valid_snapshot.signals.test_signal.assertion_message = None
+        valid_snapshot.signals.test_signal.test_names = None
+
+        validator = SnapshotValidator(valid_snapshot)
+        result = validator.validate_layer_3_consistency()
+
+        # Should fail - no extraction for partial failures
+        assert result.passed is False
+        extraction_errors = [e for e in result.errors if "extraction results" in e.message]
+        assert len(extraction_errors) > 0
+
+    def test_extraction_no_failures_no_check(self, valid_snapshot: RepoStateSnapshot) -> None:
+        """Test extraction validation skips check when no failures present."""
+        # Keep test signal passing with no failures - extraction not required
+        assert valid_snapshot.signals.test_signal.status == "passing"
+
+        validator = SnapshotValidator(valid_snapshot)
+        result = validator.validate_layer_3_consistency()
+
+        # Should pass - no extraction check for passing tests
+        assert result.passed is True
+        extraction_errors = [e for e in result.errors if "extraction results" in e.message]
+        assert len(extraction_errors) == 0
+
+    def test_extraction_validation_error_details(self, valid_snapshot: RepoStateSnapshot) -> None:
+        """Test extraction validation error includes detailed info."""
+        # Set test signal to failing without extraction results
+        valid_snapshot.signals.test_signal.status = "failing"
+        valid_snapshot.signals.test_signal.failed_count = 3
+        valid_snapshot.signals.test_signal.test_name = None
+        valid_snapshot.signals.test_signal.assertion_message = None
+        valid_snapshot.signals.test_signal.test_names = None
+
+        validator = SnapshotValidator(valid_snapshot)
+        result = validator.validate_layer_3_consistency()
+
+        assert result.passed is False
+        error = result.errors[0]
+        assert error.details.get("failed_count") == 3
+        assert error.details.get("has_test_name") is False
+        assert error.details.get("has_assertion_message") is False
+        assert error.details.get("has_test_names") is False
+
 
 class TestValidationErrorCategories:
     """Tests for validation error categorization."""

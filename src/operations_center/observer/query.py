@@ -432,6 +432,53 @@ class TestSignalQuery(FlakyTestQueryMixin):
         snapshots = self._load_snapshots_in_range(timerange)
         return [s.run_id for s in snapshots]
 
+    def get_failing_test_names(self, timerange: TimeRange) -> dict[str, int]:
+        """Get aggregated count of failures by extracted test name.
+
+        Returns a mapping of test function names to their failure counts,
+        enabling autonomy systems to identify which specific tests are failing.
+
+        Args:
+            timerange: TimeRange defining the analysis window
+
+        Returns:
+            Dict mapping test_name to failure count, sorted by count descending.
+            Empty dict if no test names found or all signals unavailable.
+        """
+        snapshots = self._load_snapshots_in_range(timerange)
+        test_name_counts: dict[str, int] = {}
+
+        for snapshot in snapshots:
+            signal = snapshot.signals.test_signal
+            if signal.status != "unavailable" and signal.test_name:
+                test_name_counts[signal.test_name] = test_name_counts.get(signal.test_name, 0) + 1
+
+        return dict(sorted(test_name_counts.items(), key=lambda x: x[1], reverse=True))
+
+    def get_failing_assertion_messages(self, timerange: TimeRange) -> dict[str, int]:
+        """Get aggregated count of failures by assertion message.
+
+        Returns a mapping of assertion messages to their failure counts,
+        enabling autonomy systems to understand common failure patterns.
+
+        Args:
+            timerange: TimeRange defining the analysis window
+
+        Returns:
+            Dict mapping assertion_message to failure count, sorted by count descending.
+            Empty dict if no assertion messages found or all signals unavailable.
+        """
+        snapshots = self._load_snapshots_in_range(timerange)
+        assertion_counts: dict[str, int] = {}
+
+        for snapshot in snapshots:
+            signal = snapshot.signals.test_signal
+            if signal.status != "unavailable" and signal.assertion_message:
+                msg = signal.assertion_message
+                assertion_counts[msg] = assertion_counts.get(msg, 0) + 1
+
+        return dict(sorted(assertion_counts.items(), key=lambda x: x[1], reverse=True))
+
     # Private helpers
 
     def _get_latest_snapshot(self) -> RepoStateSnapshot | None:

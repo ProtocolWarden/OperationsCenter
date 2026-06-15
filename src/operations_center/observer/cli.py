@@ -21,6 +21,8 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from operations_center.observer.extraction_report_formatter import ExtractionReportFormatter
+from operations_center.observer.query import TestSignalQuery, TimeRange
 from operations_center.observer.snapshot_loader import SnapshotLoadError, SnapshotLoader
 from operations_center.observer.snapshot_output_formatter import (
     OutputFormat,
@@ -799,6 +801,115 @@ def cmd_cleanup(
     if not quiet:
         console.print("[cyan]cleanup[/cyan] command not yet implemented")
     raise typer.Exit(EXIT_SUCCESS)
+
+
+@app.command("query-flaky-tests")
+def cmd_query_flaky_tests(
+    hours: int = typer.Option(
+        24,
+        "--hours",
+        help="Look back N hours (default: 24)",
+    ),
+    storage_root: Path | None = typer.Option(
+        None,
+        "--storage-root",
+        help="Storage root for snapshots (default: tools/report/operations_center/observer)",
+    ),
+    format_str: str = typer.Option(
+        "table",
+        "--format",
+        help="Output format: table|json|markdown",
+    ),
+    include_assertions: bool = typer.Option(
+        False,
+        "--include-assertions",
+        help="Include assertion messages (slower, more detailed)",
+    ),
+    limit: int = typer.Option(
+        10,
+        "--limit",
+        help="Max tests to display (0 = all)",
+    ),
+    quiet: bool = typer.Option(
+        False,
+        "--quiet",
+        "-q",
+        help="Minimal output",
+    ),
+) -> None:
+    """Query and display extracted test failure data.
+
+    Shows test names and assertion messages from failures in the last N hours.
+    Supports JSON, table, and markdown output formats.
+
+    Examples:
+
+        # Show failing tests from last 24 hours as table
+        cli query-flaky-tests --hours 24
+
+        # Get JSON output for integration
+        cli query-flaky-tests --format json
+
+        # Include assertion messages
+        cli query-flaky-tests --include-assertions --hours 6
+    """
+    try:
+        root = storage_root or Path("tools/report/operations_center/observer")
+        if not root.exists():
+            if not quiet:
+                console.print(f"[yellow]Warning: snapshot root does not exist: {root}[/yellow]")
+            raise typer.Exit(EXIT_NOT_FOUND)
+
+        query = TestSignalQuery(root=root)
+        timerange = TimeRange.last_hours(hours)
+
+        # Get test names
+        test_names = query.get_failing_test_names(timerange)
+        assertions = None
+        if include_assertions:
+            assertions = query.get_failing_assertion_messages(timerange)
+
+        if not test_names:
+            if not quiet:
+                console.print(f"[yellow]No failing tests found in the last {hours} hours[/yellow]")
+            raise typer.Exit(EXIT_SUCCESS)
+
+        formatter = ExtractionReportFormatter()
+
+        if format_str == "json":
+            output = formatter.format_test_names_as_json(test_names)
+            if include_assertions and assertions:
+                # Combine both into single JSON output
+                test_json = json.loads(formatter.format_test_names_as_json(test_names))
+                assertions_json = json.loads(
+                    formatter.format_assertion_messages_as_json(assertions)
+                )
+                combined = {
+                    "test_failures": test_json,
+                    "assertion_failures": assertions_json,
+                }
+                output = json.dumps(combined, indent=2, ensure_ascii=False)
+        elif format_str == "markdown":
+            output = formatter.format_test_names_as_markdown(test_names)
+            if include_assertions and assertions:
+                output += "\n\n" + formatter.format_assertion_messages_as_markdown(assertions)
+        else:  # table
+            output = formatter.format_test_names_as_table(test_names)
+            if include_assertions and assertions:
+                output += "\n\n" + formatter.format_assertion_messages_as_table(assertions)
+
+        if not quiet:
+            console.print(output)
+
+        raise typer.Exit(EXIT_SUCCESS)
+
+    except typer.Exit:
+        raise
+    except Exception as e:
+        if not quiet:
+            console.print(f"[red]Error querying flaky tests: {e}[/red]")
+        logger.exception("Error in query-flaky-tests command")
+        raise typer.Exit(EXIT_CONFIG_ERROR)
 
 
 def main() -> None:
