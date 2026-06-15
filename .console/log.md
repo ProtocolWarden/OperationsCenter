@@ -1,3 +1,14 @@
+## 2026-06-15 — chore: enable CAP1 capability-ref enforcement
+
+Set `audit.capabilities.enforce: true` so Custodian's CAP1 detector verifies the
+capability this repo owns (`board_unblock`) points at invocation.ref code that
+resolves here — `operations_center.entrypoints.maintenance.board_unblock`. Uses
+the existing `cross_repo.platform_manifest_repo` pointer to locate the registry +
+manifest. Activates once the local custodian install is refreshed to @main
+(post-CAP1); CI installs custodian@main fresh, where it skips (no PM sibling).
+Also declared `capabilities` in `plugin_audit_keys` — ci.yml's doctor job uses
+the pinned pre-CAP1 `[dev]` custodian which would otherwise flag it as unknown.
+
 ## 2026-06-15 — fix: reconcile in-flight ledger at watcher startup
 
 A dispatch records `execution_started` and pairs `execution_finished` in a `finally`

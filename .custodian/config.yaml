@@ -60,6 +60,11 @@ audit:
   cross_repo:
     platform_manifest_repo: ../PlatformManifest
 
+  # CAP1 — enforce that the capabilities this repo owns (board_unblock) point at
+  # invocation.ref code that actually resolves here. Anti-rot for the registry.
+  capabilities:
+    enforce: true
+
   plumbing:
     # P1/P2/P3: OC heartbeat JSON → OperatorConsole stale-role check.
     # Reader uses mtime only; P2 ignore_keys suppresses pid-check dict accesses
@@ -805,6 +810,9 @@ audit:
     - oc1_exempt
     - oc7_exempt
     - reconcile_enforce
+    # CAP1 enforcement key — a core key in current custodian, declared here so
+    # the doctor job (pinned to a pre-CAP1 custodian commit) accepts it.
+    - capabilities
 
   # Additional well-known string values for OC9 to recognise without
   # requiring a string-literal anchor in src/.
