@@ -100,11 +100,44 @@ def _prune_orphan_state_files(oc_root: Path, repo_key: str, open_numbers: set[in
         num_part = f.stem[len(prefix) :]
         if not num_part.isdigit() or int(num_part) in open_numbers:
             continue
+        # A state file surviving to prune time means THIS watcher did not
+        # terminate the PR — its own merge/close paths unlink first. A plain
+        # orphan conflates several causes (a human gh pr merge, another host,
+        # this watcher being down), so it is NOT a clean intervention signal.
+        # But an orphan that was *escalated for human attention* is: the worker
+        # explicitly handed the PR to a human, and the PR has now left the open
+        # set, so a human resolved the escalation. That is a genuine operator
+        # intervention — capture an (unjudged) ledger candidate before pruning.
+        orphan = _load_state(f)
+        if orphan.get("escalated_needs_human"):
+            _capture_human_intervention(
+                "worker-escalation-resolved-by-human", f"{repo_key}#{num_part}"
+            )
         try:
             f.unlink(missing_ok=True)
             logger.info("pr_review_watcher: pruned orphan review-state %s (PR not open)", f.name)
         except Exception as exc:
             logger.debug("pr_review_watcher: prune failed for %s — %s", f.name, exc)
+
+
+def _capture_human_intervention(signal: str, context: str) -> None:
+    """Best-effort: append a candidate to the operator-interventions ledger.
+
+    Calls ``cl ledger capture`` (ContextLifecycle), which appends an *unjudged*
+    candidate to the ledger in the private manifest and dedups on signal+context.
+    Fail-soft by design: if ``cl`` is not on PATH or no private manifest resolves,
+    this is a silent no-op — capture must never wedge, slow, or fail the poll
+    loop. Promotion of the candidate (the judgment line) stays manual.
+    """
+    try:
+        subprocess.run(
+            ["cl", "ledger", "capture", signal, context],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except Exception as exc:  # noqa: BLE001 — capture is best-effort telemetry
+        logger.debug("pr_review_watcher: ledger capture failed (%s) — %s", signal, exc)
 
 
 def _load_state(path: Path) -> dict:

@@ -1,3 +1,16 @@
+## 2026-06-16 — feat: capture human-resolved escalations to the interventions ledger
+
+`pr_review_watcher` now emits an operator-interventions ledger candidate when an
+*escalated* PR (the worker explicitly handed it to a human via
+`escalated_needs_human`) leaves the open set — i.e. a human resolved the
+escalation. Hook is in `_prune_orphan_state_files`: only escalated orphans are
+captured (plain orphans conflate multi-host races / watcher-down, so they are NOT
+a clean human signal — capturing them would poison the ledger). New
+`_capture_human_intervention` shells out to `cl ledger capture
+worker-escalation-resolved-by-human "<repo>#<n>"` fail-soft (no-op if `cl` is
+absent — never wedges the poll loop). Promotion of the candidate stays manual.
+Pairs with ContextLifecycle #30 (`cl ledger capture`).
+
 ## 2026-06-15 — chore: bump custodian pin to CAP1-aware + cwd-safe hook
 
 Bumped the `custodian` dependency pin from the pre-CAP1 SHA `4a1a0aec` to
