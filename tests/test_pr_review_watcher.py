@@ -2224,3 +2224,79 @@ def test_prune_orphan_state_files_empty_open_set_prunes_all_for_repo(tmp_path: P
     (sub / "OperationsCenter-2.json").write_text("{}", encoding="utf-8")
     watcher._prune_orphan_state_files(tmp_path, "OperationsCenter", set())
     assert list(sub.iterdir()) == []
+
+
+def _capture_recorder(monkeypatch):
+    """Record the argv of every subprocess.run the watcher makes."""
+    calls: list[list[str]] = []
+
+    def _fake_run(argv, *args, **kwargs):
+        calls.append(list(argv))
+
+        class _R:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return _R()
+
+    monkeypatch.setattr(watcher.subprocess, "run", _fake_run)
+    return calls
+
+
+def test_prune_escalated_orphan_captures_ledger_candidate(tmp_path: Path, monkeypatch) -> None:
+    """An orphan that was escalated_needs_human → a human resolved it → capture
+    one ledger candidate before pruning."""
+    calls = _capture_recorder(monkeypatch)
+    sub = tmp_path / "state" / "pr_reviews"
+    sub.mkdir(parents=True)
+    (sub / "OperationsCenter-42.json").write_text(
+        json.dumps({"escalated_needs_human": True}), encoding="utf-8"
+    )
+
+    watcher._prune_orphan_state_files(tmp_path, "OperationsCenter", set())
+
+    assert not list(sub.iterdir())  # still pruned
+    ledger_calls = [c for c in calls if c[:3] == ["cl", "ledger", "capture"]]
+    assert ledger_calls == [
+        ["cl", "ledger", "capture", "worker-escalation-resolved-by-human", "OperationsCenter#42"]
+    ]
+
+
+def test_prune_plain_orphan_does_not_capture(tmp_path: Path, monkeypatch) -> None:
+    """A non-escalated orphan conflates multi-host / watcher-down — NOT a clean
+    intervention, so no ledger candidate is captured."""
+    calls = _capture_recorder(monkeypatch)
+    sub = tmp_path / "state" / "pr_reviews"
+    sub.mkdir(parents=True)
+    (sub / "OperationsCenter-42.json").write_text(json.dumps({"phase": "ci_fix"}), encoding="utf-8")
+
+    watcher._prune_orphan_state_files(tmp_path, "OperationsCenter", set())
+
+    assert not [c for c in calls if c[:3] == ["cl", "ledger", "capture"]]
+
+
+def test_prune_escalated_but_open_pr_not_captured(tmp_path: Path, monkeypatch) -> None:
+    """An escalated PR that is STILL open is not an orphan — not pruned, not captured."""
+    calls = _capture_recorder(monkeypatch)
+    sub = tmp_path / "state" / "pr_reviews"
+    sub.mkdir(parents=True)
+    (sub / "OperationsCenter-42.json").write_text(
+        json.dumps({"escalated_needs_human": True}), encoding="utf-8"
+    )
+
+    watcher._prune_orphan_state_files(tmp_path, "OperationsCenter", {42})
+
+    assert {p.name for p in sub.iterdir()} == {"OperationsCenter-42.json"}  # kept
+    assert not [c for c in calls if c[:3] == ["cl", "ledger", "capture"]]
+
+
+def test_capture_human_intervention_fail_soft(monkeypatch) -> None:
+    """If `cl` is missing (FileNotFoundError) capture is a silent no-op."""
+
+    def _boom(*args, **kwargs):
+        raise FileNotFoundError("cl not on PATH")
+
+    monkeypatch.setattr(watcher.subprocess, "run", _boom)
+    # Must not raise, and returns None (silent no-op).
+    assert watcher._capture_human_intervention("sig", "ctx") is None
