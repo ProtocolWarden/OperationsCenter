@@ -1,3 +1,13 @@
+## 2026-06-15 — chore: bump custodian pin to CAP1-aware + cwd-safe hook
+
+Bumped the `custodian` dependency pin from the pre-CAP1 SHA `4a1a0aec` to
+`0fa072f` (the CAP1 decouple+enforce merge) so the venv build and single-repo CI
+install a CAP1-aware custodian — previously the pinned copy ran no CAP1 even
+though `audit.capabilities.enforce` was set. The doctor job's `capabilities`
+plugin-audit-key shim stays valid (now a no-op since main's doctor knows the key
+natively). Also hardened the ContextGuard hook command to
+`${CLAUDE_PROJECT_DIR:-.}` so it resolves regardless of the shell cwd.
+
 ## 2026-06-15 — chore: enable CAP1 capability-ref enforcement
 
 Set `audit.capabilities.enforce: true` so Custodian's CAP1 detector verifies the
