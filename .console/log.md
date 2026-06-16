@@ -1,3 +1,12 @@
+## 2026-06-16 — chore: bump custodian pin to 223c9da (doctor config-integrity checks)
+
+Bumped the `custodian` pin `0fa072f` → `223c9da` (Custodian #40: doctor
+duplicate-key + capabilities.enforce-without-locator checks). Previously OC's CI
+`Custodian doctor` job ran a custodian that predated those checks, so a duplicate
+`audit:` block or an enforce-without-locator could slip through OC unnoticed.
+Verified `custodian-doctor --strict --repo .` is still OK against OC with the new
+pin (no new findings) before bumping.
+
 ## 2026-06-16 — feat: capture human-resolved escalations to the interventions ledger
 
 `pr_review_watcher` now emits an operator-interventions ledger candidate when an
