@@ -1,3 +1,13 @@
+## 2026-06-17 — fix(PR review): remove unrelated spec status change from fleet `cl` PATH PR
+
+Resolved PR review concern: the commit was inadvertently including a spec status
+change (queue-drain-20260614T141231.md status: active → cancelled) unrelated to
+the main PR purpose (fixing `cl` PATH resolution). Reverted the spec file to
+restore its original `active` status, keeping the PR focused on the filesystem
+PATH fix. The code quality of the bash script implementation is sound (safe PATH
+manipulation with deduplication, proper guards, executable check, variable
+cleanup, thorough comments). Verified: 9131 tests passing, bash syntax valid.
+
 ## 2026-06-17 — fix: ensure `cl` is resolvable on the fleet watchers' PATH
 
 `watch-all` now resolves the ContextLifecycle `cl` CLI and prepends its dir to
