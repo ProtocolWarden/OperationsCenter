@@ -423,7 +423,8 @@ class FlakyTestSignal(BaseModel):
     """Flaky test detection and analysis results.
 
     Summarizes test flakiness patterns and trends detected across multiple test runs.
-    This signal synthesizes Tier 1-3 flakiness observations into actionable metrics.
+    This signal synthesizes Tier 1-3 flakiness observations into actionable metrics,
+    including visibility into test failure extraction coverage.
 
     Attributes:
         status: Flakiness measurement status ("measured", "partial", "unavailable")
@@ -435,6 +436,13 @@ class FlakyTestSignal(BaseModel):
         recovery_rate: Percentage of previously flaky tests now stable
         category_breakdown: Count of tests by flakiness category (transient, structural, etc.)
         estimated_impact: Estimated impact metrics (CI slowdown %, dev time hours)
+        extraction_success_rate: Percentage of flaky test failures with extracted data
+            (test_name and/or assertion_message). Range: 0-100. Indicates visibility
+            into failure root causes.
+        extracted_count: Number of flaky test failures that have extraction data
+            (test_name and/or assertion_message populated). Used to compute success rate.
+        extraction_gaps: List of field names that lack extraction data in the signal.
+            Examples: ["test_name", "assertion_message"]. Empty list indicates full extraction.
         source: Name of the flakiness detection system (always "flaky-test-reporter")
         observed_at: Timestamp when flakiness analysis was performed
         summary: Human-readable summary of flakiness status
@@ -449,6 +457,9 @@ class FlakyTestSignal(BaseModel):
     recovery_rate: float = 0.0
     category_breakdown: dict[str, int] = Field(default_factory=dict)
     estimated_impact: dict[str, float] = Field(default_factory=dict)
+    extraction_success_rate: float = 0.0
+    extracted_count: int = 0
+    extraction_gaps: list[str] = Field(default_factory=list)
     source: str = "flaky-test-reporter"
     observed_at: datetime | None = None
     summary: str | None = None

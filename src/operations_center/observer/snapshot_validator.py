@@ -362,6 +362,56 @@ class SnapshotValidator:
                 result.errors.append(error)
                 result.passed = False
 
+        # Flaky test extraction consistency
+        if signals.flaky_test_signal:
+            status = getattr(signals.flaky_test_signal, "status", None)
+            flaky_test_count = getattr(signals.flaky_test_signal, "flaky_test_count", 0) or 0
+            extraction_success_rate = getattr(
+                signals.flaky_test_signal, "extraction_success_rate", 0.0
+            )
+            extracted_count = getattr(signals.flaky_test_signal, "extracted_count", 0) or 0
+            extraction_gaps = getattr(signals.flaky_test_signal, "extraction_gaps", []) or []
+
+            # When flaky tests are detected, extraction data should be populated
+            if status == "measured" and flaky_test_count > 0:
+                # Extraction rate should be > 0% when flaky tests exist
+                if extraction_success_rate <= 0.0:
+                    error = ValidationError(
+                        layer=3,
+                        category=ValidationFailureCategory.STRUCTURAL,
+                        message=(
+                            f"Flaky test signal measured {flaky_test_count} flaky tests "
+                            "but extraction_success_rate is 0% (missing extraction visibility)"
+                        ),
+                        details={
+                            "flaky_test_count": flaky_test_count,
+                            "extraction_success_rate": extraction_success_rate,
+                            "extracted_count": extracted_count,
+                            "extraction_gaps": extraction_gaps,
+                        },
+                        is_retryable=False,
+                    )
+                    result.errors.append(error)
+                    result.passed = False
+                # extracted_count should be >= 0 and ideally > 0 when extraction_success_rate > 0
+                if extraction_success_rate > 0.0 and extracted_count <= 0:
+                    error = ValidationError(
+                        layer=3,
+                        category=ValidationFailureCategory.STRUCTURAL,
+                        message=(
+                            f"Flaky test signal has extraction_success_rate {extraction_success_rate}% "
+                            "but extracted_count is 0 (inconsistent metrics)"
+                        ),
+                        details={
+                            "extraction_success_rate": extraction_success_rate,
+                            "extracted_count": extracted_count,
+                            "flaky_test_count": flaky_test_count,
+                        },
+                        is_retryable=False,
+                    )
+                    result.errors.append(error)
+                    result.passed = False
+
         if result.passed:
             result.message = "Consistency validation passed"
         else:

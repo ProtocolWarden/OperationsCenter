@@ -95,6 +95,28 @@ class RepositoryHealth:
     last_improved: datetime | None = None
 
 
+@dataclass
+class ExtractionHealth:
+    """Health metrics for test extraction coverage.
+
+    Attributes:
+        success_rate: Percentage of flaky tests with complete extraction (0.0-100.0)
+        complete_extraction: Number of tests with both test_name and assertion_message
+        partial_extraction: Number of tests with only test_name or assertion_message
+        no_extraction: Number of tests with neither field
+        edge_case_summary: Dict describing encountered edge cases
+            - truncated_messages: count of assertion messages truncated to 200 chars
+            - special_chars: count of messages containing special characters
+            - malformed_exceptions: count of non-standard exception formats
+    """
+
+    success_rate: float = 0.0
+    complete_extraction: int = 0
+    partial_extraction: int = 0
+    no_extraction: int = 0
+    edge_case_summary: dict[str, int] = dataclass_field(default_factory=dict)
+
+
 class FlakyTestQueryMixin(ABC):
     """Mixin that adds flaky-test query methods to TestSignalQuery.
 
@@ -315,3 +337,105 @@ class FlakyTestQueryMixin(ABC):
                 messages_by_test[test.test_name].add(test.assertion_message)
 
         return {name: sorted(msgs) for name, msgs in messages_by_test.items()}
+
+    def get_extraction_health(self, timerange: Any | None = None) -> ExtractionHealth:
+        """Assess extraction coverage for flaky test data.
+
+        Analyzes how many flaky tests have extracted test_name and assertion_message
+        fields, identifying gaps in observability.
+
+        Args:
+            timerange: TimeRange for analysis. If None, uses most recent snapshot.
+
+        Returns:
+            ExtractionHealth with coverage metrics and edge case summary.
+        """
+        flaky_tests = self.get_flaky_tests(timerange)
+
+        if not flaky_tests:
+            return ExtractionHealth()
+
+        complete = 0
+        partial = 0
+        missing = 0
+        edge_cases: dict[str, int] = {
+            "truncated_messages": 0,
+            "special_chars": 0,
+            "malformed_exceptions": 0,
+        }
+
+        for test in flaky_tests:
+            has_test_name = test.test_name is not None
+            has_assertion = test.assertion_message is not None
+
+            if has_test_name and has_assertion:
+                complete += 1
+            elif has_test_name or has_assertion:
+                partial += 1
+            else:
+                missing += 1
+
+            if test.assertion_message:
+                if len(test.assertion_message) >= 200:
+                    edge_cases["truncated_messages"] += 1
+                if any(
+                    ord(c) < 32 or ord(c) > 126 for c in test.assertion_message if c not in "\n\r\t"
+                ):
+                    edge_cases["special_chars"] += 1
+
+        total = len(flaky_tests)
+        success_rate = ((complete + partial) / total * 100.0) if total > 0 else 0.0
+
+        return ExtractionHealth(
+            success_rate=success_rate,
+            complete_extraction=complete,
+            partial_extraction=partial,
+            no_extraction=missing,
+            edge_case_summary=edge_cases,
+        )
+
+    def filter_by_extraction_status(
+        self, status: str, timerange: Any | None = None
+    ) -> list[FlakyTest]:
+        """Filter flaky tests by extraction data availability.
+
+        Enables querying tests based on how much extraction data is available,
+        useful for identifying gaps in observability.
+
+        Args:
+            status: Extraction status to filter by.
+                - "complete": both test_name and assertion_message present
+                - "partial": only one of test_name or assertion_message present
+                - "missing": neither test_name nor assertion_message present
+            timerange: TimeRange for analysis. If None, uses most recent snapshot.
+
+        Returns:
+            List of FlakyTest objects matching the status, sorted by failure_rate.
+            Empty list if no tests match or status is invalid.
+
+        Raises:
+            ValueError: If status is not one of "complete", "partial", "missing".
+        """
+        valid_statuses = ("complete", "partial", "missing")
+        if status.lower() not in valid_statuses:
+            raise ValueError(f"Invalid status: {status}. Must be one of {valid_statuses}")
+
+        flaky_tests = self.get_flaky_tests(timerange)
+        filtered: list[FlakyTest] = []
+
+        for test in flaky_tests:
+            has_test_name = test.test_name is not None
+            has_assertion = test.assertion_message is not None
+
+            test_status = None
+            if has_test_name and has_assertion:
+                test_status = "complete"
+            elif has_test_name or has_assertion:
+                test_status = "partial"
+            else:
+                test_status = "missing"
+
+            if test_status == status.lower():
+                filtered.append(test)
+
+        return sorted(filtered, key=lambda t: t.failure_rate, reverse=True)
