@@ -101,7 +101,6 @@ class ExtractionHealth:
 
     Attributes:
         success_rate: Percentage of flaky tests with complete extraction (0.0-100.0)
-        failure_count: Number of flaky tests with missing extraction data
         complete_extraction: Number of tests with both test_name and assertion_message
         partial_extraction: Number of tests with only test_name or assertion_message
         no_extraction: Number of tests with neither field
@@ -112,7 +111,6 @@ class ExtractionHealth:
     """
 
     success_rate: float = 0.0
-    failure_count: int = 0
     complete_extraction: int = 0
     partial_extraction: int = 0
     no_extraction: int = 0
@@ -390,7 +388,6 @@ class FlakyTestQueryMixin(ABC):
 
         return ExtractionHealth(
             success_rate=success_rate,
-            failure_count=missing,
             complete_extraction=complete,
             partial_extraction=partial,
             no_extraction=missing,

@@ -102,7 +102,7 @@ class TestExtractionHealth:
             health.partial_extraction == 2
         )  # test_partial_test_name_only, test_partial_assertion_only
         assert health.no_extraction == 1  # test_missing_both
-        assert health.failure_count == 1
+        assert health.no_extraction == 1
         assert health.success_rate == 80.0  # 4 out of 5 have some extraction
 
     def test_get_extraction_health_with_truncated_messages(
@@ -120,7 +120,7 @@ class TestExtractionHealth:
         health = query.get_extraction_health()
 
         assert health.success_rate == 0.0
-        assert health.failure_count == 0
+        assert health.no_extraction == 0
         assert health.complete_extraction == 0
         assert health.partial_extraction == 0
         assert health.no_extraction == 0
@@ -137,7 +137,7 @@ class TestExtractionHealth:
         health = query.get_extraction_health()
 
         assert health.success_rate == 0.0
-        assert health.failure_count == 0
+        assert health.no_extraction == 0
 
     def test_get_extraction_health_special_characters(self) -> None:
         """Extract health detects special characters in messages."""
@@ -262,7 +262,7 @@ class TestExtractionHealthDataclass:
         health = ExtractionHealth()
 
         assert health.success_rate == 0.0
-        assert health.failure_count == 0
+        assert health.no_extraction == 0
         assert health.complete_extraction == 0
         assert health.partial_extraction == 0
         assert health.no_extraction == 0
@@ -272,7 +272,6 @@ class TestExtractionHealthDataclass:
         """ExtractionHealth can be created with values."""
         health = ExtractionHealth(
             success_rate=75.0,
-            failure_count=1,
             complete_extraction=3,
             partial_extraction=2,
             no_extraction=1,
@@ -280,7 +279,7 @@ class TestExtractionHealthDataclass:
         )
 
         assert health.success_rate == 75.0
-        assert health.failure_count == 1
+        assert health.no_extraction == 1
         assert health.complete_extraction == 3
         assert health.edge_case_summary["truncated_messages"] == 1
 
