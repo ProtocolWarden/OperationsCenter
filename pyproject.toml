@@ -1,0 +1,186 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "operations-center"
+version = "0.1.0"
+description = "Planning, routing, execution, policy, and evidence service for canonical task proposals"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.7",
+  "PyYAML>=6.0",
+  "httpx>=0.27",
+  "typer>=0.12",
+  "cxrp @ git+https://github.com/ProtocolWarden/CxRP.git@v0.3.1",
+  "source-registry @ git+https://github.com/ProtocolWarden/SourceRegistry.git",
+  "rxp @ git+https://github.com/ProtocolWarden/RxP.git",
+  "core-runner @ git+https://github.com/ProtocolWarden/CoreRunner.git",
+  "platform-manifest @ git+https://github.com/ProtocolWarden/PlatformManifest.git@v1.0.0",
+  # ADR 0002 P4 — dispatcher CL wrap.
+  "context-lifecycle @ git+https://github.com/ProtocolWarden/ContextLifecycle.git@v0.3.1",
+]
+
+[project.scripts]
+operations-center-setup = "operations_center.entrypoints.setup.main:app"
+operations-center-audit = "operations_center.entrypoints.audit.main:app"
+operations-center-artifacts = "operations_center.entrypoints.artifacts.main:app"
+operations-center-calibration = "operations_center.entrypoints.calibration.main:app"
+operations-center-fixtures = "operations_center.entrypoints.fixtures.main:app"
+operations-center-replay = "operations_center.entrypoints.replay.main:app"
+operations-center-regression = "operations_center.entrypoints.regression.main:app"
+operations-center-governance = "operations_center.entrypoints.governance.main:app"
+# Audit + maintenance trinity (added 2026-04-28). See docs/architecture/
+# {ghost_work,flow,code_health}_audit.md for the catalogs each scanner enforces.
+operations-center-ghost-audit       = "operations_center.entrypoints.ghost_audit.main:main"
+operations-center-flow-audit        = "operations_center.entrypoints.flow_audit.main:main"
+# Cross-repo Custodian sweep — runs custodian-audit against every managed repo
+# with a local checkout and a .custodian.yaml, emits one Plane task per repo
+# with --emit. Read-only against the managed repos; mutates Plane only.
+operations-center-custodian-sweep   = "operations_center.entrypoints.custodian_sweep.main:main"
+# code_health_audit moved to Custodian (2026-04-29). Run `custodian-audit
+# --repo .` instead. The OC-specific detectors (OC1-OC9) live in
+# _custodian/detectors.py and are wired via .custodian.yaml.
+operations-center-recover-stale     = "operations_center.entrypoints.maintenance.recover_stale:main"
+operations-center-cleanup-state     = "operations_center.entrypoints.maintenance.cleanup_state:main"
+operations-center-close-stale-prs   = "operations_center.entrypoints.maintenance.close_stale_prs:main"
+operations-center-cleanup-stale-backlog = "operations_center.entrypoints.maintenance.cleanup_stale_backlog:main"
+operations-center-check-regressions = "operations_center.entrypoints.maintenance.check_regressions:main"
+operations-center-triage-scan       = "operations_center.entrypoints.maintenance.triage_scan:main"
+operations-center-board-unblock     = "operations_center.entrypoints.maintenance.board_unblock:main"
+# ADR 0007 Phase B — spec trigger watcher. Emits one `spec-author` Plane task
+# per cycle on drop-file or queue-drain; no LLM calls. Supersedes the trigger
+# half of spec_director (retired in Phase F).
+operations-center-spec-trigger      = "operations_center.entrypoints.spec_trigger.main:main"
+# Operator one-shots — added 2026-04-28 from audit triage Group B.
+operations-center-autonomy-tiers    = "operations_center.entrypoints.autonomy_tiers.main:main"
+operations-center-ci-monitor        = "operations_center.entrypoints.ci_monitor.main:main"
+# Phase 13 — re-audit trigger evaluator. Cron-friendly; nonzero exit when stale.
+operations-center-reaudit-check     = "operations_center.entrypoints.reaudit_check.main:main"
+# Manifest primitive — diagnose EffectiveRepoGraph wiring (R4.1).
+operations-center-graph-doctor      = "operations_center.entrypoints.graph_doctor.main:main"
+# Cross-repo task chaining — manual trigger (R5.2).
+operations-center-propagate         = "operations_center.entrypoints.propagate.main:main"
+# Cross-repo task chaining — inspect parent-child chains (R5.5).
+operations-center-propagation-links = "operations_center.entrypoints.propagation_links.main:main"
+# Phase 14 fork-management engine extracted to SourceRegistry.
+# Use the `source-registry` CLI directly with
+#   --registry registry/source_registry.yaml
+#   --patches  registry/patches
+# ER-001 — Repo Graph primitive extracted to PlatformManifest.
+# Use the `platform-manifest` CLI directly (provided by that package).
+# ER-002 — Run Memory primitive.
+operations-center-run-memory        = "operations_center.run_memory.cli:app"
+# Snapshot validation CLI — validate observer snapshots for manual CI testing.
+operations-center-observer-snapshot = "operations_center.observer.cli:app"
+# Single-command provenance reader — prints OC↔RxP↔SwitchBoard chain
+# from execution_trace.json alone. Hardening arc item 3.
+operations-center-run-show          = "operations_center.entrypoints.run_show.main:main"
+operations-center-worker-backend-status = "operations_center.entrypoints.worker_backend_status.main:main"
+operations-center-worker-backend-probe = "operations_center.entrypoints.worker_backend_probe.main:main"
+# ADR 0007 Phase A — spec_hygiene watcher. Non-LLM hygiene + active.json
+# projection rebuild extracted from spec_director. Single writer of
+# state/campaigns/active.json.
+operations-center-spec-hygiene      = "operations_center.entrypoints.spec_hygiene.main:main"
+# WO-4 orphan-branch detector — remote branches with commits ahead of main,
+# no open PR, older than 24 h. Run in watchdog STEP-2 or as a one-shot sweep.
+operations-center-orphan-branch-check = "operations_center.entrypoints.maintenance.orphan_branch_check:main"
+
+[project.entry-points."pytest11"]
+flaky-detection = "operations_center.observer.pytest_flaky_plugin"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-xdist>=3.0",
+  "pytest-cov>=6.0",
+  "ruff==0.15.13",
+  "ty==0.0.40",
+  "custodian @ git+https://github.com/ProtocolWarden/Custodian.git@223c9dadd18c8e9526fbdc7185cef7220edde613",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "."]
+testpaths = ["tests"]
+filterwarnings = [
+  "ignore:cannot collect test class:pytest.PytestCollectionWarning",
+]
+markers = [
+  "integration: marks integration tests that require external services (run with: pytest tests/integration/ -v)",
+  "slow: marks tests as slow-running and typically excluded from quick validation runs",
+  "perf: marks tests as performance regression tests (timing + memory bounds; run with: pytest -m perf)",
+  "smoke: marks tests as smoke tests for quick validation of core functionality",
+  "edge_case: marks tests that exercise edge cases or unusual scenarios",
+  "flaky: marks tests that exercise flaky test detection logic",
+  "flaky_historical: marks tests for flaky test historical aggregation and trends",
+  "flaky_integration: marks flaky test integration tests with observer service",
+]
+# xdist configuration for parallel test execution
+# Distribution strategy: loadscope (groups tests by class/module to respect fixture boundaries)
+# Usage: pytest -n auto --dist=loadscope  (auto-detect CPU count)
+#        pytest -n 4 --dist=loadscope     (4 workers)
+#        pytest -n auto --dist=loadfile   (one file per worker; alternative strategy)
+# For CI/batch runs: pytest -n auto --dist=loadscope -x (stop on first failure)
+# For fixture audits: pytest -n 1 (single worker; disables parallelization)
+addopts = "--strict-markers"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+# Tool-side replacements for Custodian native detectors deprecated under the
+# "use the tool first" principle. See Custodian docs/design/detector_disposition_matrix.md.
+extend-select = [
+    "T201",                                              # C2  — print()
+    "S101",                                              # C40 — assert in prod
+    "S324",                                              # C31 — weak hash
+    "DTZ001", "DTZ003", "DTZ005", "DTZ006", "DTZ007",   # C10 — naive datetime
+    "G004",                                              # C15 — f-string in logger
+    "B006",                                              # C38 — mutable default arg
+    "B028",                                              # C42 — warnings.warn no stacklevel
+    "PLC1802",                                           # C17 — len(x) == 0
+    "TRY002",                                            # C20 — raise vanilla Exception
+    "TRY203",                                            # D9  — useless try/except
+    "PGH003",                                            # C35 — bare # type: ignore
+    "RET503",                                            # D8  — implicit return
+    "N818",                                              # N1  — exception class naming
+]
+# Dropped (too noisy across codebase, real legitimate uses):
+#   S110  — try/except/pass — used in cleanup paths and maintenance code
+#   S602/S603 — subprocess invocations — heavily used in adapters / CLI / setup
+#   BLE001 — blind except — codebase uses defensive top-level handlers
+
+[tool.ruff.lint.per-file-ignores]
+# Tests use `assert`, may patch subprocess, can have broad excepts in
+# fixtures, intentionally use vanilla Exception, and may print for
+# debug visibility — none of these are real violations there.
+"tests/**/*.py" = [
+    "S101",
+    "S110",
+    "S602", "S603",
+    "BLE001",
+    "DTZ001", "DTZ003", "DTZ005", "DTZ006", "DTZ007",
+    "B006", "B028",
+    "PLC1802",
+    "TRY002", "TRY203",
+    "PGH003",
+    "RET503",
+    "G004",
+    "T201",
+]
+# CLI scripts and entrypoints are allowed to print() and broad-except.
+"scripts/**/*.py" = ["T201", "BLE001", "S110"]
+"src/operations_center/entrypoints/**/*.py" = ["T201"]
+# Tools / one-shots (test_*.py files use assert like tests/)
+"tools/**/*.py" = ["T201", "BLE001"]
+"tools/**/test_*.py" = ["S101"]
+# Root-level verification scripts
+"verify_stage3.py" = ["T201"]
+
+[tool.ty.environment]
+python-version = "3.11"

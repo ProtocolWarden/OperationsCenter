@@ -1,0 +1,99 @@
+# Example: ImprovementLineage snapshot
+# Shows what the lineage artifact looks like after 2 attempts on the
+# watchdog-cooldown proposal — attempt 1 regressed, attempt 2 was accepted.
+
+lineage_id: "lin-watchdog-cooldown"
+parent_lineage_id: null
+status: "accepted"
+current_attempt_number: 2
+accepted_attempt_number: 2
+
+attempts:
+
+  - attempt_number: 1
+    run_id: "run-abc123"
+    branch_reason: "initial"
+    strategy_used:
+      principle: "Fingerprint repeated failures and apply 4-hour cooldown window per classification+repo"
+      constraints:
+        - fail_closed
+        - preserve_existing_escalations
+        - no_runtime_policy_widening
+      variation_hint: null
+    started_at: "2026-05-21T14:00:00Z"
+    completed_at: "2026-05-21T14:28:00Z"
+    implementation_artifact_path: ".context/capsules/lin-watchdog-cooldown/attempt-1/diff.patch"
+    evaluation_artifact_path: ".context/capsules/lin-watchdog-cooldown/attempt-1/eval.json"
+    checkpoint_path: ".context/checkpoints/chk-20260521-1430.yaml"
+    capsule_snapshot_path: ".context/capsules/lin-watchdog-cooldown/attempt-1/capsule-snapshot.yaml"
+    score:
+      primary_metric_value: 14.0
+      primary_metric_delta: 2.0  # worsened vs baseline of 12.0
+      secondary_metrics:
+        escalation_latency_p50_seconds: 4.1
+      guardrails_passed:
+        - custodian_clean
+        - no_architecture_violations
+        - regression_fixtures_pass
+      guardrails_failed: []
+      outcome: "regressed"
+      evidence_paths:
+        - ".context/capsules/lin-watchdog-cooldown/attempt-1/eval.json"
+      evaluation_notes: "Cooldown applied globally to all classifications; missed per-classification deduplication"
+    decision: "retry"
+    decision_reason: "Primary metric regressed but no guardrail violated; budget=2 remaining"
+    replay_metadata:
+      base_commit_sha: "abc123def456"
+      goal_text_hash: "sha256:4a8f..."
+      strategy_principle_hash: "sha256:91bc..."
+      validation_command_hashes:
+        - "sha256:c3d2..."
+      runtime_binding_kind: "cli_subscription"
+      runtime_binding_model: "claude-sonnet-4-6"
+      clp_schema_version: "0.1"
+      oc_schema_version: "0.3"
+
+  - attempt_number: 2
+    run_id: "run-def456"
+    branch_reason: "retry_after_failure"
+    strategy_used:
+      principle: "Fingerprint repeated failures and apply 4-hour cooldown window per classification+repo"
+      constraints:
+        - fail_closed
+        - preserve_existing_escalations
+        - no_runtime_policy_widening
+      variation_hint: "Apply cooldown per-classification+repo pair, not globally; reset on new evidence"
+    started_at: "2026-05-21T14:35:00Z"
+    completed_at: "2026-05-21T15:02:00Z"
+    implementation_artifact_path: ".context/capsules/lin-watchdog-cooldown/attempt-2/diff.patch"
+    evaluation_artifact_path: ".context/capsules/lin-watchdog-cooldown/attempt-2/eval.json"
+    checkpoint_path: ".context/checkpoints/chk-20260521-1505.yaml"
+    capsule_snapshot_path: ".context/capsules/lin-watchdog-cooldown/attempt-2/capsule-snapshot.yaml"
+    score:
+      primary_metric_value: 5.0
+      primary_metric_delta: -7.0  # improved by 7 vs baseline of 12.0 (target was -4.0 → pass)
+      secondary_metrics:
+        escalation_latency_p50_seconds: 3.8
+      guardrails_passed:
+        - no_lost_escalations
+        - custodian_clean
+        - no_architecture_violations
+        - regression_fixtures_pass
+      guardrails_failed: []
+      outcome: "improved"
+      evidence_paths:
+        - ".context/capsules/lin-watchdog-cooldown/attempt-2/eval.json"
+      evaluation_notes: "Per-pair cooldown reduces duplicates without suppressing real cross-classification failures"
+    decision: "accept"
+    decision_reason: "Primary metric improved by 7.0 (target -4.0), all guardrails passed"
+    replay_metadata:
+      base_commit_sha: "abc123def456"
+      goal_text_hash: "sha256:4a8f..."
+      strategy_principle_hash: "sha256:91bc..."
+      variation_hint_hash: "sha256:7e2a..."
+      validation_command_hashes:
+        - "sha256:c3d2..."
+      runtime_binding_kind: "cli_subscription"
+      runtime_binding_model: "claude-sonnet-4-6"
+      clp_schema_version: "0.1"
+      oc_schema_version: "0.3"

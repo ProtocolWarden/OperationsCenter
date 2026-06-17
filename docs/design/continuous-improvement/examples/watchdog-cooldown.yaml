@@ -1,0 +1,88 @@
+# Example: Watchdog cooldown improvement
+# Reduces duplicate escalation tasks by fingerprinting repeated failures
+# and applying a cooldown window before re-escalating.
+
+proposal_id: "prop-20260521-watchdog-cooldown"
+task_id: "task-4421"
+project_id: "operations"
+task_type: "refactor"
+execution_mode: "improve_campaign"
+goal_text: >
+  Reduce duplicate watchdog escalation tasks. The watchdog currently
+  escalates the same failure classification multiple times within a 24h
+  window, producing noise on the board. Fingerprint repeated failures
+  and apply a cooldown window before re-escalating.
+constraints_text: >
+  Must not lose any net-new escalations. Cooldown applies only to
+  identical classification+repo combinations. Fail-closed: if the
+  cooldown state is unavailable, escalate normally.
+target:
+  repo_key: "OperationsCenter"
+  clone_url: "git@github.com:ProtocolWarden/OperationsCenter.git"
+  base_branch: "main"
+  allowed_paths:
+    - "src/operations_center/watcher/"
+    - "tests/watcher/"
+
+constraints:
+  max_changed_files: 8
+  timeout_seconds: 600
+  require_clean_validation: true
+
+validation_profile:
+  profile_name: "standard"
+  commands:
+    - "python -m pytest tests/watcher/ -x -q"
+    - "python -m ruff check src/operations_center/watcher/"
+  timeout_seconds: 120
+  fail_fast: true
+
+continuous_improvement:
+
+  strategy:
+    principle: "Fingerprint repeated failures and apply 4-hour cooldown window per classification+repo"
+    constraints:
+      - fail_closed
+      - preserve_existing_escalations
+      - no_runtime_policy_widening
+      - no_state_outside_allowed_paths
+
+  evaluation:
+    baseline_description: "current_watchdog_behavior — 12 duplicate escalations per 24h observation window"
+    baseline_artifact_path: ".context/capsules/lin-watchdog-cooldown/baseline_measurement.json"
+    primary_scoring:
+      metric: "duplicate_escalations_per_24h"
+      direction: "lower_is_better"
+      baseline_value: 12.0
+      target_delta: -4.0
+      unit: "count"
+    secondary_scoring:
+      - metric: "escalation_latency_p50_seconds"
+        direction: "lower_is_better"
+        unit: "seconds"
+      - metric: "test_suite_duration_seconds"
+        direction: "lower_is_better"
+        unit: "seconds"
+    guardrails:
+      - no_lost_escalations
+      - custodian_clean
+      - no_architecture_violations
+      - regression_fixtures_pass
+    evaluation_command: >
+      python scripts/measure_escalation_dedup.py
+      --fixture-dir tests/watcher/fixtures/escalation/
+      --output .context/capsules/lin-watchdog-cooldown/attempt-{n}/eval.json
+
+  refinement:
+    enabled: true
+    max_attempts: 3
+    requires_checkpoint_between_attempts: true
+    vary_strategy_on_retry: true
+    failure_penalty: 1
+    accept_on_neutral: false
+
+  clp:
+    investigation_capsule_path: ".context/active/inv-watchdog-cooldown.yaml"
+    loop_checkpoint_path: ".context/checkpoints/chk-20260521-1400.yaml"
+    worker_handoff_path: ".context/handoffs/handoff-20260521-watchdog-001.yaml"
+    lease_expires_at: "2026-05-21T16:00:00Z"

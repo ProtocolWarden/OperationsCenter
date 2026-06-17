@@ -1,0 +1,1001 @@
+repo_key: OperationsCenter
+src_root: src/operations_center
+tests_root: tests
+
+audit:
+  # .console/ reconciled (reconcile/console) — R1/R2 reconcile detectors active.
+  reconcile_enforce: true
+  # r1_enabled: false — disable the built-in R1 line-budget reconcile checker.
+  # The custom plugin R1 (build_oc_detectors) also registers as "R1" and overwrites
+  # the pattern entry, but total_findings accumulates counts from both, causing a
+  # phantom 2-finding CI failure on log.md (1920 ln) and backlog.md (442 ln) that
+  # doesn't appear in the findings array. The custom R1 handles .console/ checks;
+  # the built-in line-budget signal is not actionable in CI.
+  r1_enabled: false
+  # W2 (core.hooksPath must be set): developer-machine setup check, not applicable
+  # in CI where the repo is freshly cloned and git config is not persisted.
+  ignore_rules:
+    - W2
+    # P3: plumbing path-fragment check requires the reader repo to be
+    # checked out alongside OC (../OperatorConsole/). In CI, only OC is
+    # present — the reader path doesn't exist so P3 always fires a
+    # false "reader not found" finding. P1/P2 still run and verify
+    # key presence in the writer; P3 adds no signal in single-repo CI.
+    - P3
+  # C1/C6 (TODO/FIXME markers): exclude paths where TODO/FIXME appear as
+  # strings being analysed (todo_signal, todo_accumulation, artifact_writer)
+  # or in comments already tagged [deferred, reviewed] and covered by OC2.
+  # C2 (print statements): entrypoints are CLI tools that write to stdout
+  # deliberately; two library files have print() only in docstring examples.
+  # C13 allowed paths: OC reads env vars for service configuration across several
+  # modules. The config layer (config/) is the canonical place; other modules
+  # read env vars for their own config (execution paths, tuning thresholds,
+  # provider setup). These are accepted patterns, not architectural debt.
+  # T3 env-gate hints: these phrases near a pytest.skip() indicate the skip
+  # is conditional on a missing tool, env var, or service — not unconditional.
+  t3_env_gate_hints:
+    - "aider"
+    - "switchboard"
+    - "OPERATIONS_CENTER_"
+    - "shutil.which"
+    - "pkg_path"
+    - "not present"
+
+  c13_allowed_paths:
+    - "src/operations_center/config/**"
+    - "src/operations_center/observer/coverage_config.py"
+    - "src/operations_center/observer/cli.py"
+    - "src/operations_center/entrypoints/**"
+    - "src/operations_center/openclaw_shell/**"
+    - "src/operations_center/adapters/workspace/**"
+    - "src/operations_center/tuning/**"
+    - "src/operations_center/proposer/**"
+    - "src/operations_center/audit_dispatch/**"
+    - "src/operations_center/execution/**"
+    - "src/operations_center/backends/**"
+    - "src/operations_center/routing/**"
+    - "src/operations_center/executors/**"
+    - "tests/**"
+
+  cross_repo:
+    platform_manifest_repo: ../PlatformManifest
+
+  # CAP1 — enforce that the capabilities this repo owns (board_unblock) point at
+  # invocation.ref code that actually resolves here. Anti-rot for the registry.
+  capabilities:
+    enforce: true
+
+  plumbing:
+    # P1/P2/P3: OC heartbeat JSON → OperatorConsole stale-role check.
+    # Reader uses mtime only; P2 ignore_keys suppresses pid-check dict accesses
+    # (alive, pid, mtime) that appear in the same function as "heartbeat_".
+    - id: heartbeat
+      writer_glob: "src/operations_center/entrypoints/*/main.py"
+      reader_path: "../OperatorConsole/src/operator_console/watcher_status_pane.py"
+      written_keys: [role, at, status]
+      path_fragment: "heartbeat_"
+      ignore_keys: [alive, pid, mtime]
+    # P1/P2/P3: OC usage.json → OperatorConsole budget/rate display.
+    # written_keys covers top-level keys + event object keys (both written
+    # by usage_store.py). P2 ignore_keys suppresses TUI state dict accesses
+    # (resources, backend_usage, resource_gate, budget sub-dicts) that appear
+    # in functions sharing "usage.json" UI labels or docstrings.
+    - id: usage
+      writer_glob: "src/operations_center/execution/usage_store.py"
+      reader_path: "../OperatorConsole/src/operator_console/watcher_status_pane.py"
+      written_keys:
+        # top-level object keys
+        - updated_at
+        - events
+        - hourly_exec_count
+        - daily_exec_count
+        - task_attempts
+        - last_task_signatures
+        - task_artifacts
+        - skipped_due_to_budget
+        - skipped_due_to_noop
+        - skipped_due_to_cooldown
+        - blocked_due_to_retry_cap
+        - suppressed_due_to_proposal_budget
+        # event object keys (nested inside events[])
+        - kind
+        - task_id
+        - timestamp
+        - backend
+        - id
+      path_fragment: "usage.json"
+      # Keys accessed in the same scoped functions but on TUI state dicts,
+      # not on the usage.json object itself.
+      ignore_keys:
+        # TUI state snapshot keys (aggregated from multiple sources)
+        - backend_usage
+        - resource_gate
+        - resources
+        - budget
+        - found
+        # budget sub-dict keys (computed, not from usage.json)
+        - daily_cap
+        - daily_used
+        - hourly_cap
+        - hourly_used
+        # rate limit display keys (computed from hourly/daily caps at display time)
+        - max_per_day
+        - max_per_hour
+        # per-backend counter keys (built by _per_backend_live_counters)
+        - hourly
+        - daily
+        - in_flight
+        # system resource sub-dict keys (from _sys_resources)
+        - load
+        - load_pct
+        - max_concurrent
+        - mem_pct
+        - mem_total_gb
+        - mem_used_gb
+        - min_available_memory_mb
+        - num_cores
+        - swap_pct
+        - swap_total_gb
+        - swap_used_gb
+    # P1/P2/P3: OC spec-author campaigns state → OperatorConsole campaign pane.
+    # (Package renamed from spec_director to spec_author per ADR 0007 Phase F.)
+    - id: campaigns
+      writer_glob: "src/operations_center/spec_author/state.py"
+      reader_path: "../OperatorConsole/src/operator_console/watcher_status_pane.py"
+      written_keys: [campaigns]
+      path_fragment: "active.json"
+
+  exclude_paths:
+    T1:
+      # OC is tested through integration and end-to-end tests, not unit tests
+      # on individual domain types. Vocabulary types, error classes, audit
+      # contracts, dispatch locks, etc. are used through their consumers and
+      # never directly referenced in test files by ast.Name.
+      - "src/operations_center/**/*.py"
+    T6:
+      # OC's surface is tested via integration and end-to-end tests, not by
+      # name-importing each module in test files. Adapters/entrypoints/
+      # backends/executors are exercised through subprocess + HTTP integration
+      # paths, not direct imports.
+      - "src/operations_center/adapters/**"
+      - "src/operations_center/entrypoints/**"
+      - "src/operations_center/backends/**"
+      - "src/operations_center/executors/**"
+      - "src/operations_center/openclaw_shell/**"
+      - "src/operations_center/observer/**"
+      - "src/operations_center/observability/**"
+      - "src/operations_center/scheduled_tasks/**"
+      - "src/operations_center/managed_repos/**"
+      - "src/operations_center/run_memory/**"
+      - "src/operations_center/run_identity/**"
+      - "src/operations_center/lifecycle/**"
+      - "src/operations_center/insights/**"
+      - "src/operations_center/upstream_eval/**"
+      - "src/operations_center/propagation/**"
+      - "src/operations_center/artifact_index/**"
+      - "src/operations_center/audit_contracts/**"
+      - "src/operations_center/audit_dispatch/**"
+      - "src/operations_center/audit_governance/**"
+      - "src/operations_center/audit_toolset/**"
+      - "src/operations_center/autonomy_tiers/**"
+      - "src/operations_center/behavior_calibration/**"
+      - "src/operations_center/routing/**"
+      - "src/operations_center/decision/**"
+      - "src/operations_center/drift/**"
+      - "src/operations_center/fixture_harvesting/**"
+      - "src/operations_center/mini_regression/**"
+      - "src/operations_center/planning/**"
+      - "src/operations_center/policy/**"
+      - "src/operations_center/proposer/**"
+      - "src/operations_center/slice_replay/**"
+      - "src/operations_center/tuning/**"
+      - "src/operations_center/spec_author/**"
+      - "src/operations_center/contracts/**"
+      - "src/operations_center/application/**"
+      - "src/operations_center/execution/**"
+      - "src/operations_center/domain/**"
+      - "src/operations_center/config/**"
+      # New subsystems — tested through integration paths
+      - "src/operations_center/backend_health/**"
+      - "src/operations_center/evidence_fingerprints/**"
+      - "src/operations_center/queue_healing/**"
+      - "src/operations_center/recovery/**"
+      - "src/operations_center/recovery_policies/**"
+      - "src/operations_center/maintenance/**"
+    T7:
+      # Same rationale as T6. Listed per-layer (not src/**) so a NEW
+      # top-level package without parallel tests still gets flagged.
+      - "src/operations_center/adapters/**"
+      - "src/operations_center/entrypoints/**"
+      - "src/operations_center/backends/**"
+      - "src/operations_center/executors/**"
+      - "src/operations_center/openclaw_shell/**"
+      - "src/operations_center/observer/**"
+      - "src/operations_center/observability/**"
+      - "src/operations_center/scheduled_tasks/**"
+      - "src/operations_center/managed_repos/**"
+      - "src/operations_center/run_memory/**"
+      - "src/operations_center/run_identity/**"
+      - "src/operations_center/lifecycle/**"
+      - "src/operations_center/insights/**"
+      - "src/operations_center/upstream_eval/**"
+      - "src/operations_center/propagation/**"
+      - "src/operations_center/spec_author/**"
+      - "src/operations_center/audit_dispatch/**"
+      - "src/operations_center/audit_governance/**"
+      - "src/operations_center/audit_toolset/**"
+      - "src/operations_center/autonomy_tiers/**"
+      - "src/operations_center/behavior_calibration/**"
+      - "src/operations_center/routing/**"
+      - "src/operations_center/decision/**"
+      - "src/operations_center/drift/**"
+      - "src/operations_center/fixture_harvesting/**"
+      - "src/operations_center/mini_regression/**"
+      - "src/operations_center/planning/**"
+      - "src/operations_center/policy/**"
+      - "src/operations_center/proposer/**"
+      - "src/operations_center/slice_replay/**"
+      - "src/operations_center/tuning/**"
+      - "src/operations_center/contracts/**"
+      - "src/operations_center/audit_contracts/**"
+      - "src/operations_center/artifact_index/**"
+      - "src/operations_center/application/**"
+      - "src/operations_center/execution/**"
+      - "src/operations_center/domain/**"
+      - "src/operations_center/config/**"
+      # New subsystems — tested through integration paths
+      - "src/operations_center/backend_health/**"
+      - "src/operations_center/evidence_fingerprints/**"
+      - "src/operations_center/queue_healing/**"
+      - "src/operations_center/recovery/**"
+      - "src/operations_center/recovery_policies/**"
+      # Maintenance subsystem — tested through integration paths.
+      - "src/operations_center/maintenance/**"
+      # Top-level scheduled-task entry modules — wired into scheduler, exercised
+      # via integration paths.
+      - src/operations_center/cross_repo_impact.py
+      - src/operations_center/impact_analysis.py
+      - src/operations_center/maintenance_windows.py
+      - src/operations_center/multi_step_planning.py
+      - src/operations_center/post_merge_regression.py
+      - src/operations_center/priority_scans.py
+      - src/operations_center/quality_alerts.py
+      - src/operations_center/reconcile_running.py
+      - src/operations_center/repo_graph_factory.py
+    T2:
+      # Schema-validation tests use jsonschema.validate() / pydantic.model_validate()
+      # which raise on failure — "shouldn't raise" is the assertion.
+      # Startup-wiring tests verify env_var_unset / env_var_set side effects via
+      # mocks; the test is the side-effect check.
+      - tests/unit/er000_phase0_golden/test_golden.py
+      - tests/unit/executors/test_startup_wiring.py
+      # cl_wrap tests assert dispatch succeeds by absence of exception — no assert statement needed.
+      - tests/unit/execution/test_coordinator_cl_wrap.py
+      # Exporter tests verify graceful no-op / no-raise behavior — absence of exception is the assertion.
+      - tests/unit/observer/test_validation_metrics_exporter.py
+      # Snapshot test files define @pytest.fixture named test_snapshot — T2 false positive
+      # (fixtures returning data are not test functions; no assertion needed in the fixture body).
+      - tests/unit/observer/test_remote_snapshot_repositories.py
+      - tests/unit/observer/test_snapshot_edge_cases.py
+      - tests/unit/observer/test_snapshot_manager.py
+      - tests/unit/observer/test_snapshot_repository.py
+      # Flaky plugin tests define nested specimen functions (def test_example(): pass)
+      # whose names must start with test_ so _extract_test_name() returns realistic values.
+      # T2 is a false positive — the outer test functions all have assertions.
+      - tests/unit/observer/test_pytest_flaky_plugin.py
+      # Integration tests use the same nested-specimen pattern — local def test_*() stubs
+      # passed to FlakyTestDetectionPlugin to simulate real pytest items.
+      # T2 is a false positive — the outer class test methods all have assertions.
+      - tests/integration/observer/test_extraction_integration.py
+    D6:
+      # MetricUnit is an Enum — values are accessed as MetricUnit.X, not via constructor.
+      # D6 is a false positive for Enum classes used only in type annotations and method signatures.
+      - src/operations_center/observer/metrics.py
+    D11:
+      # The local backends (aider_local, direct_local, team_executor) share a
+      # common lifecycle by design — _read_capture, _discover_changed_files,
+      # _diff_stat. Refactoring to a shared helper is a follow-up; today
+      # the duplication is intentional to keep each backend self-contained.
+      - "src/operations_center/backends/**"
+      # github_pr.py reactions/comments/review-events all use the same
+      # GitHub API GET shape — typological similarity, not a clone.
+      - src/operations_center/adapters/github_pr.py
+      # JSON state stores share a write/read pattern — single-source-of-
+      # truth pair (budgets/cooldowns/usage_store).
+      - "src/operations_center/audit_governance/**"
+      # PR-quality + reporting adapters that wrap GitHub APIs share patterns.
+      - src/operations_center/adapters/pr_quality.py
+      - "src/operations_center/adapters/reporting/**"
+      - "src/operations_center/adapters/plane/**"
+      # Spec-director phase orchestrators are a CRUD family by design.
+      - "src/operations_center/spec_author/**"
+      # Routing rules / decision rules / proposer / planning / lifecycle —
+      # all evaluator typology that share shape.
+      - "src/operations_center/routing/**"
+      - "src/operations_center/decision/**"
+      - "src/operations_center/proposer/**"
+      - "src/operations_center/planning/**"
+      - "src/operations_center/lifecycle/**"
+      - "src/operations_center/observer/**"
+      - "src/operations_center/observability/**"
+      - "src/operations_center/scheduled_tasks/**"
+      - "src/operations_center/insights/**"
+      - "src/operations_center/upstream_eval/**"
+      - "src/operations_center/audit_dispatch/**"
+      - "src/operations_center/policy/**"
+      - "src/operations_center/managed_repos/**"
+      - "src/operations_center/run_memory/**"
+      # CLI entrypoints (artifacts/fixtures/flow_audit/ghost_audit) share
+      # _load_index / _parse_since / _detect_* helpers — typology by class.
+      - "src/operations_center/entrypoints/**"
+      # Campaign + usage stores share record_* event-emit pattern (event-
+      # log typology). Real refactor would centralise the writer.
+      - "src/operations_center/execution/**"
+      # mini_regression + slice_replay are sibling audit subsystems with
+      # parallel report-loading and check-functions. Typology by class.
+      - "src/operations_center/mini_regression/**"
+      - "src/operations_center/slice_replay/**"
+    T4:
+      # Dynamic fixture conftest uses @pytest.fixture(name=_name) in a loop —
+      # the inner function name (_generated) is not the fixture's request name.
+      # Static T4 analysis cannot follow runtime name= redirection.
+      - tests/fixtures/console_malformed/conftest.py
+    N2:
+      # create_snapshot is a factory helper for performance tests — intentionally
+      # not prefixed test_ so pytest doesn't collect it as a test case.
+      - tests/unit/observer/test_snapshot_performance.py
+    T8:
+      # Architecture-guard + lock-store-concurrency tests don't import the
+      # code under audit — they probe via subprocess + filesystem.
+      - tests/test_architecture_cleanup_guards.py
+      - tests/unit/audit_dispatch/test_lock_store_concurrency.py
+      # Loop-controller tests exercise the top-level tool entrypoint directly.
+      - tests/test_loop_controller.py
+      # Slow-test tracker tests exercise conftest.py hooks via subprocess — no src imports.
+      - tests/test_slow_test_hooks_integration.py
+      - tests/test_slow_test_tracker.py
+      # Fixture helpers and generators — standalone test infrastructure,
+      # not consumers of src packages.
+      - tests/fixtures/dependency_reports/generators.py
+      - tests/fixtures/timing.py
+      # Fixture-coverage test probes fixture module structure, not src.
+      - tests/unit/observer/test_dependency_report_fixtures.py
+      # Custodian plugin detector tests — test .custodian/detectors.py (plugin code),
+      # not OC src packages. No src import is structurally correct for these files.
+      - tests/unit/detectors/test_r1_console_presence_validator.py
+      - tests/unit/detectors/test_r2_console_budget_validator.py
+      - tests/unit/detectors/test_oc12_model_field_mismatch.py
+      - tests/unit/detectors/test_oc13_test_reimplements_metric.py
+      # Documentation accuracy tests validate README/config/CI content against real
+      # artifacts via filesystem reads and subprocess calls — no src imports needed.
+      - tests/unit/test_documentation_accuracy.py
+    C1:
+      - src/operations_center/observer/collectors/todo_signal.py
+      - src/operations_center/observer/artifact_writer.py
+      - src/operations_center/decision/rules/todo_accumulation.py
+      - src/operations_center/proposer/candidate_mapper.py
+      - src/operations_center/observer/collectors/validation_history.py
+      - src/operations_center/tuning/metrics.py
+      - src/operations_center/insights/derivers/quality_trend.py
+      # Phase D placeholder TODO — intentional, tracked in ADR 0007 Phase D work.
+      - src/operations_center/entrypoints/board_worker/main.py
+    C6:
+      - src/operations_center/observer/collectors/todo_signal.py
+      - src/operations_center/decision/rules/todo_accumulation.py
+      - src/operations_center/proposer/candidate_mapper.py
+      - src/operations_center/insights/derivers/quality_trend.py
+    C2:
+      - src/operations_center/entrypoints/**
+      - src/operations_center/execution/campaign_store.py
+    D3:
+      # Typer command handlers end in `raise typer.Exit(code)` — they're
+      # supposed to exit, not return. D3 (NoReturn missing) misclassifies
+      # them as stubs. Discovered 2026-05-06 during while-away triage sweep.
+      - src/operations_center/entrypoints/**
+      - src/operations_center/tuning/calibration.py
+      # observer CLI commands follow the same Typer pattern.
+      - src/operations_center/observer/cli.py
+    C4:
+      # Entrypoints are polling workers — pass-in-except is correct in loops
+      # where a single bad item must not abort the whole work cycle.
+      - src/operations_center/entrypoints/**
+      # Library files with pass-in-except that is intentional:
+      # adapters: subprocess/git cleanup, process kill, PR metadata parsing
+      - src/operations_center/adapters/git/client.py
+      - src/operations_center/adapters/github_pr.py
+      # backends: finally-block cleanup (temp file delete, process teardown)
+      - src/operations_center/backends/aider_local/adapter.py
+      # governance/audit: state load failure → None is documented fallback
+      - src/operations_center/audit_governance/runner.py
+      # store: corrupted state file → empty dict (already logs warning)
+      - src/operations_center/execution/usage_store.py
+      # analytics/observer: malformed records in scan loops are skipped
+      - src/operations_center/insights/derivers/execution_outcome.py
+      - src/operations_center/insights/derivers/noop_loop.py
+      - src/operations_center/observer/collectors/check_signal.py
+      - src/operations_center/observer/collectors/execution_health.py
+      - src/operations_center/observer/collectors/validation_history.py
+      # priority scoring: malformed timestamp/label → default score (correct)
+      - src/operations_center/priority_scans.py
+      # proposer: config value parse failure → skip constraint (correct)
+      - src/operations_center/proposer/guardrail_adapter.py
+      # scheduled tasks: datetime parse failure → treat as never run (correct)
+      - src/operations_center/scheduled_tasks/runner.py
+      # spec director: date parse on archival, state file load
+      - src/operations_center/spec_author/spec_writer.py
+      - src/operations_center/spec_author/state.py
+      # tuning: calibration/metrics/compare calculations — one bad record skipped
+      - src/operations_center/tuning/calibration.py
+      - src/operations_center/tuning/compare.py
+      - src/operations_center/tuning/metrics.py
+      # fixture harvesting: file write failure on best-effort copy
+      - src/operations_center/fixture_harvesting/writer.py
+      # mini regression: test-run failure in analysis loop
+      - src/operations_center/mini_regression/runner.py
+      # proposer: integration step failure — skip candidate
+      - src/operations_center/proposer/candidate_integration.py
+      # audit dispatch: process cleanup (SIGTERM fallback)
+      - src/operations_center/audit_dispatch/executor.py
+      # behavior calibration: unresolvable artifact path — skip rule
+      - src/operations_center/behavior_calibration/rules.py
+      # spec director phase orchestrator: one best-effort traceability append
+      - src/operations_center/spec_author/phase_orchestrator.py
+    C9:
+      # Entrypoints are polling workers (same rationale as C4); broad catches
+      # prevent one bad work item from aborting the whole cycle. The cycle logs
+      # aggregate outcomes via artifact files, not per-exception logger calls.
+      - src/operations_center/entrypoints/**
+      # Analytics / signal collection — one bad record or failing collector must
+      # not crash the analysis pass. Errors surface in artifact-level counts.
+      - src/operations_center/insights/derivers/**
+      - src/operations_center/observer/collectors/**
+      - src/operations_center/observer/service.py  # _collect_required re-raises; _collect_optional now logs
+      - src/operations_center/tuning/**
+      # Backend normalisers: parse best-effort; return None/[] on any decode failure
+      - src/operations_center/backends/**
+      # Adapter layer: GitHub API calls return [] / None on any transport error;
+      # callers decide whether to retry or skip.
+      - src/operations_center/adapters/github_pr.py
+      # Structured error capture — exception message stored in a result/error list,
+      # not silently discarded:
+      - src/operations_center/audit_dispatch/executor.py
+      - src/operations_center/proposer/backlog_promoter.py
+      - src/operations_center/proposer/candidate_integration.py
+      - src/operations_center/behavior_calibration/rules.py
+      # Best-effort / non-fatal defensive fallbacks (documented per-file):
+      - src/operations_center/audit_governance/runner.py  # budget/cooldown state now logs warnings
+      - src/operations_center/autonomy_tiers/config.py
+      - src/operations_center/config/drift.py
+      - src/operations_center/execution/validation.py
+      - src/operations_center/execution/workspace.py
+      - src/operations_center/insights/loader.py
+      - src/operations_center/mini_regression/runner.py
+      - src/operations_center/post_merge_regression.py
+      - src/operations_center/priority_scans.py
+      - src/operations_center/reconcile_running.py
+      - src/operations_center/scheduled_tasks/runner.py
+      - src/operations_center/spec_author/context_bundle.py
+      - src/operations_center/spec_author/phase_orchestrator.py
+      - src/operations_center/spec_author/recovery.py
+      - src/operations_center/spec_author/spec_writer.py
+    C29:
+      # Entrypoint main files are necessarily large — they wire together the full
+      # worker lifecycle (arg parsing, signal handling, retry loops, artifact
+      # writes). Splitting them would fragment cohesion without adding clarity.
+      # snapshot_repository: implements 3 distinct backend adapters (local, S3, HTTP)
+      # behind a unified abstract interface — splitting would fragment the cohesive
+      # interface pattern without architectural benefit.
+      - src/operations_center/observer/snapshot_repository.py
+      # snapshot_validator: implements the full validation pipeline across many
+      # signal categories — single responsibility, cannot cleanly split.
+      - src/operations_center/observer/snapshot_validator.py
+      - src/operations_center/entrypoints/board_worker/main.py
+      - src/operations_center/entrypoints/setup/main.py
+      - src/operations_center/entrypoints/autonomy_cycle/main.py
+      - src/operations_center/entrypoints/pr_review_watcher/main.py
+      # usage_store: one file, one responsibility — tracks token/cost usage with
+      # many storage/query/aggregation methods. A clean boundary, not monolithic.
+      - src/operations_center/execution/usage_store.py
+      # policy engine: declarative rule evaluation over many rule types — each
+      # rule type needs its own evaluation method; cannot reasonably be split.
+      - src/operations_center/policy/engine.py
+      # settings.py is the canonical settings registry — all OC config lives
+      # in one Pydantic settings module by design.
+      - src/operations_center/config/settings.py
+      # coordinator.py is OC's execution coordinator (central dispatcher).
+      - src/operations_center/execution/coordinator.py
+      # spec_hygiene/main.py wires the full spec-hygiene worker lifecycle.
+      - src/operations_center/entrypoints/spec_hygiene/main.py
+      # workspace.py manages the full workspace lifecycle (checkout, prep, cleanup)
+      # across many code paths — single responsibility, cannot cleanly split.
+      - src/operations_center/execution/workspace.py
+      # board_unblock.py is a growing rules engine — each autonomous recovery rule
+      # adds ~20 lines; splitting by rule would fragment context.
+      - src/operations_center/entrypoints/maintenance/board_unblock.py
+      # outcomes.py holds all board_worker outcome handlers (success/failure/follow-up/
+      # CI loop) in one cohesive module. Splitting by handler type would fragment the
+      # tightly coupled state transitions and Plane client calls.
+      - src/operations_center/entrypoints/board_worker/outcomes.py
+      # validation.py is the canonical per-collector validator library — all
+      # artifact validation helpers live in one module by design.
+      - src/operations_center/observer/validation.py
+      # dashboard.py implements the full DashboardProvider with metrics, latency,
+      # health, log, and flaky-test panels in one cohesive module — splitting by
+      # panel type would fragment the shared snapshot generation and helper logic.
+      - src/operations_center/observer/dashboard.py
+      # github_pr.py is the canonical GitHub API adapter — all PR status checks,
+      # check runs, review calls, and merge operations in one cohesive module.
+      # Guard C (require ≥1 completed check) pushed it past 500 lines; splitting
+      # by operation type would scatter the shared client and pagination helpers.
+      - src/operations_center/adapters/github_pr.py
+      # alert_channels.py implements all alert channel backends (Slack, Email,
+      # GitHub, Plane, OperatorLog) plus the factory — each channel class is
+      # self-contained; splitting by channel would scatter the shared AlertResult
+      # and factory in ways that add indirection without clarity.
+      - src/operations_center/observer/alert_channels.py
+      # coverage_alert_channels.py implements all coverage-specific alert channel
+      # backends (Slack, Email, GitHub, OperatorLog) plus router — same rationale
+      # as alert_channels.py above.
+      - src/operations_center/observer/coverage_alert_channels.py
+      # coverage_trend_repository.py implements 3 distinct backend adapters (local,
+      # S3, HTTP) behind a unified abstract interface — same rationale as
+      # snapshot_repository.py above.
+      - src/operations_center/observer/coverage_trend_repository.py
+      # coverage_config.py is the canonical coverage alerting configuration registry
+      # — all coverage thresholds and channel config live in one module by design.
+      - src/operations_center/observer/coverage_config.py
+      # models.py consolidates coverage-domain Pydantic models (snapshot, module,
+      # file, trend, alert) — single-responsibility, cannot cleanly split.
+      - src/operations_center/observer/models.py
+      # coverage_trend_manager.py is the high-level trend analysis API — factory
+      # methods, trend computation, historical queries, and alert integration are
+      # all cohesively grouped; splitting by method type would scatter context.
+      - src/operations_center/observer/coverage_trend_manager.py
+      # coverage_alerting.py implements the full alert generation pipeline (threshold,
+      # regression, trend, module-gap detection) plus categorization/filtering helpers
+      # — single responsibility; splitting by alert type would break the shared config
+      # and severity-mapping logic.
+      - src/operations_center/observer/coverage_alerting.py
+      # cli.py implements 8 Typer commands — one command per cohesive operation;
+      # splitting by command would scatter the shared app, console, and exit-code defs.
+      - src/operations_center/observer/cli.py
+      # service.py manages the full collector lifecycle (required + optional collectors,
+      # signal aggregation, error handling, debug logging) — single responsibility;
+      # splitting by collector type or signal category would fragment the cohesive
+      # service initialization and error propagation logic.
+      - src/operations_center/observer/service.py
+      # flaky_test_reporter.py implements the full flakiness detection pipeline (score
+      # computation, entropy, variance, streak, recovery) — single responsibility;
+      # splitting by metric type would fragment the shared reporter state and
+      # session-level aggregation logic.
+      - src/operations_center/observer/flaky_test_reporter.py
+      # query.py implements the full observer query API — test signal, flaky test,
+      # coverage, and snapshot queries in one cohesive module; splitting by signal
+      # type would fragment the shared SnapshotManager and formatting helpers.
+      - src/operations_center/observer/query.py
+    C11:
+      # Agent-spawning entrypoints: board_worker, intake, pr_review_watcher invoke
+      # the coding backend (team_executor, aider, etc.) which runs for an unbounded
+      # duration. A timeout would kill legitimate long-running tasks.
+      - src/operations_center/entrypoints/board_worker/**
+      - src/operations_center/entrypoints/intake/**
+      - src/operations_center/entrypoints/pr_review_watcher/**
+      # Interactive setup scripts run once by a human operator; timeouts would
+      # interrupt interactive login flows and package installation.
+      - src/operations_center/entrypoints/setup/**
+      # Workspace bootstrap runs pip/npm install for repo setup — can take minutes.
+      - src/operations_center/adapters/workspace/bootstrap.py
+    C23:
+      # shell=True is intentional in OC's orchestration layer — all commands come
+      # from trusted YAML config (not user input) and may use shell features like
+      # && chaining. Injection risk is acceptable given the trusted source.
+      - src/operations_center/application/validation.py
+      - src/operations_center/execution/workspace.py
+      - src/operations_center/execution/baseline_validation.py
+      - src/operations_center/adapters/workspace/bootstrap.py
+      - src/operations_center/entrypoints/setup/main.py
+      # shell=True in docstring "Never uses shell=True." — regex false positive
+      - src/operations_center/audit_dispatch/executor.py
+      # install_provider() runs npm/curl install commands from trusted YAML config
+      - src/operations_center/entrypoints/setup/providers.py
+
+  # Stale handler names cited in autonomy_gaps.md from a pre-board_worker
+  # architecture. Used by Custodian's generic C8 (and OC's OC8) to skip
+  # tokens that are documented architecture drift, not unimplemented features.
+  stale_handlers:
+    - handle_goal_task
+    - handle_test_task
+    - handle_improve_task
+    - handle_propose_cycle
+    - handle_blocked_triage
+    - handle_feedback_loop_scan
+    - handle_merge_conflict_scan
+    - handle_review_revision_scan
+    - handle_stale_pr_scan
+    - handle_workspace_health_check
+    - handle_dependency_update_scan
+    - handle_stale_autonomy_task_scan
+    - run_watch_loop
+    - run_parallel_watch_loop
+    - classify_execution_result
+    - select_watch_candidate
+    - build_proposal_candidates
+    - validate_task_pre_execution
+    - _process_human_review
+
+  # Generic English / config / parameter words that appear backtick'd in
+  # docs but aren't function names. Reduces C8/K1 false positives.
+  common_words:
+    # K1 suppressions: module names, JSON keys, and status values in docs
+    # that are not Python def/class names but appear in implementation context.
+    - board_worker
+    - last_seen
+    - partially_cancelled
+    - step_ids
+    - cycles
+    - effort
+    - timeout
+    - exchanges
+    - execution
+    - feedback
+    - redesign
+    - overhaul
+    - modernize
+    - context_limit
+    - validation_failure
+    - advice
+    - execution_outcome
+    - execution_cost
+    - duration_anomaly
+    - scope_violation
+    - policy_violations
+    - allowed_paths
+    - context_handoff
+    - flaky_test
+    - coverage_gap
+    - snapshots_analyzed
+    - lint_fix
+    - type_fix
+    - github_rate_limit_low
+    - executor_quota_event
+    - executor_quality_warning
+    - failure_rate_degradation
+    - warn_threshold
+    - block_threshold
+    - cooldown_seconds
+    - stale_pr_days
+    - disk_space_low
+    - insufficient_quota
+    - execution_stderr_excerpt
+    - _backend_version_cache
+    - _rejection_store
+    - candidate_dedup_key
+    - _path_locks
+    - _consecutive_errors
+    - blocked_triage
+    - self_healing_repeated_block
+    - skip_repo_budget
+    - circuit_breaker_escalation_sent
+    - board_health_check
+    - validate_credentials
+    - execution_gate_decision
+    - build_proposal_description
+    - _load_rejection_patterns_for_proposal
+    - create_proposed_task_if_missing
+    - _semantic_title_similarity
+    - _estimate_task_complexity
+    - pull_request_url
+    - repo_key
+    - write_text
+    - start_watch_role
+    - refactor
+    - migrate
+    - restructure
+    - loadscope
+    - loadfile
+    - loaddist
+    - dist
+    - rewrite
+    - lint_cluster
+    - type_cluster
+    - snapshot_appearances
+    - expanded
+    - expanding
+    - superseded
+    - escalated
+    - archived
+    - ci_green
+    - evidence_schema_version
+    - completed
+    - failure_limitation_present
+    - improve_campaign
+    - test_campaign
+    - cleanup_state
+    - recover_stale
+    - ghost_audit
+    - flow_audit
+    - code_health_audit
+    - in_progress
+    - interrupted
+    - json_artifact_reads
+    - known_repo_required
+    - last_progress_at
+    - manual_review
+    - manual_selection
+    - metadata_only_reason_present
+    - needs_manual_approval
+    - not_yet_run
+    - parse_task_dependencies
+    - partial_run
+    - recover_stale_running
+    - repo_count
+    - representative
+    - requires_human_approval
+    - ruff_clean
+    - scope_too_broad
+    - shared_insight_kind
+    - source_manifest_loads
+    - spec_revision_count
+    - stage_slice
+    - state_retention_days
+    - task_dependencies_met
+    - test_regression
+    - tests_pass
+    - timeout_pattern
+    - ty_clean
+    - unavailable
+    - urgent_override_policy
+    - validation_loop
+    - velocity_cap_exceeded
+    - verified
+    # ADR 0007 rename: spec_director → spec_author. Stale doc references remain
+    # in roadmap.md and the ADR itself as historical context. spec_hygiene is
+    # an entrypoint package name (not a def/class), surfaced in the ADR as prose.
+    - spec_director
+    - spec_hygiene
+    # Autonomy-gap design doc references internal helper symbols that were
+    # renamed/removed; the doc is a design retrospective, not an API spec.
+    - repo_untrusted
+    # Refactored board_worker private names — referenced in ADR 0007 and autonomy_gaps.md
+    # as historical identifiers before the P3 refactor renamed them.
+    - _process_issue
+    - _handle_spec_author_success
+    - _build_phase_advance_goal_text
+    - _is_quota_exhausted_result
+    - _run_subprocess
+    - _run_with_claude_fallback
+    - is_quota_exhausted
+    - visibility
+    # ADR 0002 backend card axis vocabulary (orchestration / mechanism labels).
+    - local_subprocess
+    - single_agent
+    # Coverage alerting design doc references — config keys, threshold names,
+    # and tool names that are not Python def/class names. K1/OC8 false positives.
+    - branch_minimum
+    - istanbul
+    - minimum_threshold_pct
+    - module_critical_gap
+    - regression_detected
+    - trend_degrading
+
+  # F3-exempt field names: schema/documentation fields never accessed by dot
+  # notation because they're serialized to JSON and consumed by external readers,
+  # or are compatibility fields retained for schema stability.
+  f3_exempt:
+    - bucket_naming_note
+    - bucket_naming_pattern
+    - contract_version
+    - evidence_id
+    - ref_id
+    - workdir_name
+    # ComplianceInput fields — passed as a Pydantic model to an API, serialized
+    # via model_dump(); never accessed as Python attributes at callsites.
+    - diff
+    - task_constraints
+    # TestSignal fields — populated by snapshot serialisation; consumed by
+    # TestSignalQuery readers via model_validate_json(), not attribute access.
+    - skip_count
+    - xfailed_count
+    # CoverageAlertConfig fields — consumed via config YAML loading and
+    # model_dump(); never accessed as dot-notation attributes at callsites.
+    - alert_channels
+    - regression_30day_threshold_pct
+    - regression_7day_threshold_pct
+    - trend_degradation_velocity_pct
+
+  # Plugin-defined audit config keys — suppresses unknown-key warnings in doctor.
+  plugin_audit_keys:
+    - ignore_rules
+    - known_values
+    - oc1_exempt
+    - oc7_exempt
+    - reconcile_enforce
+    # CAP1 enforcement key — a core key in current custodian, declared here so
+    # the doctor job (pinned to a pre-CAP1 custodian commit) accepts it.
+    - capabilities
+
+  # Additional well-known string values for OC9 to recognise without
+  # requiring a string-literal anchor in src/.
+  known_values:
+    - awaiting_input
+    - in_progress
+    - test_campaign
+    - improve_campaign
+    - execute_representative_workflow
+    - audit_report
+    - backend_version
+    - requires_human_approval
+
+  # OC1 backends that have raise NotImplementedError intentionally —
+  # openclaw is partially scaffolded; full implementation is deferred.
+  oc1_exempt:
+    - src/operations_center/backends/openclaw/invoke.py
+
+  # Settings fields that are intentionally kept even though OC7 can't find
+  # dot-notation usage. These are generated into config file templates by
+  # setup/main.py (as dict keys) and must remain in the schema so user
+  # configs load without validation errors.
+  oc7_exempt:
+    - push_on_validation_failure
+    - sign_commits
+    - signing_key
+    - switchboard_url
+
+doc_conventions:
+  exclude_path_patterns:
+    # Defaults (must re-include when overriding)
+    - "**/archive/**"
+    - "**/history/**"
+    # Pre-existing orphan operator docs — spec/design references, not user guide entries
+    - docs/operator/platformdeployment_compose_smoke.md
+    - docs/operator/watchdog_loop.md
+    # Error handling operator runbook suite (PR #201) — supplementary references, not nav-linked by design
+    - docs/operator/backend_error_catalog.md
+    - docs/operator/error_handling_quick_reference.md
+    - docs/operator/error_handling_recipes.md
+    - docs/operator/error_handling_recovery.md
+    - docs/operator/error_message_diagnostics.md
+    - docs/operator/error_scenarios.md
+    - docs/operator/executor_failure_contracts.md
+    - docs/specs/cxrp-backend-card-vocabulary.md
+    - docs/specs/ci-coordinator-decision-tests.md
+    - docs/specs/decision-rules-test-coverage.md
+    - docs/specs/operational-health-test-coverage.md
+    - docs/specs/recovery-subsystem-test-coverage.md
+    - docs/specs/adaptive-loop-integration-tests.md
+    - docs/specs/admin-api-test-coverage.md
+    - docs/specs/scene-timing-audit-test-hardening.md
+    # Auto-generated spec-author queue-drain task docs — not linked from parent index by design
+    - docs/specs/queue-drain-*.md
+    # Coverage alerting documentation suite (PR #275) — supplementary reference
+    # and design docs, not nav-linked from the main docs index by design
+    - docs/design/COVERAGE_THRESHOLD_ALERTING_USER_GUIDE.md
+    - docs/design/STAGE0_COVERAGE_THRESHOLD_ALERTING_SYSTEM.md
+    - docs/guides/COVERAGE_ALERTING_CONFIGURATION.md
+    - docs/guides/COVERAGE_ALERTING_INTEGRATION.md
+    - docs/guides/COVERAGE_ALERTING_TROUBLESHOOTING.md
+    - docs/guides/COVERAGE_ALERTING_USAGE.md
+    - docs/reference/COVERAGE_ALERTING_API_REFERENCE.md
+
+architecture:
+  layers:
+    # General DDD boundary rules
+    - name: domain
+      glob: "src/operations_center/domain/**"
+      may_not_import:
+        - "src/operations_center/adapters/**"
+        - "src/operations_center/backends/**"
+        - "src/operations_center/entrypoints/**"
+    - name: contracts
+      glob: "src/operations_center/contracts/**"
+      may_not_import:
+        - "src/operations_center/adapters/**"
+        - "src/operations_center/backends/**"
+        - "src/operations_center/entrypoints/**"
+    - name: backends
+      glob: "src/operations_center/backends/**"
+      may_not_import:
+        - "src/operations_center/entrypoints/**"
+        - "src/operations_center/adapters/**"
+    - name: adapters
+      glob: "src/operations_center/adapters/**"
+      may_not_import:
+        - "src/operations_center/entrypoints/**"
+        - "src/operations_center/backends/**"
+    # AI2: fast-feedback ladder — unidirectional import graph
+    - name: slice_replay
+      glob: "src/operations_center/slice_replay/**"
+      may_not_import:
+        - "src/operations_center/audit_dispatch/**"
+        - "src/operations_center/audit_governance/**"
+        - "src/operations_center/mini_regression/**"
+    - name: mini_regression
+      glob: "src/operations_center/mini_regression/**"
+      may_not_import:
+        - "src/operations_center/audit_dispatch/**"
+        - "src/operations_center/audit_governance/**"
+    - name: fixture_harvesting
+      glob: "src/operations_center/fixture_harvesting/**"
+      may_not_import:
+        - "src/operations_center/audit_dispatch/**"
+    - name: audit_governance
+      glob: "src/operations_center/audit_governance/**"
+      may_not_import:
+        - "src/operations_center/fixture_harvesting/**"
+        - "src/operations_center/slice_replay/**"
+        - "src/operations_center/mini_regression/**"
+  invariants:
+    # AI1: src/operations_center must not import managed-repo packages.
+    # The bound managed repo's package prefix lives in the private overlay
+    # config/managed_repos/local/<repo_id>.yaml — Custodian config is
+    # public, so the rule here uses placeholder prefixes only. Operators
+    # extend this list in their private overlay's `.custodian/config.yaml`
+    # at the consuming repo.
+    - name: "AI1 managed-repo import (tools.audit)"
+      glob: "src/operations_center/**"
+      forbidden_import_prefix: "tools.audit"
+    - name: "AI1 managed-repo import (managed_repo)"
+      glob: "src/operations_center/**"
+      forbidden_import_prefix: "managed_repo"
+
+    # AI5: boundary discipline for extracted-library platform deps.
+    # OC consumes CoreRunner, RxP, SourceRegistry as independent
+    # libraries — imports must go through each library's public API
+    # only. Deep imports bypass the contract.
+    - name: "AI5 CoreRunner public API only"
+      glob: "src/operations_center/**"
+      public_api_only:
+        package: "core_runner"
+        allowed_paths:
+          - "core_runner"
+          - "core_runner.runners"
+          - "core_runner.contracts"
+    - name: "AI5 RxP public API only"
+      glob: "src/operations_center/**"
+      public_api_only:
+        package: "rxp"
+        allowed_paths:
+          - "rxp.contracts"
+          - "rxp.vocabulary"
+    - name: "AI5 SourceRegistry public API only"
+      glob: "src/operations_center/**"
+      public_api_only:
+        package: "source_registry"
+        allowed_paths:
+          - "source_registry"
+
+plugins:
+  - module: ".custodian/log_scanner.py:OCLogScanner"
+  - module: ".custodian/state_scanner.py:OCStateScanner"
+
+detectors:
+  - module: ".custodian/detectors.py:build_oc_detectors"
+  - module: ".custodian/architecture.py:build_oc_architecture_detectors"
+  # DC1-DC5 doc-convention detectors moved to Custodian native (DC-class).
+  # Configure via the top-level `doc_conventions:` block if defaults need
+  # tuning; otherwise the natives just work.
+
+maintenance:
+  stale_pr_days: 7
+  stale_state_days: 90
+
+tools:
+  ruff: true
+  vulture: true
+  # AI3 is now expressed as a Semgrep rule (no Python AST walker).
+  # See .custodian/rules/semgrep/ai3_no_directory_scanning.yaml.
+  semgrep:
+    configs:
+      - .custodian/rules/semgrep
+
+# ---------------------------------------------------------------------------
+# Privacy / boundary enforcement (Custodian B-class)
+# ---------------------------------------------------------------------------
+# OperationsCenter ships in a public repo. Managed repos it binds to may
+# be private. Names listed here cause Custodian B1 to fail any tracked
+# file that mentions them, with the noted path patterns excluded.
+privacy:
+  require_boundary_artifact: true
+  # boundary_artifact_file is intentionally omitted so Custodian reads from
+  # REPOGRAPH_BOUNDARY_ARTIFACT_FILE env var instead. The config path would
+  # be resolved from CWD (not repo root), which breaks CI where CWD differs.

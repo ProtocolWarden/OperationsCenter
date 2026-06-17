@@ -1,0 +1,55 @@
+[run]
+source = src
+branch = True
+omit =
+    */tests/*
+    */test_*.py
+    setup.py
+    */observer/collectors/architecture_signal.py
+    */observer/collectors/backlog.py
+    */observer/collectors/benchmark_signal.py
+    */observer/collectors/check_signal.py
+    */observer/collectors/ci_history.py
+    */observer/collectors/coverage_signal.py
+    */observer/collectors/execution_health.py
+    */observer/collectors/file_hotspots.py
+    */observer/collectors/git_context.py
+    */observer/collectors/lint_signal.py
+    */observer/collectors/quality_suppressions.py
+    */observer/collectors/recent_commits.py
+    */observer/collectors/security_signal.py
+    */observer/collectors/todo_signal.py
+    */observer/collectors/type_check.py
+    */observer/collectors/validation_history.py
+
+[report]
+precision = 2
+show_missing = True
+skip_covered = False
+fail_under = 85
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    @overload
+    @abstractmethod
+    class .*\bProtocol\):
+    @(abc\.)?abstractmethod
+    logging\.
+    def __getattribute__
+    def __setattr__
+    def __delattr__
+
+[html]
+directory = coverage_html_report
+
+[xml]
+output = coverage.xml
+
+[paths]
+source =
+    src
+    */site-packages

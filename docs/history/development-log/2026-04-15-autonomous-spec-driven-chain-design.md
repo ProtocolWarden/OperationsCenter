@@ -1,0 +1,405 @@
+# Autonomous Spec-Driven Development Chain
+
+**Date:** 2026-04-15
+**Status:** approved
+**Author:** operator + Claude
+
+---
+
+## Overview
+
+Add a fully autonomous spec-driven development chain to OperationsCenter. The existing heuristic autonomy cycle (observe → insights → decide → propose) continues to run for mechanical fixes (lint, types, coverage). A new `spec` watch role sits above it as a priority layer: when a spec campaign is active, it suppresses heuristic proposals that overlap with the campaign's area and drives directed feature work through a Claude-authored spec.
+
+The chain follows the superpowers pattern: brainstorm → spec → task campaign → execute → compliance review → PR.
+
+Human interaction: operator drops a file or creates a labelled Plane task. System picks it up and starts a campaign. Fully autonomous otherwise.
+
+---
+
+## Architecture
+
+Six modules in a new `spec_director/` package:
+
+```
+src/operations_center/spec_director/
+  trigger.py          — detects start conditions (drop-file, Plane label, queue drain)
+  brainstorm.py       — builds context bundle, calls Anthropic API, returns spec text
+  spec_writer.py      — writes spec to OperationsCenter repo + copies into target workspace
+  campaign_builder.py — creates Plane parent task + child tasks with campaign metadata
+  compliance.py       — structured verdict (diff vs spec) via Anthropic API
+  suppressor.py       — blocks heuristic proposals while a campaign covers their area
+
+src/operations_center/entrypoints/spec_director/
+  main.py             — polling loop, wires the above together
+
+scripts/operations-center.sh  — new "spec" watch role (alongside goal/test/improve/propose/review)
+```
+
+**Existing code changes (minimal):**
+- `worker/main.py`: two new `task_kind` routes (`test_campaign` → `kodo --test`, `improve_campaign` → `kodo --improve`)
+- `adapters/kodo/adapter.py`: `build_command` gains `kodo_mode` parameter (`"goal"` | `"test"` | `"improve"`)
+- `entrypoints/reviewer/main.py`: compliance branch — if task has `spec_campaign_id`, call `SpecComplianceService` instead of kodo self-review
+- `proposer/candidate_integration.py`: suppression check before creating a heuristic task
+
+---
+
+## Campaign Lifecycle
+
+```
+TRIGGER DETECTED
+  ├── drop-file: state/spec_direction.md
+  ├── Plane task with label "spec-request"
+  └── queue drain: ready_for_ai_count < threshold AND no active campaign
+
+BRAINSTORM  (claude-opus-4-6, one call per campaign)
+  Context bundle:
+    - insight snapshot (22-deriver JSON from latest autonomy_cycle run)
+    - git log summary (last 30 commits of target repo)
+    - specs index (title + status of all docs/specs/*.md)
+    - board summary (open task titles + states, last 48h)
+    - seed text (from drop-file or Plane task description, or empty for autonomous)
+  Output: spec text, suggested slug, phase flags [implement, test, improve]
+
+SPEC WRITE
+  - docs/specs/<slug>.md in OperationsCenter repo (canonical)
+  - copied into target workspace clone at same relative path
+  - Plane parent campaign task created with campaign_id, spec_file reference, short summary
+
+TASK CREATION  (campaign_builder)
+  For each goal in spec:
+    implement task  → state: Ready for AI  kind: goal             spec_campaign_id: <uuid>
+    test task       → state: Backlog        kind: test_campaign    depends_on: implement
+    improve task    → state: Backlog        kind: improve_campaign depends_on: test (if phases include improve)
+  Confidence gate: improve task promoted to Ready for AI only after test_campaign passes clean.
+
+EXECUTION  (existing workers + new routing)
+  goal worker    → kodo --goal-file (unchanged)
+  test worker    → kodo --test --goal-file (new route for test_campaign kind)
+  improve worker → kodo --improve --goal-file (new route for improve_campaign kind)
+
+COMPLIANCE CHECK  (per task, in reviewer watcher)
+  Calls SpecComplianceService with: spec text, diff, task constraints, task phase
+  Verdict: LGTM → PR proceeds; CONCERNS → human gates merge; FAIL → task back to In Progress
+  Non-campaign tasks: existing kodo self-review unchanged.
+
+CAMPAIGN COMPLETE
+  All tasks Done/Cancelled → campaign marked complete in state/campaigns/active.json
+  Suppressor releases heuristic proposals for the campaign's area
+  drop-file (if present) archived to state/spec_direction.archive/<timestamp>.md
+```
+
+---
+
+## Data Flow and Linking
+
+Every object in a campaign carries the same `campaign_id` (UUID, generated at spec creation).
+
+**Spec file front matter** (`docs/specs/<slug>.md`):
+```yaml
+---
+campaign_id: <uuid>
+slug: <slug>
+created_at: <iso>
+phases: [implement, test, improve]
+repos: [MyRepo]
+area_keywords: [src/auth/, authentication, login]
+status: active   # active | complete | cancelled
+---
+```
+
+**Plane parent task** description section:
+```
+## Campaign
+campaign_id: <uuid>
+spec_file: docs/specs/<slug>.md
+status: active
+```
+
+**Each child task** description section:
+```
+## Execution
+repo: MyRepo
+base_branch: main
+mode: goal
+spec_campaign_id: <uuid>
+spec_file: docs/specs/<slug>.md
+task_phase: implement   # or test_campaign / improve_campaign
+```
+
+**Fast-lookup state file** `state/campaigns/active.json`:
+```json
+[
+  {
+    "campaign_id": "<uuid>",
+    "slug": "<slug>",
+    "spec_file": "docs/specs/<slug>.md",
+    "area_keywords": ["src/auth/", "authentication"],
+    "status": "active",
+    "created_at": "<iso>"
+  }
+]
+```
+Written at campaign creation. Updated to `"status": "complete"` when all tasks are done. Suppressor reads this file — no disk scan of spec files needed at proposal time.
+
+---
+
+## Trigger Detection
+
+Polling loop in `spec_director/trigger.py`. Three checks in priority order, skipped entirely if a campaign is already active:
+
+1. **Drop-file**: `state/spec_direction.md` exists → read as seed text, start campaign. Archive to `state/spec_direction.archive/<timestamp>.md` only after the campaign is successfully created (brainstorm + spec write + Plane tasks all succeed).
+2. **Plane label**: fetch open tasks with label `spec-request` → use first unprocessed task's description as seed, mark task `In Progress` to claim it, start campaign.
+3. **Queue drain**: `ready_for_ai_count < spec_trigger_queue_threshold` (config, default `3`) AND no active campaign → start autonomous campaign with empty seed (Claude picks direction from context bundle).
+
+One campaign at a time per repo. The spec director skips all trigger checks while `state/campaigns/active.json` has any entry with `status: active`.
+
+---
+
+## Brainstorm Step
+
+`spec_director/brainstorm.py` assembles the context bundle and makes a single `claude-opus-4-6` call via the Anthropic SDK (`anthropic` package already available in the environment).
+
+**Context bundle assembly:**
+- Insight snapshot: read latest `tools/report/autonomy_cycle/*/insights.json`
+- Git log: `git log --oneline -30` on the target repo (uses existing `run_git` helper)
+- Specs index: scan `docs/specs/*.md` front matter for title + status fields
+- Board summary: `PlaneClient.list_issues` filtered to last 48h, titles + states only
+- Seed text: from trigger source, or empty string
+
+**Output parsing:** Claude returns structured YAML front matter block followed by spec body. `brainstorm.py` parses the front matter for `slug`, `phases`, `area_keywords`; passes the full text to `spec_writer.py`.
+
+**Prompt caching:** the static system prompt is passed as a `cache_control: ephemeral` block.
+
+**Model:** `claude-opus-4-6` for brainstorm (one call per campaign start, quality matters). `claude-sonnet-4-6` for all compliance checks (per-task, cost matters).
+
+---
+
+## Spec Compliance Service
+
+`spec_director/compliance.py` — direct Anthropic API call, structured Pydantic output.
+
+```python
+class ComplianceInput(BaseModel):
+    spec_text: str
+    diff: str
+    task_constraints: str
+    task_phase: str          # "implement" | "test_campaign" | "improve_campaign"
+    spec_coverage_hint: str  # which spec section this task addressed (written into task body by campaign_builder at creation time, parsed from task body by reviewer watcher at check time)
+
+class ComplianceVerdict(BaseModel):
+    verdict: Literal["LGTM", "CONCERNS", "FAIL"]
+    spec_coverage: float          # 0.0–1.0
+    violations: list[str]
+    notes: str
+    model: str
+    prompt_tokens: int
+    completion_tokens: int
+```
+
+**Reviewer watcher integration:** existing `run_self_review_pass` is called for non-campaign tasks (unchanged). For tasks with `spec_campaign_id` in the parsed task body, the watcher calls `SpecComplianceService.check(input)` instead.
+
+Downstream flow:
+- `LGTM` → PR proceeds to merge (existing reviewer merge path)
+- `CONCERNS` → compliance verdict posted as PR comment, task stays `In Review`, human must approve or close
+- `FAIL` → PR closed, task transitions back to `In Progress` for the worker to retry; reviewer watcher posts a comment explaining the spec violations
+
+**Retry:** 2 attempts on transient API errors. Both fail → CONCERNS verdict (human review, not silent failure).
+
+**Prompt caching:** spec text passed as `cache_control: ephemeral` prefix block. Multiple tasks in the same campaign share the cached spec.
+
+---
+
+## Heuristic Suppression
+
+`spec_director/suppressor.py` — called by `proposer/candidate_integration.py` before creating a heuristic task.
+
+```python
+def is_suppressed(proposal_title: str, proposal_paths: list[str]) -> bool:
+    active = load_active_campaigns()  # reads state/campaigns/active.json
+    for campaign in active:
+        if any_keyword_matches(campaign.area_keywords, proposal_title, proposal_paths):
+            return True
+    return False
+```
+
+Suppressed proposals are logged to the decision artifact with `reason: active_spec_campaign` — not silently dropped. Operator can see what was held back during a campaign.
+
+Suppression lifts automatically when `state/campaigns/active.json` has no `active` entries.
+
+---
+
+## Worker Routing Changes
+
+**`KodoAdapter.build_command`** gains a `kodo_mode: str = "goal"` parameter:
+- `"goal"` → `kodo --goal-file <path> ...` (current behaviour, unchanged)
+- `"test"` → `kodo --test --goal-file <path> ...`
+- `"improve"` → `kodo --improve --goal-file <path> ...`
+
+**`worker/main.py`** dispatch:
+- `test` lane: if `task.execution_mode == "test_campaign"` → `kodo_mode="test"`, else `kodo_mode="goal"` (existing behaviour)
+- `improve` lane: if `task.execution_mode == "improve_campaign"` → `kodo_mode="improve"`, else `kodo_mode="goal"` (existing behaviour)
+
+`execution_mode` is parsed from the `mode:` field in the task body's `## Execution` section by the existing `TaskParser`.
+
+Zero breaking change. Existing tasks without `task_kind` set continue to use `kodo --goal-file`.
+
+---
+
+## Resource Constraints
+
+The spec director runs on the same machine as all other workers. It must not crowd out kodo processes or fill the disk.
+
+### Concurrency
+
+- **Brainstorm and compliance are API-only** (no kodo subprocess) — they do not increment the `max_concurrent_kodo` counter and do not need to pass the kodo gate.
+- **Campaign task creation is gated** — `campaign_builder` checks `max_concurrent_kodo` before promoting any child task to `Ready for AI`. If the machine is already at the kodo concurrency limit, the task is created in `Backlog` and a note is added: `[queued: kodo concurrency limit reached]`. The reviewer watcher promotes it when a slot opens.
+- **One campaign at a time** — enforced by `state/campaigns/active.json`. The spec director polls check this file before starting any new brainstorm call.
+
+### Memory
+
+- **Brainstorm does not launch kodo**, so `min_kodo_available_mb` is not checked before brainstorm calls.
+- **Context bundle size is capped** before the brainstorm API call:
+  - Insight snapshot: truncated to 8 KB (the most recent deriver outputs)
+  - Git log: capped at 30 commits (already specified)
+  - Board summary: capped at 50 task titles
+  - Diff passed to compliance: truncated at 32 KB — if diff exceeds this, only the first 32 KB is sent with a `[diff truncated]` note in the prompt
+
+### Disk Space
+
+The spec director calls `_check_disk_space` (existing helper, `src/operations_center/execution/usage_store.py`) at two points:
+
+1. **Before writing spec file** — checked against `docs/specs/` path. Below 200 MB free: log `spec_disk_space_low` warning and continue. Below 50 MB free: abort campaign creation, log `spec_disk_space_critical`, retry on next poll.
+2. **Before writing `state/campaigns/active.json`** — same thresholds.
+
+### Spec File Rotation
+
+Completed and cancelled campaign specs accumulate in `docs/specs/`. To keep the directory bounded:
+
+- On each spec director poll cycle, scan `docs/specs/*.md` for entries with `status: complete` or `status: cancelled` older than `spec_retention_days` (config, default `90`).
+- Expired specs are moved to `docs/specs/archive/<slug>.md`.
+- The archive is not automatically deleted — operator manages it.
+- This prevents the specs index passed to brainstorm from growing unbounded over time.
+
+### Campaign Task Limit
+
+`campaign_builder` enforces `max_tasks_per_campaign` (config, default `6`) — the maximum number of child tasks (implement + test + improve across all spec goals) a single campaign can create. Specs that decompose into more goals than this cap are truncated at creation time with a `[campaign_task_limit: N goals omitted]` note on the parent Plane task. This prevents a single verbose spec from flooding the board.
+
+---
+
+## Configuration
+
+New fields in `config/operations_center.local.yaml` (all optional, with defaults):
+
+```yaml
+spec_director:
+  enabled: true
+  poll_interval_seconds: 120
+  spec_trigger_queue_threshold: 3    # queue drain trigger
+  brainstorm_model: claude-opus-4-6
+  compliance_model: claude-sonnet-4-6
+  drop_file_path: state/spec_direction.md
+  plane_spec_label: spec-request
+  max_active_campaigns: 1
+  max_tasks_per_campaign: 6          # child task cap per campaign
+  spec_retention_days: 90            # days before completed specs are archived
+  brainstorm_context_snapshot_kb: 8  # insight snapshot truncation limit
+  compliance_diff_max_kb: 32         # diff truncation limit for compliance checks
+  # self-recovery
+  spec_revision_budget: 3            # max spec revisions per campaign before giving up
+  campaign_stall_hours: 24           # hours without progress before stall recovery kicks in
+  campaign_abandon_hours: 72         # hours before campaign self-cancels
+```
+
+---
+
+## Self-Recovery
+
+The spec director runs a recovery scan on every poll cycle alongside trigger detection. The goal is that no campaign stalls permanently — every stuck state has an autonomous resolution path. Human intervention is the last resort, not the first.
+
+### Task-Level Recovery
+
+Campaign child tasks go through three tiers before escalation:
+
+**Tier 1 — Automatic retry (existing `retry_decision` / `record_retry_cap` mechanism)**
+- `goal` tasks: up to 3 retries (uses existing usage store retry budget)
+- `test_campaign` tasks: up to 2 retries (test failures are often environment noise)
+- `improve_campaign` tasks: up to 2 retries
+
+**Tier 2 — Spec-aware retry (new, spec director handles)**
+
+If a task hits the retry cap with a `compliance: FAIL` verdict (not a kodo failure — a spec mismatch), the spec director is invoked instead of marking the task Blocked:
+1. Reload the compliance verdicts from the task's retained artifacts
+2. Make a targeted Anthropic API call: "Given these spec violations, revise the relevant spec section." Model: `claude-sonnet-4-6`.
+3. Write the revised spec section back to `docs/specs/<slug>.md` and update the workspace copy
+4. Reset the retry counter for this task and re-queue it to `Ready for AI`
+5. Post a comment on the Plane task: `[spec revised: <section> updated based on compliance failures]`
+
+Spec revision is bounded: max `spec_revision_budget` revisions per campaign (config, default `3`). Once the budget is exhausted, the task is marked `Blocked` with `reason: spec_revision_budget_exhausted`.
+
+**Tier 3 — Blocked classification and decomposition**
+
+For tasks that hit the kodo retry cap (not spec violations), the existing `blocked_classification` logic applies:
+- `context_limit`: spec director splits the task into two smaller child tasks (each covering half the spec goal) and cancels the original. Uses existing `campaign_builder` task creation path.
+- `timeout`: spec director reduces the kodo `--cycles` and `--exchanges` parameters for the replacement task by 30% and re-queues.
+- `validation_loop` (same validation failure ≥3 times): spec director creates a new `goal` task whose goal is to fix the blocking validation failure, sets it as `depends_on` for the original task, and re-queues both.
+- All other blocked classifications: mark `Blocked` and post an escalation comment on the Plane task with the classification.
+
+### Campaign Stall Detection
+
+The spec director tracks `last_progress_at` in `state/campaigns/active.json` — updated whenever any child task transitions to Done or gets a compliance LGTM. On each poll cycle:
+
+1. **Stall check**: if `now - last_progress_at > campaign_stall_hours` (config, default `24`), the campaign is considered stalled.
+2. **Diagnose**: scan all child tasks for their current state. Classify the stall:
+   - `all_blocked`: every non-Done task is Blocked → trigger Tier 3 recovery for each
+   - `all_in_review`: tasks are in review but no human has responded → post a nudge comment on the oldest PR: `[campaign stalled: waiting for review — auto-resolving in 24h if no response]`; if still stalled after another `campaign_stall_hours`, merge with CONCERNS verdict treated as LGTM (operator was notified)
+   - `kodo_gate_stuck`: tasks are in `Ready for AI` but `max_concurrent_kodo` gate has not opened in `campaign_stall_hours` → log `campaign_kodo_gate_stuck` and reduce task priority (deprioritise rather than wait forever)
+   - `partial_done`: some tasks Done, some stuck in a terminal-like state → run targeted Tier 3 recovery on stuck tasks only
+3. If stall persists beyond `campaign_abandon_hours` (config, default `72`) with no recovery progress, the campaign self-cancels (see below).
+
+### Dependency Chain Unblocking
+
+When a `depends_on` task is cancelled or marked Blocked permanently:
+- If cancelled: spec director removes the dependency link and promotes the dependent task to `Ready for AI` with a note: `[dependency cancelled: proceeding without <task_id>]`
+- If blocked permanently: spec director evaluates whether the dependent task can proceed without it. For `test_campaign` tasks depending on a failed `implement` task: cancel the test task too (nothing to test). For `improve_campaign` depending on a failed `test_campaign`: check if the implement task's PR was merged anyway; if yes, promote improve; if no, cancel.
+
+### Campaign Self-Cancellation
+
+When recovery is exhausted (`campaign_abandon_hours` exceeded, or all tasks are in a permanent terminal state), the spec director performs an orderly shutdown:
+
+1. Close all open PRs for campaign tasks with comment: `[campaign abandoned: <reason>]`
+2. Cancel all non-Done Plane tasks with the same comment
+3. Mark campaign `status: cancelled` in `state/campaigns/active.json`
+4. Update `docs/specs/<slug>.md` front matter: `status: cancelled`
+5. Release heuristic suppression for the campaign's area
+6. Post a summary comment on the parent campaign Plane task listing which tasks completed and which were abandoned
+7. If a drop-file triggered this campaign and it was not yet archived, archive it now
+
+This ensures suppression never gets stuck and the heuristic loop resumes.
+
+### Brainstorm and Infrastructure Failure Recovery
+
+- **Brainstorm API failure**: log error, skip campaign creation, retry on next poll cycle. Drop-file is not archived until a campaign is successfully created.
+- **Spec write failure**: log error, do not create Plane tasks — partial state (spec exists, no tasks) is worse than no state. Retry next cycle.
+- **Campaign builder partial failure**: if some child tasks fail to create, mark campaign `status: partial` in active.json. Post a comment on the parent task listing which tasks were and were not created. Retry missing tasks on next poll cycle (idempotent — `campaign_builder` checks for existing tasks before creating).
+- **Compliance API failure**: 2 retries → CONCERNS verdict. Never blocks a PR silently.
+- **Suppressor read failure**: fail open (allow heuristic proposal) and log `spec_suppressor_read_error`. Better a duplicate proposal than a silently blocked one.
+- **State file corruption** (`state/campaigns/active.json` unparseable): log `spec_campaign_state_corrupt`, rename the file to `active.json.corrupt.<timestamp>`, and start with an empty active campaigns list. Any in-flight campaign recovers on next poll when the spec director re-scans `docs/specs/*.md` for `status: active` entries and rebuilds the state file.
+
+---
+
+## What This Does Not Change
+
+- Existing autonomy cycle (observe → insights → decide → propose) — untouched
+- All five existing worker lanes — untouched except two new `task_kind` routes
+- Kodo invocation pattern — `--goal-file` always present; `--test`/`--improve` are additive flags
+- Reviewer watcher self-review path for non-campaign tasks — untouched
+- Phase 6 (confidence calibration) and Phase 7 (experiment mode) — unblocked by this, not replaced
+
+---
+
+## Out of Scope
+
+- Multi-campaign parallelism (one campaign per repo, one repo at a time)
+- Webhook-driven triggers (polling only, consistent with existing architecture)
+- Auto-merge without human review for any task kind
+- Full spec rewrite (spec revision is bounded to targeted section fixes, not full regeneration)

@@ -1,0 +1,12 @@
+backend_id: dag_executor
+audited_at: "2026-05-22"
+audited_against_cxrp_version: "0.3.1"
+backend_version: "0.1.0"
+per_phase:
+  runtime_control: PARTIAL
+  capability_control: PASS
+  drift_detection: PASS
+  failure_observability: PASS
+  internal_routing: "N/A"
+outcome: adapter_plus_wrapper
+gap_refs: []
