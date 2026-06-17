@@ -34,6 +34,26 @@ for _cl_dir in "${CL_HOME:-}/bin" "${ROOT_DIR}/../ContextLifecycle/bin"; do
 done
 unset _cl_dir
 
+# Anchor the fleet's ContextLifecycle sessions at the PlatformManifest manifest.
+# OC's CLAUDE.md / ContextGuard (`.claude/hooks/pre_tool_use.sh`) BLOCK any Claude
+# Code session whose CL_ANCHOR is unset — so an agent dispatched into the OC repo
+# returns a prose refusal ("CL_ANCHOR is not set…") instead of a JSON plan, and
+# every self-modify task fails as backend_error (non-JSON from agent). The fleet's
+# systemd/login env carries no CL_ANCHOR, so set it here; the watchers and the
+# agents they spawn (os.environ.copy()) inherit it. `cl_dispatch_wrap` activates
+# but no-ops gracefully without an active session (SessionNotStarted is caught).
+# Respect an operator-set CL_ANCHOR; else resolve the sibling PlatformManifest.
+if [[ -z "${CL_ANCHOR:-}" ]]; then
+  for _anchor in "${CL_HOME:-}/../PlatformManifest" "${ROOT_DIR}/../PlatformManifest"; do
+    if [[ -d "${_anchor}/.context" ]]; then
+      CL_ANCHOR="$(cd "${_anchor}" && pwd)"
+      export CL_ANCHOR
+      break
+    fi
+  done
+  unset _anchor
+fi
+
 ensure_venv() {
   ensure_pip_conf
   if [[ ! -x "${VENV_DIR}/bin/python" ]]; then

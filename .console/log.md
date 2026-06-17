@@ -1,3 +1,19 @@
+## 2026-06-17 — fix: anchor the fleet at CL_ANCHOR (unblock agent execution)
+
+`watch-all` now sets `CL_ANCHOR` (→ the sibling PlatformManifest manifest, unless
+the operator already set it). Root cause of 3+ Blocked self-modify tasks: an agent
+dispatched into the OC repo loads `.claude/hooks/pre_tool_use.sh` (ContextGuard),
+which **blocks** when `CL_ANCHOR` is unset — the agent returns a prose refusal
+("CL_ANCHOR is not set…") instead of a JSON plan → planner sees non-JSON →
+`backend_error` → task Blocked. The fleet's systemd/login env carried no
+CL_ANCHOR (only an operator shell does), so EVERY agent-driven self-modify failed,
+and the proposer non-convergently re-proposed the same families 100-190×. Same
+class as the cl-on-PATH gap (#308): the fleet env missing a CL integration var.
+Verified: hook exits 0 (ALLOW) with the resolved anchor; `cl_dispatch_wrap`
+activates but no-ops gracefully without a session (`SessionNotStarted` caught in
+cl_wrap, so dispatch never breaks). Sibling to the convergence escalation+breaker
+(separate PR) that makes this failure class *reach* a human next time.
+
 ## 2026-06-17 — feat: merged-PR → Plane-task reconciler (close done-but-open debt)
 
 New `operations-center-reconcile-merged-tasks` one-shot
