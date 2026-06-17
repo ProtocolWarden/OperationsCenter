@@ -1,3 +1,28 @@
+## 2026-06-17 — Stage 3: Extend watchdog collector schema to capture extraction signal ✅
+
+**Analysis Complete**: Identified critical gap in watchdog collector visibility into extraction signal quality. Haiku collector currently reports aggregate signal counts (failures, violations, errors) but provides no metrics on extraction success rates — preventing operators from diagnosing collection failures (e.g., "50 test failures reported but only 12 test names extracted").
+
+**Key Findings**:
+- Watchdog JSON schema lacks extraction_summary field
+- haiku_collector_prompt.md has no extraction signal monitoring section
+- Gap prevents root-cause analysis when extraction is blocked or degraded (timeouts, parse failures, truncation)
+- watchdog_loop_prompt.md has no extraction quality validation in Sonnet analysis (STEP 3.5)
+
+**Deliverable**: improve-output.json with 5 focused suggestions (3 small, 2 medium complexity):
+1. Add extraction_summary section to haiku_collector_prompt.md (signal-level coverage metrics)
+2. Extend JSON output schema with extraction_summary field
+3. Implement extraction collection logic using observer query APIs (STEP 1.5)
+4. Document extraction edge cases and recovery strategies
+5. Add extraction monitoring to watchdog Sonnet analysis loop (STEP 3.5)
+
+**Acceptance Criteria Met**:
+- ✅ improve-output.json analysis complete
+- ✅ haiku_collector_prompt.md extension points identified (extraction section, success_rate metrics, edge_cases)
+- ✅ Collection logic documented (count extracted vs. total failures pattern)
+- ✅ JSON output schema extension specified
+
+---
+
 ## 2026-06-17 — feat: convergence stall breaker (escalate + suppress)
 
 New `operations-center-detect-convergence-stall` one-shot

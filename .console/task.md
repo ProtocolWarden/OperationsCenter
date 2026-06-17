@@ -5,18 +5,18 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Overall Plan
 
-Extend failure categorization to extract test names and assertion messages from
-flaky test data, then update documentation and commit all changes.
+Extend watchdog collector schema to capture extraction signal visibility and enable
+root-cause analysis for collection gaps across all signals.
 
 ## Current Stage
 
-All stages complete. PR #300 open for review and merge.
+Stage 4: Integrate and verify extraction coverage signal end-to-end (Analysis Complete)
 
 ## Objective
 
-**Stage 7: Update documentation and commit all changes** ✅ COMPLETE
+**Stage 4: Integrate and verify extraction coverage signal end-to-end** ✅ ANALYSIS COMPLETE
 
-**Status**: ✅ COMPLETE — All documentation updated with comprehensive failure extraction capabilities. README updated with query examples, inline docstrings documented, all changes committed with descriptive messages. Production-ready for merge.
+**Status**: ✅ COMPLETE — Analysis written to improve-output.json with 5 actionable suggestions for extending haiku_collector_prompt.md and watchdog_loop_prompt.md with extraction signal monitoring.
 
 ### Stage 7 Summary: Documentation and Final Commit ✅
 

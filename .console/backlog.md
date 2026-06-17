@@ -8,6 +8,31 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## Recently Completed
 
+### 2026-06-17: Stage 4 — Integrate and verify extraction coverage signal end-to-end (✅ ANALYSIS COMPLETE)
+- **Objective**: Identify why extraction signal is unavailable across repeated watchdog runs and create bounded follow-up suggestions
+- **Status**: ✅ ANALYSIS COMPLETE — Root cause identified, 5 actionable suggestions created
+- **Key Findings**:
+  - ✅ **Root Cause Identified**: CLI/data source mismatch prevents extraction signal activation
+    - haiku_collector_prompt.md STEP 3 expects raw individual test data with test_id, test_name, assertion_message
+    - query-flaky-tests command returns aggregated metrics (test_name → count, assertion_message → count)
+    - STEP 3 Python logic iterates over `d.get('tests', [])` which always returns empty list → all metrics become zero/null
+  - ✅ **Impact Verified**: Extraction signal remains unavailable (null/zero metrics) in watchdog output despite Stage 3 schema being in place
+  - ✅ **Contract Violation**: query-flaky-tests designed for human-readable display; lacks raw data exposure needed by watchdog collector
+- **5 Bounded Suggestions** (each actionable in single PR):
+  1. ✅ **Small** - Add --raw/--detailed mode to query-flaky-tests CLI
+  2. ✅ **Small** - Create FlakyTestQuery.get_detailed_metrics() method
+  3. ✅ **Small** - Update haiku_collector_prompt.md STEP 3 to use new endpoint
+  4. ✅ **Medium** - Add integration test for end-to-end extraction signal flow
+  5. ✅ **Small** - Document extraction signal contract in README/CONTRIBUTING.md
+- **Acceptance Criteria**:
+  1. ✅ Root cause identified and documented
+  2. ✅ Data flow incompatibility explained with examples
+  3. ✅ 5 prioritized, bounded suggestions for fixing in next stage
+  4. ✅ Stage 4 analysis written to improve-output.json
+- **Deliverables**:
+  - ✅ improve-output.json with comprehensive findings and 5 suggestions
+  - ✅ Updated task.md and backlog.md with Stage 4 completion
+
 ### 2026-06-17: Stage 3 — Extend watchdog collector schema to capture extraction signal (✅ COMPLETE)
 - **Objective**: Implement watchdog collector extensions to capture extraction signal visibility
 - **Status**: ✅ COMPLETE — All 3 acceptance criteria implemented and documented
