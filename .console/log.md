@@ -1,3 +1,19 @@
+## 2026-06-17 — fix: ensure `cl` is resolvable on the fleet watchers' PATH
+
+`watch-all` now resolves the ContextLifecycle `cl` CLI and prepends its dir to
+PATH (inherited by the setsid `bash -lc` watchers). Activating the ledger
+consolidation loop surfaced that under systemd the unit PATH + login-shell
+profile don't include `cl`, so every `cl` shell-out (pr_review_watcher capture;
+LedgerMaintainTask promote/observe) failed with "No such file: 'cl'" and silently
+no-op'd (best-effort). Resolves via `$CL_HOME/bin` then the sibling
+`../ContextLifecycle/bin`, reaching the wrapper by its REAL path. Note: do NOT
+symlink the `bin/cl` wrapper — its BASH_SOURCE self-location then mis-resolves
+its venv and recurses through the `command -v cl` fallback (a 30s subprocess
+hang; that was the live-debug symptom). Replaces the manual `~/.local/bin/cl`
+symlink with a tracked, self-healing launcher step. Verified: minimal-env
+(`env -i` PATH/HOME) resolution falls back to the sibling checkout and runs
+`cl ledger observe` fast (rc=0).
+
 ## 2026-06-17 — feat: controller runs the ledger consolidation loop (observe + promote)
 
 New `LedgerMaintainTask` (`maintenance/ledger_maintain.py`), registered in the
