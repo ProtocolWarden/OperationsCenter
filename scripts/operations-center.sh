@@ -13,6 +13,27 @@ PLANE_MANAGER="${ROOT_DIR}/deployment/plane/manage.sh"
 JANITOR_MAX_AGE_DAYS="${OPERATIONS_CENTER_RETENTION_DAYS:-1}"
 WATCHDOG_LOOP_LOCK="${LOG_DIR}/watchdog_loop.lock"
 
+# Ensure the ContextLifecycle `cl` CLI is resolvable for watchers that shell out
+# to it (pr_review_watcher ledger capture; spec_hygiene's LedgerMaintainTask
+# promote/observe). Under systemd the unit PATH and the `bash -lc` login profile
+# do not reliably include it, so `cl` resolves to nothing and the (best-effort)
+# shell-outs silently no-op. Resolve it here and prepend the dir holding a
+# working `cl` to PATH — inherited by the setsid `bash -lc` watchers. Reach the
+# wrapper by its REAL path via $CL_HOME/bin (or the sibling checkout); do NOT
+# symlink the wrapper, whose BASH_SOURCE self-location then mis-resolves its venv
+# and recurses via its `command -v cl` fallback (a 30s hang). Best-effort: if no
+# `cl` is found, the shell-outs degrade gracefully.
+for _cl_dir in "${CL_HOME:-}/bin" "${ROOT_DIR}/../ContextLifecycle/bin"; do
+  if [[ "${_cl_dir}" != "/bin" && -x "${_cl_dir}/cl" ]]; then
+    case ":${PATH}:" in
+      *":${_cl_dir}:"*) ;;                       # already on PATH
+      *) PATH="${_cl_dir}:${PATH}"; export PATH ;;
+    esac
+    break
+  fi
+done
+unset _cl_dir
+
 ensure_venv() {
   ensure_pip_conf
   if [[ ! -x "${VENV_DIR}/bin/python" ]]; then
