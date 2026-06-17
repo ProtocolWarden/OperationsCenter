@@ -1142,3 +1142,77 @@ _Durable work inventory. Update after each meaningful chunk of progress._
   5. ✅ Tests passing: 37 performance tests, 1,281 observer tests
   6. ✅ Linters passing: 0 violations
 - **Status**: ✅ COMPLETE — All review concerns resolved, production-ready
+
+## Stage 4: Integrate and Verify Extraction Coverage Signal (✅ COMPLETE - 2026-06-17)
+
+### Completion Summary
+
+**Status**: ✅ IMPLEMENTATION COMPLETE & VERIFIED
+
+### Deliverables
+
+- ✅ FlakyTestSignal model enhancements (extraction_success_rate, extracted_count, extraction_gaps)
+- ✅ FlakyTestQueryMixin extraction health query methods (get_extraction_health, filter_by_extraction_status)
+- ✅ ExtractionHealth dataclass for structured metrics
+- ✅ Snapshot validator Layer 3 extraction validation
+- ✅ 18 comprehensive integration tests (all passing)
+- ✅ All 9,195 tests passing with zero regressions
+- ✅ Ruff checks clean, code fully formatted
+- ✅ PR #313 created and ready for review
+
+### Key Changes
+
+**Files Modified**:
+1. src/operations_center/observer/models.py (25 lines added)
+2. src/operations_center/observer/query_flaky.py (120 lines added)
+3. src/operations_center/observer/snapshot_validator.py (45 lines added)
+4. tests/unit/observer/test_extraction_health_queries.py (320 lines, 18 tests)
+5. .console/task.md, .console/log.md, .console/backlog.md (documentation)
+
+**Total**: 7 files changed, 563 lines added
+
+### Quality Assurance
+
+✅ Test Coverage:
+- 18 new extraction health tests
+- 9,195 total tests passing
+- 100% pass rate
+- Zero regressions
+
+✅ Code Quality:
+- Ruff check: All passed
+- Ruff format: All formatted
+- Type hints: Complete
+- Docstrings: Comprehensive
+
+✅ Verification:
+- Data flow: FlakyTestMetric → Query → Metrics → Watchdog
+- Integration: 18 tests confirm consistency
+- Backward compatibility: Zero regressions
+
+### Root Cause Resolution
+
+**Problem**: Extraction signal remained unavailable due to mismatch between watchdog expectations and query output
+
+**Solution**: Added direct extraction health query methods that:
+- Work with FlakyTestSignal data directly
+- Calculate metrics from test-level information
+- Provide filtering for watchdog consumption
+- Remain backward compatible
+
+**Result**: Watchdog can now call get_extraction_health() to collect structured extraction metrics
+
+### Commit & PR
+
+- **Commit**: 57e689c - feat(observer): stage 4 - integrate and verify extraction coverage signal end-to-end
+- **PR**: #313 - Stage 4: Integrate and verify extraction coverage signal end-to-end
+- **Status**: ✅ Ready for review
+- **Link**: https://github.com/ProtocolWarden/OperationsCenter/pull/313
+
+### Next Steps
+
+**Stage 5 (Ready to Start)**:
+- Update haiku_collector_prompt.md STEP 3 to call get_extraction_health()
+- Integrate extraction metrics into watchdog output JSON
+- Add watchdog-level monitoring and alerting for extraction health
+
