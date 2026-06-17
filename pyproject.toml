@@ -95,6 +95,10 @@ operations-center-verify-sandbox-branches = "operations_center.entrypoints.maint
 # description references a now-merged PR). Fixes done-but-open board debt. Read-
 # only without --apply.
 operations-center-reconcile-merged-tasks = "operations_center.entrypoints.maintenance.reconcile_merged_tasks:main"
+# Convergence stall breaker — when a source_family's Blocked tasks fail
+# identically past a threshold (env/transport, not code), escalate to the
+# operator ledger and suppress re-proposal via the existing rejection store.
+operations-center-detect-convergence-stall = "operations_center.entrypoints.maintenance.detect_convergence_stall:main"
 
 [project.entry-points."pytest11"]
 flaky-detection = "operations_center.observer.pytest_flaky_plugin"
