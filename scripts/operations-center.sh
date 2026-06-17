@@ -539,6 +539,10 @@ start_watchdog() {
       # limit lifted before the estimated reset, so status surfaces self-heal even
       # when the board is idle. No-op when nothing is cooling.
       '${ROOT_DIR}/scripts/operations-center.sh' worker-backend-probe --timeout 30 >/dev/null 2>&1 || true
+      # Sandbox base-branch preflight (~hourly): ensure each repo's
+      # sandbox_base_branch exists on origin (heal from default if missing), so a
+      # queue of tasks doesn't stall serially discovering it deep in execution.
+      '${VENV_DIR}/bin/operations-center-verify-sandbox-branches' --config '${CONFIG_PATH}' --heal 2>&1 || true
       _slept=0
       while [[ \$_slept -lt 3600 && -f '${pid_file}' ]]; do
         sleep 300
