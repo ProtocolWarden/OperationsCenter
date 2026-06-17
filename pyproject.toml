@@ -90,6 +90,11 @@ operations-center-orphan-branch-check = "operations_center.entrypoints.maintenan
 # on origin (--heal creates it from default). Run in the watchdog loop so a
 # missing branch is fixed before any task stalls on it. Exit 1 if any missing.
 operations-center-verify-sandbox-branches = "operations_center.entrypoints.maintenance.verify_sandbox_base_branches:main"
+# Merged-PR → Plane-task reconciler — mark a non-terminal task Done when a merged
+# PR closes it (explicit "Closes <task-id>" ref, or an In-Review task whose
+# description references a now-merged PR). Fixes done-but-open board debt. Read-
+# only without --apply.
+operations-center-reconcile-merged-tasks = "operations_center.entrypoints.maintenance.reconcile_merged_tasks:main"
 
 [project.entry-points."pytest11"]
 flaky-detection = "operations_center.observer.pytest_flaky_plugin"

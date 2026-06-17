@@ -1,3 +1,22 @@
+## 2026-06-17 — feat: merged-PR → Plane-task reconciler (close done-but-open debt)
+
+New `operations-center-reconcile-merged-tasks` one-shot
+(`entrypoints/maintenance/reconcile_merged_tasks.py`): marks a non-terminal Plane
+task Done when a *merged* PR closes it, via either (1) an explicit
+`Closes/Fixes/Resolves <task-id>` reference in the merged PR title/body, or
+(2) the In-Review convention — an `In Review` task whose description references a
+now-merged PR number (`#<n>`/`/<n>`, the same link `_find_plane_task_id` uses).
+Scoped per-repo by the `repo:` label; read-only by default, `--apply` transitions
++ comments. Closes the gap where `pr_review_watcher._merge_and_done` only marks
+Done when *it* merges — PRs merged out-of-band (manual `gh pr merge`, another
+host, watcher down) left tasks stuck open, which is the root cause of the
+done-but-open board debt found during the 2026-06-17 backlog triage. Pure
+`find_closures` matcher (explicit-ref wins over convention; each task closed once;
+terminal/ wrong-repo skipped) + injected-fake I/O. 15 tests; maintenance suite 67
+green; ruff + ty + custodian-doctor clean. Human-implemented per operator decision
+(fleet won't autonomously self-modify from a watchdog source) — closes the Plane
+"Promote: detect 'Closes <task-id>' commits" task.
+
 ## 2026-06-17 — feat: sandbox base-branch preflight (watchdog)
 
 New `operations-center-verify-sandbox-branches` maintenance one-shot
