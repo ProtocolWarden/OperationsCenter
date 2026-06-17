@@ -563,6 +563,10 @@ start_watchdog() {
       # sandbox_base_branch exists on origin (heal from default if missing), so a
       # queue of tasks doesn't stall serially discovering it deep in execution.
       '${VENV_DIR}/bin/operations-center-verify-sandbox-branches' --config '${CONFIG_PATH}' --heal 2>&1 || true
+      # Convergence stall breaker (~hourly): when a candidate family's Blocked
+      # tasks fail identically (env/transport), escalate to the operator ledger
+      # and suppress re-proposal so the propose->fail->re-propose loop converges.
+      '${VENV_DIR}/bin/operations-center-detect-convergence-stall' --config '${CONFIG_PATH}' --apply 2>&1 || true
       _slept=0
       while [[ \$_slept -lt 3600 && -f '${pid_file}' ]]; do
         sleep 300

@@ -1,3 +1,22 @@
+## 2026-06-17 — feat: convergence stall breaker (escalate + suppress)
+
+New `operations-center-detect-convergence-stall` one-shot
+(`entrypoints/maintenance/detect_convergence_stall.py`): groups Blocked tasks by
+`(source_family, failure_category)`; when a family hits `--threshold` (default 2)
+identical env/transport failures (`backend_error`/`timeout` — NOT genuine code
+failures), it (1) **escalates** once to the operator ledger
+(`cl ledger capture convergence-stalled "<family>|<cat>|n=<count>"`) so the class
+reaches a human, and (2) **suppresses** re-proposal by recording each stalled
+`dedup_key` in the existing `ProposalRejectionStore` — which the proposer's
+guardrail already consults (`is_rejected`), so NO proposer change is needed.
+Read-only without `--apply`; wired into the watchdog loop. Closes the silent
+unbounded propose→fail→re-propose loop (2026-06-17 incident: one family
+re-proposed ~190× while the agent was blocked on the CL_ANCHOR gap). Pairs with
+the CL_ANCHOR unblock (#311): that fixes the cause, this makes the *class* visible
+and bounded so the fleet stops churning instead of failing silently. Pure
+`find_stalls`/`normalize_task` matchers + injected-fake apply. 14 tests; full
+maintenance/proposer suite 221 green; ruff + ty + custodian-doctor clean.
+
 ## 2026-06-17 — fix: anchor the fleet at CL_ANCHOR (unblock agent execution)
 
 `watch-all` now sets `CL_ANCHOR` (→ the sibling PlatformManifest manifest, unless
