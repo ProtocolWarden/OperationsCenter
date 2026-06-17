@@ -10,13 +10,37 @@ root-cause analysis for collection gaps across all signals.
 
 ## Current Stage
 
-Stage 4: Integrate and verify extraction coverage signal end-to-end ✅ IMPLEMENTATION COMPLETE
+Stage 2: Refactor ExtractionHealth dataclass to remove redundancy ✅ COMPLETE
 
 ## Objective
 
-**Stage 4: Integrate and verify extraction coverage signal end-to-end** ✅ IMPLEMENTATION COMPLETE
+**Stage 2: Refactor ExtractionHealth dataclass to remove redundancy** ✅ COMPLETE
 
 **Status**: ✅ COMPLETE — Full implementation with 9,195 tests passing, ruff checks clean, PR #313 ready for review.
+
+## Stage 2: Refactor ExtractionHealth to Remove Redundancy ✅
+
+**Status**: ✅ COMPLETE — Redundant field removed, code verified, refactoring correct
+
+**Acceptance Criteria — ALL MET** ✅
+
+1. ✅ **Remove failure_count field from ExtractionHealth dataclass**
+   - Field completely removed from dataclass definition (query_flaky.py:98-117)
+   - No remaining references to failure_count in extraction context
+
+2. ✅ **Update all code that references failure_count to use no_extraction**
+   - Initialization correctly assigns `no_extraction=missing` (line 393)
+   - All other assignments updated to use only no_extraction
+
+3. ✅ **Verify dataclass definition is syntactically correct**
+   - Dataclass definition verified: success_rate, complete_extraction, partial_extraction, no_extraction, edge_case_summary
+   - Field types: float, int, int, int, dict[str, int]
+   - Default values: 0.0, 0, 0, 0, empty dict
+
+4. ✅ **Ensure all imports and type hints remain valid**
+   - All imports verified
+   - All type hints complete and valid
+   - Dataclass decorator present and correct
 
 ### Stage 7 Summary: Documentation and Final Commit ✅
 

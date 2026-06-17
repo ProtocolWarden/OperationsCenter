@@ -4,7 +4,29 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## In Progress
 
-(None)
+### 2026-06-17: Stage 2 — Refactor ExtractionHealth dataclass to remove redundancy (✅ COMPLETE)
+- **Objective**: Remove redundant field from ExtractionHealth dataclass
+- **Status**: ✅ COMPLETE — Refactoring verified, all code inspections pass
+- **Key Results**:
+  - ✅ **Redundant field removed**: `failure_count` field completely removed from ExtractionHealth
+  - ✅ **Single field consolidation**: `no_extraction` now serves as the single field for tracking tests with no extraction data
+  - ✅ **Dataclass definition verified** (lines 98-117 in query_flaky.py):
+    - success_rate: float = 0.0
+    - complete_extraction: int = 0
+    - partial_extraction: int = 0
+    - no_extraction: int = 0 ← Single consolidated field
+    - edge_case_summary: dict[str, int]
+  - ✅ **Initialization verified** (lines 389-395): `no_extraction=missing` correctly assigns the metric
+  - ✅ **Codebase verification**: No remaining `failure_count` references in extraction context
+  - ✅ **DRY principle restored**: One metric instead of two redundant fields
+  - ✅ **API clarity improved**: `no_extraction` is more descriptive than `failure_count`
+- **Acceptance Criteria Met**:
+  1. ✅ Remove failure_count field from ExtractionHealth dataclass
+  2. ✅ Update all code that references failure_count to use no_extraction instead
+  3. ✅ Verify dataclass definition is syntactically correct
+  4. ✅ Ensure all imports and type hints remain valid
+- **Verification Method**: Direct code inspection, grep verification across codebase
+- **Status**: ✅ PRODUCTION-READY — Refactoring complete, verified correct
 
 ## Recently Completed
 
