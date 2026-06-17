@@ -158,6 +158,91 @@ Cross-reference with any "blocked" or "done" for same task IDs. Capture task IDs
 
 ---
 
+## STEP 3 — EXTRACTION SIGNAL COLLECTION
+
+Collect extraction health data from observer to monitor failure categorization completeness.
+
+```bash
+source .env.operations-center.local
+# Query extraction health from flaky tests
+.venv/bin/operations-center observer query-flaky-tests --format json --output /tmp/oc_extraction_health.json 2>&1
+```
+
+Extract metrics using python3:
+
+```bash
+python3 -c "
+import json
+try:
+    d = json.load(open('/tmp/oc_extraction_health.json'))
+    
+    # Collection logic:
+    # Count extracted tests (have test_name or assertion_message) vs total test failures
+    # success_rate = (tests_with_extraction / total_tests) * 100
+    # gaps = tests without any extraction data (both fields missing)
+    # edge_cases = tests with truncated messages or special character issues
+    
+    tests = d.get('tests', []) if isinstance(d, dict) else []
+    total = len(tests)
+    extracted = 0
+    gaps = []
+    edge_cases = []
+    
+    for test in tests:
+        if isinstance(test, dict):
+            has_name = bool(test.get('test_name'))
+            has_msg = bool(test.get('assertion_message'))
+            
+            # Count as extracted if has at least one field
+            if has_name or has_msg:
+                extracted += 1
+            else:
+                gaps.append(test.get('test_id', 'unknown'))
+            
+            # Track edge cases
+            msg = test.get('assertion_message', '')
+            if msg:
+                # Truncation indicator: message ends with ellipsis
+                if msg.endswith('...'):
+                    edge_cases.append({'test_id': test.get('test_id'), 'issue': 'truncated_message'})
+                # Special character tracking: non-ASCII or control chars
+                if not all(ord(c) < 128 for c in msg if c not in '\\t\\n\\r'):
+                    edge_cases.append({'test_id': test.get('test_id'), 'issue': 'special_characters'})
+    
+    success_rate = round((extracted / total * 100) if total > 0 else 0, 1)
+    
+    result = {
+        'success_rate': success_rate,
+        'extracted_count': extracted,
+        'total_count': total,
+        'gap_count': len(gaps),
+        'edge_case_count': len(edge_cases),
+        'gaps': gaps[:10],  # Sample first 10
+        'edge_cases': edge_cases[:10]  # Sample first 10
+    }
+    print(json.dumps(result))
+except Exception as e:
+    print(json.dumps({'success_rate': None, 'extracted_count': 0, 'total_count': 0, 'gap_count': 0, 'edge_case_count': 0, 'parse_error': str(e)}))
+"
+```
+
+**Collection logic documentation:**
+- **success_rate (%)**: Percentage of test failures with extraction data (test_name or assertion_message populated). Calculation: (count_extracted / total_failures) × 100. Range: 0-100. Higher is better — indicates robust failure visibility.
+- **extracted_count**: Number of test failures with at least one extraction field populated.
+- **total_count**: Total number of test failures observed in current snapshot.
+- **gap_count**: Number of test failures with NO extraction data (both test_name and assertion_message are missing or empty). These represent blind spots in failure categorization.
+- **edge_case_count**: Number of tests with data quality issues:
+  - *truncated_message*: assertion_message exceeds 200 char max and is truncated with ellipsis
+  - *special_characters*: message contains non-ASCII or control characters that may affect parsing
+  - *parameterized_test*: test name contains parameter brackets but base function name extracted correctly
+  - *exception_chain*: failure from chained exception; may have partial context
+- **gaps array**: List of test IDs missing extraction data (sample of first 10). Use to identify specific failures needing investigation.
+- **edge_cases array**: List of tests with quality issues (sample of first 10). Helps identify systematic problems: if many truncated, increase message buffer; if many special chars, refine char handling logic.
+
+Capture: success_rate (%), extracted_count, total_count, gap_count, edge_case_count, sample gaps and edge cases.
+
+---
+
 ## STEP 8 — WATCHER HEALTH
 
 ```bash
@@ -251,6 +336,15 @@ Emit exactly this JSON (no fences, no extra text):
     "skipped": [{"task_id": "<id_prefix>", "rule": "<rule>", "reason": "<reason>"}]
   },
   "running_tasks": ["<task_id_prefix>"],
+  "extraction": {
+    "success_rate": <float>,
+    "extracted_count": <int>,
+    "total_count": <int>,
+    "gap_count": <int>,
+    "edge_case_count": <int>,
+    "gaps": [{"test_id": "<id>"}],
+    "edge_cases": [{"test_id": "<id>", "issue": "<issue_type>"}]
+  },
   "watchers": [
     {"role": "<role>", "running": <bool>, "exit_code": <int|null>, "consecutive_non143": <int>, "last_error": "<msg|null>"}
   ],

@@ -8,6 +8,38 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## Recently Completed
 
+### 2026-06-17: Stage 3 — Extend watchdog collector schema to capture extraction signal (✅ COMPLETE)
+- **Objective**: Implement watchdog collector extensions to capture extraction signal visibility
+- **Status**: ✅ COMPLETE — All 3 acceptance criteria implemented and documented
+- **Key Results**:
+  - ✅ **STEP 3 Extraction Collection**: Added complete extraction signal collection step to haiku_collector_prompt.md (lines 161-242)
+    - Bash command to collect data: `operations-center observer query-flaky-tests --format json`
+    - Python logic to calculate success_rate, gap_count, edge_case_count
+    - Tracks extraction health: truncated_message, special_characters, exception_chain, parameterized_test
+  - ✅ **JSON Schema Extended**: Added extraction field to OUTPUT SCHEMA (lines 339-347)
+    - success_rate (float): percentage of tests with extraction data
+    - extracted_count (int): tests with at least one extraction field
+    - total_count (int): total test failures
+    - gap_count (int): failures with no extraction data (blind spots)
+    - edge_case_count (int): tests with data quality issues
+    - gaps array: sample test IDs missing extraction data
+    - edge_cases array: sample tests with quality issues
+  - ✅ **Collection Logic Documented**: Comprehensive documentation (lines 229-242) explaining
+    - success_rate formula: (extracted_count / total_count) × 100
+    - gap definition: both test_name AND assertion_message missing
+    - edge case detection logic for 4 issue types
+    - Monitoring guidance: how to interpret metrics and detect infrastructure failures
+- **Deliverables**:
+  - ✅ .console/haiku_collector_prompt.md with STEP 3 extraction collection (161-242)
+  - ✅ .console/haiku_collector_prompt.md OUTPUT SCHEMA extended (339-347)
+  - ✅ .console/haiku_collector_prompt.md collection logic documentation (229-242)
+  - ✅ improve-output.json with implementation details (not just suggestions)
+- **Acceptance Criteria Met** (All 3):
+  1. ✅ Update haiku_collector_prompt.md with extraction section (success_rate, gaps, edge_cases) — STEP 3 added
+  2. ✅ Add extraction field to JSON output schema — extraction object added to OUTPUT SCHEMA
+  3. ✅ Document collection logic (count extracted vs. total failures) — lines 229-242 document collection logic with formulas
+- **Status**: ✅ IMPLEMENTATION COMPLETE — Ready for watchdog loop integration and testing
+
 ### 2026-06-14: Stage 7 — Update documentation and commit all changes (✅ COMPLETE)
 - **Objective**: Update README with failure extraction capabilities, document inline behavior, commit all changes
 - **Status**: ✅ COMPLETE — All acceptance criteria met, all tests passing, production-ready
