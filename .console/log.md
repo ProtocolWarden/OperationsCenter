@@ -1,3 +1,18 @@
+## 2026-06-17 — feat: sandbox base-branch preflight (watchdog)
+
+New `operations-center-verify-sandbox-branches` maintenance one-shot
+(`entrypoints/maintenance/verify_sandbox_base_branches.py`): per repo with a
+configured `sandbox_base_branch`, verifies it exists on origin (reuses
+`GitClient.verify_remote_branch_exists`); `--heal` creates a missing branch from
+the remote default (`create_remote_branch_from`). Wired into the watchdog loop
+(`operations-center.sh`, hourly, `--heal`) so a missing sandbox branch is fixed
+once, up front, instead of a queue of tasks each stalling on it deep in
+`WorkspaceManager.prepare`. Exit 1 when any configured branch is still missing
+(gate-able). Read-only without `--heal`. 11 tests (injected fake GitClient);
+maintenance suite 52 green; ruff + ty + custodian-doctor clean. Human-implemented
+per operator decision (fleet won't autonomously self-modify from a watchdog
+source) — closes the Plane "[Watchdog] preflight: verify sandbox_base_branch" task.
+
 ## 2026-06-17 — fix: ensure `cl` is resolvable on the fleet watchers' PATH
 
 `watch-all` now resolves the ContextLifecycle `cl` CLI and prepends its dir to

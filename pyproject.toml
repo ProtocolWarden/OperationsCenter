@@ -86,6 +86,10 @@ operations-center-spec-hygiene      = "operations_center.entrypoints.spec_hygien
 # WO-4 orphan-branch detector — remote branches with commits ahead of main,
 # no open PR, older than 24 h. Run in watchdog STEP-2 or as a one-shot sweep.
 operations-center-orphan-branch-check = "operations_center.entrypoints.maintenance.orphan_branch_check:main"
+# Sandbox base-branch preflight — verify each repo's sandbox_base_branch exists
+# on origin (--heal creates it from default). Run in the watchdog loop so a
+# missing branch is fixed before any task stalls on it. Exit 1 if any missing.
+operations-center-verify-sandbox-branches = "operations_center.entrypoints.maintenance.verify_sandbox_base_branches:main"
 
 [project.entry-points."pytest11"]
 flaky-detection = "operations_center.observer.pytest_flaky_plugin"
