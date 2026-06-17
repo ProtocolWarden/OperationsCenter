@@ -1,3 +1,24 @@
+## 2026-06-17 — feat: controller runs the ledger consolidation loop (observe + promote)
+
+New `LedgerMaintainTask` (`maintenance/ledger_maintain.py`), registered in the
+`spec_hygiene` maintenance registry (the durable `spec` fleet role hosts the
+registry loop), runs the controller's half of the operator-interventions ledger
+each cycle (1h interval, best-effort):
+- `cl ledger promote --repos-root <root>` — auto-promote each recurrence of a
+  signal whose first human judgment carries a live `[check: ref]` by re-verifying
+  the check still resolves. Exit 1 (an encoded check regressed) is surfaced in
+  the result details (`regressed=True`), NOT a task failure.
+- `cl ledger observe` — surface signals recurring without a judgment yet.
+
+`repos_root` resolves from a configured repo `local_path` parent, else the
+checkout layout (`parents[4]`). Shell-out matches the capture-side pattern
+(timeout 30, try/except, never breaks the cycle). No commit/push of the private
+manifest — writes land in the working tree only and are idempotent. 9 tests;
+maintenance suite 41 green; ruff + custodian-doctor --strict clean (sole audit
+finding is the pre-existing environmental B2 boundary-artifact check). Pairs with
+ContextLifecycle #32 (the observe/promote engine). Operator decision 2026-06-17:
+controller may auto-promote the self-verifying class.
+
 ## 2026-06-16 — chore: bump custodian pin to 223c9da (doctor config-integrity checks)
 
 Bumped the `custodian` pin `0fa072f` → `223c9da` (Custodian #40: doctor

@@ -35,6 +35,7 @@ from operations_center.maintenance import (
     MaintenanceRegistry,
     MaintenanceResult,
 )
+from operations_center.maintenance.ledger_maintain import LedgerMaintainTask
 from operations_center.spec_author.campaign_builder import CampaignBuilder
 from operations_center.spec_author.models import (
     ActiveCampaigns,
@@ -680,6 +681,10 @@ def main() -> None:
     registry = MaintenanceRegistry(state_path=args.maintenance_state)
     task = SpecHygieneTask(settings, client)
     registry.register(task)
+    # Operator-interventions ledger consolidation loop (observe + self-verifying
+    # promote). Runs the controller's half of the ledger so a human only ever
+    # encodes a judgment once; recurrences self-verify. Best-effort by design.
+    registry.register(LedgerMaintainTask(settings))
 
     def _build_ctx() -> MaintenanceContext:
         return MaintenanceContext(
