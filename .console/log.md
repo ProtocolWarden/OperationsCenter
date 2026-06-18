@@ -1,3 +1,15 @@
+## 2026-06-18 — feat: D12 incomplete-integration gate with baseline ratchet
+
+Step 2 of the D12 burn-down. Custodian #44 added `audit.d12_baseline` (accepted
+symbol names D12 skips). Wrote OC's 145-name baseline into `.custodian/config.yaml`
+(textual insert under `audit:` — preserved all comments; a yaml round-trip was
+reverted after it stripped them) and added a dedicated CI step to
+`custodian-audit.yml`: `custodian-multi --only D12 --include-deprecated
+--fail-on-findings`. Net: D12 stays off in the main audit (no backlog red-wall),
+but a NEW tested-but-unwired public symbol now FAILS CI — the #313 regression
+class is gated. Verified: gate = 0 on baseline; injecting a new unwired metric →
+caught. Burn down the 145 and prune from the baseline; never add names to dodge it.
+
 ## 2026-06-17 — chore: D12 triage Phase 1 batch 2 — declare 8 library modules
 
 Declared __all__ on 8 consumed library modules whose public functions were
