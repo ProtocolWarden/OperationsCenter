@@ -1,6 +1,6 @@
 # Self-Heal Ladder for CONCERNS verdicts
 
-**Status:** design + roadmap (phased build in progress)
+**Status:** built — Phases 0–3 shipped (see roadmap below)
 **Owner:** pr_review_watcher
 **Origin:** PR #313 post-mortem — a fleet-authored PR shipped broken because the
 self-heal loop was binary (one shallow fix pass → give up to a human) and the
@@ -77,20 +77,22 @@ The fix worker is told, explicitly:
 
 ## Roadmap (phases)
 
-- **Phase 0 — this document.** Design, invariant, ladder, acceptance bar.
-- **Phase 1 — Structured concern delivery + anti-no-op acceptance bar.**
-  Parse the reviewer summary into an enumerated concern list; rewrite the fix
-  goal with the acceptance bar above. No state-machine change → low risk.
-- **Phase 2 — The ladder.** Add `fix_strategy_level`; on no-progress /
-  non-convergence climb a rung (enrich context, then decompose per concern)
-  instead of escalating to a human; escalate to a human only at the top rung.
-- **Phase 3 — Rescope on exhaustion.** When the fix cap is hit and the PR is
-  closed + re-queued, carry the still-unresolved concerns into the re-queued
-  task so the next attempt is scoped to what actually remained, not a blank
-  retry.
+- **Phase 0 — this document.** ✅ Design, invariant, ladder, acceptance bar.
+- **Phase 1 — Structured concern delivery + anti-no-op acceptance bar.** ✅
+  `_structure_concerns()` parses the reviewer summary into an enumerated concern
+  list; `_build_fix_goal()` rewrites the fix goal with `_FIX_ACCEPTANCE_BAR`
+  (tests-necessary-not-sufficient; wire don't re-test; clear the D12/DC10 gate).
+  No state-machine change.
+- **Phase 2 — The ladder.** ✅ `fix_strategy_level` state +
+  `ReviewerSettings.max_fix_strategy_level`; on no-progress the fix pass is
+  re-dispatched with `_ladder_enrichment()` (L1 enriched context, L2 decompose
+  per concern) instead of escalating; a human is reached only at the top rung.
+- **Phase 3 — Rescope on exhaustion.** ✅ `_close_and_requeue(concerns=…)` →
+  `_requeue_plane_task()` carries the still-unresolved concerns (enumerated)
+  onto the re-queued task so the next attempt is scoped to what remained.
 
-Each phase ships as its own green-gated PR. None of them touches the merge
-gate; all of them keep LGTM as the sole merge path.
+Each phase shipped as a commit on one green-gated PR. None touches the merge
+gate; all keep LGTM as the sole merge path.
 
 ## Test coverage the build must keep / add
 

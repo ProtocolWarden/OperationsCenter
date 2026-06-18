@@ -6919,3 +6919,8 @@ This completes Point 2 (Self-Heal Ladder): P0 design, P1 structured concerns +
 anti-no-op bar, P2 graduated ladder, P3 rescope-on-exhaustion. Binding
 invariant held throughout — LGTM stays the only merge path; nothing added a way
 to merge over a concern.
+
+## 2026-06-18 — Self-Heal Ladder: mark spec built (P0-P3 shipped)
+
+Updated docs/design/SELF_HEAL_LADDER.md Status -> built and checked off the
+roadmap phases now that P0-P3 are implemented. DC10 gate re-verified clean.
