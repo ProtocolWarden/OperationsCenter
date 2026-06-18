@@ -13,6 +13,20 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
+# Public API of this module — declared explicitly (consumed library; some
+# functions are tested as the boundary but not all internally wired).
+__all__ = [
+    "CoverageMetric",
+    "ModuleCoverage",
+    "FileCoverage",
+    "CoverageSnapshot",
+    "CoverageTrendAnalysis",
+    "CoverageAlert",
+    "compare_snapshots",
+    "is_snapshot_valid",
+    "get_baseline_coverage",
+]
+
 
 class CoverageMetric(BaseModel):
     """A single coverage measurement for a scope (repo/module/file)."""

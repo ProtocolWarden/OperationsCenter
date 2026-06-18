@@ -22,6 +22,14 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
+# Public API of this module — declared explicitly (consumed library; some
+# functions are tested as the boundary but not all internally wired).
+__all__ = [
+    "EnvironmentCheck",
+    "ImproveTriageResult",
+    "build_improve_triage_result",
+]
+
 logger = logging.getLogger(__name__)
 
 

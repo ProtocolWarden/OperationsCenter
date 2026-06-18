@@ -23,6 +23,17 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+# Public API of this module — declared explicitly (consumed library; some
+# functions are tested as the boundary but not all internally wired).
+__all__ = [
+    "PriorityRescoreCandidate",
+    "issue_urgency_score",
+    "handle_priority_rescore_scan",
+    "AwaitingInputResult",
+    "handle_awaiting_input_scan",
+    "signal_stale",
+]
+
 if TYPE_CHECKING:
     from operations_center.adapters.plane import PlaneClient
 
