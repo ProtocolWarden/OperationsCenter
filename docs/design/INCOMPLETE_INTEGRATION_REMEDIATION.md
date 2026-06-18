@@ -14,7 +14,7 @@ Companion to [Self-Heal Ladder](./SELF_HEAL_LADDER.md).
 ## Headline finding (adversarial)
 
 The #313 *claimed-complete-but-inert* pattern is **NOT systemic**. A full audit of
-all 11 src-bearing repos (excluding VideoFoundry + PrivateManifest per the
+all 11 src-bearing repos (excluding the two private repos per the
 private-repo deferral) found that what looks "unwired" is overwhelmingly:
 - **honestly-declared cross-repo library API** awaiting an external consumer
   (SourceRegistry, RepoGraph, CoreRunner runners, OperatorConsole CxRP boundary,
