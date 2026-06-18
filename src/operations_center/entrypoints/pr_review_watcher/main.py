@@ -1176,6 +1176,7 @@ def _close_and_requeue(
     *,
     reason: str,
     detail: str,
+    concerns: str = "",
 ) -> None:
     """Close a PR WITHOUT merging and re-queue its issue for a fresh attempt.
 
@@ -1183,7 +1184,11 @@ def _close_and_requeue(
     merged half-finished. Re-queue happens FIRST — the PR is only closed once
     the issue is safely back in the queue, so a Plane outage can't lose the
     work. With no Plane task to re-queue, the PR is left open + escalated rather
-    than closed into the void."""
+    than closed into the void.
+
+    ``concerns`` carries the still-unresolved review concerns onto the re-queued
+    task so the fresh attempt is scoped to what actually remained (Self-Heal
+    Ladder Phase 3) instead of starting blind."""
     pr_number = state["pr_number"]
     plane_task_id = state.get("plane_task_id")
 
@@ -1206,7 +1211,9 @@ def _close_and_requeue(
         return
 
     # Re-queue first; only close if it succeeded.
-    if not _requeue_plane_task(settings, plane_task_id, pr_number=pr_number, reason=reason):
+    if not _requeue_plane_task(
+        settings, plane_task_id, pr_number=pr_number, reason=reason, concerns=concerns
+    ):
         logger.warning(
             "pr_review_watcher: re-queue failed for PR #%d — leaving PR open, will retry",
             pr_number,
@@ -1295,13 +1302,31 @@ def _close_and_requeue(
     state_path.unlink(missing_ok=True)
 
 
-def _requeue_plane_task(settings, plane_task_id: str, *, pr_number: int, reason: str) -> bool:
+def _requeue_plane_task(
+    settings, plane_task_id: str, *, pr_number: int, reason: str, concerns: str = ""
+) -> bool:
     """Send the issue back to the queue for a fresh attempt, bounded by
     ``_MAX_REQUEUES`` (its own dedicated label); once exhausted, leave it
     Blocked for a human. Returns True if the issue was handled (re-queued or
     blocked), False on failure (e.g. Plane unreachable) so the caller can keep
-    the PR open and retry."""
+    the PR open and retry.
+
+    ``concerns`` (the still-unresolved review concerns) is appended to the
+    re-queue/blocked comment so the next attempt is scoped to what actually
+    remained — the closed PR's branch is gone, but its lesson is not."""
     from operations_center.entrypoints.board_worker.labels import STATE_BLOCKED, STATE_READY
+
+    # Structured, enumerated concerns for the next attempt to address — the same
+    # parse the fix pass uses, so the carry-forward reads consistently.
+    scope_block = ""
+    items = _structure_concerns(concerns)
+    if items:
+        enumerated = "\n".join(f"{i}. {c}" for i, c in enumerate(items, 1))
+        scope_block = (
+            "\n\n**Unresolved review concerns to address in the next attempt** "
+            "(the previous PR could not resolve these — scope the fresh attempt to "
+            f"them, do not start blind):\n\n{enumerated}"
+        )
 
     try:
         client = _plane_client(settings)
@@ -1324,7 +1349,7 @@ def _requeue_plane_task(settings, plane_task_id: str, *, pr_number: int, reason:
             client.comment_issue(
                 plane_task_id,
                 f"PR #{pr_number} closed ({reason}); re-queue limit "
-                f"({_MAX_REQUEUES}) reached — blocked for human review.",
+                f"({_MAX_REQUEUES}) reached — blocked for human review.{scope_block}",
             )
             logger.warning("pr_review_watcher: task=%s hit re-queue limit — Blocked", plane_task_id)
         else:
@@ -1335,7 +1360,7 @@ def _requeue_plane_task(settings, plane_task_id: str, *, pr_number: int, reason:
             client.comment_issue(
                 plane_task_id,
                 f"PR #{pr_number} closed ({reason}); re-queued for a fresh attempt "
-                f"(#{attempts + 1} of {_MAX_REQUEUES}).",
+                f"(#{attempts + 1} of {_MAX_REQUEUES}).{scope_block}",
             )
             logger.info(
                 "pr_review_watcher: re-queued task=%s to Ready (attempt %d)",
@@ -2324,6 +2349,7 @@ def _phase1(
             settings,
             reason="fix_attempts_exhausted",
             detail=detail,
+            concerns=summary,
         )
         return
 

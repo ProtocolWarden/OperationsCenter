@@ -6903,3 +6903,19 @@ climb-regardless-of-wording, escalate-only-at-top); updated the WO-3 ci-red
 test to ladder-top. Watcher suite 110 + reviewer integration 80 green. (Pre-
 existing unrelated failure: test_documentation_accuracy marker test, red on
 origin/main.)
+
+## 2026-06-18 — Self-Heal Ladder Phase 3: rescope on exhaustion
+
+When the fix cap is hit and the PR is closed + re-queued, the re-queue comment
+was generic ("re-queued, attempt N of M") — the next attempt started blind.
+Now `_close_and_requeue(concerns=...)` threads the still-unresolved verdict
+summary into `_requeue_plane_task`, which enumerates it (same `_structure_concerns`
+parse as the fix pass) under "Unresolved review concerns to address in the next
+attempt" on both the Ready and Blocked re-queue paths. The closed PR's branch
+is gone but its lesson is carried forward. 2 new tests; watcher 112 +
+reviewer integration 80 green; D12/DC10 gate clean; ty clean.
+
+This completes Point 2 (Self-Heal Ladder): P0 design, P1 structured concerns +
+anti-no-op bar, P2 graduated ladder, P3 rescope-on-exhaustion. Binding
+invariant held throughout — LGTM stays the only merge path; nothing added a way
+to merge over a concern.

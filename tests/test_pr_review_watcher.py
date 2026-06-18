@@ -1018,6 +1018,38 @@ def test_requeue_plane_task_below_cap_goes_ready(tmp_path: Path) -> None:
     assert "reviewer-requeue-count: 1" in labels
 
 
+def test_requeue_plane_task_carries_unresolved_concerns(tmp_path: Path) -> None:
+    """Self-Heal Ladder Phase 3: the re-queue comment carries the still-unresolved
+    concerns (enumerated) so the fresh attempt is scoped, not blind."""
+    mock_client = MagicMock()
+    mock_client.fetch_issue.return_value = {"id": "t1", "labels": []}
+
+    with patch.object(watcher, "_plane_client", return_value=mock_client):
+        watcher._requeue_plane_task(
+            SETTINGS,
+            "t1",
+            pr_number=PR_NUMBER,
+            reason="fix_attempts_exhausted",
+            concerns="- get_health never wired\n- missing None guard",
+        )
+
+    body = mock_client.comment_issue.call_args[0][1]
+    assert "Unresolved review concerns to address in the next attempt" in body
+    assert "1. get_health never wired" in body
+    assert "2. missing None guard" in body
+
+
+def test_requeue_plane_task_no_concerns_omits_scope_block(tmp_path: Path) -> None:
+    mock_client = MagicMock()
+    mock_client.fetch_issue.return_value = {"id": "t1", "labels": []}
+
+    with patch.object(watcher, "_plane_client", return_value=mock_client):
+        watcher._requeue_plane_task(SETTINGS, "t1", pr_number=PR_NUMBER, reason="x")
+
+    body = mock_client.comment_issue.call_args[0][1]
+    assert "Unresolved review concerns" not in body
+
+
 def test_requeue_plane_task_at_cap_goes_blocked(tmp_path: Path) -> None:
     mock_client = MagicMock()
     mock_client.fetch_issue.return_value = {
