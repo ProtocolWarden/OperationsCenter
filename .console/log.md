@@ -1,3 +1,12 @@
+## 2026-06-18 — chore: bump custodian pin to d6ba8ab (collision fix)
+
+Local `.venv` custodian was pinned at a29648a (pre-#48), and the reviewer fleet
+runs `OC/.venv/bin/custodian-multi` (pr_review_watcher main.py:1424) — so the
+live reviewer was auditing PRs with a custodian that masked colliding-ID
+findings (the R2 phantom). Bumped the pin to Custodian@d6ba8ab (PR #48:
+add_pattern un-masks collisions + content-less B2 message). Reinstall the venv
+after merge so the running fleet picks it up.
+
 ## 2026-06-18 — Stage 4: Run incomplete-integration gate and clear all findings
 
 Ran the custodian-multi incomplete-integration gate to verify B1, B2, D12, and
