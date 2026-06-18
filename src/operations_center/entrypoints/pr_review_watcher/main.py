@@ -251,6 +251,47 @@ def _build_fix_goal(concerns: str, *, extra_context: str = "") -> str:
     return "\n\n".join(parts)
 
 
+# How much of the PR diff to fold into the L1 enrichment for orientation. The
+# fix worker clones the branch and can run `git diff` itself, so this is a
+# pointer, not the source of truth — keep it bounded so the prompt stays small.
+_LADDER_DIFF_CAP = 8_000
+
+
+def _ladder_enrichment(level: int, *, pr_diff: str = "") -> str:
+    """Per-rung enrichment handed to ``_run_fix_pass`` as ``extra_context``.
+
+    Level 0 is the standard pass (no enrichment). Each higher rung adds
+    resolving power instead of conceding to a human:
+
+    - **L1** — the previous pass changed nothing; do not repeat it. Fold in a
+      bounded slice of the PR diff for orientation.
+    - **L2+** — decompose: resolve ONE concern per pass (narrower scope, higher
+      resolve rate); the rest are picked up on following passes.
+
+    See docs/design/SELF_HEAL_LADDER.md."""
+    if level <= 0:
+        return ""
+    parts = [
+        "## Earlier passes did not resolve these concerns",
+        "A previous automated fix pass on this same branch changed nothing (or "
+        "left the concerns above unresolved). Do NOT repeat the same approach — "
+        "read the actual code paths involved and take a concretely different one.",
+    ]
+    if level >= 2:
+        parts.append(
+            "Resolving every concern at once has failed. This pass, pick the "
+            "SINGLE most important still-unresolved concern and fully resolve "
+            "just that one — wire it end to end and show the call path. The "
+            "remaining concerns are handled on the following passes."
+        )
+    diff = (pr_diff or "").strip()
+    if diff:
+        if len(diff) > _LADDER_DIFF_CAP:
+            diff = diff[:_LADDER_DIFF_CAP] + "\n...[diff truncated for orientation]"
+        parts.append("## The PR diff under review (for orientation)\n\n```diff\n" + diff + "\n```")
+    return "\n\n".join(parts)
+
+
 def _new_state(repo_key: str, pr_number: int) -> dict:
     now = datetime.now(UTC).isoformat()
     return {
@@ -1610,6 +1651,7 @@ def _phase1(
         state.pop("last_concerns_summary", None)
         state.pop("last_concerns_head_sha", None)
         state.pop("last_fix_pass_pushed", None)
+        state.pop("fix_strategy_level", None)  # new code → start back at L0
         logger.info(
             "pr_review_watcher: PR #%d head changed after concerns; resetting fix state",
             pr_number,
@@ -2208,25 +2250,47 @@ def _phase1(
                 except Exception:
                     pass  # CI check failed — fall through to normal escalation
 
-        detail = (
-            "The previous automated fix pass pushed no changes; a fresh self-review on the "
-            "same PR head still finds concerns. Further autonomous retries would repeat "
-            "without changing the branch.\n\nLatest concerns:\n\n"
-            f"{summary}"
-        )
-        state["escalated_head_sha"] = current_head_sha or state.get("escalated_head_sha")
-        _escalate_needs_human(
-            state,
-            state_path,
-            gh_client,
-            owner,
-            repo,
-            settings,
-            reason="fix_pass_no_progress",
-            detail=detail,
-            current_head_sha=current_head_sha,
-        )
-        return
+        # Self-Heal Ladder: a no-progress repeat does NOT immediately concede to
+        # a human. Climb a rung — re-dispatch the fix pass with MORE resolving
+        # power (L1 enriched context, L2 decompose to one concern per pass) — and
+        # escalate only when the ladder tops out. Binding invariant holds: this
+        # changes how hard the system TRIES, never what counts as resolved; LGTM
+        # is still the only merge path. (max_fix_strategy_level=0 → old immediate
+        # escalation.)
+        current_level = int(state.get("fix_strategy_level", 0))
+        next_level = current_level + 1
+        if next_level <= reviewer.max_fix_strategy_level:
+            state["fix_strategy_level"] = next_level
+            logger.info(
+                "pr_review_watcher: PR #%d no-progress — climbing Self-Heal Ladder to "
+                "L%d/%d (re-dispatching with more resolving power, not escalating)",
+                pr_number,
+                next_level,
+                reviewer.max_fix_strategy_level,
+            )
+            _save_state(state_path, state)
+            # Fall through to the dispatch below, which reads fix_strategy_level.
+        else:
+            detail = (
+                "The automated fix passes exhausted the Self-Heal Ladder (reached "
+                f"L{current_level}/{reviewer.max_fix_strategy_level}) without changing "
+                "the branch; a fresh self-review on the same PR head still finds "
+                "concerns. Further autonomous retries would repeat without progress.\n\n"
+                f"Latest concerns:\n\n{summary}"
+            )
+            state["escalated_head_sha"] = current_head_sha or state.get("escalated_head_sha")
+            _escalate_needs_human(
+                state,
+                state_path,
+                gh_client,
+                owner,
+                repo,
+                settings,
+                reason="fix_pass_no_progress",
+                detail=detail,
+                current_head_sha=current_head_sha,
+            )
+            return
 
     # CONCERNS — never merge. Dispatch a fix pass that resolves the concerns on
     # the PR's own branch (updating the PR), then re-review next cycle. After
@@ -2314,11 +2378,17 @@ def _phase1(
     state.pop("last_fix_pass_pushed", None)
     _save_state(state_path, state)
 
+    # Self-Heal Ladder rung: L0 is the standard pass; higher rungs (set when a
+    # no-progress repeat climbed the ladder above) enrich the dispatch with more
+    # resolving power instead of conceding to a human.
+    fix_level = int(state.get("fix_strategy_level", 0))
+    extra_context = _ladder_enrichment(fix_level, pr_diff=diff)
     logger.info(
-        "pr_review_watcher: PR #%d CONCERNS — dispatching fix pass %d/%d on branch %s",
+        "pr_review_watcher: PR #%d CONCERNS — dispatching fix pass %d/%d (ladder L%d) on branch %s",
         pr_number,
         state["fix_attempts"],
         reviewer.max_fix_attempts,
+        fix_level,
         head_ref,
     )
     record_decision_outcome(
@@ -2336,6 +2406,7 @@ def _phase1(
         summary,
         settings,
         state_key=state_key,
+        extra_context=extra_context,
     )
     state["last_concerns_summary"] = normalized_summary
     state["last_fix_pass_pushed"] = pushed

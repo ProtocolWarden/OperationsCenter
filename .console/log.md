@@ -6879,3 +6879,27 @@ instruction to clear the D12/DC10 incomplete-integration gate locally before
 finishing. `_run_fix_pass` gained an optional `extra_context` param for the
 ladder's per-rung enrichment (Phase 2). No state-machine change; merge gate
 untouched. 6 new tests; full watcher suite 109 + reviewer integration 80 green.
+
+## 2026-06-18 — Self-Heal Ladder Phase 2: graduated fix escalation
+
+The no-progress path used to concede to a human on the FIRST no-progress
+repeat. Now it climbs a ladder of resolving power before giving up:
+
+- New `ReviewerSettings.max_fix_strategy_level` (default 2; 0 = old immediate
+  escalation). New state field `fix_strategy_level`, reset to L0 on head change.
+- `_ladder_enrichment(level, pr_diff)`: L1 = "previous pass changed nothing,
+  take a different approach" + bounded PR-diff orientation; L2 = decompose
+  (resolve ONE concern per pass, rest on following passes).
+- `_phase1` no-progress branch: instead of escalating, bump fix_strategy_level
+  and fall through to re-dispatch with `extra_context=_ladder_enrichment(...)`.
+  Escalate to a human (`fix_pass_no_progress`) ONLY when next_level exceeds
+  max — the terminal rung. The WO-3 CI-green merge guard is untouched and still
+  evaluated first; the ladder is strictly gentler than immediate escalation.
+
+Binding invariant intact: LGTM remains the only merge path; the ladder changes
+how hard the system tries, never what counts as resolved. Tests: replaced the
+two old immediate-escalation tests with three ladder tests (climb-at-L0,
+climb-regardless-of-wording, escalate-only-at-top); updated the WO-3 ci-red
+test to ladder-top. Watcher suite 110 + reviewer integration 80 green. (Pre-
+existing unrelated failure: test_documentation_accuracy marker test, red on
+origin/main.)

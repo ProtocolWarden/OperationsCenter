@@ -290,6 +290,14 @@ class ReviewerSettings(BaseModel):
     # exhaustion the PR is closed and the issue re-queued for a fresh attempt —
     # never merged half-finished.
     max_fix_attempts: int = 6
+    # Self-Heal Ladder: how many rungs of escalating resolving power to climb
+    # before conceding a no-progress CONCERNS PR to a human. On each no-progress
+    # repeat the fix pass is re-dispatched with MORE power (L1 enriched context,
+    # L2 decompose to one concern per pass) instead of escalating immediately;
+    # a human is the top of the ladder, not the second rung. 0 disables the
+    # ladder (revert to the old immediate-escalation behavior). See
+    # docs/design/SELF_HEAL_LADDER.md.
+    max_fix_strategy_level: int = 2
     # Unused — human_review phase removed. Kept for config-file compatibility.
     max_human_review_loops: int = 3
     human_review_timeout_seconds: int = 86400
