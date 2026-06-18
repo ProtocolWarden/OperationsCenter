@@ -1279,3 +1279,16 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 the collector integration is the `extraction-health` command + STEP 3 rewrite
 above. "End-to-end" is true only as of this fix-forward, not at #313's merge.
 
+
+**Reviewer Self-Heal Ladder — Point 2 (DONE, 2026-06-18, PR #321)**:
+The CONCERNS→fix loop now *resolves* the binding verdict instead of conceding
+on the first no-progress repeat. Shipped P0 design (`docs/design/SELF_HEAL_LADDER.md`)
+→ P1 structured concerns + anti-no-op acceptance bar → P2 graduated ladder
+(`fix_strategy_level`, `max_fix_strategy_level`, `_ladder_enrichment`) → P3
+rescope-on-exhaustion (re-queue carries unresolved concerns). Binding invariant
+held: LGTM stays the only merge path; the ladder changes how hard the system
+tries, never what counts as resolved.
+- ⏳ Possible refinement: true per-concern fan-out at L2 (one dispatch per
+  concern in a single cycle) instead of the across-cycles narrowing.
+- ⏳ Possible refinement: a "stronger model/effort" ladder rung (needs a model
+  override plumbed through worker.main → execute.main).
