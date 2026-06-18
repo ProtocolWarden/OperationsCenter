@@ -1,3 +1,14 @@
+## 2026-06-18 — feat: complete coverage trend enrichment + alert routing
+
+Wired the last 5 unbaselined coverage methods into `_record_coverage_trend`:
+`calculate_trend_slope` + `calculate_volatility_score` + `get_historical_data`
+enrich each trend record with direction/stability/history-depth; `categorize_alert`
++ `AlertChannelConfig.get_routes_for_alert` categorize and route every generated
+alert to its delivery channels (default → operator). Pruned all 5 from
+`audit.d12_baseline`; D12/DC10 gate confirms 0 — they're genuinely reachable from
+production now, not baseline-hidden. New test drives the below-threshold →
+categorize+route path. Closes the observer-plane completion backlog.
+
 ## 2026-06-18 — chore: bump custodian pin to d6ba8ab (collision fix)
 
 Local `.venv` custodian was pinned at a29648a (pre-#48), and the reviewer fleet
