@@ -5,12 +5,12 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Overall Plan
 
-Extend watchdog collector schema to capture extraction signal visibility and enable
-root-cause analysis for collection gaps across all signals.
+Address standing reviewer concerns on PR #330/#328 by adding missing leak fix evidence
+to the diff and ensuring all documentation changes are complete and visible.
 
 ## Current Stage
 
-Stage 3: Run tests and linters to verify changes ✅ COMPLETE
+Stage 1: Add missing second leak fix evidence to the diff ✅ COMPLETE
 
 ## Objective
 
