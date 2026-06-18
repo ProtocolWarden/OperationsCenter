@@ -59,7 +59,6 @@ audit:
     - filter_by_extraction_status
     - filter_by_test_name
     - find_violations
-    - format_flaky_tests_markdown
     - format_flaky_tests_table
     - format_report_text
     - generate_alerts
@@ -145,7 +144,6 @@ audit:
     - save_session_report
     - save_session_results
     - save_snapshot
-    - save_test_results
     - scrub_sample
     - should_alert_on_failure_rate
     - should_alert_on_flaky_count

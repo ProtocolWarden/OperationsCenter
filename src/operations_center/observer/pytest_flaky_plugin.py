@@ -143,6 +143,44 @@ class FlakyTestDetectionPlugin:
         # Save to storage
         self._save_session_report(session_report)
 
+        # Drive the richer FlakyTestReporter engine from the same in-session
+        # outcomes so it actually runs in the live path: it persists results in
+        # its own format (building the dataset its trend analysis consumes) and
+        # emits a human-readable markdown report. Best-effort — reporting must
+        # never break a test session.
+        self._emit_reporter_report()
+
+    def _emit_reporter_report(self) -> None:
+        """Feed this session's outcomes to FlakyTestReporter, persist them, and
+        write a markdown flaky report alongside the raw session JSON.
+
+        FlakyTestReporter (observer.flaky_test_reporter) is the full reporting
+        engine — categories, per-test metrics, markdown tables, trend analysis —
+        but had no live caller. This wires it into the pytest plugin so the
+        feature produces output on every run. (Cross-session trend analysis,
+        which needs loading the persisted history back, is a follow-up: the data
+        is now persisted in the reporter's format here.)"""
+        try:
+            from .flaky_test_models import FlakyTestResult
+            from .flaky_test_reporter import FlakyTestReporter
+
+            reporter = FlakyTestReporter.create_local(self.flaky_storage_path)
+            for nodeid, result in self.test_outcomes.items():
+                reporter.track_test(
+                    FlakyTestResult(
+                        nodeid=nodeid,
+                        outcome=str(result.get("outcome", "passed")),
+                        duration=float(result.get("duration") or 0.0),
+                    )
+                )
+            reporter.analyze_session()
+            reporter.save_test_results()
+            report_md = reporter.format_flaky_tests_markdown(include_assertions=False)
+            report_path = self.flaky_storage_path / "latest-flaky-report.md"
+            report_path.write_text(report_md, encoding="utf-8")
+        except Exception as exc:  # noqa: BLE001 — reporting is best-effort
+            self._log.debug("flaky reporter emit skipped: %s", exc)
+
     def _extract_test_name(self, item: pytest.Item) -> str:
         """Extract test function name from pytest Item.
 
