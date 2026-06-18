@@ -6944,3 +6944,16 @@ dedicated isolated CI job "Reviewer state-machine tests" that runs the file on
 its own (112 tests, no services). Kept separate from tests/unit so it can't
 perturb the environment-sensitive test_documentation_accuracy collection-count
 assertions (6 of which fail locally but pass in CI — pre-existing, unrelated).
+
+## 2026-06-18 — Ecosystem incomplete-integration remediation: audit + roadmap
+
+Widened the #313 question across the platform. Audited all 11 src-bearing repos
+(excl. VF/PrivateManifest). Headline (adversarial): the #313 claimed-complete-
+but-inert pattern is NOT systemic — only OC's observer plane (#247/#279/#250)
+has the genuine pattern; elsewhere "unwired" is honestly-deferred cross-repo API,
+framework dispatch, or benign superseded wrappers. Wrote
+docs/design/INCOMPLETE_INTEGRATION_REMEDIATION.md (plan of record) with per-item
+WIRE/DELETE/KEEP dispositions, adversarially adjudicated (nothing deferred to a
+human). Phase 1 (enforcement backbone) DONE: Custodian #46 closed the --only
+silent-skip (gate now self-verifying). Phases 2 (WIRE 4 real gaps), 3 (DELETE
+clean dead code), 4 (OC observer plane), 5 (ratchet cleanup) follow via /loop.

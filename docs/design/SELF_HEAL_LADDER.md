@@ -6,6 +6,8 @@ status: implemented
 
 **Status:** built — Phases 0–3 shipped (see roadmap below)
 **Owner:** pr_review_watcher
+**See also:** [Ecosystem Incomplete-Integration Remediation](./INCOMPLETE_INTEGRATION_REMEDIATION.md)
+— the cross-repo follow-on that audits and burns down the #313 debt class.
 **Origin:** PR #313 post-mortem — a fleet-authored PR shipped broken because the
 self-heal loop was binary (one shallow fix pass → give up to a human) and the
 merge then bypassed the binding verdict on green CI. Governance was fixed in
