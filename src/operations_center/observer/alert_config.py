@@ -14,6 +14,20 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+# Public alert-config surface. Declared explicitly: this is a consumed config
+# library; the lookup helpers (get_alert_route, list_collector_names,
+# list_condition_names) are tested but not all wired into a caller yet — declaring
+# them marks the public API rather than leaving them as apparent dead code.
+__all__ = [
+    "CollectorThresholds",
+    "AlertRoute",
+    "AlertContext",
+    "get_collector_thresholds",
+    "get_alert_route",
+    "list_collector_names",
+    "list_condition_names",
+]
+
 
 @dataclass
 class CollectorThresholds:

@@ -1,3 +1,16 @@
+## 2026-06-17 — chore: D12 triage Phase 1 — declare cxrp_mapper + alert_config public API
+
+Phase 1 (declare module-function public-API libraries via __all__) continues:
+`contracts/cxrp_mapper.py` (7 OC↔CxRP converters) and `observer/alert_config.py`
+(3 dataclasses + 4 lookup helpers) declared in __all__. Both are consumed
+libraries with no `import *` users; several functions are tested as the contract
+boundary but not all wired into a caller — declaring marks them public API, not
+dead code. D12 count 161 → 153 (8 cleared); 81 tests green; ruff clean. Roadmap:
+~13 module-func modules remain for Phase 1; the 140 methods (UsageStore 27, the
+git/PR clients, stores, queries) are class public-API surfaces best handled by a
+D12 symbol-baseline (accept + gate new code) rather than wire/remove, with the
+genuinely-dead minority removed deliberately.
+
 ## 2026-06-17 — chore(observer): declare flaky_metrics public API in __all__ (D12 triage)
 
 First batch of the OperationsCenter D12 triage (Custodian's new "tested but never
