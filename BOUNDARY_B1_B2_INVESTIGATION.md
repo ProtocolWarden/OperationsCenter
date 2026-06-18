@@ -79,15 +79,15 @@ The PR `fix/boundary-b2-close` (commit 1ec51f7) successfully resolves both the B
 
 **File**: `docs/design/INCOMPLETE_INTEGRATION_REMEDIATION.md`
 
-**Change**:
-```diff
-- all 11 src-bearing repos (excluding [specific private repos] per the
-+ all 11 src-bearing repos (excluding the two private repos per the
-```
+**Change**: File added with B1-safe content (line 17 containing generic reference "the two private repos")
 
 **Location**: Line 17 (headline finding section)
 
-**Impact**: Removes explicit private repo names from tracked documentation, resolving the B1 boundary leak.
+**What was fixed**: The remediation documentation file uses a generic reference ("the two private repos") instead of explicitly naming private repository names. This satisfies the B1 boundary detector's requirement that tracked files must not contain literal private-repo names.
+
+**Impact**: Prevents B1 boundary leak detection when the artifact is configured with forbidden private repo names.
+
+**Note on diff format**: This file was added in commit 1ec51f7, not modified. The content was composed correctly from the start to avoid B1 findings once B2 artifact refresh was completed.
 
 ---
 

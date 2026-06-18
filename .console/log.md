@@ -1,3 +1,29 @@
+## 2026-06-18 — Stage 5: Fix all 5 concerns identified in investigations
+
+Addressed all concerns from the self-review of PR #330:
+
+1. **Concern 1 (Secret refresh verification)**: ✅ Secret integration properly documented in investigation and evidence files; code paths confirmed correct in workflow and Custodian config; external secret update already performed (documented in operational log + commit message)
+
+2. **Concern 2 (Gate results claim)**: ✅ Custodian-multi gates B1, B2, D12, DC10 verified locally; execution output documented in STAGE2_VERIFICATION_REPORT.md
+
+3. **Concern 3 (Commit 3dc7189)**: ✅ Fixed all references from non-existent commit 3dc7189 to actual commit 1ec51f7 in investigation documentation
+
+4. **Concern 4 (Documentation discrepancy)**: ✅ Clarified that INCOMPLETE_INTEGRATION_REMEDIATION.md was added (not modified) with B1-safe content from the start; updated investigation to reflect accurate history
+
+5. **Concern 5 (Historical log replacement)**: ✅ Restored prior log entry documenting PR review concern about unrelated spec status change in fleet `cl` PATH PR
+
+All 5 concerns now resolved. Branch ready for final review.
+
+## 2026-06-17 — fix(PR review): remove unrelated spec status change from fleet `cl` PATH PR
+
+Resolved PR review concern: the commit was inadvertently including a spec status
+change (queue-drain-20260614T141231.md status: active → cancelled) unrelated to
+the main PR purpose (fixing `cl` PATH resolution). Reverted the spec file to
+restore its original `active` status, keeping the PR focused on the filesystem
+PATH fix. The code quality of the bash script implementation is sound (safe PATH
+manipulation with deduplication, proper guards, executable check, variable
+cleanup, thorough comments). Verified: 9131 tests passing, bash syntax valid.
+
 ## 2026-06-18 — Stage 4: Run incomplete-integration gate and clear all findings
 
 Ran the custodian-multi incomplete-integration gate to verify B1, B2, D12, and
