@@ -20,7 +20,16 @@ custodian-multi --repos . --only D12,DC10 --include-deprecated --fail-on-finding
 
 **Expected Result**: Exit code 0 (no findings)
 
-**Status**: Ready for verification before merge
+**Actual Result** ✅ **VERIFIED CLEAN**:
+```
+repo             | findings | HIGH | MED  | LOW  | status
+-----------------+---------+------+------+------+--------
+OperationsCenter |        0 |    0 |    0 |    0 | clean
+-----------------+---------+------+------+------+--------
+  1 repos:  1 clean  | 0 total findings
+```
+
+**Status**: ✅ VERIFIED — 0 findings, exit code 0
 
 ---
 
@@ -34,9 +43,16 @@ custodian-multi --repos . --only B1,B2 --include-deprecated --fail-on-findings
 
 **Expected Result**: Exit code 0 (0 findings on both B1 and B2)
 
-**Documentation**: Results were documented in prior `.console/log.md` entry from the B2 fix commit (documented as "Verified locally: B1+B2 both clean")
+**Actual Result** ✅ **VERIFIED CLEAN**:
+```
+repo             | findings | HIGH | MED  | LOW  | status
+-----------------+---------+------+------+------+--------
+OperationsCenter |        0 |    0 |    0 |    0 | clean
+-----------------+---------+------+------+------+--------
+  1 repos:  1 clean  | 0 total findings
+```
 
-**Status**: Prior gate, documented for reference
+**Status**: ✅ VERIFIED — 0 findings, B1 and B2 both clean
 
 ---
 
@@ -131,7 +147,25 @@ custodian-multi --repos . --only B1,B2 --include-deprecated --fail-on-findings
 
 ---
 
-## Next Steps
+---
 
-This verification document will be updated as evidence is collected. The PR should not merge until all gates show clean.
+## All-Detectors Summary
+
+When running the full audit (all detectors, no --only filter), the repository shows:
+- **68 total findings** across various detectors (C4, C10, C17, C23, C35, D1, F1, N1)
+- These are **pre-existing findings** not related to this PR's documentation changes
+- The critical D12/DC10 gates required by SELF_HEAL_LADDER.md are **clean** (0 findings)
+- The B1/B2 boundary detectors are **clean** (0 findings)
+
+The existing 68 findings are code quality/dead code issues tracked separately; this PR's documentation changes do not introduce any new findings in the D12/DC10 incomplete-integration gates.
+
+---
+
+## Verification Complete
+
+✅ **All required gates verified clean**:
+- D12/DC10 incomplete-integration: 0 findings ✅
+- B1/B2 boundary detectors: 0 findings ✅
+
+The PR is ready for review and merge from a gate verification perspective.
 
