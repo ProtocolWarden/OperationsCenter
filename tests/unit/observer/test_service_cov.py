@@ -161,6 +161,40 @@ def test_observe_drives_coverage_trend_recording(tmp_path: Path) -> None:
     assert len(manager.list_snapshots(limit=5)) == 1
 
 
+def test_observe_low_coverage_categorizes_and_routes_alerts(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # A below-threshold coverage observation drives the full trend+alert wire:
+    # slope/volatility/history enrichment plus per-alert categorization and
+    # channel routing. The previously-unwired methods (calculate_trend_slope,
+    # calculate_volatility_score, get_historical_data, categorize_alert,
+    # get_routes_for_alert) all run here.
+    builder = MagicMock()
+    builder.build.return_value = "BUILT"
+    writer = MagicMock()
+    writer.root = tmp_path / "obs"
+    writer.write.return_value = ["x.json"]
+    svc = _make_service(
+        snapshot_builder=builder,
+        artifact_writer=writer,
+        coverage_signal_collector=_collector(
+            CoverageSignal(status="ok", total_coverage_pct=10.0)
+        ),
+    )
+
+    with caplog.at_level("WARNING", logger=service_mod.logger.name):
+        svc.observe(_make_context(tmp_path))
+
+    # A below-threshold alert was generated, categorized, and routed.
+    trend_log = [r.getMessage() for r in caplog.records if "Coverage trend:" in r.getMessage()]
+    assert trend_log, "expected a coverage-trend warning for the below-threshold run"
+    msg = trend_log[0]
+    assert "slope=" in msg and "volatility=" in msg
+    assert "routed=[" in msg
+    # Default routing falls back to the operator channel.
+    assert "operator" in msg
+
+
 def test_observe_no_coverage_does_not_record_trend(tmp_path: Path) -> None:
     builder = MagicMock()
     builder.build.return_value = "BUILT"

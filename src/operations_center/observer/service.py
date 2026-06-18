@@ -496,7 +496,12 @@ class RepoObserverService:
         if pct is None:
             return
         try:
-            from operations_center.observer.coverage_alerting import CoverageAlertManager
+            from operations_center.observer.coverage_alerting import (
+                AlertSeverity,
+                AlertType,
+                CoverageAlertManager,
+            )
+            from operations_center.observer.coverage_config import AlertChannelConfig
             from operations_center.observer.coverage_models import CoverageSnapshot
 
             snapshot = CoverageSnapshot(
@@ -514,17 +519,51 @@ class RepoObserverService:
                 metric_type="line", granularity="repository", window_days=7
             )
             manager.save_trend_analysis(trend)
+            # Enrich the point-in-time trend with direction (slope), stability
+            # (volatility), and how much history backs it — so downstream
+            # autonomy can tell a noisy blip from a sustained decline.
+            slope = manager.calculate_trend_slope(
+                metric_type="line", granularity="repository", window_days=7
+            )
+            volatility = manager.calculate_volatility_score(
+                metric_type="line", granularity="repository", window_days=7
+            )
+            history_points = len(
+                manager.get_historical_data(
+                    metric_type="line", granularity="repository"
+                )
+            )
             regressed = manager.detect_regression(snapshot, metric_type="line")
-            alerts = CoverageAlertManager().generate_alerts(snapshot, trend_analysis=trend)
+            alert_mgr = CoverageAlertManager()
+            alerts = alert_mgr.generate_alerts(snapshot, trend_analysis=trend)
+            # Categorize each alert and resolve its delivery channels, so an
+            # alert is actionable (typed + routed) rather than just recorded.
+            channel_config = AlertChannelConfig()
+            routed_summary: list[str] = []
             for alert in alerts:
                 manager.save_alert(alert)
+                category = alert_mgr.categorize_alert(alert)
+                module = alert.scope_id if alert.granularity == "module" else None
+                channels = channel_config.get_routes_for_alert(
+                    AlertType(alert.alert_type),
+                    AlertSeverity(alert.severity),
+                    module,
+                )
+                routed_summary.append(
+                    f"{category['category']}→{','.join(channels)}"
+                )
             if regressed or alerts:
                 logger.warning(
-                    "Coverage trend: run=%s coverage=%.1f%% regressed=%s alerts=%d",
+                    "Coverage trend: run=%s coverage=%.1f%% slope=%+.2f%%/d "
+                    "volatility=%.2f history=%d regressed=%s alerts=%d routed=[%s]",
                     context.run_id,
                     float(pct),
+                    slope,
+                    volatility,
+                    history_points,
                     regressed,
                     len(alerts),
+                    "; ".join(routed_summary),
                 )
         except Exception as exc:  # noqa: BLE001 — trend/alerting is best-effort
             logger.debug("coverage trend recording skipped: %s", exc)
