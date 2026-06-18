@@ -61,7 +61,7 @@ no external contract); KEEP = legitimate API/dispatch surface, do not touch.
 |------|------|--------|
 | TeamExecutor | `TeamExecutorRunner` never registered as an RxP runtime → the whole executor is undispatchable | WIRE: add the RxP runtime/entry-point registration |
 | PlatformManifest | `parse_visibility_scope` — `visibility_scope` field shipped in `data/platform_manifest.yaml`, parsed nowhere | WIRE into `load_repo_graph`; surface on the graph |
-| SwitchBoard | `p95_latency_ms` computed but the demote heuristic reads only `mean_latency_ms` (outlier-sensitive) | WIRE p95 into `AdjustmentEngine._evaluate` |
+| SwitchBoard | p95 latency computed but the demote heuristic reads only mean latency (outlier-sensitive) | WIRE p95 into the AdjustmentEngine evaluate path |
 | DAGExecutor | `NodeRunner` Protocol defined but the runner dispatch isn't typed to it (inert) | WIRE: type the runner registry as `dict[NodeType, NodeRunner]` |
 
 ### Phase 3 — DELETE provably-dead superseded code
