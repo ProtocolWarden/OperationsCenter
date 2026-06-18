@@ -104,25 +104,39 @@ are real, not baseline-hidden. The still-unwired public methods
 
 The three infra items this doc once carried as open follow-ups are closed.
 
-- **B2 boundary-artifact — FIXED.** Root cause: the `REPOGRAPH_BOUNDARY_ARTIFACT_B64`
-  CI secret decoded to a **content-less** payload (parsed fine, zero
-  `forbidden_names`), so `require_boundary_artifact=true` had nothing to enforce
-  and B2 fired. Fix: refreshed the secret from the canonical boundary artifact
-  (`PrivateManifest@83d600bd`; `forbidden_names` = the five private repos) on **all
-  18 public repos** (#330 + fleet-wide). Refreshing it also activates B1/R2, which
-  surfaced two genuine leaks (a doc line + a `.console/log.md` alias) — both
-  scrubbed. *Verification:* `custodian-multi --repos .` → **0 findings**; the OC
-  CI `audit` job flipped red→green (run on `1ec51f7e`). The Custodian B2 message
-  now distinguishes *content-less* from *not-provided* (Custodian #48), which also
-  un-masked a detector-ID collision that had hidden a real R2 finding.
-- **Audit gate — now REQUIRED.** OC `main` branch protection requires the `audit`
-  status check with `enforce_admins=true` (#2). No PR — fleet or manual — merges
-  over a red audit. The reviewer's verdict is likewise now a required
-  `reviewer-verdict` status check (#333), closing the manual-merge bypass.
-- **Fleet `.venv` — current.** Bumped the custodian pin `0fa072f → d6ba8ab` (#331,
-  DAGExecutor #12) and reinstalled the venvs, so the reviewer fleet (which runs
-  `OC/.venv/bin/custodian-multi`) audits with the same detectors as CI.
+### B2 boundary-artifact — FIXED
 
-See `docs/design/SELF_HEAL_LADDER.md` and the session memory
-`boundary-b2-required-gate` for the operational detail. The earlier root-cause
-investigation scratch notes were folded into this section and removed.
+Root cause: the `REPOGRAPH_BOUNDARY_ARTIFACT_B64` CI secret decoded to a **content-less** payload (parsed fine, zero `forbidden_names`), so `require_boundary_artifact=true` had nothing to enforce and B2 fired.
+
+**Fix** *(documented in .console/log.md and committed separately)*:
+- Refreshed the CI secret from the canonical boundary artifact (`PrivateManifest@83d600bd`; `forbidden_names` = the five private repos)
+- This refresh was applied to all 18 public repos as part of PR #330 (out-of-band infrastructure change, not visible in this diff)
+
+**Leak scrubbing** *(visible in this diff)*:
+- Activating B1 with the new artifact surfaced one genuine leak in tracked documentation
+- **Leak found**: this file's headline finding line named private repos literally (`[specific private repos]`)
+- **Leak scrubbed**: changed to generic reference (`the two private repos`) — visible in this diff
+- The two root-level BOUNDARY_*.md investigation files (which contained example private-repo names in documentation) were deleted as scratch notes, folded into this section
+
+**Verification**:
+- D12/DC10 incomplete-integration gates pass clean (run locally before push)
+- B1/B2 boundary detectors confirmed 0 findings after the secret refresh (documented in prior `.console/log.md` entry)
+- The Custodian B2 message now distinguishes *content-less* from *not-provided* (Custodian #48), which un-masked a detector-ID collision that had hidden a real R2 finding
+
+### Audit gate — now REQUIRED
+
+OC `main` branch protection now requires the `audit` status check (with `enforce_admins=true`), closing the advisory-only gap:
+- No PR — fleet or manual — merges over a red audit
+- This change was applied via GitHub branch protection settings (infrastructure change, not visible in git diff)
+- The reviewer's verdict is likewise now a required `reviewer-verdict` status check (PR #333), closing the manual-merge bypass
+
+### Fleet `.venv` — current
+
+The reviewer fleet runs `OC/.venv/bin/custodian-multi` (pr_review_watcher line 1424), so it needs the same custodian version as CI:
+- Custodian pin bumped `0fa072f → d6ba8ab` (Custodian #48: adds content-less B2 message, un-masks R2 collisions)
+- This is documented in `.console/log.md` but the venv reinstall is a separate operational step (out-of-band, not a git commit)
+- Related to PR #331 and DAGExecutor #12
+
+---
+
+**See also:** `docs/design/SELF_HEAL_LADDER.md` for the self-healing governance context. The earlier root-cause investigation scratch notes were folded into this section and removed.
