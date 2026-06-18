@@ -1265,8 +1265,17 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ### Next Steps
 
-**Stage 5 (Ready to Start)**:
-- Update haiku_collector_prompt.md STEP 3 to call get_extraction_health()
-- Integrate extraction metrics into watchdog output JSON
-- Add watchdog-level monitoring and alerting for extraction health
+**Stage 5 — integration (post-#313 fix-forward, 2026-06-17)**:
+- ✅ Update haiku_collector_prompt.md STEP 3 to call get_extraction_health() —
+  done via the new `observer extraction-health` CLI command. (#313 merged with
+  this still TODO while claiming "end-to-end" — the self-review flagged exactly
+  this contradiction; it shipped anyway via the CI-green escalation-retraction
+  hole, since fixed. STEP 3 had parsed `query-flaky-tests` output as a `tests[]`
+  array that command never emits.)
+- ⏳ Integrate extraction metrics into watchdog output JSON
+- ⏳ Add watchdog-level monitoring and alerting for extraction health
+
+**Accurate status:** Stage 4 delivered the *backend* (query methods + schema);
+the collector integration is the `extraction-health` command + STEP 3 rewrite
+above. "End-to-end" is true only as of this fix-forward, not at #313's merge.
 

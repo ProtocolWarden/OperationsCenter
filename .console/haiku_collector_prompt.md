@@ -164,61 +164,34 @@ Collect extraction health data from observer to monitor failure categorization c
 
 ```bash
 source .env.operations-center.local
-# Query extraction health from flaky tests
-.venv/bin/operations-center observer query-flaky-tests --format json --output /tmp/oc_extraction_health.json 2>&1
+# Aggregate extraction-coverage health from the observer. This calls
+# get_extraction_health() (FlakyTestQueryMixin) which assesses how many flaky
+# tests have extracted test_name / assertion_message fields. NOTE: use
+# `extraction-health`, NOT `query-flaky-tests` — the latter emits per-test
+# extraction *records* (a `test_failures` array), not the aggregate health, and
+# parsing it as `tests[]` silently yields nothing.
+.venv/bin/operations-center observer extraction-health --format json --hours 24 > /tmp/oc_extraction_health.json 2>/dev/null
 ```
 
-Extract metrics using python3:
+Map the structured ExtractionHealth into the collector's metric schema:
 
 ```bash
 python3 -c "
 import json
 try:
-    d = json.load(open('/tmp/oc_extraction_health.json'))
-    
-    # Collection logic:
-    # Count extracted tests (have test_name or assertion_message) vs total test failures
-    # success_rate = (tests_with_extraction / total_tests) * 100
-    # gaps = tests without any extraction data (both fields missing)
-    # edge_cases = tests with truncated messages or special character issues
-    
-    tests = d.get('tests', []) if isinstance(d, dict) else []
-    total = len(tests)
-    extracted = 0
-    gaps = []
-    edge_cases = []
-    
-    for test in tests:
-        if isinstance(test, dict):
-            has_name = bool(test.get('test_name'))
-            has_msg = bool(test.get('assertion_message'))
-            
-            # Count as extracted if has at least one field
-            if has_name or has_msg:
-                extracted += 1
-            else:
-                gaps.append(test.get('test_id', 'unknown'))
-            
-            # Track edge cases
-            msg = test.get('assertion_message', '')
-            if msg:
-                # Truncation indicator: message ends with ellipsis
-                if msg.endswith('...'):
-                    edge_cases.append({'test_id': test.get('test_id'), 'issue': 'truncated_message'})
-                # Special character tracking: non-ASCII or control chars
-                if not all(ord(c) < 128 for c in msg if c not in '\\t\\n\\r'):
-                    edge_cases.append({'test_id': test.get('test_id'), 'issue': 'special_characters'})
-    
-    success_rate = round((extracted / total * 100) if total > 0 else 0, 1)
-    
+    h = json.load(open('/tmp/oc_extraction_health.json'))
+    complete = int(h.get('complete_extraction', 0))
+    partial  = int(h.get('partial_extraction', 0))
+    missing  = int(h.get('no_extraction', 0))
+    total    = complete + partial + missing
+    edge     = h.get('edge_case_summary', {}) or {}
     result = {
-        'success_rate': success_rate,
-        'extracted_count': extracted,
+        'success_rate': round(float(h.get('success_rate', 0.0)), 1),
+        'extracted_count': complete + partial,
         'total_count': total,
-        'gap_count': len(gaps),
-        'edge_case_count': len(edge_cases),
-        'gaps': gaps[:10],  # Sample first 10
-        'edge_cases': edge_cases[:10]  # Sample first 10
+        'gap_count': missing,
+        'edge_case_count': sum(int(v) for v in edge.values()),
+        'edge_cases': edge,  # {'truncated_messages': N, 'special_chars': N, ...}
     }
     print(json.dumps(result))
 except Exception as e:
