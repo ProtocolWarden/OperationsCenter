@@ -912,6 +912,65 @@ def cmd_query_flaky_tests(
         raise typer.Exit(EXIT_CONFIG_ERROR)
 
 
+@app.command("extraction-health")
+def cmd_extraction_health(
+    hours: int = typer.Option(24, "--hours", help="Look back N hours (default: 24)"),
+    storage_root: Path | None = typer.Option(
+        None,
+        "--storage-root",
+        help="Storage root for snapshots (default: tools/report/operations_center/observer)",
+    ),
+    format_str: str = typer.Option("json", "--format", help="Output format: json|table"),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Minimal output"),
+) -> None:
+    """Report extraction coverage health for flaky test data.
+
+    Emits the structured ExtractionHealth metrics (success_rate,
+    complete/partial/no_extraction counts, edge_case_summary) from
+    ``get_extraction_health()`` — the signal the watchdog collector consumes.
+    Unlike ``query-flaky-tests`` (which emits per-test extraction *records*),
+    this emits the aggregate coverage health as a single object.
+
+    Examples:
+
+        # JSON for the collector (haiku_collector_prompt.md STEP 3)
+        cli extraction-health --format json --hours 24
+    """
+    from dataclasses import asdict
+
+    try:
+        root = storage_root or Path("tools/report/operations_center/observer")
+        if not root.exists():
+            if not quiet:
+                console.print(f"[yellow]Warning: snapshot root does not exist: {root}[/yellow]")
+            raise typer.Exit(EXIT_NOT_FOUND)
+
+        query = TestSignalQuery(root=root)
+        health = query.get_extraction_health(TimeRange.last_hours(hours))
+        payload = asdict(health)
+
+        if format_str == "json":
+            # typer.echo (not the rich console) so piped/redirected JSON is not
+            # soft-wrapped — the watchdog collector parses this from a file.
+            typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:  # table
+            console.print(
+                f"extraction success_rate={payload['success_rate']:.1f}%  "
+                f"complete={payload['complete_extraction']}  "
+                f"partial={payload['partial_extraction']}  "
+                f"none={payload['no_extraction']}"
+            )
+        raise typer.Exit(EXIT_SUCCESS)
+
+    except typer.Exit:
+        raise
+    except Exception as e:
+        if not quiet:
+            console.print(f"[red]Error querying extraction health: {e}[/red]")
+        logger.exception("Error in extraction-health command")
+        raise typer.Exit(EXIT_CONFIG_ERROR)
+
+
 def main() -> None:
     """Entry point for CLI."""
     app()
