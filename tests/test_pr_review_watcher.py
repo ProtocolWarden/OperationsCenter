@@ -2565,3 +2565,76 @@ def test_publish_reviewer_verdict_swallows_errors():
     )
     assert out is None
     gh.set_commit_status.assert_called_once()  # attempted despite the raise
+
+
+# ---------------------------------------------------------------------------
+# Escalation-budget reset guard: the fleet's OWN fix-push must not reset the
+# fix_attempts budget (else a non-converging PR loops forever instead of
+# terminating). Only an EXTERNAL push resets. (The #334 non-convergence bug.)
+# ---------------------------------------------------------------------------
+def test_phase1_self_pushed_fix_does_not_reset_budget(tmp_path: Path) -> None:
+    # Head moved to H1 because our own previous fix pass pushed it
+    # (last_fix_push_sha == H1) — the budget must keep accumulating.
+    state, sp = _make_state(
+        tmp_path,
+        phase="self_review",
+        self_review_loops=1,
+        fix_attempts=1,
+        concerns_comment_id=123,
+        last_concerns_head_sha="H0",
+        last_fix_push_sha="H1",
+        last_concerns_summary="same issues",
+    )
+    gh = _make_gh()
+    gh.get_pr.return_value = _pr_data(head_sha="H2")  # our next fix pushes H2
+
+    with (
+        patch.object(
+            watcher, "_run_direct_review",
+            return_value={"result": "CONCERNS", "summary": "still unverifiable"},
+        ),
+        patch.object(watcher, "_run_fix_pass", return_value=True),
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(head_sha="H1"), gh, "owner", "repo",
+            tmp_path, tmp_path / "cfg.yaml", SETTINGS,
+        )
+
+    loaded = watcher._load_state(sp)
+    # NOT reset to 0-then-1: preserved 1, dispatch incremented to 2.
+    assert loaded["fix_attempts"] == 2
+    # The new self-push head is recorded for the next poll's guard.
+    assert loaded["last_fix_push_sha"] == "H2"
+
+
+def test_phase1_external_push_resets_budget(tmp_path: Path) -> None:
+    # Head moved to HX by an EXTERNAL push (!= last_fix_push_sha) — genuinely new
+    # work; the budget resets so the human's fix is reviewed fresh.
+    state, sp = _make_state(
+        tmp_path,
+        phase="self_review",
+        self_review_loops=1,
+        fix_attempts=1,
+        concerns_comment_id=123,
+        last_concerns_head_sha="H0",
+        last_fix_push_sha="H1",
+        last_concerns_summary="same issues",
+    )
+    gh = _make_gh()
+    gh.get_pr.return_value = _pr_data(head_sha="HX2")
+
+    with (
+        patch.object(
+            watcher, "_run_direct_review",
+            return_value={"result": "CONCERNS", "summary": "new concern on human fix"},
+        ),
+        patch.object(watcher, "_run_fix_pass", return_value=True),
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(head_sha="HX"), gh, "owner", "repo",
+            tmp_path, tmp_path / "cfg.yaml", SETTINGS,
+        )
+
+    loaded = watcher._load_state(sp)
+    # Reset to 0, then dispatch incremented to 1 (fresh start).
+    assert loaded["fix_attempts"] == 1
