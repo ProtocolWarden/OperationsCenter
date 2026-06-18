@@ -50,7 +50,7 @@ the corrections caught before acting:
    PreToolUse hook) mandates the loader fail-closed on visibility — so it was a
    **WIRE**, not a delete.
 
-## Outcomes (14 green-gated PRs)
+## Outcomes (12 green-gated PRs)
 
 ### Enforcement backbone
 - **Custodian #46** — `--only` silent-skip closed: a gate naming an absent

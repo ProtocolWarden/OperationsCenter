@@ -1,3 +1,25 @@
+## 2026-06-18 — fix: root cause analysis & resolution of PR count discrepancy (14→12)
+
+**Root Cause Identified:** In commit 4f438ed (initial documentation finalization),
+ProtocolWarden counted "14 green-gated PRs" in both backlog.md and the design doc
+header. However, the enumeration section explicitly lists only **12 distinct PRs**:
+- 1 backbone (Custodian #46)
+- 6 WIRE completions (DAGExecutor #10, SwitchBoard #21, PlatformManifest #83,
+  OperationsCenter #325/326/327)
+- 5 DELETE items (Custodian #47, DAGExecutor #11, SourceRegistry #14,
+  TeamExecutor #12, CoreRunner #20)
+
+Total: 1 + 6 + 5 = 12 distinct PRs (not 14).
+
+**Resolution:** Commit 8b4c9de corrected the count from 14 → 12 in both backlog.md
+and design doc header to align with the actual enumeration. Verification with
+custodian-multi --only D12,DC10 gate confirmed clean (no D12/DC10 findings).
+
+The discrepancy was a **counting error during documentation creation** — the
+enumeration was always correct (12), but the summary count claim was wrong (14).
+The correction ensures both the backlog and design doc accurately reflect the
+12 green-gated PRs that were actually wired and deleted as part of the remediation.
+
 ## 2026-06-18 — feat: enable DC10 (claims-integrated-while-deferring) on the CI gate
 
 Point-1 of the #313 flow fix now GATES OC: bumped custodian pin to a29648a (DC10),

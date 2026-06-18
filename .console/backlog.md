@@ -1294,7 +1294,7 @@ tries, never what counts as resolved.
   override plumbed through worker.main → execute.main).
 
 **Ecosystem incomplete-integration remediation — COMPLETE (2026-06-18)**:
-14 green-gated PRs. Cross-repo audit found the #313 claimed-complete-but-inert
+12 green-gated PRs. Cross-repo audit found the #313 claimed-complete-but-inert
 pattern is NOT systemic — only OC's observer plane had it. Backbone: Custodian #46
 (gate self-verifying). WIRED genuine features: DAGExecutor #10, SwitchBoard #21
 (p95 demote), PlatformManifest #83 (visibility_scope fail-closed), and the OC
