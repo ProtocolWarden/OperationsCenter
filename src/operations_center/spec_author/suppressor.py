@@ -7,6 +7,12 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+# Public API of this module — declared explicitly (consumed library; some
+# functions are tested as the boundary but not all internally wired).
+__all__ = [
+    "is_suppressed",
+]
+
 if TYPE_CHECKING:
     from operations_center.spec_author.models import CampaignRecord
 

@@ -13,6 +13,20 @@ from operations_center.backends._capacity_classifier import (
 )
 from operations_center.backends.limit_classifier import GENERIC, classify_limit
 
+# Public API of this module — declared explicitly (consumed library; some
+# functions are tested as the boundary but not all internally wired).
+__all__ = [
+    "WorkerBackendSelection",
+    "WorkerBackendExecution",
+    "worker_backend_observed_runtime",
+    "worker_backend_candidates",
+    "alternate_worker_backend",
+    "select_worker_backend",
+    "parse_worker_backend_reset",
+    "maybe_record_worker_backend_cooldown",
+    "execute_with_worker_backend_round_robin",
+]
+
 _T = TypeVar("_T")
 
 # All worker backends — remote (cloud) and local. The executor services

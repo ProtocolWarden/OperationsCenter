@@ -7,6 +7,16 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+# Public API of this module — declared explicitly (consumed library; some
+# functions are tested as the boundary but not all internally wired).
+__all__ = [
+    "label_value",
+    "has_label",
+    "retry_count_from_labels",
+    "add_label",
+    "increment_retry_count",
+]
+
 logger = logging.getLogger(__name__)
 
 # ── Plane states ──────────────────────────────────────────────────────────────

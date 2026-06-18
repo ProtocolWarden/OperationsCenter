@@ -28,6 +28,19 @@ from operations_center.execution.target import (
     BoundExecutionTarget,
 )
 
+# Public API of this module — declared explicitly (consumed library; some
+# functions are tested as the boundary but not all internally wired).
+__all__ = [
+    "TargetBindError",
+    "UnknownBackendError",
+    "InvalidRuntimeBindingError",
+    "PolicyViolationError",
+    "MissingProvenanceError",
+    "CatalogLike",
+    "PolicyLike",
+    "bind_execution_target",
+]
+
 # ── Typed errors ────────────────────────────────────────────────────────
 
 

@@ -27,6 +27,14 @@ from __future__ import annotations
 
 import re
 
+# Public API of this module — declared explicitly (consumed library; some
+# functions are tested as the boundary but not all internally wired).
+__all__ = [
+    "detect_model",
+    "classify_limit",
+    "models_affected",
+]
+
 # limit_kind values
 MODEL_WEEKLY = "model_weekly"
 SESSION_5H = "session_5h"

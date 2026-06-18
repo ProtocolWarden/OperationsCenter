@@ -1,3 +1,15 @@
+## 2026-06-17 — chore: D12 triage Phase 1 batch 2 — declare 8 library modules
+
+Declared __all__ on 8 consumed library modules whose public functions were
+tested-but-not-internally-wired: limit_classifier, worker_backend_selector,
+board_worker/labels, execution/binding, execution/validation, coverage_models,
+priority_scans, spec_author/suppressor. All import cleanly; 964 tests green; ruff
+clean. D12 153 → 145. Phase 1 nearly done — 5 module-funcs deferred (setup/main
+45-name CLI app, _scrub private module, multi_step_planning / alert_validation /
+routing/smoke which are NOT-imported and may be genuine gaps needing a real look,
+not blind __all__). Next: Step 2 — the D12 symbol-baseline infra so D12 gates new
+code while the 140 method findings are accepted + tracked.
+
 ## 2026-06-17 — chore: D12 triage Phase 1 — declare cxrp_mapper + alert_config public API
 
 Phase 1 (declare module-function public-API libraries via __all__) continues:
