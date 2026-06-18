@@ -6851,3 +6851,18 @@ Stage 5 can now update haiku_collector_prompt.md STEP 3 to:
    - Well documented with clear docstrings
    - Ruff clean, fully formatted
 
+## 2026-06-18 — Self-Heal Ladder (Point 2): design + roadmap
+
+Origin: PR #313 post-mortem. #314 fixed governance (verdict-gate + CI-green
+guard); #319/#320 added the planner-side catch (Custodian D12/DC10 gates).
+Remaining gap: the CONCERNS→fix loop itself was binary and shallow — one fix
+pass on an unstructured prose blob, then escalate straight to a human on the
+first no-progress repeat, with "tests pass" as the (wrong) acceptance bar.
+
+Phase 0: wrote `docs/design/SELF_HEAL_LADDER.md` — design + binding invariant
+(self-heal RESOLVES the concern, never bypasses it; LGTM stays the only merge
+path) + the strategy ladder (L0 structured -> L1 enriched -> L2 decompose ->
+L3 human/rescope) + phased roadmap (P1 structured concerns + anti-no-op bar;
+P2 ladder; P3 rescope-on-exhaustion). Verified the doc does not trip the DC10
+gate. Implementation phases follow as their own green-gated PRs.
+
