@@ -6851,3 +6851,85 @@ Stage 5 can now update haiku_collector_prompt.md STEP 3 to:
    - Well documented with clear docstrings
    - Ruff clean, fully formatted
 
+## 2026-06-18 — Self-Heal Ladder (Point 2): design + roadmap
+
+Origin: PR #313 post-mortem. #314 fixed governance (verdict-gate + CI-green
+guard); #319/#320 added the planner-side catch (Custodian D12/DC10 gates).
+Remaining gap: the CONCERNS→fix loop itself was binary and shallow — one fix
+pass on an unstructured prose blob, then escalate straight to a human on the
+first no-progress repeat, with "tests pass" as the (wrong) acceptance bar.
+
+Phase 0: wrote `docs/design/SELF_HEAL_LADDER.md` — design + binding invariant
+(self-heal RESOLVES the concern, never bypasses it; LGTM stays the only merge
+path) + the strategy ladder (L0 structured -> L1 enriched -> L2 decompose ->
+L3 human/rescope) + phased roadmap (P1 structured concerns + anti-no-op bar;
+P2 ladder; P3 rescope-on-exhaustion). Verified the doc does not trip the DC10
+gate. Implementation phases follow as their own green-gated PRs.
+
+
+## 2026-06-18 — Self-Heal Ladder Phase 1: structured concerns + anti-no-op bar
+
+Strengthened `_run_fix_pass`. New helpers: `_structure_concerns(summary)` splits
+the reviewer prose into individually-addressable concerns (bullets / numbered /
+paragraph fallback, never empty for non-empty input), and `_build_fix_goal()`
+enumerates them and attaches `_FIX_ACCEPTANCE_BAR` — the #313 lesson encoded:
+"tests passing is necessary but NOT sufficient; a defined/tested-but-unwired
+symbol must be wired to its production call path, not re-tested", plus an
+instruction to clear the D12/DC10 incomplete-integration gate locally before
+finishing. `_run_fix_pass` gained an optional `extra_context` param for the
+ladder's per-rung enrichment (Phase 2). No state-machine change; merge gate
+untouched. 6 new tests; full watcher suite 109 + reviewer integration 80 green.
+
+## 2026-06-18 — Self-Heal Ladder Phase 2: graduated fix escalation
+
+The no-progress path used to concede to a human on the FIRST no-progress
+repeat. Now it climbs a ladder of resolving power before giving up:
+
+- New `ReviewerSettings.max_fix_strategy_level` (default 2; 0 = old immediate
+  escalation). New state field `fix_strategy_level`, reset to L0 on head change.
+- `_ladder_enrichment(level, pr_diff)`: L1 = "previous pass changed nothing,
+  take a different approach" + bounded PR-diff orientation; L2 = decompose
+  (resolve ONE concern per pass, rest on following passes).
+- `_phase1` no-progress branch: instead of escalating, bump fix_strategy_level
+  and fall through to re-dispatch with `extra_context=_ladder_enrichment(...)`.
+  Escalate to a human (`fix_pass_no_progress`) ONLY when next_level exceeds
+  max — the terminal rung. The WO-3 CI-green merge guard is untouched and still
+  evaluated first; the ladder is strictly gentler than immediate escalation.
+
+Binding invariant intact: LGTM remains the only merge path; the ladder changes
+how hard the system tries, never what counts as resolved. Tests: replaced the
+two old immediate-escalation tests with three ladder tests (climb-at-L0,
+climb-regardless-of-wording, escalate-only-at-top); updated the WO-3 ci-red
+test to ladder-top. Watcher suite 110 + reviewer integration 80 green. (Pre-
+existing unrelated failure: test_documentation_accuracy marker test, red on
+origin/main.)
+
+## 2026-06-18 — Self-Heal Ladder Phase 3: rescope on exhaustion
+
+When the fix cap is hit and the PR is closed + re-queued, the re-queue comment
+was generic ("re-queued, attempt N of M") — the next attempt started blind.
+Now `_close_and_requeue(concerns=...)` threads the still-unresolved verdict
+summary into `_requeue_plane_task`, which enumerates it (same `_structure_concerns`
+parse as the fix pass) under "Unresolved review concerns to address in the next
+attempt" on both the Ready and Blocked re-queue paths. The closed PR's branch
+is gone but its lesson is carried forward. 2 new tests; watcher 112 +
+reviewer integration 80 green; D12/DC10 gate clean; ty clean.
+
+This completes Point 2 (Self-Heal Ladder): P0 design, P1 structured concerns +
+anti-no-op bar, P2 graduated ladder, P3 rescope-on-exhaustion. Binding
+invariant held throughout — LGTM stays the only merge path; nothing added a way
+to merge over a concern.
+
+## 2026-06-18 — Self-Heal Ladder: mark spec built (P0-P3 shipped)
+
+Updated docs/design/SELF_HEAL_LADDER.md Status -> built and checked off the
+roadmap phases now that P0-P3 are implemented. DC10 gate re-verified clean.
+
+## 2026-06-18 — Self-Heal Ladder: clear DC1/DC7 on the new design doc
+
+Pre-push Custodian audit flagged the new SELF_HEAL_LADDER.md: [DC1] missing YAML
+front matter and [DC7] orphan (unlinked) doc. Added `status: implemented` front
+matter and linked it from docs/specs/reviewer-pr-state-machine.md (the topical
+reviewer spec). Audit now down to the sole pre-existing [B2] boundary-artifact
+MED finding (environmental — present on origin/main; CI materializes the
+artifact from REPOGRAPH_BOUNDARY_ARTIFACT_B64 secret).

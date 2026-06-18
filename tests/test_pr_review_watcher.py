@@ -30,6 +30,7 @@ REVIEWER_CFG = MagicMock(
     allowed_reviewer_logins=[],
     max_self_review_loops=2,
     max_fix_attempts=2,
+    max_fix_strategy_level=2,
     bot_comment_marker="<!-- operations-center:bot -->",
 )
 
@@ -245,12 +246,99 @@ def test_phase1_concerns_records_no_progress_signature(tmp_path: Path) -> None:
     assert loaded["last_concerns_summary"] == "issues"
 
 
-def test_phase1_repeated_concerns_after_noop_fix_escalates(tmp_path: Path) -> None:
+def test_phase1_repeated_concerns_after_noop_fix_climbs_ladder(tmp_path: Path) -> None:
+    """Self-Heal Ladder: a no-progress repeat at L0 climbs to L1 and re-dispatches
+    the fix pass with more resolving power — it does NOT escalate to a human
+    (that is the top of the ladder, not the second rung)."""
     state, sp = _make_state(
         tmp_path,
         phase="self_review",
         self_review_loops=1,
         fix_attempts=1,
+        last_fix_pass_pushed=False,
+        last_concerns_head_sha="abc123",
+        last_concerns_summary="same issues",
+    )
+    gh = _make_gh()
+
+    with (
+        patch.object(
+            watcher,
+            "_run_direct_review",
+            return_value={"result": "CONCERNS", "summary": "same issues"},
+        ),
+        patch.object(watcher, "_run_fix_pass", return_value=False) as mock_fix,
+        patch.object(watcher, "_escalate_needs_human") as mock_escalate,
+    ):
+        watcher._phase1(
+            state,
+            sp,
+            _pr_data(head_sha="abc123"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            SETTINGS,
+        )
+
+    mock_escalate.assert_not_called()
+    mock_fix.assert_called_once()
+    # The dispatched fix pass carried the L1 enrichment (extra_context).
+    assert "changed nothing" in (mock_fix.call_args.kwargs.get("extra_context", "")).lower()
+    loaded = watcher._load_state(sp)
+    assert loaded["fix_strategy_level"] == 1
+
+
+def test_phase1_no_progress_climbs_ladder_regardless_of_concern_wording(tmp_path: Path) -> None:
+    """No-progress is detected by the unchanged head, not concern text — so the
+    ladder climbs even when the LLM rewords the concern between loops."""
+    state, sp = _make_state(
+        tmp_path,
+        phase="self_review",
+        self_review_loops=1,
+        fix_attempts=1,
+        last_fix_pass_pushed=False,
+        last_concerns_head_sha="abc123",
+        last_concerns_summary="old concern wording from prior loop",
+    )
+    gh = _make_gh()
+
+    with (
+        patch.object(
+            watcher,
+            "_run_direct_review",
+            return_value={"result": "CONCERNS", "summary": "slightly different wording same issue"},
+        ),
+        patch.object(watcher, "_run_fix_pass", return_value=False) as mock_fix,
+        patch.object(watcher, "_escalate_needs_human") as mock_escalate,
+    ):
+        watcher._phase1(
+            state,
+            sp,
+            _pr_data(head_sha="abc123"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            SETTINGS,
+        )
+
+    mock_escalate.assert_not_called()
+    mock_fix.assert_called_once()
+    assert watcher._load_state(sp)["fix_strategy_level"] == 1
+
+
+def test_phase1_no_progress_escalates_only_at_ladder_top(tmp_path: Path) -> None:
+    """When the ladder is already at max_fix_strategy_level, a further no-progress
+    repeat escalates to a human — the terminal rung."""
+    state, sp = _make_state(
+        tmp_path,
+        phase="self_review",
+        self_review_loops=1,
+        fix_attempts=1,  # below max_fix_attempts(2) so the cap isn't what fires
+        fix_strategy_level=2,  # already at max (REVIEWER_CFG.max_fix_strategy_level)
         last_fix_pass_pushed=False,
         last_concerns_head_sha="abc123",
         last_concerns_summary="same issues",
@@ -280,45 +368,8 @@ def test_phase1_repeated_concerns_after_noop_fix_escalates(tmp_path: Path) -> No
 
     mock_fix.assert_not_called()
     mock_escalate.assert_called_once()
+    assert mock_escalate.call_args.kwargs["reason"] == "fix_pass_no_progress"
     assert state["escalated_head_sha"] == "abc123"
-
-
-def test_phase1_repeated_concerns_different_text_still_escalates(tmp_path: Path) -> None:
-    """No-progress escalation fires even when LLM produces different concern text."""
-    state, sp = _make_state(
-        tmp_path,
-        phase="self_review",
-        self_review_loops=1,
-        fix_attempts=1,
-        last_fix_pass_pushed=False,
-        last_concerns_head_sha="abc123",
-        last_concerns_summary="old concern wording from prior loop",
-    )
-    gh = _make_gh()
-
-    with (
-        patch.object(
-            watcher,
-            "_run_direct_review",
-            return_value={"result": "CONCERNS", "summary": "slightly different wording same issue"},
-        ),
-        patch.object(watcher, "_run_fix_pass") as mock_fix,
-        patch.object(watcher, "_escalate_needs_human") as mock_escalate,
-    ):
-        watcher._phase1(
-            state,
-            sp,
-            _pr_data(head_sha="abc123"),
-            gh,
-            "owner",
-            "repo",
-            tmp_path,
-            tmp_path / "cfg.yaml",
-            SETTINGS,
-        )
-
-    mock_fix.assert_not_called()
-    mock_escalate.assert_called_once()
 
 
 def test_phase1_fix_pass_preserves_external_escalation(tmp_path: Path) -> None:
@@ -967,6 +1018,38 @@ def test_requeue_plane_task_below_cap_goes_ready(tmp_path: Path) -> None:
     assert "reviewer-requeue-count: 1" in labels
 
 
+def test_requeue_plane_task_carries_unresolved_concerns(tmp_path: Path) -> None:
+    """Self-Heal Ladder Phase 3: the re-queue comment carries the still-unresolved
+    concerns (enumerated) so the fresh attempt is scoped, not blind."""
+    mock_client = MagicMock()
+    mock_client.fetch_issue.return_value = {"id": "t1", "labels": []}
+
+    with patch.object(watcher, "_plane_client", return_value=mock_client):
+        watcher._requeue_plane_task(
+            SETTINGS,
+            "t1",
+            pr_number=PR_NUMBER,
+            reason="fix_attempts_exhausted",
+            concerns="- get_health never wired\n- missing None guard",
+        )
+
+    body = mock_client.comment_issue.call_args[0][1]
+    assert "Unresolved review concerns to address in the next attempt" in body
+    assert "1. get_health never wired" in body
+    assert "2. missing None guard" in body
+
+
+def test_requeue_plane_task_no_concerns_omits_scope_block(tmp_path: Path) -> None:
+    mock_client = MagicMock()
+    mock_client.fetch_issue.return_value = {"id": "t1", "labels": []}
+
+    with patch.object(watcher, "_plane_client", return_value=mock_client):
+        watcher._requeue_plane_task(SETTINGS, "t1", pr_number=PR_NUMBER, reason="x")
+
+    body = mock_client.comment_issue.call_args[0][1]
+    assert "Unresolved review concerns" not in body
+
+
 def test_requeue_plane_task_at_cap_goes_blocked(tmp_path: Path) -> None:
     mock_client = MagicMock()
     mock_client.fetch_issue.return_value = {
@@ -1016,6 +1099,68 @@ def test_run_fix_pass_noop_returns_false(tmp_path: Path) -> None:
             tmp_path, tmp_path / "cfg.yaml", REPO_KEY, "goal/1", "fix it", SETTINGS, state_key="k"
         )
     assert pushed is False
+
+
+# ── Self-Heal Ladder Phase 1: structured concerns + anti-no-op acceptance bar ──
+
+
+def test_structure_concerns_splits_bulleted_list() -> None:
+    summary = "Problems found:\n- get_health() never called\n- missing error handling\n* no tests"
+    out = watcher._structure_concerns(summary)
+    assert out == ["get_health() never called", "missing error handling", "no tests"]
+
+
+def test_structure_concerns_splits_numbered_list_with_continuations() -> None:
+    summary = "1. First concern\n   spanning two lines\n2. Second concern"
+    out = watcher._structure_concerns(summary)
+    assert out == ["First concern\nspanning two lines", "Second concern"]
+
+
+def test_structure_concerns_falls_back_to_paragraphs_then_whole() -> None:
+    assert watcher._structure_concerns("para one\n\npara two") == ["para one", "para two"]
+    assert watcher._structure_concerns("single blob of prose") == ["single blob of prose"]
+    assert watcher._structure_concerns("   ") == []
+
+
+def test_build_fix_goal_enumerates_and_carries_acceptance_bar() -> None:
+    goal = watcher._build_fix_goal("- wire up X\n- handle the None case")
+    # Concerns are enumerated...
+    assert "2 concerns" in goal
+    assert "1. wire up X" in goal
+    assert "2. handle the None case" in goal
+    # ...and the anti-no-op bar (the #313 lesson) is present.
+    assert "NECESSARY BUT NOT SUFFICIENT" in goal
+    assert "never called/wired in production" in goal
+    assert "Do NOT resolve such a concern by adding another test" in goal
+    assert "--only D12,DC10" in goal
+
+
+def test_build_fix_goal_single_concern_and_extra_context() -> None:
+    goal = watcher._build_fix_goal("just one thing", extra_context="PREVIOUS PASS CHANGED NOTHING")
+    assert "following concern" in goal
+    assert "just one thing" in goal
+    assert "PREVIOUS PASS CHANGED NOTHING" in goal
+
+
+def test_run_fix_pass_builds_structured_goal(tmp_path: Path) -> None:
+    # The dispatched goal must carry the structured concerns + acceptance bar,
+    # and the ladder's extra_context when supplied.
+    outcome = {"result": {"success": True, "branch_pushed": True}}
+    with patch.object(watcher, "_run_pipeline", return_value=outcome) as mock_pipe:
+        watcher._run_fix_pass(
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            REPO_KEY,
+            "goal/1",
+            "- wire up the collector\n- add the None guard",
+            SETTINGS,
+            state_key="k",
+            extra_context="LADDER L1 ENRICHMENT",
+        )
+    goal_text = mock_pipe.call_args.args[3]
+    assert "1. wire up the collector" in goal_text
+    assert "NECESSARY BUT NOT SUFFICIENT" in goal_text
+    assert "LADDER L1 ENRICHMENT" in goal_text
 
 
 def test_merge_and_done_keeps_state_on_merge_failure(tmp_path: Path) -> None:
@@ -2173,6 +2318,7 @@ def test_wo3_no_progress_after_retraction_ci_red_still_escalates(tmp_path: Path)
         tmp_path,
         phase="self_review",
         fix_attempts=1,
+        fix_strategy_level=2,  # ladder already at top → red CI must escalate, not merge
         last_fix_pass_pushed=False,
         last_concerns_head_sha="sha1",
         ci_green_retraction_count=watcher._MAX_CI_GREEN_RETRACTIONS,
