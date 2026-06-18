@@ -6933,3 +6933,14 @@ matter and linked it from docs/specs/reviewer-pr-state-machine.md (the topical
 reviewer spec). Audit now down to the sole pre-existing [B2] boundary-artifact
 MED finding (environmental — present on origin/main; CI materializes the
 artifact from REPOGRAPH_BOUNDARY_ARTIFACT_B64 secret).
+
+## 2026-06-18 — Close the reviewer-tests-not-in-CI gap (honesty flag #3)
+
+Discovered while shipping the Self-Heal Ladder: CI's "Test (pytest)" job runs
+`pytest tests/unit`, but the reviewer state machine tests live at
+`tests/test_pr_review_watcher.py` (repo ROOT) — so the verdict-gate + ladder +
+governance code (the #313 regression class) was NEVER run in CI. Added a
+dedicated isolated CI job "Reviewer state-machine tests" that runs the file on
+its own (112 tests, no services). Kept separate from tests/unit so it can't
+perturb the environment-sensitive test_documentation_accuracy collection-count
+assertions (6 of which fail locally but pass in CI — pre-existing, unrelated).

@@ -116,6 +116,27 @@ jobs:
             coverage.xml
           retention-days: 30
 
+  reviewer:
+    name: Reviewer state-machine tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -e .[dev]
+      - name: Run pr_review_watcher tests
+        # The reviewer self-review / verdict-gate / Self-Heal Ladder state machine
+        # lives at tests/test_pr_review_watcher.py (repo ROOT, not tests/unit), so
+        # the main "Test (pytest)" job — which runs `pytest tests/unit` — never
+        # exercised it. This dedicated job gates the governance + self-heal code
+        # (the #313 regression class: never merge over a CONCERNS verdict; resolve
+        # concerns instead of conceding) on every PR. Standalone, no live services.
+        # Isolated from tests/unit so it cannot perturb the doc-accuracy suite's
+        # collection-count assertions.
+        run: pytest -q tests/test_pr_review_watcher.py -p no:flaky-detection
+
   performance:
     name: Performance regression tests
     runs-on: ubuntu-latest
