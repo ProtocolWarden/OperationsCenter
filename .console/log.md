@@ -6957,3 +6957,15 @@ WIRE/DELETE/KEEP dispositions, adversarially adjudicated (nothing deferred to a
 human). Phase 1 (enforcement backbone) DONE: Custodian #46 closed the --only
 silent-skip (gate now self-verifying). Phases 2 (WIRE 4 real gaps), 3 (DELETE
 clean dead code), 4 (OC observer plane), 5 (ratchet cleanup) follow via /loop.
+
+## 2026-06-18 — fix-forward: remediation doc tripped OC phantom-symbol gate
+
+#323 merged (fleet reviewer LGTM; main is not branch-protected and the reviewer
+does not gate on the advisory `audit` check) while the custodian-audit job was
+red: my cross-repo roadmap doc backtick-referenced `p95_latency_ms` (a SwitchBoard
+symbol), which OC's K1/OC8 phantom-symbol detectors flag (they only know OC src).
+K1 has no per-file exclude (suppresses via known_values only), so the root-cause
+fix is to drop the backticks on that one cross-repo symbol. Reworded line 64.
+Audit now down to the sole environmental B2 (boundary artifact, materialized from
+secret in CI). NOTE: the audit gate is advisory (main unprotected, reviewer
+LGTM-merges over it) — a governance gap worth a follow-up.
