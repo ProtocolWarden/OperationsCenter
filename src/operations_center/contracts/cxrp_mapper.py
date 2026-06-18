@@ -62,6 +62,21 @@ from .execution import OcExecutionRequest, OcExecutionResult, RuntimeBindingSumm
 from .proposal import OcPlanningProposal
 from .routing import OcRoutingDecision
 
+# Public OC↔CxRP mapping surface. Declared explicitly: this is a consumed
+# converter library and several directions (the to_cxrp_* / *_to_summary
+# mappers) are tested as the contract boundary but not all wired into a caller
+# yet — declaring them marks the public API rather than leaving them as apparent
+# dead code.
+__all__ = [
+    "to_cxrp_task_proposal",
+    "to_cxrp_lane_decision",
+    "from_cxrp_lane_decision",
+    "to_cxrp_execution_request",
+    "to_cxrp_execution_result",
+    "runtime_binding_to_summary",
+    "runtime_binding_from_summary",
+]
+
 CODING_AGENT_INPUT_SCHEMA_ID = "coding_agent_input/v0.2"
 CODING_AGENT_TARGET_SCHEMA_ID = "coding_agent_target/v0.2"
 
