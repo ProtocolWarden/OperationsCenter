@@ -1,3 +1,10 @@
+## 2026-06-18 — chore: bump custodian pin to a34b8b3 (D12 baseline + doctor key)
+
+OC CI installed custodian@223c9da (pre-D12) via the pyproject pin, overriding the
+workflow's @main install — so doctor warned `unknown audit key d12_baseline` and
+the D12 gate ran against a custodian without D12. Bumped the dev pin to current
+Custodian main (D12 + audit.d12_baseline + the doctor known-key fix).
+
 ## 2026-06-18 — feat: D12 incomplete-integration gate with baseline ratchet
 
 Step 2 of the D12 burn-down. Custodian #44 added `audit.d12_baseline` (accepted
