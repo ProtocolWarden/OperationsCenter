@@ -7017,3 +7017,14 @@ best-effort. Pruned export_metrics_json from d12_baseline (D12 gate confirms 0).
 1 test; reviewer suite 113 green (tests/ root + the #322 dedicated CI job);
 audit B2-env + doctor + D12 clean. Another false-positive corrected — the
 instrumenter wasn't unwired, only its export surface was.
+
+## 2026-06-18 — Remediation campaign COMPLETE: roadmap reframed to completion
+
+Final wrap-up. Updated docs/design/INCOMPLETE_INTEGRATION_REMEDIATION.md to the
+completed plan of record: reframed around COMPLETION (operator correction — wire
+features, don't delete); recorded all 14 PRs; flipped parse_visibility_scope to
+WIRE-done; removed the TeamExecutor RxP false-positive; recorded the 3 adversarial
+corrections (cross-repo consumers, indirect dispatch, convention hooks), the
+observer-plane completions, the superseded-dup deletes, ContextLifecycle=KEEP,
+and the B2 root cause (content-less secret artifact = infra, not a code bug).
+Backlog updated. Loop complete.
