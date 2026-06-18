@@ -6984,3 +6984,20 @@ report + persists; failure is swallowed). Pruned format_flaky_tests_markdown +
 save_test_results from audit.d12_baseline (now wired → D12 gate confirms 0
 findings). Follow-up: cross-session trend load (needs FlakyTestResult.from_dict +
 a history loader) to light up query_trend_analysis.
+
+## 2026-06-18 — COMPLETE coverage trend/alert engines: wire into observer service
+
+Observer-plane #313 remediation. CoverageTrendManager + CoverageAlertManager
+(#279) were built+tested but never driven; the #279 PR claimed "Integration into
+generate_snapshot()" which never existed. Wired them into RepoObserverService:
+default-construct a CoverageTrendManager rooted under the observer artifact dir;
+after coverage is collected, _record_coverage_trend bridges the live
+CoverageSignal → CoverageSnapshot, records it (building trend history), computes
+the trend + a regression check, runs CoverageAlertManager, persists trend+alerts,
+and logs regressions/alerts. Best-effort (try/except) so it never breaks an
+observation; skips cleanly when coverage is unavailable or storage can't build.
+2 tests (records on live coverage; skips when unavailable). Pruned the now-wired
+detect_regression/generate_alerts/save_snapshot/save_alert from d12_baseline —
+D12 gate confirms 0. (calculate_trend_slope/volatility/get_historical_data and
+categorize_alert/get_routes_for_alert remain genuinely unwired public API — stay
+baselined.) Observer suite 1389 green; ruff+ty+audit(B2)+doctor clean.
