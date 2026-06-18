@@ -3,6 +3,13 @@ src_root: src/operations_center
 tests_root: tests
 
 audit:
+  # DC10 baseline ratchet — accepted pre-existing docs that claim integrated
+  # while deferring the integration. DC10 gates NEW such over-claims; burn
+  # these down (reconcile the doc's status vs its deferred work) and prune.
+  dc10_baseline:
+    - .console/backlog.md
+    - .console/log.md
+    - docs/design/STAGE2_CI_INTEGRATION_TEST_RUNNER_IMPLEMENTATION.md
   # D12 baseline ratchet (Custodian audit.d12_baseline). The accepted
   # pre-existing set of public symbols that are tested but not yet wired into
   # production (145 as of 2026-06-17). D12 runs as a dedicated CI gate

@@ -1,3 +1,11 @@
+## 2026-06-18 — feat: enable DC10 (claims-integrated-while-deferring) on the CI gate
+
+Point-1 of the #313 flow fix now GATES OC: bumped custodian pin to a29648a (DC10),
+extended the gate step to `--only D12,DC10`, baselined OC's 3 existing DC10 docs
+(.console/backlog.md, .console/log.md, STAGE2 design). A NEW doc that claims a
+feature integrated end-to-end while deferring the integration now fails CI — the
+planner-level over-claim that shipped #313 is deterministically caught.
+
 ## 2026-06-18 — chore: bump custodian pin to a34b8b3 (D12 baseline + doctor key)
 
 OC CI installed custodian@223c9da (pre-D12) via the pyproject pin, overriding the

@@ -56,4 +56,4 @@ jobs:
         # a NEW tested-but-unwired public symbol fails CI; the backlog is burned
         # down separately (declare __all__ / wire / remove → prune the baseline).
         run: |
-          custodian-multi --repos . --only D12 --include-deprecated --fail-on-findings --no-color
+          custodian-multi --repos . --only D12,DC10 --include-deprecated --fail-on-findings --no-color
