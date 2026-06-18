@@ -164,6 +164,93 @@ def _normalize_concerns_summary(summary: str) -> str:
     return " ".join(str(summary).split())
 
 
+# A line that begins an enumerated review concern: a bullet (-, *, +) or an
+# "N." / "N)" ordinal marker. Used to split a reviewer summary into individually
+# addressable concerns. See docs/design/SELF_HEAL_LADDER.md.
+_CONCERN_BULLET_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(.*)$")
+
+
+def _structure_concerns(summary: str) -> list[str]:
+    """Split a freeform reviewer summary into individually-addressable concerns.
+
+    Most reviewer summaries enumerate concerns as a bulleted or numbered list.
+    Returning one string per concern lets the fix pass be told to resolve EACH
+    (and, at the decompose rung, be dispatched one pass per concern). Falls back
+    to paragraph splitting, then to the whole summary as a single concern —
+    never returns an empty list for non-empty input."""
+    text = str(summary or "").strip()
+    if not text:
+        return []
+    items: list[str] = []
+    current: list[str] = []
+    saw_bullet = False
+    for line in text.splitlines():
+        m = _CONCERN_BULLET_RE.match(line)
+        if m:
+            saw_bullet = True
+            if current:
+                items.append("\n".join(current).strip())
+            current = [m.group(1)]
+        elif current:
+            current.append(line.strip())  # continuation of the current item
+    if current:
+        items.append("\n".join(current).strip())
+    if saw_bullet:
+        out = [it for it in items if it]
+        if out:
+            return out
+    # No list markers — split on blank-line paragraphs, else the whole text.
+    paras = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+    return paras if len(paras) > 1 else [text]
+
+
+# The acceptance bar handed to EVERY fix pass. "Tests pass" is necessary but NOT
+# sufficient: #313 shipped a symbol that was unit-tested in isolation and never
+# wired into production. The bar is RESOLVING the concern — proven by the
+# production call path — not by another green test. See SELF_HEAL_LADDER.md.
+_FIX_ACCEPTANCE_BAR = (
+    "## How each concern must be resolved\n\n"
+    "- Resolve EVERY concern listed above. A pass that changes nothing, or that "
+    "only addresses the concerns you find easy, is a failed pass.\n"
+    "- Passing tests and linters is NECESSARY BUT NOT SUFFICIENT. If a concern is "
+    "that something is defined, declared, or tested but never called/wired in "
+    "production, you MUST connect it to its production call path and point to "
+    "where it is invoked. Do NOT resolve such a concern by adding another test — "
+    "that is exactly the defect the reviewer flagged.\n"
+    "- Before finishing, run the repository's incomplete-integration gate and "
+    "clear anything it reports:\n"
+    "    custodian-multi --repos . --only D12,DC10 --include-deprecated --fail-on-findings\n"
+    "  A D12 finding means a public symbol is tested but never wired into "
+    "production; a DC10 finding means a doc claims an integration is complete "
+    "while the wiring is deferred. Either means a concern is not actually "
+    "resolved — fix the code/doc until the gate is clean.\n"
+    "- Push to the existing branch (do NOT open a new pull request) so the open "
+    "PR updates in place."
+)
+
+
+def _build_fix_goal(concerns: str, *, extra_context: str = "") -> str:
+    """Construct the fix-pass goal: enumerated concerns + the anti-no-op
+    acceptance bar, plus optional ladder enrichment (``extra_context``)."""
+    items = _structure_concerns(concerns)
+    if len(items) > 1:
+        enumerated = "\n".join(f"{i}. {c}" for i, c in enumerate(items, 1))
+        concern_block = (
+            "A self-review of the currently open pull request raised "
+            f"{len(items)} concerns:\n\n{enumerated}"
+        )
+    else:
+        body = items[0] if items else str(concerns)
+        concern_block = (
+            "A self-review of the currently open pull request raised the "
+            f"following concern:\n\n{body}"
+        )
+    parts = [concern_block, _FIX_ACCEPTANCE_BAR]
+    if extra_context.strip():
+        parts.append(extra_context.strip())
+    return "\n\n".join(parts)
+
+
 def _new_state(repo_key: str, pr_number: int) -> dict:
     now = datetime.now(UTC).isoformat()
     return {
@@ -874,20 +961,20 @@ def _run_fix_pass(
     settings,
     *,
     state_key: str,
+    extra_context: str = "",
 ) -> bool:
     """Dispatch a worker pass that resolves review concerns on the PR's own
     branch and pushes (updating the open PR). Returns True only if the pass
     actually pushed changes to the branch — a no-op pass (worker couldn't
     resolve anything) returns False so the caller can log it; the next review
-    cycle re-evaluates the actual diff regardless."""
-    goal_text = (
-        "A self-review of the currently open pull request raised the concerns "
-        "below. Resolve ALL of them by editing the code on the current branch, "
-        "then commit and push. Do NOT open a new pull request — push to the "
-        "existing branch so the open PR updates in place. Before finishing, run "
-        "the repository's tests and linters and make sure they pass.\n\n"
-        f"## Review concerns to resolve\n\n{concerns}"
-    )
+    cycle re-evaluates the actual diff regardless.
+
+    The goal enumerates the concerns and carries the anti-no-op acceptance bar
+    (tests passing is necessary but not sufficient; a tested-but-unwired symbol
+    must be wired, not re-tested). ``extra_context`` carries the Self-Heal
+    Ladder's per-rung enrichment (e.g. the PR diff, or "the previous pass
+    changed nothing — take a different approach")."""
+    goal_text = _build_fix_goal(concerns, extra_context=extra_context)
     try:
         outcome = _run_pipeline(
             oc_root,

@@ -1018,6 +1018,68 @@ def test_run_fix_pass_noop_returns_false(tmp_path: Path) -> None:
     assert pushed is False
 
 
+# ── Self-Heal Ladder Phase 1: structured concerns + anti-no-op acceptance bar ──
+
+
+def test_structure_concerns_splits_bulleted_list() -> None:
+    summary = "Problems found:\n- get_health() never called\n- missing error handling\n* no tests"
+    out = watcher._structure_concerns(summary)
+    assert out == ["get_health() never called", "missing error handling", "no tests"]
+
+
+def test_structure_concerns_splits_numbered_list_with_continuations() -> None:
+    summary = "1. First concern\n   spanning two lines\n2. Second concern"
+    out = watcher._structure_concerns(summary)
+    assert out == ["First concern\nspanning two lines", "Second concern"]
+
+
+def test_structure_concerns_falls_back_to_paragraphs_then_whole() -> None:
+    assert watcher._structure_concerns("para one\n\npara two") == ["para one", "para two"]
+    assert watcher._structure_concerns("single blob of prose") == ["single blob of prose"]
+    assert watcher._structure_concerns("   ") == []
+
+
+def test_build_fix_goal_enumerates_and_carries_acceptance_bar() -> None:
+    goal = watcher._build_fix_goal("- wire up X\n- handle the None case")
+    # Concerns are enumerated...
+    assert "2 concerns" in goal
+    assert "1. wire up X" in goal
+    assert "2. handle the None case" in goal
+    # ...and the anti-no-op bar (the #313 lesson) is present.
+    assert "NECESSARY BUT NOT SUFFICIENT" in goal
+    assert "never called/wired in production" in goal
+    assert "Do NOT resolve such a concern by adding another test" in goal
+    assert "--only D12,DC10" in goal
+
+
+def test_build_fix_goal_single_concern_and_extra_context() -> None:
+    goal = watcher._build_fix_goal("just one thing", extra_context="PREVIOUS PASS CHANGED NOTHING")
+    assert "following concern" in goal
+    assert "just one thing" in goal
+    assert "PREVIOUS PASS CHANGED NOTHING" in goal
+
+
+def test_run_fix_pass_builds_structured_goal(tmp_path: Path) -> None:
+    # The dispatched goal must carry the structured concerns + acceptance bar,
+    # and the ladder's extra_context when supplied.
+    outcome = {"result": {"success": True, "branch_pushed": True}}
+    with patch.object(watcher, "_run_pipeline", return_value=outcome) as mock_pipe:
+        watcher._run_fix_pass(
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            REPO_KEY,
+            "goal/1",
+            "- wire up the collector\n- add the None guard",
+            SETTINGS,
+            state_key="k",
+            extra_context="LADDER L1 ENRICHMENT",
+        )
+    goal_text = mock_pipe.call_args.args[3]
+    assert "1. wire up the collector" in goal_text
+    assert "NECESSARY BUT NOT SUFFICIENT" in goal_text
+    assert "LADDER L1 ENRICHMENT" in goal_text
+
+
 def test_merge_and_done_keeps_state_on_merge_failure(tmp_path: Path) -> None:
     state, sp = _make_state(tmp_path, plane_task_id=None)
     gh = _make_gh()

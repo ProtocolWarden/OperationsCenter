@@ -6866,3 +6866,16 @@ L3 human/rescope) + phased roadmap (P1 structured concerns + anti-no-op bar;
 P2 ladder; P3 rescope-on-exhaustion). Verified the doc does not trip the DC10
 gate. Implementation phases follow as their own green-gated PRs.
 
+
+## 2026-06-18 — Self-Heal Ladder Phase 1: structured concerns + anti-no-op bar
+
+Strengthened `_run_fix_pass`. New helpers: `_structure_concerns(summary)` splits
+the reviewer prose into individually-addressable concerns (bullets / numbered /
+paragraph fallback, never empty for non-empty input), and `_build_fix_goal()`
+enumerates them and attaches `_FIX_ACCEPTANCE_BAR` — the #313 lesson encoded:
+"tests passing is necessary but NOT sufficient; a defined/tested-but-unwired
+symbol must be wired to its production call path, not re-tested", plus an
+instruction to clear the D12/DC10 incomplete-integration gate locally before
+finishing. `_run_fix_pass` gained an optional `extra_context` param for the
+ladder's per-rung enrichment (Phase 2). No state-machine change; merge gate
+untouched. 6 new tests; full watcher suite 109 + reviewer integration 80 green.
