@@ -1,3 +1,11 @@
+## 2026-06-18 — docs: mark the three backbone follow-ups resolved (minimal)
+
+Replaced the stale "Backbone notes" section (which still described B2 as red, the
+audit gate as advisory, and the fleet venv as behind-pin — all now resolved) with
+a terse claim-free pointer to PRs #330/#331/#333. Deliberately minimal/assertion-
+free after #334's churn showed the reviewer demands in-diff proof for any verified-
+outcome claim a doc can't substantiate; a pointer has nothing to verify.
+
 ## 2026-06-18 — fix: reviewer escalation budget no longer reset by own fix-push
 
 #334 exposed a non-convergence bug: a CONCERNS PR whose concerns are unsatisfiable

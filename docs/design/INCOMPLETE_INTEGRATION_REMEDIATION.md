@@ -100,21 +100,8 @@ are real, not baseline-hidden. The still-unwired public methods
 (`calculate_trend_slope`, `calculate_volatility_score`, `get_historical_data`,
 `categorize_alert`, `get_routes_for_alert`) remain baselined.
 
-## Backbone notes (infra / follow-ups, not code-fixed here)
+## Backbone follow-ups — resolved
 
-- **B2 boundary-artifact (root cause).** OC's CI `audit` job is red on every PR
-  with a single MED **B2** finding *even though* `REPOGRAPH_BOUNDARY_ARTIFACT_FILE`
-  is materialized in CI. Diagnosis (read-only): `detect_b2` emits its generic
-  "not provided" message only when the artifact loads with **no error but yields
-  zero boundary names** — so the secret-decoded artifact is present and parseable
-  but **content-less** (no boundary names). This is an **infra/secret issue**
-  (`REPOGRAPH_BOUNDARY_ARTIFACT_B64` needs a real disclosure artifact), not a
-  Custodian code bug — hence advisory-only and left for the operator. One genuine
-  minor Custodian follow-up: B2's message should distinguish *provided-but-no-names*
-  from *not-provided* (the loader already has the provenance).
-- **Audit gate is advisory.** OC `main` is unprotected and the reviewer
-  LGTM-merges over the advisory (B2-red) `audit` check. Making it required is
-  blocked on B2 above.
-- **Fleet `.venv` pinned behind** (`0fa072f`, no D12/DC10) — local/fleet pre-push
-  gates are no-ops; CI carries the real check via `custodian@main`. Reinstall at
-  the pin per repo when convenient (sequence so running watchers aren't disrupted).
+The three infra follow-ups this section once tracked as open are resolved: the
+B2 boundary-artifact red, the advisory `audit` gate, and the behind-pin fleet
+`.venv`. See PRs #330, #331, and #333, and `docs/design/SELF_HEAL_LADDER.md`.
