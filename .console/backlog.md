@@ -1292,3 +1292,15 @@ tries, never what counts as resolved.
   concern in a single cycle) instead of the across-cycles narrowing.
 - ⏳ Possible refinement: a "stronger model/effort" ladder rung (needs a model
   override plumbed through worker.main → execute.main).
+
+**Ecosystem incomplete-integration remediation — COMPLETE (2026-06-18)**:
+14 green-gated PRs. Cross-repo audit found the #313 claimed-complete-but-inert
+pattern is NOT systemic — only OC's observer plane had it. Backbone: Custodian #46
+(gate self-verifying). WIRED genuine features: DAGExecutor #10, SwitchBoard #21
+(p95 demote), PlatformManifest #83 (visibility_scope fail-closed), and the OC
+observer plane — #325 (FlakyTestReporter), #326 (Coverage trend/alerts), #327
+(merge-decision metrics). Deleted only superseded duplicates (Custodian #47,
+DAGExecutor #11, SourceRegistry #14, TeamExecutor #12, CoreRunner #20).
+ContextLifecycle = KEEP. Each observer wire pruned its names from d12_baseline
+(D12 gate confirms 0). B2 root cause = content-less secret artifact (infra, not a
+code bug). Full record: docs/design/INCOMPLETE_INTEGRATION_REMEDIATION.md.
