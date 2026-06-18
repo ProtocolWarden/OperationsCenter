@@ -200,6 +200,11 @@ class RepoObserverService:
         )
         self.artifact_writer = artifact_writer or ObserverArtifactWriter()
         logger.debug("  Infrastructure: artifact_writer (%s)", type(self.artifact_writer).__name__)
+        # Coverage trend + alert engines (CoverageTrendManager / CoverageAlertManager
+        # from #279) live behind this. They were built + tested but never driven;
+        # default-construct one rooted under the observer artifact dir so each
+        # observation records coverage history and computes trends/regressions/alerts.
+        self._coverage_trend_manager = self._build_coverage_trend_manager()
         self.metrics_exporter = metrics_exporter
         if metrics_exporter is not None:
             logger.debug("  Infrastructure: metrics_exporter (%s)", type(metrics_exporter).__name__)
@@ -417,6 +422,9 @@ class RepoObserverService:
             )[1]
         )
 
+        # Drive the coverage trend + alert engines from this run's live coverage.
+        self._record_coverage_trend(coverage_signal, context)
+
         signals = RepoSignalsSnapshot(
             recent_commits=recent_commits,
             file_hotspots=file_hotspots,
@@ -452,6 +460,74 @@ class RepoObserverService:
             len(collector_errors),
         )
         return snapshot, artifacts
+
+    def _build_coverage_trend_manager(self) -> Any:
+        """Default-construct a CoverageTrendManager rooted under the observer
+        artifact dir. Best-effort: returns None if the engine can't be built."""
+        try:
+            from operations_center.observer.coverage_trend_manager import (
+                CoverageTrendManager,
+            )
+
+            return CoverageTrendManager.create_local(
+                root=self.artifact_writer.root / "coverage-trends"
+            )
+        except Exception as exc:  # noqa: BLE001 — feature is best-effort
+            logger.debug("coverage trend manager unavailable: %s", exc)
+            return None
+
+    def _record_coverage_trend(
+        self, coverage_signal: CoverageSignal, context: ObserverContext
+    ) -> None:
+        """Drive the coverage trend + alert engines from this run's coverage.
+
+        Bridges the live CoverageSignal into a CoverageSnapshot, records it to
+        CoverageTrendManager (building the history its trend analysis needs),
+        computes the trend + a regression check, runs CoverageAlertManager, and
+        persists the trend + alerts — logging any regression/alert. This is the
+        live integration for the CoverageTrendManager / CoverageAlertManager
+        engines (#279), which were built and tested but never driven.
+
+        Best-effort: coverage trend/alerting must never break an observation."""
+        manager = self._coverage_trend_manager
+        if manager is None or getattr(coverage_signal, "status", "") == "unavailable":
+            return
+        pct = getattr(coverage_signal, "total_coverage_pct", None)
+        if pct is None:
+            return
+        try:
+            from operations_center.observer.coverage_alerting import CoverageAlertManager
+            from operations_center.observer.coverage_models import CoverageSnapshot
+
+            snapshot = CoverageSnapshot(
+                timestamp=context.observed_at,
+                run_id=context.run_id,
+                source="coverage.py",
+                # The CoverageSignal exposes a single overall (line-based) figure;
+                # use it for all three metrics as the best available approximation.
+                overall_statement_coverage_pct=float(pct),
+                overall_branch_coverage_pct=float(pct),
+                overall_line_coverage_pct=float(pct),
+            )
+            manager.save_snapshot(snapshot)
+            trend = manager.compute_trend_analysis(
+                metric_type="line", granularity="repository", window_days=7
+            )
+            manager.save_trend_analysis(trend)
+            regressed = manager.detect_regression(snapshot, metric_type="line")
+            alerts = CoverageAlertManager().generate_alerts(snapshot, trend_analysis=trend)
+            for alert in alerts:
+                manager.save_alert(alert)
+            if regressed or alerts:
+                logger.warning(
+                    "Coverage trend: run=%s coverage=%.1f%% regressed=%s alerts=%d",
+                    context.run_id,
+                    float(pct),
+                    regressed,
+                    len(alerts),
+                )
+        except Exception as exc:  # noqa: BLE001 — trend/alerting is best-effort
+            logger.debug("coverage trend recording skipped: %s", exc)
 
     def query(self, root: Path | None = None) -> TestSignalQuery:
         """Create a query API for test signal visibility.

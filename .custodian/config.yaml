@@ -48,7 +48,6 @@ audit:
     - create
     - create_and_merge
     - detect_pending_advances
-    - detect_regression
     - do_POST
     - evaluate_alerts_dry_run
     - evaluate_per_collector_thresholds
@@ -61,7 +60,6 @@ audit:
     - find_violations
     - format_flaky_tests_table
     - format_report_text
-    - generate_alerts
     - get_assertion_messages
     - get_audit_type_spec
     - get_channels_for_alert
@@ -139,11 +137,9 @@ audit:
     - revert_commit
     - route_alert
     - save_aggregation
-    - save_alert
     - save_report_json
     - save_session_report
     - save_session_results
-    - save_snapshot
     - scrub_sample
     - should_alert_on_failure_rate
     - should_alert_on_flaky_count

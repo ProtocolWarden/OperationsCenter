@@ -137,6 +137,48 @@ def test_observe_happy_path_passes_signals_and_returns(tmp_path: Path) -> None:
     assert signals.file_hotspots[0].path == "a.py"
 
 
+def test_observe_drives_coverage_trend_recording(tmp_path: Path) -> None:
+    # An observation with live coverage now drives CoverageTrendManager: the
+    # bridged snapshot is recorded (building the trend history) — the live wire
+    # for the previously-unwired trend/alert engines.
+    builder = MagicMock()
+    builder.build.return_value = "BUILT"
+    writer = MagicMock()
+    writer.root = tmp_path / "obs"
+    writer.write.return_value = ["x.json"]
+    svc = _make_service(
+        snapshot_builder=builder,
+        artifact_writer=writer,
+        coverage_signal_collector=_collector(
+            CoverageSignal(status="ok", total_coverage_pct=91.5)
+        ),
+    )
+
+    svc.observe(_make_context(tmp_path))
+
+    manager = svc._coverage_trend_manager
+    assert manager is not None
+    assert len(manager.list_snapshots(limit=5)) == 1
+
+
+def test_observe_no_coverage_does_not_record_trend(tmp_path: Path) -> None:
+    builder = MagicMock()
+    builder.build.return_value = "BUILT"
+    writer = MagicMock()
+    writer.root = tmp_path / "obs"
+    writer.write.return_value = ["x.json"]
+    svc = _make_service(
+        snapshot_builder=builder,
+        artifact_writer=writer,
+        coverage_signal_collector=_collector(CoverageSignal(status="unavailable")),
+    )
+
+    svc.observe(_make_context(tmp_path))
+
+    assert svc._coverage_trend_manager is not None
+    assert svc._coverage_trend_manager.list_snapshots(limit=5) == []
+
+
 def test_observe_optional_collectors_present(tmp_path: Path) -> None:
     builder = MagicMock()
     builder.build.return_value = "BUILT"
