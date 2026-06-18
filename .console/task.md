@@ -10,13 +10,19 @@ to the diff and ensuring all documentation changes are complete and visible.
 
 ## Current Stage
 
-Stage 1: Add missing second leak fix evidence to the diff ✅ COMPLETE
+Stage 4: Resolve scope ambiguity — prove or revise claims about multi-repo impact ✅ COMPLETE
 
 ## Objective
 
-**Stage 3: Run tests and linters to verify changes** ✅ COMPLETE
+**Stage 4: Resolve Scope Ambiguity — Prove or Revise Claims About Multi-Repo Impact** ✅ COMPLETE
 
-**Status**: ✅ COMPLETE — All tests passing (1378+ observer tests), ruff linting clean, no violations found.
+**Status**: ✅ COMPLETE — All acceptance criteria met:
+- Secret refresh claim clarified (PR #330, out-of-band)
+- Fleet venv bump claim clarified (PR #331, out-of-band)
+- Scope clearly separated (THIS PR vs parallel work)
+- D12/DC10 incomplete-integration gates: 0 findings ✅
+- B1/B2 boundary detectors: 0 findings ✅
+- All commits pushed to origin ✅
 
 ## Stage 2: Refactor ExtractionHealth to Remove Redundancy ✅
 
