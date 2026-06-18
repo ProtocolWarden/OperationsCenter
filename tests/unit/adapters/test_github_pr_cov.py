@@ -290,6 +290,41 @@ def test_post_comment(client):
 
 
 # ---------------------------------------------------------------------------
+# set_commit_status
+# ---------------------------------------------------------------------------
+def test_set_commit_status_posts_to_statuses_endpoint(client):
+    resp = _make_response(status_code=200, json_data={"state": "success"})
+    with mock.patch.object(client, "_request", return_value=resp) as req:
+        out = client.set_commit_status(
+            "o", "r", "abc123",
+            state="success", context="reviewer-verdict", description="reviewer LGTM",
+        )
+    assert out == {"state": "success"}
+    method, url = req.call_args[0]
+    assert method == "POST"
+    assert url.endswith("/repos/o/r/statuses/abc123")
+    body = req.call_args[1]["json"]
+    assert body == {
+        "state": "success",
+        "context": "reviewer-verdict",
+        "description": "reviewer LGTM",
+    }
+
+
+def test_set_commit_status_truncates_long_description_and_adds_target_url(client):
+    resp = _make_response(status_code=200, json_data={})
+    with mock.patch.object(client, "_request", return_value=resp) as req:
+        client.set_commit_status(
+            "o", "r", "sha",
+            state="failure", context="reviewer-verdict",
+            description="x" * 200, target_url="https://example/run",
+        )
+    body = req.call_args[1]["json"]
+    assert len(body["description"]) == 140  # GitHub's status description cap
+    assert body["target_url"] == "https://example/run"
+
+
+# ---------------------------------------------------------------------------
 # get_check_runs
 # ---------------------------------------------------------------------------
 def test_get_check_runs_returns_list(client):

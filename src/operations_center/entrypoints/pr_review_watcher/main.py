@@ -817,6 +817,48 @@ def _attempt_auto_rebase(repo_cfg, head_ref: str, settings, pr_number: int) -> s
         return "error"
 
 
+_REVIEWER_VERDICT_STATUS_CONTEXT = "reviewer-verdict"
+
+
+def _publish_reviewer_verdict(
+    gh_client,
+    owner: str,
+    repo: str,
+    sha: str | None,
+    *,
+    result: str,
+    description: str,
+) -> None:
+    """Publish the reviewer's verdict as a commit status on the PR head SHA.
+
+    This makes the (otherwise comment-only) verdict a first-class status check
+    so it can be marked *required* in branch protection — closing the gap where
+    a manual ``gh pr merge`` bypasses an unresolved CONCERNS verdict. Until the
+    reviewer posts ``success`` (LGTM), the context is ``failure``/absent and the
+    merge is blocked, for the fleet and humans alike.
+
+    Best-effort: a status-post failure must never crash the review loop.
+    """
+    if not sha:
+        return
+    try:
+        gh_client.set_commit_status(
+            owner,
+            repo,
+            sha,
+            state=result,
+            context=_REVIEWER_VERDICT_STATUS_CONTEXT,
+            description=description,
+        )
+    except Exception as exc:  # noqa: BLE001 — status publishing is best-effort
+        logger.warning(
+            "pr_review_watcher: failed to publish %s status on %s — %s",
+            _REVIEWER_VERDICT_STATUS_CONTEXT,
+            sha[:8],
+            exc,
+        )
+
+
 def _merge_and_done(
     state: dict,
     state_path: Path,
@@ -838,6 +880,19 @@ def _merge_and_done(
         _auto_rebase_or_escalate(state, state_path, gh_client, owner, repo, settings, reason)
         return
     state["rebase_attempts"] = 0  # mergeable — clear any rebase bookkeeping
+    # Bless this head with reviewer-verdict=success BEFORE merging, so the
+    # required status check is satisfied for the fleet's own merge — and so the
+    # non-LGTM merge paths (e.g. ci_validated_after_retraction) also clear the
+    # gate. GitHub records the status synchronously; a brief propagation lag at
+    # most causes one retry on the next poll.
+    _publish_reviewer_verdict(
+        gh_client,
+        owner,
+        repo,
+        _pr_head_sha(_pr_data),
+        result="success",
+        description=f"reviewer approved ({reason})",
+    )
     try:
         gh_client.merge_pr(owner, repo, pr_number, merge_method="squash")
         logger.info(
@@ -2188,6 +2243,19 @@ def _phase1(
     normalized_summary = _normalize_concerns_summary(summary)
 
     logger.info("pr_review_watcher: PR #%d self-review verdict=%s", pr_number, result)
+
+    # Surface the verdict as a required status check on the reviewed head, so an
+    # unresolved CONCERNS verdict blocks merge for humans (manual gh pr merge)
+    # too, not just the fleet's own verdict-gated path. _merge_and_done re-blesses
+    # success right before merging, which also covers the non-LGTM merge paths.
+    _publish_reviewer_verdict(
+        gh_client,
+        owner,
+        repo,
+        current_head_sha,
+        result="success" if result == "LGTM" else "failure",
+        description="reviewer LGTM" if result == "LGTM" else "reviewer concerns — auto-fixing",
+    )
 
     if result == "LGTM":
         # The ONLY merge path on the self-review track — verdict-gated.

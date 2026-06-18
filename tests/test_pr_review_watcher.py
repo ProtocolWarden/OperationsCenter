@@ -2530,3 +2530,38 @@ def test_capture_human_intervention_fail_soft(monkeypatch) -> None:
     monkeypatch.setattr(watcher.subprocess, "run", _boom)
     # Must not raise, and returns None (silent no-op).
     assert watcher._capture_human_intervention("sig", "ctx") is None
+
+
+# ---------------------------------------------------------------------------
+# reviewer-verdict status publishing (Part B: make the verdict a required check)
+# ---------------------------------------------------------------------------
+def test_publish_reviewer_verdict_posts_success():
+    gh = MagicMock()
+    watcher._publish_reviewer_verdict(
+        gh, "o", "r", "sha123", result="success", description="reviewer LGTM"
+    )
+    gh.set_commit_status.assert_called_once_with(
+        "o",
+        "r",
+        "sha123",
+        state="success",
+        context=watcher._REVIEWER_VERDICT_STATUS_CONTEXT,
+        description="reviewer LGTM",
+    )
+
+
+def test_publish_reviewer_verdict_noop_on_empty_sha():
+    gh = MagicMock()
+    watcher._publish_reviewer_verdict(gh, "o", "r", "", result="failure", description="x")
+    gh.set_commit_status.assert_not_called()
+
+
+def test_publish_reviewer_verdict_swallows_errors():
+    gh = MagicMock()
+    gh.set_commit_status.side_effect = RuntimeError("boom")
+    # Best-effort: a status-post failure must never crash the review loop.
+    out = watcher._publish_reviewer_verdict(
+        gh, "o", "r", "sha", result="failure", description="x"
+    )
+    assert out is None
+    gh.set_commit_status.assert_called_once()  # attempted despite the raise
