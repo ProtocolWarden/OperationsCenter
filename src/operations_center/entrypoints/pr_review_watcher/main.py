@@ -1574,9 +1574,22 @@ def _phase1(
             # validated the implementation. Retract the escalation once so the
             # reviewer can re-evaluate without a diff-truncation blind spot.
             # Bounded by _MAX_CI_GREEN_RETRACTIONS to prevent loops.
+            #
+            # EXCEPT when the escalation carries unresolved review concerns on
+            # THIS exact (unchanged) head: CI was ALREADY green when those
+            # concerns were raised, so green CI is not new information and must
+            # not silently clear them. Retracting here shipped #313 — a
+            # fix_pass_no_progress escalation got retracted on green CI, the
+            # concerns were forgotten (last_concerns_* popped below), and a fresh
+            # pass LGTM'd the same broken, CI-invisible integration. A
+            # concern-based escalation waits for a real new push (changed head,
+            # handled above) or a human — never for "CI is still green".
+            _concerns_on_this_head = bool(current_head_sha) and current_head_sha == str(
+                state.get("last_concerns_head_sha") or ""
+            ).strip()
             _ci_green_retracted = state.get("ci_green_retraction_count", 0)
             _did_ci_green_retract = False
-            if _ci_green_retracted < _MAX_CI_GREEN_RETRACTIONS:
+            if not _concerns_on_this_head and _ci_green_retracted < _MAX_CI_GREEN_RETRACTIONS:
                 _rcfg = settings.repos.get(repo_key)
                 if _rcfg and getattr(_rcfg, "auto_merge_on_ci_green", False):
                     _rhead = ((pr_data.get("head") or {}).get("ref") or "").lower()

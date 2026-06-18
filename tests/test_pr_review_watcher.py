@@ -477,6 +477,76 @@ def test_phase1_skips_escalated_pr_without_new_head(tmp_path: Path) -> None:
     assert loaded["escalated_head_sha"] == "abc123"
 
 
+def test_phase1_concern_escalation_not_retracted_on_green_ci(tmp_path: Path) -> None:
+    # Regression for #313: a fix_pass_no_progress escalation carrying unresolved
+    # concerns on THIS unchanged head must NOT be retracted just because CI is
+    # green — CI was already green when the concerns were raised, so it is not
+    # new information. The escalation (and the concerns) must survive.
+    state, sp = _make_state(
+        tmp_path,
+        phase="self_review",
+        escalated_needs_human=True,
+        escalated_head_sha="abc123",
+        last_concerns_head_sha="abc123",  # concerns on the current head
+        last_concerns_summary="STEP 3 integration incomplete",
+        no_verdict_passes=0,
+    )
+    gh = _make_gh()
+    gh.get_failed_checks.return_value = []  # CI green
+    gh.get_incomplete_checks.return_value = []  # settled
+    settings = _settings_with_ci_green_repo()
+
+    with (
+        patch.object(watcher, "_run_direct_review") as mock_review,
+        patch.object(watcher, "_merge_and_done") as mock_merge,
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(head_sha="abc123"), gh, "owner", "repo",
+            tmp_path, tmp_path / "cfg.yaml", settings,
+        )
+
+    mock_review.assert_not_called()  # no fresh review to LGTM the same code
+    mock_merge.assert_not_called()
+    loaded = watcher._load_state(sp)
+    assert loaded["escalated_needs_human"] is True  # NOT retracted
+    assert loaded.get("last_concerns_summary")  # concerns NOT forgotten
+
+
+def test_phase1_blindspot_escalation_still_retracts_on_green_ci(tmp_path: Path) -> None:
+    # The WO-3 path is preserved: an escalation with NO concerns recorded on the
+    # current head (e.g. a diff-truncation blind spot) still retracts on green CI
+    # so the reviewer re-evaluates. Proves the new guard is scoped to concerns.
+    # A real cfg.yaml is provided since retraction falls through to the review.
+    cfg = tmp_path / "cfg.yaml"
+    cfg.write_text("reviewer: {}\n", encoding="utf-8")
+    state, sp = _make_state(
+        tmp_path,
+        phase="self_review",
+        escalated_needs_human=True,
+        escalated_head_sha="abc123",
+        no_verdict_passes=0,
+    )  # note: no last_concerns_head_sha
+    gh = _make_gh()
+    gh.get_failed_checks.return_value = []
+    gh.get_incomplete_checks.return_value = []
+    settings = _settings_with_ci_green_repo()
+
+    with (
+        patch.object(
+            watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}
+        ),
+        patch.object(watcher, "_merge_and_done"),
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(head_sha="abc123"), gh, "owner", "repo",
+            tmp_path, cfg, settings,
+        )
+
+    loaded = watcher._load_state(sp)
+    assert loaded["escalated_needs_human"] is False  # retracted (no concerns on head)
+    assert loaded.get("ci_green_retraction_count") == 1
+
+
 def test_phase1_resumes_escalated_pr_with_null_sha(tmp_path: Path) -> None:
     # When escalated with escalated_head_sha=None but the current PR data has a
     # head SHA, the watcher should repair the state and keep waiting instead of

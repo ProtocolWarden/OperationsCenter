@@ -1,3 +1,19 @@
+## 2026-06-17 — fix: reviewer verdict authoritative — don't retract concern-escalations on green CI
+
+Governance fix for how #313 shipped broken. `pr_review_watcher._phase1`'s WO-3
+CI-green retraction (the `else` branch when the escalated head is unchanged)
+assumed "CI green ⇒ the test suite validated the implementation" and retracted
+ANY escalation on green CI — including `fix_pass_no_progress` escalations whose
+concerns CI never covered (incomplete STEP-3 integration, docs, completeness).
+It even popped `last_concerns_summary` (forgetting the concerns), so a fresh
+self-review pass then LGTM'd the same broken code → auto-merged. Fix: skip the
+CI-green retraction when there are unresolved concerns on THIS exact unchanged
+head (`last_concerns_head_sha == current_head_sha`) — CI was already green when
+they were raised, so it's not new information. Such escalations now wait for a
+real new push (changed head, already handled) or a human. The WO-3 blind-spot
+path (no concerns recorded on head) is preserved. 2 regression tests; full
+pr_review_watcher suite 103 green; ruff + ty + custodian-doctor clean.
+
 ## 2026-06-17 — Stage 3: Extend watchdog collector schema to capture extraction signal ✅
 
 **Analysis Complete**: Identified critical gap in watchdog collector visibility into extraction signal quality. Haiku collector currently reports aggregate signal counts (failures, violations, errors) but provides no metrics on extraction success rates — preventing operators from diagnosing collection failures (e.g., "50 test failures reported but only 12 test names extracted").
