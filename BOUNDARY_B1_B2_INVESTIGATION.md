@@ -4,7 +4,7 @@
 
 **Status**: ✅ **BOTH B1 AND B2 FINDINGS RESOLVED AND VERIFIED**
 
-The PR `fix/boundary-b2-close` (commit 3dc7189) successfully resolves both the B1 and B2 boundary detector findings. The custodian-multi gate confirms both B1 and B2 are now clean.
+The PR `fix/boundary-b2-close` (commit 1ec51f7) successfully resolves both the B1 and B2 boundary detector findings. The custodian-multi gate confirms both B1 and B2 are now clean.
 
 ---
 
@@ -140,7 +140,7 @@ Result: ✅ CLEAN (0 findings)
 
 Since the CI secret `REPOGRAPH_BOUNDARY_ARTIFACT_B64` is not stored in git, the fix is documented via:
 
-1. **Commit Message** (3dc7189):
+1. **Commit Message** (1ec51f7):
    > "Pairs with refreshing the REPOGRAPH_BOUNDARY_ARTIFACT_B64 CI secret to a valid, current boundary disclosure artifact"
 
 2. **Operational Log** (`.console/log.md`):
@@ -178,7 +178,7 @@ Since the CI secret `REPOGRAPH_BOUNDARY_ARTIFACT_B64` is not stored in git, the 
 ### ✅ Map current branch changes to which findings they resolve
 - **B1**: Resolved by scrubbing explicit private repo names → "the two private repos"
 - **B2**: Resolved by refreshing secret to valid artifact with proper forbidden names list
-  - **Documentation**: `.console/log.md` and commit message (3dc7189)
+  - **Documentation**: `.console/log.md` and commit message (1ec51f7)
   - **Verification**: Custodian gate shows B1+B2 clean
 
 ---

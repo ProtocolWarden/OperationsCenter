@@ -82,7 +82,7 @@ The main audit runs **after** secret materialization:
 
 ## 4. Evidence of Secret Refresh
 
-### Commit Message (Commit 3dc7189)
+### Commit Message (Commit 1ec51f7)
 
 **Message**:
 ```
@@ -174,7 +174,7 @@ Required fields for valid artifact (per B2 detector):
 | **Custodian Config** | `.custodian/config.yaml:1150` | Requires boundary artifact | `require_boundary_artifact: true` |
 | **Custodian Execution** | `.github/workflows/custodian-audit.yml:46-49` | Runs audit with artifact | Custodian reads `REPOGRAPH_BOUNDARY_ARTIFACT_FILE` from environment |
 | **Verification Record** | `.console/log.md` | Documents refresh action | Operational log with artifact ref + forbidden_names count |
-| **Commit Record** | Git commit 3dc7189 | Immutable change record | Commit message documents the fix and pairs it with refresh |
+| **Commit Record** | Git commit 1ec51f7 | Immutable change record | Commit message documents the fix and pairs it with refresh |
 
 ---
 
@@ -199,7 +199,7 @@ The refresh was performed by updating the GitHub secret, which is why there is n
 ```
 User Action: Refresh secret via GitHub UI / GitHub CLI
         ↓
-Documented in: Commit message (3dc7189) + Operational log (.console/log.md)
+Documented in: Commit message (1ec51f7) + Operational log (.console/log.md)
         ↓
 Codified in CI: .github/workflows/custodian-audit.yml (materialization step)
         ↓
@@ -220,7 +220,7 @@ Result: B2 finding CLOSED; audit gate ready to be made required in CI
 |-----------|----------|----------|
 | **Locate CI secret definitions** | Secret referenced in workflow as `${{ secrets.REPOGRAPH_BOUNDARY_ARTIFACT_B64 }}` | `.github/workflows/custodian-audit.yml:36` |
 | **Document current secret state** | Artifact reference documented as `PrivateManifest@83d600bd` with 5 forbidden repos | `.console/log.md` (first entry) |
-| **Find evidence of refresh** | Commit message explicitly states "Pairs with refreshing..."; log entry confirms action | Commit 3dc7189 + `.console/log.md` |
+| **Find evidence of refresh** | Commit message explicitly states "Pairs with refreshing..."; log entry confirms action | Commit 1ec51f7 + `.console/log.md` |
 | **Prove valid artifact** | Operational log documents forbidden_names count (non-empty ✓ for B2) | `.console/log.md` |
 | **Verify both gates clean** | B1+B2 both documented as clean; D12/DC10 also clean | `.console/log.md` verification statement |
 | **Complete infrastructure path** | End-to-end: secret → CI decoding → Custodian validation → audit gate | All sections above |
@@ -234,7 +234,7 @@ The B2 fix (secret refresh) is **fully documented and integrated**:
 - The artifact contains a non-empty forbidden_names list (the 5 private repos)
 - The CI workflow materializes and uses the secret during audit execution
 - Both B1 and B2 gates pass clean after the refresh
-- The fix is immutably recorded in commit 3dc7189 and the operational log
+- The fix is immutably recorded in commit 1ec51f7 and the operational log
 
 This resolves the reviewer concern that "the PR claims to fix B2 but provides no evidence." The evidence is **complete and verifiable through**:
 1. Commit message (references and describes the refresh)
