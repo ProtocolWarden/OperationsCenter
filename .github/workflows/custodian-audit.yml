@@ -47,3 +47,13 @@ jobs:
         run: |
           git config core.hooksPath .hooks
           custodian-multi --repos . --fail-on-findings --no-color
+
+      - name: D12 incomplete-integration gate (ratchet)
+        # D12 ("public src symbol tested but never wired into production" — the
+        # #313 regression class) is opt-in/off in the main audit above. This
+        # dedicated step enables it and fails ONLY on symbols not in the
+        # audit.d12_baseline ratchet (the accepted pre-existing backlog). Net:
+        # a NEW tested-but-unwired public symbol fails CI; the backlog is burned
+        # down separately (declare __all__ / wire / remove → prune the baseline).
+        run: |
+          custodian-multi --repos . --only D12 --include-deprecated --fail-on-findings --no-color

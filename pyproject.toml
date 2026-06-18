@@ -110,7 +110,7 @@ dev = [
   "pytest-cov>=6.0",
   "ruff==0.15.13",
   "ty==0.0.40",
-  "custodian @ git+https://github.com/ProtocolWarden/Custodian.git@223c9dadd18c8e9526fbdc7185cef7220edde613",
+  "custodian @ git+https://github.com/ProtocolWarden/Custodian.git@a34b8b39afe7d4978120fc1e0d94db3415a92333",
 ]
 
 [tool.setuptools.packages.find]
