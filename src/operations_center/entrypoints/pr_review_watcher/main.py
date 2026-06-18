@@ -1719,11 +1719,20 @@ def _phase1(
     current_head_sha = _pr_head_sha(pr_data)
 
     previous_concerns_head_sha = str(state.get("last_concerns_head_sha") or "").strip()
+    # Only reset the fix/escalation budget when the head moved because of an
+    # EXTERNAL push (a human, or another host) — that is genuinely new work to
+    # review fresh. When the head moved because OUR OWN fix pass pushed it, the
+    # budget must keep accumulating, otherwise every self-pushed fix resets the
+    # counter and the PR loops forever instead of escalating to a human (the
+    # #334 non-convergence: 7 self-pushes, fix_attempts stuck at 1, piling on
+    # evidence files). last_fix_push_sha is the head our last fix pass produced.
+    last_fix_push_sha = str(state.get("last_fix_push_sha") or "").strip()
     if (
         state.get("concerns_comment_id")
         and current_head_sha
         and previous_concerns_head_sha
         and current_head_sha != previous_concerns_head_sha
+        and current_head_sha != last_fix_push_sha
     ):
         _retract_flag(
             state, gh_client, owner, repo, resolution="superseded by new push — re-review resumed"
@@ -1732,9 +1741,11 @@ def _phase1(
         state.pop("last_concerns_summary", None)
         state.pop("last_concerns_head_sha", None)
         state.pop("last_fix_pass_pushed", None)
+        state.pop("last_fix_push_sha", None)
         state.pop("fix_strategy_level", None)  # new code → start back at L0
         logger.info(
-            "pr_review_watcher: PR #%d head changed after concerns; resetting fix state",
+            "pr_review_watcher: PR #%d head changed after concerns (external push); "
+            "resetting fix state",
             pr_number,
         )
         _save_state(state_path, state)
@@ -2505,6 +2516,21 @@ def _phase1(
     )
     state["last_concerns_summary"] = normalized_summary
     state["last_fix_pass_pushed"] = pushed
+    if pushed:
+        # Record the head our own fix pass just produced, so the next poll does
+        # NOT mistake it for an external push and reset the escalation budget.
+        # Without this, fix_attempts never accumulates and the PR loops forever.
+        try:
+            state["last_fix_push_sha"] = _pr_head_sha(
+                gh_client.get_pr(owner, repo, pr_number)
+            )
+        except Exception as exc:  # noqa: BLE001 — best-effort; reset-guard degrades safe
+            logger.warning(
+                "pr_review_watcher: could not record fix-push head for PR #%d — %s",
+                pr_number,
+                exc,
+            )
+            state.pop("last_fix_push_sha", None)
     if not pushed:
         logger.warning(
             "pr_review_watcher: fix pass for PR #%d pushed no changes (attempt %d/%d)",

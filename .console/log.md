@@ -1,3 +1,17 @@
+## 2026-06-18 — fix: reviewer escalation budget no longer reset by own fix-push
+
+#334 exposed a non-convergence bug: a CONCERNS PR whose concerns are unsatisfiable
+in-diff (a doc summarizing out-of-diff facts — CI runs, secrets, sibling PRs) looped
+forever — 7 self-pushes, `fix_attempts` stuck at 1, piling on VERIFICATION_*.md /
+RESOLUTION_SUMMARY.md cruft, never escalating. Root cause: `_phase1`'s "head changed
+after concerns → reset fix state" fired on EVERY head move, including the fleet's OWN
+fix-push, so the budget never accumulated to `max_fix_attempts`. Fix: record the head
+each fix pass produces (`last_fix_push_sha`) and only reset on an EXTERNAL push (head
+≠ our last fix-push). Now self-pushes accumulate → the PR terminates (close+requeue at
+max) instead of looping. Surfaced because Part B made `reviewer-verdict` required, so
+the loop became a hard merge-blocker rather than advisory churn. Tests: self-push keeps
+budget (→2), external push resets (→1). Reviewer suite 118 pass.
+
 ## 2026-06-18 — feat: reviewer verdict as a required status check (Part B)
 
 The reviewer's verdict was a bot *comment*, not a status check, so a manual
