@@ -1284,6 +1284,20 @@ def test_write_heartbeat_creates_file(tmp_path: Path) -> None:
     assert data["status"] == "active"
 
 
+def test_export_decision_metrics_writes_instrumenter_summary(tmp_path: Path) -> None:
+    # The reviewer records every merge decision via record_decision_outcome (→ the
+    # global MergeDecisionInstrumenter); _export_decision_metrics surfaces those
+    # collected metrics to the status dir (previously export_metrics_json had no
+    # caller — the metrics went nowhere).
+    watcher.record_decision_outcome(pr_number=7, repo_key="r", outcome="merge", reason="lgtm")
+    watcher._export_decision_metrics(tmp_path)
+    metrics_file = tmp_path / "merge_decision_metrics.json"
+    assert metrics_file.exists()
+    data = json.loads(metrics_file.read_text())
+    assert "total_decisions" in data and "outcomes" in data
+    assert data["total_decisions"] >= 1
+
+
 def test_write_heartbeat_idempotent(tmp_path: Path) -> None:
     watcher._write_heartbeat(tmp_path)
     watcher._write_heartbeat(tmp_path)

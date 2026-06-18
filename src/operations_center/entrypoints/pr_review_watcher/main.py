@@ -57,6 +57,7 @@ from operations_center.close_invariants import (
     close_without_receipt_allowed,
 )
 from operations_center.reviewer.instrumentation import (
+    get_instrumenter,
     record_decision_outcome,
     record_ci_gate_defer,
     record_escalation,
@@ -2512,6 +2513,22 @@ def _write_heartbeat(status_dir: Path) -> None:
         pass
 
 
+def _export_decision_metrics(status_dir: Path) -> None:
+    """Surface the merge-decision metrics the instrumenter collects.
+
+    pr_review_watcher records every merge decision via record_decision_outcome
+    (→ the global MergeDecisionInstrumenter), but the collected metrics had no
+    reader: export_metrics_json was never called. Write the instrumenter's
+    summary to the status dir each cycle so the metrics are actually observable.
+    Best-effort — metrics export must never break the review loop."""
+    try:
+        status_dir.mkdir(parents=True, exist_ok=True)
+        metrics_path = status_dir / "merge_decision_metrics.json"
+        metrics_path.write_text(get_instrumenter().export_metrics_json(), encoding="utf-8")
+    except Exception:
+        pass
+
+
 # ── Poll cycle ────────────────────────────────────────────────────────────────
 
 
@@ -2643,6 +2660,7 @@ def main() -> int:
             logger.error("pr_review_watcher: error — %s", exc, exc_info=True)
             return 1
         _write_heartbeat(status_dir)
+        _export_decision_metrics(status_dir)
         return 0
 
     logger.info("pr_review_watcher: starting — poll_interval=%ds", args.poll_interval)
@@ -2653,6 +2671,7 @@ def main() -> int:
         except Exception as exc:
             logger.error("pr_review_watcher: unhandled error — %s", exc, exc_info=True)
         _write_heartbeat(status_dir)
+        _export_decision_metrics(status_dir)
         time.sleep(args.poll_interval)
 
 

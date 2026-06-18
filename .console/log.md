@@ -7001,3 +7001,19 @@ detect_regression/generate_alerts/save_snapshot/save_alert from d12_baseline —
 D12 gate confirms 0. (calculate_trend_slope/volatility/get_historical_data and
 categorize_alert/get_routes_for_alert remain genuinely unwired public API — stay
 baselined.) Observer suite 1389 green; ruff+ty+audit(B2)+doctor clean.
+
+## 2026-06-18 — COMPLETE merge-decision metrics: surface export_metrics_json
+
+Observer-plane #313 remediation. Investigation corrected the premise: the audit
+flagged MergeDecisionInstrumenter/DecisionMetricsCollector as "never
+instantiated", but they're ALREADY wired — pr_review_watcher calls the module-
+level record_decision_outcome at 5 decision points → get_instrumenter() →
+MergeDecisionInstrumenter records every merge decision. The genuine gap was
+narrow: export_metrics_json / get_metrics_summary had NO caller, so the
+collected metrics went nowhere. Wired it: _export_decision_metrics(status_dir)
+writes get_instrumenter().export_metrics_json() to status_dir/
+merge_decision_metrics.json each poll cycle (alongside the heartbeat),
+best-effort. Pruned export_metrics_json from d12_baseline (D12 gate confirms 0).
+1 test; reviewer suite 113 green (tests/ root + the #322 dedicated CI job);
+audit B2-env + doctor + D12 clean. Another false-positive corrected — the
+instrumenter wasn't unwired, only its export surface was.

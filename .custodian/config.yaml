@@ -52,7 +52,6 @@ audit:
     - evaluate_alerts_dry_run
     - evaluate_per_collector_thresholds
     - export_all
-    - export_metrics_json
     - failure_reason_summary
     - filter_by_category
     - filter_by_extraction_status
