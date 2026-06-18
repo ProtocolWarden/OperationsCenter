@@ -6924,3 +6924,12 @@ to merge over a concern.
 
 Updated docs/design/SELF_HEAL_LADDER.md Status -> built and checked off the
 roadmap phases now that P0-P3 are implemented. DC10 gate re-verified clean.
+
+## 2026-06-18 — Self-Heal Ladder: clear DC1/DC7 on the new design doc
+
+Pre-push Custodian audit flagged the new SELF_HEAL_LADDER.md: [DC1] missing YAML
+front matter and [DC7] orphan (unlinked) doc. Added `status: implemented` front
+matter and linked it from docs/specs/reviewer-pr-state-machine.md (the topical
+reviewer spec). Audit now down to the sole pre-existing [B2] boundary-artifact
+MED finding (environmental — present on origin/main; CI materializes the
+artifact from REPOGRAPH_BOUNDARY_ARTIFACT_B64 secret).

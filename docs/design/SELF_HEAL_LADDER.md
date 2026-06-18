@@ -1,3 +1,7 @@
+---
+status: implemented
+---
+
 # Self-Heal Ladder for CONCERNS verdicts
 
 **Status:** built — Phases 0–3 shipped (see roadmap below)

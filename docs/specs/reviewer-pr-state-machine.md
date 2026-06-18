@@ -49,6 +49,12 @@ described in `docs/design/lifecycle.md`.
    (up to `reviewer.max_self_review_loops`, default 2), then re-check
 6. Unresolved after max loops → escalate to Phase 2
 
+> The `CONCERNS` → fix loop is hardened by the
+> [Self-Heal Ladder](../design/SELF_HEAL_LADDER.md): the fix pass receives the
+> concerns structured + an anti-no-op acceptance bar, and a no-progress repeat
+> climbs rungs of escalating resolving power before conceding to a human. LGTM
+> stays the only merge path — self-heal resolves the concern, never bypasses it.
+
 ### Phase 2 — Human review
 
 1. Post escalation comment: `<!-- operations-center:bot -->` + concerns summary
