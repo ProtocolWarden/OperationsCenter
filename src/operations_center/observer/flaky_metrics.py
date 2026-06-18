@@ -22,6 +22,31 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 
+# Public metrics API. Declared explicitly because this is a consumed library
+# (flaky_test_reporter / collector / models import from it) and several metrics
+# are implemented + tested but not yet wired into a collector (e.g.
+# environment_correlation, isolation_score — see the module docstring). Declaring
+# the public surface marks them as intentional API rather than dead code.
+__all__ = [
+    # per-test metrics
+    "failure_rate",
+    "failure_entropy",
+    "streak_variance",
+    "percentile",
+    "recovery_time_percentile_90",
+    "duration_stability",
+    "environment_correlation",
+    "isolation_score",
+    # repository-level metrics
+    "flaky_test_percentage",
+    "median_failure_rate",
+    "flaky_growth_rate",
+    "category_concentration",
+    "critical_test_flakiness_ratio",
+    "flaky_velocity",
+    "repository_health_score",
+]
+
 # ── Per-test metrics ─────────────────────────────────────────────────────────
 
 

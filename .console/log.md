@@ -1,4 +1,16 @@
-## 2026-06-17 — fix: reviewer verdict authoritative — don't retract concern-escalations on green CI
+## 2026-06-17 — chore(observer): declare flaky_metrics public API in __all__ (D12 triage)
+
+First batch of the OperationsCenter D12 triage (Custodian's new "tested but never
+wired" detector found 176 → 161 after this). `observer/flaky_metrics.py` is a
+consumed pure-function metrics library (flaky_test_reporter/collector/models
+import it); several metrics are implemented + tested but intentionally not yet
+wired to a collector (the module docstring says so — environment_correlation,
+isolation_score). Declared its 15 public metric functions in `__all__` — marks
+them as intentional public API rather than dead code, the correct D12 resolution
+("declare or wire"), and clears 10 D12 findings. No behaviour change (no
+`import *` consumer); 82 flaky-metric tests green. Remaining D12 backlog (~161,
+mostly observer + execution) burns down per-subsystem with the same declare /
+wire / remove triage.
 
 Governance fix for how #313 shipped broken. `pr_review_watcher._phase1`'s WO-3
 CI-green retraction (the `else` branch when the escalated head is unchanged)
