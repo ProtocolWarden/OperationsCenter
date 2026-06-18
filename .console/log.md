@@ -1,3 +1,18 @@
+## 2026-06-18 — feat: reviewer verdict as a required status check (Part B)
+
+The reviewer's verdict was a bot *comment*, not a status check, so a manual
+`gh pr merge` (operator/admin) bypassed an unresolved CONCERNS verdict — and fast
+manual merges raced past the review loop entirely (see #330/#328 today). Made the
+verdict first-class: `GitHubPRClient.set_commit_status` + `_publish_reviewer_verdict`
+publish a `reviewer-verdict` commit status on the PR head — `success` on LGTM (and
+re-blessed inside `_merge_and_done` so the fleet's own merge + non-LGTM merge paths
+clear the gate), `failure` on CONCERNS. Before any review there is no status →
+fail-closed, merge blocked. DEPLOY ORDER (critical): merge + restart fleet so it
+runs the publishing code BEFORE adding `reviewer-verdict` to OC main required
+checks (else PRs deadlock waiting for a status the old fleet never posts). Enforce
+on admins too (else my own admin merges bypass it). Fleet-outage recovery: lift
+branch protection to merge manually.
+
 ## 2026-06-18 — feat: complete coverage trend enrichment + alert routing
 
 Wired the last 5 unbaselined coverage methods into `_record_coverage_trend`:

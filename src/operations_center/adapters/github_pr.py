@@ -201,6 +201,39 @@ class GitHubPRClient:
         resp.raise_for_status()
         return resp.json()
 
+    def set_commit_status(
+        self,
+        owner: str,
+        repo: str,
+        sha: str,
+        *,
+        state: str,
+        context: str,
+        description: str = "",
+        target_url: str | None = None,
+    ) -> dict:
+        """Publish a commit status (``success``/``failure``/``pending``/``error``).
+
+        Used to surface the reviewer's verdict as a first-class status check on
+        the PR head SHA, so it can be made a *required* status check — closing
+        the gap where a manual ``gh pr merge`` bypasses the (comment-only)
+        review verdict.
+        """
+        payload: dict[str, Any] = {
+            "state": state,
+            "context": context,
+            "description": description[:140],
+        }
+        if target_url:
+            payload["target_url"] = target_url
+        resp = self._request(
+            "POST",
+            f"{self._API}/repos/{owner}/{repo}/statuses/{sha}",
+            json=payload,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
     def get_check_runs(self, owner: str, repo: str, ref: str) -> list[dict]:
         """Return all check-runs for a given commit SHA or ref."""
         resp = self._request(
