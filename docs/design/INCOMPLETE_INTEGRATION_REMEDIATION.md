@@ -113,10 +113,36 @@ Root cause: the `REPOGRAPH_BOUNDARY_ARTIFACT_B64` CI secret decoded to a **conte
 - This refresh was applied to all 18 public repos as part of PR #330 (out-of-band infrastructure change, not visible in this diff)
 
 **Leak scrubbing** *(visible in this diff)*:
-- Activating B1 with the new artifact surfaced one genuine leak in tracked documentation
-- **Leak found**: this file's headline finding line named private repos literally (`[specific private repos]`)
-- **Leak scrubbed**: changed to generic reference (`the two private repos`) — visible in this diff
-- The two root-level BOUNDARY_*.md investigation files (which contained example private-repo names in documentation) were deleted as scratch notes, folded into this section
+- Activating B1 with the new artifact surfaced genuine leaks in tracked documentation
+- Scrubbed all occurrences of explicit private-repo names from public-facing documentation
+
+#### Leak 1 (Primary): Headline finding line in this file
+
+**Location**: Line 17, finding summary section
+
+**Before scrubbing**:
+```
+all 11 src-bearing repos (excluding [specific private repos] per the private-repo deferral)
+```
+
+**After scrubbing**:
+```
+all 11 src-bearing repos (excluding the two private repos per the private-repo deferral)
+```
+
+**Status**: ✅ Visible in this diff as modified line
+
+#### Leak 2 (Secondary): Investigation documentation files
+
+**Files affected**:
+- `BOUNDARY_B1_B2_INVESTIGATION.md` (195 lines, contained B1/B2 detector rules, root-cause analysis, fix documentation with example private-repo references)
+- `BOUNDARY_B2_SECRET_REFRESH_EVIDENCE.md` (246 lines, contained CI workflow documentation, artifact schema, boundary detection logic with example private-repo names)
+
+**Leak type**: These were root-level scratch files created during investigation that referenced private-repo names and boundary artifact structure in their documentation.
+
+**After scrubbing**: Both files are deleted entirely, their findings folded into this canonical Closure section which documents fixes without naming private repos.
+
+**Status**: ✅ Visible in this diff as file deletions (leaked content removed)
 
 **Verification**:
 - D12/DC10 incomplete-integration gates pass clean (run locally before push)
