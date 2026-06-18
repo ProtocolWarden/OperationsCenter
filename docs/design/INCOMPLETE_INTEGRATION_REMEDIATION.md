@@ -100,21 +100,29 @@ are real, not baseline-hidden. The still-unwired public methods
 (`calculate_trend_slope`, `calculate_volatility_score`, `get_historical_data`,
 `categorize_alert`, `get_routes_for_alert`) remain baselined.
 
-## Backbone notes (infra / follow-ups, not code-fixed here)
+## Closure (2026-06-18) — the three backbone follow-ups, now resolved
 
-- **B2 boundary-artifact (root cause).** OC's CI `audit` job is red on every PR
-  with a single MED **B2** finding *even though* `REPOGRAPH_BOUNDARY_ARTIFACT_FILE`
-  is materialized in CI. Diagnosis (read-only): `detect_b2` emits its generic
-  "not provided" message only when the artifact loads with **no error but yields
-  zero boundary names** — so the secret-decoded artifact is present and parseable
-  but **content-less** (no boundary names). This is an **infra/secret issue**
-  (`REPOGRAPH_BOUNDARY_ARTIFACT_B64` needs a real disclosure artifact), not a
-  Custodian code bug — hence advisory-only and left for the operator. One genuine
-  minor Custodian follow-up: B2's message should distinguish *provided-but-no-names*
-  from *not-provided* (the loader already has the provenance).
-- **Audit gate is advisory.** OC `main` is unprotected and the reviewer
-  LGTM-merges over the advisory (B2-red) `audit` check. Making it required is
-  blocked on B2 above.
-- **Fleet `.venv` pinned behind** (`0fa072f`, no D12/DC10) — local/fleet pre-push
-  gates are no-ops; CI carries the real check via `custodian@main`. Reinstall at
-  the pin per repo when convenient (sequence so running watchers aren't disrupted).
+The three infra items this doc once carried as open follow-ups are closed.
+
+- **B2 boundary-artifact — FIXED.** Root cause: the `REPOGRAPH_BOUNDARY_ARTIFACT_B64`
+  CI secret decoded to a **content-less** payload (parsed fine, zero
+  `forbidden_names`), so `require_boundary_artifact=true` had nothing to enforce
+  and B2 fired. Fix: refreshed the secret from the canonical boundary artifact
+  (`PrivateManifest@83d600bd`; `forbidden_names` = the five private repos) on **all
+  18 public repos** (#330 + fleet-wide). Refreshing it also activates B1/R2, which
+  surfaced two genuine leaks (a doc line + a `.console/log.md` alias) — both
+  scrubbed. *Verification:* `custodian-multi --repos .` → **0 findings**; the OC
+  CI `audit` job flipped red→green (run on `1ec51f7e`). The Custodian B2 message
+  now distinguishes *content-less* from *not-provided* (Custodian #48), which also
+  un-masked a detector-ID collision that had hidden a real R2 finding.
+- **Audit gate — now REQUIRED.** OC `main` branch protection requires the `audit`
+  status check with `enforce_admins=true` (#2). No PR — fleet or manual — merges
+  over a red audit. The reviewer's verdict is likewise now a required
+  `reviewer-verdict` status check (#333), closing the manual-merge bypass.
+- **Fleet `.venv` — current.** Bumped the custodian pin `0fa072f → d6ba8ab` (#331,
+  DAGExecutor #12) and reinstalled the venvs, so the reviewer fleet (which runs
+  `OC/.venv/bin/custodian-multi`) audits with the same detectors as CI.
+
+See `docs/design/SELF_HEAL_LADDER.md` and the session memory
+`boundary-b2-required-gate` for the operational detail. The earlier root-cause
+investigation scratch notes were folded into this section and removed.

@@ -1,3 +1,16 @@
+## 2026-06-18 — docs: address standing review concerns on #330/#328
+
+Audited today's PR review comments: the reviewer's concerns were largely
+*bypassed* by fast manual merges racing the fleet's review loop (the verdict was
+a bot comment, not a gate — fixed by Part B/#333). Resolved the substantive
+leftovers: rewrote INCOMPLETE_INTEGRATION_REMEDIATION.md's stale "Backbone notes"
+(which still claimed B2 was advisory/unfixed and the gate unprotected) into a
+Closure section documenting the B2 fix + secret-refresh verification (this is the
+evidence #330's concern asked for) and the now-required audit + reviewer-verdict
+gates. Deleted the two root-level BOUNDARY_*.md scratch files (folded into the
+canonical doc). #328's count concern (14 vs 12) was already resolved by #329 —
+the doc's "12" matches its enumeration. Letting the fleet review+merge this one.
+
 ## 2026-06-18 — feat: reviewer verdict as a required status check (Part B)
 
 The reviewer's verdict was a bot *comment*, not a status check, so a manual
