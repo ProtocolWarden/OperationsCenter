@@ -6969,3 +6969,18 @@ fix is to drop the backticks on that one cross-repo symbol. Reworded line 64.
 Audit now down to the sole environmental B2 (boundary artifact, materialized from
 secret in CI). NOTE: the audit gate is advisory (main unprotected, reviewer
 LGTM-merges over it) — a governance gap worth a follow-up.
+
+## 2026-06-18 — COMPLETE FlakyTestReporter: wire it into the live plugin
+
+Observer-plane #313 remediation — COMPLETE (wire), not delete. FlakyTestReporter
+(observer/flaky_test_reporter.py) is the full flaky-reporting engine (categories,
+per-test metrics, markdown tables, trend analysis) built+tested in #247 but never
+called in production — the live pytest_flaky_plugin reimplemented a simpler
+analysis and never used it. Wired it: pytest_sessionfinish now feeds the
+session's outcomes to FlakyTestReporter (_emit_reporter_report), which persists
+results in its JSONL format and writes latest-flaky-report.md. Best-effort
+(try/except) so reporting can never break a test session. 2 tests (wire produces
+report + persists; failure is swallowed). Pruned format_flaky_tests_markdown +
+save_test_results from audit.d12_baseline (now wired → D12 gate confirms 0
+findings). Follow-up: cross-session trend load (needs FlakyTestResult.from_dict +
+a history loader) to light up query_trend_analysis.

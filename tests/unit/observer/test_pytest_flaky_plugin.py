@@ -106,6 +106,46 @@ def test_sessionfinish_writes_report_with_flaky_candidates(tmp_path: Path) -> No
     assert report["flaky_candidates"][0]["module"] == "tests/a.py"
 
 
+def test_sessionfinish_drives_flaky_test_reporter(tmp_path: Path) -> None:
+    # The richer FlakyTestReporter engine is now wired into the live plugin:
+    # a session emits its markdown report and persists results in the reporter's
+    # JSONL format (in addition to the raw session JSON).
+    storage = tmp_path / "flaky"
+    plugin = FlakyTestDetectionPlugin(str(storage))
+    plugin.pytest_sessionstart(session=SimpleNamespace(name="s"))
+    plugin.pytest_runtest_makereport(_item("tests/a.py::test_ok"), _call_info())
+    exc = SimpleNamespace(value=ValueError("flake"))
+    plugin.pytest_runtest_makereport(_item("tests/a.py::test_bad"), _call_info(excinfo=exc))
+
+    plugin.pytest_sessionfinish(session=SimpleNamespace(name="sess-1"), exitstatus=1)
+
+    # FlakyTestReporter produced its markdown report...
+    report_md = storage / "latest-flaky-report.md"
+    assert report_md.exists()
+    assert report_md.read_text(encoding="utf-8").strip() != ""
+    # ...and persisted results in its own JSONL format (the trend-analysis dataset).
+    assert list(storage.glob("runs/results-*.jsonl"))
+
+
+def test_sessionfinish_reporter_failure_does_not_break_session(tmp_path: Path, monkeypatch) -> None:
+    # Reporting is best-effort: a failure INSIDE the reporter must be swallowed
+    # so it never breaks a test session. Make the reporter blow up and assert
+    # pytest_sessionfinish still completes (and the raw session JSON still saved).
+    storage = tmp_path / "flaky"
+    plugin = FlakyTestDetectionPlugin(str(storage))
+    plugin.pytest_runtest_makereport(_item("tests/a.py::test_ok"), _call_info())
+
+    import operations_center.observer.flaky_test_reporter as ftr
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("reporter exploded")
+
+    monkeypatch.setattr(ftr.FlakyTestReporter, "create_local", classmethod(_boom))
+    plugin.pytest_sessionfinish(session=SimpleNamespace(name="s"), exitstatus=0)  # must not raise
+
+    assert list(storage.glob("runs/*/*-session.json"))  # raw session report still written
+
+
 def test_save_session_report_warning_on_io_error(tmp_path: Path, monkeypatch, caplog) -> None:
     plugin = FlakyTestDetectionPlugin(str(tmp_path / "flaky"))
 
