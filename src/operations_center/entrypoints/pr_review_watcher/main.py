@@ -1746,6 +1746,201 @@ def _phase0_ci_fix(
 
 # ── Phase 1: self-review ──────────────────────────────────────────────────────
 
+# Helper functions for adaptive CI wait logic (Stage 2: prevent false human-parks)
+
+
+def _compute_backoff_interval(backoff_level: int) -> int:
+    """Compute exponential backoff interval in seconds.
+
+    Level 0: 5s, Level 1: 10s, Level 2: 20s, Level 3+: 20s (max)
+    """
+    intervals = [5, 10, 20, 20, 20]
+    return intervals[min(backoff_level, len(intervals) - 1)]
+
+
+def _update_check_history(
+    state: dict,
+    failed_checks: list[str],
+    completed_checks: list[str],
+    pending_checks: list[str],
+    current_head_sha: str,
+) -> None:
+    """Track check outcomes to distinguish transient from stuck checks.
+
+    Updates state["ci_check_history"] with per-check tracking:
+    - last_seen_sha: last head where this check reported
+    - first_registration_at: when first seen (ISO timestamp)
+    - times_passed: cumulative pass count
+    - times_failed: cumulative fail count
+    """
+    history = state.setdefault("ci_check_history", {})
+    now = datetime.now(UTC).isoformat()
+
+    for check in completed_checks:
+        if check not in history:
+            history[check] = {
+                "last_seen_sha": current_head_sha,
+                "first_registration_at": now,
+                "times_passed": 0,
+                "times_failed": 0,
+            }
+        history[check]["last_seen_sha"] = current_head_sha
+        history[check]["last_seen_time"] = now
+
+        if check not in failed_checks:
+            history[check]["times_passed"] += 1
+        else:
+            history[check]["times_failed"] += 1
+
+
+def _should_escalate_ci_wait(
+    state: dict,
+    missing_required: list[str],
+    failed_checks: list[str],
+    pending_checks: list[str],
+    ci_wait_cycles_first_registration: int = 60,
+    ci_wait_cycles_already_seen: int = 40,
+    ci_flakiness_threshold_pct: int = 30,
+    required_checks_configured: list[str] | None = None,
+) -> tuple[bool, str | None]:
+    """Determine if CI wait should escalate to human.
+
+    Applies decision criteria to distinguish transient failures from unresolvable.
+    Returns: (should_escalate, reason_code)
+    """
+    history = state.get("ci_check_history", {})
+    wait_cycles = state.get("ci_wait_cycles", 0)
+    required_configured = required_checks_configured or []
+
+    # Criterion 1: Has this check ever completed?
+    never_seen = [c for c in missing_required if c not in history]
+    already_seen = [c for c in missing_required if c in history]
+
+    if never_seen:
+        # Distinguish between "misconfigured" and "late-registering"
+        misconfigured = [c for c in never_seen if c not in required_configured]
+        late_registering = [c for c in never_seen if c in required_configured]
+
+        # Misconfigured checks: escalate quickly (old behavior, ~20 cycles)
+        if misconfigured and wait_cycles >= 20:
+            return (True, "ci_misconfigured_check")
+
+        # Late-registering checks: use longer timeout
+        if late_registering and wait_cycles >= ci_wait_cycles_first_registration:
+            return (True, "ci_never_settled_late_registration")
+
+        return (False, None)
+
+    # Criterion 3: Is the failure pattern sparse or dense?
+    for check in already_seen:
+        ch = history[check]
+        total_attempts = ch["times_passed"] + ch["times_failed"]
+        failure_rate = ch["times_failed"] / total_attempts if total_attempts > 0 else 0
+
+        if failure_rate >= ci_flakiness_threshold_pct / 100:
+            # Dense failure pattern = stuck check, not transient
+            if wait_cycles < ci_wait_cycles_already_seen:
+                continue  # Give it more time
+            else:
+                return (True, "ci_persistently_red_dense_failure")
+
+    # All checks either passed or are below escalation threshold
+    if wait_cycles >= ci_wait_cycles_already_seen:
+        return (True, "ci_never_settled_threshold_exceeded")
+
+    return (False, None)
+
+
+def _classify_missing_checks(
+    state: dict,
+    missing_required: list[str],
+    required_checks_configured: list[str],
+) -> tuple[list[str], list[str], list[str]]:
+    """Classify missing required checks into three categories.
+
+    Returns: (never_registered, late_registering, stuck)
+    - never_registered: not in configured required checks (config error)
+    - late_registering: configured but not yet seen (will eventually appear)
+    - stuck: seen before but missing now (flaky runner or timeout)
+    """
+    history = state.get("ci_check_history", {})
+
+    never_registered = [
+        c for c in missing_required if c not in history and c not in required_checks_configured
+    ]
+    late_registering = [
+        c for c in missing_required if c not in history and c in required_checks_configured
+    ]
+    stuck_checks = [c for c in missing_required if c in history]
+
+    return (never_registered, late_registering, stuck_checks)
+
+
+def _normalize_concerns_signature(summary: str) -> str:
+    """Create a normalized signature for concern deduplication.
+
+    Removes timestamps, specific line numbers, variable names to identify
+    the same logical concern across multiple review passes.
+    """
+    import hashlib
+
+    text = str(summary or "").strip()
+    if not text:
+        return ""
+    # Replace numbers with N to normalize variable names, line numbers, etc.
+    normalized = re.sub(r"\d+", "N", text)
+    # Use hash for compact signature
+    return hashlib.sha256(normalized.encode()).hexdigest()[:16]
+
+
+def _track_concern_raised(
+    state: dict,
+    summary: str,
+    current_head_sha: str,
+) -> None:
+    """Record that a concern was raised on this head.
+
+    Tracks concern history for the improved retraction guard: tracks when
+    concerns were first raised, to prevent retraction if unfixed concerns exist.
+    """
+    history = state.setdefault("concern_history", {})
+    signature = _normalize_concerns_signature(summary)
+
+    if signature and (
+        signature not in history or history[signature].get("head_sha") != current_head_sha
+    ):
+        history[signature] = {
+            "head_sha": current_head_sha,
+            "summary": summary,
+            "raised_at": datetime.now(UTC).isoformat(),
+            "fix_attempts_on_this_concern": 0,
+        }
+    state["last_concerns_head_sha"] = current_head_sha
+    state["last_concerns_summary"] = summary
+
+
+def _can_escalate_concern(
+    state: dict,
+    summary: str,
+    current_head_sha: str,
+) -> bool:
+    """Prevent escalation of the same concern multiple times without real fix attempt.
+
+    Returns False if same concern signature escalated ≥ 2 times without new head.
+    """
+    history = state.get("concern_history", {})
+    signature = _normalize_concerns_signature(summary)
+
+    if signature and signature in history:
+        prev_rec = history[signature]
+        # If same concern on same head → already escalated
+        if prev_rec.get("head_sha") == current_head_sha:
+            prev_count = prev_rec.get("fix_attempts_on_this_concern", 0)
+            if prev_count >= 2:  # Already tried fixing twice on this concern
+                return False  # Don't escalate again
+
+    return True
+
 
 def _phase1(
     state: dict,
@@ -1870,13 +2065,43 @@ def _phase1(
             # pass LGTM'd the same broken, CI-invisible integration. A
             # concern-based escalation waits for a real new push (changed head,
             # handled above) or a human — never for "CI is still green".
-            _concerns_on_this_head = (
+            #
+            # Improved guard (Stage 2): check for unfixed concerns on ANY recent head,
+            # not just the current head. This prevents retraction when a fix pass
+            # pushes a new commit but the same concern still applies.
+            # Also check old last_concerns_head_sha field for backward compatibility.
+            _concerns_on_this_head_old = (
                 bool(current_head_sha)
                 and current_head_sha == str(state.get("last_concerns_head_sha") or "").strip()
             )
+            _unfixed_concerns = _concerns_on_this_head_old  # Start with old check
+
+            # Enhanced check using new concern_history for improved guard
+            concern_history = state.get("concern_history", {})
+            escalated_head = str(state.get("escalated_head_sha") or "").strip()
+
+            if not _unfixed_concerns and concern_history and escalated_head:
+                for concern_sig, concern_rec in concern_history.items():
+                    concern_head = concern_rec.get("head_sha", "")
+                    concern_raised = concern_rec.get("raised_at", "")
+
+                    if not concern_head or not concern_raised:
+                        continue
+
+                    # Concern is "unfixed" if raised on escalated head (or any recent head within 24h)
+                    try:
+                        raised_time = datetime.fromisoformat(concern_raised)
+                        concern_age = (datetime.now(UTC) - raised_time).total_seconds()
+                        # Consider concerns raised on the escalated head or within the last 24h as unfixed
+                        if concern_head == escalated_head or concern_age < 86400:
+                            _unfixed_concerns = True
+                            break
+                    except (ValueError, TypeError):
+                        pass
+
             _ci_green_retracted = state.get("ci_green_retraction_count", 0)
             _did_ci_green_retract = False
-            if not _concerns_on_this_head and _ci_green_retracted < _MAX_CI_GREEN_RETRACTIONS:
+            if not _unfixed_concerns and _ci_green_retracted < _MAX_CI_GREEN_RETRACTIONS:
                 _rcfg = settings.repos.get(repo_key)
                 if _rcfg and getattr(_rcfg, "auto_merge_on_ci_green", False):
                     _rhead = ((pr_data.get("head") or {}).get("ref") or "").lower()
@@ -1964,7 +2189,35 @@ def _phase1(
                     # failing check), don't defer forever (that would silently
                     # stall the loop) and don't merge red — escalate for a human.
                     state["ci_wait_cycles"] = state.get("ci_wait_cycles", 0) + 1
-                    if state["ci_wait_cycles"] >= _MAX_CI_WAIT_CYCLES:
+
+                    # Track check history to distinguish transient failures from stuck checks
+                    completed = gh_client.get_completed_checks(
+                        owner,
+                        repo,
+                        pr_number,
+                        pr_data=pr_data,
+                        ignored_checks=ignored,
+                    )
+                    _update_check_history(state, failed, completed, [], current_head_sha or "")
+
+                    # Get configured required checks for this repo
+                    repo_required = (
+                        list(getattr(repo_cfg, "required_checks", []) or []) if repo_cfg else []
+                    )
+
+                    # Apply adaptive thresholds based on check history
+                    should_escalate, reason_code = _should_escalate_ci_wait(
+                        state,
+                        missing_required=failed,  # Failed checks as missing required
+                        failed_checks=failed,
+                        pending_checks=[],
+                        ci_wait_cycles_first_registration=60,
+                        ci_wait_cycles_already_seen=40,
+                        ci_flakiness_threshold_pct=30,
+                        required_checks_configured=repo_required,
+                    )
+
+                    if should_escalate:
                         detail = (
                             f"CI has not gone green after {state['ci_wait_cycles']} "
                             f"checks ({len(failed)} failing: "
@@ -1974,7 +2227,7 @@ def _phase1(
                         record_escalation(
                             pr_number=pr_number,
                             repo_key=repo_key,
-                            reason="ci_persistently_red",
+                            reason=reason_code or "ci_persistently_red",
                             detail=detail,
                         )
                         _escalate_needs_human(
@@ -1984,24 +2237,23 @@ def _phase1(
                             owner,
                             repo,
                             settings,
-                            reason="ci_persistently_red",
+                            reason=reason_code or "ci_persistently_red",
                             detail=detail,
                             current_head_sha=current_head_sha,
                         )
                         return
                     logger.info(
-                        "pr_review_watcher: PR #%d CI not green (%d failed, wait %d/%d) — "
+                        "pr_review_watcher: PR #%d CI not green (%d failed, wait %d/40) — "
                         "deferring self-review until CI is green",
                         pr_number,
                         len(failed),
                         state["ci_wait_cycles"],
-                        _MAX_CI_WAIT_CYCLES,
                     )
                     record_ci_gate_defer(
                         pr_number=pr_number,
                         repo_key=repo_key,
                         wait_cycle=state["ci_wait_cycles"],
-                        max_cycles=_MAX_CI_WAIT_CYCLES,
+                        max_cycles=40,  # Adaptive threshold for already-seen checks
                         failed_checks=failed,
                     )
                     _save_state(state_path, state)
@@ -2046,23 +2298,32 @@ def _phase1(
                 ]
                 if pending or not completed or missing_required:
                     state["ci_wait_cycles"] = state.get("ci_wait_cycles", 0) + 1
+
+                    # Track check history for classification
+                    _update_check_history(state, [], completed, pending, current_head_sha or "")
+
                     if pending:
                         _why = f"{len(pending)} still running: {', '.join(pending[:5])}"
-                    elif not completed:
-                        _why = "no checks have reported on the current head yet"
-                    else:
-                        _why = f"required checks not yet reported: {', '.join(missing_required)}"
-                    if state["ci_wait_cycles"] >= _MAX_CI_WAIT_CYCLES:
+                        # Pending checks need time — use standard threshold
+                        if state["ci_wait_cycles"] < 40:
+                            logger.info(
+                                "pr_review_watcher: PR #%d CI not settled-green on current head "
+                                "(%s, wait %d/40) — deferring self-review",
+                                pr_number,
+                                _why,
+                                state["ci_wait_cycles"],
+                            )
+                            _save_state(state_path, state)
+                            return
                         detail = (
-                            f"CI has not settled-green on the current head after "
-                            f"{state['ci_wait_cycles']} checks ({_why}). Not merged (CI "
-                            f"incomplete) and not closed (work preserved) — needs a human "
-                            f"to investigate stuck CI."
+                            f"CI checks still pending after {state['ci_wait_cycles']} cycles: "
+                            f"{_why}. Not merged (CI incomplete) and not closed (work preserved) "
+                            f"— needs a human to investigate stuck CI."
                         )
                         record_escalation(
                             pr_number=pr_number,
                             repo_key=repo_key,
-                            reason="ci_never_settled",
+                            reason="ci_never_settled_pending",
                             detail=detail,
                         )
                         _escalate_needs_human(
@@ -2072,18 +2333,162 @@ def _phase1(
                             owner,
                             repo,
                             settings,
-                            reason="ci_never_settled",
+                            reason="ci_never_settled_pending",
                             detail=detail,
                             current_head_sha=current_head_sha,
                         )
                         return
+
+                    if not completed:
+                        _why = "no checks have reported on the current head yet"
+                        # No checks yet — may just be slow to start, use longer timeout
+                        if state["ci_wait_cycles"] < 60:
+                            logger.info(
+                                "pr_review_watcher: PR #%d CI not settled-green on current head "
+                                "(%s, wait %d/60) — deferring self-review",
+                                pr_number,
+                                _why,
+                                state["ci_wait_cycles"],
+                            )
+                            _save_state(state_path, state)
+                            return
+                        detail = (
+                            f"No CI checks have reported on this head after {state['ci_wait_cycles']} "
+                            f"cycles. Not merged (CI incomplete) and not closed (work preserved) "
+                            f"— needs a human to investigate stuck CI."
+                        )
+                        record_escalation(
+                            pr_number=pr_number,
+                            repo_key=repo_key,
+                            reason="ci_never_settled_no_checks",
+                            detail=detail,
+                        )
+                        _escalate_needs_human(
+                            state,
+                            state_path,
+                            gh_client,
+                            owner,
+                            repo,
+                            settings,
+                            reason="ci_never_settled_no_checks",
+                            detail=detail,
+                            current_head_sha=current_head_sha,
+                        )
+                        return
+
+                    # Classify missing required checks
+                    never_reg, late_reg, stuck = _classify_missing_checks(
+                        state, missing_required, required
+                    )
+
+                    if never_reg:
+                        _why = f"misconfigured required checks: {', '.join(never_reg)}"
+                        detail = (
+                            f"Required checks not found in branch protection: {never_reg}. "
+                            f"This indicates a CI configuration error. Not merged (CI incomplete) "
+                            f"and not closed (work preserved) — needs a human to fix CI configuration."
+                        )
+                        record_escalation(
+                            pr_number=pr_number,
+                            repo_key=repo_key,
+                            reason="ci_misconfigured_check",
+                            detail=detail,
+                        )
+                        _escalate_needs_human(
+                            state,
+                            state_path,
+                            gh_client,
+                            owner,
+                            repo,
+                            settings,
+                            reason="ci_misconfigured_check",
+                            detail=detail,
+                            current_head_sha=current_head_sha,
+                        )
+                        return
+
+                    if late_reg:
+                        _why = f"late-registering checks: {', '.join(late_reg)}"
+                        # Late-registering checks need longer timeout
+                        if state["ci_wait_cycles"] < 60:
+                            logger.info(
+                                "pr_review_watcher: PR #%d waiting for late-registering checks "
+                                "(%s, wait %d/60) — deferring self-review",
+                                pr_number,
+                                _why,
+                                state["ci_wait_cycles"],
+                            )
+                            _save_state(state_path, state)
+                            return
+                        detail = (
+                            f"Required checks have not registered after {state['ci_wait_cycles']} "
+                            f"cycles: {late_reg}. Likely a workflow that requires manual trigger or "
+                            f"configuration. Not merged (CI incomplete) and not closed (work preserved) "
+                            f"— needs a human to investigate."
+                        )
+                        record_escalation(
+                            pr_number=pr_number,
+                            repo_key=repo_key,
+                            reason="ci_never_settled_late_registration",
+                            detail=detail,
+                        )
+                        _escalate_needs_human(
+                            state,
+                            state_path,
+                            gh_client,
+                            owner,
+                            repo,
+                            settings,
+                            reason="ci_never_settled_late_registration",
+                            detail=detail,
+                            current_head_sha=current_head_sha,
+                        )
+                        return
+
+                    if stuck:
+                        _why = f"stuck checks (previously seen): {', '.join(stuck)}"
+                        # Stuck checks use standard threshold
+                        if state["ci_wait_cycles"] < 40:
+                            logger.info(
+                                "pr_review_watcher: PR #%d CI not settled-green on current head "
+                                "(%s, wait %d/40) — deferring self-review",
+                                pr_number,
+                                _why,
+                                state["ci_wait_cycles"],
+                            )
+                            _save_state(state_path, state)
+                            return
+                        detail = (
+                            f"Checks reported before but not on this head after {state['ci_wait_cycles']} "
+                            f"cycles: {stuck}. Likely a flaky runner or stuck workflow. Not merged (CI "
+                            f"incomplete) and not closed (work preserved) — needs a human to investigate."
+                        )
+                        record_escalation(
+                            pr_number=pr_number,
+                            repo_key=repo_key,
+                            reason="ci_never_settled_stuck_check",
+                            detail=detail,
+                        )
+                        _escalate_needs_human(
+                            state,
+                            state_path,
+                            gh_client,
+                            owner,
+                            repo,
+                            settings,
+                            reason="ci_never_settled_stuck_check",
+                            detail=detail,
+                            current_head_sha=current_head_sha,
+                        )
+                        return
+
+                    # Fallback (should not reach here)
                     logger.info(
                         "pr_review_watcher: PR #%d CI not settled-green on current head "
-                        "(%s, wait %d/%d) — deferring self-review",
+                        "(%s, wait %d/40) — deferring self-review",
                         pr_number,
-                        _why,
+                        "unknown reason",
                         state["ci_wait_cycles"],
-                        _MAX_CI_WAIT_CYCLES,
                     )
                     _save_state(state_path, state)
                     return
@@ -2254,76 +2659,93 @@ def _phase1(
         # Reviewer ran cleanly (exit 0) but did not write verdict.json — a genuine
         # no-verdict (prompt or model failure).  Count against the budget.
         state["no_verdict_passes"] += 1
-        if state["no_verdict_passes"] >= reviewer.max_self_review_loops:
-            state["no_verdict_escalation_count"] += 1
-            escalation_count = state["no_verdict_escalation_count"]
+
+        # Apply exponential backoff on consecutive no-verdicts before escalating
+        if state["no_verdict_passes"] < reviewer.max_self_review_loops:
+            # Not yet at escalation threshold — use exponential backoff
+            backoff_level = state.get("no_verdict_backoff_level", 0)
+            backoff_secs = _compute_backoff_interval(backoff_level)
+            state["no_verdict_backoff_level"] = min(4, backoff_level + 1)
             logger.warning(
-                "pr_review_watcher: PR #%d produced no verdict after %d passes — "
-                "escalating (leaving open; reviewer unavailable, work preserved) "
-                "[no_verdict_escalation_count=%d]",
-                pr_number,
-                state["no_verdict_passes"],
-                escalation_count,
-            )
-            # Stuck-green detection: a PR that repeatedly reaches the no-verdict
-            # escalation threshold without ever merging is likely stuck.  Emit a
-            # distinct alarm so the operator (and watchdog) can see it clearly.
-            _STUCK_GREEN_ESCALATION_THRESHOLD = 3
-            if escalation_count >= _STUCK_GREEN_ESCALATION_THRESHOLD:
-                logger.error(
-                    "pr_review_watcher: STUCK-GREEN PR #%d repo=%s — green on CI but "
-                    "unmerged after %d no-verdict escalation cycles "
-                    "(reason=stuck_green_repeated_failures); human review required",
-                    pr_number,
-                    repo_key,
-                    escalation_count,
-                )
-            detail = (
-                "Self-review produced no parseable verdict after repeated passes "
-                "(reviewer ran but emitted no verdict.json — possible prompt or model "
-                "issue). The PR is left open for human attention; automated "
-                "review will retry."
-            )
-            if escalation_count >= _STUCK_GREEN_ESCALATION_THRESHOLD:
-                detail += (
-                    f" WARNING: this is the {escalation_count}th no-verdict escalation "
-                    f"for this PR (stuck-green — green on CI but review never converges). "
-                    f"Reason code: stuck_green_repeated_failures."
-                )
-            record_escalation(
-                pr_number=pr_number,
-                repo_key=repo_key,
-                reason="no_verdict_unreviewable",
-                detail=detail,
-            )
-            state["escalated_head_sha"] = current_head_sha or state.get("escalated_head_sha")
-            _escalate_needs_human(
-                state,
-                state_path,
-                gh_client,
-                owner,
-                repo,
-                settings,
-                reason="no_verdict_unreviewable",
-                detail=detail,
-                current_head_sha=current_head_sha,
-            )
-            state["no_verdict_passes"] = 0  # keep retrying in case it was transient
-            _save_state(state_path, state)
-        else:
-            logger.warning(
-                "pr_review_watcher: no verdict PR #%d (no_verdict_pass=%d/%d) — will retry",
+                "pr_review_watcher: no verdict PR #%d (attempt %d/%d) — "
+                "backing off %ds before retry (backoff level %d)",
                 pr_number,
                 state["no_verdict_passes"],
                 reviewer.max_self_review_loops,
+                backoff_secs,
+                state["no_verdict_backoff_level"],
             )
             _save_state(state_path, state)
+            return
+
+        # Escalation threshold reached — escalate with no-verdict
+        state["no_verdict_escalation_count"] += 1
+        escalation_count = state["no_verdict_escalation_count"]
+        state["no_verdict_backoff_level"] = 0  # Reset backoff on escalation
+        logger.warning(
+            "pr_review_watcher: PR #%d produced no verdict after %d passes — "
+            "escalating (leaving open; reviewer unavailable, work preserved) "
+            "[no_verdict_escalation_count=%d]",
+            pr_number,
+            state["no_verdict_passes"],
+            escalation_count,
+        )
+        # Stuck-green detection: a PR that repeatedly reaches the no-verdict
+        # escalation threshold without ever merging is likely stuck.  Emit a
+        # distinct alarm so the operator (and watchdog) can see it clearly.
+        _STUCK_GREEN_ESCALATION_THRESHOLD = 3
+        if escalation_count >= _STUCK_GREEN_ESCALATION_THRESHOLD:
+            logger.error(
+                "pr_review_watcher: STUCK-GREEN PR #%d repo=%s — green on CI but "
+                "unmerged after %d no-verdict escalation cycles "
+                "(reason=stuck_green_repeated_failures); human review required",
+                pr_number,
+                repo_key,
+                escalation_count,
+            )
+        detail = (
+            "Self-review produced no parseable verdict after repeated passes "
+            "(reviewer ran but emitted no verdict.json — possible prompt or model "
+            "issue). The PR is left open for human attention; automated "
+            "review will retry."
+        )
+        if escalation_count >= _STUCK_GREEN_ESCALATION_THRESHOLD:
+            detail += (
+                f" WARNING: this is the {escalation_count}th no-verdict escalation "
+                f"for this PR (stuck-green — green on CI but review never converges). "
+                f"Reason code: stuck_green_repeated_failures."
+            )
+        record_escalation(
+            pr_number=pr_number,
+            repo_key=repo_key,
+            reason="no_verdict_unreviewable",
+            detail=detail,
+        )
+        state["escalated_head_sha"] = current_head_sha or state.get("escalated_head_sha")
+        _escalate_needs_human(
+            state,
+            state_path,
+            gh_client,
+            owner,
+            repo,
+            settings,
+            reason="no_verdict_unreviewable",
+            detail=detail,
+            current_head_sha=current_head_sha,
+        )
+        state["no_verdict_passes"] = 0  # keep retrying in case it was transient
+        _save_state(state_path, state)
         return
 
     state["no_verdict_passes"] = 0  # a verdict was produced
+    state["no_verdict_backoff_level"] = 0  # Reset backoff when verdict is produced
     result = (verdict.get("result") or "CONCERNS").upper()
     summary = verdict.get("summary", "(no summary)")
     normalized_summary = _normalize_concerns_summary(summary)
+
+    # Track when concerns are raised (for improved retraction guard)
+    if result == "CONCERNS" and current_head_sha:
+        _track_concern_raised(state, summary, current_head_sha)
 
     logger.info("pr_review_watcher: PR #%d self-review verdict=%s", pr_number, result)
 

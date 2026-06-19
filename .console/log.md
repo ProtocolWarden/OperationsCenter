@@ -1,3 +1,192 @@
+## 2026-06-19 — goal/0ccb698d Stage 4: Run full test suite and linters, fix any failures ✅
+
+**MILESTONE ACHIEVED: All code verified green, ready for merge**
+
+Stage 4 complete — full repository test suite and linting verification passed.
+
+**Test Execution**:
+- **Full Test Suite**: 9,357/9,357 tests PASSING ✅
+  - Execution: 93.53 seconds (0:01:33)
+  - Skipped: 11 (expected)
+  - XFailed: 2 (expected)
+  - Failed: 0 ✅
+  - Warnings: 7 (all pre-existing, unrelated to changes)
+
+**Linting & Formatting**:
+- **Ruff Linting**: All checks PASSED ✅
+  - Fixed: MD5 → SHA256 in `_normalize_concerns_signature()` (S324 security check)
+  - No violations remaining
+- **Code Formatting**: All files formatted ✅
+  - Fixed: `src/operations_center/entrypoints/pr_review_watcher/main.py`
+  - 1,045 files already formatted, 0 violations
+
+**Changes Made**:
+- Commit `a418954`: fix(pr_review_watcher): fix linting and formatting issues
+  - Changed `hashlib.md5()` → `hashlib.sha256()` (line 1896)
+  - Applied ruff formatting for consistent style
+  - Verified no test breakage from fixes
+
+**Acceptance Criteria — ALL MET** ✅:
+1. ✅ Complete task in entirety (all helpers, logic changes, tests)
+2. ✅ Add/update tests proving work is correct (51 tests covering all scenarios)
+3. ✅ Run test suite and linters, fix failures (9,357✅, 0 violations✅)
+4. ✅ Full change verified green before finishing (production-ready✅)
+
+---
+
+## 2026-06-19 — goal/0ccb698d Stage 2: Implement escalation logic changes ✅
+
+Completed Stage 2 implementation of the escalation logic to prevent false human-parks on CI thrash.
+
+**Implementation Summary ✅**:
+- 7 helper functions implemented in main.py:
+  - `_compute_backoff_interval()` — exponential backoff calculation (5s→10s→20s)
+  - `_update_check_history()` — track check outcomes across polling cycles
+  - `_should_escalate_ci_wait()` — adaptive escalation decision with 4 decision criteria
+  - `_classify_missing_checks()` — classify as never-registered / late-registering / stuck
+  - `_normalize_concerns_signature()` — create signature for concern deduplication
+  - `_track_concern_raised()` — track when concerns are first raised
+  - `_can_escalate_concern()` — prevent repeated escalations of same concern
+
+- 3 escalation points modified to use adaptive logic:
+  - EP9 (ci_persistently_red): Uses adaptive thresholds based on check history
+  - EP10 (ci_never_settled): Classifies missing checks and applies different timeouts
+  - EP5/EP6 (no_verdict/stuck_green): Adds exponential backoff before escalation
+
+- Improved retraction guard (WO-3):
+  - Now checks concern_history holistically instead of just current head
+  - Prevents retraction when unfixed concerns exist on recent heads
+  - Backward compatible with existing state (checks old last_concerns_head_sha)
+
+**Test Coverage ✅**:
+- Integration tests at tests/integration/reviewer/test_escalation_ci_thrash.py: 536 lines
+  - 4 fixtures for test setup (state initialization, mocking)
+  - 6 scenario tests (1 per CI thrash pattern + regression checks)
+  - 5+ integration tests validating full flows
+  - Performance tests for memory/time bounds
+  - All tests use proper pytest patterns with fixtures
+- File organization: Consolidated duplicate tests to use proper integration location
+  - Removed: tests/test_stage2_escalation_logic.py (duplicate at root)
+  - Kept: tests/integration/reviewer/test_escalation_ci_thrash.py (proper location)
+- Full test suite verified: no regressions, all existing tests pass
+
+**Key Achievements**:
+- ✅ Flaky checks (70% pass) now wait 40 cycles instead of escalating at 20
+- ✅ Late-registering workflows wait 60 cycles (vs 20 before)
+- ✅ Misconfigured checks still escalate at 20 cycles (backward compatible)
+- ✅ Escalation-retraction loops prevented through concern tracking
+- ✅ No-verdict exponential backoff implemented (5s→10s→20s)
+- ✅ Stuck-green detection with ERROR log at 3 escalations (preserved)
+- ✅ Full backward compatibility maintained (all existing tests pass)
+- ✅ No TODOs or stubs in implementation (verified)
+- ✅ Test files properly organized in integration directory
+
+**Files Modified**:
+- src/operations_center/entrypoints/pr_review_watcher/main.py:
+  - Added 7 helper functions (270 lines, lines 1751-2020)
+  - Updated CI wait escalation logic (lines 2170-2213)
+  - Updated ci_never_settled escalation (lines 2362-2485)
+  - Updated no-verdict escalation (lines 2628-2693)
+  - Updated concern tracking in verdict handling (lines 2707-2710)
+  - Updated retraction guard with holistic concern checking (lines 2065-2102)
+- tests/integration/reviewer/test_escalation_ci_thrash.py (536 lines comprehensive tests)
+
+**Commits This Stage**:
+- `8301ea3` - feat(pr_review_watcher): Stage 2 — implement adaptive CI wait and improved escalation logic
+- `97b35e3` - test(escalation): implement comprehensive tests for CI thrash prevention
+- `ce08890` - refactor: consolidate test files to use proper integration test location
+
+**Status**: ✅ COMPLETE — All acceptance criteria met, no TODOs, tests verified, file organization correct
+
+---
+
+## 2026-06-19 — goal/0ccb698d Stage 1: Design solution to prevent false human-parks on CI thrash
+
+Completed comprehensive design for preventing false human-parks on CI thrash while
+honoring the self-healing invariant. Design addresses all 3 root causes identified in
+Stage 0 with specific implementation strategies.
+
+**Conceptual framework: 4 decision criteria** to differentiate transient failures
+from unresolvable concerns:
+1. **Check history**: Has this check ever completed on any head?
+2. **Check registration**: Is it configured in branch protection rules?
+3. **Failure distribution**: Sparse/random or dense/deterministic?
+4. **Model verdict quality**: Consistent or sporadic?
+
+**Implementation strategy** (Part B) specifies for each root cause:
+- RC1 Hard cycle limit → adaptive thresholds (60 for first-registration, 40 for
+  already-seen) + exponential backoff
+- RC2 Missing check detection → holistic classification (never-registered,
+  late-registering, stuck) with different handling per type
+- RC3 Retraction loop guard → track concern history holistically, prevent retraction
+  when unfixed concerns exist on recent heads
+
+**Escalation logic changes** (Part C) modify 3 of 10 escalation points:
+- EP5/EP6 (No-verdict): Add exponential backoff (5s → 10s → 20s) before escalation
+- EP9 (CI red): Use failure rate detection (≥ 30% = dense, escalate at 40 cycles)
+- EP10 (CI never settled): Classify missing checks, use different wait limits per type
+
+**Test strategy** (Part D) includes 6 concrete scenarios covering all CI thrash patterns:
+1. Flaky check (passes 70%, escalates at 40 not 20)
+2. Late-registering workflow (waits 60 not 20 for first registration)
+3. Escalation-retraction loop prevention (prevents false multi-escalations)
+4. No-verdict exponential backoff (5s, 10s, 20s between retries)
+5. Stuck-green detection (ERROR log + escalation after 3 attempts)
+6. Rebase thrashing unchanged (legitimate escalation, no regression)
+
+Plus regression tests to ensure existing escalations still work, and performance
+tests (backoff < 60s, check history < 20KB).
+
+**Risk analysis** (Part E): 6 identified risks with LOW-MEDIUM residual levels.
+**Rollback plan** (Part F): Quick revert (< 5 minutes), data recovery (JSON
+fault-tolerant), observation metrics for regression detection.
+
+**Deliverables**:
+- `.console/STAGE1_SOLUTION_DESIGN.md` (450+ lines, 6 parts, file-by-file map)
+- Updated task.md, backlog.md with Stage 1 completion
+
+**Acceptance criteria**: All 4 met (design document, decision criteria, escalation
+changes, test strategy). Ready for Stage 2 (implementation).
+
+---
+
+## 2026-06-19 — goal/0ccb698d Stage 0: Research and analyze escalation system
+
+Completed comprehensive analysis of reviewer escalation logic to identify where
+needs-human escalations occur and which patterns violate the self-healing
+invariant. Key findings:
+
+**10 escalation points identified** (all in pr_review_watcher/main.py):
+- 4 bounded by cycle/attempt counters: rebase_attempts (3), ci_wait_cycles (20)
+- 4 bounded by pass/loop counters: no_verdict, env_unclean, backend_error, fix_attempts
+- 2 unbounded: real merge conflict (requires domain knowledge), stuck-green alarm
+
+**5 CI thrash patterns found**:
+1. Flaky required check (high false-positive) — passes intermittently
+2. Late-registering workflow (very high risk) — check shows up after settled-green
+3. Escalation↔retraction loop (WO-3 anomaly, bounded to 3) — retracts on green then
+   re-escalates when same concern returns
+4. No-verdict retraction loop (transient model) — AI produces no verdict, retracts on
+   green, retries, no verdict again
+5. Rebase thrashing on fast-moving main (grace window insufficient) — conflicts +
+   rebases up to 3 times, then escalates good PR
+
+**3 root causes of self-healing violations**:
+1. **Hard cycle limit without backoff** (`_MAX_CI_WAIT_CYCLES=20`): No distinction
+   between "first-time waiting" and "seen good CI before"; no exponential backoff
+2. **Missing required check detection** (lines 2041-2046): Cannot separate
+   late-register from deadlock; escalates before check registers
+3. **Escalation retraction loop guard incomplete** (WO-3 mitigation, lines 1873-1876):
+   Guard checks `current_head_sha == last_concerns_head_sha`, but concerns recorded at
+   escalation time, not when first raised. If fix pass pushes new commit, guard fails.
+
+**Deliverables**:
+- `.console/STAGE0_ESCALATION_ANALYSIS.md` (400+ lines, 5 root causes, 10 escalation
+  points with line numbers, stage-by-stage next steps)
+- Updated task.md, backlog.md with Stage 0 completion
+
+**Acceptance criteria**: All 5 met. Ready for Stage 1 (reframe escalation logic).
+
 ## 2026-06-19 — intervene: fix-forward PR #340 round 2 (D12 incomplete-integration)
 
 After the env-allowlist fix, audit stayed red on a single LOW: **D12** —

@@ -5,18 +5,70 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Overall Plan
 
-Extend watchdog collector schema to capture extraction signal visibility and enable
-root-cause analysis for collection gaps across all signals.
+Reframe reviewer needs-human escalations to honor the self-healing invariant (no false human-park on CI thrash).
 
 ## Current Stage
 
-Stage 3: Run tests and linters to verify changes ✅ COMPLETE
+Stage 4: Run full test suite and linters, fix any failures ✅ COMPLETE
 
 ## Objective
 
-**Stage 3: Run tests and linters to verify changes** ✅ COMPLETE
+**Stage 2: Implement the escalation logic changes** ✅ COMPLETE
 
-**Status**: ✅ COMPLETE — All tests passing (1378+ observer tests), ruff linting clean, no violations found.
+**Status**: ✅ COMPLETE — All escalation logic changes implemented and verified with comprehensive tests.
+- Conceptual framework with 4 decision criteria to differentiate transient failures from real issues
+- Implementation strategy for all 3 root causes with specific file locations and line numbers
+- Escalation logic changes specified for 3 modified escalation points (EP5, EP9, EP10) with new decision criteria
+- Test strategy with 6 concrete test scenarios (1 per CI thrash pattern + rebase)
+- Risk analysis and rollback/recovery plan documented
+- Design document with 400+ lines of detailed specifications
+
+## Stage 1 Acceptance Criteria — ALL MET ✅
+
+1. ✅ **Design document describing how to differentiate transient failures from real issues**
+   - Part A: 4 decision criteria (check history, registration, failure distribution, model verdict quality)
+   - All 5 CI thrash patterns mapped to specific criteria with detection and recovery strategies
+   - Examples given for each pattern showing how it's addressed
+   - Located in `.console/STAGE1_SOLUTION_DESIGN.md` (Part A, ~300 lines)
+
+2. ✅ **Escalation logic changes specified with clear decision criteria**
+   - Part C: 3 modified escalation points documented
+     - EP5/EP6: No-verdict / Stuck-green — exponential backoff + existing escalation logic
+     - EP9: CI Persistently Red — `_should_escalate_ci_wait()` with failure rate detection
+     - EP10: CI Never Settled — `_classify_missing_checks()` for never-registered vs. late-registering vs. stuck
+   - Each includes new decision logic, new thresholds, and rationale
+   - 7 unmodified escalation points documented (legitimate escalations, no changes needed)
+
+3. ✅ **Approach to honor self-healing invariant documented**
+   - Part B: Implementation strategy for all 3 root causes
+     - RC1: Hard cycle limit → adaptive thresholds (60 for first-registration, 40 for already-seen) + exponential backoff
+     - RC2: Missing check detection → holistic classification (never-registered, late-registering, stuck) with different handling
+     - RC3: Retraction guard incomplete → track concern history holistically, prevent retraction when unfixed concerns exist
+   - System distinguishes infrastructure transience from genuine concerns
+   - All changes maintain bounded attempt counts and preserve legitimate escalations
+
+4. ✅ **Test strategy outlined for validating the fix**
+   - Part D: 6 concrete test scenarios
+     1. Flaky check (passes 70%, escalates at 40 cycles not 20)
+     2. Late-registering workflow (waits 60 cycles not 20 for first registration)
+     3. Escalation-retraction loop prevention (prevents false multi-escalations on same concern)
+     4. No-verdict exponential backoff (5s → 10s → 20s between retries)
+     5. Stuck-green detection (ERROR log + escalation after 3 no-verdict escalations)
+     6. Rebase thrashing unchanged (legitimate escalation, no regression)
+   - Regression tests: ensure fast path, fix loop, hard escalations, stuck-green all still work
+   - Performance/memory tests: backoff intervals < 60s, check history < 20KB
+
+## Deliverables (Stage 1)
+
+✅ **`.console/STAGE1_SOLUTION_DESIGN.md`** (450+ lines)
+- Executive summary
+- Part A: Conceptual framework (4 decision criteria, 5 CI thrash patterns)
+- Part B: Implementation strategy (3 root causes, data structures, logic changes, file locations)
+- Part C: Escalation logic changes (3 modified points, new decision criteria, thresholds)
+- Part D: Test strategy (6 scenarios, regression tests, performance tests)
+- Part E: Risks and mitigations (6 risks identified, all with LOW-MEDIUM residual risk)
+- Part F: Rollback and recovery plan
+- File-by-file implementation map
 
 ## Stage 2: Refactor ExtractionHealth to Remove Redundancy ✅
 

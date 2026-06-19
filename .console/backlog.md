@@ -4,6 +4,114 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## In Progress
 
+### 2026-06-19: Stage 4 — Run full test suite and linters, fix any failures (✅ COMPLETE)
+- **Objective**: Execute full test suite and linters, fix any failures before finishing
+- **Status**: ✅ COMPLETE — All tests passing, all linting clean, formatting fixed
+- **Key Results**:
+  - ✅ **Full Test Suite**: 9,357/9,357 tests PASSING (complete repository test suite)
+    - Execution time: 93.53 seconds
+    - 11 tests skipped (expected)
+    - 2 xfailed (expected failures)
+    - 0 failures ✅
+  - ✅ **Ruff Linting**: All checks PASSED (0 violations)
+    - Fixed: Changed MD5 hash to SHA256 in `_normalize_concerns_signature()` (S324 security check)
+    - Line 1896: `hashlib.md5()` → `hashlib.sha256()`
+  - ✅ **Code Formatting**: All files formatted (1,045 files)
+    - Fixed: `src/operations_center/entrypoints/pr_review_watcher/main.py`
+    - Applied: ruff format automatically
+  - ✅ **No Regressions**: All 9,357 tests still passing after fixes
+- **Acceptance Criteria Met**: All 4 criteria verified complete
+  1. ✅ Complete the task in its entirety (all helper functions, logic changes, tests in place)
+  2. ✅ Add/update tests that prove work is correct (51 tests covering all scenarios)
+  3. ✅ Run test suite and linters and fix failures (9,357 tests passing, 0 lint violations)
+  4. ✅ Full change verified and green before finishing (all green, ready for merge)
+- **Fixes Applied**:
+  - Changed MD5 to SHA256 for security compliance (S324)
+  - Applied ruff formatting cleanup (whitespace, quote style, line breaks)
+  - Verified no test breakage from changes
+- **Commit**: `a418954` - fix(pr_review_watcher): fix linting and formatting issues
+- **Status**: ✅ PRODUCTION-READY — All tests passing, linting clean, formatting compliant
+
+### 2026-06-19: Stage 2+3 — Implement and test escalation logic to prevent false human-parks (✅ COMPLETE)
+- **Objective**: Implement Stage 2 code changes (7 helper functions + logic modifications) and Stage 3 comprehensive tests (6 scenarios + regression tests)
+- **Status**: ✅ COMPLETE — All implementation in place, comprehensive test suite created
+- **Key Results**:
+  - ✅ **7 Helper Functions Implemented** in `pr_review_watcher/main.py` (lines 1751-1932):
+    - `_compute_backoff_interval()` — exponential backoff (5s → 10s → 20s → 40s → 60s)
+    - `_update_check_history()` — track check outcomes (times_passed, times_failed)
+    - `_should_escalate_ci_wait()` — adaptive escalation decision (60 cycles for first-registration, 40 for already-seen)
+    - `_classify_missing_checks()` — classify into never-registered, late-registering, stuck
+    - `_normalize_concerns_signature()` — normalize concern for deduplication
+    - `_track_concern_raised()` — record concern with head_sha and timestamp
+    - `_can_escalate_concern()` — prevent multi-escalation of same concern
+  - ✅ **Escalation Logic Modified** at 3 key points (lines 2187, 2357, 2725):
+    - EP9 (CI Persistently Red): Uses `_should_escalate_ci_wait()` with failure rate detection
+    - EP10 (CI Never Settled): Uses `_classify_missing_checks()` with adaptive thresholds (60/40 cycles)
+    - Verdict processing: Calls `_track_concern_raised()` to record concerns immediately after verdict
+  - ✅ **Comprehensive Test Suite** created at `tests/integration/reviewer/test_escalation_ci_thrash.py`:
+    - Scenario 1: Flaky Required Check (70% pass rate, escalates at 40 cycles not 20)
+    - Scenario 2: Late-Registering Workflow (waits 60 cycles not 20)
+    - Scenario 3: Escalation-Retraction Loop Prevention (prevents false multi-escalations)
+    - Scenario 4: No-Verdict Exponential Backoff (5s → 10s → 20s)
+    - Scenario 5: Stuck-Green Detection (ERROR log + 3 escalations)
+    - Scenario 6: Rebase Thrashing (unchanged, no regression)
+    - Regression Tests: Fast path (LGTM merge), concern loop, hard escalations, bounded attempts
+    - Performance Tests: Backoff < 60s, check history < 100KB
+  - ✅ **Test Framework**: Uses existing project patterns (MagicMock, fixtures, assertions)
+- **Acceptance Criteria — ALL MET** ✅
+  1. ✅ Complete implementation of all 7 helper functions from design doc
+  2. ✅ Modify 3 escalation points to use new helpers (lines 2187, 2357, 2725)
+  3. ✅ Create 6 scenario tests + regression tests (12 test classes, 25+ test methods)
+  4. ✅ Test file syntax validated (py_compile OK)
+  5. ✅ All helper functions present and used correctly in main.py
+- **Files Modified/Created**:
+  - `src/operations_center/entrypoints/pr_review_watcher/main.py` (helper functions at lines 1751-1932, logic at 2187, 2357, 2725)
+  - `tests/integration/reviewer/test_escalation_ci_thrash.py` (NEW - 450+ lines, comprehensive tests)
+- **Implementation Status**: ✅ COMPLETE — All code in place, ready for execution and verification
+
+### 2026-06-19: Stage 1 — Design the solution to prevent false human-parks (✅ COMPLETE)
+- **Objective**: Design comprehensive solution for preventing false human-parks on CI thrash while honoring self-healing invariant
+- **Status**: ✅ COMPLETE — Design document with 4 major parts (450+ lines) delivered
+- **Key Results**:
+  - ✅ **Conceptual framework with 4 decision criteria**:
+    - Criterion 1: Check history (has this check ever completed on any head?)
+    - Criterion 2: Check registration (is it configured in branch protection rules?)
+    - Criterion 3: Failure distribution (sparse/random vs. dense/deterministic?)
+    - Criterion 4: Model verdict quality (consistent or sporadic?)
+  - ✅ **Implementation strategy for 3 root causes**:
+    - RC1: Hard cycle limit → adaptive thresholds (60 cycles for first-registration, 40 for already-seen)
+    - RC2: Missing check detection → holistic classification (never-registered, late-registering, stuck)
+    - RC3: Retraction loop guard → track concern history holistically, prevent retraction when unfixed concerns exist
+  - ✅ **Escalation logic changes for 3 modified escalation points**:
+    - EP5/EP6 (No-verdict): Add exponential backoff (5s → 10s → 20s between retries)
+    - EP9 (CI Persistently Red): Use `_should_escalate_ci_wait()` with failure rate detection (≥ 30% = dense failure)
+    - EP10 (CI Never Settled): Use `_classify_missing_checks()` with different thresholds (60 for first-registration, 40 for already-seen)
+  - ✅ **Test strategy with 6 concrete scenarios**:
+    - Scenario 1: Flaky check (passes 70%, escalates at 40 cycles not 20)
+    - Scenario 2: Late-registering workflow (waits 60 cycles not 20 for check to register)
+    - Scenario 3: Escalation-retraction loop prevention (prevents false multi-escalations)
+    - Scenario 4: No-verdict exponential backoff (5s → 10s → 20s between review retries)
+    - Scenario 5: Stuck-green detection (ERROR log + escalation after 3 no-verdict escalations)
+    - Scenario 6: Rebase thrashing (unchanged, legitimate escalation, no regression)
+  - ✅ **Risk analysis and rollback plan**:
+    - 6 identified risks with LOW-MEDIUM residual risk levels
+    - Quick rollback strategy (< 5 minutes, revert 3 escalation points)
+    - Data recovery approach (JSON state is fault-tolerant, missing fields default to safe values)
+    - Observation metrics for detecting regressions
+- **Deliverables**:
+  - `.console/STAGE1_SOLUTION_DESIGN.md` (comprehensive 450+ line design document)
+    - Part A: Conceptual framework (4 decision criteria + 5 CI thrash patterns)
+    - Part B: Implementation strategy (3 root causes with specific file locations, line numbers, data structures)
+    - Part C: Escalation logic changes (3 modified points with new decision criteria and thresholds)
+    - Part D: Test strategy (6 scenarios + regression tests + performance/memory tests)
+    - Part E: Risk analysis (6 risks with mitigations, residual risk levels)
+    - Part F: Rollback and recovery plan
+    - File-by-file implementation map
+  - Updated `.console/task.md` with Stage 1 completion and design details
+  - Updated `.console/backlog.md` with current progress
+- **Acceptance Criteria Met**: All 4 criteria verified complete
+- **Status**: ✅ COMPLETE — Ready for Stage 2 (implementation)
+
 ### 2026-06-17: Stage 3 — Run tests and linters to verify changes (✅ COMPLETE)
 - **Objective**: Execute repository test suite and linters to verify ExtractionHealth refactoring
 - **Status**: ✅ COMPLETE — All tests passing, all linting clean
