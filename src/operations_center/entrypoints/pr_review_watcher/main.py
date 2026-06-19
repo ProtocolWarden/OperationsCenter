@@ -817,6 +817,52 @@ def _attempt_auto_rebase(repo_cfg, head_ref: str, settings, pr_number: int) -> s
         return "error"
 
 
+_DOC_PATH_SUFFIXES = (".md", ".markdown", ".rst", ".txt")
+
+
+def _is_doc_path(path: str) -> bool:
+    """True for documentation files — any doc extension, or anything under docs/."""
+    p = path.strip().lower()
+    return bool(p) and (p.endswith(_DOC_PATH_SUFFIXES) or p.startswith("docs/") or "/docs/" in p)
+
+
+def _files_from_diff(diff: str) -> list[str]:
+    """Extract changed file paths from a unified diff's ``diff --git a/X b/Y`` headers."""
+    files: list[str] = []
+    for line in diff.splitlines():
+        if line.startswith("diff --git "):
+            parts = line.split(" b/", 1)
+            if len(parts) == 2 and parts[1].strip():
+                files.append(parts[1].strip())
+    return files
+
+
+def _diff_is_docs_only(files) -> bool:
+    """True when every changed file is documentation (and there is at least one).
+
+    A docs-only diff gets a review rubric that does NOT demand in-diff proof of
+    facts a document legitimately references but cannot contain (CI runs, secrets,
+    sibling/other-repo PRs) — the over-flagging that looped #334.
+    """
+    fs = [f for f in (files or []) if f]
+    return bool(fs) and all(_is_doc_path(f) for f in fs)
+
+
+# Review rubric injected when the diff is documentation-only — see _diff_is_docs_only.
+_DOC_ONLY_REVIEW_RUBRIC = (
+    "\n\n## This diff is DOCUMENTATION-ONLY — apply the docs rubric\n"
+    "Every changed file is documentation. Review it for **internal consistency, "
+    "accuracy against the repository's actual state, broken cross-references, and "
+    "clarity**. Documentation legitimately summarizes and points to work that lives "
+    "OUTSIDE this diff (CI runs, secrets, sibling PRs, other repos). Therefore you "
+    "MUST NOT raise CONCERNS of the form 'unverifiable in the diff', 'lacks CI "
+    "output / test evidence', 'claims changes not shown here', or 'references work "
+    "outside this diff' — demanding in-diff proof of an external fact is NOT a valid "
+    "concern for a docs PR. Raise CONCERNS only for statements that CONTRADICT the "
+    "repository's actual state, broken/dead references, or genuinely incoherent prose."
+)
+
+
 _REVIEWER_VERDICT_STATUS_CONTEXT = "reviewer-verdict"
 
 
@@ -2059,7 +2105,11 @@ def _phase1(
             + _file_lines
         )
     else:
+        _pr_files = _files_from_diff(diff)
         diff_excerpt = diff
+    # A documentation-only diff gets a rubric that doesn't demand in-diff proof of
+    # facts a doc legitimately references but can't contain (the #334 over-flagging).
+    docs_only = _diff_is_docs_only(_pr_files)
     title = pr_data.get("title", "")
 
     # Load optional campaign spec and Custodian findings for spec-aware review
@@ -2074,6 +2124,7 @@ def _phase1(
     custodian_section = (
         f"\n\n## Custodian static analysis\n\n{custodian_text}" if custodian_text else ""
     )
+    doc_rubric = _DOC_ONLY_REVIEW_RUBRIC if docs_only else ""
 
     goal_text = (
         "## TASK TYPE: Read-only code review\n"
@@ -2082,7 +2133,8 @@ def _phase1(
         f"PR #{pr_number}: {title}\n\n"
         f"```diff\n{diff_excerpt}\n```"
         f"{spec_section}"
-        f"{custodian_section}\n\n"
+        f"{custodian_section}"
+        f"{doc_rubric}\n\n"
         f"**Review checklist** (raise CONCERNS for any failure):\n"
         f"1. If a campaign spec is provided above, verify the diff implements EXACTLY what the spec\n"
         f"   requires — correct filenames, member names, member count, exports, tests, version bumps.\n"

@@ -2638,3 +2638,73 @@ def test_phase1_external_push_resets_budget(tmp_path: Path) -> None:
     loaded = watcher._load_state(sp)
     # Reset to 0, then dispatch incremented to 1 (fresh start).
     assert loaded["fix_attempts"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Doc-only review rubric: a documentation-only diff must NOT be flagged for
+# "unverifiable in-diff" facts a doc legitimately references (the #334 churn).
+# ---------------------------------------------------------------------------
+def test_is_doc_path_classification():
+    assert watcher._is_doc_path("docs/design/X.md")
+    assert watcher._is_doc_path(".console/log.md")
+    assert watcher._is_doc_path("README.rst")
+    assert watcher._is_doc_path("docs/diagram.png")  # anything under docs/
+    assert not watcher._is_doc_path("src/foo.py")
+    assert not watcher._is_doc_path(".console/reconcile.yaml")  # config, not docs
+
+
+def test_diff_is_docs_only():
+    assert watcher._diff_is_docs_only(["docs/X.md", ".console/log.md"])
+    assert not watcher._diff_is_docs_only(["docs/X.md", "src/foo.py"])  # mixed
+    assert not watcher._diff_is_docs_only([".custodian/config.yaml"])  # config
+    assert not watcher._diff_is_docs_only([])  # nothing changed
+
+
+def test_files_from_diff_parses_git_headers():
+    diff = "diff --git a/docs/X.md b/docs/X.md\n+hi\ndiff --git a/src/y.py b/src/y.py\n+x"
+    assert watcher._files_from_diff(diff) == ["docs/X.md", "src/y.py"]
+
+
+def test_phase1_docs_only_diff_injects_doc_rubric(tmp_path: Path) -> None:
+    state, sp = _make_state(tmp_path, phase="self_review", self_review_loops=0, fix_attempts=0)
+    gh = _make_gh()
+    gh.get_pr_diff.return_value = "diff --git a/docs/design/D.md b/docs/design/D.md\n+pointer to #330"
+    captured = {}
+
+    def _capture(_oc_root, goal_text, _state_key):
+        captured["goal"] = goal_text
+        return {"result": "LGTM", "summary": "ok"}
+
+    with (
+        patch.object(watcher, "_run_direct_review", side_effect=_capture),
+        patch.object(watcher, "_merge_and_done"),
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(head_sha="abc"), gh, "owner", "repo",
+            tmp_path, tmp_path / "cfg.yaml", SETTINGS,
+        )
+
+    assert "DOCUMENTATION-ONLY" in captured["goal"]
+    assert "demanding in-diff proof of an external fact is NOT a valid" in captured["goal"]
+
+
+def test_phase1_code_diff_omits_doc_rubric(tmp_path: Path) -> None:
+    state, sp = _make_state(tmp_path, phase="self_review", self_review_loops=0, fix_attempts=0)
+    gh = _make_gh()
+    gh.get_pr_diff.return_value = "diff --git a/src/foo.py b/src/foo.py\n+x = 1"
+    captured = {}
+
+    def _capture(_oc_root, goal_text, _state_key):
+        captured["goal"] = goal_text
+        return {"result": "LGTM", "summary": "ok"}
+
+    with (
+        patch.object(watcher, "_run_direct_review", side_effect=_capture),
+        patch.object(watcher, "_merge_and_done"),
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(head_sha="abc"), gh, "owner", "repo",
+            tmp_path, tmp_path / "cfg.yaml", SETTINGS,
+        )
+
+    assert "DOCUMENTATION-ONLY" not in captured["goal"]
