@@ -9,19 +9,15 @@ Tests cover the 6 key scenarios to prevent false human-parks on CI thrash:
 6. Rebase thrashing — legitimate escalation (unchanged regression test)
 """
 
-import pytest
 from datetime import UTC, datetime
-from pathlib import Path
-from unittest.mock import MagicMock, patch, call
 
 from operations_center.entrypoints.pr_review_watcher.main import (
-    _compute_backoff_interval,
-    _update_check_history,
-    _should_escalate_ci_wait,
     _classify_missing_checks,
+    _compute_backoff_interval,
     _normalize_concerns_signature,
+    _should_escalate_ci_wait,
     _track_concern_raised,
-    _can_escalate_concern,
+    _update_check_history,
 )
 
 
@@ -314,7 +310,10 @@ class TestFlakyCheckScenario:
         )
         assert should_escalate
         # Either dense_failure or threshold_exceeded is acceptable at 40 cycles
-        assert reason in ("ci_persistently_red_dense_failure", "ci_never_settled_threshold_exceeded")
+        assert reason in (
+            "ci_persistently_red_dense_failure",
+            "ci_never_settled_threshold_exceeded",
+        )
 
 
 class TestLateRegisteringWorkflowScenario:
@@ -388,8 +387,6 @@ class TestEscalationRetractionLoopScenario:
                 }
             },
         }
-
-        current_head_sha = "sha2"  # Fix pass pushed new commit
 
         # Improved guard: check if concern is still unfixed (raised on escalated head)
         has_unfixed = any(
