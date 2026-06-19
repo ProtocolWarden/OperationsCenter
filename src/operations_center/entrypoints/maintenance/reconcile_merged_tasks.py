@@ -86,9 +86,7 @@ def _state_name(issue: dict) -> str:
     return str(state or "").strip().lower()
 
 
-def find_closures(
-    issues: list[dict], merged_prs: list[dict], repo_key: str
-) -> list[TaskClosure]:
+def find_closures(issues: list[dict], merged_prs: list[dict], repo_key: str) -> list[TaskClosure]:
     """Pure matcher: which non-terminal `repo_key` tasks are closed by a merge.
 
     ``merged_prs`` are dicts with ``number``, ``title``, ``body``. Each task is
@@ -129,9 +127,7 @@ def find_closures(
             desc = str(issue.get("description") or issue.get("description_stripped") or "")
             for n in merged_numbers:
                 if f"#{n}" in desc or f"/{n}" in desc:
-                    closures.append(
-                        TaskClosure(repo_key, task_id, name, n, "in-review-pr-merged")
-                    )
+                    closures.append(TaskClosure(repo_key, task_id, name, n, "in-review-pr-merged"))
                     break
     return closures
 

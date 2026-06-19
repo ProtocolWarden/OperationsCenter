@@ -38,7 +38,9 @@ def test_normalize_extracts_family_dedup_category():
 
 
 def test_normalize_family_from_label_fallback():
-    issue = _issue("1", desc="no provenance here", labels=[{"name": "source-family: observation_coverage"}])
+    issue = _issue(
+        "1", desc="no provenance here", labels=[{"name": "source-family: observation_coverage"}]
+    )
     assert normalize_task(issue, _FAIL_COMMENT)["family"] == "observation_coverage"
 
 
@@ -51,7 +53,13 @@ def test_normalize_last_category_wins():
 
 
 def _norm(family, category, dedup, tid):
-    return {"task_id": tid, "title": f"t{tid}", "family": family, "dedup_key": dedup, "failure_category": category}
+    return {
+        "task_id": tid,
+        "title": f"t{tid}",
+        "family": family,
+        "dedup_key": dedup,
+        "failure_category": category,
+    }
 
 
 def test_two_backend_errors_same_family_trips_threshold():
@@ -96,10 +104,9 @@ def test_distinct_families_grouped_separately():
 
 
 def test_sorted_by_count_desc():
-    items = (
-        [_norm("hot", "backend_error", f"h{i}", str(i)) for i in range(3)]
-        + [_norm("low", "backend_error", f"l{i}", str(10 + i)) for i in range(2)]
-    )
+    items = [_norm("hot", "backend_error", f"h{i}", str(i)) for i in range(3)] + [
+        _norm("low", "backend_error", f"l{i}", str(10 + i)) for i in range(2)
+    ]
     stalls = find_stalls(items, threshold=2)
     assert [s.family for s in stalls] == ["hot", "low"]
 
@@ -123,7 +130,9 @@ class _FakeStore:
 def test_apply_escalates_once_and_suppresses_each_dedup():
     captures = []
     store = _FakeStore()
-    s = StalledFamily("fam", "backend_error", 2, task_ids=["1", "2"], dedup_keys=["k1", "k2"], titles=["t1", "t2"])
+    s = StalledFamily(
+        "fam", "backend_error", 2, task_ids=["1", "2"], dedup_keys=["k1", "k2"], titles=["t1", "t2"]
+    )
     res = apply_breaker([s], store=store, capture=lambda f, c, n: captures.append((f, c, n)))
     assert res == {"escalated": 1, "suppressed": 2}
     assert captures == [("fam", "backend_error", 2)]
@@ -132,7 +141,9 @@ def test_apply_escalates_once_and_suppresses_each_dedup():
 
 def test_apply_skips_already_rejected_dedup():
     store = _FakeStore(rejected=["k1"])
-    s = StalledFamily("fam", "backend_error", 2, task_ids=["1"], dedup_keys=["k1", "k2"], titles=["t1", "t2"])
+    s = StalledFamily(
+        "fam", "backend_error", 2, task_ids=["1"], dedup_keys=["k1", "k2"], titles=["t1", "t2"]
+    )
     res = apply_breaker([s], store=store, capture=lambda *a: None)
     assert res["suppressed"] == 1  # only k2 newly suppressed
     assert store.records == ["k2"]
@@ -154,7 +165,9 @@ def test_main_report_only(monkeypatch, capsys):
         mod, "scan", lambda *a, **k: [StalledFamily("fam", "backend_error", 3, dedup_keys=["k1"])]
     )
     applied = {"called": False}
-    monkeypatch.setattr(mod, "apply_breaker", lambda *a, **k: applied.__setitem__("called", True) or {})
+    monkeypatch.setattr(
+        mod, "apply_breaker", lambda *a, **k: applied.__setitem__("called", True) or {}
+    )
     rc = main(["--config", "x.yaml"])
     assert rc == 0
     assert "WOULD BREAK" in capsys.readouterr().out
@@ -163,7 +176,9 @@ def test_main_report_only(monkeypatch, capsys):
 
 def test_main_apply(monkeypatch, capsys):
     monkeypatch.setattr(mod, "load_settings", lambda _c: object())
-    monkeypatch.setattr(mod, "scan", lambda *a, **k: [StalledFamily("fam", "backend_error", 3, dedup_keys=["k1"])])
+    monkeypatch.setattr(
+        mod, "scan", lambda *a, **k: [StalledFamily("fam", "backend_error", 3, dedup_keys=["k1"])]
+    )
     monkeypatch.setattr(mod, "apply_breaker", lambda *a, **k: {"escalated": 1, "suppressed": 1})
     rc = main(["--config", "x.yaml", "--apply"])
     assert rc == 0

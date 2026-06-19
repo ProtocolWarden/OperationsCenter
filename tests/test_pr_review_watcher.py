@@ -552,8 +552,15 @@ def test_phase1_concern_escalation_not_retracted_on_green_ci(tmp_path: Path) -> 
         patch.object(watcher, "_merge_and_done") as mock_merge,
     ):
         watcher._phase1(
-            state, sp, _pr_data(head_sha="abc123"), gh, "owner", "repo",
-            tmp_path, tmp_path / "cfg.yaml", settings,
+            state,
+            sp,
+            _pr_data(head_sha="abc123"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            settings,
         )
 
     mock_review.assert_not_called()  # no fresh review to LGTM the same code
@@ -589,8 +596,15 @@ def test_phase1_blindspot_escalation_still_retracts_on_green_ci(tmp_path: Path) 
         patch.object(watcher, "_merge_and_done"),
     ):
         watcher._phase1(
-            state, sp, _pr_data(head_sha="abc123"), gh, "owner", "repo",
-            tmp_path, cfg, settings,
+            state,
+            sp,
+            _pr_data(head_sha="abc123"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            cfg,
+            settings,
         )
 
     loaded = watcher._load_state(sp)
@@ -2560,9 +2574,7 @@ def test_publish_reviewer_verdict_swallows_errors():
     gh = MagicMock()
     gh.set_commit_status.side_effect = RuntimeError("boom")
     # Best-effort: a status-post failure must never crash the review loop.
-    out = watcher._publish_reviewer_verdict(
-        gh, "o", "r", "sha", result="failure", description="x"
-    )
+    out = watcher._publish_reviewer_verdict(gh, "o", "r", "sha", result="failure", description="x")
     assert out is None
     gh.set_commit_status.assert_called_once()  # attempted despite the raise
 
@@ -2592,14 +2604,22 @@ def test_phase1_self_pushed_fix_does_not_reset_budget(tmp_path: Path) -> None:
 
     with (
         patch.object(
-            watcher, "_run_direct_review",
+            watcher,
+            "_run_direct_review",
             return_value={"result": "CONCERNS", "summary": "still unverifiable"},
         ),
         patch.object(watcher, "_run_fix_pass", return_value=True),
     ):
         watcher._phase1(
-            state, sp, _pr_data(head_sha="H1"), gh, "owner", "repo",
-            tmp_path, tmp_path / "cfg.yaml", SETTINGS,
+            state,
+            sp,
+            _pr_data(head_sha="H1"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            SETTINGS,
         )
 
     loaded = watcher._load_state(sp)
@@ -2629,14 +2649,22 @@ def test_phase1_external_push_resets_budget(tmp_path: Path) -> None:
 
     with (
         patch.object(
-            watcher, "_run_direct_review",
+            watcher,
+            "_run_direct_review",
             return_value={"result": "CONCERNS", "summary": "new concern on human fix"},
         ),
         patch.object(watcher, "_run_fix_pass", return_value=True),
     ):
         watcher._phase1(
-            state, sp, _pr_data(head_sha="HX"), gh, "owner", "repo",
-            tmp_path, tmp_path / "cfg.yaml", SETTINGS,
+            state,
+            sp,
+            _pr_data(head_sha="HX"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            SETTINGS,
         )
 
     loaded = watcher._load_state(sp)
@@ -2667,14 +2695,22 @@ def test_phase1_restart_mid_fix_does_not_reset_budget(tmp_path: Path) -> None:
 
     with (
         patch.object(
-            watcher, "_run_direct_review",
+            watcher,
+            "_run_direct_review",
             return_value={"result": "CONCERNS", "summary": "still"},
         ),
         patch.object(watcher, "_run_fix_pass", return_value=True),
     ):
         watcher._phase1(
-            state, sp, _pr_data(head_sha="H1"), gh, "owner", "repo",
-            tmp_path, tmp_path / "cfg.yaml", SETTINGS,
+            state,
+            sp,
+            _pr_data(head_sha="H1"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            SETTINGS,
         )
 
     loaded = watcher._load_state(sp)
@@ -2710,7 +2746,9 @@ def test_files_from_diff_parses_git_headers():
 def test_phase1_docs_only_diff_injects_doc_rubric(tmp_path: Path) -> None:
     state, sp = _make_state(tmp_path, phase="self_review", self_review_loops=0, fix_attempts=0)
     gh = _make_gh()
-    gh.get_pr_diff.return_value = "diff --git a/docs/design/D.md b/docs/design/D.md\n+pointer to #330"
+    gh.get_pr_diff.return_value = (
+        "diff --git a/docs/design/D.md b/docs/design/D.md\n+pointer to #330"
+    )
     captured = {}
 
     def _capture(_oc_root, goal_text, _state_key):
@@ -2722,8 +2760,15 @@ def test_phase1_docs_only_diff_injects_doc_rubric(tmp_path: Path) -> None:
         patch.object(watcher, "_merge_and_done"),
     ):
         watcher._phase1(
-            state, sp, _pr_data(head_sha="abc"), gh, "owner", "repo",
-            tmp_path, tmp_path / "cfg.yaml", SETTINGS,
+            state,
+            sp,
+            _pr_data(head_sha="abc"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            SETTINGS,
         )
 
     assert "DOCUMENTATION-ONLY" in captured["goal"]
@@ -2745,8 +2790,15 @@ def test_phase1_code_diff_omits_doc_rubric(tmp_path: Path) -> None:
         patch.object(watcher, "_merge_and_done"),
     ):
         watcher._phase1(
-            state, sp, _pr_data(head_sha="abc"), gh, "owner", "repo",
-            tmp_path, tmp_path / "cfg.yaml", SETTINGS,
+            state,
+            sp,
+            _pr_data(head_sha="abc"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            SETTINGS,
         )
 
     assert "DOCUMENTATION-ONLY" not in captured["goal"]

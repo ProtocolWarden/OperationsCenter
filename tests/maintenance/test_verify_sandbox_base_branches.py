@@ -37,9 +37,7 @@ def _repo(tmp_path, *, sandbox="sandbox", default="main", git=True):
     p = tmp_path
     if git:
         (p / ".git").mkdir(parents=True, exist_ok=True)
-    return SimpleNamespace(
-        local_path=str(p), sandbox_base_branch=sandbox, default_branch=default
-    )
+    return SimpleNamespace(local_path=str(p), sandbox_base_branch=sandbox, default_branch=default)
 
 
 def _settings(repos):
@@ -111,30 +109,44 @@ def test_heal_failure_records_error(tmp_path):
 
 
 def test_repo_without_local_path_is_dropped(tmp_path):
-    s = _settings({"R": SimpleNamespace(local_path=None, sandbox_base_branch="x", default_branch="main")})
+    s = _settings(
+        {"R": SimpleNamespace(local_path=None, sandbox_base_branch="x", default_branch="main")}
+    )
     res = scan(s, git=_FakeGit(), fetch=_noop_fetch)
     assert res == []  # no local checkout configured → not serviced here
 
 
 def test_main_exit_1_when_missing(tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr(mod, "load_settings", lambda _c: _settings({"R": _repo(tmp_path, sandbox="sandbox")}))
-    monkeypatch.setattr(mod, "scan", lambda *a, **k: [SandboxBranchResult("R", "sandbox", exists=False)])
+    monkeypatch.setattr(
+        mod, "load_settings", lambda _c: _settings({"R": _repo(tmp_path, sandbox="sandbox")})
+    )
+    monkeypatch.setattr(
+        mod, "scan", lambda *a, **k: [SandboxBranchResult("R", "sandbox", exists=False)]
+    )
     rc = main(["--config", "x.yaml"])
     assert rc == 1
     assert "MISSING" in capsys.readouterr().out
 
 
 def test_main_exit_0_when_all_present(tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr(mod, "load_settings", lambda _c: _settings({"R": _repo(tmp_path, sandbox="sandbox")}))
-    monkeypatch.setattr(mod, "scan", lambda *a, **k: [SandboxBranchResult("R", "sandbox", exists=True)])
+    monkeypatch.setattr(
+        mod, "load_settings", lambda _c: _settings({"R": _repo(tmp_path, sandbox="sandbox")})
+    )
+    monkeypatch.setattr(
+        mod, "scan", lambda *a, **k: [SandboxBranchResult("R", "sandbox", exists=True)]
+    )
     rc = main(["--config", "x.yaml"])
     assert rc == 0
     assert "OK" in capsys.readouterr().out
 
 
 def test_main_json_output(tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr(mod, "load_settings", lambda _c: _settings({"R": _repo(tmp_path, sandbox="sandbox")}))
-    monkeypatch.setattr(mod, "scan", lambda *a, **k: [SandboxBranchResult("R", "sandbox", exists=True, healed=True)])
+    monkeypatch.setattr(
+        mod, "load_settings", lambda _c: _settings({"R": _repo(tmp_path, sandbox="sandbox")})
+    )
+    monkeypatch.setattr(
+        mod, "scan", lambda *a, **k: [SandboxBranchResult("R", "sandbox", exists=True, healed=True)]
+    )
     rc = main(["--config", "x.yaml", "--json", "--heal"])
     import json as _json
 

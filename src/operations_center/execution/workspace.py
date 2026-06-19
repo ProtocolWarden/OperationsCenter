@@ -29,6 +29,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from operations_center.adapters.git.client import GitClient
+from operations_center.adapters.workspace.patch_applier import PatchApplier
 from operations_center.contracts.enums import FailureReasonCategory
 from operations_center.contracts.execution import ExecutionRequest, ExecutionResult
 
@@ -80,6 +81,119 @@ class WorkspaceManager:
         # bootstrap step (C-K3) and the open_pr_default gate (C-K9). Decoupled
         # from the full Settings object so callers can pass a lambda.
         self._repo_lookup = repo_settings_lookup or (lambda _k: None)
+        # SBX pre-push applier: validates patches before commit/push
+        self._patch_applier = PatchApplier()
+
+    # ── credential handling ──────────────────────────────────────────────────
+
+    def _extract_tokenless_url(self, clone_url: str) -> str:
+        """Extract tokenless URL from clone_url by removing embedded credentials.
+
+        Examples:
+            https://ghp_abc123@github.com/org/repo.git → https://github.com/org/repo.git
+            https://token@github.com/org/repo.git → https://github.com/org/repo.git
+            git@github.com:org/repo.git → git@github.com:org/repo.git (unchanged)
+        """
+        if "://" in clone_url and "@" in clone_url:
+            protocol, rest = clone_url.split("://", 1)
+            if "@" in rest:
+                # Find the end of the authority section (where path starts)
+                # For https:// URLs, path starts with /
+                # For SSH URLs (git@), this is already unchanged by the check above
+                slash_pos = rest.find("/")
+                # Authority section is everything before the first /
+                if slash_pos == -1:
+                    # No path, entire rest is authority
+                    authority = rest
+                else:
+                    authority = rest[:slash_pos]
+
+                # Find the last @ in the authority (credentials separator)
+                last_at = authority.rfind("@")
+                if last_at != -1:
+                    # Found credentials, remove them
+                    host_part = authority[last_at + 1 :]
+                    if slash_pos == -1:
+                        return f"{protocol}://{host_part}"
+                    else:
+                        path_part = rest[slash_pos:]
+                        return f"{protocol}://{host_part}{path_part}"
+        return clone_url
+
+    def _clean_reflog(self, workspace_path: Path) -> None:
+        """Clean reflog to remove token references from clone operation.
+
+        Token may appear in reflog URLs from the clone operation. This clears
+        the reflog and runs gc to remove any cached token references.
+        """
+        try:
+            self._git._run(
+                ["git", "reflog", "expire", "--expire=now", "--all"],
+                cwd=workspace_path,
+            )
+            self._git._run(
+                ["git", "gc", "--prune=now"],
+                cwd=workspace_path,
+            )
+        except RuntimeError as e:
+            logger.debug("Reflog cleanup failed (non-fatal): %s", e)
+
+    def _strip_token_from_config(self, workspace_path: Path, clone_url: str) -> None:
+        """Remove embedded token from .git/config after clone.
+
+        Implementation of Option B (tokenless URL rewrite):
+        - Clone used token URL (required for authentication)
+        - Immediately rewrite remote.origin.url to tokenless URL
+        - Clean reflog to remove token references from clone operation
+        """
+        tokenless_url = self._extract_tokenless_url(clone_url)
+        try:
+            self._git._run(
+                ["git", "config", "remote.origin.url", tokenless_url],
+                cwd=workspace_path,
+            )
+        except RuntimeError as e:
+            logger.warning("Failed to rewrite git config: %s", e)
+            raise RuntimeError(f"Could not strip token from git config: {e}") from e
+
+        self._clean_reflog(workspace_path)
+
+    def verify_no_token_in_workspace(self, workspace_path: Path) -> tuple[bool, list[str]]:
+        """Verify that no git token remains in workspace after clone.
+
+        Checks:
+            1. .git/config remote.origin.url contains no embedded credentials
+            2. .git/logs/HEAD (reflog) contains no token references
+
+        Returns:
+            (success, error_messages) - success is True if no tokens found
+        """
+        ws = Path(workspace_path)
+        errors = []
+
+        config_file = ws / ".git" / "config"
+        if config_file.exists():
+            config_content = config_file.read_text(encoding="utf-8")
+            if "://" in config_content and "@" in config_content:
+                for line in config_content.split("\n"):
+                    if "url =" in line and "://" in line:
+                        after_protocol = line.split("://", 1)[1] if "://" in line else ""
+                        if "@" in after_protocol and not after_protocol.startswith("git@"):
+                            errors.append(
+                                f"Found embedded credentials in .git/config: {line.strip()}"
+                            )
+
+        reflog_file = ws / ".git" / "logs" / "HEAD"
+        if reflog_file.exists():
+            reflog_content = reflog_file.read_text(encoding="utf-8")
+            if "://" in reflog_content and "@" in reflog_content:
+                for i, line in enumerate(reflog_content.split("\n")):
+                    if "://" in line and "@" in line and "github.com" in line:
+                        errors.append(
+                            f"Found embedded credentials in reflog line {i}: {line[:100]}"
+                        )
+
+        return len(errors) == 0, errors
 
     # ── pre-execution ────────────────────────────────────────────────────────
 
@@ -111,6 +225,9 @@ class WorkspaceManager:
             raise RuntimeError(
                 f"git clone failed: {proc.stderr.strip() or proc.stdout.strip()}",
             )
+
+        # Strip token from .git/config immediately after successful clone
+        self._strip_token_from_config(ws, request.clone_url)
 
         self._git.set_identity(ws, self._bot_name, self._bot_email)
         # Belt-and-suspenders: even if the target repo's .gitignore doesn't
@@ -180,8 +297,7 @@ class WorkspaceManager:
         self._git.restore_to_head(ws, ".baseline-validation.json")
         self._git.create_task_branch(ws, request.task_branch)
         logger.info(
-            "WorkspaceManager.prepare: cloned %s into %s on branch %s",
-            request.clone_url,
+            "WorkspaceManager.prepare: cloned into %s on branch %s (token stripped from config)",
             ws,
             request.task_branch,
         )
@@ -268,6 +384,23 @@ class WorkspaceManager:
                 }
             )
 
+        # SBX pre-push applier gate: validate patch before committing
+        # This enforces the path allowlist, blocking dangerous changes
+        is_valid, error_msg = self._validate_patch_before_commit(ws, request)
+        if not is_valid:
+            logger.warning(
+                "WorkspaceManager.finalize: patch validation failed for %s — %s",
+                request.task_branch,
+                error_msg,
+            )
+            return result.model_copy(
+                update={
+                    "branch_pushed": False,
+                    "failure_category": FailureReasonCategory.POLICY_BLOCKED,
+                    "failure_reason": error_msg or "Patch validation failed",
+                }
+            )
+
         # Commit anything the executor left in the working tree
         if self._git.changed_files(ws):
             commit_message = self._commit_message(request)
@@ -311,6 +444,55 @@ class WorkspaceManager:
                 "pull_request_url": pr_url,
             }
         )
+
+    def _validate_patch_before_commit(
+        self, ws: Path, request: ExecutionRequest
+    ) -> tuple[bool, str | None]:
+        """Validate the staged diff against path allowlist before committing.
+
+        This is the SBX pre-push applier gate: enforce path policy that would
+        otherwise be advisory. Reject patches touching blocked paths, absolute
+        paths, .. traversal, or symlinks.
+
+        Returns (is_valid, error_message).
+        """
+        # Get the staged diff
+        try:
+            # First stage all changes
+            subprocess.run(
+                ["git", "add", "-A"],
+                cwd=ws,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+            # Get the staged diff
+            proc = subprocess.run(
+                ["git", "diff", "--cached"],
+                cwd=ws,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=30,
+            )
+        except subprocess.CalledProcessError:
+            return True, None  # No staged changes; nothing to validate
+        except subprocess.TimeoutExpired:
+            return False, "Patch validation timed out"
+
+        diff_text = proc.stdout
+        if not diff_text.strip():
+            return True, None  # Empty diff is valid
+
+        # Validate the patch (without applying it)
+        result = self._patch_applier.validate(diff_text, ws)
+        if not result.success:
+            blocked_msg = ""
+            if result.blocked_paths:
+                blocked_msg = f"\nBlocked paths: {', '.join(result.blocked_paths)}"
+            return False, f"Patch validation failed: {result.reason}{blocked_msg}"
+        return True, None
 
     def _warn_cross_repo_impact(self, ws: Path, request: ExecutionRequest) -> None:
         """Log a warning when changed files cross another repo's interface.

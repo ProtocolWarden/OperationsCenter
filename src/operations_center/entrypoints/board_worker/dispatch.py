@@ -11,7 +11,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from ._subprocess import build_env, is_transient_failure, venv_python
+from ._subprocess import build_allowlist_env, is_transient_failure, venv_python
 from ._text import desc_text, extract_goal, task_type_from_kind
 from .labels import GITHUB_DIR, add_label, label_value
 from .outcomes import (
@@ -99,7 +99,7 @@ def dispatch_issue(
 
     oc_root = Path(__file__).resolve().parents[4]
     python = venv_python(oc_root)
-    env = build_env(oc_root)
+    env = build_allowlist_env(oc_root)
     short_id = task_id[:8]
 
     logger.info(
@@ -463,7 +463,7 @@ def _dispatch_spec_author(
     )
     oc_root = Path(__file__).resolve().parents[4]
     python = venv_python(oc_root)
-    env = build_env(oc_root)
+    env = build_allowlist_env(oc_root)
     short_id = task_id[:8]
 
     logger.info(
