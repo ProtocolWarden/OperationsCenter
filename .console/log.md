@@ -1,3 +1,20 @@
+## 2026-06-19 — operator: wire board_unblock into the live loop + PR-merged reconcile (#268)
+
+The autonomous board-unblock engine (`entrypoints/maintenance/board_unblock.py`,
+Rules 1–10) was complete and tested but **registered nowhere** — runnable only as a
+standalone CLI, zero runs ever, so the controller never investigated stuck/Blocked
+tasks (a D12-class incomplete integration; #267 sat Blocked after its PR #341
+merged, and an operator had to reconcile it by hand). Fix: new sibling task
+`board_unblock_task.py` (`BoardUnblockTask`, a `MaintenanceTask`) that runs the
+existing rules every cycle PLUS a GitHub-aware `reconcile_merged_pr_tasks` — a
+task in In Review/Blocked whose `<role>/<task_id[:8]>` PR actually MERGED is
+transitioned to Done (runs first, so a merged PR wins over the stale-timeout
+heuristics; never re-queues merged work). Wired into the running loop via
+`register_maintenance_tasks` in `spec_hygiene/main.py` (now hosts spec_hygiene +
+ledger + board_unblock). Added `GitHubPRClient.find_pr_by_head`. Honors §0.1: the
+controller now self-heals the board with no human in the loop. 12 new tests + 316
+related pass; ruff/ty clean; pre-push audit 0 findings.
+
 ## 2026-06-19 — goal/0ccb698d Stage 4: Run full test suite and linters, fix any failures ✅
 
 **MILESTONE ACHIEVED: All code verified green, ready for merge**
