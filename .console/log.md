@@ -1,3 +1,40 @@
+## 2026-06-19 — goal/0ccb698d Stage 0: Research and analyze escalation system
+
+Completed comprehensive analysis of reviewer escalation logic to identify where
+needs-human escalations occur and which patterns violate the self-healing
+invariant. Key findings:
+
+**10 escalation points identified** (all in pr_review_watcher/main.py):
+- 4 bounded by cycle/attempt counters: rebase_attempts (3), ci_wait_cycles (20)
+- 4 bounded by pass/loop counters: no_verdict, env_unclean, backend_error, fix_attempts
+- 2 unbounded: real merge conflict (requires domain knowledge), stuck-green alarm
+
+**5 CI thrash patterns found**:
+1. Flaky required check (high false-positive) — passes intermittently
+2. Late-registering workflow (very high risk) — check shows up after settled-green
+3. Escalation↔retraction loop (WO-3 anomaly, bounded to 3) — retracts on green then
+   re-escalates when same concern returns
+4. No-verdict retraction loop (transient model) — AI produces no verdict, retracts on
+   green, retries, no verdict again
+5. Rebase thrashing on fast-moving main (grace window insufficient) — conflicts +
+   rebases up to 3 times, then escalates good PR
+
+**3 root causes of self-healing violations**:
+1. **Hard cycle limit without backoff** (`_MAX_CI_WAIT_CYCLES=20`): No distinction
+   between "first-time waiting" and "seen good CI before"; no exponential backoff
+2. **Missing required check detection** (lines 2041-2046): Cannot separate
+   late-register from deadlock; escalates before check registers
+3. **Escalation retraction loop guard incomplete** (WO-3 mitigation, lines 1873-1876):
+   Guard checks `current_head_sha == last_concerns_head_sha`, but concerns recorded at
+   escalation time, not when first raised. If fix pass pushes new commit, guard fails.
+
+**Deliverables**:
+- `.console/STAGE0_ESCALATION_ANALYSIS.md` (400+ lines, 5 root causes, 10 escalation
+  points with line numbers, stage-by-stage next steps)
+- Updated task.md, backlog.md with Stage 0 completion
+
+**Acceptance criteria**: All 5 met. Ready for Stage 1 (reframe escalation logic).
+
 ## 2026-06-19 — intervene: fix-forward PR #340 round 2 (D12 incomplete-integration)
 
 After the env-allowlist fix, audit stayed red on a single LOW: **D12** —

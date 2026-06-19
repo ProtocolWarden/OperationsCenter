@@ -4,6 +4,34 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## In Progress
 
+### 2026-06-19: Stage 0 — Research and understand current escalation system (✅ COMPLETE)
+- **Objective**: Analyze reviewer escalation system to identify where/how needs-human escalations occur and which patterns violate self-healing invariant
+- **Status**: ✅ COMPLETE — Comprehensive analysis delivered
+- **Key Results**:
+  - ✅ **10 escalation points identified**: All in `pr_review_watcher/main.py` with line numbers and counters
+    - 4 bounded by cycle/attempt counters (rebase, CI wait)
+    - 4 bounded by pass/loop counters (no verdict, env unclean, backend error, fix attempts)
+    - 2 unbounded (real merge conflict, stuck-green alarm)
+  - ✅ **5 CI thrash patterns documented**:
+    - Flaky required check (high false-positive risk)
+    - Late-registering workflow (very high risk)
+    - Escalation↔retraction loop (bounded to 3, anomaly)
+    - No-verdict retraction loop (transient model failures)
+    - Rebase thrashing on fast-moving main (grace window insufficient)
+  - ✅ **3 self-healing invariant violations identified**:
+    - Root Cause 1: Hard cycle limit without backoff strategy
+    - Root Cause 2: Missing required check not detected holistically
+    - Root Cause 3: Escalation retraction loop guard incomplete (WO-3)
+  - ✅ **6 files requiring modification confirmed**:
+    - Primary: `src/operations_center/entrypoints/pr_review_watcher/main.py`
+    - Secondary: Tests, instrumentation, documentation
+- **Deliverables**:
+  - `.console/STAGE0_ESCALATION_ANALYSIS.md` (comprehensive analysis document, 400+ lines)
+  - Updated `.console/task.md` with Stage 0 completion and next steps
+  - Updated `.console/backlog.md` with current progress
+- **Acceptance Criteria Met**: All 5 criteria verified complete
+- **Status**: ✅ COMPLETE — Ready for Stage 1 (reframe escalation logic)
+
 ### 2026-06-17: Stage 3 — Run tests and linters to verify changes (✅ COMPLETE)
 - **Objective**: Execute repository test suite and linters to verify ExtractionHealth refactoring
 - **Status**: ✅ COMPLETE — All tests passing, all linting clean

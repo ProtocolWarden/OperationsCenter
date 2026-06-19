@@ -5,18 +5,66 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Overall Plan
 
-Extend watchdog collector schema to capture extraction signal visibility and enable
-root-cause analysis for collection gaps across all signals.
+Reframe reviewer needs-human escalations to honor the self-healing invariant (no false human-park on CI thrash).
 
 ## Current Stage
 
-Stage 3: Run tests and linters to verify changes ✅ COMPLETE
+Stage 0: Research and understand current escalation system, identify problem areas ✅ COMPLETE
 
 ## Objective
 
-**Stage 3: Run tests and linters to verify changes** ✅ COMPLETE
+**Stage 0: Research and understand current escalation system, identify problem areas** ✅ COMPLETE
 
-**Status**: ✅ COMPLETE — All tests passing (1378+ observer tests), ruff linting clean, no violations found.
+**Status**: ✅ COMPLETE — Comprehensive analysis of reviewer escalation system completed.
+- Located 10 distinct escalation points in `pr_review_watcher/main.py`
+- Identified 5 CI thrash patterns causing false human-parks
+- Documented 3 self-healing invariant violations
+- Root cause analysis completed for escalation loop anomaly (WO-3)
+- 6 files requiring modification identified
+
+## Stage 0 Acceptance Criteria — ALL MET ✅
+
+1. ✅ **Located code responsible for 'needs-human' escalations in reviewer logic**
+   - All 10 escalation points identified with line numbers and function names
+   - Primary location: `src/operations_center/entrypoints/pr_review_watcher/main.py`
+   - Key functions: `_escalate_needs_human()` (line 1229), `_auto_rebase_or_escalate()` (line 973), `_phase1()` (line 1750)
+
+2. ✅ **Understood what the 'self-healing invariant' means in this codebase**
+   - Definition: System must judge+correct itself; no human in per-correction loop
+   - Source: `docs/design/HARNESS_TRUST_HARDENING.md` (2026-06-18 spec)
+   - Binding requirement: LGTM is only merge path; escalation occurs when automation cannot self-heal
+
+3. ✅ **Identified specific cases where CI thrash causes false human-parks**
+   - Pattern 1: Flaky required check (very high risk — 1+ escalation false-positives)
+   - Pattern 2: Late-registering workflow (very high risk — escalates before check registers)
+   - Pattern 3: Escalation↔retraction loop (anomaly — PR loops 1-3 times before blocking)
+   - Pattern 4: No-verdict retraction loop (medium risk — transient model failures)
+   - Pattern 5: Rebase thrashing on fast-moving main (medium risk — 3 rebase attempts insufficient)
+
+4. ✅ **Root cause analysis documented showing the pattern**
+   - Root Cause 1: Hard cycle limit without backoff strategy (`_MAX_CI_WAIT_CYCLES=20`, lines 1967/2055)
+     - No distinction between "first time waiting" and "seen good CI before"
+     - No exponential backoff or adaptive timeout
+   - Root Cause 2: Missing required check not detected holistically (lines 2041-2046)
+     - Cannot separate late-register from deadlock
+     - No tracking of "check has passed before"
+   - Root Cause 3: Escalation retraction loop guard incomplete (lines 1873-1876, WO-3 anomaly)
+     - Guard checks `current_head_sha == last_concerns_head_sha`
+     - But concerns recorded at escalation time, not when first raised
+     - If fix pass pushes new commit, guard no longer protects → loop repeats
+
+5. ✅ **Confirmed which components/files need modification**
+   - **Primary**: `src/operations_center/entrypoints/pr_review_watcher/main.py` (2844 lines)
+     - Lines 1940-2090: CI-green precondition logic (requires backoff strategy)
+     - Lines 1859-1938: Escalation retraction logic (requires guard fix)
+     - Lines 973-1074: Auto-rebase logic (may need grace window adjustment)
+   - **Secondary**: Test files, instrumentation, documentation
+     - `tests/integration/reviewer/test_ci_green_gate.py` (verify new CI wait behavior)
+     - `tests/integration/reviewer/test_boundary_conditions.py` (escalation boundaries)
+     - `src/operations_center/reviewer/instrumentation.py` (escalation tracking)
+   - **Documentation**: 
+     - `docs/design/SELF_HEAL_LADDER.md` (references WO-3)
+     - `docs/design/HARNESS_TRUST_HARDENING.md` (self-healing invariant)
 
 ## Stage 2: Refactor ExtractionHealth to Remove Redundancy ✅
 
