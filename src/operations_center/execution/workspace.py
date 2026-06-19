@@ -226,8 +226,17 @@ class WorkspaceManager:
                 f"git clone failed: {proc.stderr.strip() or proc.stdout.strip()}",
             )
 
-        # Strip token from .git/config immediately after successful clone
+        # Strip token from .git/config immediately after successful clone, then
+        # verify nothing leaked through. The verification is a production gate,
+        # not just a test helper: a residual token in .git/config or the reflog
+        # is a credential-exposure defect, so fail closed rather than proceed
+        # with a tainted workspace.
         self._strip_token_from_config(ws, request.clone_url)
+        clean, token_errors = self.verify_no_token_in_workspace(ws)
+        if not clean:
+            raise RuntimeError(
+                "git token survived workspace sanitisation: " + "; ".join(token_errors),
+            )
 
         self._git.set_identity(ws, self._bot_name, self._bot_email)
         # Belt-and-suspenders: even if the target repo's .gitignore doesn't

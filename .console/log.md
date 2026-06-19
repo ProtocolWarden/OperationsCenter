@@ -1,3 +1,15 @@
+## 2026-06-19 — intervene: fix-forward PR #340 round 2 (D12 incomplete-integration)
+
+After the env-allowlist fix, audit stayed red on a single LOW: **D12** —
+`verify_no_token_in_workspace()` (workspace.py:161) was tested but never called in
+production. Genuine incomplete integration: a thorough credential-leak verifier
+sat fully tested yet unwired. Fix completes the integration rather than deleting
+the safety check — `prepare()` now calls it as a production gate right after
+`_strip_token_from_config`, failing closed (`RuntimeError: token survived ...`) if
+a token remains in .git/config or the reflog. Added `test_prepare_raises_when_
+token_survives_sanitisation` so the gate itself (not just the helper) is covered.
+D12/DC10 clean, ruff clean, 59 workspace tests pass.
+
 ## 2026-06-19 — intervene: fix-forward Phase-0 PR #340 (env-allowlist would halt the fleet)
 
 PR #340 (SBX Layer 0 + pre-push applier) escalated `ci_persistently_red` — two red

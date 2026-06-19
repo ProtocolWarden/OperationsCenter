@@ -136,6 +136,32 @@ def test_prepare_happy_path(tmp_path):
     git.create_remote_branch_from.assert_not_called()
 
 
+def test_prepare_raises_when_token_survives_sanitisation(tmp_path):
+    """The post-strip verification is a production gate: a residual token in
+    .git/config must fail prepare() closed, not slip through to execution."""
+    ws = tmp_path / "ws"
+    git = _git_for_prepare()
+    mgr = WorkspaceManager(git_client=git)
+    req = _make_request(ws)
+
+    def _fake_clone(*_a, **_k):
+        # Simulate a clone that left an embedded credential behind even after
+        # the config rewrite (e.g. rewrite silently no-op'd).
+        (ws / ".git").mkdir(parents=True, exist_ok=True)
+        (ws / ".git" / "config").write_text(
+            '[remote "origin"]\n\turl = https://ghp_leak@github.com/acme/widget.git\n',
+            encoding="utf-8",
+        )
+        return _fake_completed(0)
+
+    with mock.patch.object(ws_mod.subprocess, "run", side_effect=_fake_clone):
+        with pytest.raises(RuntimeError, match="token survived"):
+            mgr.prepare(req)
+    # Failed closed before establishing identity / creating the branch.
+    git.set_identity.assert_not_called()
+    git.create_task_branch.assert_not_called()
+
+
 def test_prepare_pre_created_empty_workspace_ok(tmp_path):
     ws = tmp_path / "ws"
     ws.mkdir(parents=True)
