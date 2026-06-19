@@ -1773,12 +1773,31 @@ def _phase1(
     # #334 non-convergence: 7 self-pushes, fix_attempts stuck at 1, piling on
     # evidence files). last_fix_push_sha is the head our last fix pass produced.
     last_fix_push_sha = str(state.get("last_fix_push_sha") or "").strip()
+    # Restart-safe recognition of our own fix-push. In steady state the head
+    # matches the SHA we recorded after the pass (last_fix_push_sha). But if the
+    # watcher was interrupted BETWEEN the fix-push and that recording — e.g. a
+    # long fix pass kills the process (seen on #337) — last_fix_push_sha is lost
+    # and a naive guard would mistake our own push for an external one and reset
+    # the budget (re-opening the #334 loop). Recover from durable state that
+    # survives the pre-fix save: when we have an active fix cycle
+    # (`fix_attempts > 0`) but the pass outcome was never recorded
+    # (`last_fix_pass_pushed` is popped at dispatch start and only re-set when the
+    # pass completes), a head move is almost certainly that interrupted pass's
+    # push — treat it as ours. (A poll never observes this mid-dispatch: the
+    # dispatch is synchronous within one poll, so the unrecorded state is only
+    # ever seen after a restart.)
+    _fix_dispatch_unrecorded = (
+        state.get("fix_attempts", 0) > 0 and "last_fix_pass_pushed" not in state
+    )
+    _is_our_fix_push = (
+        bool(last_fix_push_sha) and current_head_sha == last_fix_push_sha
+    ) or _fix_dispatch_unrecorded
     if (
         state.get("concerns_comment_id")
         and current_head_sha
         and previous_concerns_head_sha
         and current_head_sha != previous_concerns_head_sha
-        and current_head_sha != last_fix_push_sha
+        and not _is_our_fix_push
     ):
         _retract_flag(
             state, gh_client, owner, repo, resolution="superseded by new push — re-review resumed"

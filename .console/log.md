@@ -1,3 +1,18 @@
+## 2026-06-18 — fix: budget-guard survives a watcher restart mid-fix
+
+Closes the residual edge in #335 that #337 exposed live: if the review watcher is
+interrupted BETWEEN a fix-push and recording `last_fix_push_sha` (a long fix pass
+killed the process), the SHA is lost and the next poll mistook our own push for an
+external one — resetting the budget (re-opening the #334 loop risk). Added a
+restart-safe fallback driven by state that survives the pre-fix save: when we have
+an active fix cycle (`fix_attempts > 0`) but the pass outcome was never recorded
+(`last_fix_pass_pushed` absent — it's popped at dispatch start, re-set only on
+completion), a head move is our interrupted fix's push → treat as ours, don't
+reset. A poll never observes this mid-dispatch (the dispatch is synchronous), so
+the fallback only fires post-restart. External pushes after a COMPLETED pass still
+reset. Test: restart-mid-fix preserves budget (→2); updated the self/external tests
+to set `last_fix_pass_pushed=True`. Reviewer suite 124 pass.
+
 ## 2026-06-18 — fix: reviewer applies a docs-only rubric (stop over-flagging doc PRs)
 
 Root fix for the #334 over-flagging (the loop-bug #335 only bounded it). When a
