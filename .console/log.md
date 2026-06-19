@@ -1,3 +1,19 @@
+## 2026-06-19 — fix: executor PATH must include the agent-CLI dirs (fleet-down regression)
+
+The Phase-0 `build_allowlist_env` pins the worker-subprocess PATH to system dirs
+(`/usr/local/...:/bin`), which omits `~/.local/bin` where the `claude` binary
+lives (and `cl`, `uv`). This stayed latent until the fleet was restarted onto the
+deployed Phase-0 code (board_unblock deploy), at which point EVERY claude_code
+dispatch hard-failed `claude binary not found in PATH` — the executor (and the
+hourly budget it burned retrying) was down fleet-wide; a §0.1 self-healing
+violation. Fix: `executor_path()` discovers each agent tool's dir from the parent
+PATH (`shutil.which`) + always prepends `~/.local/bin`, prepending only those
+specific dirs to the pinned base (the full parent PATH is still NOT inherited, so
+the blast-radius cut holds). `build_allowlist_env` now sets `PATH=executor_path()`.
+Deployed directly to the live checkout + fleet restart to break the bootstrap
+deadlock (the reviewer also shells out to claude, so the fleet couldn't review the
+fix that restores it). 3 new tests; 235 board_worker tests pass.
+
 ## 2026-06-19 — fix: PR-merged reconcile must match head.ref locally (org-redirect-proof)
 
 Live dry-run against the board caught a bug in the #268 reconcile: the lookup used
