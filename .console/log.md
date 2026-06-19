@@ -1,3 +1,53 @@
+## 2026-06-19 — goal/0ccb698d Stage 1: Design solution to prevent false human-parks on CI thrash
+
+Completed comprehensive design for preventing false human-parks on CI thrash while
+honoring the self-healing invariant. Design addresses all 3 root causes identified in
+Stage 0 with specific implementation strategies.
+
+**Conceptual framework: 4 decision criteria** to differentiate transient failures
+from unresolvable concerns:
+1. **Check history**: Has this check ever completed on any head?
+2. **Check registration**: Is it configured in branch protection rules?
+3. **Failure distribution**: Sparse/random or dense/deterministic?
+4. **Model verdict quality**: Consistent or sporadic?
+
+**Implementation strategy** (Part B) specifies for each root cause:
+- RC1 Hard cycle limit → adaptive thresholds (60 for first-registration, 40 for
+  already-seen) + exponential backoff
+- RC2 Missing check detection → holistic classification (never-registered,
+  late-registering, stuck) with different handling per type
+- RC3 Retraction loop guard → track concern history holistically, prevent retraction
+  when unfixed concerns exist on recent heads
+
+**Escalation logic changes** (Part C) modify 3 of 10 escalation points:
+- EP5/EP6 (No-verdict): Add exponential backoff (5s → 10s → 20s) before escalation
+- EP9 (CI red): Use failure rate detection (≥ 30% = dense, escalate at 40 cycles)
+- EP10 (CI never settled): Classify missing checks, use different wait limits per type
+
+**Test strategy** (Part D) includes 6 concrete scenarios covering all CI thrash patterns:
+1. Flaky check (passes 70%, escalates at 40 not 20)
+2. Late-registering workflow (waits 60 not 20 for first registration)
+3. Escalation-retraction loop prevention (prevents false multi-escalations)
+4. No-verdict exponential backoff (5s, 10s, 20s between retries)
+5. Stuck-green detection (ERROR log + escalation after 3 attempts)
+6. Rebase thrashing unchanged (legitimate escalation, no regression)
+
+Plus regression tests to ensure existing escalations still work, and performance
+tests (backoff < 60s, check history < 20KB).
+
+**Risk analysis** (Part E): 6 identified risks with LOW-MEDIUM residual levels.
+**Rollback plan** (Part F): Quick revert (< 5 minutes), data recovery (JSON
+fault-tolerant), observation metrics for regression detection.
+
+**Deliverables**:
+- `.console/STAGE1_SOLUTION_DESIGN.md` (450+ lines, 6 parts, file-by-file map)
+- Updated task.md, backlog.md with Stage 1 completion
+
+**Acceptance criteria**: All 4 met (design document, decision criteria, escalation
+changes, test strategy). Ready for Stage 2 (implementation).
+
+---
+
 ## 2026-06-19 — goal/0ccb698d Stage 0: Research and analyze escalation system
 
 Completed comprehensive analysis of reviewer escalation logic to identify where

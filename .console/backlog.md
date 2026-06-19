@@ -4,33 +4,48 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## In Progress
 
-### 2026-06-19: Stage 0 — Research and understand current escalation system (✅ COMPLETE)
-- **Objective**: Analyze reviewer escalation system to identify where/how needs-human escalations occur and which patterns violate self-healing invariant
-- **Status**: ✅ COMPLETE — Comprehensive analysis delivered
+### 2026-06-19: Stage 1 — Design the solution to prevent false human-parks (✅ COMPLETE)
+- **Objective**: Design comprehensive solution for preventing false human-parks on CI thrash while honoring self-healing invariant
+- **Status**: ✅ COMPLETE — Design document with 4 major parts (450+ lines) delivered
 - **Key Results**:
-  - ✅ **10 escalation points identified**: All in `pr_review_watcher/main.py` with line numbers and counters
-    - 4 bounded by cycle/attempt counters (rebase, CI wait)
-    - 4 bounded by pass/loop counters (no verdict, env unclean, backend error, fix attempts)
-    - 2 unbounded (real merge conflict, stuck-green alarm)
-  - ✅ **5 CI thrash patterns documented**:
-    - Flaky required check (high false-positive risk)
-    - Late-registering workflow (very high risk)
-    - Escalation↔retraction loop (bounded to 3, anomaly)
-    - No-verdict retraction loop (transient model failures)
-    - Rebase thrashing on fast-moving main (grace window insufficient)
-  - ✅ **3 self-healing invariant violations identified**:
-    - Root Cause 1: Hard cycle limit without backoff strategy
-    - Root Cause 2: Missing required check not detected holistically
-    - Root Cause 3: Escalation retraction loop guard incomplete (WO-3)
-  - ✅ **6 files requiring modification confirmed**:
-    - Primary: `src/operations_center/entrypoints/pr_review_watcher/main.py`
-    - Secondary: Tests, instrumentation, documentation
+  - ✅ **Conceptual framework with 4 decision criteria**:
+    - Criterion 1: Check history (has this check ever completed on any head?)
+    - Criterion 2: Check registration (is it configured in branch protection rules?)
+    - Criterion 3: Failure distribution (sparse/random vs. dense/deterministic?)
+    - Criterion 4: Model verdict quality (consistent or sporadic?)
+  - ✅ **Implementation strategy for 3 root causes**:
+    - RC1: Hard cycle limit → adaptive thresholds (60 cycles for first-registration, 40 for already-seen)
+    - RC2: Missing check detection → holistic classification (never-registered, late-registering, stuck)
+    - RC3: Retraction loop guard → track concern history holistically, prevent retraction when unfixed concerns exist
+  - ✅ **Escalation logic changes for 3 modified escalation points**:
+    - EP5/EP6 (No-verdict): Add exponential backoff (5s → 10s → 20s between retries)
+    - EP9 (CI Persistently Red): Use `_should_escalate_ci_wait()` with failure rate detection (≥ 30% = dense failure)
+    - EP10 (CI Never Settled): Use `_classify_missing_checks()` with different thresholds (60 for first-registration, 40 for already-seen)
+  - ✅ **Test strategy with 6 concrete scenarios**:
+    - Scenario 1: Flaky check (passes 70%, escalates at 40 cycles not 20)
+    - Scenario 2: Late-registering workflow (waits 60 cycles not 20 for check to register)
+    - Scenario 3: Escalation-retraction loop prevention (prevents false multi-escalations)
+    - Scenario 4: No-verdict exponential backoff (5s → 10s → 20s between review retries)
+    - Scenario 5: Stuck-green detection (ERROR log + escalation after 3 no-verdict escalations)
+    - Scenario 6: Rebase thrashing (unchanged, legitimate escalation, no regression)
+  - ✅ **Risk analysis and rollback plan**:
+    - 6 identified risks with LOW-MEDIUM residual risk levels
+    - Quick rollback strategy (< 5 minutes, revert 3 escalation points)
+    - Data recovery approach (JSON state is fault-tolerant, missing fields default to safe values)
+    - Observation metrics for detecting regressions
 - **Deliverables**:
-  - `.console/STAGE0_ESCALATION_ANALYSIS.md` (comprehensive analysis document, 400+ lines)
-  - Updated `.console/task.md` with Stage 0 completion and next steps
+  - `.console/STAGE1_SOLUTION_DESIGN.md` (comprehensive 450+ line design document)
+    - Part A: Conceptual framework (4 decision criteria + 5 CI thrash patterns)
+    - Part B: Implementation strategy (3 root causes with specific file locations, line numbers, data structures)
+    - Part C: Escalation logic changes (3 modified points with new decision criteria and thresholds)
+    - Part D: Test strategy (6 scenarios + regression tests + performance/memory tests)
+    - Part E: Risk analysis (6 risks with mitigations, residual risk levels)
+    - Part F: Rollback and recovery plan
+    - File-by-file implementation map
+  - Updated `.console/task.md` with Stage 1 completion and design details
   - Updated `.console/backlog.md` with current progress
-- **Acceptance Criteria Met**: All 5 criteria verified complete
-- **Status**: ✅ COMPLETE — Ready for Stage 1 (reframe escalation logic)
+- **Acceptance Criteria Met**: All 4 criteria verified complete
+- **Status**: ✅ COMPLETE — Ready for Stage 2 (implementation)
 
 ### 2026-06-17: Stage 3 — Run tests and linters to verify changes (✅ COMPLETE)
 - **Objective**: Execute repository test suite and linters to verify ExtractionHealth refactoring

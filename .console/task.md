@@ -9,62 +9,66 @@ Reframe reviewer needs-human escalations to honor the self-healing invariant (no
 
 ## Current Stage
 
-Stage 0: Research and understand current escalation system, identify problem areas ✅ COMPLETE
+Stage 1: Design the solution to prevent false human-parks on CI thrash ✅ COMPLETE
 
 ## Objective
 
-**Stage 0: Research and understand current escalation system, identify problem areas** ✅ COMPLETE
+**Stage 1: Design the solution to prevent false human-parks on CI thrash** ✅ COMPLETE
 
-**Status**: ✅ COMPLETE — Comprehensive analysis of reviewer escalation system completed.
-- Located 10 distinct escalation points in `pr_review_watcher/main.py`
-- Identified 5 CI thrash patterns causing false human-parks
-- Documented 3 self-healing invariant violations
-- Root cause analysis completed for escalation loop anomaly (WO-3)
-- 6 files requiring modification identified
+**Status**: ✅ COMPLETE — Comprehensive design for preventing false human-parks delivered.
+- Conceptual framework with 4 decision criteria to differentiate transient failures from real issues
+- Implementation strategy for all 3 root causes with specific file locations and line numbers
+- Escalation logic changes specified for 3 modified escalation points (EP5, EP9, EP10) with new decision criteria
+- Test strategy with 6 concrete test scenarios (1 per CI thrash pattern + rebase)
+- Risk analysis and rollback/recovery plan documented
+- Design document with 400+ lines of detailed specifications
 
-## Stage 0 Acceptance Criteria — ALL MET ✅
+## Stage 1 Acceptance Criteria — ALL MET ✅
 
-1. ✅ **Located code responsible for 'needs-human' escalations in reviewer logic**
-   - All 10 escalation points identified with line numbers and function names
-   - Primary location: `src/operations_center/entrypoints/pr_review_watcher/main.py`
-   - Key functions: `_escalate_needs_human()` (line 1229), `_auto_rebase_or_escalate()` (line 973), `_phase1()` (line 1750)
+1. ✅ **Design document describing how to differentiate transient failures from real issues**
+   - Part A: 4 decision criteria (check history, registration, failure distribution, model verdict quality)
+   - All 5 CI thrash patterns mapped to specific criteria with detection and recovery strategies
+   - Examples given for each pattern showing how it's addressed
+   - Located in `.console/STAGE1_SOLUTION_DESIGN.md` (Part A, ~300 lines)
 
-2. ✅ **Understood what the 'self-healing invariant' means in this codebase**
-   - Definition: System must judge+correct itself; no human in per-correction loop
-   - Source: `docs/design/HARNESS_TRUST_HARDENING.md` (2026-06-18 spec)
-   - Binding requirement: LGTM is only merge path; escalation occurs when automation cannot self-heal
+2. ✅ **Escalation logic changes specified with clear decision criteria**
+   - Part C: 3 modified escalation points documented
+     - EP5/EP6: No-verdict / Stuck-green — exponential backoff + existing escalation logic
+     - EP9: CI Persistently Red — `_should_escalate_ci_wait()` with failure rate detection
+     - EP10: CI Never Settled — `_classify_missing_checks()` for never-registered vs. late-registering vs. stuck
+   - Each includes new decision logic, new thresholds, and rationale
+   - 7 unmodified escalation points documented (legitimate escalations, no changes needed)
 
-3. ✅ **Identified specific cases where CI thrash causes false human-parks**
-   - Pattern 1: Flaky required check (very high risk — 1+ escalation false-positives)
-   - Pattern 2: Late-registering workflow (very high risk — escalates before check registers)
-   - Pattern 3: Escalation↔retraction loop (anomaly — PR loops 1-3 times before blocking)
-   - Pattern 4: No-verdict retraction loop (medium risk — transient model failures)
-   - Pattern 5: Rebase thrashing on fast-moving main (medium risk — 3 rebase attempts insufficient)
+3. ✅ **Approach to honor self-healing invariant documented**
+   - Part B: Implementation strategy for all 3 root causes
+     - RC1: Hard cycle limit → adaptive thresholds (60 for first-registration, 40 for already-seen) + exponential backoff
+     - RC2: Missing check detection → holistic classification (never-registered, late-registering, stuck) with different handling
+     - RC3: Retraction guard incomplete → track concern history holistically, prevent retraction when unfixed concerns exist
+   - System distinguishes infrastructure transience from genuine concerns
+   - All changes maintain bounded attempt counts and preserve legitimate escalations
 
-4. ✅ **Root cause analysis documented showing the pattern**
-   - Root Cause 1: Hard cycle limit without backoff strategy (`_MAX_CI_WAIT_CYCLES=20`, lines 1967/2055)
-     - No distinction between "first time waiting" and "seen good CI before"
-     - No exponential backoff or adaptive timeout
-   - Root Cause 2: Missing required check not detected holistically (lines 2041-2046)
-     - Cannot separate late-register from deadlock
-     - No tracking of "check has passed before"
-   - Root Cause 3: Escalation retraction loop guard incomplete (lines 1873-1876, WO-3 anomaly)
-     - Guard checks `current_head_sha == last_concerns_head_sha`
-     - But concerns recorded at escalation time, not when first raised
-     - If fix pass pushes new commit, guard no longer protects → loop repeats
+4. ✅ **Test strategy outlined for validating the fix**
+   - Part D: 6 concrete test scenarios
+     1. Flaky check (passes 70%, escalates at 40 cycles not 20)
+     2. Late-registering workflow (waits 60 cycles not 20 for first registration)
+     3. Escalation-retraction loop prevention (prevents false multi-escalations on same concern)
+     4. No-verdict exponential backoff (5s → 10s → 20s between retries)
+     5. Stuck-green detection (ERROR log + escalation after 3 no-verdict escalations)
+     6. Rebase thrashing unchanged (legitimate escalation, no regression)
+   - Regression tests: ensure fast path, fix loop, hard escalations, stuck-green all still work
+   - Performance/memory tests: backoff intervals < 60s, check history < 20KB
 
-5. ✅ **Confirmed which components/files need modification**
-   - **Primary**: `src/operations_center/entrypoints/pr_review_watcher/main.py` (2844 lines)
-     - Lines 1940-2090: CI-green precondition logic (requires backoff strategy)
-     - Lines 1859-1938: Escalation retraction logic (requires guard fix)
-     - Lines 973-1074: Auto-rebase logic (may need grace window adjustment)
-   - **Secondary**: Test files, instrumentation, documentation
-     - `tests/integration/reviewer/test_ci_green_gate.py` (verify new CI wait behavior)
-     - `tests/integration/reviewer/test_boundary_conditions.py` (escalation boundaries)
-     - `src/operations_center/reviewer/instrumentation.py` (escalation tracking)
-   - **Documentation**: 
-     - `docs/design/SELF_HEAL_LADDER.md` (references WO-3)
-     - `docs/design/HARNESS_TRUST_HARDENING.md` (self-healing invariant)
+## Deliverables (Stage 1)
+
+✅ **`.console/STAGE1_SOLUTION_DESIGN.md`** (450+ lines)
+- Executive summary
+- Part A: Conceptual framework (4 decision criteria, 5 CI thrash patterns)
+- Part B: Implementation strategy (3 root causes, data structures, logic changes, file locations)
+- Part C: Escalation logic changes (3 modified points, new decision criteria, thresholds)
+- Part D: Test strategy (6 scenarios, regression tests, performance tests)
+- Part E: Risks and mitigations (6 risks identified, all with LOW-MEDIUM residual risk)
+- Part F: Rollback and recovery plan
+- File-by-file implementation map
 
 ## Stage 2: Refactor ExtractionHealth to Remove Redundancy ✅
 
