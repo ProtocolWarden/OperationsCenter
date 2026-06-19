@@ -17,6 +17,7 @@ Tests ensure:
 
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -47,7 +48,7 @@ class TestDocumentationMarkers:
     def test_marker_configuration_in_pytest(self):
         """All markers are configured in pytest configuration."""
         result = subprocess.run(
-            ["python", "-m", "pytest", "--markers"],
+            [sys.executable, "-m", "pytest", "--markers"],
             capture_output=True,
             text=True,
             timeout=10,
@@ -220,7 +221,7 @@ class TestTestCommandExecutability:
     def test_pytest_help_executes(self):
         """Basic pytest help command executes successfully."""
         result = subprocess.run(
-            ["python", "-m", "pytest", "--help"],
+            [sys.executable, "-m", "pytest", "--help"],
             capture_output=True,
             text=True,
             timeout=10,
@@ -230,7 +231,7 @@ class TestTestCommandExecutability:
     def test_pytest_collect_only_succeeds(self):
         """pytest can collect tests without execution."""
         result = subprocess.run(
-            ["python", "-m", "pytest", "tests/unit", "--collect-only", "-q"],
+            [sys.executable, "-m", "pytest", "tests/unit", "--collect-only", "-q"],
             capture_output=True,
             text=True,
             timeout=30,
@@ -241,7 +242,7 @@ class TestTestCommandExecutability:
     def test_pytest_dry_run_integration_tests(self):
         """pytest can collect integration tests."""
         result = subprocess.run(
-            ["python", "-m", "pytest", "tests/integration", "--collect-only", "-q"],
+            [sys.executable, "-m", "pytest", "tests/integration", "--collect-only", "-q"],
             capture_output=True,
             text=True,
             timeout=30,
@@ -251,7 +252,7 @@ class TestTestCommandExecutability:
     def test_pytest_markers_filter_works(self):
         """Pytest marker filters work correctly."""
         result = subprocess.run(
-            ["python", "-m", "pytest", "tests/", "-m", "perf", "--collect-only", "-q"],
+            [sys.executable, "-m", "pytest", "tests/", "-m", "perf", "--collect-only", "-q"],
             capture_output=True,
             text=True,
             timeout=30,
@@ -378,7 +379,7 @@ class TestTestCountValidation:
     def test_significant_number_of_unit_tests_exist(self):
         """A significant number of unit tests exist (documented as ~7,200)."""
         result = subprocess.run(
-            ["python", "-m", "pytest", "tests/unit", "--collect-only", "-q"],
+            [sys.executable, "-m", "pytest", "tests/unit", "--collect-only", "-q"],
             capture_output=True,
             text=True,
             timeout=60,
@@ -393,7 +394,7 @@ class TestTestCountValidation:
     def test_integration_tests_exist(self):
         """Integration tests exist in the project."""
         result = subprocess.run(
-            ["python", "-m", "pytest", "tests/integration", "--collect-only", "-q"],
+            [sys.executable, "-m", "pytest", "tests/integration", "--collect-only", "-q"],
             capture_output=True,
             text=True,
             timeout=60,
