@@ -1748,6 +1748,7 @@ def _phase0_ci_fix(
 
 # Helper functions for adaptive CI wait logic (Stage 2: prevent false human-parks)
 
+
 def _compute_backoff_interval(backoff_level: int) -> int:
     """Compute exponential backoff interval in seconds.
 
@@ -1865,17 +1866,12 @@ def _classify_missing_checks(
     history = state.get("ci_check_history", {})
 
     never_registered = [
-        c for c in missing_required
-        if c not in history and c not in required_checks_configured
+        c for c in missing_required if c not in history and c not in required_checks_configured
     ]
     late_registering = [
-        c for c in missing_required
-        if c not in history and c in required_checks_configured
+        c for c in missing_required if c not in history and c in required_checks_configured
     ]
-    stuck_checks = [
-        c for c in missing_required
-        if c in history
-    ]
+    stuck_checks = [c for c in missing_required if c in history]
 
     return (never_registered, late_registering, stuck_checks)
 
@@ -1887,13 +1883,14 @@ def _normalize_concerns_signature(summary: str) -> str:
     the same logical concern across multiple review passes.
     """
     import hashlib
+
     text = str(summary or "").strip()
     if not text:
         return ""
     # Replace numbers with N to normalize variable names, line numbers, etc.
-    normalized = re.sub(r'\d+', 'N', text)
+    normalized = re.sub(r"\d+", "N", text)
     # Use hash for compact signature
-    return hashlib.md5(normalized.encode()).hexdigest()[:16]
+    return hashlib.sha256(normalized.encode()).hexdigest()[:16]
 
 
 def _track_concern_raised(
@@ -1909,7 +1906,9 @@ def _track_concern_raised(
     history = state.setdefault("concern_history", {})
     signature = _normalize_concerns_signature(summary)
 
-    if signature and (signature not in history or history[signature].get("head_sha") != current_head_sha):
+    if signature and (
+        signature not in history or history[signature].get("head_sha") != current_head_sha
+    ):
         history[signature] = {
             "head_sha": current_head_sha,
             "summary": summary,
@@ -1941,7 +1940,6 @@ def _can_escalate_concern(
                 return False  # Don't escalate again
 
     return True
-
 
 
 def _phase1(
@@ -2203,7 +2201,9 @@ def _phase1(
                     _update_check_history(state, failed, completed, [], current_head_sha or "")
 
                     # Get configured required checks for this repo
-                    repo_required = list(getattr(repo_cfg, "required_checks", []) or []) if repo_cfg else []
+                    repo_required = (
+                        list(getattr(repo_cfg, "required_checks", []) or []) if repo_cfg else []
+                    )
 
                     # Apply adaptive thresholds based on check history
                     should_escalate, reason_code = _should_escalate_ci_wait(
