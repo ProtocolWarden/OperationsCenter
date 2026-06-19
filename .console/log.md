@@ -7484,3 +7484,29 @@ corrections (cross-repo consumers, indirect dispatch, convention hooks), the
 observer-plane completions, the superseded-dup deletes, ContextLifecycle=KEEP,
 and the B2 root cause (content-less secret artifact = infra, not a code bug).
 Backlog updated. Loop complete.
+
+## 2026-06-19 19:25 — Stage 1 Complete: Proc Variable Scope Verification
+
+**Decision**: Self-review concern about proc variable scope is unfounded — no code changes required.
+
+**Reasoning**: 
+- Initial dispatch captures proc at line 225 (unconditional, before retry block)
+- Retry block optionally reassigns proc at line 279 (within conditional)
+- persist_failure_diagnostics call at line 336 only reached when not success or scope_too_wide
+- All execution paths have proc defined before the call
+
+**Verification Method**:
+- Analyzed control flow in src/operations_center/entrypoints/board_worker/dispatch.py
+- Confirmed proc assignment at line 225 (before diff context)
+- Confirmed proc reassignment at line 279 (within retry block)
+- Confirmed persist_failure_diagnostics call only in else block where proc is guaranteed in scope
+- Verified Python syntax with py_compile
+- Verified imports resolve correctly
+
+**Result**: ✅ PRODUCTION-READY
+- No NameError risk exists
+- All acceptance criteria met
+- Code is correct as-is
+- Ready for merge
+
+**Next**: Stage 2 will handle any additional concerns from self-review (if applicable).
