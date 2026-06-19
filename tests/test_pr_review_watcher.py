@@ -2574,7 +2574,8 @@ def test_publish_reviewer_verdict_swallows_errors():
 # ---------------------------------------------------------------------------
 def test_phase1_self_pushed_fix_does_not_reset_budget(tmp_path: Path) -> None:
     # Head moved to H1 because our own previous fix pass pushed it
-    # (last_fix_push_sha == H1) — the budget must keep accumulating.
+    # (last_fix_push_sha == H1, recorded after a completed pass) — the budget must
+    # keep accumulating.
     state, sp = _make_state(
         tmp_path,
         phase="self_review",
@@ -2583,6 +2584,7 @@ def test_phase1_self_pushed_fix_does_not_reset_budget(tmp_path: Path) -> None:
         concerns_comment_id=123,
         last_concerns_head_sha="H0",
         last_fix_push_sha="H1",
+        last_fix_pass_pushed=True,  # prior pass completed + recorded
         last_concerns_summary="same issues",
     )
     gh = _make_gh()
@@ -2608,8 +2610,9 @@ def test_phase1_self_pushed_fix_does_not_reset_budget(tmp_path: Path) -> None:
 
 
 def test_phase1_external_push_resets_budget(tmp_path: Path) -> None:
-    # Head moved to HX by an EXTERNAL push (!= last_fix_push_sha) — genuinely new
-    # work; the budget resets so the human's fix is reviewed fresh.
+    # Head moved to HX by an EXTERNAL push (!= last_fix_push_sha) after a COMPLETED
+    # prior pass (last_fix_pass_pushed recorded) — genuinely new work; the budget
+    # resets so the human's fix is reviewed fresh.
     state, sp = _make_state(
         tmp_path,
         phase="self_review",
@@ -2618,6 +2621,7 @@ def test_phase1_external_push_resets_budget(tmp_path: Path) -> None:
         concerns_comment_id=123,
         last_concerns_head_sha="H0",
         last_fix_push_sha="H1",
+        last_fix_pass_pushed=True,  # prior pass completed → not a mid-fix restart
         last_concerns_summary="same issues",
     )
     gh = _make_gh()
@@ -2638,6 +2642,44 @@ def test_phase1_external_push_resets_budget(tmp_path: Path) -> None:
     loaded = watcher._load_state(sp)
     # Reset to 0, then dispatch incremented to 1 (fresh start).
     assert loaded["fix_attempts"] == 1
+
+
+def test_phase1_restart_mid_fix_does_not_reset_budget(tmp_path: Path) -> None:
+    # The watcher was interrupted BETWEEN our fix-push and recording its SHA, so
+    # both last_fix_push_sha and last_fix_pass_pushed are absent — but we DID
+    # dispatch a fix (fix_attempts=1). The moved head is that interrupted push, not
+    # an external one, so the budget must NOT reset (regression guard for the #337
+    # restart edge that would otherwise re-open the #334 loop).
+    state, sp = _make_state(
+        tmp_path,
+        phase="self_review",
+        self_review_loops=1,
+        fix_attempts=1,
+        concerns_comment_id=123,
+        last_concerns_head_sha="H0",
+        last_concerns_summary="same issues",
+    )
+    state.pop("last_fix_pass_pushed", None)  # lost to the restart
+    state.pop("last_fix_push_sha", None)
+    watcher._save_state(sp, state)
+    gh = _make_gh()
+    gh.get_pr.return_value = _pr_data(head_sha="H1b")
+
+    with (
+        patch.object(
+            watcher, "_run_direct_review",
+            return_value={"result": "CONCERNS", "summary": "still"},
+        ),
+        patch.object(watcher, "_run_fix_pass", return_value=True),
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(head_sha="H1"), gh, "owner", "repo",
+            tmp_path, tmp_path / "cfg.yaml", SETTINGS,
+        )
+
+    loaded = watcher._load_state(sp)
+    # Preserved (no spurious reset), dispatch incremented to 2.
+    assert loaded["fix_attempts"] == 2
 
 
 # ---------------------------------------------------------------------------
