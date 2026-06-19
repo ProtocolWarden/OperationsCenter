@@ -35,6 +35,7 @@ from operations_center.maintenance import (
     MaintenanceRegistry,
     MaintenanceResult,
 )
+from operations_center.entrypoints.maintenance.board_unblock_task import BoardUnblockTask
 from operations_center.maintenance.ledger_maintain import LedgerMaintainTask
 from operations_center.spec_author.campaign_builder import CampaignBuilder
 from operations_center.spec_author.models import (
@@ -645,6 +646,28 @@ def _log_maintenance_result(result: MaintenanceResult) -> None:
     )
 
 
+def register_maintenance_tasks(
+    registry: MaintenanceRegistry, settings: Any, client: PlaneClient
+) -> MaintenanceRegistry:
+    """Register every maintenance task the live loop runs.
+
+    Extracted so the wiring is unit-testable (the standalone CLI and the
+    watchdog-side loop share it — ADR 0007 follow-up D). Order is informational;
+    the registry schedules by per-task interval.
+    """
+    registry.register(SpecHygieneTask(settings, client))
+    # Operator-interventions ledger consolidation loop (observe + self-verifying
+    # promote). Runs the controller's half of the ledger so a human only ever
+    # encodes a judgment once; recurrences self-verify. Best-effort by design.
+    registry.register(LedgerMaintainTask(settings))
+    # Autonomous board-unblock engine (Rules 1–10 + PR-merged reconciliation).
+    # Previously runnable only as a standalone CLI, so nothing ever investigated
+    # stuck/Blocked tasks; registering it here makes the controller self-heal the
+    # board every cycle with no human in the loop (HARNESS_TRUST_HARDENING §0.1).
+    registry.register(BoardUnblockTask(settings))
+    return registry
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="spec_hygiene — non-LLM spec/campaign hygiene watcher (ADR 0007)",
@@ -679,12 +702,7 @@ def main() -> None:
     # standalone CLI and the watchdog-side loop share the same wiring
     # (ADR 0007 follow-up D).
     registry = MaintenanceRegistry(state_path=args.maintenance_state)
-    task = SpecHygieneTask(settings, client)
-    registry.register(task)
-    # Operator-interventions ledger consolidation loop (observe + self-verifying
-    # promote). Runs the controller's half of the ledger so a human only ever
-    # encodes a judgment once; recurrences self-verify. Best-effort by design.
-    registry.register(LedgerMaintainTask(settings))
+    register_maintenance_tasks(registry, settings, client)
 
     def _build_ctx() -> MaintenanceContext:
         return MaintenanceContext(
@@ -696,10 +714,10 @@ def main() -> None:
     try:
         if args.once:
             # --once bypasses the interval gate so operators can force a
-            # single cycle on demand.
+            # single cycle of every registered maintenance task on demand.
             ctx = _build_ctx()
-            result = task.run_once(ctx)
-            _log_maintenance_result(result)
+            for registered in registry.list_tasks():
+                _log_maintenance_result(registered.run_once(ctx))
             return
         cycle = 0
         while True:

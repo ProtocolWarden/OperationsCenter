@@ -395,6 +395,31 @@ class GitHubPRClient:
         resp.raise_for_status()
         return resp.json()
 
+    def find_pr_by_head(self, owner: str, repo: str, head_ref: str) -> dict | None:
+        """Return the most-recently-created PR whose head branch is ``head_ref``
+        (any state: open/closed/merged), or ``None`` if there is none.
+
+        Uses ``GET /pulls?state=all&head={owner}:{head_ref}`` — a precise,
+        single-call lookup (no pagination over all closed PRs). Best-effort:
+        returns ``None`` on any error so a board-reconcile cycle never hardens
+        into a failure because GitHub was momentarily unreachable. A merged PR is
+        identified by a non-null ``merged_at`` on the returned dict.
+        """
+        try:
+            resp = self._request(
+                "GET",
+                f"{self._API}/repos/{owner}/{repo}/pulls",
+                params={"state": "all", "head": f"{owner}:{head_ref}", "per_page": 100},
+            )
+            resp.raise_for_status()
+            prs = resp.json()
+        except Exception:
+            return None
+        if not isinstance(prs, list) or not prs:
+            return None
+        prs.sort(key=lambda p: (p or {}).get("created_at") or "", reverse=True)
+        return prs[0]
+
     def list_pr_files(self, owner: str, repo: str, pr_number: int) -> list[str]:
         """Return the list of filenames changed in a pull request.
 
