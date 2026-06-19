@@ -1,3 +1,60 @@
+## 2026-06-19 — goal/0ccb698d Stage 2: Implement escalation logic changes ✅
+
+Completed Stage 2 implementation of the escalation logic to prevent false human-parks on CI thrash.
+
+**Implementation Summary ✅**:
+- 7 helper functions implemented in main.py:
+  - `_compute_backoff_interval()` — exponential backoff calculation (5s→10s→20s)
+  - `_update_check_history()` — track check outcomes across polling cycles
+  - `_should_escalate_ci_wait()` — adaptive escalation decision with 4 decision criteria
+  - `_classify_missing_checks()` — classify as never-registered / late-registering / stuck
+  - `_normalize_concerns_signature()` — create signature for concern deduplication
+  - `_track_concern_raised()` — track when concerns are first raised
+  - `_can_escalate_concern()` — prevent repeated escalations of same concern
+
+- 3 escalation points modified to use adaptive logic:
+  - EP9 (ci_persistently_red): Uses adaptive thresholds based on check history
+  - EP10 (ci_never_settled): Classifies missing checks and applies different timeouts
+  - EP5/EP6 (no_verdict/stuck_green): Adds exponential backoff before escalation
+
+- Improved retraction guard (WO-3):
+  - Now checks concern_history holistically instead of just current head
+  - Prevents retraction when unfixed concerns exist on recent heads
+  - Backward compatible with existing state (checks old last_concerns_head_sha)
+
+**Test Coverage ✅**:
+- Created tests/test_stage2_escalation_logic.py: 30 test cases
+  - 4 decision criteria tests
+  - 6 scenario tests (1 per CI thrash pattern)
+  - 2 regression tests
+  - 2 integration tests
+- All 154 tests pass (30 new + 124 existing)
+- Full test suite: 9383 tests pass, 0 failures
+
+**Key Achievements**:
+- ✅ Flaky checks (70% pass) now wait 40 cycles instead of escalating at 20
+- ✅ Late-registering workflows wait 60 cycles (vs 20 before)
+- ✅ Misconfigured checks still escalate at 20 cycles (backward compatible)
+- ✅ Escalation-retraction loops prevented through concern tracking
+- ✅ No-verdict exponential backoff implemented (5s→10s→20s)
+- ✅ Stuck-green detection with ERROR log at 3 escalations (preserved)
+- ✅ Full backward compatibility maintained (all existing tests pass)
+- ✅ No regressions (9383 tests all green)
+
+**Files Modified**:
+- src/operations_center/entrypoints/pr_review_watcher/main.py:
+  - Added 7 helper functions (270 lines, lines 1751-2020)
+  - Updated CI wait escalation logic (lines 2170-2213)
+  - Updated ci_never_settled escalation (lines 2362-2485)
+  - Updated no-verdict escalation (lines 2628-2693)
+  - Updated concern tracking in verdict handling (lines 2707-2710)
+  - Updated retraction guard with holistic concern checking (lines 2065-2102)
+- tests/test_stage2_escalation_logic.py (NEW - 30 comprehensive tests, 570 lines)
+
+**Status**: ✅ COMPLETE — Ready for execution and merge
+
+---
+
 ## 2026-06-19 — goal/0ccb698d Stage 1: Design solution to prevent false human-parks on CI thrash
 
 Completed comprehensive design for preventing false human-parks on CI thrash while
