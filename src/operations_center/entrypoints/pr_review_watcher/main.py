@@ -2086,6 +2086,7 @@ def _phase1(
             pr_number,
         )
 
+    _pr_files = _files_from_diff(diff)
     if len(diff) > _DIFF_LIMIT:
         # Fetch the complete file list so the reviewer can verify implementation
         # completeness even when the diff body is truncated. Without this, the
@@ -2105,7 +2106,6 @@ def _phase1(
             + _file_lines
         )
     else:
-        _pr_files = _files_from_diff(diff)
         diff_excerpt = diff
     # A documentation-only diff gets a rubric that doesn't demand in-diff proof of
     # facts a doc legitimately references but can't contain (the #334 over-flagging).
