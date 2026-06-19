@@ -529,9 +529,7 @@ class RepoObserverService:
                 metric_type="line", granularity="repository", window_days=7
             )
             history_points = len(
-                manager.get_historical_data(
-                    metric_type="line", granularity="repository"
-                )
+                manager.get_historical_data(metric_type="line", granularity="repository")
             )
             regressed = manager.detect_regression(snapshot, metric_type="line")
             alert_mgr = CoverageAlertManager()
@@ -549,9 +547,7 @@ class RepoObserverService:
                     AlertSeverity(alert.severity),
                     module,
                 )
-                routed_summary.append(
-                    f"{category['category']}→{','.join(channels)}"
-                )
+                routed_summary.append(f"{category['category']}→{','.join(channels)}")
             if regressed or alerts:
                 logger.warning(
                     "Coverage trend: run=%s coverage=%.1f%% slope=%+.2f%%/d "

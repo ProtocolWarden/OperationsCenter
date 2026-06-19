@@ -152,9 +152,7 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Create any missing sandbox branch from the remote default branch",
     )
-    parser.add_argument(
-        "--json", dest="output_json", action="store_true", help="Emit JSON output"
-    )
+    parser.add_argument("--json", dest="output_json", action="store_true", help="Emit JSON output")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.WARNING, stream=sys.stderr)

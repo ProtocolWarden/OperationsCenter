@@ -65,9 +65,7 @@ class _UsageStore(Protocol):
 
     def load(self) -> dict[str, Any]: ...
 
-    def record_execution_finished(
-        self, *, task_id: str, backend: str, now: datetime
-    ) -> None: ...
+    def record_execution_finished(self, *, task_id: str, backend: str, now: datetime) -> None: ...
 
 
 def _open_in_flight(
@@ -166,9 +164,7 @@ def clear_orphaned_in_flight(
     reported as ``would_apply`` and the ledger is untouched.
     """
     cleared: list[dict[str, Any]] = []
-    for slot in find_orphaned_in_flight(
-        usage_store, client, now=now, window_hours=window_hours
-    ):
+    for slot in find_orphaned_in_flight(usage_store, client, now=now, window_hours=window_hours):
         entry: dict[str, Any] = {
             "task_id": slot.task_id,
             "backend": slot.backend,
@@ -217,9 +213,7 @@ def reconcile_in_flight_on_startup(
 
         try:
             with locked_state_file(usage_store.path, timeout=lock_timeout):
-                return clear_orphaned_in_flight(
-                    usage_store, client, now=moment, apply=True
-                )
+                return clear_orphaned_in_flight(usage_store, client, now=moment, apply=True)
         except FileLockTimeoutError:
             # Another worker holds the lock and is already reconciling.
             return []

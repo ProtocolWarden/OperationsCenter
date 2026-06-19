@@ -149,9 +149,7 @@ def test_observe_drives_coverage_trend_recording(tmp_path: Path) -> None:
     svc = _make_service(
         snapshot_builder=builder,
         artifact_writer=writer,
-        coverage_signal_collector=_collector(
-            CoverageSignal(status="ok", total_coverage_pct=91.5)
-        ),
+        coverage_signal_collector=_collector(CoverageSignal(status="ok", total_coverage_pct=91.5)),
     )
 
     svc.observe(_make_context(tmp_path))
@@ -177,9 +175,7 @@ def test_observe_low_coverage_categorizes_and_routes_alerts(
     svc = _make_service(
         snapshot_builder=builder,
         artifact_writer=writer,
-        coverage_signal_collector=_collector(
-            CoverageSignal(status="ok", total_coverage_pct=10.0)
-        ),
+        coverage_signal_collector=_collector(CoverageSignal(status="ok", total_coverage_pct=10.0)),
     )
 
     with caplog.at_level("WARNING", logger=service_mod.logger.name):

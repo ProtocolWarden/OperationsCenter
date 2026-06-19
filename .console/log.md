@@ -1,3 +1,35 @@
+## 2026-06-19 — intervene: fix-forward PR #340 round 2 (D12 incomplete-integration)
+
+After the env-allowlist fix, audit stayed red on a single LOW: **D12** —
+`verify_no_token_in_workspace()` (workspace.py:161) was tested but never called in
+production. Genuine incomplete integration: a thorough credential-leak verifier
+sat fully tested yet unwired. Fix completes the integration rather than deleting
+the safety check — `prepare()` now calls it as a production gate right after
+`_strip_token_from_config`, failing closed (`RuntimeError: token survived ...`) if
+a token remains in .git/config or the reflog. Added `test_prepare_raises_when_
+token_survives_sanitisation` so the gate itself (not just the helper) is covered.
+D12/DC10 clean, ruff clean, 59 workspace tests pass.
+
+## 2026-06-19 — intervene: fix-forward Phase-0 PR #340 (env-allowlist would halt the fleet)
+
+PR #340 (SBX Layer 0 + pre-push applier) escalated `ci_persistently_red` — two red
+required checks (audit: 5 findings; License headers) the CONCERNS-only fix loop
+can't self-heal. Operator-authorized fix-forward. The real defect under the cruft:
+`build_allowlist_env` stripped the worker env to {PATH,CI,LANG,LC_ALL,PYTHONPATH,
+GITHUB_ACTIONS}, dropping **model creds + HOME** — a latent fleet-halt that
+violates the self-healing invariant (HARNESS_TRUST_HARDENING.md §0.1), and a test
+locked the bug in. Fix: made the allowlist a *passthrough* — pinned safe base +
+forward operational vars (HOME, cache dirs) + model creds (so local/cloud backends
+still run) + the ACTIVE repo's git token via `git_token_passthrough(settings,
+repo_cfg)`; deny-set (PLANE_API_TOKEN, AWS_*) never forwarded; sibling-repo tokens
+dropped. Rewrote `test_env_allowlist.py` to assert BOTH halves (secrets dropped +
+function preserved) — the test that would have caught the bug. Cleared cruft:
+deleted 2 STAGE docs + PHASE0_FINAL_VALIDATION + 4 redundant bug-encoding
+credential/stage tests; restored #339-owned docs + operator console to main; fixed
+the T2 no-assert reflog test; added SPDX to the empty `__init__`. Audit 0 findings,
+ruff clean, 7754 unit/maint/reviewer tests pass (the 6 doc-accuracy failures are a
+pre-existing bare-`python` env artifact, not this diff).
+
 ## 2026-06-18 — spec: harness trust-hardening (INJ + SBX + EVAL), adversarial + self-healing
 
 New completion spec `docs/design/HARNESS_TRUST_HARDENING.md` closing the three

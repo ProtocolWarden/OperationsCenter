@@ -46,7 +46,9 @@ def test_explicit_closes_ref_matches_uuid():
 
 def test_close_keyword_variants_and_case_insensitive():
     for kw in ("Fixes", "resolved", "RESOLVES task", "Promotes"):
-        cl = find_closures([_issue(_UUID, "Todo")], [_pr(7, title=f"{kw} {_UUID}")], "OperationsCenter")
+        cl = find_closures(
+            [_issue(_UUID, "Todo")], [_pr(7, title=f"{kw} {_UUID}")], "OperationsCenter"
+        )
         assert len(cl) == 1, kw
 
 
@@ -114,7 +116,9 @@ def test_merged_prs_recent_filters_unmerged_and_old():
     ]
     gh = _FakeGitHub(prs)
     # owner_repo_from_clone_url is a staticmethod on the real class; patch via clone_url
-    kept = _merged_prs_recent(gh, "https://github.com/ProtocolWarden/OperationsCenter.git", days=7, now=now)
+    kept = _merged_prs_recent(
+        gh, "https://github.com/ProtocolWarden/OperationsCenter.git", days=7, now=now
+    )
     assert [p["number"] for p in kept] == [1]
 
 
@@ -158,7 +162,10 @@ def test_apply_closures_one_failure_does_not_abort(monkeypatch):
     monkeypatch.setattr(mod, "_plane_client", lambda settings: fake)
     n = apply_closures(
         object(),
-        [TaskClosure("R", "bad", "x", 1, "closes-ref"), TaskClosure("R", _UUID, "y", 2, "closes-ref")],
+        [
+            TaskClosure("R", "bad", "x", 1, "closes-ref"),
+            TaskClosure("R", _UUID, "y", 2, "closes-ref"),
+        ],
     )
     assert n == 1  # the good one still applied
     assert fake.closed is True
@@ -166,7 +173,9 @@ def test_apply_closures_one_failure_does_not_abort(monkeypatch):
 
 def test_apply_closures_empty_is_noop(monkeypatch):
     called = {"n": 0}
-    monkeypatch.setattr(mod, "_plane_client", lambda settings: called.__setitem__("n", called["n"] + 1))
+    monkeypatch.setattr(
+        mod, "_plane_client", lambda settings: called.__setitem__("n", called["n"] + 1)
+    )
     assert apply_closures(object(), []) == 0
     assert called["n"] == 0  # no client constructed when nothing to do
 
@@ -176,9 +185,13 @@ def test_apply_closures_empty_is_noop(monkeypatch):
 
 def test_main_report_only(monkeypatch, capsys):
     monkeypatch.setattr(mod, "load_settings", lambda _c: object())
-    monkeypatch.setattr(mod, "scan", lambda *a, **k: [TaskClosure("R", _UUID, "task name", 42, "closes-ref")])
+    monkeypatch.setattr(
+        mod, "scan", lambda *a, **k: [TaskClosure("R", _UUID, "task name", 42, "closes-ref")]
+    )
     applied = {"called": False}
-    monkeypatch.setattr(mod, "apply_closures", lambda *a, **k: applied.__setitem__("called", True) or 1)
+    monkeypatch.setattr(
+        mod, "apply_closures", lambda *a, **k: applied.__setitem__("called", True) or 1
+    )
     rc = main(["--config", "x.yaml"])
     assert rc == 0
     out = capsys.readouterr().out
@@ -188,7 +201,9 @@ def test_main_report_only(monkeypatch, capsys):
 
 def test_main_apply(monkeypatch, capsys):
     monkeypatch.setattr(mod, "load_settings", lambda _c: object())
-    monkeypatch.setattr(mod, "scan", lambda *a, **k: [TaskClosure("R", _UUID, "t", 42, "closes-ref")])
+    monkeypatch.setattr(
+        mod, "scan", lambda *a, **k: [TaskClosure("R", _UUID, "t", 42, "closes-ref")]
+    )
     monkeypatch.setattr(mod, "apply_closures", lambda *a, **k: 1)
     rc = main(["--config", "x.yaml", "--apply"])
     assert rc == 0

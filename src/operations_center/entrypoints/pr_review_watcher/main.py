@@ -1870,9 +1870,10 @@ def _phase1(
             # pass LGTM'd the same broken, CI-invisible integration. A
             # concern-based escalation waits for a real new push (changed head,
             # handled above) or a human — never for "CI is still green".
-            _concerns_on_this_head = bool(current_head_sha) and current_head_sha == str(
-                state.get("last_concerns_head_sha") or ""
-            ).strip()
+            _concerns_on_this_head = (
+                bool(current_head_sha)
+                and current_head_sha == str(state.get("last_concerns_head_sha") or "").strip()
+            )
             _ci_green_retracted = state.get("ci_green_retraction_count", 0)
             _did_ci_green_retract = False
             if not _concerns_on_this_head and _ci_green_retracted < _MAX_CI_GREEN_RETRACTIONS:
@@ -2592,9 +2593,7 @@ def _phase1(
         # NOT mistake it for an external push and reset the escalation budget.
         # Without this, fix_attempts never accumulates and the PR loops forever.
         try:
-            state["last_fix_push_sha"] = _pr_head_sha(
-                gh_client.get_pr(owner, repo, pr_number)
-            )
+            state["last_fix_push_sha"] = _pr_head_sha(gh_client.get_pr(owner, repo, pr_number))
         except Exception as exc:  # noqa: BLE001 — best-effort; reset-guard degrades safe
             logger.warning(
                 "pr_review_watcher: could not record fix-push head for PR #%d — %s",

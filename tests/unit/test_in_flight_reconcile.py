@@ -116,17 +116,12 @@ def test_finished_event_closes_the_slot() -> None:
 def test_events_older_than_window_are_ignored() -> None:
     old = (_NOW - timedelta(hours=48)).isoformat()
     assert (
-        find_orphaned_in_flight(
-            _store([_started("t-old", ts=old)]), _FakeClient(), now=_NOW
-        )
-        == []
+        find_orphaned_in_flight(_store([_started("t-old", ts=old)]), _FakeClient(), now=_NOW) == []
     )
 
 
 def test_non_404_http_error_is_skipped_not_cleared() -> None:
-    err = httpx.HTTPStatusError(
-        "500", request=mock.Mock(), response=mock.Mock(status_code=500)
-    )
+    err = httpx.HTTPStatusError("500", request=mock.Mock(), response=mock.Mock(status_code=500))
     client = _FakeClient({"t-err": err})
     assert find_orphaned_in_flight(_store([_started("t-err")]), client, now=_NOW) == []
 
