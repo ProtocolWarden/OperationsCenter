@@ -56,7 +56,7 @@ class FakeProc:
 def _install_common_patches(monkeypatch):
     """Patch out subprocess-adjacent helpers so dispatch is hermetic."""
     monkeypatch.setattr(dispatch, "venv_python", lambda root: "/fake/python")
-    monkeypatch.setattr(dispatch, "build_allowlist_env", lambda root: {"PATH": "/fake"})
+    monkeypatch.setattr(dispatch, "build_allowlist_env", lambda root, **kw: {"PATH": "/fake"})
     monkeypatch.setattr(dispatch, "task_type_from_kind", lambda kind: "feature")
     monkeypatch.setattr(dispatch, "desc_text", lambda issue: issue.get("description_stripped", ""))
     monkeypatch.setattr(dispatch, "extract_goal", lambda desc, title: desc or title)
@@ -482,7 +482,7 @@ def test_dispatch_spec_author_no_payload(monkeypatch):
 def test_dispatch_spec_author_happy(monkeypatch):
     _install_common_patches(monkeypatch)
     monkeypatch.setattr(dispatch, "venv_python", lambda r: "/py")
-    monkeypatch.setattr(dispatch, "build_allowlist_env", lambda r: {})
+    monkeypatch.setattr(dispatch, "build_allowlist_env", lambda r, **kw: {})
 
     import operations_center.entrypoints.board_worker._text as text_mod
 
@@ -522,7 +522,7 @@ def test_dispatch_spec_author_happy(monkeypatch):
 def test_dispatch_spec_author_no_repo_cfg_uses_file_url(monkeypatch):
     _install_common_patches(monkeypatch)
     monkeypatch.setattr(dispatch, "venv_python", lambda r: "/py")
-    monkeypatch.setattr(dispatch, "build_allowlist_env", lambda r: {})
+    monkeypatch.setattr(dispatch, "build_allowlist_env", lambda r, **kw: {})
 
     import operations_center.entrypoints.board_worker._text as text_mod
 

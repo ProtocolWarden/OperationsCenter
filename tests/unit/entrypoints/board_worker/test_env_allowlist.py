@@ -1,6 +1,14 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-"""Tests for environment variable allowlisting in board_worker."""
+"""Tests for environment variable allowlisting in board_worker.
+
+The allowlist is a *minimization*, not a strip-everything: it drops secrets the
+worker provably does not need (the Plane token, sibling-repo tokens, host secrets)
+while preserving what it needs to run/review/fix/push — HOME + cache dirs, model
+creds, and the ACTIVE repo's git token. Dropping those would hard-halt the fleet,
+violating the self-healing invariant (HARNESS_TRUST_HARDENING.md §0.1). These
+tests pin both halves of that contract.
+"""
 
 from pathlib import Path
 from unittest import mock
@@ -12,117 +20,104 @@ from operations_center.entrypoints.board_worker._subprocess import (
 )
 
 
-class TestEnvAllowlist:
-    """Verify environment allowlisting blocks all secrets."""
+class TestEnvAllowlistDropsSecrets:
+    """The minimization drops secrets the worker does not need."""
 
-    def test_allowlist_contains_only_safe_keys(self) -> None:
-        """Allowlist should contain only whitelisted variable names."""
-        safe_keys = {"PATH", "LANG", "LC_ALL", "CI"}
-        assert set(MINIMAL_ENV_ALLOWLIST.keys()) == safe_keys
+    def test_static_base_is_only_safe_keys(self) -> None:
+        assert set(MINIMAL_ENV_ALLOWLIST.keys()) == {"PATH", "LANG", "LC_ALL", "CI"}
 
-    def test_build_allowlist_env_returns_dict(self, tmp_path: Path) -> None:
-        """build_allowlist_env() returns a dict."""
+    def test_returns_dict_with_pinned_pythonpath(self, tmp_path: Path) -> None:
         env = build_allowlist_env(tmp_path)
         assert isinstance(env, dict)
+        assert env["PYTHONPATH"] == str(tmp_path / "src")
 
-    def test_build_allowlist_env_sets_pythonpath(self, tmp_path: Path) -> None:
-        """PYTHONPATH should be set to oc_root/src."""
-        env = build_allowlist_env(tmp_path)
-        expected = str(tmp_path / "src")
-        assert env["PYTHONPATH"] == expected
-
-    def test_build_allowlist_env_has_minimal_keys(self, tmp_path: Path) -> None:
-        """Environment should have minimal safe keys plus PYTHONPATH."""
-        env = build_allowlist_env(tmp_path)
-        expected_keys = {"PATH", "LANG", "LC_ALL", "CI", "PYTHONPATH", "GITHUB_ACTIONS"}
-        assert set(env.keys()) == expected_keys
-
-    def test_build_allowlist_env_excludes_inherited_secrets(self, tmp_path: Path) -> None:
-        """Even if parent env has secrets, allowlist should exclude them."""
+    def test_drops_unrelated_secrets(self, tmp_path: Path) -> None:
+        """Plane token, AWS creds, sibling git token, and unknown vars are dropped."""
         with mock.patch.dict(
             "os.environ",
             {
-                "GITHUB_TOKEN": "ghp_secret123",
+                "PLANE_API_TOKEN": "pk_xyz",
                 "AWS_ACCESS_KEY_ID": "AKIAIOSFODNN7EXAMPLE",
-                "CUSTOM_SECRET": "should_not_be_included",
+                "AWS_SECRET_ACCESS_KEY": "wJalrXUtnFEMI",
+                "GITHUB_TOKEN": "ghp_secret",  # not forwarded unless it is the active token
+                "CUSTOM_SECRET": "nope",
                 "PATH": "/custom/path",
             },
+            clear=True,
         ):
             env = build_allowlist_env(tmp_path)
-            assert "GITHUB_TOKEN" not in env
-            assert "AWS_ACCESS_KEY_ID" not in env
-            assert "CUSTOM_SECRET" not in env
-            # PATH is pinned to safe default, not inherited from parent
+            for leaked in (
+                "PLANE_API_TOKEN",
+                "AWS_ACCESS_KEY_ID",
+                "AWS_SECRET_ACCESS_KEY",
+                "GITHUB_TOKEN",
+                "CUSTOM_SECRET",
+            ):
+                assert leaked not in env
+            # PATH is pinned, never inherited
             assert env["PATH"] == "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-    def test_build_allowlist_env_includes_github_actions_if_present(self, tmp_path: Path) -> None:
-        """GITHUB_ACTIONS should be included if in parent env."""
-        with mock.patch.dict("os.environ", {"GITHUB_ACTIONS": "true"}):
-            env = build_allowlist_env(tmp_path)
-            assert env.get("GITHUB_ACTIONS") == "true"
+    def test_deny_set_wins_over_explicit_passthrough(self, tmp_path: Path) -> None:
+        """A denied secret is never forwarded even if a caller lists it."""
+        with mock.patch.dict("os.environ", {"PLANE_API_TOKEN": "pk"}, clear=True):
+            env = build_allowlist_env(tmp_path, passthrough=("PLANE_API_TOKEN",))
+            assert "PLANE_API_TOKEN" not in env
 
-    def test_build_allowlist_env_defaults_github_actions_to_false(self, tmp_path: Path) -> None:
-        """GITHUB_ACTIONS should default to 'false' if not in parent env."""
+    def test_github_actions_default_and_passthrough(self, tmp_path: Path) -> None:
         with mock.patch.dict("os.environ", {}, clear=True):
+            assert build_allowlist_env(tmp_path)["GITHUB_ACTIONS"] == "false"
+        with mock.patch.dict("os.environ", {"GITHUB_ACTIONS": "true"}, clear=True):
+            assert build_allowlist_env(tmp_path)["GITHUB_ACTIONS"] == "true"
+
+
+class TestEnvAllowlistPreservesFunction:
+    """The minimization preserves what the worker needs — the §0.1 invariant.
+
+    These are the assertions that would have caught the original strip-everything
+    bug: had model creds / HOME been dropped, the fleet could not reach a model or
+    run its toolchain, a hard halt.
+    """
+
+    def test_preserves_home_and_cache_dirs(self, tmp_path: Path) -> None:
+        with mock.patch.dict(
+            "os.environ",
+            {"HOME": "/home/dev", "XDG_CACHE_HOME": "/home/dev/.cache"},
+            clear=True,
+        ):
             env = build_allowlist_env(tmp_path)
-            assert env.get("GITHUB_ACTIONS") == "false"
+            assert env["HOME"] == "/home/dev"
+            assert env["XDG_CACHE_HOME"] == "/home/dev/.cache"
 
-    def test_build_allowlist_env_excludes_plane_token(self, tmp_path: Path) -> None:
-        """PLANE_API_KEY must not be in allowlist env."""
-        with mock.patch.dict("os.environ", {"PLANE_API_KEY": "secret_plane_token"}):
-            env = build_allowlist_env(tmp_path)
-            assert "PLANE_API_KEY" not in env
-
-    def test_build_allowlist_env_excludes_openai_key(self, tmp_path: Path) -> None:
-        """OPENAI_API_KEY must not be in allowlist env."""
-        with mock.patch.dict("os.environ", {"OPENAI_API_KEY": "sk_secret"}):
-            env = build_allowlist_env(tmp_path)
-            assert "OPENAI_API_KEY" not in env
-
-    def test_minimal_allowlist_has_safe_path(self) -> None:
-        """PATH should be set to a safe, standard value."""
-        path = MINIMAL_ENV_ALLOWLIST["PATH"]
-        assert path.startswith("/usr/local/sbin")
-        assert "/bin" in path
-        assert "custom" not in path.lower()
-        assert "user" not in path.lower()
-
-
-class TestEnvAllowlistIntegration:
-    """Integration tests: env allowlist actually excludes secrets."""
-
-    def test_worker_env_passed_to_subprocess_excludes_secrets(self, tmp_path: Path) -> None:
-        """Verify that worker subprocess receives allowlist env, not full env."""
+    def test_preserves_model_creds(self, tmp_path: Path) -> None:
+        """Model access must survive or the worker cannot run/fix (self-healing)."""
         with mock.patch.dict(
             "os.environ",
             {
-                "GITHUB_TOKEN": "ghp_abc123",
-                "PLANE_API_KEY": "pk_xyz",
-                "AWS_SECRET_ACCESS_KEY": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-                "PATH": "/opt/custom/bin:/usr/bin",
-                "LANG": "fr_FR.UTF-8",
+                "OPENAI_API_KEY": "sk-local",
+                "ANTHROPIC_API_KEY": "sk-ant",
+                "OLLAMA_HOST": "http://localhost:11434",
             },
+            clear=True,
         ):
             env = build_allowlist_env(tmp_path)
+            assert env["OPENAI_API_KEY"] == "sk-local"
+            assert env["ANTHROPIC_API_KEY"] == "sk-ant"
+            assert env["OLLAMA_HOST"] == "http://localhost:11434"
 
-            # Secrets excluded
-            assert "GITHUB_TOKEN" not in env
-            assert "PLANE_API_KEY" not in env
-            assert "AWS_SECRET_ACCESS_KEY" not in env
+    def test_forwards_active_repo_git_token_only(self, tmp_path: Path) -> None:
+        """The active repo's git token is forwarded so push works; others are not."""
+        with mock.patch.dict(
+            "os.environ",
+            {"REPO_A_TOKEN": "ghp_a", "REPO_B_TOKEN": "ghp_b"},
+            clear=True,
+        ):
+            env = build_allowlist_env(tmp_path, passthrough=("REPO_A_TOKEN",))
+            assert env["REPO_A_TOKEN"] == "ghp_a"  # active repo's token: forwarded
+            assert "REPO_B_TOKEN" not in env  # sibling repo's token: dropped
 
-            # Safe values present but pinned (not inherited)
-            assert env["LANG"] == "en_US.UTF-8"
-            assert env["PATH"] != "/opt/custom/bin:/usr/bin"
-            assert "/usr/bin" in env["PATH"]
-
-    def test_allowlist_env_minimal_size(self, tmp_path: Path) -> None:
-        """Allowlist env should have only ~6 keys, not full parent env."""
-        with mock.patch.dict("os.environ", {f"EXTRA_VAR_{i}": f"value_{i}" for i in range(20)}):
-            env = build_allowlist_env(tmp_path)
-            assert len(env) <= 7  # PATH, LANG, LC_ALL, CI, PYTHONPATH, GITHUB_ACTIONS, + extras
-
-    def test_allowlist_env_deterministic(self, tmp_path: Path) -> None:
-        """Multiple calls with same input should return same env."""
-        env1 = build_allowlist_env(tmp_path)
-        env2 = build_allowlist_env(tmp_path)
-        assert env1 == env2
+    def test_absent_passthrough_vars_are_not_invented(self, tmp_path: Path) -> None:
+        """Only vars actually present in the parent env are forwarded."""
+        with mock.patch.dict("os.environ", {}, clear=True):
+            env = build_allowlist_env(tmp_path, passthrough=("SOME_TOKEN",))
+            assert "SOME_TOKEN" not in env
+            assert "HOME" not in env  # not present → not added

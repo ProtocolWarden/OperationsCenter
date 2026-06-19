@@ -165,8 +165,12 @@ class TestCleanReflog:
         git_mock._run.side_effect = RuntimeError("git failed")
         mgr = WorkspaceManager(git_client=git_mock)
 
-        # Should not raise
+        # Should swallow the error (non-fatal), not raise.
         mgr._clean_reflog(ws)
+
+        # It must have actually attempted the reflog/gc work that then failed —
+        # i.e. the error was caught internally, not avoided by skipping the call.
+        assert git_mock._run.called
 
 
 class TestVerifyNoTokenInWorkspace:
