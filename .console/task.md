@@ -9,7 +9,7 @@ Reframe reviewer needs-human escalations to honor the self-healing invariant (no
 
 ## Current Stage
 
-Stage 2: Implement the escalation logic changes ✅ COMPLETE
+Stage 4: Run full test suite and linters, fix any failures ✅ COMPLETE
 
 ## Objective
 
