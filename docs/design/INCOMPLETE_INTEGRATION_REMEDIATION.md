@@ -9,7 +9,10 @@ status: implemented
 tested but never wired" debt exists across the platform, and is the #313 pattern
 (a PR claiming completion while shipping inert code) systemic? This doc records
 the cross-repo audit, the adversarial dispositions, and what shipped.
-Companion to [Self-Heal Ladder](./SELF_HEAL_LADDER.md).
+Companion to [Self-Heal Ladder](./SELF_HEAL_LADDER.md). The forward-looking
+*trust-axis* follow-on — injection defense, runtime isolation, and a self-healing
+agent-quality eval — is specified in
+[Harness Trust-Hardening](./HARNESS_TRUST_HARDENING.md).
 
 ## Headline finding (adversarial)
 
