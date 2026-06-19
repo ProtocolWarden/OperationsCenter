@@ -4,10 +4,17 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 from collections.abc import Sequence
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+# Keep the persisted diagnostics bounded — enough to diagnose, not unbounded.
+_DIAG_MAX_STREAM_CHARS = 200_000
+_DIAG_TAIL_CHARS = 1200
 
 _TRANSIENT_CATEGORIES = {"backend_error", "timeout"}
 _TRANSIENT_REASON_PATTERNS = (
@@ -176,3 +183,53 @@ def is_transient_failure(result: dict) -> bool:
         return False
     reason = (result.get("failure_reason") or "").lower()
     return any(p in reason for p in _TRANSIENT_REASON_PATTERNS)
+
+
+def persist_failure_diagnostics(
+    result: dict,
+    oc_root: Path,
+    role: str,
+    short_id: str,
+    proc,
+    result_text: str = "",
+) -> Path | None:
+    """Persist the executor subprocess output for a FAILED dispatch and enrich
+    ``result['failure_reason']`` with a pointer, so the failure is investigable.
+
+    Why this exists: the executor captures stdout/stderr (``capture_output=True``)
+    but on every failure path that output is discarded; the ``team_executor``
+    library persists no run artifacts; and the task records only a summary like
+    "N of N stages failed". So a recurring execution failure cannot be
+    root-caused — the controller can only blind-requeue. This writes the raw
+    output to ``logs/local/failures/<role>-<short_id>.log`` (a durable, operator-
+    and controller-readable artifact) and appends a ``[diagnostics: <path>]``
+    pointer plus a short tail to the failure reason that flows into the task
+    comment. Best-effort: never raises (a diagnostics-write failure must not turn
+    a recoverable task failure into a crash).
+    """
+    try:
+        out_dir = oc_root / "logs" / "local" / "failures"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        path = out_dir / f"{role}-{short_id}.log"
+        stdout = (getattr(proc, "stdout", "") or "")[-_DIAG_MAX_STREAM_CHARS:]
+        stderr = (getattr(proc, "stderr", "") or "")[-_DIAG_MAX_STREAM_CHARS:]
+        rc = getattr(proc, "returncode", "?")
+        path.write_text(
+            f"# role={role} task={short_id} returncode={rc}\n"
+            f"# === stderr ===\n{stderr}\n"
+            f"# === stdout ===\n{stdout}\n"
+            f"# === result.json ===\n{result_text}\n",
+            encoding="utf-8",
+        )
+        tail = (stderr.strip() or stdout.strip())[-_DIAG_TAIL_CHARS:]
+        base = result.get("failure_reason") or result.get("status") or "execution failed"
+        result["failure_reason"] = f"{base} [diagnostics: {path}]"
+        if tail:
+            result["failure_reason"] += f"\n--- executor tail ---\n{tail}"
+        logger.warning(
+            "board_worker[%s]: task=%s failure diagnostics → %s", role, short_id, path
+        )
+        return path
+    except Exception as exc:  # noqa: BLE001 — diagnostics must never crash dispatch
+        logger.warning("board_worker[%s]: failed to persist diagnostics — %s", role, exc)
+        return None

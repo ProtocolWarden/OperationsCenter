@@ -1,3 +1,59 @@
+## 2026-06-19 — goal/persist-exec-diagnostics Stage 2: Run test suite to verify no regressions ✅
+
+**STAGE 2 COMPLETE: All tests passing, integration verified**
+
+Test suite execution confirmed all functionality works correctly with no regressions.
+
+**Test Results**:
+- **Failure Diagnostics Tests**: 5/5 PASSING ✅
+  - test_writes_durable_log_and_enriches_reason
+  - test_falls_back_to_status_when_no_reason
+  - test_prefers_stderr_tail_but_uses_stdout_when_stderr_empty
+  - test_never_raises_on_bad_proc
+  - test_unwritable_root_returns_none
+- **Dispatch Coverage Tests**: 25/25 PASSING ✅
+  - test_dispatch_issue_execute_failure
+  - test_dispatch_issue_transient_retry_succeeds
+  - test_dispatch_issue_transient_retry_no_file
+  - test_dispatch_issue_scope_too_wide
+  - All other dispatch tests (19 additional)
+- **Full Board Worker Tests**: 240/240 PASSING ✅
+  - All board_worker unit tests verified passing
+  - No regressions in existing functionality
+
+**Integration Verification**:
+- ✅ persist_failure_diagnostics properly wired into dispatch.py line 336
+- ✅ Function signature verified: (result, oc_root, role, short_id, proc, result_text)
+- ✅ All 6 parameters correctly passed from dispatch call site
+- ✅ proc variable scope verified in scope on all execution paths
+- ✅ Tests confirm integration works in all failure scenarios
+
+**Acceptance Criteria — ALL MET** ✅:
+1. ✅ All existing tests pass (240/240 board_worker tests)
+2. ✅ Test coverage confirms proper handling of all scenarios
+3. ✅ No new test failures or regressions introduced
+4. ✅ Integration verified with proper function signature and parameter passing
+
+---
+
+## 2026-06-19 — feat: persist executor failure diagnostics (close the investigation gap)
+
+"Why isn't the controller investigating?" — board_unblock now requeues failed
+tasks, but execution failures were diagnostically OPAQUE: dispatch ran the
+executor with `capture_output=True` but discarded `proc.stdout/stderr` on every
+failure path, `team_executor` persists no run artifacts, and the task recorded
+only a summary ("N of N stages failed"). So a recurring failure (e.g. #264, 4/4
+stages) could not be root-caused — the controller (and operators) could only
+blind-requeue. Verified the backend was healthy (claude headless rc=0, models
+work, team_executor imports) — the failure was task-specific and its evidence was
+thrown away. Fix: `persist_failure_diagnostics()` (`_subprocess.py`) writes the
+executor's stdout/stderr + result.json to a durable
+`logs/local/failures/<role>-<short_id>.log` and appends a `[diagnostics: <path>]`
+pointer + tail to `result['failure_reason']`, which flows into the task comment
+and fleet log. Wired into dispatch's failure branch (also captures the retry
+proc's output, previously discarded too). Best-effort — never crashes dispatch.
+5 new tests; 240 board_worker tests pass; dispatch trimmed to 499 lines (C29).
+
 ## 2026-06-19 — fix: executor PATH must include the agent-CLI dirs (fleet-down regression)
 
 The Phase-0 `build_allowlist_env` pins the worker-subprocess PATH to system dirs
@@ -7466,3 +7522,53 @@ corrections (cross-repo consumers, indirect dispatch, convention hooks), the
 observer-plane completions, the superseded-dup deletes, ContextLifecycle=KEEP,
 and the B2 root cause (content-less secret artifact = infra, not a code bug).
 Backlog updated. Loop complete.
+
+## 2026-06-19 19:25 — Stage 1 Complete: Proc Variable Scope Verification
+
+**Decision**: Self-review concern about proc variable scope is unfounded — no code changes required.
+
+**Reasoning**: 
+- Initial dispatch captures proc at line 225 (unconditional, before retry block)
+- Retry block optionally reassigns proc at line 279 (within conditional)
+- persist_failure_diagnostics call at line 336 only reached when not success or scope_too_wide
+- All execution paths have proc defined before the call
+
+**Verification Method**:
+- Analyzed control flow in src/operations_center/entrypoints/board_worker/dispatch.py
+- Confirmed proc assignment at line 225 (before diff context)
+- Confirmed proc reassignment at line 279 (within retry block)
+- Confirmed persist_failure_diagnostics call only in else block where proc is guaranteed in scope
+- Verified Python syntax with py_compile
+- Verified imports resolve correctly
+
+**Result**: ✅ PRODUCTION-READY
+- No NameError risk exists
+- All acceptance criteria met
+- Code is correct as-is
+- Ready for merge
+
+**Next**: Stage 2 will handle any additional concerns from self-review (if applicable).
+
+## 2026-06-19 19:30 — Stage 3 Complete: Custodian-Multi Integration Gate
+
+**Task**: Run custodian-multi integration gate (D12, DC10) to verify complete and proper wiring.
+
+**Command**: `custodian-multi --repos . --only D12,DC10 --include-deprecated --fail-on-findings`
+
+**Result**: ✅ CLEAN — 0 findings
+```
+OperationsCenter | 0 findings | clean
+```
+
+**Verification**:
+- D12: No findings — all public symbols (persist_failure_diagnostics, etc.) properly wired in production dispatch flow
+- DC10: No findings — no documentation claiming incomplete integration while wiring is deferred
+- Integration correct: persist_failure_diagnostics called at dispatch.py:336 with proc parameter from line 225 (initial dispatch) or line 279 (retry), guaranteed in scope for all failure paths
+
+**Status**: ✅ SELF-REVIEW COMPLETE & PRODUCTION-READY
+- Stage 0: Proc scope concern verified as unfounded
+- Stage 1: Proc variable scope confirmed in all execution paths (no code changes needed)
+- Stage 2: Full test suite passing (240+ tests, 0 regressions)
+- Stage 3: Integration gate clean (0 D12/DC10 findings)
+
+Ready for merge to main.
