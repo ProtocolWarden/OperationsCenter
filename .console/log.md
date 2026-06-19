@@ -1,3 +1,14 @@
+## 2026-06-19 — fix: PR-merged reconcile must match head.ref locally (org-redirect-proof)
+
+Live dry-run against the board caught a bug in the #268 reconcile: the lookup used
+the GitHub `head={owner}:{ref}` filter, but the configured clone-url owner
+(`Velascat`) is stale — the repo redirected to `ProtocolWarden` — so the filter
+matched nothing and #266 (PR #340 merged) fell through to STALE_IN_REVIEW (would
+re-queue already-merged work, the exact bug #268 prevents). `find_pr_by_head` now
+scans recent PRs and matches `head.ref` locally (the repo path follows the
+redirect). Re-validated against the live board: #266 reconciles In Review → Done.
+3 new find_pr_by_head tests; 95 related pass.
+
 ## 2026-06-19 — operator: wire board_unblock into the live loop + PR-merged reconcile (#268)
 
 The autonomous board-unblock engine (`entrypoints/maintenance/board_unblock.py`,

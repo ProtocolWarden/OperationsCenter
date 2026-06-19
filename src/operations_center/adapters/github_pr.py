@@ -399,26 +399,38 @@ class GitHubPRClient:
         """Return the most-recently-created PR whose head branch is ``head_ref``
         (any state: open/closed/merged), or ``None`` if there is none.
 
-        Uses ``GET /pulls?state=all&head={owner}:{head_ref}`` — a precise,
-        single-call lookup (no pagination over all closed PRs). Best-effort:
-        returns ``None`` on any error so a board-reconcile cycle never hardens
-        into a failure because GitHub was momentarily unreachable. A merged PR is
-        identified by a non-null ``merged_at`` on the returned dict.
+        Matches ``head.ref`` locally rather than via the API's
+        ``head={user}:{ref}`` filter: that filter keys off the head *owner*, which
+        is unreliable when a repo's org has redirected (e.g. a clone URL pointing
+        at ``Velascat/…`` that now resolves to ``ProtocolWarden/…``) — the branch
+        lives under the canonical owner, so the stale-owner filter silently
+        matches nothing. The repo path itself follows the redirect. Scans the 100
+        most-recent PRs (ample for reconciling currently-stuck tasks, whose PRs are
+        recent). Best-effort: returns ``None`` on any error so a board-reconcile
+        cycle never hardens into a failure. A merged PR has a non-null
+        ``merged_at``.
         """
         try:
             resp = self._request(
                 "GET",
                 f"{self._API}/repos/{owner}/{repo}/pulls",
-                params={"state": "all", "head": f"{owner}:{head_ref}", "per_page": 100},
+                params={
+                    "state": "all",
+                    "per_page": 100,
+                    "sort": "created",
+                    "direction": "desc",
+                },
             )
             resp.raise_for_status()
             prs = resp.json()
         except Exception:
             return None
-        if not isinstance(prs, list) or not prs:
+        if not isinstance(prs, list):
             return None
-        prs.sort(key=lambda p: (p or {}).get("created_at") or "", reverse=True)
-        return prs[0]
+        for pr in prs:
+            if isinstance(pr, dict) and ((pr.get("head") or {}).get("ref")) == head_ref:
+                return pr
+        return None
 
     def list_pr_files(self, owner: str, repo: str, pr_number: int) -> list[str]:
         """Return the list of filenames changed in a pull request.
