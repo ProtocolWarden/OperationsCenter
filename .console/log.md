@@ -1,3 +1,16 @@
+## 2026-06-18 — fix: reviewer applies a docs-only rubric (stop over-flagging doc PRs)
+
+Root fix for the #334 over-flagging (the loop-bug #335 only bounded it). When a
+PR's diff is documentation-only (every changed file is `.md/.markdown/.rst/.txt`
+or under `docs/`), `_phase1` injects a doc rubric telling the self-review to
+review for internal consistency / accuracy / broken refs / clarity and NOT to
+raise "unverifiable in-diff / lacks CI evidence / references work outside this
+diff" concerns — a doc legitimately points to CI runs, secrets, sibling PRs it
+can't contain. Mixed (doc+code) and config-only (e.g. `.console/reconcile.yaml`)
+diffs still get full review. Helpers `_is_doc_path` / `_files_from_diff` /
+`_diff_is_docs_only`; rubric `_DOC_ONLY_REVIEW_RUBRIC`. Tests: classification +
+rubric injected for docs-only, omitted for code. Reviewer suite 123 pass.
+
 ## 2026-06-18 — docs: mark the three backbone follow-ups resolved (minimal)
 
 Replaced the stale "Backbone notes" section (which still described B2 as red, the
