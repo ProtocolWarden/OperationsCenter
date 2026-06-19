@@ -1,3 +1,27 @@
+## 2026-06-18 — spec: harness trust-hardening (INJ + SBX + EVAL), adversarial + self-healing
+
+New completion spec `docs/design/HARNESS_TRUST_HARDENING.md` closing the three
+trust-axis primitives the harness audit found missing vs. the reference model:
+injection defense (INJ), runtime isolation (SBX), agent-quality eval (EVAL). The
+orchestration/governance harness is otherwise complete; these are the trust axis —
+OC trusts its inputs, its runtime, and its own quality, all unverified. Each design
+was drafted then attacked by an independent adversary assuming knowledge of the
+doc; the recorded designs are the post-attack versions. Unifying thesis:
+capability-reduction beats detection/measurement (typed code-computed verdict over
+free-text; minimized ambient authority over signature-scanning; human-anchored
+signed answer-key over auto-derived accuracy). A second adversarial pass resolved
+the three deferred decisions against a binding **self-healing invariant** (the
+system must always judge+correct itself, no human in the per-correction loop):
+D-OP-1 HYBRID (ollama-local floor, bwrap fails-open-to-local, cloud gated on a
+liveness probe, dead proxy → backend cooldown); D-OP-2 B+ (L7 egress proxy as a
+supervised `oc-egress-proxy.service`, controller-tier rot probe, no bootstrap
+deadlock); D-OP-3 split eval trust into a tiny operator-signed append-only
+hash-chained answer-key + a fully self-healing body (the prior "operator-only
+CODEOWNERS forever" was itself a self-healing violation). 5-phase roadmap to
+completion; Phase 0 (env+`.git` minimization, enforced pre-push path-allowlist,
+nonce fences, signed-corpus+constitution bootstrap) dropped to the board.
+Doc satisfies DC1/DC7 (front matter + linked from INCOMPLETE_INTEGRATION_REMEDIATION).
+
 ## 2026-06-18 — fix: budget-guard survives a watcher restart mid-fix
 
 Closes the residual edge in #335 that #337 exposed live: if the review watcher is
