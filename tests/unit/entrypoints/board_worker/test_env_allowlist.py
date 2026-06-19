@@ -14,9 +14,11 @@ from pathlib import Path
 from unittest import mock
 
 
+from operations_center.entrypoints.board_worker import _subprocess as sub
 from operations_center.entrypoints.board_worker._subprocess import (
     MINIMAL_ENV_ALLOWLIST,
     build_allowlist_env,
+    executor_path,
 )
 
 
@@ -56,6 +58,52 @@ class TestEnvAllowlistDropsSecrets:
                 assert leaked not in env
             # PATH is pinned, never inherited
             assert env["PATH"] == "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+    def test_executor_path_prepends_agent_tool_dirs(self, tmp_path: Path) -> None:
+        """The regression fix: the executor PATH must include the dirs holding the
+        agent CLIs (claude/codex/cl), which the pinned system PATH alone omits —
+        else dispatch fails 'claude binary not found in PATH' and the fleet halts."""
+
+        def fake_which(name: str):
+            return {
+                "claude": "/home/dev/.local/bin/claude",
+                "codex": "/usr/bin/codex",  # already in the pinned base
+                "cl": "/repo/ContextLifecycle/bin/cl",
+            }.get(name)
+
+        with (
+            mock.patch.dict("os.environ", {"HOME": "/home/dev"}, clear=True),
+            mock.patch.object(sub.shutil, "which", side_effect=fake_which),
+        ):
+            dirs = executor_path().split(":")
+
+        assert "/home/dev/.local/bin" in dirs  # ~/.local/bin + claude's dir
+        assert "/repo/ContextLifecycle/bin" in dirs  # cl's dir
+        # the pinned base is preserved at the tail, in order
+        assert dirs[-6:] == MINIMAL_ENV_ALLOWLIST["PATH"].split(":")
+        # a tool already in the base (codex → /usr/bin) is not duplicated
+        assert dirs.count("/usr/bin") == 1
+
+    def test_executor_path_falls_back_to_pinned_when_no_tools(self) -> None:
+        """No HOME and no discoverable tools → exactly the pinned base (never the
+        parent PATH)."""
+        with (
+            mock.patch.dict("os.environ", {"PATH": "/evil"}, clear=True),
+            mock.patch.object(sub.shutil, "which", return_value=None),
+        ):
+            assert executor_path() == MINIMAL_ENV_ALLOWLIST["PATH"]
+
+    def test_build_allowlist_env_uses_executor_path(self, tmp_path: Path) -> None:
+        with (
+            mock.patch.dict("os.environ", {"HOME": "/home/dev"}, clear=True),
+            mock.patch.object(
+                sub.shutil,
+                "which",
+                side_effect=lambda n: "/home/dev/.local/bin/claude" if n == "claude" else None,
+            ),
+        ):
+            env = build_allowlist_env(tmp_path)
+        assert "/home/dev/.local/bin" in env["PATH"].split(":")
 
     def test_deny_set_wins_over_explicit_passthrough(self, tmp_path: Path) -> None:
         """A denied secret is never forwarded even if a caller lists it."""

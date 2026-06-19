@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -32,6 +33,41 @@ MINIMAL_ENV_ALLOWLIST = {
     "LANG": "en_US.UTF-8",
     "LC_ALL": "en_US.UTF-8",
 }
+
+# Agent-backend CLIs (claude_code → `claude`, codex_cli → `codex`, aider_local →
+# `aider`) plus the `cl`/`uv` toolchain install into USER-LOCAL bin dirs
+# (e.g. ~/.local/bin, a repo-local bin) that the pinned system PATH omits.
+# Pinning PATH to the system dirs alone hides them, so dispatch hard-fails with
+# "<bin> not found in PATH" — a fleet-halt and a §0.1 self-healing violation.
+# We discover each tool's dir from the PARENT PATH (the fleet process resolves
+# them fine) and prepend only those specific dirs — not the whole parent PATH —
+# preserving the Phase-0 blast-radius cut while keeping the backends runnable.
+_EXECUTOR_TOOLS = ("claude", "codex", "aider", "cl", "uv", "node", "npm", "git")
+
+
+def executor_path() -> str:
+    """The PATH for worker subprocesses: pinned system dirs, with the dirs that
+    actually hold the agent-backend CLIs prepended (discovered from the parent
+    PATH). ``~/.local/bin`` is always prepended when ``HOME`` is set — the
+    canonical user-local install dir for these tools (a missing dir on PATH is
+    harmless). The parent PATH itself is NOT inherited — only the specific dirs
+    that hold the needed tools — so the Phase-0 blast-radius cut is preserved."""
+    base = MINIMAL_ENV_ALLOWLIST["PATH"]
+    base_dirs = base.split(":")
+    extra: list[str] = []
+
+    def _add(directory: str | None) -> None:
+        if directory and directory not in base_dirs and directory not in extra:
+            extra.append(directory)
+
+    home = os.environ.get("HOME")
+    if home:
+        _add(os.path.join(home, ".local", "bin"))
+    for tool in _EXECUTOR_TOOLS:
+        found = shutil.which(tool)
+        if found:
+            _add(os.path.dirname(found))
+    return ":".join([*extra, base]) if extra else base
 
 # Operational + model-access vars forwarded from the parent IF present. These are
 # load-bearing: the worker toolchain needs HOME/cache dirs, and it MUST be able to
@@ -88,6 +124,9 @@ def build_allowlist_env(oc_root: Path, *, passthrough: Sequence[str] = ()) -> di
     §0.1). Tighter cloud-key containment is Phase 3.
     """
     env = dict(MINIMAL_ENV_ALLOWLIST)
+    # Prepend the agent-tool dirs so claude_code/codex_cli/aider_local can find
+    # their CLI binaries (the pinned system PATH alone omits ~/.local/bin etc.).
+    env["PATH"] = executor_path()
     env["PYTHONPATH"] = str(oc_root / "src")
     env["GITHUB_ACTIONS"] = os.environ.get("GITHUB_ACTIONS", "false")
     for name in (*_ENV_PASSTHROUGH, *passthrough):
