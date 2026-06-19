@@ -40,6 +40,35 @@ def client():
 
 
 # ---------------------------------------------------------------------------
+# find_pr_by_head — local head.ref match (redirect-proof)
+# ---------------------------------------------------------------------------
+def test_find_pr_by_head_matches_head_ref_ignoring_owner(client):
+    """Matches on head.ref locally, so an org-redirected owner doesn't break it."""
+    prs = [
+        {"number": 5, "head": {"ref": "goal/other"}, "merged_at": None},
+        {"number": 341, "head": {"ref": "goal/0ccb698d"}, "merged_at": "2026-06-19T06:27:17Z"},
+    ]
+    resp = _make_response(status_code=200, json_data=prs)
+    with mock.patch.object(github_pr.httpx, "request", return_value=resp):
+        # owner intentionally the STALE/redirected one — must still match
+        pr = client.find_pr_by_head("Velascat", "OperationsCenter", "goal/0ccb698d")
+    assert pr["number"] == 341
+    assert pr["merged_at"]
+
+
+def test_find_pr_by_head_returns_none_when_no_match(client):
+    resp = _make_response(status_code=200, json_data=[{"number": 5, "head": {"ref": "x"}}])
+    with mock.patch.object(github_pr.httpx, "request", return_value=resp):
+        assert client.find_pr_by_head("o", "r", "goal/missing") is None
+
+
+def test_find_pr_by_head_swallows_errors(client):
+    resp = _make_response(status_code=500, json_data=None)
+    with mock.patch.object(github_pr.httpx, "request", return_value=resp):
+        assert client.find_pr_by_head("o", "r", "goal/x") is None
+
+
+# ---------------------------------------------------------------------------
 # __init__
 # ---------------------------------------------------------------------------
 def test_init_sets_headers():

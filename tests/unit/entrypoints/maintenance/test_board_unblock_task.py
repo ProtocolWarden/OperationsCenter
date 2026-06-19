@@ -162,6 +162,62 @@ class TestBoardUnblockTask:
         assert result.status == "failed"
         assert "plane down" in (result.error or "")
 
+    def test_run_once_closes_owned_client_on_exception_in_rules(self):
+        """Verify resource cleanup: injected client is NOT closed (not owned by task)."""
+        plane = mock.Mock()
+        plane.list_issues.return_value = [
+            _issue("0ccb698d-aaaa", state="Blocked", labels=_GOAL_LABELS)
+        ]
+        task = BoardUnblockTask(_settings(), plane_client=plane, gh_client=mock.Mock())
+        # Force an exception during rule processing by patching _apply_rules
+        with mock.patch(
+            "operations_center.entrypoints.maintenance.board_unblock_task._apply_rules",
+            side_effect=RuntimeError("rules engine failed"),
+        ):
+            with mock.patch.object(task, "_make_gh_client", return_value=None):
+                try:
+                    task.run_once(
+                        MaintenanceContext(
+                            cycle_id="c", now=datetime(2026, 6, 19, tzinfo=UTC)
+                        )
+                    )
+                except RuntimeError:
+                    pass  # Expected: exception from _apply_rules
+        # Since plane_client was injected, owns_client is False, so close() should NOT be called
+        plane.close.assert_not_called()
+
+    def test_run_once_closes_created_client_on_exception_in_rules(self):
+        """Verify resource cleanup: created client IS closed even if _apply_rules raises."""
+        settings = _settings()
+        # Create task without injected plane/gh clients so it will create/own them
+        task = BoardUnblockTask(settings, apply=True)
+        mock_client_instance = mock.Mock()
+        mock_client_instance.list_issues.return_value = [
+            _issue("0ccb698d-aaaa", state="Blocked", labels=_GOAL_LABELS)
+        ]
+        with (
+            mock.patch(
+                "operations_center.entrypoints.maintenance.board_unblock_task.PlaneClient",
+                return_value=mock_client_instance,
+            ),
+            mock.patch(
+                "operations_center.entrypoints.maintenance.board_unblock_task._apply_rules",
+                side_effect=RuntimeError("rules engine failed"),
+            ),
+            mock.patch.object(task, "_make_gh_client", return_value=None),
+        ):
+            with mock.patch.dict(
+                "os.environ", {"GITHUB_TOKEN": ""}
+            ):  # Ensure no GitHub token
+                try:
+                    task.run_once(
+                        MaintenanceContext(cycle_id="c", now=datetime(2026, 6, 19, tzinfo=UTC))
+                    )
+                except RuntimeError:
+                    pass  # Expected: exception from _apply_rules
+        # Verify the client was closed despite the exception
+        mock_client_instance.close.assert_called_once()
+
 
 class TestLiveLoopRegistration:
     """The whole point of #268: board_unblock must be wired into the running

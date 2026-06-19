@@ -236,63 +236,63 @@ class BoardUnblockTask:
         client = ctx.resources.get("plane_client") or self._make_plane_client()
         owns_client = "plane_client" not in ctx.resources and self._plane_client is None
         try:
-            issues = client.list_issues()
-        except Exception as exc:  # noqa: BLE001
-            if owns_client:
-                client.close()
+            try:
+                issues = client.list_issues()
+            except Exception as exc:  # noqa: BLE001
+                return MaintenanceResult(
+                    name=self.name,
+                    status="failed",
+                    duration_seconds=time.monotonic() - started,
+                    details=details,
+                    error=f"plane_fetch_failed: {exc}",
+                )
+
+            now = datetime.now(UTC)
+
+            # 1) GitHub-aware reconciliation first — a merged PR wins over timeouts.
+            reconcile_actions: list[dict] = []
+            gh = self._make_gh_client()
+            if gh is not None:
+                reconcile_actions = reconcile_merged_pr_tasks(
+                    issues, settings=self._settings, gh_client=gh
+                )
+            else:
+                details["gh_skipped"] = "no GitHub token available"
+
+            # Tasks reconciled to Done must not also be touched by the stale rules.
+            reconciled_ids = {a["task_id"] for a in reconcile_actions}
+
+            # 2) Existing Plane-only Rules 1–10.
+            rule_actions = [
+                a
+                for a in _apply_rules(
+                    issues,
+                    now=now,
+                    stale_blocked_hours=self._stale_blocked_hours,
+                    stale_running_hours=self._stale_running_hours,
+                    clean_blocked_min_minutes=self._clean_blocked_min_minutes,
+                    mem_available_gb=mem_gb,
+                )
+                if a.get("task_id") not in reconciled_ids
+            ]
+
+            results = apply_board_actions(client, reconcile_actions + rule_actions, apply=self._apply)
+
+            applied = [r for r in results if r.get("action") == "applied"]
+            details["scanned"] = len(issues)
+            details["reconciled_merged"] = len(reconcile_actions)
+            details["rule_actions"] = len(rule_actions)
+            details["applied"] = len(applied)
+            details["actions"] = results[:50]
             return MaintenanceResult(
                 name=self.name,
-                status="failed",
+                status="ok",
                 duration_seconds=time.monotonic() - started,
                 details=details,
-                error=f"plane_fetch_failed: {exc}",
             )
-
-        now = datetime.now(UTC)
-
-        # 1) GitHub-aware reconciliation first — a merged PR wins over timeouts.
-        reconcile_actions: list[dict] = []
-        gh = self._make_gh_client()
-        if gh is not None:
-            reconcile_actions = reconcile_merged_pr_tasks(
-                issues, settings=self._settings, gh_client=gh
-            )
-        else:
-            details["gh_skipped"] = "no GitHub token available"
-
-        # Tasks reconciled to Done must not also be touched by the stale rules.
-        reconciled_ids = {a["task_id"] for a in reconcile_actions}
-
-        # 2) Existing Plane-only Rules 1–10.
-        rule_actions = [
-            a
-            for a in _apply_rules(
-                issues,
-                now=now,
-                stale_blocked_hours=self._stale_blocked_hours,
-                stale_running_hours=self._stale_running_hours,
-                clean_blocked_min_minutes=self._clean_blocked_min_minutes,
-                mem_available_gb=mem_gb,
-            )
-            if a.get("task_id") not in reconciled_ids
-        ]
-
-        results = apply_board_actions(client, reconcile_actions + rule_actions, apply=self._apply)
-        if owns_client:
-            client.close()
-
-        applied = [r for r in results if r.get("action") == "applied"]
-        details["scanned"] = len(issues)
-        details["reconciled_merged"] = len(reconcile_actions)
-        details["rule_actions"] = len(rule_actions)
-        details["applied"] = len(applied)
-        details["actions"] = results[:50]
-        return MaintenanceResult(
-            name=self.name,
-            status="ok",
-            duration_seconds=time.monotonic() - started,
-            details=details,
-        )
+        finally:
+            if owns_client:
+                client.close()
 
 
 __all__ = [
