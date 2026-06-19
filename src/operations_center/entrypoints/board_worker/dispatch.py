@@ -12,7 +12,7 @@ import tempfile
 from pathlib import Path
 
 from ._subprocess import build_allowlist_env, git_token_passthrough
-from ._subprocess import is_transient_failure, venv_python
+from ._subprocess import is_transient_failure, persist_failure_diagnostics, venv_python
 from ._text import desc_text, extract_goal, task_type_from_kind
 from .labels import GITHUB_DIR, add_label, label_value
 from .outcomes import (
@@ -276,7 +276,7 @@ def dispatch_issue(
             retry_cmd = list(exec_cmd)
             retry_cmd[retry_cmd.index("--output") + 1] = str(retry_result_file)
             retry_cmd[retry_cmd.index("--source") + 1] = f"board_worker_{role}_retry"
-            subprocess.run(retry_cmd, cwd=oc_root, env=env, capture_output=True, text=True)
+            proc = subprocess.run(retry_cmd, cwd=oc_root, env=env, capture_output=True, text=True)
             if retry_result_file.exists():
                 outcome = json.loads(retry_result_file.read_text(encoding="utf-8"))
                 outcome["retried"] = True
@@ -332,6 +332,8 @@ def dispatch_issue(
                 task_id,
                 log_reason,
             )
+            if not scope_too_wide:
+                persist_failure_diagnostics(result, oc_root, role, short_id, proc, result_text)
             handle_failure(
                 client,
                 issue,

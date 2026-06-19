@@ -1,3 +1,21 @@
+## 2026-06-19 — feat: persist executor failure diagnostics (close the investigation gap)
+
+"Why isn't the controller investigating?" — board_unblock now requeues failed
+tasks, but execution failures were diagnostically OPAQUE: dispatch ran the
+executor with `capture_output=True` but discarded `proc.stdout/stderr` on every
+failure path, `team_executor` persists no run artifacts, and the task recorded
+only a summary ("N of N stages failed"). So a recurring failure (e.g. #264, 4/4
+stages) could not be root-caused — the controller (and operators) could only
+blind-requeue. Verified the backend was healthy (claude headless rc=0, models
+work, team_executor imports) — the failure was task-specific and its evidence was
+thrown away. Fix: `persist_failure_diagnostics()` (`_subprocess.py`) writes the
+executor's stdout/stderr + result.json to a durable
+`logs/local/failures/<role>-<short_id>.log` and appends a `[diagnostics: <path>]`
+pointer + tail to `result['failure_reason']`, which flows into the task comment
+and fleet log. Wired into dispatch's failure branch (also captures the retry
+proc's output, previously discarded too). Best-effort — never crashes dispatch.
+5 new tests; 240 board_worker tests pass; dispatch trimmed to 499 lines (C29).
+
 ## 2026-06-19 — fix: executor PATH must include the agent-CLI dirs (fleet-down regression)
 
 The Phase-0 `build_allowlist_env` pins the worker-subprocess PATH to system dirs
