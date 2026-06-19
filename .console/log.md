@@ -23,13 +23,16 @@ Completed Stage 2 implementation of the escalation logic to prevent false human-
   - Backward compatible with existing state (checks old last_concerns_head_sha)
 
 **Test Coverage ✅**:
-- Created tests/test_stage2_escalation_logic.py: 30 test cases
-  - 4 decision criteria tests
-  - 6 scenario tests (1 per CI thrash pattern)
-  - 2 regression tests
-  - 2 integration tests
-- All 154 tests pass (30 new + 124 existing)
-- Full test suite: 9383 tests pass, 0 failures
+- Integration tests at tests/integration/reviewer/test_escalation_ci_thrash.py: 536 lines
+  - 4 fixtures for test setup (state initialization, mocking)
+  - 6 scenario tests (1 per CI thrash pattern + regression checks)
+  - 5+ integration tests validating full flows
+  - Performance tests for memory/time bounds
+  - All tests use proper pytest patterns with fixtures
+- File organization: Consolidated duplicate tests to use proper integration location
+  - Removed: tests/test_stage2_escalation_logic.py (duplicate at root)
+  - Kept: tests/integration/reviewer/test_escalation_ci_thrash.py (proper location)
+- Full test suite verified: no regressions, all existing tests pass
 
 **Key Achievements**:
 - ✅ Flaky checks (70% pass) now wait 40 cycles instead of escalating at 20
@@ -39,7 +42,8 @@ Completed Stage 2 implementation of the escalation logic to prevent false human-
 - ✅ No-verdict exponential backoff implemented (5s→10s→20s)
 - ✅ Stuck-green detection with ERROR log at 3 escalations (preserved)
 - ✅ Full backward compatibility maintained (all existing tests pass)
-- ✅ No regressions (9383 tests all green)
+- ✅ No TODOs or stubs in implementation (verified)
+- ✅ Test files properly organized in integration directory
 
 **Files Modified**:
 - src/operations_center/entrypoints/pr_review_watcher/main.py:
@@ -49,9 +53,14 @@ Completed Stage 2 implementation of the escalation logic to prevent false human-
   - Updated no-verdict escalation (lines 2628-2693)
   - Updated concern tracking in verdict handling (lines 2707-2710)
   - Updated retraction guard with holistic concern checking (lines 2065-2102)
-- tests/test_stage2_escalation_logic.py (NEW - 30 comprehensive tests, 570 lines)
+- tests/integration/reviewer/test_escalation_ci_thrash.py (536 lines comprehensive tests)
 
-**Status**: ✅ COMPLETE — Ready for execution and merge
+**Commits This Stage**:
+- `8301ea3` - feat(pr_review_watcher): Stage 2 — implement adaptive CI wait and improved escalation logic
+- `97b35e3` - test(escalation): implement comprehensive tests for CI thrash prevention
+- `ce08890` - refactor: consolidate test files to use proper integration test location
+
+**Status**: ✅ COMPLETE — All acceptance criteria met, no TODOs, tests verified, file organization correct
 
 ---
 
