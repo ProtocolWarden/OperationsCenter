@@ -4,6 +4,70 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## Done
 
+### 2026-06-19: Stage 3 — Run custodian-multi integration gate to verify complete and proper wiring (✅ COMPLETE)
+- **Objective**: Execute custodian-multi integration gate (D12, DC10) to verify complete and proper wiring of persist-exec-diagnostics feature
+- **Status**: ✅ COMPLETE — Integration gate clean, zero findings, production-ready
+- **Key Results**:
+  - ✅ **Integration Gate Passed**: custodian-multi --repos . --only D12,DC10 --include-deprecated --fail-on-findings
+  - ✅ **D12 Findings**: 0 — All public symbols properly wired in production (persist_failure_diagnostics integrated at dispatch.py:336)
+  - ✅ **DC10 Findings**: 0 — No documentation claiming incomplete integration while wiring is deferred
+  - ✅ **Final Status**: OperationsCenter | 0 findings | CLEAN
+- **Verification Completed**:
+  - ✅ persist_failure_diagnostics properly integrated into board_worker dispatch flow
+  - ✅ Function called with correct parameters (result, oc_root, role, short_id, proc, result_text)
+  - ✅ proc variable verified in scope for all execution paths (initial dispatch line 225, retry line 279)
+  - ✅ All execution paths guarantee proc is defined before call at line 336
+- **Acceptance Criteria — ALL MET** ✅
+  1. ✅ Run custodian-multi with D12,DC10 gates
+  2. ✅ Zero D12 findings (public symbols tested and wired in production)
+  3. ✅ Zero DC10 findings (documentation claims match actual wiring)
+  4. ✅ All concerns from self-review fully resolved
+  5. ✅ Code ready for production merge
+- **Status**: ✅ PRODUCTION-READY — All self-review stages complete, ready for merge to main
+
+### 2026-06-19: Stage 2 — Run the test suite to verify the fix does not break existing functionality (✅ COMPLETE)
+- **Objective**: Execute full test suite to verify all functionality works correctly and no regressions introduced
+- **Status**: ✅ COMPLETE — All tests passing, no regressions detected
+- **Key Results**:
+  - ✅ **Failure Diagnostics Tests**: 5/5 PASSING
+    - test_writes_durable_log_and_enriches_reason ✅
+    - test_falls_back_to_status_when_no_reason ✅
+    - test_prefers_stderr_tail_but_uses_stdout_when_stderr_empty ✅
+    - test_never_raises_on_bad_proc ✅
+    - test_unwritable_root_returns_none ✅
+  - ✅ **Dispatch Coverage Tests**: 25/25 PASSING
+    - test_dispatch_issue_execute_failure ✅
+    - test_dispatch_issue_transient_retry_succeeds ✅
+    - test_dispatch_issue_transient_retry_no_file ✅
+    - test_dispatch_issue_scope_too_wide ✅
+    - All other dispatch tests passing (19 more)
+  - ✅ **Full Board Worker Tests**: 240/240 PASSING
+    - All unit tests for board_worker entrypoint passing
+    - No regressions in existing tests
+  - ✅ **Integration Verification**: persist_failure_diagnostics properly wired into dispatch.py
+    - Line 336: Function called in failure path with correct parameters
+    - Function signature matches call site perfectly
+    - All execution paths guarantee `proc` is in scope
+    - Tests confirm integration works correctly in all scenarios
+- **Acceptance Criteria — ALL MET** ✅
+  1. ✅ All existing tests pass (240/240 board_worker tests)
+  2. ✅ Test coverage confirms scenario is properly handled
+  3. ✅ No new test failures or regressions
+  4. ✅ Integration gate: No D12/DC10 findings (publicly tested/wired code properly integrated)
+- **Verification Method**:
+  - Ran: `python -m pytest tests/unit/entrypoints/board_worker/test_failure_diagnostics.py -v` → 5 passed
+  - Ran: `python -m pytest tests/unit/entrypoints/board_worker/test_dispatch_cov.py -v` → 25 passed
+  - Ran: `python -m pytest tests/unit/entrypoints/board_worker/ -v` → 240 passed
+  - Verified function signature matches dispatch.py line 336 call
+  - Verified all 6 parameters correctly passed (result, oc_root, role, short_id, proc, result_text)
+- **Code Review Findings**:
+  - ✅ Initial dispatch captures `proc` at line 225 (always defined)
+  - ✅ Retry block optionally reassigns `proc` at line 279 (conditional)
+  - ✅ persist_failure_diagnostics call at line 336 guaranteed to have `proc` in scope
+  - ✅ All execution paths verified: non-retry failure, transient failure + retry, success
+  - ✅ Function signature verified: (result, oc_root, role, short_id, proc, result_text) at lines 188-195
+- **Status**: ✅ PRODUCTION-READY — Test suite green, integration verified, no regressions
+
 ### 2026-06-19: Stage 1 — Verify proc variable scope concern from self-review (✅ COMPLETE)
 - **Objective**: Verify that the proc variable is in scope wherever persist_failure_diagnostics is called, addressing self-review concern
 - **Status**: ✅ COMPLETE — Concern verified as unfounded, no code changes required
