@@ -10,6 +10,7 @@ import shutil
 import subprocess
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from .sandbox import maybe_sandbox
 
@@ -166,7 +167,7 @@ def build_allowlist_env(oc_root: Path, *, passthrough: Sequence[str] = ()) -> di
     return env
 
 
-def git_token_passthrough(settings, repo_cfg) -> tuple[str, ...]:
+def git_token_passthrough(settings: Any, repo_cfg: Any) -> tuple[str, ...]:
     """The env-var name holding the ACTIVE repo's git token, if any.
 
     Forwarded into the minimized worker env (via ``build_allowlist_env``'s
@@ -211,7 +212,7 @@ def persist_failure_diagnostics(
     oc_root: Path,
     role: str,
     short_id: str,
-    proc,
+    proc: Any,
     result_text: str = "",
 ) -> Path | None:
     """Persist the executor subprocess output for a FAILED dispatch and enrich

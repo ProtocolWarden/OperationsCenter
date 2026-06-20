@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import Any
 
 from ._subprocess import build_allowlist_env, git_token_passthrough
 from ._subprocess import (
@@ -36,8 +37,8 @@ def dispatch_issue(
     issue: dict,
     role: str,
     config_path: Path,
-    settings,
-    client,
+    settings: Any,
+    client: Any,
 ) -> bool:
     """Drive one claimed Plane issue through planning → execution.
 
