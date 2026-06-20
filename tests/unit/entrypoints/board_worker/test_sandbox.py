@@ -226,3 +226,48 @@ class TestEgressProxyWiring:
     def test_proxy_reachable_false_on_closed_port(self):
         # Nothing listens on this port -> reachable is False (real socket probe).
         assert sbx._proxy_reachable("http://127.0.0.1:1", timeout=0.2) is False
+
+
+class TestGitHttpsTokenAuth:
+    """SBX Phase 2: git@github clones work in the sandbox (no ~/.ssh) via an
+    HTTPS+token rewrite injected as GIT_CONFIG_* env."""
+
+    def test_no_token_returns_empty(self):
+        assert sbx._git_auth_env({}) == {}
+        assert sbx._git_auth_env({"GITHUB_TOKEN": ""}) == {}
+
+    def test_builds_insteadof_and_extraheader_from_github_token(self):
+        import base64
+
+        out = sbx._git_auth_env({"GITHUB_TOKEN": "tok123"})
+        assert out["GIT_CONFIG_COUNT"] == "2"
+        assert out["GIT_CONFIG_KEY_0"] == "url.https://github.com/.insteadOf"
+        assert out["GIT_CONFIG_VALUE_0"] == "git@github.com:"
+        assert out["GIT_CONFIG_KEY_1"] == "http.https://github.com/.extraheader"
+        expected = base64.b64encode(b"x-access-token:tok123").decode()
+        assert out["GIT_CONFIG_VALUE_1"] == f"Authorization: Basic {expected}"
+
+    def test_falls_back_to_git_token(self):
+        out = sbx._git_auth_env({"GIT_TOKEN": "abc"})
+        assert out.get("GIT_CONFIG_COUNT") == "2"
+
+    def test_github_token_preferred_over_git_token(self):
+        out = sbx._git_auth_env({"GITHUB_TOKEN": "primary", "GIT_TOKEN": "secondary"})
+        import base64
+
+        assert base64.b64encode(b"x-access-token:primary").decode() in out["GIT_CONFIG_VALUE_1"]
+
+    def test_build_sandbox_argv_setenvs_git_config_when_token_present(self, tmp_path: Path):
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        env = {"HOME": str(tmp_path / "home"), "GITHUB_TOKEN": "tok"}
+        argv = build_sandbox_argv(["git", "clone", "x"], oc_root=tmp_path, rw_root=ws, env=env)
+        joined = " ".join(argv)
+        assert "--setenv GIT_CONFIG_COUNT 2" in joined
+        assert "url.https://github.com/.insteadOf" in joined
+
+    def test_build_sandbox_argv_no_git_config_without_token(self, tmp_path: Path):
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        argv = build_sandbox_argv(["x"], oc_root=tmp_path, rw_root=ws, env={"HOME": str(tmp_path)})
+        assert "GIT_CONFIG_COUNT" not in " ".join(argv)

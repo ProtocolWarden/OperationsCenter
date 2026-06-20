@@ -36,6 +36,7 @@ PATH/CL_ANCHOR regressions). Turning it on is an explicit, observed step.
 
 from __future__ import annotations
 
+import base64
 import os
 import shutil
 import socket
@@ -50,6 +51,10 @@ _SECRET_HOME_DIRS = (".ssh", ".gnupg", ".aws", ".config/gh", ".config/gcloud")
 _RO_SYSTEM_DIRS = ("/usr", "/bin", "/sbin", "/lib", "/lib64", "/etc")
 
 _SANDBOX_HOME = "/sandbox-home"
+
+# Env vars that may carry the github token forwarded into the executor env
+# (config token_env=GITHUB_TOKEN; GIT_TOKEN mirrors it). First non-empty wins.
+_GIT_TOKEN_ENVS = ("GITHUB_TOKEN", "GIT_TOKEN")
 
 # SBX Phase 3 (D-SBX-2): when set to the egress proxy URL in the fleet env, the
 # sandbox routes HTTPS egress through the L7/SNI allowlist proxy. Unset => no
@@ -110,6 +115,35 @@ def _proxy_env(url: str, *, existing_no_proxy: str = "") -> dict[str, str]:
         "https_proxy": url,
         "NO_PROXY": no_proxy,
         "no_proxy": no_proxy,
+    }
+
+
+def _git_auth_env(env: dict) -> dict[str, str]:
+    """PURE: ``GIT_CONFIG_*`` vars that let git reach github over HTTPS with the
+    forwarded token, rewriting SSH remotes.
+
+    Why this is needed: the sandbox never binds ``~/.ssh`` (a ``_SECRET_HOME_DIR``)
+    and its tmpfs ``$HOME`` has no keys, so a ``git@github.com:`` clone/fetch/push
+    inside the sandbox fails ("Could not read from remote repository"). This routes
+    those operations through ``https://github.com/`` with an ``Authorization``
+    header built from the token instead. Injected via ``GIT_CONFIG_COUNT`` env
+    (read by every git invocation), so it covers clone, fetch and push uniformly,
+    is **never written to ``.git/config``** (the workspace token-leak verification
+    still passes), and leaves ``remote.origin.url`` as the original SSH URL.
+
+    Returns ``{}`` when no token is present — fail-open to the prior SSH path (the
+    un-sandboxed executor, which has ``~/.ssh``, is unaffected since this only
+    enters the sandbox env)."""
+    token = next((env[k] for k in _GIT_TOKEN_ENVS if env.get(k)), None)
+    if not token:
+        return {}
+    basic = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+    return {
+        "GIT_CONFIG_COUNT": "2",
+        "GIT_CONFIG_KEY_0": "url.https://github.com/.insteadOf",
+        "GIT_CONFIG_VALUE_0": "git@github.com:",
+        "GIT_CONFIG_KEY_1": "http.https://github.com/.extraheader",
+        "GIT_CONFIG_VALUE_1": f"Authorization: Basic {basic}",
     }
 
 
@@ -201,7 +235,10 @@ def build_sandbox_argv(
     argv += ["--bind", str(rw_root), str(rw_root)]
     # Controlled env (already minimized by build_allowlist_env), HOME re-pointed
     # at the sandbox tmpfs home so secrets under the real HOME are unreachable.
-    for k, v in env.items():
+    # Add the git HTTPS-token config so git@github remotes work without ~/.ssh
+    # (absent in the sandbox); no-op when no token is present.
+    setenv = {**env, **_git_auth_env(env)}
+    for k, v in setenv.items():
         if v is None:
             continue
         argv += ["--setenv", k, str(v)]
