@@ -59,6 +59,7 @@ config/managed_repos/local/
 # Goal-worker scratchpad artifacts — never commit these
 STAGE_*.md
 STAGE[0-9]*.md
+AUDIT*.md
 DERIVER_AUDIT*.md
 LOOP_START.md
 *_COVERAGE_ANALYSIS.md
