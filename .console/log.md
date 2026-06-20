@@ -1,3 +1,19 @@
+## 2026-06-19 — fix: forward CL_ANCHOR to the executor (ContextGuard refusal regression)
+
+With the baseline blocker fixed (#346), tasks reached the agent stages and revealed
+the NEXT layer (via the #345 diagnostics — planner stage surfaced it): "I'm unable
+to access the codebase because the ContextGuard requires `CL_ANCHOR` to be set …
+run `eval $(cl session start <manifest>)` first". OC's CLAUDE.md ContextGuard
+requires every Claude session targeting OC to be anchored; without CL_ANCHOR the
+agent returns a PROSE refusal instead of a JSON plan → planner stage fails → run
+dies. operations-center.sh deliberately sets CL_ANCHOR on the fleet, but
+`build_allowlist_env` (#340) STRIPPED it (not in `_ENV_PASSTHROUGH`) — re-breaking
+the #311 CL_ANCHOR unblock, same regression class as the #344 PATH bug. Fix: add
+`CL_ANCHOR`/`CL_HOME`/`CL_SESSION_ID` to the passthrough (only forwarded if present)
+so the executor agent stays anchored and cl_dispatch_wrap hydrate/capture isn't
+silently disabled. Verified: CL_ANCHOR forwarded; 13 env-allowlist tests pass.
+Deployed direct to the live checkout + restart.
+
 ## 2026-06-19 — goal/persist-exec-diagnostics Stage 2: Run test suite to verify no regressions ✅
 
 **STAGE 2 COMPLETE: All tests passing, integration verified**

@@ -102,6 +102,17 @@ _ENV_PASSTHROUGH = (
     "ANTHROPIC_BASE_URL",
     "OLLAMA_API_BASE",
     "OLLAMA_HOST",
+    # ContextLifecycle anchoring. OC's CLAUDE.md ContextGuard REQUIRES CL_ANCHOR:
+    # an agent dispatched into the OC clone without it returns a prose refusal
+    # ("CL_ANCHOR is not set… run `eval $(cl session start …)`") instead of a JSON
+    # plan, so the planner stage fails and the whole run dies. operations-center.sh
+    # deliberately sets CL_ANCHOR for the fleet; this forwards it (and the cl
+    # session context) to the executor subprocess so the agent stays anchored and
+    # cl_dispatch_wrap()'s hydrate/capture is not silently disabled. Dropping it was
+    # a Phase-0 over-minimization (regressed the #311 CL_ANCHOR unblock).
+    "CL_ANCHOR",
+    "CL_HOME",
+    "CL_SESSION_ID",
 )
 
 # Never forwarded, even if a caller adds them to `passthrough`. The worker provably
