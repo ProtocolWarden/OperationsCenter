@@ -1,0 +1,17 @@
+# SBX Phase 3 (D-OP-2): the L7/SNI egress allowlist proxy, supervised so "proxy
+# down" self-recovers in seconds and is never a fleet halt. Install under
+# ~/.config/systemd/user/ and: systemctl --user enable --now oc-egress-proxy.
+# Ordered BEFORE oc-fleet so the egress path is up when workers start; the bwrap
+# launcher still fails open to ollama-local if it is not.
+[Unit]
+Description=ProtocolWarden OC L7/SNI egress allowlist proxy
+Before=oc-fleet.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -m operations_center.entrypoints.egress_proxy.main --host 127.0.0.1 --port 8889
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target

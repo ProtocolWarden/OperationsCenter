@@ -1,3 +1,9 @@
+## 2026-06-20 — feat: SBX Phase 3 egress proxy (clean re-commit off main)
+
+L7/SNI egress allowlist proxy + systemd unit (entrypoints/egress_proxy/). Reset to
+a single clean commit off current main to shed the .console/log.md conflict churn
++ fleet fix-pass commits that kept the branch DIRTY. Module 91%% covered, 11 tests.
+
 ## 2026-06-20 — fix: loosen flaky snapshot-perf timing bounds (fleet-wide CI flake)
 
 test_snapshot_performance.py had absolute sub-0.2s timing asserts that flake on
