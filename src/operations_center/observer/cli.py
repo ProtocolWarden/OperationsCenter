@@ -21,6 +21,10 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from operations_center.observer.collectors.extraction_history_collector import (
+    ExtractionHistoryCollector,
+)
+from operations_center.observer.extraction_history_query import ExtractionHistoryQuery
 from operations_center.observer.extraction_report_formatter import ExtractionReportFormatter
 from operations_center.observer.query import TestSignalQuery, TimeRange
 from operations_center.observer.snapshot_loader import SnapshotLoadError, SnapshotLoader
@@ -922,6 +926,9 @@ def cmd_extraction_health(
     ),
     format_str: str = typer.Option("json", "--format", help="Output format: json|table"),
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Minimal output"),
+    trend_days: int = typer.Option(
+        7, "--trend-days", help="Days of history to summarize in the trend section"
+    ),
 ) -> None:
     """Report extraction coverage health for flaky test data.
 
@@ -930,6 +937,11 @@ def cmd_extraction_health(
     ``get_extraction_health()`` — the signal the watchdog collector consumes.
     Unlike ``query-flaky-tests`` (which emits per-test extraction *records*),
     this emits the aggregate coverage health as a single object.
+
+    Each run also appends the current reading to the extraction-history time
+    series and (best-effort) augments the JSON with a ``history`` section —
+    trend, regression slope, and detected anomalies over ``--trend-days`` — so
+    repeated collector runs build a longitudinal signal, not just a snapshot.
 
     Examples:
 
@@ -948,6 +960,48 @@ def cmd_extraction_health(
         query = TestSignalQuery(root=root)
         health = query.get_extraction_health(TimeRange.last_hours(hours))
         payload = asdict(health)
+
+        # Record this reading into the extraction-history time series and surface
+        # the longitudinal trend. Best-effort: the point-in-time health is the
+        # contract STEP 3 depends on and must always emit, so any history failure
+        # (no prior snapshots, unwritable storage) degrades to omitting the
+        # ``history`` section rather than failing the command.
+        try:
+            history_root = root / "extraction_history"
+            total_flaky = (
+                health.complete_extraction + health.partial_extraction + health.no_extraction
+            )
+            collector = ExtractionHistoryCollector(history_root)
+            collector.collect_snapshot(
+                success_rate=health.success_rate,
+                complete_extraction=health.complete_extraction,
+                partial_extraction=health.partial_extraction,
+                no_extraction=health.no_extraction,
+                total_flaky_tests=total_flaky,
+                edge_case_summary=dict(health.edge_case_summary),
+            )
+            # Two complementary views over the same storage: the mixin on
+            # TestSignalQuery (daily trend, regression slope, anomaly detection,
+            # retention prune) and the standalone ExtractionHistoryQuery (a weekly
+            # aggregation, total observation count, and the most-recent readings).
+            hist_query = ExtractionHistoryQuery(collector.storage)
+            daily_trend = query.get_extraction_health_trend(days=trend_days)
+            weekly_trend = hist_query.get_success_rate_trend(days=trend_days, granularity="weekly")
+            history = {
+                "window_days": trend_days,
+                "trend": daily_trend.to_dict() if daily_trend is not None else None,
+                "weekly_trend": weekly_trend.to_dict(),
+                "slope": query.get_extraction_trend_slope(days=trend_days),
+                "anomalies": query.get_extraction_anomalies(days=trend_days),
+                "observations": hist_query.get_success_rate_history(days=trend_days).total_count,
+                "recent": [s.to_dict() for s in hist_query.get_recent_snapshots(count=5)],
+                "snapshots_pruned": query.cleanup_old_extraction_history(),
+            }
+            # guard: only attach if fully JSON-serializable
+            json.dumps(history, ensure_ascii=False)
+            payload["history"] = history
+        except Exception as e:  # noqa: BLE001 — history is supplementary, never fatal
+            logger.debug("extraction history augmentation skipped: %s", e)
 
         if format_str == "json":
             # typer.echo (not the rich console) so piped/redirected JSON is not

@@ -48,6 +48,9 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from operations_center.observer.models import RepoStateSnapshot, TestSignal
+from operations_center.observer.query_extraction_history import (
+    ExtractionHistoryQueryMixin,
+)
 from operations_center.observer.query_flaky import (
     FlakyTest,  # noqa: F401 — re-exported for existing importers
     FlakyTestMetrics,  # noqa: F401 — re-exported for existing importers
@@ -171,7 +174,7 @@ class FailureSummary:
         return self.failing_rate >= 0.2
 
 
-class TestSignalQuery(FlakyTestQueryMixin):
+class TestSignalQuery(FlakyTestQueryMixin, ExtractionHistoryQueryMixin):
     """Query API for test signal visibility in observer snapshots.
 
     Provides read-only access to historical test signals and aggregated metrics
