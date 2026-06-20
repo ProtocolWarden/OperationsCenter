@@ -4,34 +4,6 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## Done
 
-### 2026-06-20: Stage 1 — Verify code compilation and type hints (SBX bwrap sandbox) (✅ COMPLETE)
-- **Objective**: Verify all code changes compile and have proper type hints for SBX Phase 2 bwrap sandbox
-- **Status**: ✅ COMPLETE — All acceptance criteria met
-- **Key Results**:
-  - ✅ **Code Compilation**: All 4 Python files compile successfully (py_compile validation)
-    - sandbox.py: ✓ PASS
-    - verify_sandbox_base_branches.py: ✓ PASS
-    - test_sandbox.py: ✓ PASS
-    - test_verify_sandbox_base_branches.py: ✓ PASS
-  - ✅ **Type Hints Complete**: All public functions fully annotated
-    - sandbox.py: 4/4 functions fully typed
-    - verify_sandbox_base_branches.py: 3/3 functions fully typed
-  - ✅ **Docstrings Complete**: All key functions documented
-    - Added docstring to bwrap_available()
-    - Added docstring to _check_repo()
-    - Added docstring to main()
-  - ✅ **Imports Valid**: 27 imports across 4 files, all syntax valid
-- **Acceptance Criteria — ALL MET** ✅
-  1. ✅ All code changes compile (py_compile validated)
-  2. ✅ Complete type hints on all public functions
-  3. ✅ All functions have proper docstrings
-  4. ✅ All imports resolve correctly
-- **Files Modified**:
-  - src/operations_center/entrypoints/board_worker/sandbox.py (added docstring)
-  - src/operations_center/entrypoints/maintenance/verify_sandbox_base_branches.py (added 2 docstrings)
-- **Commit**: fbc723f — fix(sbx): add missing docstrings to public functions
-- **Status**: ✅ COMPLETE — Code quality verified, ready for Stage 2
-
 ### 2026-06-19: Stage 3 — Run custodian-multi integration gate to verify complete and proper wiring (✅ COMPLETE)
 - **Objective**: Execute custodian-multi integration gate (D12, DC10) to verify complete and proper wiring of persist-exec-diagnostics feature
 - **Status**: ✅ COMPLETE — Integration gate clean, zero findings, production-ready
@@ -115,42 +87,6 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 - **Conclusion**: Concern resolved through verification. Code is production-ready.
 
 ## In Progress
-
-(no tasks in progress)
-
-## Recently Completed
-
-### 2026-06-20: Stage 2 — Run full test suite and linters to verify no regressions (SBX bwrap sandbox) ✅ COMPLETE
-- **Objective**: Execute repository test suite and linters to verify all changes are correct and no regressions introduced
-- **Status**: ✅ COMPLETE — All tests passing, all linting clean, formatting applied
-- **Key Results**:
-  - ✅ **Full Test Suite**: 9,416/9,416 tests PASSING
-    - Execution time: ~94 seconds
-    - 11 tests skipped (expected)
-    - 2 xfailed (expected failures)
-    - 0 failures ✅
-  - ✅ **Ruff Linting**: All checks PASSED (0 violations) ✅
-  - ✅ **Code Formatting**: Applied to 9 files (ruff format)
-    - `src/operations_center/entrypoints/board_worker/_subprocess.py`
-    - `src/operations_center/entrypoints/board_worker/dispatch.py`
-    - `src/operations_center/entrypoints/board_worker/sandbox.py`
-    - `src/operations_center/entrypoints/maintenance/board_unblock_task.py`
-    - `src/operations_center/entrypoints/pr_review_watcher/inj.py`
-    - `src/operations_center/entrypoints/pr_review_watcher/verdict.py`
-    - `tests/unit/entrypoints/board_worker/test_sandbox.py`
-    - `tests/unit/entrypoints/maintenance/test_board_unblock_task.py`
-    - `tests/unit/entrypoints/pr_review_watcher/test_verdict.py`
-  - ✅ **Custodian Integration Gates**: D12/DC10 gates CLEAN (0 findings) ✅
-  - ✅ **No Regressions**: All 277 entrypoint tests pass after formatting
-- **Acceptance Criteria — ALL MET** ✅
-  1. ✅ Run full test suite (pytest) — 9,416/9,416 tests passing
-  2. ✅ Run linters (ruff check) — zero violations
-  3. ✅ Run code formatter (ruff format) — 9 files formatted, all compliant
-  4. ✅ Verify no new warnings or regressions introduced — 277 entrypoint tests passing
-  5. ✅ Confirm custodian-multi integration gates clean (D12/DC10) — CLEAN ✅
-- **Commits**:
-  - `dd5763e` - fix(sbx): apply ruff code formatting
-- **Status**: ✅ PRODUCTION-READY — All quality gates passed, changes pushed to origin
 
 ### 2026-06-19: Stage 4 — Run full test suite and linters, fix any failures (✅ COMPLETE)
 - **Objective**: Execute full test suite and linters, fix any failures before finishing
