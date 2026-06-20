@@ -37,9 +37,7 @@ def _settings():
     repo = SimpleNamespace(clone_url="git@github.com:Velascat/OperationsCenter.git")
     return SimpleNamespace(
         repos={"OperationsCenter": repo},
-        plane=SimpleNamespace(
-            base_url="http://x", workspace_slug="w", project_id="p"
-        ),
+        plane=SimpleNamespace(base_url="http://x", workspace_slug="w", project_id="p"),
         git=SimpleNamespace(token_env="GITHUB_TOKEN"),
         plane_token=lambda: "tok",
     )
@@ -150,7 +148,9 @@ class TestBoardUnblockTask:
         gh = mock.Mock()
         gh.find_pr_by_head.return_value = {"number": 341, "merged_at": "x"}
         task = BoardUnblockTask(_settings(), plane_client=plane, gh_client=gh, apply=False)
-        result = task.run_once(MaintenanceContext(cycle_id="c", now=datetime(2026, 6, 19, tzinfo=UTC)))
+        result = task.run_once(
+            MaintenanceContext(cycle_id="c", now=datetime(2026, 6, 19, tzinfo=UTC))
+        )
         assert result.status == "ok"
         plane.transition_issue.assert_not_called()
 
@@ -158,7 +158,9 @@ class TestBoardUnblockTask:
         plane = mock.Mock()
         plane.list_issues.side_effect = RuntimeError("plane down")
         task = BoardUnblockTask(_settings(), plane_client=plane, gh_client=mock.Mock())
-        result = task.run_once(MaintenanceContext(cycle_id="c", now=datetime(2026, 6, 19, tzinfo=UTC)))
+        result = task.run_once(
+            MaintenanceContext(cycle_id="c", now=datetime(2026, 6, 19, tzinfo=UTC))
+        )
         assert result.status == "failed"
         assert "plane down" in (result.error or "")
 
@@ -177,9 +179,7 @@ class TestBoardUnblockTask:
             with mock.patch.object(task, "_make_gh_client", return_value=None):
                 try:
                     task.run_once(
-                        MaintenanceContext(
-                            cycle_id="c", now=datetime(2026, 6, 19, tzinfo=UTC)
-                        )
+                        MaintenanceContext(cycle_id="c", now=datetime(2026, 6, 19, tzinfo=UTC))
                     )
                 except RuntimeError:
                     pass  # Expected: exception from _apply_rules
@@ -206,9 +206,7 @@ class TestBoardUnblockTask:
             ),
             mock.patch.object(task, "_make_gh_client", return_value=None),
         ):
-            with mock.patch.dict(
-                "os.environ", {"GITHUB_TOKEN": ""}
-            ):  # Ensure no GitHub token
+            with mock.patch.dict("os.environ", {"GITHUB_TOKEN": ""}):  # Ensure no GitHub token
                 try:
                     task.run_once(
                         MaintenanceContext(cycle_id="c", now=datetime(2026, 6, 19, tzinfo=UTC))
@@ -231,9 +229,15 @@ class TestLiveLoopRegistration:
         registry.register.side_effect = lambda t: registered.append(t.name)
 
         with (
-            mock.patch.object(sh, "SpecHygieneTask", lambda *a, **k: SimpleNamespace(name="spec_hygiene")),
-            mock.patch.object(sh, "LedgerMaintainTask", lambda *a, **k: SimpleNamespace(name="ledger_maintain")),
-            mock.patch.object(sh, "BoardUnblockTask", lambda *a, **k: SimpleNamespace(name="board_unblock")),
+            mock.patch.object(
+                sh, "SpecHygieneTask", lambda *a, **k: SimpleNamespace(name="spec_hygiene")
+            ),
+            mock.patch.object(
+                sh, "LedgerMaintainTask", lambda *a, **k: SimpleNamespace(name="ledger_maintain")
+            ),
+            mock.patch.object(
+                sh, "BoardUnblockTask", lambda *a, **k: SimpleNamespace(name="board_unblock")
+            ),
         ):
             sh.register_maintenance_tasks(registry, _settings(), mock.Mock())
 

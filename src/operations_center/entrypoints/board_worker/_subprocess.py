@@ -7,8 +7,18 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+import subprocess
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
+
+from .sandbox import maybe_sandbox
+
+# SBX Phase 2: the bwrap sandbox is OFF by default and enabled by setting this
+# env var to "1" in the fleet environment. Off-by-default + fail-open means
+# merging the sandbox changes nothing in production until it is deliberately
+# turned on and observed (the staged rollout the trust-hardening §0.1 requires).
+_SANDBOX_ENV_FLAG = "OC_BWRAP_SANDBOX"
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +85,7 @@ def executor_path() -> str:
         if found:
             _add(os.path.dirname(found))
     return ":".join([*extra, base]) if extra else base
+
 
 # Operational + model-access vars forwarded from the parent IF present. These are
 # load-bearing: the worker toolchain needs HOME/cache dirs, and it MUST be able to
@@ -156,7 +167,7 @@ def build_allowlist_env(oc_root: Path, *, passthrough: Sequence[str] = ()) -> di
     return env
 
 
-def git_token_passthrough(settings, repo_cfg) -> tuple[str, ...]:
+def git_token_passthrough(settings: Any, repo_cfg: Any) -> tuple[str, ...]:
     """The env-var name holding the ACTIVE repo's git token, if any.
 
     Forwarded into the minimized worker env (via ``build_allowlist_env``'s
@@ -201,7 +212,7 @@ def persist_failure_diagnostics(
     oc_root: Path,
     role: str,
     short_id: str,
-    proc,
+    proc: Any,
     result_text: str = "",
 ) -> Path | None:
     """Persist the executor subprocess output for a FAILED dispatch and enrich
@@ -237,10 +248,30 @@ def persist_failure_diagnostics(
         result["failure_reason"] = f"{base} [diagnostics: {path}]"
         if tail:
             result["failure_reason"] += f"\n--- executor tail ---\n{tail}"
-        logger.warning(
-            "board_worker[%s]: task=%s failure diagnostics → %s", role, short_id, path
-        )
+        logger.warning("board_worker[%s]: task=%s failure diagnostics → %s", role, short_id, path)
         return path
     except Exception as exc:  # noqa: BLE001 — diagnostics must never crash dispatch
         logger.warning("board_worker[%s]: failed to persist diagnostics — %s", role, exc)
         return None
+
+
+def run_executor(
+    cmd: Sequence[str],
+    *,
+    oc_root: Path,
+    rw_root: Path,
+    workspace: Path,
+    env: dict,
+) -> subprocess.CompletedProcess:
+    """Spawn the executor subprocess, optionally inside the bwrap sandbox.
+
+    Centralizes the SBX Phase 2 wrap so dispatch's spawn sites stay one-liners.
+    The sandbox is gated on ``OC_BWRAP_SANDBOX=1`` and is fail-open: when off,
+    unavailable, or unconstructable it runs the command exactly as before. The
+    outer ``env`` is still passed (harmless: bwrap ``--clearenv`` + ``--setenv``
+    re-establishes a controlled env inside; un-sandboxed it is the real env)."""
+    enabled = os.environ.get(_SANDBOX_ENV_FLAG) == "1"
+    run_cmd = maybe_sandbox(
+        cmd, oc_root=oc_root, rw_root=rw_root, env=env, enabled=enabled, chdir=workspace
+    )
+    return subprocess.run(run_cmd, cwd=oc_root, env=env, capture_output=True, text=True)

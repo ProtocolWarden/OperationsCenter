@@ -65,8 +65,7 @@ REVIEW_CHECKS: tuple[ReviewCheck, ...] = (
     ),
     ReviewCheck(
         "no_tooling_artifacts",
-        "No tooling artifacts (.baseline-validation.json, run-status.md, etc.) "
-        "in the diff.",
+        "No tooling artifacts (.baseline-validation.json, run-status.md, etc.) in the diff.",
         optional=False,
     ),
 )
@@ -160,7 +159,7 @@ def verdict_schema_prompt() -> str:
             f'"evidence_span": "<quote the diff line(s) justifying this status>"}}{tail}'
             f"   // {c.prompt}{applic}"
         )
-    lines.append("], \"summary\": \"short human-readable note (NOT the decision)\"}")
+    lines.append('], "summary": "short human-readable note (NOT the decision)"}')
     lines.append("")
     lines.append(
         'Set status "pass" only when the check genuinely holds. Use "fail" with a '

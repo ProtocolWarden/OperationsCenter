@@ -22,10 +22,7 @@ import secrets
 
 # Zero-width and bidirectional control characters used to smuggle hidden
 # instructions / homoglyph tricks past a human or the next model pass.
-_INVISIBLE = re.compile(
-    "[​‌‍‎‏‪‫‬‭‮"
-    "⁦⁧⁨⁩﻿­]"
-)
+_INVISIBLE = re.compile("[​‌‍‎‏‪‫‬‭‮⁦⁧⁨⁩﻿­]")
 # A leading @handle that GitHub would turn into a notification ping. Defanged by
 # inserting a zero-width-free separator so it renders literally.
 _MENTION = re.compile(r"(^|[\s(])@([A-Za-z0-9][A-Za-z0-9-]*)")

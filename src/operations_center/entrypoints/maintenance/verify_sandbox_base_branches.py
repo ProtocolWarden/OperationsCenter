@@ -79,6 +79,11 @@ def _check_repo(
     git: GitClient,
     fetch: Any,
 ) -> SandboxBranchResult:
+    """Check if a repo's configured sandbox base branch exists on origin.
+
+    If heal=True and the branch is missing, attempts to create it from the
+    remote default branch. Returns a SandboxBranchResult with status details.
+    """
     result = SandboxBranchResult(repo_key=repo_key, sandbox_base_branch=sandbox_base_branch)
 
     # No sandbox branch configured → nothing to verify (the repo uses its default).
@@ -145,6 +150,11 @@ def scan(
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Check and optionally heal missing sandbox base branches in configured repos.
+
+    Exit 0 when all configured branches exist (or are healed); exit 1 if any
+    remain missing. Supports JSON output for integration with watchdog loops.
+    """
     parser = argparse.ArgumentParser(description="Sandbox base-branch preflight")
     parser.add_argument("--config", required=True, help="Path to operations_center.local.yaml")
     parser.add_argument(

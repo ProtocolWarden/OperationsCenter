@@ -33,7 +33,9 @@ class TestComputeVerdictHappyPaths:
         assert failing == []
 
     def test_optional_pass_also_lgtm(self):
-        checks = [{"check_id": c.check_id, "status": "pass", "evidence_span": "x"} for c in REVIEW_CHECKS]
+        checks = [
+            {"check_id": c.check_id, "status": "pass", "evidence_span": "x"} for c in REVIEW_CHECKS
+        ]
         assert compute_verdict(checks)[0] == LGTM
 
     def test_one_required_fail_is_concerns(self):
