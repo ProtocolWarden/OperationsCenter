@@ -136,6 +136,23 @@ class TestEnvAllowlistPreservesFunction:
             assert env["HOME"] == "/home/dev"
             assert env["XDG_CACHE_HOME"] == "/home/dev/.cache"
 
+    def test_preserves_cl_anchor(self, tmp_path: Path) -> None:
+        """CL_ANCHOR must survive: OC's ContextGuard refuses the agent (prose, not
+        JSON) without it, failing the planner stage and the whole run."""
+        with mock.patch.dict(
+            "os.environ",
+            {
+                "CL_ANCHOR": "/home/dev/Documents/GitHub/PlatformManifest",
+                "CL_HOME": "/home/dev/Documents/GitHub/ContextLifecycle",
+                "CL_SESSION_ID": "sess-123",
+            },
+            clear=True,
+        ):
+            env = build_allowlist_env(tmp_path)
+            assert env["CL_ANCHOR"] == "/home/dev/Documents/GitHub/PlatformManifest"
+            assert env["CL_HOME"] == "/home/dev/Documents/GitHub/ContextLifecycle"
+            assert env["CL_SESSION_ID"] == "sess-123"
+
     def test_preserves_model_creds(self, tmp_path: Path) -> None:
         """Model access must survive or the worker cannot run/fix (self-healing)."""
         with mock.patch.dict(
