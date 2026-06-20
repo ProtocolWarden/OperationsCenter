@@ -1,3 +1,10 @@
+## 2026-06-20 — fix: loosen flaky snapshot-perf timing bounds (fleet-wide CI flake)
+
+test_snapshot_performance.py had absolute sub-0.2s timing asserts that flake on
+shared CI runners (observed small-YAML 0.17-0.22s vs the 0.1s bound), failing
+Test (pytest) intermittently for ANY PR. Loosened 6 tight bounds with generous
+margins (perf regressions still caught). 37 perf tests pass.
+
 ## 2026-06-20 — feat: SBX Phase 3 (2/n) — localhost cloud-key-injecting proxy (D-OP-1)
 
 New `entrypoints/key_proxy/`: `injector.py` (pure `inject_auth` — Anthropic
