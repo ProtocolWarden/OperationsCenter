@@ -7623,3 +7623,5 @@ OperationsCenter | 0 findings | clean
 - Stage 3: Integration gate clean (0 D12/DC10 findings)
 
 Ready for merge to main.
+
+<!-- review retrigger after reviewer-token recovery -->
