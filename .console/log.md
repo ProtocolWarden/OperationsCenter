@@ -1,3 +1,8 @@
+## 2026-06-20 — fix: SPDX header on new pr_review_watcher test package init (License headers gate)
+
+The new tests/unit/entrypoints/pr_review_watcher/__init__.py was created empty —
+added the SPDX/Copyright header so the License-headers required check passes.
+
 ## 2026-06-19 — feat: INJ Phase 1 root fix — code-computed typed verdict (D-INJ-1)
 
 First PR of the Harness Trust-Hardening Phase 1 (INJ), operator-implemented (the
