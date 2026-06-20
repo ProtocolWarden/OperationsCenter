@@ -13,6 +13,7 @@ is unavailable (CI containers); the unit tests pin the argv contract offline.
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -271,3 +272,48 @@ class TestGitHttpsTokenAuth:
         ws.mkdir()
         argv = build_sandbox_argv(["x"], oc_root=tmp_path, rw_root=ws, env={"HOME": str(tmp_path)})
         assert "GIT_CONFIG_COUNT" not in " ".join(argv)
+
+
+class TestEditableInstallBinds:
+    """SBX Phase 2: editable-installed sibling-repo deps (team_executor,
+    dag_executor) must be ro-bound or the sandboxed executor can't import them."""
+
+    def _make_editable(self, oc_root: Path, name: str, src: Path, *, editable: bool) -> None:
+        site = oc_root / ".venv" / "lib" / "python3.12" / "site-packages"
+        di = site / f"{name}-0.1.0.dist-info"
+        di.mkdir(parents=True, exist_ok=True)
+        (di / "direct_url.json").write_text(
+            json.dumps({"url": f"file://{src}", "dir_info": {"editable": editable}}),
+            encoding="utf-8",
+        )
+
+    def test_discovers_editable_dirs_outside_oc_root(self, tmp_path: Path):
+        oc_root = tmp_path / "oc"
+        (oc_root / "src").mkdir(parents=True)
+        sibling = tmp_path / "Sibling"
+        sibling.mkdir()
+        self._make_editable(oc_root, "sibling_pkg", sibling, editable=True)
+        dirs = sbx._editable_install_dirs(oc_root)
+        assert str(sibling) in dirs
+
+    def test_skips_non_editable_and_oc_root_self(self, tmp_path: Path):
+        oc_root = tmp_path / "oc"
+        (oc_root / "src").mkdir(parents=True)
+        wheel = tmp_path / "Wheel"
+        wheel.mkdir()
+        self._make_editable(oc_root, "wheel_pkg", wheel, editable=False)  # not editable
+        self._make_editable(oc_root, "operations_center", oc_root, editable=True)  # self
+        dirs = sbx._editable_install_dirs(oc_root)
+        assert str(wheel) not in dirs
+        assert str(oc_root) not in dirs
+
+    def test_toolchain_binds_include_editable_dirs(self, tmp_path: Path):
+        oc_root = tmp_path / "oc"
+        (oc_root / "src").mkdir(parents=True)
+        sibling = tmp_path / "TeamExecutor"
+        sibling.mkdir()
+        self._make_editable(oc_root, "team_executor", sibling, editable=True)
+        argv = build_sandbox_argv(
+            ["x"], oc_root=oc_root, rw_root=tmp_path, env={"HOME": str(tmp_path)}
+        )
+        assert str(sibling) in " ".join(argv)
