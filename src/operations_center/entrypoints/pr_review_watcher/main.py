@@ -62,6 +62,11 @@ from operations_center.reviewer.instrumentation import (
     record_ci_gate_defer,
     record_escalation,
 )
+from operations_center.entrypoints.pr_review_watcher.verdict import (
+    CONCERNS,
+    compute_verdict,
+    verdict_schema_prompt,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -516,13 +521,21 @@ def _run_direct_review(
             raise ReviewerBackendError(f"direct review timed out (300s) for state_key={state_key}")
         if verdict_path.exists():
             try:
-                return json.loads(verdict_path.read_text(encoding="utf-8"))
+                raw = json.loads(verdict_path.read_text(encoding="utf-8"))
             except Exception:
                 logger.warning(
                     "pr_review_watcher: malformed verdict.json from direct review for %s",
                     state_key,
                 )
                 return None  # clean exit, bad JSON — genuine no-verdict
+            # INJ Phase 1 (D-INJ-1): the merge decision is COMPUTED BY CODE from
+            # the model's typed per-check statuses — any model-authored "result"
+            # in `raw` is ignored. This is the trust boundary: an injected diff
+            # can flip a check's enum (re-checkable) but cannot author the verdict.
+            checks = raw.get("checks") if isinstance(raw, dict) else None
+            result, failing = compute_verdict(checks)
+            summary = (raw.get("summary") if isinstance(raw, dict) else None) or ""
+            return {"result": result, "failing_checks": failing, "summary": summary}
         # No verdict.json written.
         if proc.returncode != 0:
             # Non-zero exit = crash, signal kill, or rate-limit — infra failure,
@@ -2560,18 +2573,13 @@ def _phase1(
         f"{spec_section}"
         f"{custodian_section}"
         f"{doc_rubric}\n\n"
-        f"**Review checklist** (raise CONCERNS for any failure):\n"
-        f"1. If a campaign spec is provided above, verify the diff implements EXACTLY what the spec\n"
-        f"   requires — correct filenames, member names, member count, exports, tests, version bumps.\n"
-        f"2. If Custodian findings are listed above, each finding is a CONCERN unless already fixed.\n"
-        f"3. Standard code quality: correctness, style, potential bugs.\n"
-        f"4. No tooling artifacts (.baseline-validation.json, run-status.md) in the diff.\n\n"
-        f"Write your verdict as JSON to a file named `verdict.json` in the current working directory:\n"
-        f'{{"result": "LGTM", "summary": "..."}}\n'
-        f"or\n"
-        f'{{"result": "CONCERNS", "summary": "bullet list of specific issues"}}\n\n'
-        "Use LGTM only if ALL checklist items pass. "
-        "Use CONCERNS when anything fails — be specific and actionable. "
+        f"**Review checklist** — report a status for each:\n"
+        f"1. spec_compliance: if a campaign spec is provided above, the diff implements EXACTLY what\n"
+        f"   it requires — correct filenames, member names, member count, exports, tests, version bumps.\n"
+        f"2. custodian_findings: if Custodian findings are listed above, each is resolved by the diff.\n"
+        f"3. code_quality: correctness, style, potential bugs.\n"
+        f"4. no_tooling_artifacts: no .baseline-validation.json, run-status.md, etc. in the diff.\n\n"
+        f"{verdict_schema_prompt()}\n\n"
         "CRITICAL: Do NOT modify any source files in the repository. "
         "Do NOT run tests, build, or push. "
         "Your ONLY permitted action is writing verdict.json to the current directory."
@@ -2739,8 +2747,18 @@ def _phase1(
 
     state["no_verdict_passes"] = 0  # a verdict was produced
     state["no_verdict_backoff_level"] = 0  # Reset backoff when verdict is produced
-    result = (verdict.get("result") or "CONCERNS").upper()
-    summary = verdict.get("summary", "(no summary)")
+    # INJ Phase 1 (D-INJ-1): `result` was COMPUTED BY CODE in _run_direct_review
+    # from the model's typed per-check statuses — it is not a model-authored field.
+    # Fail-safe: a missing/malformed verdict computed to CONCERNS upstream.
+    result = (verdict.get("result") or CONCERNS).upper()
+    failing_checks = verdict.get("failing_checks") or []
+    # The free-text summary is informational only (human comment) — NEVER the
+    # decision. Prefer the code-derived failing-check list so an injected summary
+    # cannot misrepresent the outcome.
+    if result == CONCERNS and failing_checks:
+        summary = "Failed checks: " + ", ".join(str(c) for c in failing_checks)
+    else:
+        summary = str(verdict.get("summary") or "(no summary)")
     normalized_summary = _normalize_concerns_summary(summary)
 
     # Track when concerns are raised (for improved retraction guard)
