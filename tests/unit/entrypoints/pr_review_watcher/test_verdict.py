@@ -10,6 +10,7 @@ malformed / unknown inputs fail safe to CONCERNS, never an auto-LGTM.
 from __future__ import annotations
 
 from operations_center.entrypoints.pr_review_watcher.verdict import (
+    failing_summary,
     CONCERNS,
     LGTM,
     REVIEW_CHECKS,
@@ -105,3 +106,21 @@ class TestSchemaPromptStaysInLockstep:
             assert c.check_id in prompt
         # must NOT instruct an overall free-text verdict field
         assert '"result"' not in prompt
+
+
+class TestFailingSummary:
+    def test_surfaces_evidence_per_failing_check(self):
+        checks = [
+            {"check_id": "code_quality", "status": "fail", "evidence_span": "line 12: bare except"},
+            {"check_id": "no_tooling_artifacts", "status": "pass", "evidence_span": ""},
+        ]
+        out = failing_summary(checks, ["code_quality"])
+        assert "code_quality" in out
+        assert "bare except" in out
+
+    def test_check_without_evidence_lists_id_only(self):
+        out = failing_summary([{"check_id": "code_quality", "status": "fail"}], ["code_quality"])
+        assert "- code_quality" in out
+
+    def test_malformed_checks_safe(self):
+        assert "Failed checks" in failing_summary(None, ["x"])

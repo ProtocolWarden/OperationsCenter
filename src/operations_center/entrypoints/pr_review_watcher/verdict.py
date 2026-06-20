@@ -116,6 +116,31 @@ def compute_verdict(checks: object) -> tuple[str, list[str]]:
     return (LGTM, []) if not failing else (CONCERNS, failing)
 
 
+def failing_summary(checks: object, failing: list[str]) -> str:
+    """A human- and fix-pass-readable summary of the failing checks, surfacing the
+    model's quoted ``evidence_span`` per check.
+
+    This does NOT change the decision (still code-computed in ``compute_verdict``);
+    it only makes a CONCERNS *actionable* instead of an opaque check-id. Without
+    it, the auto-fix worker receives only "code_quality" and no-ops, looping the
+    PR to exhaustion. The evidence_span is bounded model text used purely as
+    review context (and is sanitized before it is reflected to GitHub)."""
+    spans: dict[str, str] = {}
+    if isinstance(checks, list):
+        for entry in checks:
+            if not isinstance(entry, dict):
+                continue
+            d = cast("dict[str, Any]", entry)
+            cid, span = d.get("check_id"), d.get("evidence_span")
+            if isinstance(cid, str) and isinstance(span, str):
+                spans[cid] = span.strip()
+    lines = []
+    for cid in failing:
+        ev = spans.get(cid, "")
+        lines.append(f"- {cid}: {ev[:300]}" if ev else f"- {cid}")
+    return "Failed checks:\n" + "\n".join(lines)
+
+
 def verdict_schema_prompt() -> str:
     """The review-prompt fragment describing the typed verdict the model must
     write. Kept here so the schema and the computation stay in lockstep."""
@@ -151,5 +176,6 @@ __all__ = [
     "ReviewCheck",
     "VALID_STATUS",
     "compute_verdict",
+    "failing_summary",
     "verdict_schema_prompt",
 ]

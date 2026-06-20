@@ -71,6 +71,7 @@ from operations_center.entrypoints.pr_review_watcher.inj import (
 from operations_center.entrypoints.pr_review_watcher.verdict import (
     CONCERNS,
     compute_verdict,
+    failing_summary,
     verdict_schema_prompt,
 )
 
@@ -540,7 +541,13 @@ def _run_direct_review(
             # can flip a check's enum (re-checkable) but cannot author the verdict.
             checks = raw.get("checks") if isinstance(raw, dict) else None
             result, failing = compute_verdict(checks)
-            summary = (raw.get("summary") if isinstance(raw, dict) else None) or ""
+            # Surface each failing check's evidence so the fix-pass + PR comment are
+            # ACTIONABLE (not an opaque check-id that no-op-loops to exhaustion).
+            # The decision is still code-computed above; this is context only.
+            if result == CONCERNS:
+                summary = failing_summary(checks, failing)
+            else:
+                summary = (raw.get("summary") if isinstance(raw, dict) else None) or ""
             return {"result": result, "failing_checks": failing, "summary": summary}
         # No verdict.json written.
         if proc.returncode != 0:
