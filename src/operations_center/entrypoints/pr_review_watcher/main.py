@@ -62,6 +62,12 @@ from operations_center.reviewer.instrumentation import (
     record_ci_gate_defer,
     record_escalation,
 )
+from operations_center.entrypoints.pr_review_watcher.inj import (
+    UNTRUSTED_PREAMBLE,
+    fence,
+    make_nonce,
+    sanitize_for_comment,
+)
 from operations_center.entrypoints.pr_review_watcher.verdict import (
     CONCERNS,
     compute_verdict,
@@ -1549,17 +1555,24 @@ def _custodian_findings(oc_root: Path, repo_key: str, settings) -> str:
         if not output:
             return ""
         results = json.loads(output)
-        findings = []
+        # INJ Phase 1 (D-INJ-3): emit only {detector_id, count} — NEVER the raw
+        # path/line/`message`, which are attacker-authored repo content laundered
+        # through a *trusted* channel (the single strongest attack found). The
+        # count is deterministic tool output (trusted); the reviewer re-derives
+        # which lines from the diff, which is itself fenced as untrusted.
+        counts: dict[str, int] = {}
         for repo_result in results:
             for det in repo_result.get("detectors") or []:
-                if det.get("findings"):
-                    for f in det["findings"]:
-                        findings.append(
-                            f"  [{det.get('code', '?')}] {det.get('description', '?')}: "
-                            f"{f.get('path', '?')}:{f.get('line', '?')} — {f.get('message', '')}"
-                        )
-        if findings:
-            return "Custodian findings on current branch:\n" + "\n".join(findings[:50])
+                fs = det.get("findings") or []
+                if fs:
+                    code = str(det.get("code", "?"))
+                    counts[code] = counts.get(code, 0) + len(fs)
+        if counts:
+            summary = ", ".join(f"{code}×{n}" for code, n in sorted(counts.items()))
+            return (
+                "Custodian finding counts on current branch (verify each is "
+                f"resolved by the diff): {summary}"
+            )
     except Exception as exc:
         logger.debug("pr_review_watcher: custodian check failed — %s", exc)
     return ""
@@ -2554,8 +2567,14 @@ def _phase1(
     spec_text = _load_campaign_spec(oc_root, settings, state.get("plane_task_id"))
     custodian_text = _custodian_findings(oc_root, repo_key, settings)
 
+    # INJ Phase 1 (outer, §2.2.5): wrap every untrusted span — PR title, diff,
+    # campaign spec — in a per-run nonce fence with a system preamble. Defense-in-
+    # depth only; the load-bearing control is the code-computed verdict. Custodian
+    # output is already reduced to {detector_id, count} (trusted), so it is unfenced.
+    nonce = make_nonce()
     spec_section = (
-        f"\n\n## Campaign spec (review against this — violations are CONCERNS)\n\n{spec_text}"
+        "\n\n## Campaign spec (review against this — violations are CONCERNS)\n\n"
+        + fence("campaign-spec", spec_text, nonce)
         if spec_text
         else ""
     )
@@ -2567,9 +2586,10 @@ def _phase1(
     goal_text = (
         "## TASK TYPE: Read-only code review\n"
         "## SINGLE REQUIRED ACTION: Write verdict.json — no other file changes allowed\n\n"
+        f"{UNTRUSTED_PREAMBLE}\n\n"
         f"Review the following pull-request diff for correctness, style, and spec compliance.\n\n"
-        f"PR #{pr_number}: {title}\n\n"
-        f"```diff\n{diff_excerpt}\n```"
+        f"PR #{pr_number} title: {fence('pr-title', title, nonce)}\n\n"
+        f"{fence('pr-diff', diff_excerpt, nonce)}"
         f"{spec_section}"
         f"{custodian_section}"
         f"{doc_rubric}\n\n"
@@ -2947,10 +2967,14 @@ def _phase1(
 
     # Post the concerns once, on the first CONCERNS pass.
     if state["fix_attempts"] == 0:
+        # INJ Phase 1 (§2.2.4): defang any model/untrusted text before reflecting
+        # it to GitHub — no surprise @-pings or steering markdown for the next
+        # reader/pass. (For the typed-verdict path `summary` is already the
+        # code-derived failing-check list; sanitization is belt-and-suspenders.)
         concern_body = (
             f"{reviewer.bot_comment_marker}\n"
             f"**Self-review concerns** — auto-fixing (up to {reviewer.max_fix_attempts} "
-            f"attempts; re-queued if still unresolved):\n\n{summary}"
+            f"attempts; re-queued if still unresolved):\n\n{sanitize_for_comment(summary)}"
         )
         try:
             resp = gh_client.post_comment(owner, repo, pr_number, concern_body)
