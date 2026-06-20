@@ -6,16 +6,15 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
 
-from ._subprocess import _SANDBOX_ENV_FLAG, build_allowlist_env, git_token_passthrough, run_executor
+from ._subprocess import build_allowlist_env, git_token_passthrough, run_executor
 from ._subprocess import is_transient_failure, persist_failure_diagnostics, venv_python
-from .wheelhouse import ensure_wheelhouse
+from .wheelhouse import wheelhouse_env
 from ._text import desc_text, extract_goal, task_type_from_kind
 from .labels import GITHUB_DIR, add_label, label_value
 from .outcomes import (
@@ -66,8 +65,7 @@ def dispatch_issue(
     # ── Goal text + mode ──────────────────────────────────────────────────────
     goal_text = extract_goal(description, title)
 
-    # Rejection-pattern hint: prepend patterns the backend should avoid.
-    try:
+    try:  # prepend rejection-pattern hints the backend should avoid
         from operations_center.quality_alerts import _load_rejection_patterns_for_proposal
 
         patterns = _load_rejection_patterns_for_proposal(repo_key=repo_key)
@@ -84,8 +82,7 @@ def dispatch_issue(
     if role == "improve":
         goal_text = _append_improve_output_prompt(goal_text)
     else:
-        # First-pass depth: require the initial pass to fully implement and
-        # self-verify before the PR opens, so the review loop has less to fix.
+        # First-pass depth: implement + self-verify before the PR opens.
         goal_text = _append_definition_of_done(goal_text)
 
     execution_mode = task_kind  # historically a no-op ternary; kept flat for C29
@@ -102,14 +99,7 @@ def dispatch_issue(
     oc_root = Path(__file__).resolve().parents[4]
     python = venv_python(oc_root)
     env = build_allowlist_env(oc_root, passthrough=git_token_passthrough(settings, repo_cfg))
-    # Pre-provision a wheelhouse on the host (online) so the executor's in-sandbox
-    # dev-install runs fully offline — the sandbox has no pypi egress. Event-driven
-    # + self-maintaining: rebuilds only when the repo's deps changed. Fail-open:
-    # no wheelhouse → no OC_WHEELHOUSE → the install falls back (and degrades).
-    if os.environ.get(_SANDBOX_ENV_FLAG) == "1":
-        wh = ensure_wheelhouse(repo_key, repo_path, python_bin=python)
-        if wh is not None:
-            env["OC_WHEELHOUSE"] = str(wh)
+    env.update(wheelhouse_env(repo_key, repo_path, python_bin=python))  # offline deps
     short_id = task_id[:8]
 
     logger.info(

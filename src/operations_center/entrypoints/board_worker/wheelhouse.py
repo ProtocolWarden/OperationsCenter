@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import subprocess
 from pathlib import Path
 
@@ -123,4 +124,20 @@ def ensure_wheelhouse(
         return None
 
 
-__all__ = ["ensure_wheelhouse", "wheelhouse_dir"]
+def wheelhouse_env(
+    repo_key: str, repo_local_path: str | None, *, python_bin: str
+) -> dict[str, str]:
+    """``{"OC_WHEELHOUSE": <dir>}`` to merge into the executor env when the bwrap
+    sandbox is enabled and provisioning succeeds, else ``{}`` (fail-open).
+
+    Self-contained so dispatch wires it in one line: reads ``OC_BWRAP_SANDBOX``
+    (provisioning is only needed when the executor is sandboxed) and runs the
+    host-side :func:`ensure_wheelhouse`.
+    """
+    if os.environ.get("OC_BWRAP_SANDBOX") != "1":
+        return {}
+    wh = ensure_wheelhouse(repo_key, repo_local_path, python_bin=python_bin)
+    return {"OC_WHEELHOUSE": str(wh)} if wh is not None else {}
+
+
+__all__ = ["ensure_wheelhouse", "wheelhouse_dir", "wheelhouse_env"]
