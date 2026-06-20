@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 
+from operations_center.entrypoints.board_worker import sandbox as sbx
 from operations_center.entrypoints.board_worker.sandbox import (
     build_sandbox_argv,
     bwrap_available,
@@ -74,13 +75,15 @@ class TestArgvContract:
         rw = [argv[i + 1] for i, a in enumerate(argv) if a == "--bind"]
         assert rw == [str(ws)]
 
-
     def test_secret_home_dir_bind_is_filtered(self, tmp_path: Path):
         # A toolchain path that resolves under a credential dir is dropped.
         home = tmp_path / "home"
         (home / ".ssh").mkdir(parents=True)
         argv = build_sandbox_argv(
-            ["x"], oc_root=tmp_path, rw_root=tmp_path, env={"HOME": str(home)},
+            ["x"],
+            oc_root=tmp_path,
+            rw_root=tmp_path,
+            env={"HOME": str(home)},
             extra_ro_binds=[str(home / ".ssh")],
         )
         assert str(home / ".ssh") not in " ".join(argv)
@@ -155,3 +158,71 @@ class TestRealBwrapExitGate:
 
 def test_bwrap_available_matches_shutil():
     assert bwrap_available() == (shutil.which("bwrap") is not None)
+
+
+class TestEgressProxyWiring:
+    """SBX Phase 3 (D-SBX-2): HTTPS_PROXY wiring into the sandbox, fail-open."""
+
+    def test_proxy_env_sets_both_cases_and_localhost_bypass(self):
+        out = sbx._proxy_env("http://127.0.0.1:8889")
+        assert out["HTTPS_PROXY"] == "http://127.0.0.1:8889"
+        assert out["https_proxy"] == "http://127.0.0.1:8889"
+        assert out["HTTP_PROXY"] == "http://127.0.0.1:8889"
+        # localhost (ollama floor + key-proxy) must bypass the egress proxy
+        assert "127.0.0.1" in out["NO_PROXY"]
+        assert "localhost" in out["NO_PROXY"]
+        assert out["NO_PROXY"] == out["no_proxy"]
+
+    def test_proxy_env_preserves_existing_no_proxy_without_dupes(self):
+        out = sbx._proxy_env("http://127.0.0.1:8889", existing_no_proxy="example.com,127.0.0.1")
+        parts = out["NO_PROXY"].split(",")
+        assert "example.com" in parts
+        # 127.0.0.1 came from both the bypass default and the caller — dedup'd
+        assert parts.count("127.0.0.1") == 1
+
+    def test_resolve_returns_none_when_unset(self, monkeypatch):
+        monkeypatch.delenv("OC_EGRESS_PROXY", raising=False)
+        assert sbx._resolve_egress_proxy({}) is None
+
+    def test_resolve_returns_none_when_unreachable(self, monkeypatch):
+        # Set the flag but make the reachability probe fail -> fail-open (None).
+        monkeypatch.setattr(sbx, "_proxy_reachable", lambda url, **kw: False)
+        assert sbx._resolve_egress_proxy({"OC_EGRESS_PROXY": "http://127.0.0.1:8889"}) is None
+
+    def test_resolve_returns_url_when_reachable(self, monkeypatch):
+        monkeypatch.setattr(sbx, "_proxy_reachable", lambda url, **kw: True)
+        assert (
+            sbx._resolve_egress_proxy({"OC_EGRESS_PROXY": "http://127.0.0.1:8889"})
+            == "http://127.0.0.1:8889"
+        )
+
+    def test_resolve_falls_back_to_parent_env(self, monkeypatch):
+        monkeypatch.setenv("OC_EGRESS_PROXY", "http://127.0.0.1:9999")
+        monkeypatch.setattr(sbx, "_proxy_reachable", lambda url, **kw: True)
+        assert sbx._resolve_egress_proxy({}) == "http://127.0.0.1:9999"
+
+    def test_maybe_sandbox_injects_proxy_when_reachable(self, tmp_path: Path, monkeypatch):
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        monkeypatch.setattr(sbx, "bwrap_available", lambda: True)
+        monkeypatch.setattr(sbx, "_proxy_reachable", lambda url, **kw: True)
+        env = {"HOME": str(tmp_path / "home"), "OC_EGRESS_PROXY": "http://127.0.0.1:8889"}
+        argv = maybe_sandbox(["x"], oc_root=tmp_path, rw_root=ws, env=env, enabled=True)
+        joined = " ".join(argv)
+        assert "--setenv HTTPS_PROXY http://127.0.0.1:8889" in joined
+        assert "--setenv NO_PROXY" in joined
+
+    def test_maybe_sandbox_no_proxy_when_unreachable_fail_open(self, tmp_path: Path, monkeypatch):
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        monkeypatch.setattr(sbx, "bwrap_available", lambda: True)
+        monkeypatch.setattr(sbx, "_proxy_reachable", lambda url, **kw: False)
+        env = {"HOME": str(tmp_path / "home"), "OC_EGRESS_PROXY": "http://127.0.0.1:8889"}
+        argv = maybe_sandbox(["x"], oc_root=tmp_path, rw_root=ws, env=env, enabled=True)
+        # dead proxy => no proxy env injected => still sandboxed, direct egress
+        assert "HTTPS_PROXY" not in " ".join(argv)
+        assert "bwrap" in argv[0]
+
+    def test_proxy_reachable_false_on_closed_port(self):
+        # Nothing listens on this port -> reachable is False (real socket probe).
+        assert sbx._proxy_reachable("http://127.0.0.1:1", timeout=0.2) is False

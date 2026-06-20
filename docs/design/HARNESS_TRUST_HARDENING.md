@@ -475,6 +475,14 @@ exit gate that must pass before the next begins.
   unreadable; limits enforced; local backends green.
 
 ### Phase 3 — SBX network + cloud-key containment *(D-OP-1, D-OP-2)*
+- **WIRED (2026-06-20):** the bwrap launcher now injects `HTTPS_PROXY`/`NO_PROXY`
+  into the sandbox env, gated on `OC_EGRESS_PROXY` and **fail-open** on an
+  unreachable proxy (via `board_worker/sandbox.py:maybe_sandbox`);
+  localhost (ollama floor + key-proxy) always bypasses. Egress + key proxies and
+  the supervised `oc-egress-proxy.service` were merged in #352/#353; the service
+  ExecStart was corrected to the venv python (system python3 cannot import OC).
+  Remaining: enable-and-observe (start the service + set `OC_EGRESS_PROXY`) and
+  the controller-tier synthetic probe.
 - Layer 2 `--share-net` + L7/SNI egress proxy; DNS pinned. *(D-SBX-2)*
 - **Supervise the proxy** as `oc-egress-proxy.service` (`Restart=always`, linger,
   ordered before `oc-fleet.service`); controller-tier synthetic probe →

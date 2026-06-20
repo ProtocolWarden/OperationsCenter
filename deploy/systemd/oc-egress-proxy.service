@@ -3,13 +3,19 @@
 # ~/.config/systemd/user/ and: systemctl --user enable --now oc-egress-proxy.
 # Ordered BEFORE oc-fleet so the egress path is up when workers start; the bwrap
 # launcher still fails open to ollama-local if it is not.
+#
+# ExecStart MUST use the venv python: the OC package is only importable from
+# .venv (system /usr/bin/python3 raises ModuleNotFoundError), so the prior
+# /usr/bin/python3 unit could never start and the proxy was silently absent.
+# WorkingDirectory + the absolute venv path mirror oc-fleet.service's convention.
 [Unit]
 Description=ProtocolWarden OC L7/SNI egress allowlist proxy
 Before=oc-fleet.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 -m operations_center.entrypoints.egress_proxy.main --host 127.0.0.1 --port 8889
+WorkingDirectory=/home/dev/Documents/GitHub/OperationsCenter
+ExecStart=/home/dev/Documents/GitHub/OperationsCenter/.venv/bin/python -m operations_center.entrypoints.egress_proxy.main --host 127.0.0.1 --port 8889
 Restart=always
 RestartSec=2
 

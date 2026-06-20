@@ -15,6 +15,18 @@ Wraps the executor command in a rootless ``bwrap`` (bubblewrap) sandbox that:
 - the task workspace is the only writable real path; ``/tmp`` and ``$HOME`` are
   fresh tmpfs.
 
+SBX Phase 3 — network confinement (D-SBX-2 = `--share-net` + L7/SNI egress
+proxy). bwrap keeps the host network namespace (``--share-net``, the default) so
+the sandbox can still reach the host ollama floor and the localhost proxies; the
+constraint is applied at L7 by pointing the executor's egress at the allowlist
+proxy via ``HTTPS_PROXY``. ``--unshare-net`` was rejected (D-SBX-2): an isolated
+netns cannot reach a host-loopback proxy / ollama without a forwarder, and an L7
+proxy at least logs+constrains the deliberate-exfil case. Wiring is gated on
+``OC_EGRESS_PROXY`` and is **fail-open**: if it is unset or the proxy is not
+listening, no proxy env is injected and the sandbox keeps direct egress (losing
+all HTTPS to a dead proxy would be a §0.1 violation). localhost (ollama floor +
+key-proxy) always bypasses the proxy via ``NO_PROXY``.
+
 SELF-HEALING INVARIANT (§0.1): this is **fail-open**. If bwrap is missing, the
 config flag is off, or any bind path is absent, ``maybe_sandbox`` returns the
 command UNCHANGED — the fleet runs un-sandboxed rather than halting. A wrong
@@ -26,8 +38,10 @@ from __future__ import annotations
 
 import os
 import shutil
+import socket
 from collections.abc import Sequence
 from pathlib import Path
+from urllib.parse import urlparse
 
 # HOME subdirectories that hold host credentials — NEVER bound into the sandbox.
 _SECRET_HOME_DIRS = (".ssh", ".gnupg", ".aws", ".config/gh", ".config/gcloud")
@@ -37,10 +51,66 @@ _RO_SYSTEM_DIRS = ("/usr", "/bin", "/sbin", "/lib", "/lib64", "/etc")
 
 _SANDBOX_HOME = "/sandbox-home"
 
+# SBX Phase 3 (D-SBX-2): when set to the egress proxy URL in the fleet env, the
+# sandbox routes HTTPS egress through the L7/SNI allowlist proxy. Unset => no
+# proxy wiring (fail-open: direct net, as Phase 2).
+_EGRESS_PROXY_ENV_FLAG = "OC_EGRESS_PROXY"
+# localhost destinations that MUST bypass the egress proxy: the host ollama floor
+# and the localhost cloud-key proxy (D-OP-1) live on loopback and are not
+# "egress" — routing them through the CONNECT proxy would break the local floor.
+_PROXY_BYPASS = "127.0.0.1,localhost,::1"
+
 
 def bwrap_available() -> bool:
     """Check if bwrap (bubblewrap) is available in the PATH."""
     return shutil.which("bwrap") is not None
+
+
+def _proxy_reachable(url: str, *, timeout: float = 0.5) -> bool:
+    """True if the egress proxy host:port accepts a TCP connection. This is the
+    gate that keeps proxy wiring FAIL-OPEN (§0.1): if the proxy is down we inject
+    nothing and the sandbox keeps direct egress rather than losing all HTTPS."""
+    try:
+        parsed = urlparse(url if "://" in url else f"http://{url}")
+        host = parsed.hostname or "127.0.0.1"
+        port = parsed.port or 8889
+    except ValueError:
+        return False
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _resolve_egress_proxy(env: dict) -> str | None:
+    """The egress proxy URL to wire into the sandbox, or ``None``. Reads
+    ``OC_EGRESS_PROXY`` from the controlled env (falling back to the parent
+    process env, where the fleet actually sets it) and returns it only when the
+    proxy is reachable — so a dead/missing proxy degrades to direct egress
+    instead of breaking every HTTPS call (fail-open, §0.1)."""
+    url = env.get(_EGRESS_PROXY_ENV_FLAG) or os.environ.get(_EGRESS_PROXY_ENV_FLAG)
+    if not url or not _proxy_reachable(url):
+        return None
+    return url
+
+
+def _proxy_env(url: str, *, existing_no_proxy: str = "") -> dict[str, str]:
+    """PURE: the proxy env vars that route the executor's egress through ``url``.
+    Sets both upper- and lower-case forms (clients differ) and a ``NO_PROXY`` that
+    always exempts localhost (ollama floor + key-proxy), preserving any caller
+    NO_PROXY entries."""
+    no_proxy = ",".join(
+        dict.fromkeys(filter(None, (*_PROXY_BYPASS.split(","), *existing_no_proxy.split(","))))
+    )
+    return {
+        "HTTP_PROXY": url,
+        "HTTPS_PROXY": url,
+        "http_proxy": url,
+        "https_proxy": url,
+        "NO_PROXY": no_proxy,
+        "no_proxy": no_proxy,
+    }
 
 
 def _real(p: str | None) -> str | None:
@@ -162,7 +232,23 @@ def maybe_sandbox(
     try:
         if not Path(rw_root).is_dir():
             return list(inner_cmd)
-        return build_sandbox_argv(inner_cmd, oc_root=oc_root, rw_root=rw_root, env=env, chdir=chdir)
+        # Phase 3 (D-SBX-2): route egress through the L7/SNI allowlist proxy when
+        # OC_EGRESS_PROXY is set AND reachable. The reachability check is the
+        # fail-open gate (a dead proxy => no proxy env => direct egress, never a
+        # halt). Computed here (the impure decision point) so build_sandbox_argv
+        # stays a pure, offline-testable env→argv function.
+        sandbox_env = dict(env)
+        proxy_url = _resolve_egress_proxy(env)
+        if proxy_url:
+            sandbox_env.update(
+                _proxy_env(
+                    proxy_url,
+                    existing_no_proxy=env.get("NO_PROXY") or env.get("no_proxy") or "",
+                )
+            )
+        return build_sandbox_argv(
+            inner_cmd, oc_root=oc_root, rw_root=rw_root, env=sandbox_env, chdir=chdir
+        )
     except Exception:  # noqa: BLE001 — sandbox construction must never break dispatch
         return list(inner_cmd)
 
