@@ -12,13 +12,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from ._subprocess import build_allowlist_env, git_token_passthrough
-from ._subprocess import (
-    is_transient_failure,
-    persist_failure_diagnostics,
-    run_executor,
-    venv_python,
-)
+from ._subprocess import build_allowlist_env, git_token_passthrough, run_executor
+from ._subprocess import is_transient_failure, persist_failure_diagnostics, venv_python
 from ._text import desc_text, extract_goal, task_type_from_kind
 from .labels import GITHUB_DIR, add_label, label_value
 from .outcomes import (
@@ -91,9 +86,7 @@ def dispatch_issue(
         # self-verify before the PR opens, so the review loop has less to fix.
         goal_text = _append_definition_of_done(goal_text)
 
-    execution_mode = (
-        task_kind if task_kind in {"goal", "test_campaign", "improve_campaign"} else task_kind
-    )
+    execution_mode = task_kind  # historically a no-op ternary; kept flat for C29
 
     repo_cfg = settings.repos.get(repo_key)
     repo_path = _repo_local_path(settings, repo_key)
