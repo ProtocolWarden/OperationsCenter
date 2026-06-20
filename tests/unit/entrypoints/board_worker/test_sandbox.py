@@ -317,3 +317,23 @@ class TestEditableInstallBinds:
             ["x"], oc_root=oc_root, rw_root=tmp_path, env={"HOME": str(tmp_path)}
         )
         assert str(sibling) in " ".join(argv)
+
+
+class TestWheelhouseBind:
+    """SBX: the pre-provisioned wheelhouse is ro-bound + setenv'd so the
+    in-sandbox dev-install runs fully offline."""
+
+    def test_wheelhouse_bound_and_setenv(self, tmp_path: Path):
+        wh = tmp_path / "wheelhouse"
+        wh.mkdir()
+        env = {"HOME": str(tmp_path / "home"), "OC_WHEELHOUSE": str(wh)}
+        argv = build_sandbox_argv(["x"], oc_root=tmp_path, rw_root=tmp_path, env=env)
+        joined = " ".join(argv)
+        assert f"--ro-bind {wh} {wh}" in joined
+        assert f"--setenv OC_WHEELHOUSE {wh}" in joined
+
+    def test_no_wheelhouse_no_bind(self, tmp_path: Path):
+        argv = build_sandbox_argv(
+            ["x"], oc_root=tmp_path, rw_root=tmp_path, env={"HOME": str(tmp_path)}
+        )
+        assert "OC_WHEELHOUSE" not in " ".join(argv)

@@ -212,6 +212,10 @@ def _toolchain_ro_binds(oc_root: Path, env: dict) -> list[str]:
     # ContextLifecycle home (cl) + the anchor manifest (.context tree).
     add(env.get("CL_HOME"))
     add(env.get("CL_ANCHOR"))
+    # Pre-provisioned wheelhouse (host-built) so the in-sandbox dev-install runs
+    # offline — no pypi egress needed. Bound at its real path so the install's
+    # --find-links $OC_WHEELHOUSE resolves identically inside the sandbox.
+    add(env.get("OC_WHEELHOUSE"))
     # Claude subscription auth — required or the agent refuses.
     home = env.get("HOME") or os.path.expanduser("~")
     add(os.path.join(home, ".claude"))
