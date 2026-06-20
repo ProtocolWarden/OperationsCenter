@@ -304,6 +304,7 @@ def mock_settings(
         clone_url=f"git@github.com:owner/{repo_key}.git",
         default_branch="main",
         await_review=True,
+        token_env=None,
     )
     settings = MagicMock(
         reviewer=MagicMock(
@@ -319,6 +320,7 @@ def mock_settings(
             project_id="proj",
             workspace_slug="ws",
         ),
+        git=None,
     )
     return settings
 

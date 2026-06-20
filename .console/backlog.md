@@ -4,6 +4,62 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## Done
 
+### 2026-06-20: Stage 4 — Commit and push changes to existing branch (SBX wire-egress-proxy code quality fix) ✅ COMPLETE
+- **Objective**: Commit all code quality fixes and push to feature branch, preparing for PR merge
+- **Status**: ✅ COMPLETE — All changes committed and pushed to remote, branch synchronized
+- **Key Results**:
+  - ✅ **All changes committed** with descriptive messages:
+    - Commit 7c7e787: `fix(code_quality): make git_token_passthrough defensive against MagicMock objects` (primary fix)
+    - Commit c2b302a: `docs(.console): document Stage 1 code_quality fix completion`
+    - Commit 4865d6c: `docs(.console): document Stage 3 integration gate verification completion`
+    - Commit 7241054: `docs(.console): document Stage 2 code quality verification completion`
+  - ✅ **Branch pushed to remote**: `goal/sbx-wire-egress-proxy` → `origin/goal/sbx-wire-egress-proxy`
+    - Command: `git push --set-upstream origin goal/sbx-wire-egress-proxy`
+    - Result: 4 commits pushed successfully, upstream tracking configured
+  - ✅ **Branch synchronized with remote**:
+    - Local HEAD: 7241054 (same as remote HEAD)
+    - Status: `Your branch is up to date with 'origin/goal/sbx-wire-egress-proxy'`
+    - Working tree: Clean (no uncommitted changes)
+  - ✅ **PR auto-update ready**: All commits on feature branch, any existing PR will reflect changes
+- **Fix Summary**:
+  - Root cause: MagicMock objects from test mocks passed to `os.environ.get()` without type validation
+  - Production fix: Added `isinstance(name, str)` defensive check in `_subprocess.py:183`
+  - Test fixture fix: Explicitly configured `token_env=None` and `git=None` on mocks in `conftest.py`
+- **Acceptance Criteria — ALL MET** ✅
+  1. ✅ All changes staged and committed with descriptive messages
+  2. ✅ Commit messages document code_quality resolution
+  3. ✅ Changes pushed to feature branch with upstream tracking
+  4. ✅ Branch synchronized: local = remote = 7241054
+  5. ✅ Ready for PR merge or auto-update of existing PR
+- **Status**: ✅ PRODUCTION-READY — All code quality concerns fully resolved, all verification gates pass, ready for merge to main
+
+### 2026-06-20: Stage 2 — Run full test suite and linting checks (SBX wire-egress-proxy code quality fix) ✅ COMPLETE
+- **Objective**: Run full test suite, linting checks, and custodian gates to verify Stage 1 fixes resolve code_quality failures
+- **Status**: ✅ COMPLETE — All acceptance criteria verified and passed
+- **Key Results**:
+  - ✅ **Full pytest suite**: 9,450 passed, 11 skipped, 2 xfailed, **0 failures** (Duration: 98.17 seconds)
+  - ✅ **Specific failing test now passes**: `test_merge_decision_instrumentation.py::TestMergeDecisionMetrics::test_decision_outcome_retry_counted` (was TypeError: str expected, not MagicMock)
+  - ✅ **Ruff linting**: **All checks passed** (0 violations)
+  - ✅ **Custodian gates**:
+    - D12 (unwired symbols): **0 findings** — No public symbols tested but unwired
+    - DC10 (documentation consistency): **0 findings** — No deferred wiring claims
+    - Full audit: **0 findings** — Complete clean bill of health
+  - ✅ **No regressions** detected across entire test suite
+- **Acceptance Criteria — ALL MET** ✅
+  1. ✅ All pytest tests passing (9,450 passed, 0 failures)
+  2. ✅ Specific failing test resolved (test_decision_outcome_retry_counted PASSED)
+  3. ✅ Ruff linting passing (All checks passed, 0 violations)
+  4. ✅ Production wiring verified (custodian-multi D12/DC10: 0 findings)
+  5. ✅ No test regressions introduced
+- **Fix Verification**:
+  - Root cause: MagicMock objects from mocked repo_cfg passed to `os.environ.get()` without type validation
+  - Production fix: `_subprocess.py:183` — Added `isinstance(name, str)` defensive check
+  - Test fixture fix: `conftest.py` — Explicitly configured `token_env=None` and `git=None` on mocks
+  - Solution: Defensive production code + fixed test fixtures = robust and testable code
+- **Commits**:
+  - 7c7e787: `fix(code_quality): make git_token_passthrough defensive against MagicMock objects`
+- **Status**: ✅ PRODUCTION-READY — All code quality concerns fully resolved, ready for merge to main
+
 ### 2026-06-20: Stage 3 — Verify solution with integration gates and full test suite (SBX bwrap sandbox) ✅ COMPLETE
 - **Objective**: Run full integration gates and test suite to verify the `no_tooling_artifacts` fix and ensure all concerns are resolved
 - **Status**: ✅ COMPLETE — All integration gates clean, full test suite passing, no regressions
