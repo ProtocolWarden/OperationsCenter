@@ -1,3 +1,15 @@
+## 2026-06-20 — feat: SBX Phase 3 (2/n) — localhost cloud-key-injecting proxy (D-OP-1)
+
+New `entrypoints/key_proxy/`: `injector.py` (pure `inject_auth` — Anthropic
+x-api-key / OpenAI Bearer; strips any client-supplied auth + hop-by-hop headers)
+and `main.py` (asyncio reverse proxy streaming via httpx). The sandboxed agent
+points its model base URL at this loopback proxy and carries NO key; the host-held
+key is injected here, so the cloud key never enters the sandbox env. Standalone/
+inert; fails open to ollama-local (D-OP-1). 7 tests incl an end-to-end (host-only
+key reaches a mock upstream; sandbox-side request carried none; response streams
+back). ruff/ty clean. Remaining Phase-3: bwrap --unshare-net + proxy env wiring,
+controller-tier liveness probe -> cooldown.
+
 ## 2026-06-20 — fix: SPDX header on new pr_review_watcher test package init (License headers gate)
 
 The new tests/unit/entrypoints/pr_review_watcher/__init__.py was created empty —
