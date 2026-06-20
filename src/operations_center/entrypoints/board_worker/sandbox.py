@@ -37,6 +37,7 @@ PATH/CL_ANCHOR regressions). Turning it on is an explicit, observed step.
 from __future__ import annotations
 
 import base64
+import json
 import os
 import shutil
 import socket
@@ -157,6 +158,36 @@ def _real(p: str | None) -> str | None:
         return None
 
 
+def _editable_install_dirs(oc_root: Path) -> list[str]:
+    """Source dirs of editable-installed dependencies that live OUTSIDE oc_root.
+
+    The OC venv installs sibling repos (TeamExecutor, DAGExecutor) as editable
+    (PEP 660), so their ``.dist-info/direct_url.json`` records the real source
+    path (e.g. /home/dev/Documents/GitHub/TeamExecutor). Those back
+    ``import team_executor`` / ``import dag_executor`` — the executor backends.
+    Without binding them the sandboxed executor fails ``No module named ...`` at
+    its very first stage (only surfaces once clone works). oc_root's own editable
+    install is skipped (already bound via ``oc_root/src``). Discovered (not
+    hardcoded) so new editable deps are picked up automatically."""
+    dirs: list[str] = []
+    oc_real = _real(str(oc_root))
+    for du in (oc_root / ".venv").glob("lib/python*/site-packages/*.dist-info/direct_url.json"):
+        try:
+            meta = json.loads(du.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not meta.get("dir_info", {}).get("editable"):
+            continue
+        url = meta.get("url", "")
+        rp = _real(url[len("file://") :] if url.startswith("file://") else url)
+        if not rp or rp in dirs:
+            continue
+        if oc_real and (rp == oc_real or rp.startswith(oc_real + os.sep)):
+            continue  # oc_root is already bound
+        dirs.append(rp)
+    return dirs
+
+
 def _toolchain_ro_binds(oc_root: Path, env: dict) -> list[str]:
     """Read-only host paths the executor toolchain needs. Derived from the
     resolved binaries + env so it tracks where things actually live."""
@@ -170,6 +201,9 @@ def _toolchain_ro_binds(oc_root: Path, env: dict) -> list[str]:
     # The OC source tree (PYTHONPATH) + its venv (python/pytest/ruff).
     add(str(oc_root / "src"))
     add(str(oc_root / ".venv"))
+    # Editable-installed sibling-repo deps (team_executor, dag_executor, …).
+    for d in _editable_install_dirs(oc_root):
+        add(d)
     # Agent CLIs + their install dirs.
     for tool in ("claude", "cl", "uv", "aider", "node", "npm"):
         found = shutil.which(tool)
