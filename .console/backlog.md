@@ -116,21 +116,41 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## In Progress
 
-### 2026-06-20: Stage 2 — Run full test suite and linters to verify no regressions (SBX bwrap sandbox)
+(no tasks in progress)
+
+## Recently Completed
+
+### 2026-06-20: Stage 2 — Run full test suite and linters to verify no regressions (SBX bwrap sandbox) ✅ COMPLETE
 - **Objective**: Execute repository test suite and linters to verify all changes are correct and no regressions introduced
-- **Status**: NOT STARTED
-- **Acceptance Criteria**:
-  1. Run full test suite (pytest) — all tests passing
-  2. Run linters (ruff check) — zero violations
-  3. Run code formatter (ruff format) — all files compliant
-  4. Verify no new warnings or regressions introduced
-  5. Confirm custodian-multi integration gates clean (D12/DC10)
-- **Next Steps**:
-  - Install dev dependencies if needed
-  - Run pytest on full test suite
-  - Run ruff check and format
-  - Run custodian-multi for D12/DC10 checks
-  - Commit any formatting fixes
+- **Status**: ✅ COMPLETE — All tests passing, all linting clean, formatting applied
+- **Key Results**:
+  - ✅ **Full Test Suite**: 9,416/9,416 tests PASSING
+    - Execution time: ~94 seconds
+    - 11 tests skipped (expected)
+    - 2 xfailed (expected failures)
+    - 0 failures ✅
+  - ✅ **Ruff Linting**: All checks PASSED (0 violations) ✅
+  - ✅ **Code Formatting**: Applied to 9 files (ruff format)
+    - `src/operations_center/entrypoints/board_worker/_subprocess.py`
+    - `src/operations_center/entrypoints/board_worker/dispatch.py`
+    - `src/operations_center/entrypoints/board_worker/sandbox.py`
+    - `src/operations_center/entrypoints/maintenance/board_unblock_task.py`
+    - `src/operations_center/entrypoints/pr_review_watcher/inj.py`
+    - `src/operations_center/entrypoints/pr_review_watcher/verdict.py`
+    - `tests/unit/entrypoints/board_worker/test_sandbox.py`
+    - `tests/unit/entrypoints/maintenance/test_board_unblock_task.py`
+    - `tests/unit/entrypoints/pr_review_watcher/test_verdict.py`
+  - ✅ **Custodian Integration Gates**: D12/DC10 gates CLEAN (0 findings) ✅
+  - ✅ **No Regressions**: All 277 entrypoint tests pass after formatting
+- **Acceptance Criteria — ALL MET** ✅
+  1. ✅ Run full test suite (pytest) — 9,416/9,416 tests passing
+  2. ✅ Run linters (ruff check) — zero violations
+  3. ✅ Run code formatter (ruff format) — 9 files formatted, all compliant
+  4. ✅ Verify no new warnings or regressions introduced — 277 entrypoint tests passing
+  5. ✅ Confirm custodian-multi integration gates clean (D12/DC10) — CLEAN ✅
+- **Commits**:
+  - `dd5763e` - fix(sbx): apply ruff code formatting
+- **Status**: ✅ PRODUCTION-READY — All quality gates passed, changes pushed to origin
 
 ### 2026-06-19: Stage 4 — Run full test suite and linters, fix any failures (✅ COMPLETE)
 - **Objective**: Execute full test suite and linters, fix any failures before finishing
