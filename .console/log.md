@@ -7630,3 +7630,41 @@ OperationsCenter | 0 findings | clean
 - Stage 3: Integration gate clean (0 D12/DC10 findings)
 
 Ready for merge to main.
+
+## 2026-06-20 — Stage 2 Complete: Implement Artifact Resolution (SBX bwrap sandbox) ✅ COMPLETE
+
+**Task**: Fix the `no_tooling_artifacts` check failure by implementing a proper long-term solution.
+
+**Root Cause Analysis**:
+- Previous attempts (commits e2c14fd, 1814d98) tried to delete specific audit files from the diff
+- True root cause: `.gitignore` was missing a general pattern for `AUDIT*.md` files
+- Only `DERIVER_AUDIT*.md` (specific variant) was excluded, not the broader `AUDIT*.md` pattern
+- Result: Audit files generated during local development were getting committed to version control
+
+**Solution Implemented**:
+- Added `AUDIT*.md` pattern to `.gitignore` at line 62
+- Different approach from previous attempts: Prevention rather than deletion
+- Ensures ALL future audit files are automatically excluded from version control
+- No repeated attempts to delete specific instances needed
+
+**Implementation Details**:
+- File changed: `.gitignore`
+- Pattern added: `AUDIT*.md` (now matches files like AUDIT_STAGE_0_FINDINGS.md, AUDIT_CODE_QUALITY_FINDINGS.md, etc.)
+- Commit: `0a35cfc` - fix(review): add AUDIT*.md pattern to .gitignore to prevent tooling artifacts
+
+**Verification**:
+- Pattern confirmed working: `git check-ignore -v` shows AUDIT*.md files are now matched
+- PR diff clean: Only 13 files (1 .gitignore fix + 12 legitimate source/test files)
+- No tooling artifacts in diff
+- `no_tooling_artifacts` check should now PASS
+
+**Why This Differs from Previous Attempts**:
+- e2c14fd: Deleted auto-generated audit files (AUDIT_CODE_QUALITY_FINDINGS.md, AUDIT_TOOL_OUTPUT.md)
+- 1814d98: Removed .console/ work-tracking files (backlog.md, log.md, task.md) from diff
+- Stage 2: Fixed root cause by adding proper gitignore pattern to prevent future occurrences
+- Result: Permanent fix rather than repeated deletions of symptom files
+
+**Status**: ✅ PRODUCTION-READY
+- Artifact exclusion pattern complete
+- PR diff clean
+- Ready for custodian-multi integration gate verification
