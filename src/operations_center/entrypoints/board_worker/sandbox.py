@@ -39,6 +39,7 @@ _SANDBOX_HOME = "/sandbox-home"
 
 
 def bwrap_available() -> bool:
+    """Check if bwrap (bubblewrap) is available in the PATH."""
     return shutil.which("bwrap") is not None
 
 
