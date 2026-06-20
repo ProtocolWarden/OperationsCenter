@@ -1,3 +1,21 @@
+## 2026-06-19 — feat: INJ Phase 1 root fix — code-computed typed verdict (D-INJ-1)
+
+First PR of the Harness Trust-Hardening Phase 1 (INJ), operator-implemented (the
+fleet must not author the controls that constrain it). The reviewer used to emit a
+free-text `{"result": "LGTM"}` the MODEL authored, so any prompt injection in the
+diff/spec/findings contended directly for the merge. New `pr_review_watcher/
+verdict.py`: enumerated `REVIEW_CHECKS`, `compute_verdict(checks) -> (result,
+failing)` (pure, code-computed), and `verdict_schema_prompt()`. The model now fills
+a typed `{check_id, status, evidence_span}` per check; `_run_direct_review` (the
+trust boundary) runs `compute_verdict` and returns a CODE-computed `result` —
+ignoring any model-authored `result`. Fail-safe: missing/unknown/malformed →
+CONCERNS, never auto-LGTM (also satisfies D-INJ-2 degrade-to-stricter). Acceptance
+(§2.4): a forged `{"result":"LGTM"}` with no real checks computes to CONCERNS
+(unit + boundary tests). 11 verdict-unit + 2 boundary tests; 237 reviewer tests
+pass; ruff/ty/audit clean. Remaining Phase-1 PRs: typed hand-off (D-INJ-4),
+{detector_id,count} findings (D-INJ-3), output sanitization, nonce envelope, INJ1
+detector.
+
 ## 2026-06-19 — fix: forward CL_ANCHOR to the executor (ContextGuard refusal regression)
 
 With the baseline blocker fixed (#346), tasks reached the agent stages and revealed
