@@ -110,9 +110,10 @@ class TestRealBwrapExitGate:
         ws.mkdir()
         # Try to read PID 1's environ from inside; with --unshare-pid + fresh
         # /proc there is no parent to read, so this must fail/empty.
+        oc_root = Path(__file__).resolve().parents[4]
         argv = build_sandbox_argv(
             ["sh", "-c", "cat /proc/1/environ 2>/dev/null | tr -d '\\0'; echo DONE"],
-            oc_root=Path("/home/dev/Documents/GitHub/OperationsCenter"),
+            oc_root=oc_root,
             rw_root=ws,
             env={"HOME": str(tmp_path / "home"), "SECRET_SENTINEL": "leak-me"},
         )
@@ -123,9 +124,10 @@ class TestRealBwrapExitGate:
     def test_ssh_dir_unreadable_in_sandbox(self, tmp_path: Path):
         ws = tmp_path / "ws"
         ws.mkdir()
+        oc_root = Path(__file__).resolve().parents[4]
         argv = build_sandbox_argv(
             ["sh", "-c", "ls ~/.ssh 2>&1; echo DONE"],
-            oc_root=Path("/home/dev/Documents/GitHub/OperationsCenter"),
+            oc_root=oc_root,
             rw_root=ws,
             env={"HOME": "/home/dev"},  # real home with a real ~/.ssh on this host
         )
