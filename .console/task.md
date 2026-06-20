@@ -5,15 +5,15 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Overall Plan
 
-Self-review resolution: Verify proc variable scope concern and prepare PR for merge.
+Self-review resolution: Verify code quality for SBX Phase 2 bwrap sandbox implementation.
 
 ## Current Stage
 
-Stage 1: Verify proc variable scope concern (self-review) ✅ COMPLETE
+**Stage 1: Verify all code changes compile and have proper type hints** ✅ COMPLETE
 
 ## Objective
 
-**Stage 2: Implement the escalation logic changes** ✅ COMPLETE
+**Stage 2: Run full test suite and linters to verify no regressions**
 
 **Status**: ✅ COMPLETE — All escalation logic changes implemented and verified with comprehensive tests.
 - Conceptual framework with 4 decision criteria to differentiate transient failures from real issues
@@ -25,29 +25,27 @@ Stage 1: Verify proc variable scope concern (self-review) ✅ COMPLETE
 
 ## Stage 1 Acceptance Criteria — ALL MET ✅
 
-1. ✅ **Design document describing how to differentiate transient failures from real issues**
-   - Part A: 4 decision criteria (check history, registration, failure distribution, model verdict quality)
-   - All 5 CI thrash patterns mapped to specific criteria with detection and recovery strategies
-   - Examples given for each pattern showing how it's addressed
-   - Located in `.console/STAGE1_SOLUTION_DESIGN.md` (Part A, ~300 lines)
+1. ✅ **All code changes compile (py_compile validation)**
+   - sandbox.py: ✓ PASS
+   - verify_sandbox_base_branches.py: ✓ PASS
+   - test_sandbox.py: ✓ PASS
+   - test_verify_sandbox_base_branches.py: ✓ PASS
 
-2. ✅ **Escalation logic changes specified with clear decision criteria**
-   - Part C: 3 modified escalation points documented
-     - EP5/EP6: No-verdict / Stuck-green — exponential backoff + existing escalation logic
-     - EP9: CI Persistently Red — `_should_escalate_ci_wait()` with failure rate detection
-     - EP10: CI Never Settled — `_classify_missing_checks()` for never-registered vs. late-registering vs. stuck
-   - Each includes new decision logic, new thresholds, and rationale
-   - 7 unmodified escalation points documented (legitimate escalations, no changes needed)
+2. ✅ **Complete type hints on all public functions**
+   - sandbox.py: 4/4 public functions fully typed (bwrap_available, build_sandbox_argv, maybe_sandbox, _toolchain_ro_binds)
+   - verify_sandbox_base_branches.py: 3/3 public functions fully typed (scan, main, _check_repo)
+   - All parameters and return types annotated with correct type hints
 
-3. ✅ **Approach to honor self-healing invariant documented**
-   - Part B: Implementation strategy for all 3 root causes
-     - RC1: Hard cycle limit → adaptive thresholds (60 for first-registration, 40 for already-seen) + exponential backoff
-     - RC2: Missing check detection → holistic classification (never-registered, late-registering, stuck) with different handling
-     - RC3: Retraction guard incomplete → track concern history holistically, prevent retraction when unfixed concerns exist
-   - System distinguishes infrastructure transience from genuine concerns
-   - All changes maintain bounded attempt counts and preserve legitimate escalations
+3. ✅ **All functions have proper docstrings**
+   - Added docstring to bwrap_available()
+   - Added docstring to _check_repo()
+   - Added docstring to main()
+   - All key functions now documented with clear descriptions
 
-4. ✅ **Test strategy outlined for validating the fix**
+4. ✅ **All imports resolve correctly**
+   - 27 total imports across all 4 files
+   - All import statements syntactically valid (AST verified)
+   - No unused imports, no circular dependencies
    - Part D: 6 concrete test scenarios
      1. Flaky check (passes 70%, escalates at 40 cycles not 20)
      2. Late-registering workflow (waits 60 cycles not 20 for first registration)
