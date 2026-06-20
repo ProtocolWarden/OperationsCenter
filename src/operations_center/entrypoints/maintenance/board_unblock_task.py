@@ -216,7 +216,9 @@ class BoardUnblockTask:
     def _make_gh_client(self) -> GitHubPRClient | None:
         if self._gh_client is not None:
             return self._gh_client
-        token_env = getattr(getattr(self._settings, "git", None), "token_env", None) or "GITHUB_TOKEN"
+        token_env = (
+            getattr(getattr(self._settings, "git", None), "token_env", None) or "GITHUB_TOKEN"
+        )
         token = os.environ.get(token_env)
         return GitHubPRClient(token=token) if token else None
 
@@ -276,7 +278,9 @@ class BoardUnblockTask:
                 if a.get("task_id") not in reconciled_ids
             ]
 
-            results = apply_board_actions(client, reconcile_actions + rule_actions, apply=self._apply)
+            results = apply_board_actions(
+                client, reconcile_actions + rule_actions, apply=self._apply
+            )
 
             applied = [r for r in results if r.get("action") == "applied"]
             details["scanned"] = len(issues)

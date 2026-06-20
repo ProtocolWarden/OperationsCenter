@@ -98,13 +98,17 @@ def build_sandbox_argv(
         "--unshare-pid",
         "--unshare-uts",
         "--unshare-ipc",
-        "--proc", "/proc",
-        "--dev", "/dev",
+        "--proc",
+        "/proc",
+        "--dev",
+        "/dev",
         "--die-with-parent",
         "--new-session",
         "--clearenv",
-        "--tmpfs", "/tmp",
-        "--tmpfs", home,
+        "--tmpfs",
+        "/tmp",
+        "--tmpfs",
+        home,
     ]
     for d in _RO_SYSTEM_DIRS:
         if os.path.isdir(d):
@@ -152,9 +156,7 @@ def maybe_sandbox(
     try:
         if not Path(rw_root).is_dir():
             return list(inner_cmd)
-        return build_sandbox_argv(
-            inner_cmd, oc_root=oc_root, rw_root=rw_root, env=env, chdir=chdir
-        )
+        return build_sandbox_argv(inner_cmd, oc_root=oc_root, rw_root=rw_root, env=env, chdir=chdir)
     except Exception:  # noqa: BLE001 — sandbox construction must never break dispatch
         return list(inner_cmd)
 

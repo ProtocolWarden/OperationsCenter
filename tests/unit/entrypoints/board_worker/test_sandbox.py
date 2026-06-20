@@ -77,7 +77,9 @@ class TestArgvContract:
     def test_inner_command_is_appended_last(self, tmp_path: Path):
         ws = tmp_path / "ws"
         ws.mkdir()
-        argv = build_sandbox_argv(["python", "-m", "x"], oc_root=tmp_path, rw_root=ws, env=_env(tmp_path))
+        argv = build_sandbox_argv(
+            ["python", "-m", "x"], oc_root=tmp_path, rw_root=ws, env=_env(tmp_path)
+        )
         assert argv[-3:] == ["python", "-m", "x"]
 
 
@@ -86,7 +88,10 @@ class TestFailOpen:
         ws = tmp_path / "ws"
         ws.mkdir()
         cmd = ["python", "-m", "execute"]
-        assert maybe_sandbox(cmd, oc_root=tmp_path, rw_root=ws, env=_env(tmp_path), enabled=False) == cmd
+        assert (
+            maybe_sandbox(cmd, oc_root=tmp_path, rw_root=ws, env=_env(tmp_path), enabled=False)
+            == cmd
+        )
 
     def test_missing_workspace_returns_unchanged(self, tmp_path: Path):
         cmd = ["python"]

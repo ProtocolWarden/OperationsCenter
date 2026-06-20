@@ -85,6 +85,7 @@ def executor_path() -> str:
             _add(os.path.dirname(found))
     return ":".join([*extra, base]) if extra else base
 
+
 # Operational + model-access vars forwarded from the parent IF present. These are
 # load-bearing: the worker toolchain needs HOME/cache dirs, and it MUST be able to
 # reach a model or the fleet cannot run/review/fix — the self-healing invariant
@@ -246,9 +247,7 @@ def persist_failure_diagnostics(
         result["failure_reason"] = f"{base} [diagnostics: {path}]"
         if tail:
             result["failure_reason"] += f"\n--- executor tail ---\n{tail}"
-        logger.warning(
-            "board_worker[%s]: task=%s failure diagnostics → %s", role, short_id, path
-        )
+        logger.warning("board_worker[%s]: task=%s failure diagnostics → %s", role, short_id, path)
         return path
     except Exception as exc:  # noqa: BLE001 — diagnostics must never crash dispatch
         logger.warning("board_worker[%s]: failed to persist diagnostics — %s", role, exc)
