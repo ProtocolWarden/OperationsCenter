@@ -113,7 +113,13 @@ def build_sandbox_argv(
     for d in _RO_SYSTEM_DIRS:
         if os.path.isdir(d):
             argv += ["--ro-bind", d, d]
+    real_home = os.path.realpath(env.get("HOME") or os.path.expanduser("~"))
+    secret_paths = {os.path.join(real_home, d) for d in _SECRET_HOME_DIRS}
     for src in (*_toolchain_ro_binds(oc_root, env), *extra_ro_binds):
+        # Defense-in-depth: never bind a credential dir even if a toolchain path
+        # somehow resolved to one (e.g. a misconfigured CL_HOME under ~/.ssh).
+        if any(src == s or src.startswith(s + os.sep) for s in secret_paths):
+            continue
         argv += ["--ro-bind", src, src]
     # Re-seed the Claude auth dir INTO the tmpfs home (where the agent looks).
     claude_auth = _real(os.path.join(env.get("HOME") or os.path.expanduser("~"), ".claude"))

@@ -74,6 +74,17 @@ class TestArgvContract:
         rw = [argv[i + 1] for i, a in enumerate(argv) if a == "--bind"]
         assert rw == [str(ws)]
 
+
+    def test_secret_home_dir_bind_is_filtered(self, tmp_path: Path):
+        # A toolchain path that resolves under a credential dir is dropped.
+        home = tmp_path / "home"
+        (home / ".ssh").mkdir(parents=True)
+        argv = build_sandbox_argv(
+            ["x"], oc_root=tmp_path, rw_root=tmp_path, env={"HOME": str(home)},
+            extra_ro_binds=[str(home / ".ssh")],
+        )
+        assert str(home / ".ssh") not in " ".join(argv)
+
     def test_inner_command_is_appended_last(self, tmp_path: Path):
         ws = tmp_path / "ws"
         ws.mkdir()
