@@ -14,9 +14,9 @@ key-injecting proxy). Per the spec these channels ARE exfil paths; the proxy
 *raises cost*, it does not *close* exfil. fail-CLOSED on the data path, but made
 non-load-bearing by supervision (Restart=always) + a controller-tier probe.
 
-**Integration Status**: This module is currently used only in the standalone proxy
-process (main.py, launched via systemd). Application code integration (HTTPS_PROXY
-environment variable setup in the bwrap launcher) is deferred to a follow-on Phase 3 PR.
+**Integration Status**: used by the standalone proxy process (main.py, launched via
+systemd). The bwrap launcher now wires the sandbox's ``HTTPS_PROXY`` to that proxy
+(``board_worker/sandbox.py``), so this allowlist is enforced on the executor's egress.
 """
 
 from __future__ import annotations

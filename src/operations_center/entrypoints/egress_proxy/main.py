@@ -3,22 +3,27 @@
 """L7/SNI egress allowlist proxy (SBX Phase 3, D-OP-2 = B+).
 
 A minimal HTTPS-CONNECT proxy: the sandboxed executor is given ``HTTPS_PROXY``
-pointing here (and ``--unshare-net`` so it has no other route out). For each
-``CONNECT host:port`` it (1) checks the CONNECT host against the allowlist, then
-(2) peeks the TLS ClientHello and verifies the real SNI is also allowlisted —
-catching a client that CONNECTs to an allowed host but speaks TLS to another. Only
-then does it tunnel. Everything else is refused and logged.
+pointing here (the bwrap launcher injects it via ``board_worker/sandbox.py`` when
+``OC_EGRESS_PROXY`` is set and reachable, gated on the proxy's liveness — fail-open).
+Per D-SBX-2 the sandbox keeps ``--share-net`` (an isolated netns could not reach this
+host-loopback proxy / the ollama floor without a forwarder), so the constraint is
+applied at L7 here, not by netns isolation. For each ``CONNECT host:port`` it
+(1) checks the CONNECT host against the allowlist, then (2) peeks the TLS ClientHello
+and verifies the real SNI is also allowlisted — catching a client that CONNECTs to an
+allowed host but speaks TLS to another. Only then does it tunnel. Everything else is
+refused and logged.
 
 Run as ``oc-egress-proxy.service`` (``systemd --user``, ``Restart=always``, linger,
 ordered before ``oc-fleet.service``): "proxy down" self-recovers in seconds and
 the bwrap launcher fails open to the ollama-local floor, so this is fail-CLOSED on
 the data path yet never a fleet halt (§0.1 / D-OP-2).
 
-**Integration Status**: STANDALONE SERVICE. The main() function is invoked by systemd
-(see deploy/systemd/oc-egress-proxy.service). Application integration of the HTTPS_PROXY
-environment variable (in the bwrap launcher) and controller-tier health probes are
-deferred to follow-on Phase 3 PRs. The proxy is intentionally a separate process, not
-directly instantiated from application code.
+**Integration Status**: STANDALONE SERVICE, now WIRED into the sandbox. The main()
+function is invoked by systemd (see deploy/systemd/oc-egress-proxy.service). The
+bwrap launcher injects ``HTTPS_PROXY`` pointing here when ``OC_EGRESS_PROXY`` is set
+and this proxy is reachable (``board_worker/sandbox.py``). Controller-tier synthetic
+health probes (DENY-on-allowlisted = rot → auto-fix task) remain a follow-on. The
+proxy is intentionally a separate process, not directly instantiated from app code.
 """
 
 from __future__ import annotations
@@ -114,9 +119,7 @@ async def _handle(
         return
 
     try:
-        ureader, uwriter = await asyncio.wait_for(
-            asyncio.open_connection(host, port), timeout=10
-        )
+        ureader, uwriter = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=10)
     except Exception as exc:  # noqa: BLE001 — any upstream-connect failure -> refuse
         logger.warning("egress upstream-fail host=%s:%s — %s", host, port, exc)
         cwriter.close()
@@ -141,9 +144,7 @@ async def _safe_drain_close(writer: asyncio.StreamWriter) -> None:
 
 
 async def serve(host: str, port: int, allowlist: tuple[str, ...]) -> None:  # pragma: no cover
-    server = await asyncio.start_server(
-        lambda r, w: _handle(r, w, allowlist), host, port
-    )
+    server = await asyncio.start_server(lambda r, w: _handle(r, w, allowlist), host, port)
     addrs = ", ".join(str(s.getsockname()) for s in server.sockets)
     logger.info("oc-egress-proxy listening on %s; allowlist=%s", addrs, list(allowlist))
     async with server:
