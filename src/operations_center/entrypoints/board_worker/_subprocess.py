@@ -180,7 +180,7 @@ def git_token_passthrough(settings: Any, repo_cfg: Any) -> tuple[str, ...]:
     if not name:
         git_cfg = getattr(settings, "git", None)
         name = getattr(git_cfg, "token_env", None) if git_cfg is not None else None
-    return (name,) if name else ()
+    return (name,) if isinstance(name, str) else ()
 
 
 def build_env(oc_root: Path) -> dict:
