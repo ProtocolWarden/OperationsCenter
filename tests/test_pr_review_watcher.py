@@ -2832,3 +2832,71 @@ def test_phase1_code_diff_omits_doc_rubric(tmp_path: Path) -> None:
         )
 
     assert "DOCUMENTATION-ONLY" not in captured["goal"]
+
+
+# ── SBX Phase 2: reviewer executor sandboxing ────────────────────────────────
+
+
+def test_sandbox_enabled_reads_flag(monkeypatch) -> None:
+    monkeypatch.setenv("OC_BWRAP_SANDBOX", "1")
+    assert watcher._sandbox_enabled() is True
+    monkeypatch.setenv("OC_BWRAP_SANDBOX", "0")
+    assert watcher._sandbox_enabled() is False
+    monkeypatch.delenv("OC_BWRAP_SANDBOX", raising=False)
+    assert watcher._sandbox_enabled() is False
+
+
+def _pipeline_settings() -> MagicMock:
+    # token_env None on both repo + global git so git_token_passthrough -> ()
+    # (a MagicMock token_env would be truthy and break build_allowlist_env).
+    repo_cfg = MagicMock(clone_url="u", default_branch="main", token_env=None)
+    return MagicMock(
+        repos={REPO_KEY: repo_cfg},
+        git=MagicMock(token_env=None),
+        plane=MagicMock(project_id="proj"),
+    )
+
+
+def _patched_pipeline_run(monkeypatch, tmp_path: Path):
+    """Common harness: clean tree, stubbed planning that emits an empty bundle,
+    and a captured Popen whose process completes rc=0 with no output. Returns the
+    Popen mock so the caller can assert on the spawned argv."""
+    (tmp_path / "cfg.yaml").write_text("x: 1\n")
+    plan_cp = watcher.subprocess.CompletedProcess([], 0, stdout="{}", stderr="")
+    popen = MagicMock()
+    popen.return_value.communicate.return_value = ("", "")
+    popen.return_value.returncode = 0
+    monkeypatch.setattr(watcher, "_oc_source_conflict_markers", lambda *a, **k: [])
+    monkeypatch.setattr(watcher.subprocess, "run", lambda *a, **k: plan_cp)
+    monkeypatch.setattr(watcher.subprocess, "Popen", popen)
+    return popen
+
+
+def test_run_pipeline_sandboxes_exec_when_enabled(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("OC_BWRAP_SANDBOX", "1")
+    popen = _patched_pipeline_run(monkeypatch, tmp_path)
+    sentinel = ["bwrap", "WRAPPED", "execute.main"]
+    with patch.object(watcher, "maybe_sandbox", return_value=sentinel) as msbx:
+        watcher._run_pipeline(
+            tmp_path, tmp_path / "cfg.yaml", REPO_KEY, "goal", _pipeline_settings(),
+            source="reviewer_self", state_key=STATE_KEY, branch_suffix="abc",
+        )
+    # exec wrapped via maybe_sandbox with enabled=True, and Popen got the wrap
+    msbx.assert_called_once()
+    assert msbx.call_args.kwargs["enabled"] is True
+    assert popen.call_args.args[0] == sentinel
+
+
+def test_run_pipeline_no_sandbox_when_disabled(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("OC_BWRAP_SANDBOX", raising=False)
+    popen = _patched_pipeline_run(monkeypatch, tmp_path)
+    with patch.object(watcher, "maybe_sandbox") as msbx:
+        watcher._run_pipeline(
+            tmp_path, tmp_path / "cfg.yaml", REPO_KEY, "goal", _pipeline_settings(),
+            source="reviewer_self", state_key=STATE_KEY, branch_suffix="abc",
+        )
+    # flag off -> no sandbox wrap, Popen gets the raw execute.main command
+    msbx.assert_not_called()
+    spawned = popen.call_args.args[0]
+    assert spawned[1] == "-m"
+    assert spawned[2] == "operations_center.entrypoints.execute.main"

@@ -56,6 +56,11 @@ from operations_center.close_invariants import (
     branch_delete_allowed_after_close,
     close_without_receipt_allowed,
 )
+from operations_center.entrypoints.board_worker._subprocess import (
+    build_allowlist_env,
+    git_token_passthrough,
+)
+from operations_center.entrypoints.board_worker.sandbox import maybe_sandbox
 from operations_center.reviewer.instrumentation import (
     get_instrumenter,
     record_decision_outcome,
@@ -368,6 +373,13 @@ def _build_env(oc_root: Path) -> dict:
     env = dict(os.environ)
     env["PYTHONPATH"] = str(oc_root / "src")
     return env
+
+
+def _sandbox_enabled() -> bool:
+    """True when the bwrap sandbox is enabled for worker subprocesses. Mirrors
+    board_worker._subprocess's gate (OC_BWRAP_SANDBOX=1) so the reviewer's
+    executor is contained on exactly the same switch as board_worker dispatch."""
+    return os.environ.get("OC_BWRAP_SANDBOX") == "1"
 
 
 class OCSourceTreeUncleanError(RuntimeError):
@@ -683,15 +695,41 @@ def _run_pipeline(
             "--source",
             source,
         ]
+        # SBX Phase 2: wrap the executor in the bwrap sandbox. The reviewer runs
+        # the LEAST-trusted code on the trusted host — arbitrary PR branches, incl.
+        # the fix-pass loop's own output — and shells out to claude, so it is the
+        # highest-value executor to contain, yet board_worker dispatch sandboxed
+        # it while this path did not. Gated on OC_BWRAP_SANDBOX: when OFF the exec
+        # is byte-for-byte unchanged (full env, no bwrap) so the critical merge
+        # path cannot regress; when ON it runs in bwrap with board_worker's
+        # battle-tested MINIMIZED env (build_allowlist_env strips the Plane token,
+        # sibling-repo tokens and host secrets — the reviewer's _build_env leaks
+        # the full os.environ, so without this the sandbox would just --setenv the
+        # crown-jewel tokens back in). Fail-open at every layer (§0.1): a missing
+        # bwrap degrades maybe_sandbox to the unwrapped cmd, never a halt.
+        if _sandbox_enabled():
+            exec_env = build_allowlist_env(
+                oc_root, passthrough=git_token_passthrough(settings, repo_cfg)
+            )
+            run_exec_cmd = maybe_sandbox(
+                exec_cmd,
+                oc_root=oc_root,
+                rw_root=tmp,
+                env=exec_env,
+                enabled=True,
+                chdir=workspace,
+            )
+        else:
+            exec_env, run_exec_cmd = env, exec_cmd
         # Use Popen + start_new_session so the entire process group (including
         # grandchildren like pytest-spawned claude subprocesses) can be killed on
         # timeout.  subprocess.run with capture_output=True only kills the direct
         # child on TimeoutExpired; grandchildren keep the pipe open and
         # communicate() blocks indefinitely.
         _exec_popen = subprocess.Popen(
-            exec_cmd,
+            run_exec_cmd,
             cwd=oc_root,
-            env=env,
+            env=exec_env,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
