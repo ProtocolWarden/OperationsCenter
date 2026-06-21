@@ -1,3 +1,18 @@
+## 2026-06-21 — EVAL: extraction-kind coverage + drift-monitor task (audit Finding 1)
+
+Closes the structural gap: the blocking gate grades deterministic verdict CODE
+(can't drift); the risky MODEL check-extraction layer had no corpus + no live run.
+Added: (1) `extraction` corpus kind (input.diff → model extracts checks) +
+`replay.run_corpus` now EXCLUDES non-verdict kinds from the blocking gate (chain
+integrity still covers all); (2) 3 extraction seed cases (null-deref→CONCERNS,
+clean-rename→LGTM, tooling-artifact→CONCERNS) — the semantic 'well-formed but wrong'
+miss the deterministic gate is blind to; (3) `DriftMonitorTask` (registered in
+spec_hygiene) replays extraction cases through an injected different-family
+extractor, files NON-BLOCKING dedup tickets on drift. Opt-in OC_EVAL_DRIFT_MONITOR=1
++ extractor → else skipped (no clean single-shot model API exists; the live
+different-family invoker is the remaining hookup, needs backend-machinery work).
+74 eval/maintenance tests; ruff/ty/audit clean.
+
 ## 2026-06-21 — SBX: sandbox the 3 un-wrapped executor spawn sites (audit HIGH-3)
 
 Architectural audit found the reviewer-sandbox story incomplete: the CI fix-loop

@@ -84,8 +84,17 @@ def replay_case(case: Case, *, graded: bool) -> CaseResult:
 
 
 def run_corpus(cases: list[Case], graded_ids: set[str]) -> ReplayReport:
-    """Replay every case; ``graded_ids`` are the case_ids that verified as signed."""
-    results = [replay_case(c, graded=c.case_id in graded_ids) for c in cases]
+    """Replay the VERDICT-kind cases; ``graded_ids`` are the verified-signed ids.
+
+    Non-verdict kinds (e.g. ``extraction`` cases for the drift monitor) are NOT part
+    of the deterministic blocking gate and are excluded here — they would otherwise
+    show as spurious failures (``compute_verdict`` can't grade a diff). The chain
+    integrity check in ``verify`` still covers every case regardless of kind."""
+    results = [
+        replay_case(c, graded=c.case_id in graded_ids)
+        for c in cases
+        if c.kind == VERDICT_KIND
+    ]
     return ReplayReport(results)
 
 

@@ -36,6 +36,7 @@ from operations_center.maintenance import (
     MaintenanceResult,
 )
 from operations_center.entrypoints.maintenance.board_unblock_task import BoardUnblockTask
+from operations_center.entrypoints.maintenance.drift_monitor_task import DriftMonitorTask
 from operations_center.entrypoints.maintenance.egress_probe import EgressProbeTask
 from operations_center.entrypoints.maintenance.outcome_flagger_task import (
     OutcomeFlaggerTask,
@@ -681,6 +682,12 @@ def register_maintenance_tasks(
     # is downstream-contaminated). Skipped (fail-safe) until an outcome source is
     # wired, so it never emits a false flag.
     registry.register(OutcomeFlaggerTask(settings, plane_client=client))
+    # EVAL drift monitor (HARNESS_TRUST_HARDENING D-EVAL-5). Replays the corpus's
+    # extraction-kind cases through a different-family model and tickets (non-
+    # blocking) when the model's verdict drifts from the signed answer — the
+    # semantic reviewer miss the deterministic gate is blind to. Skipped until
+    # OC_EVAL_DRIFT_MONITOR=1 + a model extractor is wired (no model, no false drift).
+    registry.register(DriftMonitorTask(settings, plane_client=client))
     return registry
 
 
