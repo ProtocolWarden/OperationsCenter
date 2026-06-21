@@ -115,6 +115,8 @@ class ExtractionHealth:
     partial_extraction: int = 0
     no_extraction: int = 0
     edge_case_summary: dict[str, int] = dataclass_field(default_factory=dict)
+    gaps: list[str] = dataclass_field(default_factory=list)
+    edge_cases: list[dict] = dataclass_field(default_factory=list)
 
 
 class FlakyTestQueryMixin(ABC):
@@ -358,11 +360,13 @@ class FlakyTestQueryMixin(ABC):
         complete = 0
         partial = 0
         missing = 0
-        edge_cases: dict[str, int] = {
+        edge_case_counts: dict[str, int] = {
             "truncated_messages": 0,
             "special_chars": 0,
             "malformed_exceptions": 0,
         }
+        gap_samples: list[str] = []
+        edge_case_samples: list[dict] = []
 
         for test in flaky_tests:
             has_test_name = test.test_name is not None
@@ -374,14 +378,22 @@ class FlakyTestQueryMixin(ABC):
                 partial += 1
             else:
                 missing += 1
+                if len(gap_samples) < 10:
+                    gap_samples.append(test.name)
 
             if test.assertion_message:
                 if len(test.assertion_message) >= 200:
-                    edge_cases["truncated_messages"] += 1
+                    edge_case_counts["truncated_messages"] += 1
+                    if len(edge_case_samples) < 10:
+                        edge_case_samples.append(
+                            {"test_id": test.name, "issue": "truncated_message"}
+                        )
                 if any(
                     ord(c) < 32 or ord(c) > 126 for c in test.assertion_message if c not in "\n\r\t"
                 ):
-                    edge_cases["special_chars"] += 1
+                    edge_case_counts["special_chars"] += 1
+                    if len(edge_case_samples) < 10:
+                        edge_case_samples.append({"test_id": test.name, "issue": "special_chars"})
 
         total = len(flaky_tests)
         success_rate = ((complete + partial) / total * 100.0) if total > 0 else 0.0
@@ -391,7 +403,9 @@ class FlakyTestQueryMixin(ABC):
             complete_extraction=complete,
             partial_extraction=partial,
             no_extraction=missing,
-            edge_case_summary=edge_cases,
+            edge_case_summary=edge_case_counts,
+            gaps=gap_samples,
+            edge_cases=edge_case_samples,
         )
 
     def filter_by_extraction_status(

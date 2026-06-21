@@ -4,6 +4,67 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## Done
 
+### 2026-06-21: Stage 5 — Full test suite, linters, and formatters (✅ COMPLETE)
+- **Objective**: Run full test suite and linters/formatters; fix any failures before finalising
+- **Status**: ✅ COMPLETE — all checks green; 2 test files auto-reformatted by ruff format
+- **Results**:
+  - `ruff check .` — 0 violations across entire project
+  - `ruff format --check` — 2 test files reformatted (`test_cli_extraction_health.py`, `test_extraction_health_queries.py`); all 4 modified files clean after reformat
+  - Observer unit tests: 1576 passed, 1 skipped, 2 xfailed (no failures)
+  - Extraction-health specific tests: 67/67 passed
+  - Full non-observer test suite: 8141 passed, 10 skipped, 0 failures
+  - Total: 9717 tests green, 0 failures
+
+### 2026-06-21: Stage 3 — Implement CLI command to expose gaps and edge_cases (✅ COMPLETE)
+- **Objective**: Implement gaps and edge_cases sample lists in extraction-health CLI (JSON + table)
+- **Status**: ✅ COMPLETE — All 5 acceptance criteria met; 46/46 tests passing; 0 lint violations
+- **Changes**:
+  - `query_flaky.py:118-119` — Added `gaps: list[str]` and `edge_cases: list[dict]` fields to `ExtractionHealth`
+  - `query_flaky.py:368-411` — Populated both lists while iterating in `get_extraction_health()` (cap: 10 samples each)
+  - `cli.py:1056-1069` — Added conditional table-format sections for gaps and edge_cases (omitted when empty)
+- **Acceptance Criteria — ALL MET** ✅
+  1. ✅ Extended extraction-health command to include gaps section (JSON auto via asdict; table branch added)
+  2. ✅ Extended extraction-health command to include edge_cases section (same)
+  3. ✅ Both JSON and human-readable table formats implemented
+  4. ✅ Sample test IDs shown for each gap (pytest node ID strings)
+  5. ✅ Sample test IDs + issue types shown for each edge_case (`[truncated_message]`, `[special_chars]`)
+- **Test results**: 46/46 extraction-health tests passing; 1555/1555 observer tests passing
+
+### 2026-06-21: Stage 1 — Design CLI output format for gaps and edge_cases exposure (✅ COMPLETE)
+- **Objective**: Define exact output format for sample gaps and edge_cases lists in extraction-health CLI
+- **Status**: ✅ COMPLETE — All 5 acceptance criteria met; design spec captured in task.md
+- **Design Decisions**:
+  - `gaps` JSON key: `list[str]` of pytest node IDs (up to 10 samples); reason omitted because all gaps share the same category
+  - `edge_cases` JSON key: `list[dict]` with `test_id` (str) and `issue` (one of `"truncated_message"`, `"special_chars"`, `"malformed_exception"`); a test with 2 issues produces 2 entries; up to 10 entries total
+  - JSON mode: zero CLI changes — `asdict(health)` auto-includes new dataclass fields
+  - Table mode: append gap/edge_case lines below the existing summary line when either list is non-empty
+- **Baseline**: 26/26 extraction-health tests confirmed passing before any code change
+- **Acceptance Criteria — ALL MET** ✅
+  1. ✅ Defined output format for sample gaps list (`list[str]` flat array of test IDs)
+  2. ✅ Defined output format for sample edge_cases list (`list[dict]` with `test_id` + `issue`)
+  3. ✅ Determined fields per gap (test_id only — reason implicit from being in `gaps` array)
+  4. ✅ Determined fields per edge_case (`test_id` + `issue` with singular issue-type string)
+  5. ✅ Planned integration (JSON auto via asdict; table branch at `cli.py:1049-1055`)
+- **Next Stage**: Implement — add fields to `ExtractionHealth`, collect samples in `get_extraction_health()`, update table branch, add tests
+
+### 2026-06-21: Stage 0 — Research extraction gaps and edge_cases tracking system (✅ COMPLETE)
+- **Objective**: Locate and document where gaps/edge_cases are (or aren't) tracked in the extraction health system
+- **Status**: ✅ COMPLETE — All 5 acceptance criteria met
+- **Key Findings**:
+  - `ExtractionHealth` (`query_flaky.py:98-117`): only 5 count fields — no `gaps` or `edge_cases` list
+  - `get_extraction_health()` (`query_flaky.py:341-395`): accumulates counts while iterating `FlakyTest` objects; does NOT collect test IDs
+  - CLI `extraction-health` (`cli.py:923-1064`): outputs `asdict(health)` — just the 5 count fields; no gaps/edge_cases arrays
+  - `FlakyTestSignal.extraction_gaps` (`models.py:462`): list of missing field NAMES, not test IDs
+  - `FlakyTest.name` (full node ID string, e.g. `"test_module::test_foo"`) is the test ID for gaps
+  - Implementation path: add `gaps: list[str]` + `edge_cases: list[dict]` to `ExtractionHealth`; collect in `get_extraction_health()`; CLI requires no change
+- **Acceptance Criteria — ALL MET** ✅
+  1. ✅ Located where gaps/edge_cases are currently calculated (answer: only counts, not lists; `query_flaky.py:341-395`)
+  2. ✅ Understood gaps data structure (`no_extraction` count + `FlakyTest.name` as the test ID)
+  3. ✅ Understood edge_cases data structure (`edge_case_summary` dict of counts; issue types: truncated_messages, special_chars, malformed_exceptions)
+  4. ✅ Identified CLI command location and current output format (`cli.py:923`, JSON with 5 count fields)
+  5. ✅ Documented how to access gaps/edge_cases from FlakyTestSignal (`extraction_gaps` = field NAMES; test IDs via `get_flaky_tests()`)
+- **Next Stage**: Implement — add `gaps`/`edge_cases` list fields to `ExtractionHealth` + collect samples in `get_extraction_health()`
+
 ### 2026-06-21: Stage 0 — Research extraction alert system (✅ COMPLETE)
 - **Objective**: Research and document the extraction success_rate tracking and alert architecture
 - **Status**: ✅ COMPLETE — All 4 acceptance criteria met, research document created
