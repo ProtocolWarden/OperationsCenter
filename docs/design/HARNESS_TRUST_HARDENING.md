@@ -523,14 +523,38 @@ exit gate that must pass before the next begins.
   **no halt, no human**.
 
 ### Phase 4 — EVAL as a self-healing guard *(D-OP-3)*
-- Component 2 flagger → ledger tickets (no metric). *(D-EVAL-1)*
-- Component 1/3 deterministic blocking gate (pinned artifact, exact-match against
-  signed labels) + non-blocking out-of-band **different-model-family critic** as
-  drift monitor. *(D-EVAL-5, D-OP-3)*
-- Over-flag penalty attributed by agent (requeue-to-death → *worker*
-  non-convergence, not reviewer). *(D-EVAL-4)*
-- Self-healing body live: drift detection, `[check:]` reconfirmation, corpus
-  growth via *unsigned candidate* append, regression auto-fix on
+- **SCAFFOLDING DONE (2026-06-21, #369 + #370):** the load-bearing machinery is
+  merged and live in `src/operations_center/eval/` + repo-root `eval/`, exercised
+  by 41 unit tests and a required CI check (`EVAL corpus integrity`). What shipped:
+  - `corpus.py` — append-only **hash-chained** case ledger (`entry_hash =
+    sha256(prev_hash ‖ canonical(payload))`); editing/deleting any past entry
+    breaks the chain → required check red (tamper-evidence). *(D-EVAL-2)*
+  - `signing.py` + `sign.py` — **Ed25519** operator answer-key signatures; a case
+    is *graded* only if its signature verifies against the constitution pubkey.
+    Asymmetric so no compute inside the trust boundary can forge a label; the
+    private key is operator-held, offline (`sign keygen`/`sign sign` CLI). *(D-OP-3)*
+  - `replay.py` — Component 1/3 **deterministic blocking gate**: replays the typed
+    checks through the pure code-computed verdict (`pr_review_watcher.verdict`,
+    no model → zero flakiness) and exact-matches the signed answer. Only graded
+    cases gate; candidates are reported only. *(D-EVAL-5)*
+  - `critic.py` — non-blocking out-of-band **different-model-family** N-of-M drift
+    monitor (the model extractor is an injected seam). *(D-EVAL-5)*
+  - `constitution.py` + `verify.py` + `.github/workflows/eval-corpus-integrity.yml`
+    — monotonic baseline floor (may only rise) + report-only→blocking graduation
+    (D-EVAL-3); the required check ties chain + signatures + floor together.
+    CODEOWNERS pins corpus + constitution + workflow to the operator. *(D-EVAL-2)*
+  - Seeded **7 unsigned candidate cases** (#313 verdict-bypass/injection + #337
+    over-flag classes); all pass replay; gate correctly report-only (0/15 signed).
+  Verified end-to-end with a throwaway ephemeral key: report-only → sign → gate
+  graduates to **blocking**, and an in-place edit of a signed answer is caught.
+- **REMAINING (deferred, gated on the operator):** the one encode-once human step
+  — generate the Ed25519 key offline, commit the pubkey, sign ≥`min_graded_cases`
+  seed cases — which flips the gate from report-only to blocking. Component 2
+  outcome-correlation flagger (→ ledger tickets, no metric, D-EVAL-1) and the
+  D-EVAL-4 over-flag attribution are not yet wired; the live drift-monitor model
+  adapter (a different-family backend behind `critic.CheckExtractor`) is a seam.
+- Self-healing body (once seeded): drift detection, `[check:]` reconfirmation,
+  corpus growth via *unsigned candidate* append, regression auto-fix on
   worker/reviewer behavior only. *(D-OP-3)*
 - Graduate report-only→blocking on the numeric precondition. *(D-EVAL-3)*
 - **Exit gate:** a seeded reviewer regression (re-introduce the #313 retraction)

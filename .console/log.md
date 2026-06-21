@@ -1,3 +1,13 @@
+## 2026-06-21 — Spec: mark Phase 4 scaffolding DONE
+
+Updated `HARNESS_TRUST_HARDENING.md` Phase-4 section to record the merged
+scaffolding (#369 + #370): corpus hash-chain, Ed25519 signing + offline CLI,
+deterministic replay blocking gate, different-family drift monitor, monotonic
+constitution + required integrity workflow, 7 seeded candidates. Documented what
+remains deferred (operator key-anchor; Component-2 flagger; D-EVAL-4 attribution;
+live drift-monitor model adapter) so the doc reflects scaffolding-done, not
+phase-complete. Docs-only.
+
 ## 2026-06-21 — Phase 4 (EVAL) operator signing CLI (offline answer-key tool)
 
 Added `operations_center.eval.sign` — the tool the OPERATOR runs OFFLINE to anchor
