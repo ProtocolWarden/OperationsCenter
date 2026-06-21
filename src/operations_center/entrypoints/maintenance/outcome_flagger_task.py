@@ -14,6 +14,7 @@ wired the task returns ``skipped`` — no data means no tickets, never a false f
 
 from __future__ import annotations
 
+import os
 import time
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -25,6 +26,7 @@ from operations_center.eval.outcome_flagger import (
 from operations_center.maintenance.contracts import MaintenanceResult
 
 if TYPE_CHECKING:
+    from operations_center.adapters.github_pr import GitHubPRClient
     from operations_center.adapters.plane.client import PlaneClient
     from operations_center.maintenance.contracts import MaintenanceContext
 
@@ -32,6 +34,9 @@ DEFAULT_INTERVAL_SECONDS = 3600
 _TICKET_PREFIX = "[eval-flag]"
 _TICKET_LABELS = ("kind:improve", "repo:OperationsCenter", "source:eval-flagger")
 _TERMINAL_STATES = {"done", "cancelled", "canceled"}
+# Opt-in: only build the live GitHub outcome source when explicitly enabled, so the
+# task stays skipped (and network-free) by default until an operator turns it on.
+_SOURCE_ENV = "OC_EVAL_OUTCOME_SOURCE"
 
 
 class OutcomeFlaggerTask:
@@ -67,14 +72,39 @@ class OutcomeFlaggerTask:
             project_id=p.project_id,
         )
 
+    def _make_gh_client(self) -> GitHubPRClient | None:
+        from operations_center.adapters.github_pr import GitHubPRClient
+
+        token_env = (
+            getattr(getattr(self._settings, "git", None), "token_env", None) or "GITHUB_TOKEN"
+        )
+        token = os.environ.get(token_env)
+        return GitHubPRClient(token=token) if token else None
+
+    def _resolve_outcome_source(self) -> OutcomeSource | None:
+        """Injected source wins; otherwise build the live GitHub source only when
+        explicitly opted in (``OC_EVAL_OUTCOME_SOURCE=github``) and a token exists.
+        Default: ``None`` → skipped (no data, no false flags, no network)."""
+        if self._outcome_source is not None:
+            return self._outcome_source
+        if os.environ.get(_SOURCE_ENV) != "github":
+            return None
+        gh = self._make_gh_client()
+        if gh is None:
+            return None
+        from operations_center.eval.outcome_sources import make_github_outcome_source
+
+        return make_github_outcome_source(self._settings, gh)
+
     def run_once(self, ctx: MaintenanceContext) -> MaintenanceResult:
         started = time.monotonic()
-        if self._outcome_source is None:
+        source = self._resolve_outcome_source()
+        if source is None:
             return self._result(
                 "skipped", started, {"reason": "no outcome source wired"}
             )
         try:
-            outcomes = self._outcome_source()
+            outcomes = source()
         except Exception as exc:  # noqa: BLE001 — a flaky source must not halt the loop
             return self._result(
                 "failed", started, {}, error=f"outcome_source_failed: {exc}"
