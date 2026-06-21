@@ -1,3 +1,24 @@
+## 2026-06-21 — Phase 3 (SBX) closure: DNS pinning + cloud-key documented satisfied
+
+Recorded the two remaining Phase 3 dispositions in `HARNESS_TRUST_HARDENING.md`
+(no code — these are satisfied-by-equivalent, not new mechanisms):
+
+- **DNS pinning → satisfied-by-equivalent.** Under `--share-net` (D-SBX-2) the
+  SNI allowlist at the proxy is the binding control, not a pinned resolver: all
+  egress is forced through HTTPS_PROXY and the proxy re-validates the TLS SNI
+  host regardless of A-record. A separate resolver would not add enforcement;
+  UDP/53 tunnel exfil is the named residual (closing it needs --unshare-net,
+  rejected by D-SBX-2). No resolver shipped.
+- **Cloud-key proxy → N/A.** Live auth is a subscription token, not an API key,
+  so there is no key to strip into an injecting proxy. Contained by the existing
+  ro-bind of `.credentials.json` (never writable/copied) + the egress allowlist
+  (token usable only at model endpoint + github). D-OP-1 fail-open-to-ollama
+  floor still holds.
+
+**Result:** Phase 3 (SBX network + cloud-key) substantively complete — Layers 2
+(egress proxy, live + probed via #367) and 3 (rlimits, #366) wired; DNS +
+cloud-key dispositioned. Closes task #47.
+
 ## 2026-06-21 — Stage 1 COMPLETE: extraction success_rate threshold alerting implemented
 
 Added `EXTRACTION_SUCCESS_RATE_LOW` alert to the flaky test alert system:

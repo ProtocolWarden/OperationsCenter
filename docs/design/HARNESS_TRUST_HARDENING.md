@@ -483,6 +483,22 @@ exit gate that must pass before the next begins.
   ExecStart was corrected to the venv python (system python3 cannot import OC).
   Remaining: enable-and-observe (start the service + set `OC_EGRESS_PROXY`) and
   the controller-tier synthetic probe.
+- **PROBE WIRED (2026-06-21, #367):** `EgressProbeTask` runs at controller tier
+  in `register_maintenance_tasks`, probing an allowlisted host (tunnels) + a
+  denied host (refused) each cycle; classifies allowlisted-DENIED as *rot* and
+  denied-ALLOWED as *breach*, auto-opening a deduplicated board fix task;
+  fail-open (`skipped`) when the proxy is unreachable or unconfigured. *(D-OP-2)*
+- **DNS pinning — SATISFIED-BY-EQUIVALENT (2026-06-21):** under `--share-net`
+  (D-SBX-2) the sandbox shares the host resolver, so a dedicated pinned resolver
+  is not the binding control. The L7/**SNI allowlist at the proxy** is: all
+  sandbox egress is forced through `HTTPS_PROXY`, and the proxy re-validates the
+  TLS SNI host against the allowlist **regardless of what DNS resolves to** — a
+  poisoned/attacker-chosen A-record cannot reach a non-allowlisted name because
+  the CONNECT host is checked, not the IP. UDP/53 DNS-tunnel exfil is the residual
+  (named in Layer 2's honest framing); closing it fully needs `--unshare-net`,
+  rejected by D-SBX-2 as a bootstrap-deadlock/over-cost trade. Pinning therefore
+  reduces to "best-effort, subsumed by SNI enforcement" — no separate resolver
+  shipped. *(D-SBX-2)*
 - Layer 2 `--share-net` + L7/SNI egress proxy; DNS pinned. *(D-SBX-2)*
 - **Supervise the proxy** as `oc-egress-proxy.service` (`Restart=always`, linger,
   ordered before `oc-fleet.service`); controller-tier synthetic probe →
@@ -490,6 +506,17 @@ exit gate that must pass before the next begins.
 - localhost key-injecting proxy; cloud-via-proxy gated on the liveness probe;
   bwrap launcher **fails open to ollama-local**; dead proxy → `worker_backend`
   cooldown → auto-route to local. *(D-OP-1, D-SBX-1)*
+- **Cloud-key proxy — N/A / SATISFIED-BY-EQUIVALENT (2026-06-21):** the live
+  cloud auth is a **subscription token, not an API key** (`~/.claude/.credentials.json`),
+  so there is no standalone key to strip into a separate injecting proxy. It is
+  contained by the same two mechanisms the key-proxy would have provided:
+  (1) **ro-bind only `.credentials.json`/`settings.json`** into a tmpfs `~/.claude`
+  (the credential is never writable, never copied into the workspace, and the rest
+  of the 1.8 GB `~/.claude` is excluded); (2) the **egress allowlist** confines
+  where that token can be used to the model endpoint + github. A compromised model
+  can *use* the session it is already running under but cannot exfiltrate the token
+  to a novel destination. The D-OP-1 HYBRID fail-open-to-ollama-local floor still
+  holds for the no-cloud case. *(D-OP-1, D-SBX-1)*
 - **Exit gate:** novel-domain egress blocked+logged; cloud backend runs with key
   absent from sandbox env; killing the proxy degrades the fleet to local
   (still reviewing/fixing/merging) and `oc-egress-proxy.service` self-restarts —
