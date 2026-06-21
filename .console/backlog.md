@@ -4,24 +4,44 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## Done
 
-### 2026-06-21: Stage 0 — Research extraction alert system (✅ COMPLETE)
-- **Objective**: Research and document the extraction success_rate tracking and alert architecture
-- **Status**: ✅ COMPLETE — All 4 acceptance criteria met, research document created
+### 2026-06-21: Stage 1 — Design Extraction Health Diagnosis section structure (✅ COMPLETE)
+- **Objective**: Revise section structure to address review rejection — 5–8 distinct commands, explicit diagnostic workflow, unified metrics reference table
+- **Status**: ✅ COMPLETE — All 5 acceptance criteria met (revised after rejection of prior attempt)
+- **Key Changes** (`docs/operator/diagnostics.md`):
+  - Replaced `### Metric: extraction_success_rate` with `### Extraction Metrics Reference` — unified 7-row table (metrics × Healthy/WARNING/CRITICAL/EMERGENCY columns)
+  - Replaced grouped CLI block with 8 individually numbered commands, each with description and fenced example output (commands 7–8 new: watcher log grep, observer snapshot lookup)
+  - Added `### Diagnostic Workflow` subsection with 8 explicit troubleshooting steps keyed to the documented commands
+  - Removed embedded "Diagnostic sequence" list from `### Common Failure Modes` (superseded)
+  - Removed duplicate raw JSONL example from `### Data Storage` (now in Command 6)
+- **Acceptance Criteria — ALL MET** ✅
+  1. ✅ Subsections match other diagnostics patterns (Extraction Metrics Reference, CLI Commands, Alert System, Data Storage, Diagnostic Workflow, Common Failure Modes)
+  2. ✅ 8 diagnostic commands documented, each with description and example output
+  3. ✅ Dedicated `### Diagnostic Workflow` subsection with 8 steps for troubleshooting extraction failures
+  4. ✅ Unified metrics reference table (7 metrics × 5 columns)
+  5. ✅ Example outputs for each of the 8 commands
+- **Test results**: 9,635 passed, 0 failures
+
+### 2026-06-21: Stage 0 — Research extraction health architecture and write diagnostics section (✅ COMPLETE)
+- **Objective**: Research extraction health architecture and write `docs/operator/diagnostics.md` § "Extraction Health Diagnosis"
+- **Status**: ✅ COMPLETE — All 5 acceptance criteria met, documentation section written and verified
 - **Key Findings**:
   - `success_rate` computed at `query_flaky.py:387` as `(complete + partial) / total × 100`
-  - `FlakyTestSignal.extraction_success_rate` (models.py:460) carries it in every snapshot
-  - Time-series stored as JSONL via `ExtractionHistoryCollector` → `extraction_health_history.jsonl`
-  - Alert delivery: `FlakyTestAlertManager` + `AlertChannelFactory` (operator_log, slack, email, github, pagerduty)
-  - `FlakyTestAlertConfig` governs alert type routing and severity thresholds
-  - **No `extraction_success_rate` threshold exists** — that is the feature gap
-  - Reference pattern: `CoverageAlertManager` in `coverage_alerting.py`
-  - Natural integration point: `cli.py:919` (`extraction-health` command)
+  - `FlakyTestSignal.extraction_success_rate` (models.py:460) carries it in every observer snapshot
+  - Time-series stored as JSONL via `ExtractionHistoryCollector` → `tools/report/operations_center/observer/extraction_history/extraction_health_history.jsonl`
+  - Alert system: `FlakyTestAlertManager.check_extraction_success_rate()` fires `EXTRACTION_SUCCESS_RATE_LOW`
+  - Alert thresholds: WARNING<80%, CRITICAL<50%, EMERGENCY<10% (inverted semantics)
+  - Alert channels by severity: operator_log → +slack → +email → +pagerduty
+  - CLI commands: `extraction-health` (aggregate) and `query-flaky-tests` (per-test records)
+  - Edge case tracking: truncated_messages, special_chars, malformed_exceptions
+  - 6 documented failure modes with diagnostic sequence
 - **Acceptance Criteria — ALL MET** ✅
-  1. ✅ Located where success_rate metric is currently calculated or tracked
-  2. ✅ Identified the alert/notification system and how alerts are delivered
-  3. ✅ Documented the schema and data structures involved
-  4. ✅ Understood current thresholds or monitoring mechanisms if any exist
-- **Deliverable**: `STAGE0_EXTRACTION_ALERT_RESEARCH.md`
+  1. ✅ extraction_success_rate metric calculation and tracking understood (query_flaky.py:387)
+  2. ✅ All extraction-related alert/monitoring systems identified (FlakyTestAlertManager, AlertChannelFactory, FlakyTestAlertConfig)
+  3. ✅ CLI commands documented (extraction-health, query-flaky-tests with all options)
+  4. ✅ Common extraction health failure modes listed (6 modes with root causes)
+  5. ✅ Extraction health data storage documented (JSONL path, retention, snapshot structure)
+- **Deliverable**: `docs/operator/diagnostics.md` — "Extraction Health Diagnosis" section added
+- **Test results**: 9,635 passed, 0 failures, ruff clean
 
 ### 2026-06-20: Stage 4 — Commit and push changes to existing branch (SBX wire-egress-proxy code quality fix) ✅ COMPLETE
 - **Objective**: Commit all code quality fixes and push to feature branch, preparing for PR merge
