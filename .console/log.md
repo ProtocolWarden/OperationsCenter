@@ -1,3 +1,14 @@
+## 2026-06-21 — SBX: sandbox the 3 un-wrapped executor spawn sites (audit HIGH-3)
+
+Architectural audit found the reviewer-sandbox story incomplete: the CI fix-loop
+(outcomes.py), spec-author (spec_author.py), and intake (intake/main.py) spawned
+execute.main via RAW subprocess.run — un-sandboxed even with OC_BWRAP_SANDBOX=1.
+Routed all three through run_executor (bwrap + rlimits). board_worker sites already
+get the minimized build_allowlist_env from dispatch; intake built a full-os.environ
+env, so gave it a focused build_allowlist_env (git token only) to avoid bwrap
+--clearenv re-injecting every secret. Updated 3 outcomes tests (patch run_executor,
+not subprocess). 536 board_worker/spec_author tests pass; ruff/ty/audit clean.
+
 ## 2026-06-21 — Phase 4: operator signing runbook + key-loss recovery docs
 
 Operator asked the right questions (key loss? what am I signing? recurring?).

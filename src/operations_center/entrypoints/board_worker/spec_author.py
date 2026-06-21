@@ -11,6 +11,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from ._subprocess import run_executor
 from ._text import summarize_prompt_diff_block
 from .labels import STATE_DONE, add_label
 from .outcomes import fail_task, handle_failure
@@ -152,7 +153,10 @@ def process_spec_author(
             "--source",
             source_tag,
         ]
-        subprocess.run(exec_cmd, cwd=oc_root, env=env, capture_output=True, text=True)
+        # SBX: route the spec-author executor through the bwrap/rlimits wrap (was a
+        # raw subprocess.run). env is already the minimized build_allowlist_env from
+        # _dispatch_spec_author.
+        run_executor(exec_cmd, oc_root=oc_root, rw_root=tmp, workspace=workspace, env=env)
 
         if not result_file.exists():
             logger.error(

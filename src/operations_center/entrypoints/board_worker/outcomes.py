@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import json
 import logging
-import subprocess
 from pathlib import Path
 
+from ._subprocess import run_executor
 from .labels import (
     LIFECYCLE_EXPANDED,
     STATE_BLOCKED,
@@ -713,7 +713,13 @@ def run_ci_loop(
             attempt_number,
             task_id,
         )
-        subprocess.run(exec_cmd, cwd=oc_root, env=env, capture_output=True, text=True)
+        # SBX: route the CI fix-loop executor through the same bwrap/rlimits wrap as
+        # dispatch (was a raw subprocess.run — un-sandboxed even with the flag on).
+        # The fix-loop runs model-driven code on least-trusted failing branches; env
+        # is already the minimized build_allowlist_env from dispatch.
+        run_executor(
+            exec_cmd, oc_root=oc_root, rw_root=tmp, workspace=attempt_workspace, env=env
+        )
 
         run_id: str = f"ci-{task_id[:8]}-attempt-{attempt_number}"
         changed_files: list[str] = []

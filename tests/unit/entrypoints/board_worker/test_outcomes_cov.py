@@ -932,7 +932,7 @@ def test_run_ci_loop_execute_closure(ci_modules, tmp_path, monkeypatch):
         )
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
-    monkeypatch.setattr(outcomes.subprocess, "run", fake_run)
+    monkeypatch.setattr(outcomes, "run_executor", fake_run)
     outcomes.run_ci_loop(**kw)
     run_id, changed, success = state["execute_return"]
     assert run_id == "real-run"
@@ -947,8 +947,8 @@ def test_run_ci_loop_execute_no_result_file(ci_modules, tmp_path, monkeypatch):
     kw = _ci_kwargs(tmp_path)
 
     monkeypatch.setattr(
-        outcomes.subprocess,
-        "run",
+        outcomes,
+        "run_executor",
         lambda cmd, **k: SimpleNamespace(returncode=0, stdout="", stderr=""),
     )
     outcomes.run_ci_loop(**kw)
@@ -970,7 +970,7 @@ def test_run_ci_loop_execute_malformed_result(ci_modules, tmp_path, monkeypatch)
         result_path.write_text("not-json{", encoding="utf-8")
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
-    monkeypatch.setattr(outcomes.subprocess, "run", fake_run)
+    monkeypatch.setattr(outcomes, "run_executor", fake_run)
     outcomes.run_ci_loop(**kw)
     run_id, changed, success = state["execute_return"]
     assert run_id == "ci-task-123-attempt-1"
