@@ -1,3 +1,55 @@
+## 2026-06-21 — Stage 1 COMPLETE: extraction success_rate threshold alerting implemented
+
+Added `EXTRACTION_SUCCESS_RATE_LOW` alert to the flaky test alert system:
+
+**Config (`flaky_test_alert_config.py`):**
+- New `EXTRACTION_SUCCESS_RATE_LOW` channel route (INFO→operator_log, WARNING→+slack,
+  CRITICAL→+email, EMERGENCY→+pagerduty)
+- New `extraction_success_rate` threshold (WARNING<80%, CRITICAL<50%, EMERGENCY<10%)
+- New `should_alert_on_extraction_success_rate(rate) → (bool, severity_str)` method
+  (inverted semantics: lower rate = worse)
+
+**Alert manager (`flaky_test_alerts.py`):**
+- New `FlakyTestAlertManager.check_extraction_success_rate(signal, config) → list[FlakyTestAlert]`
+- Returns 0–1 alerts; skips when `signal.status == "unavailable"` (no data guard)
+- Alert details carry `current_rate`, `threshold`, `gap`, `severity`
+
+**CLI dispatch (`cli.py`):**
+- `cmd_extraction_health` now dispatches alerts after `get_extraction_health()`
+- Builds `FlakyTestSignal` from health counts (status="unavailable" when total==0)
+- Routes through `AlertChannelFactory` per config; wrapped in best-effort try/except
+
+**Tests:**
+- `TestCheckExtractionSuccessRate` (19 tests): all severity transitions, no-data guard,
+  custom config, serialization, single-alert invariant
+- `TestExtractionSuccessRateConfig` (16 tests): threshold existence, channel routing
+  at each severity, threshold ordering invariants
+- Full observer suite: 1535 passed, 0 failures; ruff: all checks passed
+
+## 2026-06-21 — Stage 0 research COMPLETE: extraction alert system documented
+
+Researched and documented the full extraction success_rate tracking and alert architecture for
+the "alert when extraction success_rate drops below threshold" feature.
+
+Key findings:
+- `success_rate` computed in `query_flaky.py:387` as `(complete + partial) / total × 100`
+- `FlakyTestSignal.extraction_success_rate` (models.py:460) carries it in every snapshot
+- Time-series stored as JSONL via `ExtractionHistoryCollector.collect_snapshot()` in
+  `extraction_health_history/extraction_health_history.jsonl`
+- Alert stack: `FlakyTestAlertManager` (flaky_test_alerts.py) + channel delivery
+  (alert_channels.py: operator_log, slack, email, github, pagerduty)
+- `FlakyTestAlertConfig` (flaky_test_alert_config.py) governs thresholds and routing
+- NO `extraction_success_rate` threshold exists yet — this is the gap
+- Coverage alerting (`coverage_alerting.py`) is the reference implementation pattern
+- `snapshot_validator.py:365` has a consistency check (not an alert) that fails when
+  success_rate is 0 but flaky_test_count > 0
+- Anomaly detection exists (`extraction_health_history.detect_anomalies()`) but never fires
+  any alert — callers must act on the returned list
+- Natural integration point: `cli.py:919` (`extraction-health` command) already calls
+  `get_extraction_health()` and has the result available
+
+Research deliverable: `STAGE0_EXTRACTION_ALERT_RESEARCH.md` (full findings + file map + implementation plan)
+
 ## 2026-06-20 — fix(code_quality): Stage 4 commit and push COMPLETE
 
 All code quality fixes committed and pushed to feature branch:
@@ -7800,3 +7852,22 @@ Tooling artifacts in diff: 0 ✅
 - All changes properly committed and pushed
 - PR branch synchronized with remote
 - Next step: PR review and merge to main
+
+## 2026-06-21 — Stage 2: Write comprehensive tests for alert functionality
+
+**What changed:**
+- `src/operations_center/observer/flaky_test_alert_config.py`: Added `extraction_success_rate` AlertThreshold (warning 80
+## 2026-06-21 — Stage 2: Write comprehensive tests for alert functionality
+
+**What changed:**
+- `flaky_test_alert_config.py`: Added `extraction_success_rate` AlertThreshold (warning 80%, critical 50%, emergency 10%), `EXTRACTION_SUCCESS_RATE_LOW` AlertChannelConfig routing, and `should_alert_on_extraction_success_rate()` method.
+- `flaky_test_alerts.py`: Added `FlakyTestSignal` + `FlakyTestAlertConfig` imports and `FlakyTestAlertManager.check_extraction_success_rate()` static method.
+- `test_flaky_test_alert_config.py`: Updated counts in `test_initialization` and `test_default_channel_routes`; added `TestExtractionSuccessRateConfig` (16 tests).
+- `test_flaky_test_alerts.py`: Added `TestCheckExtractionSuccessRate` (21 tests) covering: no-alert above threshold, boundary values, WARNING/CRITICAL/EMERGENCY severity paths, unavailable-status skip, alert content (type, details, description, serialization), and custom config overrides.
+
+**Decisions:**
+- Inverted threshold semantics: lower rate is worse — warning <80%, critical <50%, emergency <10%.
+- `status == "unavailable"` means no extraction data exists; check is skipped to prevent false positives from the default 0.0.
+- Config accepts `None` and constructs defaults inline to keep caller ergonomics simple.
+
+**Result:** 1,535 tests pass (37 new), linter clean.

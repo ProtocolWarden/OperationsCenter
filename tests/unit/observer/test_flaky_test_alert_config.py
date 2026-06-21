@@ -72,8 +72,8 @@ class TestFlakyTestAlertConfig:
     def test_initialization(self) -> None:
         config = FlakyTestAlertConfig()
         assert config is not None
-        assert len(config.channel_routes) == 4
-        assert len(config.thresholds) == 3
+        assert len(config.channel_routes) == 5
+        assert len(config.thresholds) == 4
 
     def test_default_channel_routes(self) -> None:
         config = FlakyTestAlertConfig()
@@ -83,6 +83,7 @@ class TestFlakyTestAlertConfig:
         assert "REGRESSION_SPIKE" in config.channel_routes
         assert "CRITICAL_FLAKINESS" in config.channel_routes
         assert "MODULE_OUTBREAK" in config.channel_routes
+        assert "EXTRACTION_SUCCESS_RATE_LOW" in config.channel_routes
 
     def test_get_channels_for_alert_info(self) -> None:
         config = FlakyTestAlertConfig()
@@ -156,3 +157,111 @@ class TestFlakyTestAlertConfig:
         should_alert, severity = config.should_alert_on_regression(0.5)
         assert should_alert is True
         assert severity == "WARNING"
+
+
+class TestExtractionSuccessRateConfig:
+    """Tests for extraction success rate alert configuration."""
+
+    def test_extraction_success_rate_threshold_exists(self) -> None:
+        config = FlakyTestAlertConfig()
+        assert "extraction_success_rate" in config.thresholds
+
+    def test_extraction_success_rate_channel_route_exists(self) -> None:
+        config = FlakyTestAlertConfig()
+        assert "EXTRACTION_SUCCESS_RATE_LOW" in config.channel_routes
+
+    def test_no_alert_when_rate_above_warning_threshold(self) -> None:
+        config = FlakyTestAlertConfig()
+        should_alert, severity = config.should_alert_on_extraction_success_rate(90.0)
+        assert should_alert is False
+        assert severity == ""
+
+    def test_no_alert_when_rate_equals_warning_threshold(self) -> None:
+        config = FlakyTestAlertConfig()
+        warning_threshold = config.get_threshold("extraction_success_rate", "WARNING")
+        should_alert, _ = config.should_alert_on_extraction_success_rate(warning_threshold)
+        assert should_alert is False
+
+    def test_no_alert_at_100_percent(self) -> None:
+        config = FlakyTestAlertConfig()
+        should_alert, severity = config.should_alert_on_extraction_success_rate(100.0)
+        assert should_alert is False
+        assert severity == ""
+
+    def test_warning_alert_below_warning_threshold(self) -> None:
+        config = FlakyTestAlertConfig()
+        should_alert, severity = config.should_alert_on_extraction_success_rate(75.0)
+        assert should_alert is True
+        assert severity == "WARNING"
+
+    def test_critical_alert_below_critical_threshold(self) -> None:
+        config = FlakyTestAlertConfig()
+        should_alert, severity = config.should_alert_on_extraction_success_rate(40.0)
+        assert should_alert is True
+        assert severity == "CRITICAL"
+
+    def test_emergency_alert_below_emergency_threshold(self) -> None:
+        config = FlakyTestAlertConfig()
+        should_alert, severity = config.should_alert_on_extraction_success_rate(5.0)
+        assert should_alert is True
+        assert severity == "EMERGENCY"
+
+    def test_emergency_alert_at_zero_percent(self) -> None:
+        config = FlakyTestAlertConfig()
+        should_alert, severity = config.should_alert_on_extraction_success_rate(0.0)
+        assert should_alert is True
+        assert severity == "EMERGENCY"
+
+    def test_warning_alert_just_below_warning_threshold(self) -> None:
+        """79.9% is just below the 80% warning threshold."""
+        config = FlakyTestAlertConfig()
+        warning_threshold = config.get_threshold("extraction_success_rate", "WARNING")
+        should_alert, severity = config.should_alert_on_extraction_success_rate(
+            warning_threshold - 0.1
+        )
+        assert should_alert is True
+        assert severity == "WARNING"
+
+    def test_critical_alert_just_below_critical_threshold(self) -> None:
+        config = FlakyTestAlertConfig()
+        critical_threshold = config.get_threshold("extraction_success_rate", "CRITICAL")
+        should_alert, severity = config.should_alert_on_extraction_success_rate(
+            critical_threshold - 0.1
+        )
+        assert should_alert is True
+        assert severity == "CRITICAL"
+
+    def test_warning_threshold_is_higher_than_critical(self) -> None:
+        config = FlakyTestAlertConfig()
+        warning = config.get_threshold("extraction_success_rate", "WARNING")
+        critical = config.get_threshold("extraction_success_rate", "CRITICAL")
+        assert warning > critical
+
+    def test_critical_threshold_is_higher_than_emergency(self) -> None:
+        config = FlakyTestAlertConfig()
+        critical = config.get_threshold("extraction_success_rate", "CRITICAL")
+        emergency = config.get_threshold("extraction_success_rate", "EMERGENCY")
+        assert critical > emergency
+
+    def test_channels_warning_includes_slack(self) -> None:
+        config = FlakyTestAlertConfig()
+        channels = config.get_channels_for_alert("EXTRACTION_SUCCESS_RATE_LOW", "WARNING")
+        assert "operator_log" in channels
+        assert "slack" in channels
+
+    def test_channels_critical_includes_email(self) -> None:
+        config = FlakyTestAlertConfig()
+        channels = config.get_channels_for_alert("EXTRACTION_SUCCESS_RATE_LOW", "CRITICAL")
+        assert "operator_log" in channels
+        assert "slack" in channels
+        assert "email" in channels
+
+    def test_channels_emergency_includes_pagerduty(self) -> None:
+        config = FlakyTestAlertConfig()
+        channels = config.get_channels_for_alert("EXTRACTION_SUCCESS_RATE_LOW", "EMERGENCY")
+        assert "pagerduty" in channels
+
+    def test_channels_info_includes_operator_log(self) -> None:
+        config = FlakyTestAlertConfig()
+        channels = config.get_channels_for_alert("EXTRACTION_SUCCESS_RATE_LOW", "INFO")
+        assert "operator_log" in channels

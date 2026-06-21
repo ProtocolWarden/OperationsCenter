@@ -86,6 +86,13 @@ class FlakyTestAlertConfig:
                 critical_channels=["operator_log", "slack", "email"],
                 emergency_channels=["operator_log", "slack", "email", "pagerduty"],
             ),
+            "EXTRACTION_SUCCESS_RATE_LOW": AlertChannelConfig(
+                alert_type="EXTRACTION_SUCCESS_RATE_LOW",
+                info_channels=["operator_log"],
+                warning_channels=["operator_log", "slack"],
+                critical_channels=["operator_log", "slack", "email"],
+                emergency_channels=["operator_log", "slack", "email", "pagerduty"],
+            ),
         }
 
         # Define severity thresholds for different metrics
@@ -110,6 +117,14 @@ class FlakyTestAlertConfig:
                 warning_threshold=0.5,  # 50% increase
                 critical_threshold=1.0,  # 100% increase (doubled)
                 emergency_threshold=2.0,  # 200% increase (tripled)
+            ),
+            # Inverted semantics: threshold values are *minimums*; below → alert
+            "extraction_success_rate": AlertThreshold(
+                alert_type="extraction_success_rate",
+                info_threshold=95.0,
+                warning_threshold=80.0,
+                critical_threshold=50.0,
+                emergency_threshold=10.0,
             ),
         }
 
@@ -192,6 +207,25 @@ class FlakyTestAlertConfig:
         if rate >= self.get_threshold("failure_rate", "CRITICAL"):
             return True, "CRITICAL"
         if rate >= self.get_threshold("failure_rate", "WARNING"):
+            return True, "WARNING"
+        return False, ""
+
+    def should_alert_on_extraction_success_rate(self, rate: float) -> tuple[bool, str]:
+        """Determine if extraction success rate should trigger an alert.
+
+        Uses inverted threshold semantics: lower rate is worse.
+
+        Args:
+            rate: Extraction success rate (0-100 scale)
+
+        Returns:
+            Tuple of (should_alert, severity)
+        """
+        if rate < self.get_threshold("extraction_success_rate", "EMERGENCY"):
+            return True, "EMERGENCY"
+        if rate < self.get_threshold("extraction_success_rate", "CRITICAL"):
+            return True, "CRITICAL"
+        if rate < self.get_threshold("extraction_success_rate", "WARNING"):
             return True, "WARNING"
         return False, ""
 

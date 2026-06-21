@@ -4,11 +4,13 @@
 
 import pytest
 
+from operations_center.observer.flaky_test_alert_config import AlertThreshold, FlakyTestAlertConfig
 from operations_center.observer.flaky_test_alerts import (
     AlertSeverity,
     FlakyTestAlertManager,
 )
 from operations_center.observer.flaky_test_storage import FlakyTestAggregationReport
+from operations_center.observer.models import FlakyTestSignal
 
 
 @pytest.mark.flaky
@@ -301,3 +303,170 @@ class TestFlakyTestAlertManager:
 
         # Should still detect critical flakiness if present
         assert len(alerts) >= 0
+
+
+class TestCheckExtractionSuccessRate:
+    """Tests for extraction success rate alert detection."""
+
+    def _make_signal(self, rate: float, status: str = "measured") -> FlakyTestSignal:
+        return FlakyTestSignal(status=status, extraction_success_rate=rate)
+
+    # --- no-alert cases ---
+
+    def test_no_alert_when_rate_above_threshold(self) -> None:
+        """90% success rate is above the 80% warning threshold — no alert."""
+        signal = self._make_signal(90.0)
+        alerts = FlakyTestAlertManager.check_extraction_success_rate(signal)
+        assert len(alerts) == 0
+
+    def test_no_alert_when_rate_equals_warning_threshold(self) -> None:
+        """Rate exactly at the warning threshold (80%) is acceptable — no alert."""
+        signal = self._make_signal(80.0)
+        alerts = FlakyTestAlertManager.check_extraction_success_rate(signal)
+        assert len(alerts) == 0
+
+    def test_no_alert_at_100_percent(self) -> None:
+        """Perfect extraction coverage never triggers an alert."""
+        signal = self._make_signal(100.0)
+        alerts = FlakyTestAlertManager.check_extraction_success_rate(signal)
+        assert len(alerts) == 0
+
+    def test_no_alert_when_signal_status_unavailable(self) -> None:
+        """When status is 'unavailable' there is no data to evaluate — skip check."""
+        signal = self._make_signal(0.0, status="unavailable")
+        alerts = FlakyTestAlertManager.check_extraction_success_rate(signal)
+        assert len(alerts) == 0
+
+    # --- alert generated cases ---
+
+    def test_warning_alert_just_below_threshold(self) -> None:
+        """79.9% is just below the 80% warning threshold."""
+        signal = self._make_signal(79.9)
+        alerts = FlakyTestAlertManager.check_extraction_success_rate(signal)
+        assert len(alerts) == 1
+        assert alerts[0].severity == AlertSeverity.WARNING
+
+    def test_warning_alert_between_warning_and_critical_thresholds(self) -> None:
+        """60% falls between WARNING (80%) and CRITICAL (50%) thresholds."""
+        signal = self._make_signal(60.0)
+        alerts = FlakyTestAlertManager.check_extraction_success_rate(signal)
+        assert len(alerts) == 1
+        assert alerts[0].severity == AlertSeverity.WARNING
+
+    def test_critical_alert_just_below_critical_threshold(self) -> None:
+        """49.9% is just below the 50% critical threshold."""
+        signal = self._make_signal(49.9)
+        alerts = FlakyTestAlertManager.check_extraction_success_rate(signal)
+        assert len(alerts) == 1
+        assert alerts[0].severity == AlertSeverity.CRITICAL
+
+    def test_critical_alert_between_critical_and_emergency_thresholds(self) -> None:
+        """25% falls between CRITICAL (50%) and EMERGENCY (10%) thresholds."""
+        signal = self._make_signal(25.0)
+        alerts = FlakyTestAlertManager.check_extraction_success_rate(signal)
+        assert len(alerts) == 1
+        assert alerts[0].severity == AlertSeverity.CRITICAL
+
+    def test_emergency_alert_below_emergency_threshold(self) -> None:
+        """5% is below the 10% emergency threshold."""
+        signal = self._make_signal(5.0)
+        alerts = FlakyTestAlertManager.check_extraction_success_rate(signal)
+        assert len(alerts) == 1
+        assert alerts[0].severity == AlertSeverity.EMERGENCY
+
+    def test_emergency_alert_at_zero_percent(self) -> None:
+        """Complete extraction failure (0%) on a measured signal triggers EMERGENCY."""
+        signal = self._make_signal(0.0, status="measured")
+        alerts = FlakyTestAlertManager.check_extraction_success_rate(signal)
+        assert len(alerts) == 1
+        assert alerts[0].severity == AlertSeverity.EMERGENCY
+
+    def test_partial_status_still_triggers_alert(self) -> None:
+        """Status 'partial' with low rate still fires a critical alert."""
+        signal = self._make_signal(40.0, status="partial")
+        alerts = FlakyTestAlertManager.check_extraction_success_rate(signal)
+        assert len(alerts) == 1
+        assert alerts[0].severity == AlertSeverity.CRITICAL
+
+    # --- alert content ---
+
+    def test_alert_type_is_extraction_success_rate_low(self) -> None:
+        signal = self._make_signal(70.0)
+        alerts = FlakyTestAlertManager.check_extraction_success_rate(signal)
+        assert len(alerts) == 1
+        assert alerts[0].alert_type == "EXTRACTION_SUCCESS_RATE_LOW"
+
+    def test_alert_details_include_current_rate(self) -> None:
+        signal = self._make_signal(70.0)
+        alerts = FlakyTestAlertManager.check_extraction_success_rate(signal)
+        assert len(alerts) == 1
+        assert "current_rate" in alerts[0].details
+        assert alerts[0].details["current_rate"] == 70.0
+
+    def test_alert_details_include_threshold(self) -> None:
+        signal = self._make_signal(70.0)
+        alerts = FlakyTestAlertManager.check_extraction_success_rate(signal)
+        assert len(alerts) == 1
+        assert "threshold" in alerts[0].details
+        assert alerts[0].details["threshold"] > 0
+
+    def test_alert_details_include_positive_gap(self) -> None:
+        signal = self._make_signal(70.0)
+        alerts = FlakyTestAlertManager.check_extraction_success_rate(signal)
+        assert len(alerts) == 1
+        assert "gap" in alerts[0].details
+        assert alerts[0].details["gap"] > 0
+
+    def test_alert_description_mentions_current_rate(self) -> None:
+        signal = self._make_signal(70.0)
+        alerts = FlakyTestAlertManager.check_extraction_success_rate(signal)
+        assert len(alerts) == 1
+        assert "70" in alerts[0].description
+
+    def test_alert_serialization_to_dict(self) -> None:
+        signal = self._make_signal(70.0)
+        alerts = FlakyTestAlertManager.check_extraction_success_rate(signal)
+        assert len(alerts) == 1
+        alert_dict = alerts[0].to_dict()
+        assert alert_dict["type"] == "EXTRACTION_SUCCESS_RATE_LOW"
+        assert "severity" in alert_dict
+        assert "description" in alert_dict
+        assert "details" in alert_dict
+
+    # --- custom config ---
+
+    def test_custom_config_higher_threshold_triggers_alert(self) -> None:
+        """With a 90% warning threshold, a rate of 85% should fire a WARNING."""
+        config = FlakyTestAlertConfig()
+        config.thresholds["extraction_success_rate"] = AlertThreshold(
+            alert_type="extraction_success_rate",
+            info_threshold=95.0,
+            warning_threshold=90.0,
+            critical_threshold=50.0,
+            emergency_threshold=10.0,
+        )
+        signal = self._make_signal(85.0)
+        alerts = FlakyTestAlertManager.check_extraction_success_rate(signal, config=config)
+        assert len(alerts) == 1
+        assert alerts[0].severity == AlertSeverity.WARNING
+
+    def test_custom_config_lower_threshold_suppresses_alert(self) -> None:
+        """With a 70% warning threshold, a rate of 75% should produce no alert."""
+        config = FlakyTestAlertConfig()
+        config.thresholds["extraction_success_rate"] = AlertThreshold(
+            alert_type="extraction_success_rate",
+            info_threshold=95.0,
+            warning_threshold=70.0,
+            critical_threshold=50.0,
+            emergency_threshold=10.0,
+        )
+        signal = self._make_signal(75.0)
+        alerts = FlakyTestAlertManager.check_extraction_success_rate(signal, config=config)
+        assert len(alerts) == 0
+
+    def test_only_one_alert_generated_regardless_of_severity(self) -> None:
+        """A single signal produces at most one alert."""
+        for rate in [0.0, 5.0, 25.0, 49.9, 70.0]:
+            signal = self._make_signal(rate, status="measured")
+            alerts = FlakyTestAlertManager.check_extraction_success_rate(signal)
+            assert len(alerts) <= 1, f"Expected ≤1 alert for rate={rate}, got {len(alerts)}"

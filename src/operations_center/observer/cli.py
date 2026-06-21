@@ -21,11 +21,15 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from operations_center.observer.alert_channels import AlertChannelFactory
 from operations_center.observer.collectors.extraction_history_collector import (
     ExtractionHistoryCollector,
 )
 from operations_center.observer.extraction_history_query import ExtractionHistoryQuery
 from operations_center.observer.extraction_report_formatter import ExtractionReportFormatter
+from operations_center.observer.flaky_test_alert_config import FlakyTestAlertConfig
+from operations_center.observer.flaky_test_alerts import FlakyTestAlertManager
+from operations_center.observer.models import FlakyTestSignal
 from operations_center.observer.query import TestSignalQuery, TimeRange
 from operations_center.observer.snapshot_loader import SnapshotLoadError, SnapshotLoader
 from operations_center.observer.snapshot_output_formatter import (
@@ -960,6 +964,41 @@ def cmd_extraction_health(
         query = TestSignalQuery(root=root)
         health = query.get_extraction_health(TimeRange.last_hours(hours))
         payload = asdict(health)
+
+        # Threshold alert: fire if extraction success rate is below configured threshold.
+        # Best-effort — never fatal to the command output.
+        try:
+            total_tests = (
+                health.complete_extraction + health.partial_extraction + health.no_extraction
+            )
+            signal = FlakyTestSignal(
+                status="measured" if total_tests > 0 else "unavailable",
+                extraction_success_rate=health.success_rate,
+            )
+            alert_cfg = FlakyTestAlertConfig()
+            for extraction_alert in FlakyTestAlertManager.check_extraction_success_rate(
+                signal, alert_cfg
+            ):
+                severity_str = extraction_alert.severity.value.upper()
+                channel_names = alert_cfg.get_channels_for_alert(
+                    extraction_alert.alert_type, severity_str
+                )
+                alert_context = {
+                    "condition_name": extraction_alert.alert_type,
+                    "severity": severity_str,
+                    "collector_name": "extraction-health",
+                    "error_count": round(extraction_alert.details.get("current_rate", 0)),
+                    "threshold": extraction_alert.details.get("threshold", 0),
+                    "time_window_minutes": hours * 60,
+                    "metrics_summary": extraction_alert.details,
+                    "description": extraction_alert.description,
+                }
+                for channel in AlertChannelFactory.create_channels_from_config(
+                    channel_names
+                ).values():
+                    channel.notify(alert_context)
+        except Exception as e:  # noqa: BLE001 — alerts are supplementary, never fatal
+            logger.debug("extraction success rate alert dispatch skipped: %s", e)
 
         # Record this reading into the extraction-history time series and surface
         # the longitudinal trend. Best-effort: the point-in-time health is the

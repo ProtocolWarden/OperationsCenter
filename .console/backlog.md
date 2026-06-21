@@ -4,6 +4,25 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## Done
 
+### 2026-06-21: Stage 0 — Research extraction alert system (✅ COMPLETE)
+- **Objective**: Research and document the extraction success_rate tracking and alert architecture
+- **Status**: ✅ COMPLETE — All 4 acceptance criteria met, research document created
+- **Key Findings**:
+  - `success_rate` computed at `query_flaky.py:387` as `(complete + partial) / total × 100`
+  - `FlakyTestSignal.extraction_success_rate` (models.py:460) carries it in every snapshot
+  - Time-series stored as JSONL via `ExtractionHistoryCollector` → `extraction_health_history.jsonl`
+  - Alert delivery: `FlakyTestAlertManager` + `AlertChannelFactory` (operator_log, slack, email, github, pagerduty)
+  - `FlakyTestAlertConfig` governs alert type routing and severity thresholds
+  - **No `extraction_success_rate` threshold exists** — that is the feature gap
+  - Reference pattern: `CoverageAlertManager` in `coverage_alerting.py`
+  - Natural integration point: `cli.py:919` (`extraction-health` command)
+- **Acceptance Criteria — ALL MET** ✅
+  1. ✅ Located where success_rate metric is currently calculated or tracked
+  2. ✅ Identified the alert/notification system and how alerts are delivered
+  3. ✅ Documented the schema and data structures involved
+  4. ✅ Understood current thresholds or monitoring mechanisms if any exist
+- **Deliverable**: `STAGE0_EXTRACTION_ALERT_RESEARCH.md`
+
 ### 2026-06-20: Stage 4 — Commit and push changes to existing branch (SBX wire-egress-proxy code quality fix) ✅ COMPLETE
 - **Objective**: Commit all code quality fixes and push to feature branch, preparing for PR merge
 - **Status**: ✅ COMPLETE — All changes committed and pushed to remote, branch synchronized
