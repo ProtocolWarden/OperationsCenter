@@ -337,3 +337,12 @@ class TestWheelhouseBind:
             ["x"], oc_root=tmp_path, rw_root=tmp_path, env={"HOME": str(tmp_path)}
         )
         assert "OC_WHEELHOUSE" not in " ".join(argv)
+
+    def test_tiktoken_cache_bound_and_setenv(self, tmp_path: Path):
+        tk = tmp_path / "tiktoken"
+        tk.mkdir()
+        env = {"HOME": str(tmp_path / "home"), "TIKTOKEN_CACHE_DIR": str(tk)}
+        argv = build_sandbox_argv(["x"], oc_root=tmp_path, rw_root=tmp_path, env=env)
+        joined = " ".join(argv)
+        assert f"--ro-bind {tk} {tk}" in joined
+        assert f"--setenv TIKTOKEN_CACHE_DIR {tk}" in joined

@@ -81,3 +81,54 @@ def test_fail_open_on_build_error(tmp_path, monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", _boom)
     assert wh.ensure_wheelhouse("Repo", str(repo), python_bin="python3") is None
+
+
+def test_tiktoken_cache_noop_when_populated(tmp_path, monkeypatch):
+    cache = tmp_path / "tk"
+    cache.mkdir()
+    (cache / "enc").write_text("x")
+    monkeypatch.setattr(wh, "_TIKTOKEN_CACHE", cache)
+
+    def _fail(*a, **k):
+        raise AssertionError("should not repopulate a non-empty cache")
+
+    monkeypatch.setattr(subprocess, "run", _fail)
+    assert wh.ensure_tiktoken_cache("python3") == cache
+
+
+def test_tiktoken_cache_populates_when_empty(tmp_path, monkeypatch):
+    cache = tmp_path / "tk"
+    monkeypatch.setattr(wh, "_TIKTOKEN_CACHE", cache)
+    calls = []
+
+    def _run(cmd, **k):
+        calls.append(cmd)
+        (cache / "enc").write_text("x")  # simulate tiktoken download
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", _run)
+    out = wh.ensure_tiktoken_cache("/v/bin/python")
+    assert out == cache
+    assert calls and "TIKTOKEN" not in str(calls[0])  # cmd is just python -c
+    assert "tiktoken" in calls[0][-1]
+
+
+def test_tiktoken_cache_fail_open(tmp_path, monkeypatch):
+    cache = tmp_path / "tk"
+    monkeypatch.setattr(wh, "_TIKTOKEN_CACHE", cache)
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(OSError("no net")))
+    assert wh.ensure_tiktoken_cache("python3") is None
+
+
+def test_provision_env_empty_when_sandbox_off(monkeypatch):
+    monkeypatch.delenv("OC_BWRAP_SANDBOX", raising=False)
+    assert wh.provision_env("Repo", "/x", python_bin="python3") == {}
+
+
+def test_provision_env_merges_wheelhouse_and_tiktoken(monkeypatch, tmp_path):
+    monkeypatch.setenv("OC_BWRAP_SANDBOX", "1")
+    monkeypatch.setattr(wh, "ensure_wheelhouse", lambda *a, **k: tmp_path / "wh")
+    monkeypatch.setattr(wh, "ensure_tiktoken_cache", lambda *a, **k: tmp_path / "tk")
+    out = wh.provision_env("Repo", "/x", python_bin="python3")
+    assert out["OC_WHEELHOUSE"] == str(tmp_path / "wh")
+    assert out["TIKTOKEN_CACHE_DIR"] == str(tmp_path / "tk")

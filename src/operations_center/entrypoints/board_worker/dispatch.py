@@ -14,7 +14,7 @@ from typing import Any
 
 from ._subprocess import build_allowlist_env, git_token_passthrough, run_executor
 from ._subprocess import is_transient_failure, persist_failure_diagnostics, venv_python
-from .wheelhouse import wheelhouse_env
+from .wheelhouse import provision_env
 from ._text import desc_text, extract_goal, task_type_from_kind
 from .labels import GITHUB_DIR, add_label, label_value
 from .outcomes import (
@@ -99,7 +99,7 @@ def dispatch_issue(
     oc_root = Path(__file__).resolve().parents[4]
     python = venv_python(oc_root)
     env = build_allowlist_env(oc_root, passthrough=git_token_passthrough(settings, repo_cfg))
-    env.update(wheelhouse_env(repo_key, repo_path, python_bin=python))  # offline deps
+    env.update(provision_env(repo_key, repo_path, python_bin=python))  # offline deps
     short_id = task_id[:8]
 
     logger.info(

@@ -212,10 +212,11 @@ def _toolchain_ro_binds(oc_root: Path, env: dict) -> list[str]:
     # ContextLifecycle home (cl) + the anchor manifest (.context tree).
     add(env.get("CL_HOME"))
     add(env.get("CL_ANCHOR"))
-    # Pre-provisioned wheelhouse (host-built) so the in-sandbox dev-install runs
-    # offline — no pypi egress needed. Bound at its real path so the install's
-    # --find-links $OC_WHEELHOUSE resolves identically inside the sandbox.
+    # Pre-provisioned host caches, bound at their real paths so the executor needs
+    # no pypi/CDN egress: the wheelhouse (offline dev-install via --find-links
+    # $OC_WHEELHOUSE) and the tiktoken encoding cache (offline token accounting).
     add(env.get("OC_WHEELHOUSE"))
+    add(env.get("TIKTOKEN_CACHE_DIR"))
     # Claude subscription auth — required or the agent refuses.
     home = env.get("HOME") or os.path.expanduser("~")
     add(os.path.join(home, ".claude"))
