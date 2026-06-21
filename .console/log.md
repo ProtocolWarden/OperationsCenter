@@ -1,3 +1,21 @@
+## 2026-06-21 — Phase 4 §4.4 acceptance validation (executable + live)
+
+Encoded the four §4.4 acceptance criteria as a permanent re-runnable test
+(`tests/unit/eval/test_acceptance_4_4.py`, 6 cases) against the REAL committed
+corpus + constitution + CODEOWNERS:
+1. ≥15 cases, CODEOWNERS-pinned, corpus edit trips the hash-chain tamper alarm.
+2. flagger emits tickets, NO precision/recall symbol anywhere.
+3. **seeded #313 verdict-bypass regression is caught by the shadow gate** —
+   monkeypatch `replay.compute_verdict` to a 'pass'-prefix bypass, sign the corpus
+   with an ephemeral test key, assert `gate_ok` False + inj-313 case in failures.
+4. graduation: floor-1 graded → report-only, floor → blocking.
+
+Also ran it LIVE through the real sign+verify CLIs (throwaway key, shredded):
+clean reviewer code → gate blocking PASS; after seeding the #313 bypass into
+verdict.py → gate blocking FAIL catching 9 graded cases (incl.
+inj-313-forged-approval-status); verdict.py reverted. All 4 criteria MET.
+54 eval tests; ruff/audit clean.
+
 ## 2026-06-21 — Phase 4: grow corpus to 15 + wire Component 2 flagger
 
 Two follow-ups toward graduating the EVAL gate:
