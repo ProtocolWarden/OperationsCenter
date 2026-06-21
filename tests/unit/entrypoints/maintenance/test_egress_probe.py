@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 ProtocolWarden
 """Tests for the controller-tier egress-boundary probe (D-OP-2)."""
 
 from __future__ import annotations

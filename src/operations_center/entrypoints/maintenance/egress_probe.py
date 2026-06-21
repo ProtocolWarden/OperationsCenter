@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 ProtocolWarden
 """Controller-tier egress-proxy health probe (Harness Trust-Hardening, D-OP-2).
 
 The sandboxed executor reaches the network only through the L7/SNI allowlist
