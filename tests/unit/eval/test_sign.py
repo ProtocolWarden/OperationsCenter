@@ -47,7 +47,7 @@ def test_sign_ledger_grades_candidates_and_keeps_chain_valid(tmp_path):
     append_case(ledger_path, _case("b"))
 
     # Before: both candidates.
-    pub = load_public_key_from_hex(tmp_path, pubhex)
+    pub = _pubkey_from_hex(tmp_path, pubhex)
     assert not any(is_graded(c, pub) for c in load_ledger(ledger_path).cases())
 
     signed = sign_ledger(ledger_path, key, signer="operator")
@@ -78,7 +78,7 @@ def test_sign_ledger_limits_to_case_ids(tmp_path):
     append_case(ledger_path, _case("b"))
     signed = sign_ledger(ledger_path, key, signer="op", case_ids={"b"})
     assert signed == ["b"]
-    pub = load_public_key_from_hex(tmp_path, pubhex)
+    pub = _pubkey_from_hex(tmp_path, pubhex)
     graded = {c.case_id for c in load_ledger(ledger_path).cases() if is_graded(c, pub)}
     assert graded == {"b"}
 
@@ -104,7 +104,7 @@ def test_cli_keygen_refuses_overwrite(tmp_path):
     assert main(["keygen", "--private-out", str(priv)]) == 1
 
 
-def load_public_key_from_hex(tmp_path, pubhex):
+def _pubkey_from_hex(tmp_path, pubhex):
     p = tmp_path / "pub.ed25519"
     p.write_text(pubhex + "\n")
     return load_public_key(p)
