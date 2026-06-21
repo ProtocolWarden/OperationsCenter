@@ -20,6 +20,8 @@ dependencies = [
   "platform-manifest @ git+https://github.com/ProtocolWarden/PlatformManifest.git@v1.0.0",
   # ADR 0002 P4 — dispatcher CL wrap.
   "context-lifecycle @ git+https://github.com/ProtocolWarden/ContextLifecycle.git@v0.3.1",
+  # EVAL answer-key signatures (Ed25519) — operations_center.eval.signing.
+  "cryptography>=42",
 ]
 
 [project.scripts]
@@ -194,6 +196,9 @@ extend-select = [
 "tools/**/test_*.py" = ["S101"]
 # Root-level verification scripts
 "verify_stage3.py" = ["T201"]
+# EVAL verify CLI prints its integrity report; the seed script is dev tooling.
+"src/operations_center/eval/verify.py" = ["T201"]
+"eval/**/*.py" = ["T201", "BLE001"]
 
 [tool.ty.environment]
 python-version = "3.11"

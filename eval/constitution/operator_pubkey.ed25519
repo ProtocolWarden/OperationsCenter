@@ -1,0 +1,19 @@
+OPERATOR_PUBKEY_PLACEHOLDER
+# Replace this entire file with the operator's Ed25519 PUBLIC key — either a
+# 64-character raw hex string (32 bytes) on the first line, or a PEM block
+# (-----BEGIN PUBLIC KEY-----). The matching PRIVATE key is generated OFFLINE by
+# the operator and never committed, never placed on any fleet host, and used only
+# to sign corpus cases (convert a candidate into a graded answer-key entry).
+#
+# While this placeholder is present, signing.load_public_key() returns None: no
+# case can be graded, so the EVAL gate stays in report-only mode (it can never
+# block the fleet before the answer key is anchored — §0.1 degrade-never-halt).
+#
+# To anchor:
+#   1. (offline)  python -c "from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey; \
+#                 k=Ed25519PrivateKey.generate(); \
+#                 open('operator_priv.pem','wb').write(k.private_bytes_raw()); \
+#                 print(k.public_key().public_bytes_raw().hex())"
+#   2. paste the printed hex as the sole first line of this file, commit it
+#      (operator-authored, CODEOWNERS-pinned).
+#   3. keep operator_priv.pem offline; use it only to sign seed cases.

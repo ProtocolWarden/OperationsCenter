@@ -1,3 +1,36 @@
+## 2026-06-21 — Phase 4 (EVAL) scaffolding stood up
+
+Built the self-healing agent-quality guard's machinery (everything buildable
+ahead of the operator signature) in `src/operations_center/eval/` + `eval/`:
+
+- **corpus.py** — append-only, hash-chained case ledger; editing/deleting any
+  past entry breaks the chain → tamper-evident.
+- **signing.py** — Ed25519 operator answer-key signatures; a case is *graded*
+  only if its signature verifies against the constitution pubkey (the one human
+  anchor). Asymmetric so no in-boundary compute can mint a label.
+- **replay.py** — deterministic blocking gate: replays `input.checks` through the
+  pure code-computed verdict (`pr_review_watcher.verdict.compute_verdict`) and
+  exact-matches the answer. Zero model → zero flakiness. Only graded cases gate.
+- **critic.py** — non-blocking, different-family-model N-of-M drift monitor
+  (extractor injected as a seam).
+- **constitution.py** — monotonic baseline floor + report-only→blocking
+  graduation (D-EVAL-3); the gate can never block before the key is seeded (§0.1).
+- **verify.py** — the required CI check (`.github/workflows/eval-corpus-integrity.yml`)
+  tying chain + signatures + floor together.
+- Seeded **7 unsigned candidate cases** (#313/#337 classes) — all pass replay;
+  gate correctly report-only (0/15 signed). CODEOWNERS pins corpus + constitution
+  + workflow to the operator (D-EVAL-2).
+
+**Decisions:** blocking gate grades the deterministic verdict *code* (catches a
+#313-style bypass with no model); real-model extraction is the separate
+non-blocking drift lane. Candidate-vs-graded split = the exam/answer-key
+separation: fleet may append candidates, only an offline operator signature makes
+one count. 33 unit tests; ruff/ty clean; Custodian T7 cleared (B2 boundary is
+env-only, passes in CI).
+
+**Deferred (irreducibly human):** operator generates the Ed25519 key offline,
+commits the pubkey, signs ≥15 seed cases → gate graduates to blocking.
+
 ## 2026-06-21 — Phase 3 (SBX) closure: DNS pinning + cloud-key documented satisfied
 
 Recorded the two remaining Phase 3 dispositions in `HARNESS_TRUST_HARDENING.md`
