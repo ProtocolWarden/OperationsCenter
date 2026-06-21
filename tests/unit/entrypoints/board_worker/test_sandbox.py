@@ -118,6 +118,17 @@ class TestArgvContract:
         )
         assert argv[-3:] == ["python", "-m", "x"]
 
+    def test_workspace_venv_bin_prepended_to_path(self, tmp_path: Path):
+        # The agent must run bare `pytest`/`ruff`; the workspace .venv/bin is
+        # prepended to PATH (resolved at exec time, after the bootstrap makes it).
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        argv = build_sandbox_argv(
+            ["x"], oc_root=tmp_path, rw_root=tmp_path, env=_env(tmp_path), chdir=ws
+        )
+        path_val = argv[argv.index("PATH") + 1]
+        assert path_val.startswith(f"{ws}/.venv/bin:")
+
 
 class TestFailOpen:
     def test_disabled_returns_unchanged(self, tmp_path: Path):
