@@ -37,6 +37,9 @@ from operations_center.maintenance import (
 )
 from operations_center.entrypoints.maintenance.board_unblock_task import BoardUnblockTask
 from operations_center.entrypoints.maintenance.egress_probe import EgressProbeTask
+from operations_center.entrypoints.maintenance.outcome_flagger_task import (
+    OutcomeFlaggerTask,
+)
 from operations_center.maintenance.ledger_maintain import LedgerMaintainTask
 from operations_center.spec_author.campaign_builder import CampaignBuilder
 from operations_center.spec_author.models import (
@@ -672,6 +675,12 @@ def register_maintenance_tasks(
     # auto-opens a fix task. Runs outside the sandbox where the proxy config and
     # loopback live; skipped (fail-open) when no proxy is configured.
     registry.register(EgressProbeTask(settings, plane_client=client))
+    # EVAL Component 2 outcome-correlation flagger (HARNESS_TRUST_HARDENING D-EVAL-1).
+    # Correlates reviewer decisions with downstream outcomes and files deduplicated
+    # operator-adjudication tickets — never a precision/recall metric (outcome data
+    # is downstream-contaminated). Skipped (fail-safe) until an outcome source is
+    # wired, so it never emits a false flag.
+    registry.register(OutcomeFlaggerTask(settings, plane_client=client))
     return registry
 
 

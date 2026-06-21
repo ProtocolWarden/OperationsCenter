@@ -1,3 +1,22 @@
+## 2026-06-21 — Phase 4: grow corpus to 15 + wire Component 2 flagger
+
+Two follow-ups toward graduating the EVAL gate:
+
+- **Corpus 7→15 candidate cases** (`eval/seed_candidates.py` + regenerated
+  `ledger.jsonl`): added 8 distinct verdict mechanisms — clean feature-PR LGTM,
+  unknown-check_id-is-inert, empty-checks-list, both-required-fail, unresolved
+  custodian finding, typo-status fail-safe, n/a-on-required, non-string check_id.
+  Reaches `min_graded_cases`=15 so the operator has a full exam to sign. All 15
+  pass replay; gate still report-only (0 signed).
+- **Component 2 outcome-correlation flagger (D-EVAL-1):**
+  `eval/outcome_flagger.py` (pure: `flag_disagreements` → tickets, NEVER a
+  precision/recall metric) + `entrypoints/maintenance/outcome_flagger_task.py`
+  (controller-tier MaintenanceTask, dedup board tickets, registered in
+  spec_hygiene). Correctly attributes `lgtm_then_regression`→reviewer and
+  `requeue_to_death`→**worker** (D-EVAL-4, not reviewer over-flag). Outcome data
+  is an injected `OutcomeSource` seam; no source wired → `skipped` (no false
+  flags). 56 eval/maintenance unit tests; ruff/ty clean; B2 env-only.
+
 ## 2026-06-21 — Spec: mark Phase 4 scaffolding DONE
 
 Updated `HARNESS_TRUST_HARDENING.md` Phase-4 section to record the merged
