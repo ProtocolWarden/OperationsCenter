@@ -186,3 +186,34 @@ class TestEnvAllowlistPreservesFunction:
             env = build_allowlist_env(tmp_path, passthrough=("SOME_TOKEN",))
             assert "SOME_TOKEN" not in env
             assert "HOME" not in env  # not present → not added
+
+
+class TestResourceLimitArgv:
+    """SBX Layer 3: cgroup resource caps via systemd-run, gated + fail-open."""
+
+    def test_disabled_returns_unchanged(self):
+        assert sub.resource_limit_argv(["bwrap", "x"], enabled=False) == ["bwrap", "x"]
+
+    def test_no_systemd_run_returns_unchanged(self):
+        with mock.patch.object(sub.shutil, "which", return_value=None):
+            assert sub.resource_limit_argv(["bwrap", "x"], enabled=True) == ["bwrap", "x"]
+
+    def test_enabled_wraps_in_systemd_run_scope_with_caps(self, monkeypatch):
+        monkeypatch.setattr(sub.shutil, "which", lambda _n: "/usr/bin/systemd-run")
+        monkeypatch.delenv("OC_RLIMIT_MEM", raising=False)
+        out = sub.resource_limit_argv(["bwrap", "x"], enabled=True)
+        assert out[0].endswith("systemd-run")
+        assert "--scope" in out and "--collect" in out
+        joined = " ".join(out)
+        assert "MemoryMax=8G" in joined  # default cap
+        assert "TasksMax=512" in joined
+        assert "RuntimeMaxSec=7200" in joined  # wall-timeout backstop
+        assert out[-2:] == ["bwrap", "x"]  # inner command appended
+
+    def test_caps_are_env_overridable(self, monkeypatch):
+        monkeypatch.setattr(sub.shutil, "which", lambda _n: "/usr/bin/systemd-run")
+        monkeypatch.setenv("OC_RLIMIT_MEM", "2G")
+        monkeypatch.setenv("OC_RLIMIT_WALL_SEC", "300")
+        joined = " ".join(sub.resource_limit_argv(["x"], enabled=True))
+        assert "MemoryMax=2G" in joined
+        assert "RuntimeMaxSec=300" in joined

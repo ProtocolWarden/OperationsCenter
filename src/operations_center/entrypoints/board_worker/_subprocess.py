@@ -20,6 +20,16 @@ from .sandbox import maybe_sandbox
 # turned on and observed (the staged rollout the trust-hardening §0.1 requires).
 _SANDBOX_ENV_FLAG = "OC_BWRAP_SANDBOX"
 
+# SBX Layer 3 (resource limits): gated on this flag. Wraps the executor in a
+# transient systemd-user cgroup scope with memory/pids/cpu caps + a wall-timeout
+# backstop, so a runaway/stuck sandboxed run can't exhaust the host. Defaults are
+# generous (cap runaways, don't throttle legit work) and env-overridable.
+_RLIMIT_ENV_FLAG = "OC_SANDBOX_RLIMITS"
+# systemd-run --user needs the user-bus vars; the minimized executor env drops
+# them, so we re-add ONLY these for the systemd-run hop (bwrap --clearenv keeps
+# them out of the sandbox).
+_USER_BUS_ENV = ("XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS")
+
 logger = logging.getLogger(__name__)
 
 # Keep the persisted diagnostics bounded — enough to diagnose, not unbounded.
@@ -255,6 +265,29 @@ def persist_failure_diagnostics(
         return None
 
 
+def resource_limit_argv(cmd: Sequence[str], *, enabled: bool) -> list:
+    """Prepend a transient ``systemd-run --user --scope`` with cgroup caps
+    (memory/pids/cpu) + a ``RuntimeMaxSec`` wall-timeout, so a runaway or wedged
+    sandboxed executor can't exhaust the host. Gated on ``OC_SANDBOX_RLIMITS=1``,
+    **fail-open**: if disabled or ``systemd-run`` is unavailable it returns the
+    command unchanged (degrade, never halt — §0.1). Caps are env-overridable and
+    default generous (cap runaways, don't throttle legit work)."""
+    if not enabled or shutil.which("systemd-run") is None:
+        return list(cmd)
+    mem = os.environ.get("OC_RLIMIT_MEM", "8G")
+    tasks = os.environ.get("OC_RLIMIT_TASKS", "512")
+    cpu = os.environ.get("OC_RLIMIT_CPU_PCT", "400%")
+    wall = os.environ.get("OC_RLIMIT_WALL_SEC", "7200")
+    return [
+        "systemd-run", "--user", "--scope", "--quiet", "--collect",
+        "-p", f"MemoryMax={mem}",
+        "-p", f"TasksMax={tasks}",
+        "-p", f"CPUQuota={cpu}",
+        "-p", f"RuntimeMaxSec={wall}",
+        *cmd,
+    ]
+
+
 def run_executor(
     cmd: Sequence[str],
     *,
@@ -263,15 +296,24 @@ def run_executor(
     workspace: Path,
     env: dict,
 ) -> subprocess.CompletedProcess:
-    """Spawn the executor subprocess, optionally inside the bwrap sandbox.
+    """Spawn the executor subprocess, optionally inside the bwrap sandbox and a
+    resource-limited cgroup scope.
 
-    Centralizes the SBX Phase 2 wrap so dispatch's spawn sites stay one-liners.
-    The sandbox is gated on ``OC_BWRAP_SANDBOX=1`` and is fail-open: when off,
-    unavailable, or unconstructable it runs the command exactly as before. The
+    Centralizes the SBX wraps so dispatch's spawn sites stay one-liners. Both are
+    gated + fail-open: the bwrap sandbox on ``OC_BWRAP_SANDBOX=1`` (off/unavailable
+    => runs as before); the Layer-3 cgroup caps on ``OC_SANDBOX_RLIMITS=1``. The
     outer ``env`` is still passed (harmless: bwrap ``--clearenv`` + ``--setenv``
     re-establishes a controlled env inside; un-sandboxed it is the real env)."""
     enabled = os.environ.get(_SANDBOX_ENV_FLAG) == "1"
     run_cmd = maybe_sandbox(
         cmd, oc_root=oc_root, rw_root=rw_root, env=env, enabled=enabled, chdir=workspace
     )
-    return subprocess.run(run_cmd, cwd=oc_root, env=env, capture_output=True, text=True)
+    rlimits = os.environ.get(_RLIMIT_ENV_FLAG) == "1"
+    run_cmd = resource_limit_argv(run_cmd, enabled=rlimits)
+    run_env = env
+    if rlimits and run_cmd and run_cmd[0].endswith("systemd-run"):
+        # systemd-run --user needs the user-bus vars the minimized env drops;
+        # re-add ONLY those for the outer hop. bwrap --clearenv keeps them out of
+        # the sandbox; un-sandboxed they are harmless (not secrets).
+        run_env = {**env, **{k: os.environ[k] for k in _USER_BUS_ENV if k in os.environ}}
+    return subprocess.run(run_cmd, cwd=oc_root, env=run_env, capture_output=True, text=True)
