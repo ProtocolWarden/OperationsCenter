@@ -85,3 +85,22 @@ def test_gate_fails_when_a_graded_case_fails():
     report = run_corpus([bad], graded_ids={"g"})
     assert report.gate_ok is False
     assert report.failures()[0].case_id == "g"
+
+
+def test_extraction_kind_excluded_from_verdict_gate():
+    """Extraction-kind cases belong to the drift monitor, not the blocking gate."""
+    verdict = Case(
+        case_id="v", kind="verdict",
+        input={"checks": [{"check_id": "code_quality", "status": "fail"},
+                          {"check_id": "no_tooling_artifacts", "status": "pass"}]},
+        ground_truth={"result": "CONCERNS", "failing": ["code_quality"]},
+    )
+    extraction = Case(
+        case_id="x", kind="extraction", input={"diff": "..."},
+        ground_truth={"result": "CONCERNS", "failing": ["code_quality"]},
+    )
+    report = run_corpus([verdict, extraction], graded_ids={"v", "x"})
+    # Only the verdict case is replayed; the extraction case is not a failure.
+    assert len(report.results) == 1
+    assert report.results[0].case_id == "v"
+    assert report.gate_ok is True

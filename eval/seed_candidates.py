@@ -212,6 +212,48 @@ SEED: list[Case] = [
         rationale="A non-string check_id is ignored, so the required code_quality "
         "check is effectively missing → CONCERNS.",
     ),
+    # --- EXTRACTION-kind cases: the diff→checks layer the DRIFT MONITOR grades.
+    # Unlike verdict-kind (pre-filled checks), these carry a real diff so a
+    # different-family model must extract the per-check statuses. They cover the
+    # semantic reviewer failure (well-formed but WRONG extraction) the deterministic
+    # blocking gate is structurally blind to. Non-gating (drift monitor only).
+    Case(
+        case_id="extract-nulldef-must-concern",
+        kind="extraction",
+        context="A diff that introduces a null-dereference; a competent reviewer must "
+        "extract code_quality=fail. An LGTM here is reviewer drift.",
+        input={"diff": (
+            "--- a/store.py\n+++ b/store.py\n@@ def get_value(store, key):\n"
+            "-    item = store.get(key)\n-    return item.value if item else None\n"
+            "+    return store.get(key).value  # store.get may return None -> AttributeError\n"
+        )},
+        ground_truth={"result": "CONCERNS", "failing": ["code_quality"]},
+        rationale="Diff adds a null-deref; correct extraction is code_quality=fail.",
+    ),
+    Case(
+        case_id="extract-clean-rename-must-lgtm",
+        kind="extraction",
+        context="A pure, safe rename with no behavior change; a competent reviewer "
+        "must extract all-pass. A spurious CONCERNS here is over-flag drift.",
+        input={"diff": (
+            "--- a/util.py\n+++ b/util.py\n@@\n-def calc_total(items):\n"
+            "-    return sum(i.price for i in items)\n+def compute_total(items):\n"
+            "+    return sum(i.price for i in items)\n"
+        )},
+        ground_truth={"result": "LGTM", "failing": []},
+        rationale="No behavior change; correct extraction is all checks pass → LGTM.",
+    ),
+    Case(
+        case_id="extract-tooling-artifact-must-concern",
+        kind="extraction",
+        context="A diff that commits a tooling artifact; the reviewer must extract "
+        "no_tooling_artifacts=fail.",
+        input={"diff": (
+            "--- /dev/null\n+++ b/.baseline-validation.json\n@@\n+{\"runs\": 3, \"ok\": true}\n"
+        )},
+        ground_truth={"result": "CONCERNS", "failing": ["no_tooling_artifacts"]},
+        rationale="A leaked .baseline-validation.json is a no_tooling_artifacts fail.",
+    ),
 ]
 
 

@@ -31,6 +31,10 @@ from typing import Protocol
 from operations_center.entrypoints.pr_review_watcher.verdict import compute_verdict
 from operations_center.eval.corpus import Case
 
+# Corpus cases whose input carries a diff/context for the model to extract checks
+# from (graded by THIS drift monitor, not the deterministic verdict gate).
+EXTRACTION_KIND = "extraction"
+
 
 class CheckExtractor(Protocol):
     """Produce the typed ``checks`` list for a case from a *different-family* model.
@@ -84,4 +88,4 @@ def run_drift_monitor(
     return out
 
 
-__all__ = ["CheckExtractor", "DriftResult", "run_drift_monitor"]
+__all__ = ["EXTRACTION_KIND", "CheckExtractor", "DriftResult", "run_drift_monitor"]
