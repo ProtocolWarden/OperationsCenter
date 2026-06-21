@@ -1,3 +1,17 @@
+## 2026-06-21 — INJ: fence fix-loop diff + complete output sanitization (audit G-3/G-1)
+
+Operator confirmed board tasks are operator-authored ONLY → G-2 (unfenced task
+description) is moot (provenance closes it); dropped task-fencing + the
+authorization gate. Did the provenance-independent remainder:
+- G-3: `_ladder_enrichment` folded the raw PR diff into a markdown ```diff``` block
+  (attacker-breakable) inside the push-capable fix goal; now nonce-fenced
+  (fence()+UNTRUSTED_PREAMBLE), consistent with the reviewer's own diff fencing.
+- G-1: applied sanitize_for_comment at the previously-unsanitized egress points —
+  _escalate_needs_human + _close_and_requeue (detail) and the Plane re-queue
+  scope_block (enumerated model concerns). The close-receipt/merged comments carry
+  only trusted fields (no change). First-pass concern comment already sanitized.
+343 reviewer tests + 3 new INJ fix-loop tests pass; ruff/ty/audit clean.
+
 ## 2026-06-21 — EVAL: extraction-kind coverage + drift-monitor task (audit Finding 1)
 
 Closes the structural gap: the blocking gate grades deterministic verdict CODE

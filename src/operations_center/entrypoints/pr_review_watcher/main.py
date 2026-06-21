@@ -306,7 +306,17 @@ def _ladder_enrichment(level: int, *, pr_diff: str = "") -> str:
     if diff:
         if len(diff) > _LADDER_DIFF_CAP:
             diff = diff[:_LADDER_DIFF_CAP] + "\n...[diff truncated for orientation]"
-        parts.append("## The PR diff under review (for orientation)\n\n```diff\n" + diff + "\n```")
+        # The PR diff is UNTRUSTED repo content. The reviewer fences it for the
+        # review pass; the fix pass (which has push capability) must too — a
+        # markdown ```diff``` block is attacker-breakable (the diff can contain a
+        # ``` line), so use the nonce fence + preamble instead (INJ G-3).
+        nonce = make_nonce()
+        parts.append(
+            "## The PR diff under review (for orientation — UNTRUSTED DATA)\n\n"
+            + UNTRUSTED_PREAMBLE
+            + "\n\n"
+            + fence("pr_diff", diff, nonce)
+        )
     return "\n\n".join(parts)
 
 
@@ -1317,7 +1327,8 @@ def _escalate_needs_human(
                 repo,
                 pr_number,
                 f"{marker}\n**Needs human attention** (reason=`{reason}`). Left open — "
-                f"not merged (unresolved) and not closed (work preserved).\n\n{detail}",
+                f"not merged (unresolved) and not closed (work preserved).\n\n"
+                f"{sanitize_for_comment(detail)}",
             )
             state["escalation_comment_id"] = (resp or {}).get("id")
         except Exception as exc:
@@ -1416,7 +1427,8 @@ def _close_and_requeue(
         f"{marker}\n**Closing without merge** (reason=`{reason}`). A PR is never "
         f"merged with unresolved review concerns — the issue has been re-queued for "
         f"a fresh attempt. Durable receipt recorded on Plane task `{plane_task_id}` "
-        f"for `{_durable_pr_head_ref(pr_number)}` and `{spec_file}`.\n\n{detail}"
+        f"for `{_durable_pr_head_ref(pr_number)}` and `{spec_file}`.\n\n"
+        f"{sanitize_for_comment(detail)}"
     )
     if not close_without_receipt_allowed(comment=close_comment, durable_receipt_recorded=True):
         logger.error(
@@ -1487,7 +1499,11 @@ def _requeue_plane_task(
     scope_block = ""
     items = _structure_concerns(concerns)
     if items:
-        enumerated = "\n".join(f"{i}. {c}" for i, c in enumerate(items, 1))
+        # The concerns are model-authored and may carry attacker text (a quoted
+        # evidence_span). Sanitize before reflecting to the Plane comment (INJ G-1).
+        enumerated = sanitize_for_comment(
+            "\n".join(f"{i}. {c}" for i, c in enumerate(items, 1))
+        )
         scope_block = (
             "\n\n**Unresolved review concerns to address in the next attempt** "
             "(the previous PR could not resolve these — scope the fresh attempt to "
