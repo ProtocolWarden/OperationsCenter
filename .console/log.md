@@ -1,3 +1,24 @@
+## 2026-06-21 — Phase 4 (EVAL) operator signing CLI (offline answer-key tool)
+
+Added `operations_center.eval.sign` — the tool the OPERATOR runs OFFLINE to anchor
+the EVAL answer key (the one irreducibly-human step). Declined to generate/hold the
+signing key in-session: a key generated on a fleet-reachable host, by the agent that
+builds the eval, would collapse the un-forgeable anchor the whole design depends on
+(self-dealing + a label-forging key next to the attacker). Built the tooling instead
+so the operator's manual step is one command; key generation + custody stay with them.
+
+- `corpus.write_ledger` — re-chain helper (signing a candidate changes its hash, so
+  the chain after it is recomputed).
+- `sign keygen` — generate an Ed25519 keypair offline; writes the PEM private key,
+  prints the public hex to paste into `operator_pubkey.ed25519`.
+- `sign sign --private <pem> --ledger ...` — converts unsigned candidates into signed
+  graded cases (idempotent; `--case-id` to limit), rewriting the chain.
+
+Verified end-to-end with a THROWAWAY ephemeral key (never committed, shredded after):
+report-only (0 graded) → sign 7 seeds → gate graduates to **blocking**, all pass;
+and a tamper (flip a signed answer in place) is caught — `entry_hash mismatch`,
+RESULT FAIL. 41 eval unit tests; ruff/ty/D12 clean.
+
 ## 2026-06-21 — Phase 4 (EVAL) scaffolding stood up
 
 Built the self-healing agent-quality guard's machinery (everything buildable

@@ -190,6 +190,27 @@ def append_case(path: Path, case: Case) -> LedgerEntry:
     return entry
 
 
+def write_ledger(path: Path, cases: list[Case]) -> None:
+    """Rewrite the entire ledger from scratch, re-chaining from genesis.
+
+    Used by the operator signing tool to convert candidates into signed graded
+    entries: adding a signature changes an entry's payload (hence its
+    ``entry_hash``), so every following entry's ``prev_hash`` must be recomputed.
+    The result is a fresh, internally-consistent chain. (Legitimate because the
+    rewrite is operator-authored and CODEOWNERS-gated; an out-of-band edit that
+    forgets to re-chain still reds ``verify_chain``.)"""
+    prev = GENESIS_PREV_HASH
+    lines: list[str] = []
+    for case in cases:
+        entry_hash = compute_entry_hash(case.payload(), prev)
+        record = dict(case.payload())
+        record["prev_hash"] = prev
+        record["entry_hash"] = entry_hash
+        lines.append(json.dumps(record, sort_keys=True, separators=(",", ":"), ensure_ascii=False))
+        prev = entry_hash
+    path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+
+
 __all__ = [
     "GENESIS_PREV_HASH",
     "Case",
@@ -202,4 +223,5 @@ __all__ = [
     "gradeable_view",
     "load_ledger",
     "verify_chain",
+    "write_ledger",
 ]

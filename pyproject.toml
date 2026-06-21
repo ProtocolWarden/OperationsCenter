@@ -101,6 +101,8 @@ operations-center-reconcile-merged-tasks = "operations_center.entrypoints.mainte
 # identically past a threshold (env/transport, not code), escalate to the
 # operator ledger and suppress re-proposal via the existing rejection store.
 operations-center-detect-convergence-stall = "operations_center.entrypoints.maintenance.detect_convergence_stall:main"
+# EVAL answer-key signing CLI — Ed25519 sign/verify for eval operator workflow.
+operations-center-eval-sign             = "operations_center.eval.sign:main"
 
 [project.entry-points."pytest11"]
 flaky-detection = "operations_center.observer.pytest_flaky_plugin"
@@ -196,8 +198,9 @@ extend-select = [
 "tools/**/test_*.py" = ["S101"]
 # Root-level verification scripts
 "verify_stage3.py" = ["T201"]
-# EVAL verify CLI prints its integrity report; the seed script is dev tooling.
+# EVAL verify + operator-signing CLIs print; the seed script is dev tooling.
 "src/operations_center/eval/verify.py" = ["T201"]
+"src/operations_center/eval/sign.py" = ["T201"]
 "eval/**/*.py" = ["T201", "BLE001"]
 
 [tool.ty.environment]
