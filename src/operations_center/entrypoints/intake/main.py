@@ -41,6 +41,11 @@ import time
 import uuid
 from pathlib import Path
 
+from operations_center.entrypoints.board_worker._subprocess import (
+    build_allowlist_env,
+    run_executor,
+)
+
 logger = logging.getLogger(__name__)
 
 QUEUE_DIR = Path.home() / ".console" / "queue"
@@ -199,7 +204,14 @@ def _process_item(item: dict, config_path: Path, venv_python: str) -> bool:
             "intake",
         ]
 
-        exec_proc = subprocess.run(exec_cmd, cwd=oc_root, env=env, capture_output=True, text=True)
+        # SBX: route the intake executor through the bwrap/rlimits wrap with a
+        # MINIMIZED env (intake's _build_env is full os.environ → bwrap --clearenv
+        # would otherwise re-inject every secret). Forward only the git token so
+        # push still works; sibling-repo tokens / Plane token / host secrets drop.
+        exec_env = build_allowlist_env(oc_root, passthrough=("GITHUB_TOKEN", "GIT_TOKEN"))
+        exec_proc = run_executor(
+            exec_cmd, oc_root=oc_root, rw_root=tmp, workspace=workspace, env=exec_env
+        )
 
         if not result_file.exists():
             logger.error(
