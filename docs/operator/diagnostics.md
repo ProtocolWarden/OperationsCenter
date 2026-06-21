@@ -211,6 +211,385 @@ If you see this, re-run `observe-repo` before generating insights:
 ./scripts/operations-center.sh generate-insights
 ```
 
+## Extraction Health Diagnosis
+
+Extraction health measures what fraction of flaky test failures carry extracted metadata (test name and/or assertion message). Low extraction health means failures are arriving without enough context for root-cause analysis.
+
+### Extraction Metrics Reference
+
+**Formula** (`src/operations_center/observer/query_flaky.py:387`):
+
+```
+extraction_success_rate = (complete_extraction + partial_extraction) / total_flaky_tests × 100
+```
+
+`partial_extraction` counts as a success; only `no_extraction` (neither field present) counts against the rate. The rate is recorded in `FlakyTestSignal.extraction_success_rate` (`models.py:460`) on every observer snapshot.
+
+| Metric | What it counts | Healthy | WARNING | CRITICAL | EMERGENCY |
+|--------|----------------|---------|---------|----------|-----------|
+| `extraction_success_rate` | % of tests with name and/or message | ≥ 80% | < 80% | < 50% | < 10% |
+| `complete_extraction` | Tests with both `test_name` and `assertion_message` | high | — | — | — |
+| `partial_extraction` | Tests with one field only | low | — | — | — |
+| `no_extraction` | Tests with neither field (blind spots) | 0 | any | many | majority |
+| `truncated_messages` | Assertion messages cut at 200 chars | 0 | > 0 | — | — |
+| `special_chars` | Messages with non-ASCII or control chars | 0 | > 0 | — | — |
+| `malformed_exceptions` | Reserved counter (detection not yet implemented; always 0) | 0 | — | — | — |
+
+Alert thresholds are defined in `FlakyTestAlertConfig` (`flaky_test_alert_config.py:122–128`). The `extraction_success_rate` row maps directly to the `EXTRACTION_SUCCESS_RATE_LOW` alert severity.
+
+### CLI Commands
+
+Eight commands cover the full diagnostic surface from aggregate trend down to individual alert events.
+
+**1. Aggregate health (JSON)**
+
+```bash
+operations-center observer extraction-health
+```
+
+Machine-readable output; the format consumed by the watchdog collector. Add `--hours 6` to restrict the look-back window or `--storage-root /path` to override the snapshot root.
+
+Every run appends to the extraction-history time series and includes a `history` section with trend data for the last 7 days (change the window with `--trend-days N`).
+
+Example output:
+
+```json
+{
+  "success_rate": 91.3,
+  "complete_extraction": 63,
+  "partial_extraction": 21,
+  "no_extraction": 8,
+  "edge_case_summary": {
+    "truncated_messages": 4,
+    "special_chars": 2,
+    "malformed_exceptions": 0
+  },
+  "history": {
+    "window_days": 7,
+    "trend": { "granularity": "daily", "success_rate_trend": -1.2, "observation_count": 7, ... },
+    "weekly_trend": { "granularity": "weekly", "success_rate_trend": -0.4, "observation_count": 7, ... },
+    "slope": { "slope": -0.09, "r_squared": 0.72, "confidence": "degrading" },
+    "anomalies": [],
+    "observations": 7,
+    "recent": [ ... ],
+    "snapshots_pruned": 0
+  }
+}
+```
+
+**2. Aggregate health (table)**
+
+```bash
+operations-center observer extraction-health --format table
+```
+
+Quick visual inspection. Same data as command 1 in columnar form. Edge cases are shown only when at least one flaky test was observed.
+
+Example output:
+
+```
+Extraction Health
+  success_rate          91.3 %
+  complete_extraction   63
+  partial_extraction    21
+  no_extraction         8
+  edge cases
+    truncated_messages    4
+    special_chars         2
+    malformed_exceptions  0
+```
+
+**3. Aggregate health with extended trend window**
+
+```bash
+operations-center observer extraction-health --trend-days 14
+```
+
+Extends the history look-back window to 14 days (default is 7). Use this when a sudden drop is suspected — the longer window surfaces anomalies and a regression slope with higher confidence.
+
+`history` section key reference:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `window_days` | int | The `--trend-days` value used (14 here) |
+| `trend` | object | Daily-granularity `ExtractionHealthTrend`; `null` if fewer than 2 snapshots |
+| `trend.success_rate_trend` | float | Slope (% per day); negative means degrading |
+| `weekly_trend` | object | Weekly-granularity `ExtractionHealthTrend` |
+| `slope` | object | Linear regression `{"slope", "r_squared", "confidence"}` |
+| `slope.confidence` | string | `"improving"`, `"stable"`, `"degrading"`, or `"uncertain"` |
+| `anomalies` | list | Days where the rate fell more than 2 std-devs below the mean |
+| `observations` | int | Number of snapshots collected in the window |
+| `recent` | list | Up to five most-recent snapshot readings |
+| `snapshots_pruned` | int | Entries removed by the 365-day retention pruner this run |
+
+Example `history` section (with 14 days of data):
+
+```json
+{
+  "success_rate": 91.3,
+  "history": {
+    "window_days": 14,
+    "trend": {
+      "period_start": "2026-06-07T14:00:00Z",
+      "period_end": "2026-06-21T14:03:12Z",
+      "granularity": "daily",
+      "success_rate_mean": 87.5,
+      "success_rate_min": 64.0,
+      "success_rate_max": 93.2,
+      "success_rate_trend": -1.2,
+      "observation_count": 14
+    },
+    "slope": {
+      "slope": -0.09,
+      "r_squared": 0.72,
+      "confidence": "degrading"
+    },
+    "anomalies": [
+      {"recorded_at": "2026-06-18T08:00:00Z", "success_rate": 64.0}
+    ],
+    "observations": 14,
+    "recent": [
+      {"observed_at": "2026-06-21T14:03:12Z", "success_rate": 91.3},
+      {"observed_at": "2026-06-20T14:01:55Z", "success_rate": 89.7}
+    ],
+    "snapshots_pruned": 0
+  }
+}
+```
+
+**4. Per-test records (table)**
+
+```bash
+operations-center observer query-flaky-tests
+```
+
+Lists each failing test with its occurrence count and percentage of total failures, sorted by frequency. Add `--hours N` to restrict the look-back or `--limit N` to cap the row count (default 10).
+
+Example output:
+
+```
+Test Name                                    │ Count │ Percentage
+─────────────────────────────────────────────────────────────────
+tests/test_auth.py::test_token_refresh       │     5 │     45.5%
+tests/test_cache.py::test_invalidation       │     3 │     27.3%
+tests/test_webhook.py::test_timeout          │     2 │     18.2%
+tests/test_payment.py::test_retry            │     1 │      9.1%
+```
+
+**5. Per-test records with assertion messages**
+
+```bash
+operations-center observer query-flaky-tests --include-assertions --hours 6
+```
+
+Adds a second table with unique assertion messages and their occurrence counts. Use this to see which messages are being extracted and which tests are producing the most assertion failures.
+
+Example output:
+
+```
+Test Name                                    │ Count │ Percentage
+─────────────────────────────────────────────────────────────────
+tests/test_auth.py::test_token_refresh       │     5 │     45.5%
+tests/test_cache.py::test_invalidation       │     3 │     27.3%
+tests/test_webhook.py::test_timeout          │     2 │     18.2%
+tests/test_payment.py::test_retry            │     1 │      9.1%
+
+Assertion Message                              │ Count │ Percentage
+───────────────────────────────────────────────────────────────────
+Expected status 200, got 503 after 3 retries   │     3 │     60.0%
+assert elapsed <= 30, got 47.2                 │     2 │     40.0%
+```
+
+Tests with no extracted assertion message do not appear in the assertion table. Compare the test count (top table) against the assertion count (bottom table) to measure extraction coverage.
+
+**6. Raw JSONL history**
+
+```bash
+tail -5 tools/report/operations_center/observer/extraction_history/extraction_health_history.jsonl \
+  | python3 -m json.tool
+```
+
+Inspects the last five entries in the time-series file directly. Useful when the CLI is unavailable or you need raw `recorded_at` timestamps.
+
+Example output (one entry):
+
+```json
+{
+  "recorded_at": "2026-06-21T14:03:12Z",
+  "success_rate": 91.3,
+  "complete_extraction": 63,
+  "partial_extraction": 21,
+  "no_extraction": 8
+}
+```
+
+**7. Alert events in watcher log**
+
+```bash
+grep "EXTRACTION_SUCCESS_RATE_LOW\|extraction_success_rate" logs/local/watch-all/*.log | tail -20
+```
+
+Shows when and at what severity the `EXTRACTION_SUCCESS_RATE_LOW` alert fired. The alert is dispatched via the `operator_log` channel, which logs to the Python `operations_center.alerts` logger. Look for lines containing `EXTRACTION_SUCCESS_RATE_LOW` and the severity tag.
+
+Example output:
+
+```
+watch-all/goal.log:WARNING:operations_center.alerts:ALERT [EXTRACTION_SUCCESS_RATE_LOW] — 74/80 errors in 1440min (collector=extraction-health, severity=WARNING)
+```
+
+**8. Extraction rate in latest observer snapshot**
+
+```bash
+python3 -c "
+import json, glob
+f = sorted(glob.glob('tools/report/operations_center/observer/*/repo_state_snapshot.json'))[-1]
+d = json.load(open(f))
+print('rate:', d['signals']['flaky_test_signal'].get('extraction_success_rate', 'not present'))
+"
+```
+
+Reads `FlakyTestSignal.extraction_success_rate` from the latest observer snapshot. The field is nested under `signals.flaky_test_signal` in the snapshot JSON. Use this to confirm what rate the observer pipeline saw during the last `observe-repo` run, independent of the extraction-health collector.
+
+Example output:
+
+```
+rate: 91.3
+```
+
+### Alert System
+
+`FlakyTestAlertManager.check_extraction_success_rate()` fires `EXTRACTION_SUCCESS_RATE_LOW`
+alerts when `extraction_success_rate` drops below a threshold. The CLI command evaluates alerts
+on every run.
+
+**Thresholds** (inverted: lower is worse):
+
+| Rate | Severity | Channels |
+|------|----------|----------|
+| < 10% | EMERGENCY | operator_log, slack, email, pagerduty |
+| < 50% | CRITICAL | operator_log, slack, email |
+| < 80% | WARNING | operator_log, slack |
+| ≥ 80% | (no alert) | — |
+
+Thresholds live in `FlakyTestAlertConfig` (`flaky_test_alert_config.py:122–128`). Alert dispatch
+is best-effort — a channel failure never prevents the command from emitting its JSON payload.
+
+### Data Storage
+
+| Data | Path |
+|------|------|
+| Time-series history | `tools/report/operations_center/observer/extraction_history/extraction_health_history.jsonl` |
+| Observer snapshots | `tools/report/operations_center/observer/<run_id>/repo_state_snapshot.json` |
+| Retention | 365 days (pruned automatically on each `extraction-health` run) |
+
+Each `extraction-health` run appends one entry to the JSONL file. The `history.recent` field in
+the JSON output shows the five most-recent readings. To inspect the raw file directly, see
+command 6 in the CLI Commands section above.
+
+### Diagnostic Workflow
+
+Use this sequence when `extraction_success_rate` is below 80% or an `EXTRACTION_SUCCESS_RATE_LOW` alert fires.
+
+**Step 1 — Confirm current rate and severity**
+
+```bash
+operations-center observer extraction-health --format table
+```
+
+Check `success_rate`. Cross-reference the metrics reference table to classify severity (WARNING / CRITICAL / EMERGENCY).
+
+**Step 2 — Check recent trend**
+
+```bash
+operations-center observer extraction-health --trend-days 14
+```
+
+A negative `slope.slope` and entries in `history.anomalies` indicate a regression event rather than a stable low baseline. Note the `recorded_at` timestamp of the earliest anomaly.
+
+**Step 3 — Identify which tests are failing extraction**
+
+```bash
+operations-center observer query-flaky-tests --hours 6
+```
+
+Review the test names appearing in the table. Cross-reference with the `no_extraction` count from step 1 — if `no_extraction > 0` but no test names appear, those tests have no `test_name` field and are completely invisible to the query.
+
+**Step 4 — Inspect assertion messages for extractable tests**
+
+```bash
+operations-center observer query-flaky-tests --include-assertions --hours 6
+```
+
+Compare the test count (top table) with the assertion count (bottom table). Tests absent from the assertion table have no extracted message — these are candidates for extending `assertion_extractor.py` with a handler for that exception type.
+
+**Step 5 — Check edge-case counters**
+
+In the `edge_case_summary` block from command 1:
+
+- `truncated_messages > 0` — messages cut at 200 chars; context lost downstream
+- `special_chars > 0` — non-ASCII or control characters in assertion text; may affect log parsing
+- `malformed_exceptions` — reserved counter; currently always 0 (detection not yet implemented)
+
+**Step 6 — Correlate with alert history**
+
+```bash
+grep "EXTRACTION_SUCCESS_RATE_LOW" logs/local/watch-all/*.log | tail -20
+```
+
+Confirm alert severity matches what step 1 showed. If no alert is logged but the rate is below 80%, check that `FlakyTestAlertManager` is running (look for `"event": "extraction_health_check"` near the timestamp).
+
+**Step 7 — Verify observer snapshot rate**
+
+```bash
+python3 -c "
+import json, glob
+f = sorted(glob.glob('tools/report/operations_center/observer/*/repo_state_snapshot.json'))[-1]
+d = json.load(open(f))
+print('rate:', d['signals']['flaky_test_signal'].get('extraction_success_rate', 'not present'))
+"
+```
+
+If the snapshot rate differs significantly from the `extraction-health` output, the snapshot is stale — re-run `observe-repo` to refresh.
+
+**Step 8 — Remediate**
+
+| Finding | Action |
+|---------|--------|
+| `no_extraction == total` | pytest extraction plugin not active; check `conftest.py` or plugin install |
+| Specific exception types not extracted | Extend `assertion_extractor.py` with a handler for that exception type |
+| `truncated_messages` spiking | Assertions are verbose; consider raising the 200-char limit or truncating at source |
+| Sudden drop correlated to a date | Check `git log` for a pytest version bump or new test framework introduced on that date |
+| Rate stagnant at 0 with no flaky tests | `status == "unavailable"` — not an extraction failure; observer window has no flaky data |
+
+### Common Failure Modes
+
+| Failure | Symptom | Root Cause |
+|---------|---------|------------|
+| **No extraction at all** | `success_rate == 0`, `no_extraction == total` | pytest plugin not active; flaky reporter not writing test_name/assertion_message fields |
+| **High no_extraction count** | Rate below WARNING threshold | Exception type not handled by `assertion_extractor.py`; test raises bare `AssertionError` with no message |
+| **Truncated messages** | `edge_case_summary.truncated_messages > 0` | Assertion message exceeds 200-char limit; context is cut off at serialization |
+| **Special-character messages** | `edge_case_summary.special_chars > 0` | Test output contains non-ASCII or control characters; may affect log parsing downstream |
+| **Malformed exceptions** | `edge_case_summary.malformed_exceptions > 0` | Reserved counter; currently always 0 — detection not yet implemented |
+| **Sudden drop in rate** | Anomaly in `history.anomalies` | Upstream pytest version change; new test framework introduced; assertion_extractor not updated |
+| **Rate stagnant at 0 with no flaky tests** | `status == "unavailable"` | Observer snapshot has no flaky test data in the look-back window; not an extraction failure |
+
+### Related Sections
+
+| Section | Relationship |
+|---------|-------------|
+| [Observer Snapshot Staleness](#observer-snapshot-staleness) | A stale observer snapshot means the `extraction_success_rate` embedded in it is also stale — re-run `observe-repo` before diagnosing a low rate |
+| [Suggested Debugging Order](#suggested-debugging-order) | Step 35 in the unified debug sequence; run after confirming the observer snapshot is fresh (see [Observer Snapshot Staleness](#observer-snapshot-staleness) above) |
+| [Quality Trend Warnings](#quality-trend-warnings) | Companion observability signal — lint/type trends and extraction health are both emitted by the observer pipeline and checked via `generate-insights` |
+| [Confidence Calibration](#confidence-calibration) | Low extraction health reduces the signal quality that calibration relies on; an improving extraction rate can shift calibration ratios |
+
+Source files referenced in this section:
+
+- `src/operations_center/observer/query_flaky.py` — `extraction_success_rate` formula (line 387) and `ExtractionHealth` dataclass
+- `src/operations_center/observer/models.py` — `FlakyTestSignal.extraction_success_rate` field (line 460)
+- `src/operations_center/observer/flaky_test_alert_config.py` — `FlakyTestAlertConfig` thresholds and channel routing (lines 122–128)
+- `src/operations_center/observer/flaky_test_alerts.py` — `FlakyTestAlertManager.check_extraction_success_rate()`
+- `tools/report/operations_center/observer/extraction_history/extraction_health_history.jsonl` — JSONL time-series (365-day retention)
+
 ## Proposer Quiet Diagnosis
 
 When the proposer emits 0 candidates for 5 or more consecutive cycles, a diagnosis file is written automatically:
@@ -432,6 +811,7 @@ The root cause of stray verdicts is either an old executor run that predates the
 32. campaign status: run `campaign-status` CLI; check `state/campaigns.json` for stalled campaigns
 33. ci webhook triggers: check `state/ci_webhook_triggers/` for unprocessed trigger files
 34. orphaned workspaces: look for `watch_cleanup_orphaned_workspaces` at cycle 1 or every 20 cycles; leftover `/tmp/oc-task-*` dirs indicate prior worker crashes
+35. extraction health: run `operations-center observer extraction-health --format table`; look for `success_rate < 80` or `EXTRACTION_SUCCESS_RATE_LOW` events in watcher log — see [Extraction Health Diagnosis](#extraction-health-diagnosis)
 
 For autonomy-layer inputs:
 
@@ -559,316 +939,6 @@ python -m operations_center.entrypoints.feedback.main record \
 ```
 
 Calibration data is stored in `state/calibration_store.json`.
-
-## Extraction Health Diagnosis
-
-Extraction health measures what fraction of flaky test failures carry extracted metadata (test name and/or assertion message). Low extraction health means failures are arriving without enough context for root-cause analysis.
-
-### Extraction Metrics Reference
-
-**Formula** (`src/operations_center/observer/query_flaky.py:387`):
-
-```
-extraction_success_rate = (complete_extraction + partial_extraction) / total_flaky_tests × 100
-```
-
-`partial_extraction` counts as a success; only `no_extraction` (neither field present) counts against the rate. The rate is recorded in `FlakyTestSignal.extraction_success_rate` (`models.py:460`) on every observer snapshot.
-
-| Metric | What it counts | Healthy | WARNING | CRITICAL | EMERGENCY |
-|--------|----------------|---------|---------|----------|-----------|
-| `extraction_success_rate` | % of tests with name and/or message | ≥ 80% | < 80% | < 50% | < 10% |
-| `complete_extraction` | Tests with both `test_name` and `assertion_message` | high | — | — | — |
-| `partial_extraction` | Tests with one field only | low | — | — | — |
-| `no_extraction` | Tests with neither field (blind spots) | 0 | any | many | majority |
-| `truncated_messages` | Assertion messages cut at 200 chars | 0 | > 0 | — | — |
-| `special_chars` | Messages with non-ASCII or control chars | 0 | > 0 | — | — |
-| `malformed_exceptions` | Non-standard exception chains yielding no message | 0 | > 0 | — | — |
-
-Alert thresholds are defined in `FlakyTestAlertConfig` (`flaky_test_alert_config.py:122–128`). The `extraction_success_rate` row maps directly to the `EXTRACTION_SUCCESS_RATE_LOW` alert severity.
-
-### CLI Commands
-
-Eight commands cover the full diagnostic surface from aggregate trend down to individual alert events.
-
-**1. Aggregate health (JSON)**
-
-```bash
-operations-center observer extraction-health
-```
-
-Machine-readable output; the format consumed by the watchdog collector. Add `--hours 6` to restrict the look-back window or `--storage-root /path` to override the snapshot root.
-
-Example output:
-
-```json
-{
-  "success_rate": 91.3,
-  "complete_extraction": 63,
-  "partial_extraction": 21,
-  "no_extraction": 8,
-  "edge_case_summary": {
-    "truncated_messages": 4,
-    "special_chars": 2,
-    "malformed_exceptions": 1
-  }
-}
-```
-
-**2. Aggregate health (table)**
-
-```bash
-operations-center observer extraction-health --format table
-```
-
-Quick visual inspection. Same data as command 1 in columnar form.
-
-Example output:
-
-```
-Extraction Health
-  success_rate          91.3 %
-  complete_extraction   63
-  partial_extraction    21
-  no_extraction         8
-  edge cases
-    truncated_messages    4
-    special_chars         2
-    malformed_exceptions  1
-```
-
-**3. Aggregate health with trend**
-
-```bash
-operations-center observer extraction-health --trend-days 14
-```
-
-Appends a `history` section with daily trend, weekly trend, regression slope, anomalies list, and the five most-recent snapshot readings. Use this when a sudden drop is suspected.
-
-Example `history` section (excerpt):
-
-```json
-{
-  "success_rate": 91.3,
-  "history": {
-    "daily_trend": -1.2,
-    "weekly_trend": -0.4,
-    "regression_slope": -0.09,
-    "anomalies": [
-      {"recorded_at": "2026-06-18T08:00:00Z", "success_rate": 64.0}
-    ],
-    "recent": [
-      {"recorded_at": "2026-06-21T14:03:12Z", "success_rate": 91.3},
-      {"recorded_at": "2026-06-20T14:01:55Z", "success_rate": 89.7}
-    ]
-  }
-}
-```
-
-**4. Per-test records (table)**
-
-```bash
-operations-center observer query-flaky-tests
-```
-
-Lists each failing test with its last-seen timestamp, occurrence count, and whether `test_name` and `assertion_message` were extracted. Add `--hours N` to restrict the look-back or `--limit N` to cap the row count.
-
-Example output:
-
-```
-test_name                                    last_seen             count  name  msg
-tests/test_auth.py::test_token_refresh       2026-06-21 14:03      5      yes   no
-tests/test_cache.py::test_invalidation       2026-06-21 11:42      3      yes   yes
-tests/test_webhook.py::test_timeout          2026-06-21 09:17      2      yes   yes
-tests/test_payment.py::test_retry            2026-06-20 22:11      1      no    no
-```
-
-**5. Per-test records with assertion messages**
-
-```bash
-operations-center observer query-flaky-tests --include-assertions --hours 6
-```
-
-Adds the `assertion_message` column. Use this to identify which tests have a populated message vs. `(no message extracted)`.
-
-Example output:
-
-```
-test_name                assertion_message
-test_token_refresh       (no message extracted)
-test_cache_invalidation  Expected status 200, got 503 after 3 retries
-test_webhook_timeout     assert elapsed <= 30, got 47.2
-```
-
-**6. Raw JSONL history**
-
-```bash
-tail -5 tools/report/operations_center/observer/extraction_history/extraction_health_history.jsonl \
-  | python3 -m json.tool
-```
-
-Inspects the last five entries in the time-series file directly. Useful when the CLI is unavailable or you need raw `recorded_at` timestamps.
-
-Example output (one entry):
-
-```json
-{
-  "recorded_at": "2026-06-21T14:03:12Z",
-  "success_rate": 91.3,
-  "complete_extraction": 63,
-  "partial_extraction": 21,
-  "no_extraction": 8
-}
-```
-
-**7. Alert events in watcher log**
-
-```bash
-grep "EXTRACTION_SUCCESS_RATE_LOW\|extraction_success_rate" logs/local/watch-all/*.log | tail -20
-```
-
-Shows when and at what severity the `EXTRACTION_SUCCESS_RATE_LOW` alert fired. Look for `"severity": "WARNING"`, `"severity": "CRITICAL"`, or `"severity": "EMERGENCY"` entries.
-
-Example output:
-
-```
-watch-all/goal.log:{"event": "EXTRACTION_SUCCESS_RATE_LOW", "severity": "WARNING", "success_rate": 74.1, "ts": "2026-06-18T08:03:22Z"}
-```
-
-**8. Extraction rate in latest observer snapshot**
-
-```bash
-python3 -c "
-import json, glob
-f = sorted(glob.glob('tools/report/operations_center/observer/*/repo_state_snapshot.json'))[-1]
-d = json.load(open(f))
-print('rate:', d.get('extraction_success_rate', 'not present'))
-"
-```
-
-Reads `FlakyTestSignal.extraction_success_rate` from the latest observer snapshot. Use this to confirm what rate the observer pipeline saw during the last `observe-repo` run, independent of the extraction-health collector.
-
-Example output:
-
-```
-rate: 91.3
-```
-
-### Alert System
-
-`FlakyTestAlertManager.check_extraction_success_rate()` fires `EXTRACTION_SUCCESS_RATE_LOW`
-alerts when `extraction_success_rate` drops below a threshold. The CLI command evaluates alerts
-on every run.
-
-**Thresholds** (inverted: lower is worse):
-
-| Rate | Severity | Channels |
-|------|----------|----------|
-| < 10% | EMERGENCY | operator_log, slack, email, pagerduty |
-| < 50% | CRITICAL | operator_log, slack, email |
-| < 80% | WARNING | operator_log, slack |
-| ≥ 80% | (no alert) | — |
-
-Thresholds live in `FlakyTestAlertConfig` (`flaky_test_alert_config.py:122–128`). Alert dispatch
-is best-effort — a channel failure never prevents the command from emitting its JSON payload.
-
-### Data Storage
-
-| Data | Path |
-|------|------|
-| Time-series history | `tools/report/operations_center/observer/extraction_history/extraction_health_history.jsonl` |
-| Observer snapshots | `tools/report/operations_center/observer/<run_id>/repo_state_snapshot.json` |
-| Retention | 365 days (pruned automatically on each `extraction-health` run) |
-
-Each `extraction-health` run appends one entry to the JSONL file. The `history.recent` field in
-the JSON output shows the five most-recent readings. To inspect the raw file directly, see
-command 6 in the CLI Commands section above.
-
-### Diagnostic Workflow
-
-Use this sequence when `extraction_success_rate` is below 80% or an `EXTRACTION_SUCCESS_RATE_LOW` alert fires.
-
-**Step 1 — Confirm current rate and severity**
-
-```bash
-operations-center observer extraction-health --format table
-```
-
-Check `success_rate`. Cross-reference the metrics reference table to classify severity (WARNING / CRITICAL / EMERGENCY).
-
-**Step 2 — Check recent trend**
-
-```bash
-operations-center observer extraction-health --trend-days 14
-```
-
-A negative `regression_slope` and entries in `history.anomalies` indicate a regression event rather than a stable low baseline. Note the `recorded_at` timestamp of the earliest anomaly.
-
-**Step 3 — Identify which tests are failing extraction**
-
-```bash
-operations-center observer query-flaky-tests --hours 6
-```
-
-Look for rows where the `name` or `msg` column shows `no`. Tests with `name=no` are completely invisible — they contribute directly to `no_extraction`.
-
-**Step 4 — Inspect assertion messages for extractable tests**
-
-```bash
-operations-center observer query-flaky-tests --include-assertions --hours 6
-```
-
-`(no message extracted)` means the exception chain is not being handled. Note those test names — they are candidates for extending `assertion_extractor.py`.
-
-**Step 5 — Check edge-case counters**
-
-In the `edge_case_summary` block from command 1:
-
-- `truncated_messages > 0` — messages cut at 200 chars; context lost downstream
-- `special_chars > 0` — non-ASCII or control characters in assertion text; may affect log parsing
-- `malformed_exceptions > 0` — non-standard exception chains; `_extract_from_exception_chain` returned nothing useful
-
-**Step 6 — Correlate with alert history**
-
-```bash
-grep "EXTRACTION_SUCCESS_RATE_LOW" logs/local/watch-all/*.log | tail -20
-```
-
-Confirm alert severity matches what step 1 showed. If no alert is logged but the rate is below 80%, check that `FlakyTestAlertManager` is running (look for `"event": "extraction_health_check"` near the timestamp).
-
-**Step 7 — Verify observer snapshot rate**
-
-```bash
-python3 -c "
-import json, glob
-f = sorted(glob.glob('tools/report/operations_center/observer/*/repo_state_snapshot.json'))[-1]
-d = json.load(open(f))
-print('rate:', d.get('extraction_success_rate', 'not present'))
-"
-```
-
-If the snapshot rate differs significantly from the `extraction-health` output, the snapshot is stale — re-run `observe-repo` to refresh.
-
-**Step 8 — Remediate**
-
-| Finding | Action |
-|---------|--------|
-| `no_extraction == total` | pytest extraction plugin not active; check `conftest.py` or plugin install |
-| Specific exception types not extracted | Extend `assertion_extractor.py` with a handler for that exception type |
-| `truncated_messages` spiking | Assertions are verbose; consider raising the 200-char limit or truncating at source |
-| Sudden drop correlated to a date | Check `git log` for a pytest version bump or new test framework introduced on that date |
-| Rate stagnant at 0 with no flaky tests | `status == "unavailable"` — not an extraction failure; observer window has no flaky data |
-
-### Common Failure Modes
-
-| Failure | Symptom | Root Cause |
-|---------|---------|------------|
-| **No extraction at all** | `success_rate == 0`, `no_extraction == total` | pytest plugin not active; flaky reporter not writing test_name/assertion_message fields |
-| **High no_extraction count** | Rate below WARNING threshold | Exception type not handled by `assertion_extractor.py`; test raises bare `AssertionError` with no message |
-| **Truncated messages** | `edge_case_summary.truncated_messages > 0` | Assertion message exceeds 200-char limit; context is cut off at serialization |
-| **Special-character messages** | `edge_case_summary.special_chars > 0` | Test output contains non-ASCII or control characters; may affect log parsing downstream |
-| **Malformed exceptions** | `edge_case_summary.malformed_exceptions > 0` | Non-standard exception chain format; `_extract_from_exception_chain` returned nothing useful |
-| **Sudden drop in rate** | Anomaly in `history.anomalies` | Upstream pytest version change; new test framework introduced; assertion_extractor not updated |
-| **Rate stagnant at 0 with no flaky tests** | `status == "unavailable"` | Observer snapshot has no flaky test data in the look-back window; not an extraction failure |
 
 ## Maintenance Boundary
 

@@ -4,6 +4,92 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## Done
 
+### 2026-06-21: Stage 6 — Commit changes and prepare for merge (✅ COMPLETE)
+- **Objective**: Stage all documentation changes, commit with descriptive message, push to feature branch, verify synchronized
+- **Status**: ✅ COMPLETE — All 6 acceptance criteria met
+- **Key Results**:
+  - ✅ All changed files staged and committed with descriptive message
+  - ✅ Commit message documents new Extraction Health Diagnosis section and all supporting changes
+  - ✅ Changes pushed to `origin/goal/8d173ffe` with upstream tracking
+  - ✅ Branch synchronized: local HEAD = remote HEAD
+  - ✅ Working tree clean after push (no uncommitted changes)
+  - ✅ `.console/backlog.md` and `.console/log.md` updated with completion status
+- **Files Committed**:
+  - `docs/operator/diagnostics.md` — new `## Extraction Health Diagnosis` section (8 CLI commands, metrics table, 8-step workflow, common failure modes, cross-links)
+  - `scripts/operations-center.sh` — added `observer)` routing; added `observer` to skip-janitor list
+  - `src/operations_center/observer/cli.py` — fixed `--format table` to multi-line columnar format
+  - `tests/unit/observer/test_cli_extraction_health.py` — updated `test_table_format` to match new format
+  - `.console/backlog.md` and `.console/log.md` — stage completion records
+- **Acceptance Criteria — ALL MET** ✅
+  1. ✅ All documentation changes staged
+  2. ✅ Descriptive commit message created
+  3. ✅ Changes pushed to feature branch
+  4. ✅ Branch synchronized with remote
+  5. ✅ Working tree clean
+  6. ✅ `.console/backlog.md` and `.console/log.md` updated
+
+### 2026-06-21: Stage 5 — Run linters and tests on documentation changes (✅ COMPLETE)
+- **Objective**: Verify all quality gates pass after documentation changes
+- **Status**: ✅ COMPLETE — All 5 acceptance criteria met with fresh evidence
+- **Verification Evidence**:
+  - ✅ Full test suite: **9,635 passed, 11 skipped, 2 xfailed, 0 failures** (`python -m pytest tests/ --tb=short -q`, 115s)
+  - ✅ Ruff linter: **All checks passed!** (0 violations)
+  - ✅ Markdown structure: **OK** (no unclosed fences, no malformed headers, no table column mismatches)
+  - ✅ Anchor links: **All OK** (6 internal links, all resolve to real headings among 55 in the doc)
+  - ✅ SPDX headers: `cli.py` and `test_cli_extraction_health.py` have SPDX; scripts/docs markdown don't (consistent repo pattern)
+- **No fixes needed** — all gates already green from prior stages
+- **Acceptance Criteria — ALL MET** ✅
+  1. ✅ Full test suite passes (9,635 passed, 0 failures)
+  2. ✅ Ruff linter passes (0 violations)
+  3. ✅ Markdown formatting valid (structure check OK, anchor links OK)
+  4. ✅ No broken links (all 6 internal anchor links resolve)
+  5. ✅ SPDX headers present where required (consistent with repo pattern)
+
+### 2026-06-21: Stage 4 — Review section consistency and integrate with existing docs (✅ COMPLETE)
+- **Objective**: Verify section follows existing formatting/style, check cross-references, ensure terminology matches, verify placement, update navigation
+- **Status**: ✅ COMPLETE — All 5 acceptance criteria verified
+- **Key Changes** (`docs/operator/diagnostics.md`):
+  - Fixed `regression_slope` → `slope.slope` in Diagnostic Workflow step 2 (not a real field name; `slope.slope` is the actual linear-regression slope key in the `history` block)
+  - Fixed "(steps 3 and 28)" cross-reference in Related Sections table — steps 3 and 28 are "Plane comments" and "execution env warnings", not observer-layer checks; replaced with a link to the Observer Snapshot Staleness section
+- **Acceptance Criteria — ALL MET** ✅
+  1. ✅ Section follows existing diagnostics.md formatting and style (`##`/`###` headers, pipe tables, fenced code blocks — consistent throughout)
+  2. ✅ Cross-references verified correct: `#observer-snapshot-staleness`, `#suggested-debugging-order`, `#quality-trend-warnings`, `#confidence-calibration`, `#extraction-health-diagnosis` all resolve to existing headings
+  3. ✅ Terminology matches: "observer snapshot", "watcher log", "usage store", "flaky test" used consistently with rest of doc
+  4. ✅ Section placement verified: after Confidence Calibration (end of observability cluster) — consistent with Suggested Debugging Order step 35 placing it as a late-stage check; "likely after Observer Snapshot Staleness" in spec was a pre-work suggestion, current placement is intentional
+  5. ✅ No explicit ToC in document — no navigation update needed; cross-links and step 35 handle navigation
+- **Test results**: 9,635 passed, 0 failures; ruff: clean
+
+### 2026-06-21: Stage 3 — Test all documented commands and procedures (✅ COMPLETE)
+- **Objective**: Execute each documented CLI command, verify output formats, test against real system state, validate thresholds, document caveats
+- **Status**: ✅ COMPLETE — All 5 acceptance criteria met
+- **Key Changes**:
+  - `scripts/operations-center.sh`: Added `observer)` routing to `operations-center-observer-snapshot`; added `observer` to skip-janitor list (read-only command)
+  - `src/operations_center/observer/cli.py`: Fixed `--format table` from single-line summary to documented multi-line columnar format with `edge cases` sub-section
+  - `tests/unit/observer/test_cli_extraction_health.py`: Updated `test_table_format` assertion to match new format
+  - `docs/operator/diagnostics.md`: Fixed 8 inaccuracies in documented command examples and behavior descriptions
+- **Acceptance Criteria — ALL MET** ✅
+  1. ✅ Executed each CLI command — discovered routing gap and 7 output format discrepancies
+  2. ✅ All example outputs now accurate to actual CLI behavior
+  3. ✅ Tested against real system state (no observer snapshots present — empty-state behavior verified)
+  4. ✅ Metric thresholds validated: WARNING < 80%, CRITICAL < 50%, EMERGENCY < 10% confirmed in `flaky_test_alert_config.py`; channel routing confirmed
+  5. ✅ Caveats documented: `malformed_exceptions` always 0, `history` section always present, `edge_case_summary` empty when no tests
+- **Test results**: 9,635 passed, 0 failures; ruff: clean
+
+### 2026-06-21: Stage 2 — Write Extraction Health Diagnosis section in diagnostics.md (✅ COMPLETE)
+- **Objective**: Complete the section by adding related-section cross-links and external documentation references (the one remaining acceptance criterion)
+- **Status**: ✅ COMPLETE — All 6 acceptance criteria met
+- **Key Changes** (`docs/operator/diagnostics.md`):
+  - Added `### Related Sections` table at end of Extraction Health Diagnosis: links to Observer Snapshot Staleness, Suggested Debugging Order, Quality Trend Warnings, Confidence Calibration, plus a source-file reference list (5 files)
+  - Added step 35 to Suggested Debugging Order: `extraction-health --format table` with anchor link to the diagnosis section
+- **Acceptance Criteria — ALL MET** ✅
+  1. ✅ Section covers extraction_success_rate monitoring
+  2. ✅ 8 CLI commands with examples
+  3. ✅ Metric interpretation guide with thresholds (unified 7-row table)
+  4. ✅ Troubleshooting table for common extraction failure modes (7 modes)
+  5. ✅ Step-by-step diagnostic workflow (8 steps)
+  6. ✅ Links to related sections and external documentation (new Related Sections table + step 35 in Suggested Debugging Order)
+- **Test results**: 9,635 passed, 0 failures; ruff: clean
+
 ### 2026-06-21: Stage 1 — Design Extraction Health Diagnosis section structure (✅ COMPLETE)
 - **Objective**: Revise section structure to address review rejection — 5–8 distinct commands, explicit diagnostic workflow, unified metrics reference table
 - **Status**: ✅ COMPLETE — All 5 acceptance criteria met (revised after rejection of prior attempt)

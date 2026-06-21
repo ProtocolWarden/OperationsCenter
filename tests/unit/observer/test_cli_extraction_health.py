@@ -114,7 +114,9 @@ class TestExtractionHealthCommand:
         with patch("pathlib.Path.exists", return_value=True):
             result = runner.invoke(app, ["extraction-health", "--format", "table"])
         assert result.exit_code == 0
-        assert "success_rate=50.0%" in result.stdout
+        assert "Extraction Health" in result.stdout
+        assert "success_rate" in result.stdout
+        assert "50.0 %" in result.stdout
 
     @patch("operations_center.observer.cli.TestSignalQuery")
     def test_error_handling(self, mock_cls: MagicMock) -> None:

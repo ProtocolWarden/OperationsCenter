@@ -672,7 +672,7 @@ shift || true
 cd "${ROOT_DIR}"
 # Skip janitor for read-only / stop commands — they're fast and don't need it.
 case "${cmd}" in
-  watch-all-status|dev-status|watch-all-stop|watch-stop|watchdog-stop|plane-status|providers-status|doctor|status|worker-backend-status|worker-backend-probe|loop-start|loop-stop|loop-status|loop-log) ;;
+  watch-all-status|dev-status|watch-all-stop|watch-stop|watchdog-stop|plane-status|providers-status|doctor|status|worker-backend-status|worker-backend-probe|loop-start|loop-stop|loop-status|loop-log|observer) ;;
   *) run_janitor ;;
 esac
 
@@ -905,6 +905,11 @@ PYEOF
     ensure_venv
     load_env_file
     run_with_log smoke "${VENV_DIR}/bin/python" -m operations_center.entrypoints.smoke.plane --config "${CONFIG_PATH}" "$@"
+    ;;
+  observer)
+    ensure_venv
+    load_env_file
+    "${VENV_DIR}/bin/operations-center-observer-snapshot" "$@"
     ;;
   observe-repo)
     ensure_venv

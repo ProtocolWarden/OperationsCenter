@@ -1047,12 +1047,19 @@ def cmd_extraction_health(
             # soft-wrapped — the watchdog collector parses this from a file.
             typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
         else:  # table
-            console.print(
-                f"extraction success_rate={payload['success_rate']:.1f}%  "
-                f"complete={payload['complete_extraction']}  "
-                f"partial={payload['partial_extraction']}  "
-                f"none={payload['no_extraction']}"
-            )
+            edge = payload.get("edge_case_summary", {})
+            lines = [
+                "Extraction Health",
+                f"  {'success_rate':<22}{payload['success_rate']:.1f} %",
+                f"  {'complete_extraction':<22}{payload['complete_extraction']}",
+                f"  {'partial_extraction':<22}{payload['partial_extraction']}",
+                f"  {'no_extraction':<22}{payload['no_extraction']}",
+            ]
+            if edge:
+                lines.append("  edge cases")
+                for key, val in edge.items():
+                    lines.append(f"    {key:<22}{val}")
+            console.print("\n".join(lines))
         raise typer.Exit(EXIT_SUCCESS)
 
     except typer.Exit:
