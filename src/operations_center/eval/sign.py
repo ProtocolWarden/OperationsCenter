@@ -27,10 +27,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from cryptography.hazmat.primitives.asymmetric.ed25519 import (
-    Ed25519PrivateKey,
-    Ed25519PublicKey,
-)
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import (
     Encoding,
     NoEncryption,
@@ -65,10 +62,6 @@ def load_private_key(path: Path) -> Ed25519PrivateKey:
             raise ValueError("PEM is not an Ed25519 private key")
         return key
     return Ed25519PrivateKey.from_private_bytes(bytes.fromhex(text.split()[0]))
-
-
-def public_key_of(private_key: Ed25519PrivateKey) -> Ed25519PublicKey:
-    return private_key.public_key()
 
 
 def sign_ledger(
