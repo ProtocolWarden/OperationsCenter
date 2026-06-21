@@ -68,6 +68,27 @@ class TestArgvContract:
         assert "/.aws" not in joined
         assert "/.gnupg" not in joined
 
+    def test_claude_home_is_writable_with_auth_ro(self, tmp_path: Path):
+        # ~/.claude must be a WRITABLE tmpfs in the sandbox (the agent writes its
+        # session state there); only the auth/settings are bound read-only.
+        home = tmp_path / "home"
+        (home / ".claude").mkdir(parents=True)
+        (home / ".claude" / ".credentials.json").write_text("{}")
+        (home / ".claude" / "settings.json").write_text("{}")
+        # a big state dir that must NOT be whole-dir ro-bound
+        (home / ".claude" / "projects").mkdir()
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        argv = build_sandbox_argv(["x"], oc_root=tmp_path, rw_root=ws, env={"HOME": str(home)})
+        joined = " ".join(argv)
+        # /sandbox-home/.claude is a tmpfs (writable), not a whole-dir ro-bind
+        assert "--tmpfs /sandbox-home/.claude" in joined
+        assert f"--ro-bind {home / '.claude'} /sandbox-home/.claude " not in joined + " "
+        # only the auth files are ro-bound, into the tmpfs
+        creds = home / ".claude" / ".credentials.json"
+        assert f"--ro-bind {creds} /sandbox-home/.claude/.credentials.json" in joined
+        assert "/sandbox-home/.claude/settings.json" in joined
+
     def test_workspace_is_the_only_writable_bind(self, tmp_path: Path):
         ws = tmp_path / "ws"
         ws.mkdir()

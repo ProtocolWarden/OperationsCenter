@@ -48,6 +48,11 @@ from urllib.parse import urlparse
 # HOME subdirectories that hold host credentials — NEVER bound into the sandbox.
 _SECRET_HOME_DIRS = (".ssh", ".gnupg", ".aws", ".config/gh", ".config/gcloud")
 
+# The only ~/.claude entries bound read-only into the agent's (otherwise writable)
+# sandbox ~/.claude: the subscription credential + settings. Everything else the
+# agent writes itself (session state), so the dir must be writable.
+_CLAUDE_AUTH_FILES = (".credentials.json", "settings.json")
+
 # System directories the toolchain needs at runtime (read-only).
 _RO_SYSTEM_DIRS = ("/usr", "/bin", "/sbin", "/lib", "/lib64", "/etc")
 
@@ -217,9 +222,10 @@ def _toolchain_ro_binds(oc_root: Path, env: dict) -> list[str]:
     # $OC_WHEELHOUSE) and the tiktoken encoding cache (offline token accounting).
     add(env.get("OC_WHEELHOUSE"))
     add(env.get("TIKTOKEN_CACHE_DIR"))
-    # Claude subscription auth — required or the agent refuses.
-    home = env.get("HOME") or os.path.expanduser("~")
-    add(os.path.join(home, ".claude"))
+    # NOTE: ~/.claude is intentionally NOT ro-bound at the real path here — the
+    # agent uses $HOME=/sandbox-home and build_sandbox_argv re-seeds a WRITABLE
+    # ~/.claude there (auth files ro). Binding the real dir read-only would just
+    # re-create the "read-only filesystem" trap for the agent's state writes.
     return binds
 
 
@@ -264,10 +270,19 @@ def build_sandbox_argv(
         if any(src == s or src.startswith(s + os.sep) for s in secret_paths):
             continue
         argv += ["--ro-bind", src, src]
-    # Re-seed the Claude auth dir INTO the tmpfs home (where the agent looks).
-    claude_auth = _real(os.path.join(env.get("HOME") or os.path.expanduser("~"), ".claude"))
-    if claude_auth:
-        argv += ["--ro-bind", claude_auth, f"{home}/.claude"]
+    # Re-seed Claude state into the tmpfs home as a WRITABLE ~/.claude. The agent
+    # writes session state there during a task (projects/, todos/, file-history/,
+    # history.jsonl, …); ro-binding the whole dir made every such write fail
+    # "read-only filesystem", so the agent couldn't do real work and the commit
+    # stage found nothing to commit. Only the auth + settings are bound read-only;
+    # the rest the agent creates fresh in the tmpfs (discarded with the sandbox).
+    claude_dir = _real(os.path.join(env.get("HOME") or os.path.expanduser("~"), ".claude"))
+    if claude_dir:
+        argv += ["--tmpfs", f"{home}/.claude"]
+        for fname in _CLAUDE_AUTH_FILES:
+            src = _real(os.path.join(claude_dir, fname))
+            if src:
+                argv += ["--ro-bind", src, f"{home}/.claude/{fname}"]
     # The one writable real path: the per-task ephemeral dir (workspace, the
     # plan bundle, the config copy, the result file — all under it). oc_root
     # itself is NOT bound, so .env secrets and the .git token stay outside.
