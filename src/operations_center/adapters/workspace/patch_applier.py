@@ -34,46 +34,64 @@ class PatchApplyResult:
 
 # Paths and patterns that must NEVER be modified in a patch (load-bearing rules).
 # These block RCE vectors, credential exposure, and infrastructure changes.
+# Dangerous BASENAMES — blocked at ANY directory depth. The previous patterns were
+# root-anchored (`^conftest\.py$`), so `src/conftest.py`, `tools/Makefile`,
+# `pkg/setup.py` etc. slipped through — yet pytest auto-imports ANY conftest.py in
+# the collection tree (RCE the moment CI/the reviewer runs pytest), and build tools
+# read these wherever they sit. Checked by basename, position-independent.
+_BLOCKED_BASENAMES = frozenset(
+    {
+        # python build / test-autoload hooks (RCE on the host that runs them)
+        "conftest.py",
+        "setup.py",
+        "setup.cfg",
+        "pyproject.toml",
+        "tox.ini",
+        "noxfile.py",
+        ".pre-commit-config.yaml",
+        ".pre-commit-config.yml",
+        # rust / go manifests with build hooks
+        "Cargo.toml",
+        "Cargo.lock",
+        "go.mod",
+        "go.sum",
+        # git + shell configs (sourced / executed)
+        ".gitmodules",
+        ".bashrc",
+        ".zshrc",
+        ".profile",
+    }
+)
+
+# Dangerous basename PATTERNS (the `.*`/optional-suffix cases), also any-depth.
+_BLOCKED_BASENAME_RE = re.compile(
+    r"^(?:Makefile(?:\..*)?|Dockerfile.*|\.env(?:\..*)?|.*\.pem|.*\.key|.*\.pub)$"
+)
+
+# Paths and patterns that must NEVER be modified in a patch (load-bearing rules).
+# These block RCE vectors, credential exposure, and infrastructure changes.
+# (Filename-based hooks live in _BLOCKED_BASENAMES above; this list is for
+# path-position patterns.)
 _BLOCKED_PATH_PATTERNS = [
-    # CI/CD configs (sandbox → CI → secrets)
-    r"\.github/workflows/.*",
+    # CI/CD + governance: block the WHOLE .github tree, not just workflows — the old
+    # rule missed .github/actions/*/action.yml (composite-action RCE),
+    # .github/CODEOWNERS (self-approval rewrite), and .github/dependabot.yml.
+    r"\.github/.*",
     r"\.gitlab-ci\.yml",
     r"\.circleci/.*",
     r"bitbucket-pipelines\.yml",
     r"\.circle/.*",
-    # Build/install hooks (RCE on host)
-    r"^setup\.py$",
-    r"^setup\.cfg$",
-    r"^pyproject\.toml$",
-    r"^Makefile(?:\..*)?$",
-    r"^conftest\.py$",
-    # Package manifests with build hooks
-    r"^Cargo\.toml$",
-    r"^Cargo\.lock$",
-    r"^go\.mod$",
-    r"^go\.sum$",
-    # package.json (only if it contains "scripts" field — caught by content check)
     # Git metadata
     r"\.git/.*",
-    r"\.gitmodules",
-    # Hooks (all forms)
+    # Hooks (all forms, any depth)
     r"\.husky/.*",
     r"\.githooks/.*",
     r".*\/hooks/.*",
-    # Environment and shell configs (often sourced)
-    r"\.env(?:\..*)?",
-    r"\.bashrc",
-    r"\.zshrc",
-    r"\.profile",
-    # Credentials and keys
+    # Credentials and keys (directories)
     r"\.ssh/.*",
     r"\.gnupg/.*",
-    r".*\.pem",
-    r".*\.key",
-    r".*\.pub",
     # Deployment/infrastructure configs
     r"docker-compose(?:\..*)?\.yml",
-    r"Dockerfile.*",
     r"kubernetes/.*",
     r"terraform/.*",
     r"ansible/.*",
@@ -148,6 +166,11 @@ class PatchApplier:
         normalized = file_path
         if normalized.startswith("./"):
             normalized = normalized[2:]
+
+        # Position-independent basename block (any directory depth).
+        basename = normalized.rsplit("/", 1)[-1]
+        if basename in _BLOCKED_BASENAMES or _BLOCKED_BASENAME_RE.match(basename):
+            return True
 
         for pattern in self._compiled_patterns:
             if pattern.match(normalized):
