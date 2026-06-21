@@ -1,0 +1,18 @@
+# CODEOWNERS — operator-pinned trust surfaces (HARNESS_TRUST_HARDENING D-EVAL-2, D-OP-3).
+#
+# The EVAL answer key and its constitution are the one human-anchored root of the
+# trust axis. Pinning them to the operator means a fleet-authored PR that touches a
+# signed corpus case, the baseline floor, the signature-verify workflow, or the
+# branch-protection surface requires operator review — the structural complement to
+# the hash-chain tamper-evidence (a chain break reds the check; CODEOWNERS makes the
+# edit itself require a human).
+
+# The corpus ledger (signed answer key + candidate cases) and the constitution.
+/eval/corpus/         @ProtocolWarden
+/eval/constitution/   @ProtocolWarden
+
+# The required integrity/gate workflow (constitution surface #1).
+/.github/workflows/eval-corpus-integrity.yml   @ProtocolWarden
+
+# CODEOWNERS itself — so the pin cannot be quietly removed.
+/.github/CODEOWNERS   @ProtocolWarden

@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# EVAL corpus integrity + answer-key gate (HARNESS_TRUST_HARDENING §4.2, D-OP-3).
+#
+# This is constitution surface #1: the required, non-bypassable check that makes
+# corpus tampering structurally visible and runs the answer-key replay gate. It
+# must be added to branch protection as a required status check (constitution
+# surface #2) so the fleet cannot disarm it.
+name: EVAL corpus integrity
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  corpus-integrity:
+    name: EVAL corpus integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need the base ref too, to enforce the monotonic baseline floor.
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install (cryptography only — verifier has no heavy deps)
+        run: pip install "cryptography>=42"
+
+      - name: Verify hash chain + signatures + run answer-key gate
+        run: |
+          PYTHONPATH=src python -m operations_center.eval.verify \
+            --corpus eval/corpus/ledger.jsonl \
+            --constitution eval/constitution
+
+      - name: Enforce monotonic baseline floor (may only rise, never fall)
+        run: |
+          PYTHONPATH=src python - <<'PY'
+          import json, subprocess, sys
+          from pathlib import Path
+          from operations_center.eval.constitution import BaselineFloor
+          floor_path = Path("eval/constitution/baseline_floor.json")
+          new = BaselineFloor.load(floor_path)
+          base = subprocess.run(
+              ["git", "show", f"origin/${{github.base_ref}}:{floor_path}"],
+              capture_output=True, text=True,
+          )
+          if base.returncode != 0 or not base.stdout.strip():
+              print("no base floor to compare (new file or base ref absent) — OK")
+              sys.exit(0)
+          prior = BaselineFloor(
+              **{k: v for k, v in json.loads(base.stdout).items()
+                 if k in ("min_graded_cases", "min_graded_pass_rate", "note")}
+          )
+          if not new.is_monotonic_successor_of(prior):
+              print(f"BASELINE LOWERED: {prior} -> {new} (the bar may only rise)")
+              sys.exit(1)
+          print(f"baseline monotonic OK: {prior.min_graded_cases}/{prior.min_graded_pass_rate}"
+                f" -> {new.min_graded_cases}/{new.min_graded_pass_rate}")
+          PY

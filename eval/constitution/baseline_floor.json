@@ -1,0 +1,5 @@
+{
+  "min_graded_cases": 15,
+  "min_graded_pass_rate": 1.0,
+  "note": "Monotonic baseline floor (HARNESS_TRUST_HARDENING D-OP-3). May only RISE automatically, never fall; lowering requires an operator-authored edit to this CODEOWNERS-pinned file. The gate stays report-only until min_graded_cases operator-SIGNED cases exist (D-EVAL-3 graduation), then blocks. pass_rate 1.0 = every signed answer-key case must match the deterministic code-computed verdict exactly."
+}
