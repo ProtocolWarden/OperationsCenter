@@ -1,3 +1,24 @@
+## 2026-06-21 — Phase 4: wire the two production data seams
+
+Built the live adapters behind the flagger + drift monitor:
+
+- **`eval/outcome_sources.py:GitHubOutcomeSource`** — turns
+  `detect_post_merge_regressions` signals into ReviewOutcome records. Key insight:
+  a merged PR necessarily passed the required `reviewer-verdict` (=LGTM), so a
+  post-merge regression IS an LGTM-then-regression reviewer miss — no separate
+  decision log needed. Detector injectable for tests. Wired as the flagger's
+  default source, opt-in via `OC_EVAL_OUTCOME_SOURCE=github` (+ token), fail-safe
+  to skipped (no env → None → no network, no false flags).
+- **`eval/check_extractors.py:BackendCheckExtractor`** — drift-monitor model
+  adapter: builds the verdict-schema review prompt from a case's diff/context,
+  invokes an injected (different-family) backend, parses `checks` (prose-wrapped
+  JSON tolerant; malformed → [] → CONCERNS = drift signal, never silent pass).
+  Real mechanism; awaits extraction-kind corpus cases + a configured backend to
+  run live.
+
+77 eval/maintenance tests; ruff/ty/audit clean (B2 env-only). Spec Phase-4 section
+updated: seams wired, only the operator signature remains.
+
 ## 2026-06-21 — Phase 4 §4.4 acceptance validation (executable + live)
 
 Encoded the four §4.4 acceptance criteria as a permanent re-runnable test

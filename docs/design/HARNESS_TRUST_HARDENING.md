@@ -547,12 +547,19 @@ exit gate that must pass before the next begins.
     over-flag classes); all pass replay; gate correctly report-only (0/15 signed).
   Verified end-to-end with a throwaway ephemeral key: report-only → sign → gate
   graduates to **blocking**, and an in-place edit of a signed answer is caught.
+- **PRODUCTION SEAMS WIRED (2026-06-21, #372 + #374):** the Component 2 flagger
+  (D-EVAL-1, D-EVAL-4 attribution) is registered and runs on a real source —
+  `eval/outcome_sources.py:GitHubOutcomeSource` turns post-merge regressions on
+  merged PRs into LGTM-miss tickets (a merged PR necessarily passed
+  `reviewer-verdict`=LGTM), opt-in via `OC_EVAL_OUTCOME_SOURCE=github`, fail-safe
+  to skipped. The drift-monitor model adapter is built —
+  `eval/check_extractors.py:BackendCheckExtractor` (prompts a different-family
+  backend with the verdict schema, parses `checks`); it awaits an *extraction-kind*
+  corpus layer (diff→checks cases) + a configured non-implementer backend to run
+  live.
 - **REMAINING (deferred, gated on the operator):** the one encode-once human step
   — generate the Ed25519 key offline, commit the pubkey, sign ≥`min_graded_cases`
-  seed cases — which flips the gate from report-only to blocking. Component 2
-  outcome-correlation flagger (→ ledger tickets, no metric, D-EVAL-1) and the
-  D-EVAL-4 over-flag attribution are not yet wired; the live drift-monitor model
-  adapter (a different-family backend behind `critic.CheckExtractor`) is a seam.
+  seed cases — which flips the gate from report-only to blocking.
 - Self-healing body (once seeded): drift detection, `[check:]` reconfirmation,
   corpus growth via *unsigned candidate* append, regression auto-fix on
   worker/reviewer behavior only. *(D-OP-3)*

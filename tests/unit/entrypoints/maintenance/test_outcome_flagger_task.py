@@ -46,11 +46,28 @@ def test_satisfies_protocol_and_defaults():
     assert task.enabled is True
 
 
-def test_skipped_when_no_source_wired():
+def test_skipped_when_no_source_wired(monkeypatch):
+    monkeypatch.delenv("OC_EVAL_OUTCOME_SOURCE", raising=False)
     task = OutcomeFlaggerTask(settings=None)
     result = task.run_once(_ctx())
     assert result.status == "skipped"
     assert "no outcome source" in result.details["reason"]
+
+
+def test_github_source_opt_in_builds_a_source(monkeypatch):
+    monkeypatch.setenv("OC_EVAL_OUTCOME_SOURCE", "github")
+    monkeypatch.setenv("GITHUB_TOKEN", "x-token")
+    from operations_center.eval.outcome_sources import GitHubOutcomeSource
+
+    task = OutcomeFlaggerTask(settings=None)
+    assert isinstance(task._resolve_outcome_source(), GitHubOutcomeSource)
+
+
+def test_github_source_not_built_without_opt_in(monkeypatch):
+    monkeypatch.delenv("OC_EVAL_OUTCOME_SOURCE", raising=False)
+    monkeypatch.setenv("GITHUB_TOKEN", "x-token")  # token present but not opted in
+    task = OutcomeFlaggerTask(settings=None)
+    assert task._resolve_outcome_source() is None
 
 
 def test_skipped_when_source_empty():
