@@ -79,3 +79,8 @@ improve-output.json
 # Flaky test detection metrics and artifacts (local + CI storage)
 .flaky-tests/
 improve-output.json
+
+# EVAL operator signing key — must NEVER be committed (private answer-key root)
+operator_priv.pem
+*operator_priv*.pem
+eval/**/operator_priv*
