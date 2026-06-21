@@ -38,9 +38,29 @@ DEFAULT_CORPUS = Path("eval/corpus/ledger.jsonl")
 DEFAULT_CONSTITUTION = Path("eval/constitution")
 
 
-def verify(corpus_path: Path, constitution_dir: Path) -> tuple[int, list[str]]:
-    """Return ``(exit_code, report_lines)``."""
+def verify(
+    corpus_path: Path, constitution_dir: Path, *, base_floor_path: Path | None = None
+) -> tuple[int, list[str]]:
+    """Return ``(exit_code, report_lines)``.
+
+    When ``base_floor_path`` is given (the base ref's floor, in CI), enforce that
+    the committed floor does not LOWER either bar — the monotonic ratchet
+    (D-OP-3): the exam may only get harder automatically, never easier."""
     lines: list[str] = []
+
+    floor = BaselineFloor.load(constitution_dir / BASELINE_FLOOR_FILENAME)
+    if base_floor_path is not None and base_floor_path.exists():
+        prior = BaselineFloor.load(base_floor_path)
+        if not floor.is_monotonic_successor_of(prior):
+            return 1, [
+                f"BASELINE LOWERED: cases {prior.min_graded_cases}->{floor.min_graded_cases}, "
+                f"rate {prior.min_graded_pass_rate}->{floor.min_graded_pass_rate} "
+                f"(the floor may only rise — operator-anchored, see constitution)"
+            ]
+        lines.append(
+            f"baseline monotonic OK: {prior.min_graded_cases}/{prior.min_graded_pass_rate} "
+            f"-> {floor.min_graded_cases}/{floor.min_graded_pass_rate}"
+        )
 
     # 1) Chain integrity — the tamper-evidence.
     try:
@@ -61,7 +81,6 @@ def verify(corpus_path: Path, constitution_dir: Path) -> tuple[int, list[str]]:
 
     # 3) Replay + gate decision under the baseline floor.
     report = run_corpus(cases, graded_ids)
-    floor = BaselineFloor.load(constitution_dir / BASELINE_FLOOR_FILENAME)
     decision = decide_gate(
         floor,
         graded_count=len(graded_ids),
@@ -81,8 +100,14 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--corpus", type=Path, default=DEFAULT_CORPUS)
     parser.add_argument("--constitution", type=Path, default=DEFAULT_CONSTITUTION)
+    parser.add_argument(
+        "--base-floor",
+        type=Path,
+        default=None,
+        help="The base ref's baseline_floor.json; enforces the monotonic ratchet.",
+    )
     args = parser.parse_args(argv)
-    code, lines = verify(args.corpus, args.constitution)
+    code, lines = verify(args.corpus, args.constitution, base_floor_path=args.base_floor)
     for line in lines:
         print(line)
     print("RESULT:", "PASS" if code == 0 else "FAIL")

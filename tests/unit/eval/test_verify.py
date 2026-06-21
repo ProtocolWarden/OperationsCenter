@@ -71,6 +71,28 @@ def test_signed_cases_block_and_pass(tmp_path):
     assert any("gate [blocking]" in ln for ln in lines)
 
 
+def test_lowering_the_baseline_floor_fails(tmp_path):
+    corpus = tmp_path / "ledger.jsonl"
+    append_case(corpus, _concerns_case("a"))
+    constitution = _constitution(tmp_path, min_cases=10)
+    base_floor = tmp_path / "base_floor.json"
+    base_floor.write_text(json.dumps({"min_graded_cases": 15, "min_graded_pass_rate": 1.0}))
+    code, lines = verify(corpus, constitution, base_floor_path=base_floor)
+    assert code == 1
+    assert any("BASELINE LOWERED" in ln for ln in lines)
+
+
+def test_raising_the_baseline_floor_is_allowed(tmp_path):
+    corpus = tmp_path / "ledger.jsonl"
+    append_case(corpus, _concerns_case("a"))
+    constitution = _constitution(tmp_path, min_cases=20)
+    base_floor = tmp_path / "base_floor.json"
+    base_floor.write_text(json.dumps({"min_graded_cases": 15, "min_graded_pass_rate": 1.0}))
+    code, lines = verify(corpus, constitution, base_floor_path=base_floor)
+    assert code == 0
+    assert any("baseline monotonic OK" in ln for ln in lines)
+
+
 def test_signed_wrong_answer_fails_the_blocking_gate(tmp_path):
     key = Ed25519PrivateKey.generate()
     corpus = tmp_path / "ledger.jsonl"

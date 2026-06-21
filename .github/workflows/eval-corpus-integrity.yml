@@ -28,34 +28,15 @@ jobs:
       - name: Install (cryptography only — verifier has no heavy deps)
         run: pip install "cryptography>=42"
 
-      - name: Verify hash chain + signatures + run answer-key gate
+      - name: Extract the base ref's baseline floor (for the monotonic ratchet)
+        if: github.base_ref != ''
+        run: |
+          git show "origin/${{ github.base_ref }}:eval/constitution/baseline_floor.json" \
+            > /tmp/base_floor.json 2>/dev/null || rm -f /tmp/base_floor.json
+
+      - name: Verify chain + signatures + answer-key gate + monotonic floor
         run: |
           PYTHONPATH=src python -m operations_center.eval.verify \
             --corpus eval/corpus/ledger.jsonl \
-            --constitution eval/constitution
-
-      - name: Enforce monotonic baseline floor (may only rise, never fall)
-        run: |
-          PYTHONPATH=src python - <<'PY'
-          import json, subprocess, sys
-          from pathlib import Path
-          from operations_center.eval.constitution import BaselineFloor
-          floor_path = Path("eval/constitution/baseline_floor.json")
-          new = BaselineFloor.load(floor_path)
-          base = subprocess.run(
-              ["git", "show", f"origin/${{github.base_ref}}:{floor_path}"],
-              capture_output=True, text=True,
-          )
-          if base.returncode != 0 or not base.stdout.strip():
-              print("no base floor to compare (new file or base ref absent) — OK")
-              sys.exit(0)
-          prior = BaselineFloor(
-              **{k: v for k, v in json.loads(base.stdout).items()
-                 if k in ("min_graded_cases", "min_graded_pass_rate", "note")}
-          )
-          if not new.is_monotonic_successor_of(prior):
-              print(f"BASELINE LOWERED: {prior} -> {new} (the bar may only rise)")
-              sys.exit(1)
-          print(f"baseline monotonic OK: {prior.min_graded_cases}/{prior.min_graded_pass_rate}"
-                f" -> {new.min_graded_cases}/{new.min_graded_pass_rate}")
-          PY
+            --constitution eval/constitution \
+            $([ -f /tmp/base_floor.json ] && echo "--base-floor /tmp/base_floor.json")
