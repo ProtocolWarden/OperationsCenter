@@ -290,8 +290,16 @@ def build_sandbox_argv(
     # Controlled env (already minimized by build_allowlist_env), HOME re-pointed
     # at the sandbox tmpfs home so secrets under the real HOME are unreachable.
     # Add the git HTTPS-token config so git@github remotes work without ~/.ssh
-    # (absent in the sandbox); no-op when no token is present.
-    setenv = {**env, **_git_auth_env(env)}
+    # (absent in the sandbox); no-op when no token is present. Also prepend the
+    # task workspace's .venv/bin to PATH so the agent can run `pytest`/`ruff`
+    # directly — the repo's dev tools live there (created by the bootstrap), and
+    # without this bare `pytest` is "command not found" and the agent reports it
+    # "cannot run tests" and the verify stage fails. The dir need not exist yet at
+    # build time (PATH is resolved at exec time, after the bootstrap creates it).
+    workspace = chdir if chdir is not None else rw_root
+    venv_bin = f"{workspace}/.venv/bin"
+    path_env = {"PATH": f"{venv_bin}:{env['PATH']}"} if env.get("PATH") else {}
+    setenv = {**env, **_git_auth_env(env), **path_env}
     for k, v in setenv.items():
         if v is None:
             continue
