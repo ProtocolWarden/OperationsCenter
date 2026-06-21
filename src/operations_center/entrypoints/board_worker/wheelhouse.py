@@ -50,6 +50,13 @@ _CACHE_ROOT = Path.home() / ".cache" / "oc-wheelhouse"
 # must be present as wheels too).
 _EXTRA_BUILD_REQS = ("setuptools", "wheel", "pip")
 
+# tiktoken downloads its BPE encoding files from openaipublic.blob.core.windows.net
+# on first use — a host the egress allowlist denies — so the executor's token
+# accounting fails in the sandbox. Pre-populate the encodings into a host cache
+# bound into the sandbox (TIKTOKEN_CACHE_DIR) so they resolve offline.
+_TIKTOKEN_CACHE = Path.home() / ".cache" / "oc-tiktoken"
+_TIKTOKEN_ENCODINGS = ("cl100k_base", "o200k_base", "p50k_base", "r50k_base")
+
 
 def wheelhouse_dir(repo_key: str) -> Path:
     """The wheelhouse directory for a repo (stable path, bound into the sandbox)."""
@@ -124,20 +131,58 @@ def ensure_wheelhouse(
         return None
 
 
-def wheelhouse_env(
+def ensure_tiktoken_cache(python_bin: str) -> Path | None:
+    """Pre-populate tiktoken's encoding cache on the host so the sandboxed
+    executor's token accounting works offline. Idempotent: a non-empty cache is a
+    no-op; otherwise it loads the encodings once (online) in a subprocess with
+    ``TIKTOKEN_CACHE_DIR`` pointed at the cache. ``None`` on failure (fail-open)."""
+    cache = _TIKTOKEN_CACHE
+    if cache.is_dir() and any(cache.glob("*")):
+        return cache
+    try:
+        cache.mkdir(parents=True, exist_ok=True)
+        code = (
+            "import tiktoken\n"
+            f"for e in {list(_TIKTOKEN_ENCODINGS)!r}:\n"
+            "    try: tiktoken.get_encoding(e)\n"
+            "    except Exception: pass\n"
+        )
+        subprocess.run(
+            [python_bin, "-c", code],
+            env={**os.environ, "TIKTOKEN_CACHE_DIR": str(cache)},
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except Exception as exc:  # noqa: BLE001 — provisioning is best-effort, never fatal
+        logger.warning("tiktoken cache provision failed — %s", exc)
+    return cache if cache.is_dir() and any(cache.glob("*")) else None
+
+
+def provision_env(
     repo_key: str, repo_local_path: str | None, *, python_bin: str
 ) -> dict[str, str]:
-    """``{"OC_WHEELHOUSE": <dir>}`` to merge into the executor env when the bwrap
-    sandbox is enabled and provisioning succeeds, else ``{}`` (fail-open).
-
-    Self-contained so dispatch wires it in one line: reads ``OC_BWRAP_SANDBOX``
-    (provisioning is only needed when the executor is sandboxed) and runs the
-    host-side :func:`ensure_wheelhouse`.
+    """Host-side pre-provisioning env to merge into the executor env when the
+    bwrap sandbox is on (else ``{}``, fail-open). Wires the offline wheelhouse
+    (``OC_WHEELHOUSE``) and the tiktoken encoding cache (``TIKTOKEN_CACHE_DIR``) —
+    both bound into the sandbox — so the executor needs no pypi / CDN egress.
     """
     if os.environ.get("OC_BWRAP_SANDBOX") != "1":
         return {}
+    out: dict[str, str] = {}
     wh = ensure_wheelhouse(repo_key, repo_local_path, python_bin=python_bin)
-    return {"OC_WHEELHOUSE": str(wh)} if wh is not None else {}
+    if wh is not None:
+        out["OC_WHEELHOUSE"] = str(wh)
+    tk = ensure_tiktoken_cache(python_bin)
+    if tk is not None:
+        out["TIKTOKEN_CACHE_DIR"] = str(tk)
+    return out
 
 
-__all__ = ["ensure_wheelhouse", "wheelhouse_dir", "wheelhouse_env"]
+__all__ = [
+    "ensure_tiktoken_cache",
+    "ensure_wheelhouse",
+    "provision_env",
+    "wheelhouse_dir",
+]
