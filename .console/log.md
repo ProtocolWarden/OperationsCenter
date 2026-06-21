@@ -1,3 +1,22 @@
+## 2026-06-21 — Phase 4: operator signing runbook + key-loss recovery docs
+
+Operator asked the right questions (key loss? what am I signing? recurring?).
+Added the missing docs:
+- `eval/SIGNING.md` — plain-English operator runbook: what a signature attests
+  (with example), one-time anchoring (keygen→anchor pubkey→sign→verify via the
+  sign CLI), the **lost-key rotation** procedure (new key, repaste pubkey,
+  re-sign — old sigs revert to candidate, fleet stays report-only mid-rotation,
+  then blocking), adding a case later, and why crypto vs a plain rule.
+- Fixed the FOOTGUN in `operator_pubkey.ed25519`: its old keygen snippet used
+  `private_bytes_raw()` (raw bytes) which `load_private_key` can't read; now
+  points at `sign keygen` (PEM) + SIGNING.md.
+- `.gitignore`: guard `operator_priv.pem` / `*operator_priv*.pem` /
+  `eval/**/operator_priv*` so a private key can never be committed by accident.
+
+Verified the whole runbook live with throwaway keys incl. rotation: keygen→sign
+15→blocking PASS; rotate→old sigs become candidates (report-only, no halt)→
+re-sign→blocking PASS. Loss is recoverable, proven. Docs-only.
+
 ## 2026-06-21 — Phase 4: wire the two production data seams
 
 Built the live adapters behind the flagger + drift monitor:
