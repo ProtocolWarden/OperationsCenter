@@ -36,6 +36,7 @@ from operations_center.maintenance import (
     MaintenanceResult,
 )
 from operations_center.entrypoints.maintenance.board_unblock_task import BoardUnblockTask
+from operations_center.entrypoints.maintenance.egress_probe import EgressProbeTask
 from operations_center.maintenance.ledger_maintain import LedgerMaintainTask
 from operations_center.spec_author.campaign_builder import CampaignBuilder
 from operations_center.spec_author.models import (
@@ -665,6 +666,12 @@ def register_maintenance_tasks(
     # stuck/Blocked tasks; registering it here makes the controller self-heal the
     # board every cycle with no human in the loop (HARNESS_TRUST_HARDENING §0.1).
     registry.register(BoardUnblockTask(settings))
+    # Controller-tier egress-boundary probe (HARNESS_TRUST_HARDENING D-OP-2).
+    # Actively asserts the sandbox's egress proxy still tunnels allowlisted
+    # destinations and still refuses denied ones; a regression (rot or breach)
+    # auto-opens a fix task. Runs outside the sandbox where the proxy config and
+    # loopback live; skipped (fail-open) when no proxy is configured.
+    registry.register(EgressProbeTask(settings, plane_client=client))
     return registry
 
 
