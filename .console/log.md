@@ -1,3 +1,17 @@
+## 2026-06-21 — NET: fix #379 partial-ClientHello fail-closed regression (deploy-blocker)
+
+Failure investigation found #379 (SNI fail-closed) was a deploy-blocker: it dropped
+on extract_sni()==None, but None ALSO occurs benignly when the proxy's single
+read(4096) returns a PARTIAL ClientHello (TCP segmentation) — confirmed: truncated
+hello -> sni None. Once deployed it would convert intermittent github clone-EOFs
+into deterministic drops. Fix: `_read_client_hello` parses the 5-byte TLS record
+header and accumulates until the full record (capped 16389B) before deciding SNI;
+only a COMPLETE no-SNI hello (real ECH) fail-closes. Validated: segmented-hello test
+tunnels; LIVE shallow clone through the new proxy rc=0. Note: the pre-existing
+clone-EOFs (Jun 20-21, ~4/9 failures) are transient network/TLS to github, NOT from
+#379 (running proxy is still old code); they self-recover via requeue. 25 proxy/probe
+tests pass; ruff/ty/audit clean.
+
 ## 2026-06-21 — INJ: fence fix-loop diff + complete output sanitization (audit G-3/G-1)
 
 Operator confirmed board tasks are operator-authored ONLY → G-2 (unfenced task
