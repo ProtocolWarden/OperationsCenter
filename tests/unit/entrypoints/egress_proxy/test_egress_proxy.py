@@ -197,6 +197,50 @@ def test_missing_sni_fails_closed():
     asyncio.run(scenario())
 
 
+def test_segmented_client_hello_still_tunnels():
+    """Regression: a ClientHello split across TCP segments must NOT read as 'no SNI'
+    and get dropped — the proxy assembles the full record before deciding."""
+    from operations_center.entrypoints.egress_proxy.main import _handle
+
+    async def scenario():
+        async def echo(r, w):
+            while (data := await r.read(1024)):
+                w.write(data)
+                await w.drain()
+            w.close()
+        echo_srv = await asyncio.start_server(echo, "127.0.0.1", 0)
+        eport = echo_srv.sockets[0].getsockname()[1]
+        proxy = await asyncio.start_server(
+            lambda r, w: _handle(r, w, DEFAULT_ALLOWLIST), "127.0.0.1", 0
+        )
+        pport = proxy.sockets[0].getsockname()[1]
+        async with echo_srv, proxy:
+            r, w = await asyncio.open_connection("127.0.0.1", pport)
+            w.write(f"CONNECT 127.0.0.1:{eport} HTTP/1.1\r\n\r\n".encode())
+            await w.drain()
+            assert b"200" in await asyncio.wait_for(r.read(64), timeout=5)
+            hello = _client_hello("github.com")  # allowlisted SNI
+            # Send the hello SPLIT across two segments with a gap — the proxy's first
+            # read() sees only a fragment; it must wait for the rest, not fail-close.
+            w.write(hello[:12])
+            await w.drain()
+            await asyncio.sleep(0.05)
+            w.write(hello[12:])
+            await w.drain()
+            w.write(b"ping-through-proxy")
+            await w.drain()
+            buf = b""
+            while b"ping-through-proxy" not in buf:
+                chunk = await asyncio.wait_for(r.read(4096), timeout=5)
+                if not chunk:
+                    break
+                buf += chunk
+            assert b"ping-through-proxy" in buf  # tunnelled despite segmentation
+            w.close()
+
+    asyncio.run(scenario())
+
+
 def test_strict_sni_pin_denies_allowlisted_mismatch(monkeypatch):
     """OC_EGRESS_SNI_STRICT=1 pins SNI == CONNECT host: an allowlisted-but-different
     SNI (in-allowlist domain-fronting) is refused."""

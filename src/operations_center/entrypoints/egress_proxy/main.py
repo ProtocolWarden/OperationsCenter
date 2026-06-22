@@ -43,8 +43,39 @@ logger = logging.getLogger("oc_egress_proxy")
 
 _DEFAULT_HOST = "127.0.0.1"
 _DEFAULT_PORT = 8889
-_PEEK_BYTES = 4096
 _BUF = 65536
+# Max TLS record payload (2^14) + 5-byte record header — the cap for assembling a
+# ClientHello before deciding SNI.
+_CLIENT_HELLO_MAX = 16384 + 5
+_TLS_HANDSHAKE = b"\x16"
+
+
+async def _read_client_hello(reader: asyncio.StreamReader, *, timeout: float) -> bytes:
+    """Read a COMPLETE TLS ClientHello record, tolerating TCP segmentation.
+
+    A single ``read()`` can return a PARTIAL handshake when the ClientHello spans
+    multiple TCP segments; running ``extract_sni`` on a partial record yields a
+    false 'no SNI' and (under fail-closed) wrongly drops a legitimate connection.
+    Parse the 5-byte TLS record header (type, version, length), then accumulate
+    until the full ``5 + length`` record (capped) is buffered. Returns whatever was
+    read — the caller forwards it upstream regardless, and decides SNI on the
+    assembled bytes. A non-handshake first byte (not 0x16) returns immediately so
+    the caller fail-closes a non-TLS tunnel attempt."""
+
+    async def _read_at_least(buf: bytes, n: int) -> bytes:
+        while len(buf) < n:
+            chunk = await reader.read(_BUF)
+            if not chunk:
+                break  # peer closed before the record completed
+            buf += chunk
+        return buf
+
+    buf = await asyncio.wait_for(_read_at_least(b"", 5), timeout=timeout)
+    if len(buf) < 5 or buf[:1] != _TLS_HANDSHAKE:
+        return buf
+    record_len = int.from_bytes(buf[3:5], "big")
+    want = min(5 + record_len, _CLIENT_HELLO_MAX)
+    return await asyncio.wait_for(_read_at_least(buf, want), timeout=timeout)
 
 
 def _parse_connect(line: bytes) -> tuple[str, int] | None:
@@ -107,9 +138,11 @@ async def _handle(
     cwriter.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
     await cwriter.drain()
 
-    # Peek the ClientHello and verify the in-TLS SNI is also allowlisted.
+    # Read the FULL ClientHello (not a single possibly-partial read) before deciding
+    # SNI — a partial read yields a false 'no SNI' that fail-closed would wrongly
+    # drop, breaking legitimate clones whose hello spans TCP segments.
     try:
-        hello = await asyncio.wait_for(creader.read(_PEEK_BYTES), timeout=10)
+        hello = await _read_client_hello(creader, timeout=10)
     except Exception:  # noqa: BLE001 — drop the connection on any read/parse error
         cwriter.close()
         return
