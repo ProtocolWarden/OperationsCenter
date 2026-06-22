@@ -3,6 +3,10 @@
 _The active assignment. One objective at a time._
 _Replace contents when the objective changes. History belongs in log.md._
 
+## Objective
+
+Expose the sample `gaps` and `edge_cases` lists in the extraction-health CLI so an operator can inspect them directly. Definition of done: the CLI surfaces both lists; tests cover the new output.
+
 ## Overall Plan
 
 Expose sample gaps and edge_cases lists in CLI for operator inspection.
