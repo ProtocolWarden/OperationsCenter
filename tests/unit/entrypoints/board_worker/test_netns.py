@@ -86,7 +86,24 @@ conn("1.1.1.1", 443)         # internet (must be kernel-blocked)
 """
 
 
-@pytest.mark.skipif(not _HAVE_TOOLS, reason="needs pasta + iptables + setpriv")
+def _pasta_netns_functional() -> bool:
+    """True only if pasta can actually create a netns here. CI runners may HAVE the
+    binaries but forbid `unshare`/netns creation in the container — in which case
+    pasta exits non-zero and this test must skip, not fail."""
+    if not _HAVE_TOOLS:
+        return False
+    try:
+        r = subprocess.run(
+            ["pasta", "--config-net", "--", "true"], capture_output=True, timeout=15
+        )
+        return r.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+@pytest.mark.skipif(
+    not _pasta_netns_functional(), reason="pasta netns not functional here (CI/container)"
+)
 def test_kernel_enforcement_end_to_end():
     """Decisive: through the real maybe_netns wrapper, the host-loopback proxy is
     reachable, a raw socket to the internet is kernel-blocked, and the agent cannot
