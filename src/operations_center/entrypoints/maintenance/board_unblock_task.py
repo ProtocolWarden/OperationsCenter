@@ -222,6 +222,24 @@ class BoardUnblockTask:
         token = os.environ.get(token_env)
         return GitHubPRClient(token=token) if token else None
 
+    def _repair_console_structure(self, gh: GitHubPRClient) -> list[dict]:
+        """Restore dropped required .console/task.md sections on open goal/improve
+        PRs across all configured repos (repos without .console skip). Best-effort."""
+        from .console_repair import repair_console_structure
+
+        out: list[dict] = []
+        for _key, cfg in getattr(self._settings, "repos", {}).items():
+            clone_url = getattr(cfg, "clone_url", None)
+            if not clone_url:
+                continue
+            try:
+                owner, repo = GitHubPRClient.owner_repo_from_clone_url(clone_url)
+                prs = gh.list_open_prs(owner, repo)
+                out.extend(repair_console_structure(gh, owner, repo, prs))
+            except Exception:  # noqa: BLE001 — a flaky repo/repair must not break the loop
+                continue
+        return out
+
     def run_once(self, ctx: MaintenanceContext) -> MaintenanceResult:
         started = time.monotonic()
         details: dict[str, object] = {"apply": self._apply}
@@ -260,6 +278,17 @@ class BoardUnblockTask:
                 )
             else:
                 details["gh_skipped"] = "no GitHub token available"
+
+            # 1.5) Self-heal: restore a dropped required .console/task.md section on
+            # open goal/improve PRs. A dropped '## Objective' fails the Custodian
+            # .console audit and — since the reviewer can't auto-fix audit findings —
+            # leaves the PR open, stalling the WHOLE goal lane via OPEN_PR_GATE
+            # (exactly how goal/c99f3159 wedged the lane). Best-effort; repos without
+            # .console simply skip. Only mutates when applying.
+            if gh is not None and self._apply:
+                console_repairs = self._repair_console_structure(gh)
+                if console_repairs:
+                    details["console_repairs"] = console_repairs
 
             # Tasks reconciled to Done must not also be touched by the stale rules.
             reconciled_ids = {a["task_id"] for a in reconcile_actions}

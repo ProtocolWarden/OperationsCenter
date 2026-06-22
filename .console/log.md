@@ -1,3 +1,15 @@
+## 2026-06-22 — FU2: board-unblock auto-repairs dropped .console/task.md sections
+
+Closes the self-heal gap that stalled goal/c99f3159 + the whole goal lane: the board
+worker's task.md rewrite drops a required '## Objective' heading → Custodian .console
+audit fails → reviewer (no audit auto-fix) escalates + leaves the PR open →
+OPEN_PR_GATE blocks ALL new goal work. Added GitHubPRClient.get_file_content +
+update_file (Contents API) and console_repair.repair_console_structure, wired into
+BoardUnblockTask.run_once: each cycle, for open goal/improve PRs across configured
+repos, restore any missing required task.md section heading (Objective/Overall Plan/
+Current Stage) via a commit. Best-effort, idempotent, only when applying; repos
+without .console skip. 45 board_unblock/console-repair tests pass; ruff/ty/audit clean.
+
 ## 2026-06-22 — NET: B1 structural egress confinement IMPLEMENTED (opt-in, pasta+netns)
 
 Completed follow-up B. `board_worker/netns.py:maybe_netns` (OC_EGRESS_NETNS=1, fail-open)
