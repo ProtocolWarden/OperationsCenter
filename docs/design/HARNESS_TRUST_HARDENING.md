@@ -283,6 +283,17 @@ pivot's required guard:**
   names (UDP/53 otherwise blocked — DNS tunnels exfil). Honest framing: the two
   sanctioned channels (github push, model endpoint) **are** exfil paths; Layer 2
   *raises cost*, it does not *close* exfil.
+- **STRUCTURAL EGRESS — B1 IMPLEMENTED (2026-06-22, opt-in).** The audit found the
+  `--share-net` proxy is *honor-system* (an agent can `unset HTTPS_PROXY` / raw-socket
+  out); the cheap kernel fix (`systemd-run --user -p IPAddressDeny`) was empirically
+  shown NOT to enforce under a rootless `--user` manager. `board_worker/netns.py`
+  (`maybe_netns`, gated `OC_EGRESS_NETNS=1`, fail-open) now closes it rootless: **pasta**
+  runs the executor in a netns that maps host loopback in (proxy/ollama reachable at the
+  same `127.0.0.1:port` via `-T`), an in-netns **iptables OUTPUT DROP** (allow only `lo`
+  + established) kernel-blocks all other egress, and **caps are dropped** before exec so
+  the agent can't flush it. Validated end-to-end: proxy reachable, raw internet socket
+  `ENETUNREACH`, firewall un-flushable. Reverses the D-SBX-2 "`--unshare-net` can't reach
+  host loopback" objection (pasta's loopback map solves it). Needs `passt` installed.
 - **Non-load-bearing under the self-healing invariant (§0.1):** the proxy runs as
   `oc-egress-proxy.service` (`systemd --user`, `Restart=always`, linger on,
   ordered before `oc-fleet.service`) so its death self-recovers in seconds without

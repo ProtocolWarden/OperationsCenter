@@ -1,3 +1,21 @@
+## 2026-06-22 — NET: B1 structural egress confinement IMPLEMENTED (opt-in, pasta+netns)
+
+Completed follow-up B. `board_worker/netns.py:maybe_netns` (OC_EGRESS_NETNS=1, fail-open)
+wraps the executor in a rootless pasta netns: pasta `-T <proxyport> -T 11434` forwards the
+host-loopback proxy+ollama to the netns 127.0.0.1 (so HTTPS_PROXY=127.0.0.1:8889 works
+UNCHANGED, no forwarder), in-netns `iptables -P OUTPUT DROP` (allow lo+established) kernel-
+blocks all other egress, `setpriv --bounding-set=-all` drops caps before exec so the agent
+can't flush. Wired into run_executor (wraps bwrap, inside the systemd-run scope). Validated
+by a committed integration test (skips w/o pasta+iptables+setpriv): proxy reachable, internet
+ENETUNREACH, firewall un-flushable. Default OFF → no fleet behavior change. Discovery: pasta
+maps host loopback via `-T` (not auto on all ports); the cheap IPAddressDeny fix was proven
+dead under --user. Needs `passt` (in extra). 37 existing + 7 new tests pass; ruff/ty/audit clean.
+
+REMAINING for production enable: (1) install passt on fleet hosts; (2) §0.1 decision — netns
+makes proxy-down = fail-CLOSED for that task (vs current fail-open); proxy is supervised
+(Restart=always) + tasks requeue, so per-task fail-closed is bounded/recoverable, but the
+operator should confirm; (3) enable-and-observe a real claude+git run through the full stack.
+
 ## 2026-06-21 — NET: fix #379 partial-ClientHello fail-closed regression (deploy-blocker)
 
 Failure investigation found #379 (SNI fail-closed) was a deploy-blocker: it dropped
