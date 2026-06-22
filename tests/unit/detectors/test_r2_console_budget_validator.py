@@ -485,3 +485,21 @@ def test_r2_multiple_violations_reported(tmp_path: Path) -> None:
     # Should report multiple violations
     assert result.count >= 2, f"Should report multiple violations, got {result.count}"
     assert len(result.samples) >= 2, "Should have multiple error samples"
+
+
+def test_console_detector_ids_do_not_collide_with_builtin_readme_r1_r2():
+    """Regression: the custom .console detectors must NOT register as 'R1'/'R2' —
+    those collide with Custodian's builtin README R1/R2, masking each other so a
+    .console violation gets mislabeled as a 'README first H1' finding (the bug that
+    stalled goal/c99f3159). They must use the OC-prefixed ids OC1/OC2."""
+    import importlib.util
+    from pathlib import Path
+
+    spec = importlib.util.spec_from_file_location(
+        "oc_detectors", str(Path(__file__).resolve().parents[3] / ".custodian" / "detectors.py")
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    ids = {d.id for d in mod.build_oc_detectors()}
+    assert "R1" not in ids and "R2" not in ids, f"custom detectors still collide: {ids & {'R1','R2'}}"
+    assert "OC1" in ids and "OC2" in ids, f"expected OC1/OC2, got {sorted(ids)}"
