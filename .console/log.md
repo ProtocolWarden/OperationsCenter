@@ -1,3 +1,15 @@
+## 2026-06-24 — FIX: unblock goal-lane #387 (extraction-health-dashboard) — real asserts + console hygiene
+
+#387 (goal/42275c3a, extraction-health-dashboard) had been OPEN and stuck ~2.5 days on the
+required `audit` check. Custodian **T2** flagged 3 smoke tests with no assert
+(`test_to_dict_json_serializable`, `test_to_dict_generated_at_is_iso_string`,
+`test_renders_without_raising`). Rebased onto current main (was 16 behind) and made each
+assertion explicit — JSON round-trip, datetime parse, rendered-header presence — so they are
+real tests now (57 pass). Also restored `.console/backlog.md` + `task.md` to main: the worker's
+stale console edits were not part of the feature and would have regressed the live operator
+console. The feature (Rich terminal dashboard for extraction-health trends) is unchanged. This
+clears the OPEN_PR_GATE that was deadlocking the goal lane on task 89fdd864.
+
 ## 2026-06-24 — RELEASE: cut PM v1.1.0 + RepoGraph v0.3.0, pin capability deps to tags
 
 The capability plane was consumed via bare-SHA pins because no plane-bearing release tag
