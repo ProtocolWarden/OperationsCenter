@@ -1,3 +1,40 @@
+## 2026-06-22 — HARDEN: 3 top gaps from the fresh guide-vs-harness adversarial audit
+
+Closes the three highest-priority findings the fresh audit (vs the harness-engineering
+guide) surfaced on the worker axis + running fleet — the half the internal INJ/SBX/EVAL
+audit never examined.
+
+1. INJ worker goal-fence (highest live injection surface). A Plane issue title/body flowed
+verbatim into `--goal` → a token-holding, push-capable backend with ZERO injection controls
+(the reviewer fence was reviewer-only). Lifted the fence/nonce/sanitize primitives into a
+shared `operations_center.injection` (reviewer `inj.py` now re-exports → existing imports/
+tests untouched) + new `wrap_untrusted_goal`: `GOAL_PREAMBLE` separates the request's
+engineering substance from embedded meta-instructions (role-change, secret-exfil, foreign
+git remote, gate-skip) + a per-run nonce fence. Applied in `dispatch` BEFORE the trusted
+scaffolding (DoD/rejection-patterns) is appended, so trusted framing stays outside the fence.
+
+2. SBX fail-open made observable + egress enabled. `maybe_sandbox`/`maybe_netns` degraded
+SILENTLY to un-sandboxed/shared-netns, so "isolation absent in prod" was invisible. They now
+log a structured `sandbox_degraded`/`netns_degraded` WARNING when ENABLED-but-degraded (still
+§0.1 fail-open, now LOUD). Documented the SBX flags in the committed .env example; enabled
+OC_EGRESS_SNI_STRICT in the live env (OC_EGRESS_NETNS needs `passt` installed — pending).
+
+3. Liveness-vs-success heartbeat + stall detector. The old heartbeat wrote a fresh "active"
+on EVERY cycle incl. the catch-and-continue error path → a crash-looping watcher looked
+healthy (this MASKED the 2026-06-21 reviewer token outage: 813 failures, 0 restarts, hb still
+"active"). New `entrypoints/heartbeat.py` records `last_success_at` separately from `at` and
+carries it across failing cycles; board_worker + reviewer now mark failed cycles distinctly.
+New `HeartbeatStallTask` (registered in the live maintenance loop) flags the live-but-not-
+succeeding state the PID watchdog can't see and opens a deduplicated fix task.
+
+**Result:** full unit suite green (8006 passed, 5 skipped, 2 xfailed); reviewer tests
+(tests/ root, not in CI) 128 pass; ruff clean. New tests: injection fence, heartbeat
+liveness/success/stall, stall-task (healthy/stalled/dead/transient/dedup), sandbox degraded-
+warning. REMAINING: `sudo pacman -S passt` on fleet hosts to activate OC_EGRESS_NETNS, then
+restart the fleet to pick up all three (code frozen at launch — fleet does not auto-pull).
+Follow-up: the fence push C29-tripped dispatch.py to 507 lines → extracted the rejection-
+patterns block to `_text.append_rejection_patterns` (dispatch back to 492); audit clean.
+
 ## 2026-06-22 — FU2: board-unblock auto-repairs dropped .console/task.md sections
 
 Closes the self-heal gap that stalled goal/c99f3159 + the whole goal lane: the board

@@ -12,10 +12,12 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from operations_center.injection import wrap_untrusted_goal
+
 from ._subprocess import build_allowlist_env, git_token_passthrough, run_executor
 from ._subprocess import is_transient_failure, persist_failure_diagnostics, venv_python
 from .wheelhouse import provision_env
-from ._text import desc_text, extract_goal, task_type_from_kind
+from ._text import append_rejection_patterns, desc_text, extract_goal, task_type_from_kind
 from .labels import GITHUB_DIR, add_label, label_value
 from .outcomes import (
     fail_task,
@@ -63,21 +65,11 @@ def dispatch_issue(
         )
 
     # ── Goal text + mode ──────────────────────────────────────────────────────
-    goal_text = extract_goal(description, title)
-
-    try:  # prepend rejection-pattern hints the backend should avoid
-        from operations_center.quality_alerts import _load_rejection_patterns_for_proposal
-
-        patterns = _load_rejection_patterns_for_proposal(repo_key=repo_key)
-        if patterns:
-            goal_text = (
-                f"{goal_text}\n\n"
-                f"## Rejection patterns to avoid\n"
-                "Recent proposals in this repo were rejected for these reasons; "
-                "do not repeat them:\n" + "\n".join(f"- {p}" for p in patterns[:5])
-            )
-    except Exception:
-        pass
+    # The issue title/body is attacker-controllable. Fence it BEFORE appending any
+    # trusted scaffolding, so embedded meta-instructions reach the token-holding
+    # backend as data, not a control channel (see operations_center.injection).
+    goal_text = wrap_untrusted_goal(extract_goal(description, title))
+    goal_text = append_rejection_patterns(goal_text, repo_key)
 
     if role == "improve":
         goal_text = _append_improve_output_prompt(goal_text)

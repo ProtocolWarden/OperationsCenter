@@ -38,12 +38,28 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import os
 import shutil
 import socket
 from collections.abc import Sequence
 from pathlib import Path
 from urllib.parse import urlparse
+
+logger = logging.getLogger(__name__)
+
+
+def _warn_degraded(reason: str) -> None:
+    """Emit an observable warning when the sandbox was ENABLED but degraded to
+    un-sandboxed execution (fail-open, §0.1). Silent fail-open hides the fact that
+    the nominal containment is absent at runtime — exactly the audit finding. The
+    structured ``event`` key lets the log sweep / alerting key off it."""
+    logger.warning(
+        "sandbox_degraded: enabled but running UN-SANDBOXED (%s) "
+        '{"event": "sandbox_degraded", "reason": "%s"}',
+        reason,
+        reason,
+    )
 
 # HOME subdirectories that hold host credentials — NEVER bound into the sandbox.
 _SECRET_HOME_DIRS = (".ssh", ".gnupg", ".aws", ".config/gh", ".config/gcloud")
@@ -327,9 +343,11 @@ def maybe_sandbox(
     if not enabled:
         return list(inner_cmd)
     if not bwrap_available():
+        _warn_degraded("bwrap_unavailable")
         return list(inner_cmd)
     try:
         if not Path(rw_root).is_dir():
+            _warn_degraded("workspace_missing")
             return list(inner_cmd)
         # Phase 3 (D-SBX-2): route egress through the L7/SNI allowlist proxy when
         # OC_EGRESS_PROXY is set AND reachable. The reachability check is the
@@ -348,7 +366,8 @@ def maybe_sandbox(
         return build_sandbox_argv(
             inner_cmd, oc_root=oc_root, rw_root=rw_root, env=sandbox_env, chdir=chdir
         )
-    except Exception:  # noqa: BLE001 — sandbox construction must never break dispatch
+    except Exception as exc:  # noqa: BLE001 — sandbox construction must never break dispatch
+        _warn_degraded(f"construction_error:{type(exc).__name__}")
         return list(inner_cmd)
 
 
