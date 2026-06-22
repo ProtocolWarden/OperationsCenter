@@ -268,6 +268,16 @@ class TestExtractionHealthDataclass:
         assert health.no_extraction == 0
         assert health.edge_case_summary == {}
 
+    def test_gaps_field_defaults_to_empty_list(self) -> None:
+        """ExtractionHealth gaps field defaults to empty list."""
+        health = ExtractionHealth()
+        assert health.gaps == []
+
+    def test_edge_cases_field_defaults_to_empty_list(self) -> None:
+        """ExtractionHealth edge_cases field defaults to empty list."""
+        health = ExtractionHealth()
+        assert health.edge_cases == []
+
     def test_with_values(self) -> None:
         """ExtractionHealth can be created with values."""
         health = ExtractionHealth(
@@ -282,6 +292,391 @@ class TestExtractionHealthDataclass:
         assert health.no_extraction == 1
         assert health.complete_extraction == 3
         assert health.edge_case_summary["truncated_messages"] == 1
+
+    def test_gaps_field_accepts_list_of_strings(self) -> None:
+        """ExtractionHealth gaps field accepts a list of test ID strings."""
+        health = ExtractionHealth(gaps=["test_module::test_a", "test_module::test_b"])
+        assert health.gaps == ["test_module::test_a", "test_module::test_b"]
+
+    def test_edge_cases_field_accepts_list_of_dicts(self) -> None:
+        """ExtractionHealth edge_cases field accepts a list of dicts."""
+        health = ExtractionHealth(
+            edge_cases=[{"test_id": "test_module::test_a", "issue": "truncated_message"}]
+        )
+        assert health.edge_cases == [
+            {"test_id": "test_module::test_a", "issue": "truncated_message"}
+        ]
+
+
+class TestExtractionHealthGaps:
+    """Test that get_extraction_health populates the gaps list."""
+
+    def test_gaps_contains_test_ids_for_missing_both(
+        self, sample_snapshot: RepoStateSnapshot
+    ) -> None:
+        """gaps list includes pytest node IDs where both test_name and assertion_message are None."""
+        query = MockFlakyTestQuery([sample_snapshot])
+        health = query.get_extraction_health()
+
+        assert "test_module::test_missing_both" in health.gaps
+
+    def test_gaps_does_not_include_partial_or_complete_tests(
+        self, sample_snapshot: RepoStateSnapshot
+    ) -> None:
+        """gaps list excludes partial and complete extraction tests."""
+        query = MockFlakyTestQuery([sample_snapshot])
+        health = query.get_extraction_health()
+
+        assert "test_module::test_complete_extraction" not in health.gaps
+        assert "test_module::test_partial_test_name_only" not in health.gaps
+        assert "test_module::test_partial_assertion_only" not in health.gaps
+
+    def test_gaps_is_empty_when_no_missing_tests(self) -> None:
+        """gaps list is empty when all tests have at least one extracted field."""
+        snapshot = MagicMock()
+        flaky_signal = MagicMock()
+        flaky_signal.status = "available"
+        flaky_signal.most_problematic_tests = [
+            {
+                "name": "test_module::test_a",
+                "failure_rate": 0.5,
+                "run_count": 5,
+                "category": "INTERMITTENT",
+                "test_name": "test_a",
+                "assertion_message": "some message",
+            }
+        ]
+        snapshot.signals.flaky_test_signal = flaky_signal
+
+        query = MockFlakyTestQuery([snapshot])
+        health = query.get_extraction_health()
+
+        assert health.gaps == []
+
+    def test_gaps_capped_at_10_samples(self) -> None:
+        """gaps list contains at most 10 test IDs even if more are missing."""
+        snapshot = MagicMock()
+        flaky_signal = MagicMock()
+        flaky_signal.status = "available"
+        flaky_signal.most_problematic_tests = [
+            {
+                "name": f"test_module::test_missing_{i}",
+                "failure_rate": 0.5,
+                "run_count": 5,
+                "category": "UNKNOWN",
+                "test_name": None,
+                "assertion_message": None,
+            }
+            for i in range(15)
+        ]
+        snapshot.signals.flaky_test_signal = flaky_signal
+
+        query = MockFlakyTestQuery([snapshot])
+        health = query.get_extraction_health()
+
+        assert len(health.gaps) == 10
+
+    def test_gaps_count_matches_no_extraction(self, sample_snapshot: RepoStateSnapshot) -> None:
+        """Number of gaps in list is consistent with no_extraction count."""
+        query = MockFlakyTestQuery([sample_snapshot])
+        health = query.get_extraction_health()
+
+        assert len(health.gaps) == health.no_extraction
+
+
+class TestExtractionHealthEdgeCases:
+    """Test that get_extraction_health populates the edge_cases list."""
+
+    def test_edge_cases_includes_truncated_message_issue(
+        self, sample_snapshot: RepoStateSnapshot
+    ) -> None:
+        """edge_cases list includes entry with issue=truncated_message for truncated assertions."""
+        query = MockFlakyTestQuery([sample_snapshot])
+        health = query.get_extraction_health()
+
+        issues = [e["issue"] for e in health.edge_cases]
+        assert "truncated_message" in issues
+
+    def test_edge_cases_entry_has_test_id_and_issue_keys(
+        self, sample_snapshot: RepoStateSnapshot
+    ) -> None:
+        """Every edge_cases entry has test_id and issue fields."""
+        query = MockFlakyTestQuery([sample_snapshot])
+        health = query.get_extraction_health()
+
+        for entry in health.edge_cases:
+            assert "test_id" in entry
+            assert "issue" in entry
+
+    def test_edge_cases_test_id_is_the_pytest_node_id(
+        self, sample_snapshot: RepoStateSnapshot
+    ) -> None:
+        """edge_cases test_id is the full pytest node ID."""
+        query = MockFlakyTestQuery([sample_snapshot])
+        health = query.get_extraction_health()
+
+        truncated_entries = [e for e in health.edge_cases if e["issue"] == "truncated_message"]
+        assert len(truncated_entries) == 1
+        assert truncated_entries[0]["test_id"] == "test_module::test_truncated_message"
+
+    def test_edge_cases_is_empty_when_no_edge_cases(self) -> None:
+        """edge_cases list is empty when no edge cases are detected."""
+        snapshot = MagicMock()
+        flaky_signal = MagicMock()
+        flaky_signal.status = "available"
+        flaky_signal.most_problematic_tests = [
+            {
+                "name": "test_module::test_clean",
+                "failure_rate": 0.5,
+                "run_count": 5,
+                "category": "INTERMITTENT",
+                "test_name": "test_clean",
+                "assertion_message": "simple ascii message",
+            }
+        ]
+        snapshot.signals.flaky_test_signal = flaky_signal
+
+        query = MockFlakyTestQuery([snapshot])
+        health = query.get_extraction_health()
+
+        assert health.edge_cases == []
+
+    def test_edge_cases_capped_at_10_entries(self) -> None:
+        """edge_cases list contains at most 10 entries even if more are detected."""
+        snapshot = MagicMock()
+        flaky_signal = MagicMock()
+        flaky_signal.status = "available"
+        flaky_signal.most_problematic_tests = [
+            {
+                "name": f"test_module::test_trunc_{i}",
+                "failure_rate": 0.5,
+                "run_count": 5,
+                "category": "INTERMITTENT",
+                "test_name": f"test_trunc_{i}",
+                "assertion_message": "x" * 210,
+            }
+            for i in range(15)
+        ]
+        snapshot.signals.flaky_test_signal = flaky_signal
+
+        query = MockFlakyTestQuery([snapshot])
+        health = query.get_extraction_health()
+
+        assert len(health.edge_cases) <= 10
+
+    def test_edge_cases_special_chars_issue(self) -> None:
+        """edge_cases includes special_chars issue for messages with non-ASCII characters."""
+        snapshot = MagicMock()
+        flaky_signal = MagicMock()
+        flaky_signal.status = "available"
+        flaky_signal.most_problematic_tests = [
+            {
+                "name": "test_module::test_unicode",
+                "failure_rate": 0.5,
+                "run_count": 5,
+                "category": "INTERMITTENT",
+                "test_name": "test_unicode",
+                "assertion_message": "Error: café résumé",
+            }
+        ]
+        snapshot.signals.flaky_test_signal = flaky_signal
+
+        query = MockFlakyTestQuery([snapshot])
+        health = query.get_extraction_health()
+
+        issues = [e["issue"] for e in health.edge_cases]
+        assert "special_chars" in issues
+
+
+class TestExtractionHealthGapsFormat:
+    """Tests for gaps list format invariants."""
+
+    def test_gaps_items_are_plain_strings_not_objects(
+        self, sample_snapshot: RepoStateSnapshot
+    ) -> None:
+        """Each item in gaps is a str (pytest node ID), not a dict or other type."""
+        query = MockFlakyTestQuery([sample_snapshot])
+        health = query.get_extraction_health()
+
+        for item in health.gaps:
+            assert isinstance(item, str)
+
+    def test_gaps_contains_only_tests_with_both_fields_none(self) -> None:
+        """gaps includes a test only when BOTH test_name AND assertion_message are None."""
+        snapshot = MagicMock()
+        flaky_signal = MagicMock()
+        flaky_signal.status = "available"
+        flaky_signal.most_problematic_tests = [
+            {
+                "name": "test_module::test_name_only",
+                "failure_rate": 0.7,
+                "run_count": 5,
+                "category": "INTERMITTENT",
+                "test_name": "some_test",
+                "assertion_message": None,
+            },
+            {
+                "name": "test_module::test_assertion_only",
+                "failure_rate": 0.6,
+                "run_count": 5,
+                "category": "INTERMITTENT",
+                "test_name": None,
+                "assertion_message": "Connection timed out",
+            },
+            {
+                "name": "test_module::test_gap",
+                "failure_rate": 0.3,
+                "run_count": 5,
+                "category": "UNKNOWN",
+                "test_name": None,
+                "assertion_message": None,
+            },
+        ]
+        snapshot.signals.flaky_test_signal = flaky_signal
+
+        query = MockFlakyTestQuery([snapshot])
+        health = query.get_extraction_health()
+
+        assert health.gaps == ["test_module::test_gap"]
+
+    def test_gap_tests_do_not_appear_in_edge_cases(
+        self, sample_snapshot: RepoStateSnapshot
+    ) -> None:
+        """Tests with no extraction (gaps) cannot appear in edge_cases — they have no assertion_message."""
+        query = MockFlakyTestQuery([sample_snapshot])
+        health = query.get_extraction_health()
+
+        gap_ids = set(health.gaps)
+        edge_case_ids = {e["test_id"] for e in health.edge_cases}
+        assert gap_ids.isdisjoint(edge_case_ids)
+
+
+class TestExtractionHealthEdgeCasesFormat:
+    """Tests for edge_cases list format invariants."""
+
+    def test_edge_cases_items_have_exactly_test_id_and_issue_keys(
+        self, sample_snapshot: RepoStateSnapshot
+    ) -> None:
+        """Each edge_cases entry has exactly test_id and issue keys, no extras."""
+        query = MockFlakyTestQuery([sample_snapshot])
+        health = query.get_extraction_health()
+
+        for entry in health.edge_cases:
+            assert set(entry.keys()) == {"test_id", "issue"}
+
+    def test_edge_cases_truncated_issue_value_is_singular(self) -> None:
+        """Issue value for long assertion messages is 'truncated_message' (singular, not plural)."""
+        snapshot = MagicMock()
+        flaky_signal = MagicMock()
+        flaky_signal.status = "available"
+        flaky_signal.most_problematic_tests = [
+            {
+                "name": "test_module::test_long",
+                "failure_rate": 0.5,
+                "run_count": 5,
+                "category": "INTERMITTENT",
+                "test_name": "test_long",
+                "assertion_message": "x" * 210,
+            }
+        ]
+        snapshot.signals.flaky_test_signal = flaky_signal
+
+        query = MockFlakyTestQuery([snapshot])
+        health = query.get_extraction_health()
+
+        truncated_entries = [e for e in health.edge_cases if "truncated" in e["issue"]]
+        assert len(truncated_entries) == 1
+        assert truncated_entries[0]["issue"] == "truncated_message"
+
+    def test_edge_cases_special_chars_issue_value(self) -> None:
+        """Issue value for non-ASCII messages is 'special_chars'."""
+        snapshot = MagicMock()
+        flaky_signal = MagicMock()
+        flaky_signal.status = "available"
+        flaky_signal.most_problematic_tests = [
+            {
+                "name": "test_module::test_unicode",
+                "failure_rate": 0.5,
+                "run_count": 5,
+                "category": "INTERMITTENT",
+                "test_name": "test_unicode",
+                "assertion_message": "Error: naïve résumé",
+            }
+        ]
+        snapshot.signals.flaky_test_signal = flaky_signal
+
+        query = MockFlakyTestQuery([snapshot])
+        health = query.get_extraction_health()
+
+        special_entries = [e for e in health.edge_cases if "special" in e["issue"]]
+        assert len(special_entries) == 1
+        assert special_entries[0]["issue"] == "special_chars"
+
+    def test_edge_cases_multiple_issue_types_in_same_run(self) -> None:
+        """edge_cases can contain both truncated_message and special_chars entries."""
+        snapshot = MagicMock()
+        flaky_signal = MagicMock()
+        flaky_signal.status = "available"
+        flaky_signal.most_problematic_tests = [
+            {
+                "name": "test_module::test_truncated",
+                "failure_rate": 0.8,
+                "run_count": 5,
+                "category": "INTERMITTENT",
+                "test_name": "test_truncated",
+                "assertion_message": "x" * 210,
+            },
+            {
+                "name": "test_module::test_unicode",
+                "failure_rate": 0.6,
+                "run_count": 5,
+                "category": "INTERMITTENT",
+                "test_name": "test_unicode",
+                "assertion_message": "Error: naïve résumé",
+            },
+        ]
+        snapshot.signals.flaky_test_signal = flaky_signal
+
+        query = MockFlakyTestQuery([snapshot])
+        health = query.get_extraction_health()
+
+        issues = {e["issue"] for e in health.edge_cases}
+        assert "truncated_message" in issues
+        assert "special_chars" in issues
+
+    def test_edge_cases_combined_cap_across_issue_types(self) -> None:
+        """edge_cases total is capped at 10 across all issue types combined."""
+        snapshot = MagicMock()
+        flaky_signal = MagicMock()
+        flaky_signal.status = "available"
+        # 8 truncated + 8 special_chars = 16 entries without cap → should cap at 10
+        flaky_signal.most_problematic_tests = [
+            {
+                "name": f"test_module::test_trunc_{i}",
+                "failure_rate": 0.8,
+                "run_count": 5,
+                "category": "INTERMITTENT",
+                "test_name": f"test_trunc_{i}",
+                "assertion_message": "x" * 210,
+            }
+            for i in range(8)
+        ] + [
+            {
+                "name": f"test_module::test_unicode_{i}",
+                "failure_rate": 0.6,
+                "run_count": 5,
+                "category": "INTERMITTENT",
+                "test_name": f"test_unicode_{i}",
+                "assertion_message": "Error: naïve résumé",
+            }
+            for i in range(8)
+        ]
+        snapshot.signals.flaky_test_signal = flaky_signal
+
+        query = MockFlakyTestQuery([snapshot])
+        health = query.get_extraction_health()
+
+        assert len(health.edge_cases) <= 10
 
 
 class TestIntegrationWithExistingMethods:

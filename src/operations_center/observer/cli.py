@@ -1053,6 +1053,20 @@ def cmd_extraction_health(
                 f"partial={payload['partial_extraction']}  "
                 f"none={payload['no_extraction']}"
             )
+            gaps = payload.get("gaps", [])
+            if gaps:
+                console.print(
+                    f"gaps ({payload['no_extraction']} test{'s' if payload['no_extraction'] != 1 else ''}, showing {len(gaps)}):"
+                )
+                for test_id in gaps:
+                    console.print(f"  {test_id}")
+            edge_cases = payload.get("edge_cases", [])
+            if edge_cases:
+                console.print(
+                    f"edge_cases ({sum(payload.get('edge_case_summary', {}).values())} issues, showing {len(edge_cases)}):"
+                )
+                for entry in edge_cases:
+                    console.print(f"  {entry['test_id']}  [{entry['issue']}]", markup=False)
         raise typer.Exit(EXIT_SUCCESS)
 
     except typer.Exit:
