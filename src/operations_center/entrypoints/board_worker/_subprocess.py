@@ -12,7 +12,8 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from .sandbox import maybe_sandbox
+from .netns import maybe_netns, netns_enabled
+from .sandbox import _resolve_egress_proxy, maybe_sandbox
 
 # SBX Phase 2: the bwrap sandbox is OFF by default and enabled by setting this
 # env var to "1" in the fleet environment. Off-by-default + fail-open means
@@ -307,6 +308,13 @@ def run_executor(
     enabled = os.environ.get(_SANDBOX_ENV_FLAG) == "1"
     run_cmd = maybe_sandbox(
         cmd, oc_root=oc_root, rw_root=rw_root, env=env, enabled=enabled, chdir=workspace
+    )
+    # Structural egress confinement (B1): run bwrap inside a rootless pasta netns
+    # whose only egress is the proxy. Opt-in (OC_EGRESS_NETNS=1) + fail-open. Wraps
+    # bwrap but stays INSIDE the systemd-run scope (so systemd-run keeps the host
+    # user bus). See netns.py.
+    run_cmd = maybe_netns(
+        run_cmd, proxy_url=_resolve_egress_proxy(env), enabled=netns_enabled()
     )
     rlimits = os.environ.get(_RLIMIT_ENV_FLAG) == "1"
     run_cmd = resource_limit_argv(run_cmd, enabled=rlimits)
