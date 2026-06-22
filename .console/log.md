@@ -1,3 +1,16 @@
+## 2026-06-22 — FU1: fix Custodian detector-id collision (.console R1/R2 → OC1/OC2)
+
+The repo's custom .console detectors registered as "R1"/"R2", colliding with
+Custodian's BUILTIN README R1/R2 (Custodian #48 masking bug). The collision made a
+.console violation (e.g. task.md missing '## Objective') surface under the wrong
+title — "README first H1 does not match repo name" — which misdirected the reviewer
+(it escalated as ci_misconfigured_check) and stalled goal/c99f3159 + the whole goal
+lane for hours. Renamed the custom ids to OC1/OC2 (matching the OC-prefix convention
+of OC3/OC8/OC10…). Now .console findings show their own correct label; the builtin
+README R1/R2 also run independently (and pass — H1 normalizes to match the repo
+name). 14 detector tests pass incl. a regression asserting no R1/R2 collision; audit
+clean.
+
 ## 2026-06-22 — NET: B1 structural egress confinement IMPLEMENTED (opt-in, pasta+netns)
 
 Completed follow-up B. `board_worker/netns.py:maybe_netns` (OC_EGRESS_NETNS=1, fail-open)

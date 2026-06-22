@@ -39,7 +39,7 @@ from pathlib import Path
 
 from custodian.audit_kit.detector import LOW, MEDIUM, AuditContext, Detector, DetectorResult
 
-# ── R1: .console/ directory presence ─────────────────────────────────────────
+# ── OC1: .console/ directory presence ─────────────────────────────────────────
 
 _CONSOLE_REQUIRED_FILES = ["task.md", "guidelines.md", "backlog.md", "log.md", "workers.yaml"]
 
@@ -65,7 +65,7 @@ def _detect_r1_console_presence(ctx: AuditContext) -> DetectorResult:
     return DetectorResult(count=len(samples), samples=samples)
 
 
-# ── R2: .console/ file budget and structure ───────────────────────────────────
+# ── OC2: .console/ file budget and structure ───────────────────────────────────
 
 _TASK_SIZE_LIMIT = 100 * 1024  # 100 KB (task.md should remain concise)
 _CONSOLE_SIZE_LIMIT = 500 * 1024  # 500 KB (log.md grows through legitimate operational history)
@@ -138,7 +138,7 @@ def _py_files(root: Path) -> list[Path]:
     return [p for p in root.rglob("*.py") if "__pycache__" not in p.parts]
 
 
-# ── R1: .console/ directory presence validator ───────────────────────────────
+# ── OC1: .console/ directory presence validator ───────────────────────────────
 
 
 def _detect_r1_console_presence(ctx: AuditContext) -> DetectorResult:
@@ -180,7 +180,7 @@ def _detect_r1_console_presence(ctx: AuditContext) -> DetectorResult:
     return DetectorResult(count=0, samples=[])
 
 
-# ── R2: .console/ budget and structure validator ─────────────────────────────
+# ── OC2: .console/ budget and structure validator ─────────────────────────────
 
 
 def _detect_r2_console_budget(ctx: AuditContext) -> DetectorResult:
@@ -852,9 +852,9 @@ def _detect_oc13_test_reimplements_metric(ctx: AuditContext) -> DetectorResult:
 
 def build_oc_detectors() -> list[Detector]:
     return [
-        Detector("R1", ".console/ presence validator", "open", _detect_r1_console_presence, MEDIUM),
+        Detector("OC1", ".console/ presence validator", "open", _detect_r1_console_presence, MEDIUM),
         Detector(
-            "R2",
+            "OC2",
             ".console/ budget and structure validator",
             "open",
             _detect_r2_console_budget,
