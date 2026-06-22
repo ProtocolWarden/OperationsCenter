@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 
 from operations_center.entrypoints.egress_proxy.allowlist import (
     DEFAULT_ALLOWLIST,
@@ -113,7 +114,16 @@ async def _handle(
         cwriter.close()
         return
     sni = extract_sni(hello)
-    if sni is not None and not host_allowed(sni, allowlist):
+    # Fail-CLOSED on the in-TLS SNI. Previously a MISSING sni (ECH / no-SNI
+    # ClientHello) passed — letting an attacker tunnel anywhere through an
+    # allowlisted CONNECT host. Now an absent or non-allowlisted SNI is refused.
+    # OC_EGRESS_SNI_STRICT additionally pins sni == CONNECT host (blocks
+    # in-allowlist domain-fronting, e.g. CONNECT github.com / SNI gist.github…);
+    # opt-in so connection-coalescing clients aren't broken by default.
+    sni_ok = sni is not None and host_allowed(sni, allowlist)
+    if sni_ok and os.environ.get("OC_EGRESS_SNI_STRICT") == "1":
+        sni_ok = sni.lower() == host.lower()
+    if not sni_ok:
         logger.warning("egress DENY sni=%s (connect host=%s) peer=%s", sni, host, peer)
         cwriter.close()
         return

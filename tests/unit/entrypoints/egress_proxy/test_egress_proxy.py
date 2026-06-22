@@ -112,16 +112,25 @@ def test_proxy_denies_then_tunnels():
             resp = await asyncio.wait_for(r.read(64), timeout=5)
             assert b"403" in resp
             w.close()
-            # 2) ALLOW 127.0.0.1 -> tunnel bytes through to echo
+            # 2) ALLOW 127.0.0.1 + a valid allowlisted ClientHello -> tunnel through
+            #    echo. (A real HTTPS client sends the ClientHello first; the proxy
+            #    now fail-closes on a missing SNI, so plaintext-first no longer works.)
             r2, w2 = await asyncio.open_connection("127.0.0.1", pport)
             w2.write(f"CONNECT 127.0.0.1:{eport} HTTP/1.1\r\n\r\n".encode())
             await w2.drain()
             est = await asyncio.wait_for(r2.read(64), timeout=5)
             assert b"200" in est
+            w2.write(_client_hello("github.com"))  # allowlisted SNI -> passes fail-closed
+            await w2.drain()
             w2.write(b"ping-through-proxy")
             await w2.drain()
-            back = await asyncio.wait_for(r2.read(64), timeout=5)
-            assert back == b"ping-through-proxy"
+            buf = b""
+            while b"ping-through-proxy" not in buf:
+                chunk = await asyncio.wait_for(r2.read(4096), timeout=5)
+                if not chunk:
+                    break
+                buf += chunk
+            assert b"ping-through-proxy" in buf  # bytes tunnelled through to echo
             w2.close()
 
     asyncio.run(scenario())
@@ -161,5 +170,52 @@ def test_proxy_405_on_non_connect_and_sni_deny_and_upstream_fail():
             await w3.drain()
             assert await asyncio.wait_for(r3.read(64), timeout=5) == b""  # upstream fail -> drop
             w3.close()
+
+    asyncio.run(scenario())
+
+
+def test_missing_sni_fails_closed():
+    """A ClientHello with no extractable SNI (ECH / no-SNI) is now REFUSED — it used
+    to pass, letting an attacker tunnel anywhere through an allowlisted CONNECT host."""
+    from operations_center.entrypoints.egress_proxy.main import _handle
+
+    async def scenario():
+        proxy = await asyncio.start_server(
+            lambda r, w: _handle(r, w, DEFAULT_ALLOWLIST), "127.0.0.1", 0
+        )
+        pport = proxy.sockets[0].getsockname()[1]
+        async with proxy:
+            r, w = await asyncio.open_connection("127.0.0.1", pport)
+            w.write(b"CONNECT 127.0.0.1:443 HTTP/1.1\r\n\r\n")  # allowed CONNECT host
+            await w.drain()
+            assert b"200" in await asyncio.wait_for(r.read(64), timeout=5)
+            w.write(b"GET / HTTP/1.1\r\n\r\n")  # not a TLS ClientHello -> SNI None
+            await w.drain()
+            assert await asyncio.wait_for(r.read(64), timeout=5) == b""  # fail-closed: dropped
+            w.close()
+
+    asyncio.run(scenario())
+
+
+def test_strict_sni_pin_denies_allowlisted_mismatch(monkeypatch):
+    """OC_EGRESS_SNI_STRICT=1 pins SNI == CONNECT host: an allowlisted-but-different
+    SNI (in-allowlist domain-fronting) is refused."""
+    monkeypatch.setenv("OC_EGRESS_SNI_STRICT", "1")
+    from operations_center.entrypoints.egress_proxy.main import _handle
+
+    async def scenario():
+        proxy = await asyncio.start_server(
+            lambda r, w: _handle(r, w, DEFAULT_ALLOWLIST), "127.0.0.1", 0
+        )
+        pport = proxy.sockets[0].getsockname()[1]
+        async with proxy:
+            r, w = await asyncio.open_connection("127.0.0.1", pport)
+            w.write(b"CONNECT 127.0.0.1:443 HTTP/1.1\r\n\r\n")  # allowed CONNECT host
+            await w.drain()
+            assert b"200" in await asyncio.wait_for(r.read(64), timeout=5)
+            w.write(_client_hello("github.com"))  # allowlisted, but != CONNECT host
+            await w.drain()
+            assert await asyncio.wait_for(r.read(64), timeout=5) == b""  # strict: dropped
+            w.close()
 
     asyncio.run(scenario())
