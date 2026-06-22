@@ -61,6 +61,7 @@ from operations_center.entrypoints.board_worker._subprocess import (
     git_token_passthrough,
 )
 from operations_center.entrypoints.board_worker.sandbox import maybe_sandbox
+from operations_center.entrypoints.heartbeat import write_heartbeat
 from operations_center.reviewer.instrumentation import (
     get_instrumenter,
     record_decision_outcome,
@@ -3183,23 +3184,18 @@ def _find_plane_task_id(settings, repo_key: str, pr_number: int, _pr_data: dict)
 # ── Heartbeat ──────────────────────────────────────────────────────────────────
 
 
-def _write_heartbeat(status_dir: Path) -> None:
-    try:
-        status_dir.mkdir(parents=True, exist_ok=True)
-        hb = status_dir / "heartbeat_review.json"
-        hb.write_text(
-            json.dumps(
-                {
-                    "role": "review",
-                    "at": datetime.now(UTC).isoformat(),
-                    "status": "active",
-                },
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
-        )
-    except Exception:
-        pass
+def _write_heartbeat(
+    status_dir: Path, *, success: bool = True, error: str | None = None
+) -> None:
+    """Write the reviewer heartbeat, separating liveness from progress.
+
+    Historically this wrote a fresh ``"active"`` heartbeat on EVERY cycle —
+    including the catch-and-continue error path — so a reviewer failing every
+    poll (e.g. empty GitHub token) looked perfectly healthy. Now ``success=False``
+    keeps liveness (``at``) fresh but ages ``last_success_at``, so a crash-looping
+    reviewer is caught by HeartbeatStallTask instead of hiding."""
+    status = "active" if success else "error"
+    write_heartbeat(status_dir, "review", status=status, success=success, error=error)
 
 
 def _export_decision_metrics(status_dir: Path) -> None:
@@ -3347,6 +3343,7 @@ def main() -> int:
             _poll_once(oc_root, args.config, settings)
         except Exception as exc:
             logger.error("pr_review_watcher: error — %s", exc, exc_info=True)
+            _write_heartbeat(status_dir, success=False, error=str(exc))
             return 1
         _write_heartbeat(status_dir)
         _export_decision_metrics(status_dir)
@@ -3359,7 +3356,11 @@ def main() -> int:
             _poll_once(oc_root, args.config, settings)
         except Exception as exc:
             logger.error("pr_review_watcher: unhandled error — %s", exc, exc_info=True)
-        _write_heartbeat(status_dir)
+            # Failed cycle: liveness stays fresh, last_success_at ages → the stall
+            # is detectable (this is the path that hid the 2026-06-21 outage).
+            _write_heartbeat(status_dir, success=False, error=str(exc))
+        else:
+            _write_heartbeat(status_dir)
         _export_decision_metrics(status_dir)
         time.sleep(args.poll_interval)
 

@@ -33,10 +33,13 @@ other SBX layers."""
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 from collections.abc import Sequence
 from urllib.parse import urlparse
+
+logger = logging.getLogger(__name__)
 
 _NETNS_FLAG = "OC_EGRESS_NETNS"
 _PASTA_BIN_ENV = "OC_PASTA_BIN"
@@ -103,6 +106,16 @@ def maybe_netns(
         return list(cmd)
     pasta = pasta_path()
     if pasta is None or not proxy_url:
+        # Enabled but degraded: make the silent fail-open observable (§0.1 keeps
+        # it non-halting, but the audit flagged that absent isolation must be
+        # visible). The structured ``event`` key lets the log sweep alert on it.
+        reason = "pasta_unavailable" if pasta is None else "no_egress_proxy"
+        logger.warning(
+            "netns_degraded: egress confinement enabled but running with "
+            'shared netns (%s) {"event": "netns_degraded", "reason": "%s"}',
+            reason,
+            reason,
+        )
         return list(cmd)
     forwards: list[str] = []
     for port in _forward_ports(proxy_url):

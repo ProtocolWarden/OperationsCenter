@@ -40,6 +40,28 @@ def extract_goal(description: str, title: str) -> str:
     return title
 
 
+def append_rejection_patterns(goal_text: str, repo_key: str) -> str:
+    """Append recent rejection-pattern hints for this repo (best-effort).
+
+    Trusted scaffolding — appended AFTER the issue goal is fenced, so it stays
+    outside the untrusted fence. Any failure (no patterns, import error) leaves
+    ``goal_text`` unchanged."""
+    try:
+        from operations_center.quality_alerts import _load_rejection_patterns_for_proposal
+
+        patterns = _load_rejection_patterns_for_proposal(repo_key=repo_key)
+        if patterns:
+            return (
+                f"{goal_text}\n\n"
+                f"## Rejection patterns to avoid\n"
+                "Recent proposals in this repo were rejected for these reasons; "
+                "do not repeat them:\n" + "\n".join(f"- {p}" for p in patterns[:5])
+            )
+    except Exception:
+        pass
+    return goal_text
+
+
 def task_type_from_kind(task_kind: str) -> str:
     return {
         "goal": "feature",

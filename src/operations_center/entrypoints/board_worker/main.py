@@ -29,12 +29,12 @@ Follow-up creation per lifecycle contract:
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import threading
 import time
-from datetime import UTC, datetime
 from pathlib import Path
+
+from operations_center.entrypoints.heartbeat import write_heartbeat
 
 from .claim import claim_next
 from .dispatch import dispatch_issue
@@ -66,23 +66,19 @@ def _plane_client(settings):
 # ── Heartbeat ─────────────────────────────────────────────────────────────────
 
 
-def _write_heartbeat(status_dir: Path, role: str, status: str = "idle") -> None:
-    try:
-        status_dir.mkdir(parents=True, exist_ok=True)
-        hb = status_dir / f"heartbeat_{role}.json"
-        hb.write_text(
-            json.dumps(
-                {
-                    "role": role,
-                    "at": datetime.now(UTC).isoformat(),
-                    "status": status,
-                },
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
-        )
-    except Exception:
-        pass
+def _write_heartbeat(
+    status_dir: Path,
+    role: str,
+    status: str = "idle",
+    *,
+    success: bool = True,
+    error: str | None = None,
+) -> None:
+    """Write the role heartbeat, separating liveness (``at``) from progress
+    (``last_success_at``). ``success=False`` keeps the loop's liveness fresh but
+    lets ``last_success_at`` age, so a crash-looping lane becomes detectable by
+    ``HeartbeatStallTask`` instead of hiding behind a fresh 'active' heartbeat."""
+    write_heartbeat(status_dir, role, status=status, success=success, error=error)
 
 
 def _heartbeat_loop(status_dir: Path, role: str, stop_event: threading.Event) -> None:
@@ -178,6 +174,10 @@ def main() -> int:
                 client.close()
         except Exception as exc:
             logger.error("board_worker[%s]: unhandled error — %s", role, exc, exc_info=True)
+            # Record a FAILED cycle: liveness (`at`) stays fresh so the lane looks
+            # alive, but `last_success_at` ages — the signal HeartbeatStallTask
+            # uses to catch a crash-looping lane the PID watchdog can't see.
+            _write_heartbeat(status_dir, role, status="error", success=False, error=str(exc))
 
         if args.once:
             return 0

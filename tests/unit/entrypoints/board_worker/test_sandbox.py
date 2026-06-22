@@ -154,6 +154,28 @@ class TestFailOpen:
         cmd = ["python"]
         assert maybe_sandbox(cmd, oc_root=tmp_path, rw_root=ws, env={}, enabled=True) == cmd
 
+    def test_enabled_but_degraded_logs_observable_warning(
+        self, tmp_path: Path, monkeypatch, caplog
+    ):
+        # Audit fix: enabled-but-degraded fail-open must be OBSERVABLE, not silent.
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        monkeypatch.setattr(
+            "operations_center.entrypoints.board_worker.sandbox.bwrap_available", lambda: False
+        )
+        with caplog.at_level("WARNING"):
+            maybe_sandbox(["python"], oc_root=tmp_path, rw_root=ws, env={}, enabled=True)
+        assert any("sandbox_degraded" in r.message for r in caplog.records)
+
+    def test_disabled_does_not_warn(self, tmp_path: Path, monkeypatch, caplog):
+        # When the sandbox is intentionally OFF, there is no degradation to report.
+        monkeypatch.setattr(
+            "operations_center.entrypoints.board_worker.sandbox.bwrap_available", lambda: False
+        )
+        with caplog.at_level("WARNING"):
+            maybe_sandbox(["python"], oc_root=tmp_path, rw_root=tmp_path, env={}, enabled=False)
+        assert not any("sandbox_degraded" in r.message for r in caplog.records)
+
 
 @pytest.mark.skipif(not _HAS_BWRAP, reason="bwrap not installed")
 class TestRealBwrapExitGate:
