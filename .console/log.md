@@ -1,15 +1,14 @@
-## 2026-06-22 — FU1: fix Custodian detector-id collision (.console R1/R2 → OC1/OC2)
+## 2026-06-22 — FU2: board-unblock auto-repairs dropped .console/task.md sections
 
-The repo's custom .console detectors registered as "R1"/"R2", colliding with
-Custodian's BUILTIN README R1/R2 (Custodian #48 masking bug). The collision made a
-.console violation (e.g. task.md missing '## Objective') surface under the wrong
-title — "README first H1 does not match repo name" — which misdirected the reviewer
-(it escalated as ci_misconfigured_check) and stalled goal/c99f3159 + the whole goal
-lane for hours. Renamed the custom ids to OC1/OC2 (matching the OC-prefix convention
-of OC3/OC8/OC10…). Now .console findings show their own correct label; the builtin
-README R1/R2 also run independently (and pass — H1 normalizes to match the repo
-name). 14 detector tests pass incl. a regression asserting no R1/R2 collision; audit
-clean.
+Closes the self-heal gap that stalled goal/c99f3159 + the whole goal lane: the board
+worker's task.md rewrite drops a required '## Objective' heading → Custodian .console
+audit fails → reviewer (no audit auto-fix) escalates + leaves the PR open →
+OPEN_PR_GATE blocks ALL new goal work. Added GitHubPRClient.get_file_content +
+update_file (Contents API) and console_repair.repair_console_structure, wired into
+BoardUnblockTask.run_once: each cycle, for open goal/improve PRs across configured
+repos, restore any missing required task.md section heading (Objective/Overall Plan/
+Current Stage) via a commit. Best-effort, idempotent, only when applying; repos
+without .console skip. 45 board_unblock/console-repair tests pass; ruff/ty/audit clean.
 
 ## 2026-06-22 — NET: B1 structural egress confinement IMPLEMENTED (opt-in, pasta+netns)
 

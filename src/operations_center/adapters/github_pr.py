@@ -2,6 +2,7 @@
 # Copyright (C) 2026 ProtocolWarden
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import re
@@ -551,6 +552,56 @@ class GitHubPRClient:
             return str((resp.json().get("commit") or {}).get("sha", "")) or None
         except Exception:
             return None
+
+    def get_file_content(
+        self, owner: str, repo: str, path: str, ref: str
+    ) -> tuple[str, str] | None:
+        """Return ``(decoded_text, blob_sha)`` for *path* at *ref*, or None.
+
+        ``blob_sha`` is required to update the file (optimistic concurrency)."""
+        try:
+            resp = self._request(
+                "GET",
+                f"{self._API}/repos/{owner}/{repo}/contents/{path}",
+                params={"ref": ref},
+            )
+            resp.raise_for_status()
+            body = resp.json()
+            if body.get("encoding") != "base64" or "content" not in body:
+                return None
+            text = base64.b64decode(body["content"]).decode("utf-8", "replace")
+            return text, str(body.get("sha", ""))
+        except Exception:
+            return None
+
+    def update_file(
+        self,
+        owner: str,
+        repo: str,
+        path: str,
+        *,
+        new_text: str,
+        message: str,
+        branch: str,
+        blob_sha: str,
+    ) -> bool:
+        """Commit ``new_text`` to *path* on *branch* (Contents API). Returns success."""
+        try:
+            resp = self._request(
+                "PUT",
+                f"{self._API}/repos/{owner}/{repo}/contents/{path}",
+                json={
+                    "message": message,
+                    "content": base64.b64encode(new_text.encode("utf-8")).decode("ascii"),
+                    "sha": blob_sha,
+                    "branch": branch,
+                },
+            )
+            resp.raise_for_status()
+            return True
+        except Exception as exc:  # noqa: BLE001 — repair is best-effort, never raise
+            _logger.warning("github update_file failed for %s on %s — %s", path, branch, exc)
+            return False
 
     @staticmethod
     def has_thumbs_up(reactions: list[dict]) -> bool:
