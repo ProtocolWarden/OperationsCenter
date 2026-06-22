@@ -747,8 +747,54 @@ class TestPatchApplierCustomPatterns:
         assert applier._is_blocked(".custom/file.txt")
         assert applier._is_blocked("forbidden.py")
 
-        # Should not block standard patterns (not in custom list)
-        assert not applier._is_blocked("setup.py")
+        # Custom patterns REPLACE the standard path-pattern list, so a standard
+        # path pattern not in the custom list is not blocked.
+        assert not applier._is_blocked(".github/workflows/ci.yml")
+
+        # …but dangerous RCE-vector BASENAMES (conftest.py/setup.py/…) are always
+        # blocked at any depth, regardless of custom patterns — a custom caller must
+        # not be able to silently un-block a build/test-hook RCE vector.
+        assert applier._is_blocked("setup.py")
+        assert applier._is_blocked("src/conftest.py")
+
+    def test_dangerous_basenames_blocked_at_any_depth(self):
+        """Regression: root-anchored patterns let subdir RCE files slip through."""
+        applier = PatchApplier()
+        for p in [
+            "src/conftest.py",
+            "tools/conftest.py",
+            "pkg/setup.py",
+            "a/b/pyproject.toml",
+            "deep/dir/Makefile",
+            "x/Cargo.toml",
+            "y/tox.ini",
+            "z/noxfile.py",
+            "nested/.pre-commit-config.yaml",
+            "any/where/id.pem",
+        ]:
+            assert applier._is_blocked(p), f"should block {p}"
+
+    def test_whole_github_tree_blocked(self):
+        """Composite actions, CODEOWNERS, dependabot — not just workflows."""
+        applier = PatchApplier()
+        for p in [
+            ".github/workflows/ci.yml",
+            ".github/actions/build/action.yml",
+            ".github/CODEOWNERS",
+            ".github/dependabot.yml",
+        ]:
+            assert applier._is_blocked(p), f"should block {p}"
+
+    def test_legit_paths_not_overblocked(self):
+        applier = PatchApplier()
+        for p in [
+            "src/operations_center/foo.py",
+            "tests/test_x.py",
+            "README.md",
+            "package.json",
+            "docs/guide.md",
+        ]:
+            assert not applier._is_blocked(p), f"should allow {p}"
 
     def test_custom_patterns_in_apply(self):
         """Test that custom patterns are enforced in apply()."""
