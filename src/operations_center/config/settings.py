@@ -522,6 +522,11 @@ class Settings(BaseModel):
     # Propose worker skips its generation cycle when the "Ready for AI" queue
     # already has this many or more tasks.  0 = disabled (default 8).
     propose_skip_when_ready_count: int = 8
+    # Global fleet work ceiling (determinism surface 6). Hard cap on the number
+    # of OPEN fleet-created tasks across the whole board; fleet self-filers
+    # (follow-ups, scope-splits, maintenance fix-tasks) refuse to create more
+    # once reached, so a systemic fault cannot flood the board. 0 = disabled.
+    max_open_fleet_tasks: int = 0
 
     def plane_token(self) -> str:
         return os.environ[self.plane.api_token_env]

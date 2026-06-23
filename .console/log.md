@@ -8193,3 +8193,17 @@ fails the cycle observably via the new heartbeat, no crash-loop. Documented in
 Still open in Phase B: B2 (global work ceiling — replace the phantom "global
 budget" with a real fleet-wide open-task counter) and B3 (aggregate
 task-creation cap on follow-ups/scope-splits).
+
+## 2026-06-22 — Phase B2: global fleet work ceiling (surface 6)
+
+New `board_worker/work_ceiling.py`: `fleet_open_work_count` counts OPEN,
+fleet-created tasks (origin markers: source: board_worker/autonomy/improve, or
+lineage labels original-task-id/handoff-reason/lineage-id; human tasks never
+counted) and `ceiling_reached(client, settings)` brakes past
+`settings.max_open_fleet_tasks` (0 = disabled, fail-open on list error). Wired
+into the highest-fanout self-amplification path — `outcomes._create_follow_up`
+(scope-split ≤6 children, improve ≤5) — so a systemic fault can't flood the
+board. Replaces the phantom "global budget applies" comment with a real object.
+Combined with the existing per-lineage retry cap this closes the B3 escape.
+Remaining filer adoption (heartbeat-stall/drift/dependency/egress-probe) can call
+the same primitive — documented follow-up. 6 tests; outcomes suite green.
