@@ -8154,3 +8154,23 @@ Tooling artifacts in diff: 0 ✅
 - Config accepts `None` and constructs defaults inline to keep caller ergonomics simple.
 
 **Result:** 1,535 tests pass (37 new), linter clean.
+
+## 2026-06-22 — Execution-lineage projection + determinism-boundary spec (Phase A)
+
+Adversarial design pass (4 parallel auditors) on "lineage as a read-model" +
+the "deterministic edges / emergent interior" thesis. Two claims failed review
+and are corrected in `docs/design/EXECUTION_LINEAGE_AND_DETERMINISM_BOUNDARY.md`:
+(1) a read-model that lanes *plan from* is authority, and its source (issue
+bodies) is attacker-controllable — resolved with a hard typed-steering /
+display-only split; (2) "four deterministic surfaces" undercounts to ten
+(admission, global work ceiling, task-creation gate, egress/token containment,
+lineage integrity, controller liveness all omitted; capability-ownership +
+required-gate are async/out-of-repo, not synchronous edges).
+
+**Phase A shipped (this branch):** new `operations_center.lineage` package —
+`models` (four-dimension TrustFlags + LineageNode/Edge/Chain), `projection`
+(joins run artifacts + pr_reviews + ci_lineage on task_id/PR#, no writes),
+`steering` (the ONLY sanctioned lane path; allowlist strips free text; empty by
+construction until Phase D1), `cli` (display view, honestly marks every
+non-steerable edge). 12 tests, ruff clean. Steerable set is empty TODAY by
+design — nothing steers until integrity (D1) + ordering land.
