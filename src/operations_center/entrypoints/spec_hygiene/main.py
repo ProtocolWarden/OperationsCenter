@@ -35,6 +35,7 @@ from operations_center.maintenance import (
     MaintenanceRegistry,
     MaintenanceResult,
 )
+from operations_center.entrypoints.heartbeat import write_heartbeat
 from operations_center.entrypoints.maintenance.board_unblock_task import BoardUnblockTask
 from operations_center.entrypoints.maintenance.drift_monitor_task import DriftMonitorTask
 from operations_center.entrypoints.maintenance.egress_probe import EgressProbeTask
@@ -616,24 +617,22 @@ class SpecHygieneTask:
         )
 
 
-def _write_heartbeat(status_dir: Path | None) -> None:
+def _write_heartbeat(status_dir: Path | None, *, success: bool = True, error: str | None = None) -> None:
+    """Write the spec_hygiene heartbeat using the shared liveness-vs-success
+    schema, so a crash-looping maintenance loop ages ``last_success_at`` and is
+    catchable by the external controller-liveness check (surface 10). Previously
+    spec_hygiene wrote an old at/status-only heartbeat, so the one watcher whose
+    own stall the in-loop HeartbeatStallTask can't see was itself only detectable
+    when fully dead — not when live-but-stalled."""
     if status_dir is None:
         return
-    try:
-        hb = status_dir / "heartbeat_spec_hygiene.json"
-        hb.write_text(
-            json.dumps(
-                {
-                    "role": "spec_hygiene",
-                    "at": datetime.now(UTC).isoformat(),
-                    "status": "idle",
-                },
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
-        )
-    except OSError:
-        pass
+    write_heartbeat(
+        status_dir,
+        "spec_hygiene",
+        status="idle" if success else "error",
+        success=success,
+        error=error,
+    )
 
 
 def _log_maintenance_result(result: MaintenanceResult) -> None:
@@ -751,11 +750,13 @@ def main() -> None:
             return
         cycle = 0
         while True:
-            _write_heartbeat(args.status_dir)
             try:
                 results = registry.run_due(_build_ctx())
                 for r in results:
                     _log_maintenance_result(r)
+                # The maintenance LOOP completed a cycle (individual task failures
+                # are captured as MaintenanceResults, not exceptions) → success.
+                _write_heartbeat(args.status_dir, success=True)
             except Exception as exc:
                 logger.error(
                     json.dumps(
@@ -763,6 +764,7 @@ def main() -> None:
                         ensure_ascii=False,
                     )
                 )
+                _write_heartbeat(args.status_dir, success=False, error=str(exc))
             cycle += 1
             time.sleep(sd.poll_interval_seconds)
     finally:

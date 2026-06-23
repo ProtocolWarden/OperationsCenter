@@ -8334,3 +8334,16 @@ durable/integrity tier is the isolated attestation authority (the only writer).
 Moved the F1 durable producer from dispatch.py into lineage/durable.py as
 record_task_completion (dispatch back under the 500-line C29 limit; producer now
 lives with the tier). Moved its tests to test_durable.py with asserts (T2).
+
+## 2026-06-23 — spec_hygiene heartbeat schema (close F2 residual)
+
+spec_hygiene wrote an old at/status-only heartbeat, so the external controller-
+liveness check (F2) could only catch it when fully DEAD, not live-but-stalled —
+the exact scenario D2 was built for. spec_hygiene now writes the shared success/
+failure schema via write_heartbeat (success on a completed cycle, success=False
+on a cycle exception), so a crash-looping maintenance loop ages last_success_at
+and is caught + restarted by the watchdog. Surface 10 now fully closed.
+
+## 2026-06-23 — T2 fix for spec_hygiene heartbeat test
+
+Added the missing assert to test_none_status_dir_is_noop (custodian T2).
