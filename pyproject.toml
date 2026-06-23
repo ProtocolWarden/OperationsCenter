@@ -201,6 +201,8 @@ extend-select = [
 # EVAL verify + operator-signing CLIs print; the seed script is dev tooling.
 "src/operations_center/eval/verify.py" = ["T201"]
 "src/operations_center/eval/sign.py" = ["T201"]
+# Lineage display CLI prints the human-facing read-model.
+"src/operations_center/lineage/cli.py" = ["T201"]
 "eval/**/*.py" = ["T201", "BLE001"]
 
 [tool.ty.environment]

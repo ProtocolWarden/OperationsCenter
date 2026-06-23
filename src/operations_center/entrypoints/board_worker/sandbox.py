@@ -61,6 +61,32 @@ def _warn_degraded(reason: str) -> None:
         reason,
     )
 
+
+class ContainmentRequiredError(RuntimeError):
+    """Raised when containment is REQUIRED (operator opt-in) but unavailable.
+
+    The default posture is fail-open (§0.1: degrade-never-halt). An operator who
+    wants the stronger guarantee — never run a token-holding backend
+    un-contained — sets ``OC_SANDBOX_REQUIRED=1``; then a degrade raises this
+    instead of silently dropping the sandbox. Dispatch turns it into a blocked
+    task + fault, not a crash-loop.
+    """
+
+
+def _containment_required(env: dict | None, *, var: str) -> bool:
+    """True if the operator has opted into fail-closed containment for ``var``.
+
+    Checks the passed worker env first (the minimized, authoritative env) then
+    the process env, so the flag works whether or not it survived minimization.
+    """
+
+    for source in (env or {}, os.environ):
+        val = source.get(var)
+        if val is not None:
+            return str(val).strip().lower() in {"1", "true", "yes", "on"}
+    return False
+
+
 # HOME subdirectories that hold host credentials — NEVER bound into the sandbox.
 _SECRET_HOME_DIRS = (".ssh", ".gnupg", ".aws", ".config/gh", ".config/gcloud")
 
@@ -342,13 +368,21 @@ def maybe_sandbox(
     """
     if not enabled:
         return list(inner_cmd)
-    if not bwrap_available():
-        _warn_degraded("bwrap_unavailable")
+    required = _containment_required(env, var="OC_SANDBOX_REQUIRED")
+
+    def _degrade(reason: str) -> list[str]:
+        _warn_degraded(reason)
+        if required:
+            raise ContainmentRequiredError(
+                f"OC_SANDBOX_REQUIRED set but sandbox unavailable ({reason})"
+            )
         return list(inner_cmd)
+
+    if not bwrap_available():
+        return _degrade("bwrap_unavailable")
     try:
         if not Path(rw_root).is_dir():
-            _warn_degraded("workspace_missing")
-            return list(inner_cmd)
+            return _degrade("workspace_missing")
         # Phase 3 (D-SBX-2): route egress through the L7/SNI allowlist proxy when
         # OC_EGRESS_PROXY is set AND reachable. The reachability check is the
         # fail-open gate (a dead proxy => no proxy env => direct egress, never a
@@ -366,9 +400,10 @@ def maybe_sandbox(
         return build_sandbox_argv(
             inner_cmd, oc_root=oc_root, rw_root=rw_root, env=sandbox_env, chdir=chdir
         )
+    except ContainmentRequiredError:
+        raise  # operator opted into fail-closed — propagate, don't swallow
     except Exception as exc:  # noqa: BLE001 — sandbox construction must never break dispatch
-        _warn_degraded(f"construction_error:{type(exc).__name__}")
-        return list(inner_cmd)
+        return _degrade(f"construction_error:{type(exc).__name__}")
 
 
 __all__ = [

@@ -32,6 +32,7 @@ REVIEWER_CFG = MagicMock(
     max_fix_attempts=2,
     max_fix_strategy_level=2,
     bot_comment_marker="<!-- operations-center:bot -->",
+    require_branch_protection=False,  # default: self-merge gate off (surface 3)
 )
 
 SETTINGS = MagicMock(
@@ -2900,3 +2901,69 @@ def test_run_pipeline_no_sandbox_when_disabled(tmp_path: Path, monkeypatch) -> N
     spawned = popen.call_args.args[0]
     assert spawned[1] == "-m"
     assert spawned[2] == "operations_center.entrypoints.execute.main"
+
+
+# ── Self-merge branch-protection gate (Phase C1, determinism surface 3) ────────
+
+from types import SimpleNamespace  # noqa: E402
+
+
+def _settings_require_protection(flag: bool):
+    return SimpleNamespace(reviewer=SimpleNamespace(require_branch_protection=flag))
+
+
+def _good_protection():
+    return {
+        "required_status_checks": {"contexts": ["reviewer-verdict", "audit"]},
+        "enforce_admins": {"enabled": True},
+    }
+
+
+def test_branch_protection_gate_disabled_allows() -> None:
+    gh = MagicMock()
+    assert watcher._branch_protection_ok(gh, "o", "r", "main", _settings_require_protection(False))
+    gh.get_branch_protection.assert_not_called()  # short-circuits when disabled
+
+
+def test_branch_protection_gate_allows_when_configured() -> None:
+    gh = MagicMock()
+    gh.get_branch_protection.return_value = _good_protection()
+    assert watcher._branch_protection_ok(gh, "o", "r", "main", _settings_require_protection(True))
+
+
+def test_branch_protection_gate_refuses_when_unprotected() -> None:
+    gh = MagicMock()
+    gh.get_branch_protection.return_value = None
+    assert not watcher._branch_protection_ok(
+        gh, "o", "r", "main", _settings_require_protection(True)
+    )
+
+
+def test_branch_protection_gate_refuses_when_verdict_not_required() -> None:
+    gh = MagicMock()
+    gh.get_branch_protection.return_value = {
+        "required_status_checks": {"contexts": ["audit"]},  # missing reviewer-verdict
+        "enforce_admins": {"enabled": True},
+    }
+    assert not watcher._branch_protection_ok(
+        gh, "o", "r", "main", _settings_require_protection(True)
+    )
+
+
+def test_branch_protection_gate_refuses_when_admins_not_enforced() -> None:
+    gh = MagicMock()
+    gh.get_branch_protection.return_value = {
+        "required_status_checks": {"checks": [{"context": "reviewer-verdict"}]},
+        "enforce_admins": {"enabled": False},
+    }
+    assert not watcher._branch_protection_ok(
+        gh, "o", "r", "main", _settings_require_protection(True)
+    )
+
+
+def test_branch_protection_gate_refuses_on_api_error() -> None:
+    gh = MagicMock()
+    gh.get_branch_protection.side_effect = RuntimeError("403")
+    assert not watcher._branch_protection_ok(
+        gh, "o", "r", "main", _settings_require_protection(True)
+    )

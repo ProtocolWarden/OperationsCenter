@@ -176,6 +176,44 @@ class TestFailOpen:
             maybe_sandbox(["python"], oc_root=tmp_path, rw_root=tmp_path, env={}, enabled=False)
         assert not any("sandbox_degraded" in r.message for r in caplog.records)
 
+    def test_required_raises_when_degraded(self, tmp_path: Path, monkeypatch):
+        # B4: OC_SANDBOX_REQUIRED flips fail-open into fail-closed — a degrade
+        # must REFUSE to run un-contained, not silently drop the sandbox.
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        monkeypatch.setattr(
+            "operations_center.entrypoints.board_worker.sandbox.bwrap_available", lambda: False
+        )
+        with pytest.raises(sbx.ContainmentRequiredError):
+            maybe_sandbox(
+                ["python"],
+                oc_root=tmp_path,
+                rw_root=ws,
+                env={"OC_SANDBOX_REQUIRED": "1"},
+                enabled=True,
+            )
+
+    def test_required_via_process_env(self, tmp_path: Path, monkeypatch):
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        monkeypatch.setattr(
+            "operations_center.entrypoints.board_worker.sandbox.bwrap_available", lambda: False
+        )
+        monkeypatch.setenv("OC_SANDBOX_REQUIRED", "1")
+        with pytest.raises(sbx.ContainmentRequiredError):
+            maybe_sandbox(["python"], oc_root=tmp_path, rw_root=ws, env={}, enabled=True)
+
+    def test_not_required_still_fail_open(self, tmp_path: Path, monkeypatch):
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        monkeypatch.setattr(
+            "operations_center.entrypoints.board_worker.sandbox.bwrap_available", lambda: False
+        )
+        # default (flag unset) preserves degrade-never-halt
+        assert maybe_sandbox(
+            ["python"], oc_root=tmp_path, rw_root=ws, env={}, enabled=True
+        ) == ["python"]
+
 
 @pytest.mark.skipif(not _HAS_BWRAP, reason="bwrap not installed")
 class TestRealBwrapExitGate:

@@ -24,6 +24,7 @@ from .labels import (
     label_value,
     retry_count_from_labels,
 )
+from .work_ceiling import ceiling_reached
 
 logger = logging.getLogger(__name__)
 
@@ -573,6 +574,17 @@ def create_follow_up(
             "board_worker: refusing follow-up — parent task_id=%s already at retry-count=%d",
             parent_id,
             retry_count,
+        )
+        return ""
+
+    # Global fleet work ceiling (surface 6): refuse to amplify board work past
+    # the aggregate cap, so a systemic fault can't fan out unbounded follow-ups.
+    if ceiling_reached(client, _settings):
+        logger.warning(
+            "board_worker: refusing follow-up — fleet work ceiling reached "
+            "(parent task_id=%s kind=%s)",
+            parent_id,
+            follow_kind,
         )
         return ""
 

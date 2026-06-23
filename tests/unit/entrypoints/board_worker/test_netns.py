@@ -33,6 +33,28 @@ def test_missing_pasta_fails_open(monkeypatch):
     assert netns.maybe_netns(cmd, proxy_url="http://127.0.0.1:8889", enabled=True) == cmd
 
 
+def test_required_raises_when_pasta_missing(monkeypatch):
+    # B4: OC_EGRESS_REQUIRED flips fail-open into fail-closed.
+    monkeypatch.setattr(netns, "pasta_path", lambda: None)
+    monkeypatch.setenv("OC_EGRESS_REQUIRED", "1")
+    with pytest.raises(netns.EgressContainmentRequiredError):
+        netns.maybe_netns(["bwrap", "x"], proxy_url="http://127.0.0.1:8889", enabled=True)
+
+
+def test_required_raises_when_no_proxy(monkeypatch):
+    monkeypatch.setattr(netns, "pasta_path", lambda: "/usr/bin/pasta")
+    monkeypatch.setenv("OC_EGRESS_REQUIRED", "1")
+    with pytest.raises(netns.EgressContainmentRequiredError):
+        netns.maybe_netns(["bwrap", "x"], proxy_url=None, enabled=True)
+
+
+def test_not_required_still_fails_open(monkeypatch):
+    monkeypatch.setattr(netns, "pasta_path", lambda: None)
+    monkeypatch.delenv("OC_EGRESS_REQUIRED", raising=False)
+    cmd = ["bwrap", "x"]
+    assert netns.maybe_netns(cmd, proxy_url="http://127.0.0.1:8889", enabled=True) == cmd
+
+
 def test_enabled_wraps_with_pasta(monkeypatch):
     monkeypatch.setattr(netns, "pasta_path", lambda: "/usr/bin/pasta")
     monkeypatch.delenv("OC_EGRESS_NETNS_PORTS", raising=False)

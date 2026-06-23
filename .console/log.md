@@ -8154,3 +8154,112 @@ Tooling artifacts in diff: 0 ✅
 - Config accepts `None` and constructs defaults inline to keep caller ergonomics simple.
 
 **Result:** 1,535 tests pass (37 new), linter clean.
+
+## 2026-06-22 — Execution-lineage projection + determinism-boundary spec (Phase A)
+
+Adversarial design pass (4 parallel auditors) on "lineage as a read-model" +
+the "deterministic edges / emergent interior" thesis. Two claims failed review
+and are corrected in `docs/design/EXECUTION_LINEAGE_AND_DETERMINISM_BOUNDARY.md`:
+(1) a read-model that lanes *plan from* is authority, and its source (issue
+bodies) is attacker-controllable — resolved with a hard typed-steering /
+display-only split; (2) "four deterministic surfaces" undercounts to ten
+(admission, global work ceiling, task-creation gate, egress/token containment,
+lineage integrity, controller liveness all omitted; capability-ownership +
+required-gate are async/out-of-repo, not synchronous edges).
+
+**Phase A shipped (this branch):** new `operations_center.lineage` package —
+`models` (four-dimension TrustFlags + LineageNode/Edge/Chain), `projection`
+(joins run artifacts + pr_reviews + ci_lineage on task_id/PR#, no writes),
+`steering` (the ONLY sanctioned lane path; allowlist strips free text; empty by
+construction until Phase D1), `cli` (display view, honestly marks every
+non-steerable edge). 12 tests, ruff clean. Steerable set is empty TODAY by
+design — nothing steers until integrity (D1) + ordering land.
+
+## 2026-06-22 — Phase B (partial): admission allowlist + fail-closed containment
+
+**B1 (surface 5 — task admission):** added `TaskAdmissionSettings.author_allowlist`
+(config/settings.py) + an author gate in `claim._build_candidates` — un-allowlisted
+task authors are not claimed and get an `unauthorized-author` label for operator
+promotion. Disabled by default (empty allowlist) → no behavior change. Tolerates
+the several Plane creator shapes (bare id, nested actor email/name).
+
+**B4 (surface 8 — containment):** `OC_SANDBOX_REQUIRED` / `OC_EGRESS_REQUIRED` flip
+the fail-open sandbox/netns into fail-closed — `maybe_sandbox`/`maybe_netns` raise
+(ContainmentRequiredError / EgressContainmentRequiredError) on degrade instead of
+running un-contained. Default UNSET preserves §0.1 degrade-never-halt; a raise
+fails the cycle observably via the new heartbeat, no crash-loop. Documented in
+.env example. Tests: admission 6, sandbox required 3, netns required 3 — all green.
+
+Still open in Phase B: B2 (global work ceiling — replace the phantom "global
+budget" with a real fleet-wide open-task counter) and B3 (aggregate
+task-creation cap on follow-ups/scope-splits).
+
+## 2026-06-22 — Phase B2: global fleet work ceiling (surface 6)
+
+New `board_worker/work_ceiling.py`: `fleet_open_work_count` counts OPEN,
+fleet-created tasks (origin markers: source: board_worker/autonomy/improve, or
+lineage labels original-task-id/handoff-reason/lineage-id; human tasks never
+counted) and `ceiling_reached(client, settings)` brakes past
+`settings.max_open_fleet_tasks` (0 = disabled, fail-open on list error). Wired
+into the highest-fanout self-amplification path — `outcomes._create_follow_up`
+(scope-split ≤6 children, improve ≤5) — so a systemic fault can't flood the
+board. Replaces the phantom "global budget applies" comment with a real object.
+Combined with the existing per-lineage retry cap this closes the B3 escape.
+Remaining filer adoption (heartbeat-stall/drift/dependency/egress-probe) can call
+the same primitive — documented follow-up. 6 tests; outcomes suite green.
+
+## 2026-06-22 — Phase C1: self-contained self-merge gate (surface 3)
+
+`_branch_protection_ok` + new `GitHubPRClient.get_branch_protection`. When
+`reviewer.require_branch_protection` is set, `_merge_and_done` verifies (from
+code) that the base branch's protection actually requires the `reviewer-verdict`
+check AND enforces admins before self-issuing its own verdict + REST-merging; if
+not, it refuses and leaves the PR for an operator. Fail-CLOSED on opt-in (an
+unverifiable protection state refuses). Default False preserves prior behavior.
+Closes the audit's surface-3 gap (the fleet self-issues the only thing between it
+and main). 6 new tests; full reviewer suite 134 green.
+
+C2 (runtime capability-ownership) DEFERRED: needs RepoGraph capability-registry
+access at the invocation point; the capability plane is registry-lint today and
+the only OC-owned capability (board_unblock) has no runtime branch on ownership.
+Higher integration risk, lowest immediate payoff — documented, not rushed.
+
+## 2026-06-22 — Phase D: lineage integrity (D1) + external controller liveness (D2)
+
+**D1 (surface 9):** new `lineage/integrity.py` — per-lineage hash chain (each
+entry commits to the prior; `verify()` detects tampering) + authorship binding
+(first writer owns the lineage; a foreign author is rejected + quarantined, never
+chained). `chained_trust()` is the sole sanctioned way an edge's integrity
+dimension goes green. Decoupled from the projection (which stays `unverified`)
+until the durable tier (A5) appends here — the hard prerequisite for ANY steerable
+edge. 7 tests.
+
+**D2 (surface 10):** new `entrypoints/controller_liveness.py` — designed to run
+OUTSIDE spec_hygiene (shell watchdog / cron). Classifies the maintenance-loop
+heartbeat absent/healthy/dead/stalled and exits non-zero on dead|stalled so the
+supervisor restarts it. Closes the blind spot where HeartbeatStallTask (hosted
+INSIDE spec_hygiene) can't catch its own host crash-looping. 6 tests.
+
+All 4 phases landed: A (lineage projection + trust split), B (admission allowlist,
+global work ceiling, fail-closed containment), C1 (self-merge gate; C2 deferred),
+D (integrity + controller liveness). C2 (runtime capability-ownership) is the one
+documented deferral — needs RepoGraph-at-invocation, highest risk/lowest payoff.
+
+## 2026-06-23 — Custodian gate fixes for the lineage branch
+
+Cleared 8 LOW findings before push: C41 ensure_ascii=False (integrity hash +
+cli json — 3); T6/T7 added direct test files tests/unit/lineage/test_models.py +
+test_steering.py; DC1 added YAML front matter to the spec; DC7 linked the spec
+from HARNESS_TRUST_HARDENING.md. Custodian now clean; full unit suite 8050 green.
+
+## 2026-06-23 — CI fix
+
+Added the SPDX header to the empty tests/unit/lineage/__init__.py (License
+headers CI requires SPDX on every .py file). PR #388.
+
+## 2026-06-23 — D12 ratchet fix
+
+CI audit (D12 incomplete-integration gate) flagged two unwired symbols:
+display_edges() (now used by cli.render_chain to show the trust split) and
+owner_of() (removed — speculative API with no consumer; ownership is enforced
+internally in append()). D12 gate now clean. PR #388.

@@ -133,6 +133,22 @@ class GitHubPRClient:
         resp.raise_for_status()
         return resp.json()
 
+    def get_branch_protection(self, owner: str, repo: str, branch: str) -> dict | None:
+        """Return the branch-protection config, or None if unprotected/inaccessible.
+
+        Used by the self-merge gate (determinism surface 3) to verify the fleet's
+        own merge is actually constrained by required checks + admin enforcement,
+        rather than trusting an out-of-repo setting the fleet can't see.
+        """
+        resp = self._request(
+            "GET",
+            f"{self._API}/repos/{owner}/{repo}/branches/{branch}/protection",
+        )
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        return resp.json()
+
     def delete_branch(self, owner: str, repo: str, branch: str) -> None:
         resp = self._request(
             "DELETE",

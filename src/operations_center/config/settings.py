@@ -303,6 +303,14 @@ class ReviewerSettings(BaseModel):
     human_review_timeout_seconds: int = 86400
     # HTML marker appended to every bot-posted comment — belt-and-suspenders filter
     bot_comment_marker: str = "<!-- operations-center:bot -->"
+    # Self-merge gate (determinism surface 3). The fleet self-issues its own
+    # reviewer-verdict status then merges via REST, so the ONLY thing between it
+    # and main is the repo's branch protection — an out-of-repo setting the fleet
+    # can't see. When True, the fleet verifies (from code) that protection
+    # actually requires the reviewer-verdict check AND enforces admins before
+    # self-merging; if not, it refuses and leaves the PR for an operator. False
+    # preserves prior behavior (trust GitHub protection blindly).
+    require_branch_protection: bool = False
 
 
 class RepoSettings(BaseModel):
@@ -438,6 +446,41 @@ class ContractChangePropagationSettings(BaseModel):
     dedup_path: Path = Path("state/propagation/dedup.json")
 
 
+class TaskAdmissionSettings(BaseModel):
+    """Admission control for board tasks (determinism surface 5).
+
+    The board claims any Ready-for-AI issue with the right labels regardless of
+    who authored it — the fence (#386) stops a goal from hijacking the agent's
+    role, but it does NOT stop an unauthorized actor from getting arbitrary
+    engineering work executed against a managed repo. This gate adds an author
+    allowlist to the admission edge.
+
+    Disabled by default (empty allowlist) to preserve degrade-never-halt and
+    avoid breaking existing boards. When ``author_allowlist`` is non-empty,
+    tasks whose creator is not on it are not claimed; they are labelled for
+    operator promotion instead. Identities are matched case-insensitively
+    against the issue creator's id, email, or display name.
+    """
+
+    author_allowlist: list[str] = Field(default_factory=list)
+    # Label applied to a task rejected for an un-allowlisted author.
+    reject_label: str = "unauthorized-author"
+
+    def enforced(self) -> bool:
+        return bool(self.author_allowlist)
+
+    def allows(self, *identities: str | None) -> bool:
+        """True if admission is unenforced, or any provided identity matches."""
+
+        if not self.enforced():
+            return True
+        allow = {a.strip().lower() for a in self.author_allowlist if a and a.strip()}
+        for ident in identities:
+            if ident and ident.strip().lower() in allow:
+                return True
+        return False
+
+
 class Settings(BaseModel):
     plane: PlaneSettings
     git: GitSettings
@@ -481,9 +524,17 @@ class Settings(BaseModel):
     # S8-8: Runtime error ingestion configuration.  None = disabled.
     error_ingest: ErrorIngestSettings | None = None
     spec_author: SpecAuthorSettings = Field(default_factory=SpecAuthorSettings)
+    # Admission control (determinism surface 5). Disabled by default; when the
+    # author allowlist is set, un-allowlisted task authors are not auto-claimed.
+    task_admission: TaskAdmissionSettings = Field(default_factory=TaskAdmissionSettings)
     # Propose worker skips its generation cycle when the "Ready for AI" queue
     # already has this many or more tasks.  0 = disabled (default 8).
     propose_skip_when_ready_count: int = 8
+    # Global fleet work ceiling (determinism surface 6). Hard cap on the number
+    # of OPEN fleet-created tasks across the whole board; fleet self-filers
+    # (follow-ups, scope-splits, maintenance fix-tasks) refuse to create more
+    # once reached, so a systemic fault cannot flood the board. 0 = disabled.
+    max_open_fleet_tasks: int = 0
 
     def plane_token(self) -> str:
         return os.environ[self.plane.api_token_env]
