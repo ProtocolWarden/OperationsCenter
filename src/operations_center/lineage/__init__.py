@@ -10,6 +10,13 @@ own untrustworthiness, and exposes a single sanctioned steering path.
 
 from __future__ import annotations
 
+from .integrity import (
+    AuthorshipError,
+    LedgerEntry,
+    LineageLedger,
+    chained_trust,
+    entry_hash,
+)
 from .models import (
     Completeness,
     Integrity,
@@ -24,10 +31,13 @@ from .projection import build_all, build_chain
 from .steering import SteerableFact, steerable_facts
 
 __all__ = [
+    "AuthorshipError",
     "Completeness",
     "Integrity",
+    "LedgerEntry",
     "LineageChain",
     "LineageEdge",
+    "LineageLedger",
     "LineageNode",
     "Order",
     "Provenance",
@@ -35,5 +45,7 @@ __all__ = [
     "TrustFlags",
     "build_all",
     "build_chain",
+    "chained_trust",
+    "entry_hash",
     "steerable_facts",
 ]

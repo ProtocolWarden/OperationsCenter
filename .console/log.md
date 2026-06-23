@@ -8223,3 +8223,24 @@ C2 (runtime capability-ownership) DEFERRED: needs RepoGraph capability-registry
 access at the invocation point; the capability plane is registry-lint today and
 the only OC-owned capability (board_unblock) has no runtime branch on ownership.
 Higher integration risk, lowest immediate payoff — documented, not rushed.
+
+## 2026-06-22 — Phase D: lineage integrity (D1) + external controller liveness (D2)
+
+**D1 (surface 9):** new `lineage/integrity.py` — per-lineage hash chain (each
+entry commits to the prior; `verify()` detects tampering) + authorship binding
+(first writer owns the lineage; a foreign author is rejected + quarantined, never
+chained). `chained_trust()` is the sole sanctioned way an edge's integrity
+dimension goes green. Decoupled from the projection (which stays `unverified`)
+until the durable tier (A5) appends here — the hard prerequisite for ANY steerable
+edge. 7 tests.
+
+**D2 (surface 10):** new `entrypoints/controller_liveness.py` — designed to run
+OUTSIDE spec_hygiene (shell watchdog / cron). Classifies the maintenance-loop
+heartbeat absent/healthy/dead/stalled and exits non-zero on dead|stalled so the
+supervisor restarts it. Closes the blind spot where HeartbeatStallTask (hosted
+INSIDE spec_hygiene) can't catch its own host crash-looping. 6 tests.
+
+All 4 phases landed: A (lineage projection + trust split), B (admission allowlist,
+global work ceiling, fail-closed containment), C1 (self-merge gate; C2 deferred),
+D (integrity + controller liveness). C2 (runtime capability-ownership) is the one
+documented deferral — needs RepoGraph-at-invocation, highest risk/lowest payoff.
