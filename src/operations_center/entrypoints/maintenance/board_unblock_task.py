@@ -31,6 +31,7 @@ from datetime import UTC, datetime
 
 from operations_center.adapters.github_pr import GitHubPRClient
 from operations_center.adapters.plane import PlaneClient
+from operations_center.capability_ownership import verify_owner_or_degrade
 from operations_center.config.settings import Settings
 from operations_center.in_flight_reconcile import state_name as _state_name
 from operations_center.maintenance.contracts import MaintenanceContext, MaintenanceResult
@@ -251,6 +252,21 @@ class BoardUnblockTask:
                 status="skipped",
                 duration_seconds=time.monotonic() - started,
                 details={"reason": f"mem_available {mem_gb:.2f}GB < {_MEM_SKIP_THRESHOLD_GB}GB"},
+            )
+
+        # Synchronous capability-owner check (surface 1). No-op unless
+        # require_capability_owner is set; degrades (proceeds) when the capability
+        # registry is unavailable, so this never halts self-healing on its own.
+        if not verify_owner_or_degrade(
+            self.name,
+            required=getattr(self._settings, "require_capability_owner", False),
+            expected_owner=getattr(self._settings, "self_repo_key", None),
+        ):
+            return MaintenanceResult(
+                name=self.name,
+                status="skipped",
+                duration_seconds=time.monotonic() - started,
+                details={"reason": "capability_owner_ambiguous"},
             )
 
         client = ctx.resources.get("plane_client") or self._make_plane_client()

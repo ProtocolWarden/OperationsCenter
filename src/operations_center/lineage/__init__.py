@@ -10,6 +10,7 @@ own untrustworthiness, and exposes a single sanctioned steering path.
 
 from __future__ import annotations
 
+from .durable import DurableLineageStore, lineage_id_for_task
 from .integrity import (
     AuthorshipError,
     LedgerEntry,
@@ -28,11 +29,13 @@ from .models import (
     TrustFlags,
 )
 from .projection import build_all, build_chain
+from .repograph_binding import to_repograph
 from .steering import SteerableFact, steerable_facts
 
 __all__ = [
     "AuthorshipError",
     "Completeness",
+    "DurableLineageStore",
     "Integrity",
     "LedgerEntry",
     "LineageChain",
@@ -47,5 +50,7 @@ __all__ = [
     "build_chain",
     "chained_trust",
     "entry_hash",
+    "lineage_id_for_task",
     "steerable_facts",
+    "to_repograph",
 ]

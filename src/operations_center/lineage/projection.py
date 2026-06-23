@@ -55,10 +55,20 @@ def _parse_ts(value: Any) -> datetime | None:
     return ts
 
 
-def _completeness(ts: datetime | None, *, now: datetime, retention_days: int) -> Completeness:
+def _completeness(
+    ts: datetime | None,
+    *,
+    now: datetime,
+    retention_days: int,
+    durable: bool = False,
+) -> Completeness:
     """An edge older than the source retention window is not reproducible on a
-    rebuild from source, so it is EXPIRED even if the file is still present."""
+    rebuild from source, so it is EXPIRED even if the file is still present —
+    UNLESS the durable tier (Phase A5) vouches for its lineage, in which case it
+    stays DURABLE because that tier outlives the source GC."""
 
+    if durable:
+        return Completeness.DURABLE
     if ts is None:
         return Completeness.EXPIRED
     if now - ts > timedelta(days=retention_days):
@@ -114,10 +124,17 @@ def build_chain(
     state_dir: Path,
     now: datetime | None = None,
     retention_days: int = _DEFAULT_RETENTION_DAYS,
+    durable_lineage_ids: set[str] | None = None,
 ) -> LineageChain:
-    """Assemble the lineage chain for one task_id from on-disk signals."""
+    """Assemble the lineage chain for one task_id from on-disk signals.
+
+    ``durable_lineage_ids`` (Phase A5) is the set of lineage_ids the durable tier
+    vouches for; an edge whose lineage is durable stays ``completeness=durable``
+    even when its source record is past the GC horizon.
+    """
 
     now = now or datetime.now(timezone.utc)
+    durable = (durable_lineage_ids is not None) and (f"lin-{task_id[:12]}" in durable_lineage_ids)
     runs = [r for r in _iter_runs(runs_root) if r.task_id == task_id]
     pr_states = _load_pr_reviews(state_dir)
 
@@ -141,7 +158,7 @@ def build_chain(
             kind="task",
             trust=default_trust(
                 provenance=Provenance.TEXT_DERIVED,
-                completeness=_completeness(task_ts, now=now, retention_days=retention_days),
+                completeness=_completeness(task_ts, now=now, retention_days=retention_days, durable=durable),
             ),
             attributes={"task_id": task_id, "repo_key": repo, "goal_text": goal},
         )
@@ -151,7 +168,7 @@ def build_chain(
     for r in runs:
         run_node_id = f"run:{r.run_id}"
         run_ts = _parse_ts(r.meta.get("written_at"))
-        run_complete = _completeness(run_ts, now=now, retention_days=retention_days)
+        run_complete = _completeness(run_ts, now=now, retention_days=retention_days, durable=durable)
         # Run/proposal facts are machine-generated → code-computed.
         nodes.append(
             LineageNode(
@@ -203,7 +220,7 @@ def build_chain(
             continue
         pr_node_id = f"pr:{pr_num}"
         pr_ts = _parse_ts(state.get("updated_at")) or _parse_ts(state.get("created_at"))
-        pr_complete = _completeness(pr_ts, now=now, retention_days=retention_days)
+        pr_complete = _completeness(pr_ts, now=now, retention_days=retention_days, durable=durable)
         nodes.append(
             LineageNode(
                 node_id=pr_node_id,
@@ -270,6 +287,7 @@ def build_all(
     state_dir: Path,
     now: datetime | None = None,
     retention_days: int = _DEFAULT_RETENTION_DAYS,
+    durable_lineage_ids: set[str] | None = None,
 ) -> dict[str, LineageChain]:
     """Build chains for every task_id discoverable in the run artifacts."""
 
@@ -287,6 +305,7 @@ def build_all(
             state_dir=state_dir,
             now=now,
             retention_days=retention_days,
+            durable_lineage_ids=durable_lineage_ids,
         )
         for tid in sorted(task_ids)
     }

@@ -10,6 +10,8 @@ from unittest.mock import MagicMock
 from operations_center.entrypoints.board_worker.work_ceiling import (
     ceiling_reached,
     fleet_open_work_count,
+    open_descendants_of_root,
+    root_descendant_cap_reached,
 )
 
 
@@ -65,3 +67,57 @@ def test_ceiling_fail_open_on_list_error():
     settings = SimpleNamespace(max_open_fleet_tasks=1)
     # a broken count must not deadlock self-healing
     assert ceiling_reached(client, settings) is False
+
+
+# ── Per-root descendant cap (B3, determinism surface 7) ────────────────────────
+
+
+def _rooted(root, *, state="Ready for AI"):
+    return _issue(state=state, labels=[f"lineage-root: {root}", "source: board_worker"])
+
+
+def test_open_descendants_counts_only_matching_root():
+    issues = [
+        _rooted("R1"),
+        _rooted("R1"),
+        _rooted("R1", state="Done"),  # terminal → excluded
+        _rooted("R2"),
+        _issue(labels=["task-kind: goal"]),  # no root → excluded
+    ]
+    assert open_descendants_of_root(issues, "R1") == 2
+    assert open_descendants_of_root(issues, "R2") == 1
+
+
+def test_root_cap_disabled_by_default():
+    client = MagicMock()
+    assert root_descendant_cap_reached(client, SimpleNamespace(), "R1") is False
+    client.list_issues.assert_not_called()
+
+
+def test_root_cap_empty_root_never_throttles():
+    client = MagicMock()
+    settings = SimpleNamespace(max_descendants_per_root=1)
+    assert root_descendant_cap_reached(client, settings, "") is False
+    client.list_issues.assert_not_called()
+
+
+def test_root_cap_reached():
+    client = MagicMock()
+    client.list_issues.return_value = [_rooted("R1") for _ in range(4)]
+    settings = SimpleNamespace(max_descendants_per_root=4)
+    assert root_descendant_cap_reached(client, settings, "R1") is True
+
+
+def test_root_cap_not_reached_for_other_root():
+    client = MagicMock()
+    client.list_issues.return_value = [_rooted("R1") for _ in range(9)]
+    settings = SimpleNamespace(max_descendants_per_root=3)
+    # a different root with no descendants is unaffected by R1's overflow
+    assert root_descendant_cap_reached(client, settings, "R2") is False
+
+
+def test_root_cap_fail_open_on_error():
+    client = MagicMock()
+    client.list_issues.side_effect = RuntimeError("plane down")
+    settings = SimpleNamespace(max_descendants_per_root=1)
+    assert root_descendant_cap_reached(client, settings, "R1") is False

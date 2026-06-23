@@ -24,7 +24,7 @@ from .labels import (
     label_value,
     retry_count_from_labels,
 )
-from .work_ceiling import ceiling_reached
+from .work_ceiling import ceiling_reached, root_descendant_cap_reached
 
 logger = logging.getLogger(__name__)
 
@@ -588,6 +588,20 @@ def create_follow_up(
         )
         return ""
 
+    # Per-root descendant cap (surface 7): a lineage root propagates down the
+    # tree; even fresh-lineage scope-split children inherit it, so one runaway
+    # root cannot keep spawning under the per-generation retry cap.
+    lineage_root = label_value(parent_labels, "lineage-root") or parent_id
+    if root_descendant_cap_reached(client, _settings, lineage_root):
+        logger.warning(
+            "board_worker: refusing follow-up — per-root descendant cap reached "
+            "(root=%s parent task_id=%s kind=%s)",
+            lineage_root,
+            parent_id,
+            follow_kind,
+        )
+        return ""
+
     description = (
         f"## Goal\n{parent_title} — {reason.replace('_', ' ')}\n\n"
         f"## Execution\n"
@@ -611,6 +625,7 @@ def create_follow_up(
         "source: board_worker",
         *inherited_sources,
         f"original-task-id: {parent_id}",
+        f"lineage-root: {lineage_root}",
         f"handoff-reason: {reason}",
         f"retry-count: {retry_count + 1}",
     ]
