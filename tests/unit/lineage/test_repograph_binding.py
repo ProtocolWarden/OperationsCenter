@@ -2,8 +2,9 @@
 # Copyright (C) 2026 ProtocolWarden
 """Tests for the RepoGraph binding (Phase A3).
 
-The lineage read-model maps into RepoGraph's RUN/AUDIT/EVIDENCE vocabulary,
-stamped as derived (WORK_SCOPE) with trust preserved in metadata.
+The lineage read-model maps into RepoGraph's RUN/AUDIT/EVIDENCE vocabulary as
+boundary-respecting dicts (no repograph import), stamped derived (work_scope)
+with trust preserved in metadata.
 """
 
 from __future__ import annotations
@@ -48,7 +49,7 @@ def _chain() -> LineageChain:
 
 def test_nodes_map_to_run_audit_evidence_kinds():
     nodes, _ = to_repograph(_chain())
-    by_id = {n.repo_id: n.kind.value for n in nodes}
+    by_id = {n["repo_id"]: n["kind"] for n in nodes}
     assert by_id["run:r"] == "Run"
     assert by_id["verdict:1"] == "Audit"
     assert by_id["pr:1"] == "Evidence"
@@ -58,27 +59,44 @@ def test_nodes_map_to_run_audit_evidence_kinds():
 def test_all_nodes_marked_derived_work_scope():
     nodes, _ = to_repograph(_chain())
     for n in nodes:
-        assert n.source.value == "work_scope"
-        assert ("derived", "true") in n.metadata
+        assert n["source"] == "work_scope"
+        assert n["metadata"]["derived"] == "true"
+
+
+def test_no_repograph_import():
+    # A3 must not cross the OC->repograph boundary (Custodian X2). Parse the
+    # actual import statements (not source text, which mentions repograph in
+    # prose) and assert none reference repograph.
+    import ast
+    import inspect
+
+    import operations_center.lineage.repograph_binding as mod
+
+    tree = ast.parse(inspect.getsource(mod))
+    imported: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported += [a.name for a in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            imported.append(node.module or "")
+    assert not any(name.split(".")[0] == "repograph" for name in imported)
 
 
 def test_edges_map_and_preserve_trust():
     _, rels = to_repograph(_chain())
-    by_pair = {(r.source_id, r.target_id): r for r in rels}
+    by_pair = {(r["source_id"], r["target_id"]): r for r in rels}
     reviewed = by_pair[("pr:1", "verdict:1")]
-    assert reviewed.kind.value == "validates_output"
-    # the green edge is marked steerable in metadata
-    assert ("steerable", "true") in reviewed.metadata
+    assert reviewed["kind"] == "validates_output"
+    assert reviewed["metadata"]["steerable"] == "true"
     executed = by_pair[("task:t", "run:r")]
-    assert executed.kind.value == "orchestrates"
-    # default-trust edge is NOT steerable
-    assert ("steerable", "false") in executed.metadata
+    assert executed["kind"] == "orchestrates"
+    assert executed["metadata"]["steerable"] == "false"
 
 
 def test_trust_dimensions_carried_into_metadata():
     nodes, _ = to_repograph(_chain())
-    verdict = next(n for n in nodes if n.repo_id == "verdict:1")
-    md = dict(verdict.metadata)
+    verdict = next(n for n in nodes if n["repo_id"] == "verdict:1")
+    md = verdict["metadata"]
     assert md["trust.provenance"] == "code-computed"
     assert md["trust.integrity"] == "chained"
 

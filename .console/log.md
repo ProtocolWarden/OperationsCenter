@@ -8283,3 +8283,11 @@ Finished the open spec items on branch feat/lineage-followups:
   pinned repograph wheel has no capabilities plane, so the registry is None and
   the guard degrades; load-bearing only once the plane is an OC runtime dep.
 Full suite 8090 green (one observer perf test flakes under -n auto; passes solo).
+
+## 2026-06-23 — A3 X2 boundary fix
+
+Custodian X2: repograph_binding.py imported repograph directly, crossing the
+undeclared OC->RepoGraph edge (OC depends on platform_manifest, which does not
+re-export the RUN/AUDIT/EVIDENCE EntityKind vocab). Rewrote A3 to emit
+RepoGraph-SHAPED dicts (kind names as strings), no repograph import — a derived
+export the manifest side hydrates. Custodian clean.
