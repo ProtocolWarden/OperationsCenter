@@ -1,10 +1,34 @@
 ---
-status: partially-implemented
+status: implemented
 ---
 
 # Execution Lineage & the Determinism Boundary
 
-**Status:** Draft spec (adversarially reviewed)
+**Status:** Implemented (adversarially reviewed)
+
+## Implementation status (2026-06-23)
+
+All build items shipped (PRs #388, #389):
+
+- **A1–A3, A4, A5** ✅ — `operations_center.lineage` (projection, 4-dim trust,
+  steering split, CLI, integrity, **durable tier**, **RepoGraph binding**) +
+  the **rebuild-conformance gate** (`tests/unit/lineage/test_conformance.py`).
+- **B1, B2, B3, B4** ✅ — admission allowlist, global work ceiling, **per-root
+  descendant cap**, fail-closed containment.
+- **C1** ✅ — self-contained self-merge gate.
+- **C2** ⚠️ **mechanism shipped, dormant-by-environment** —
+  `capability_ownership.py` provides synchronous owner resolution + a wired
+  opt-in guard in `BoardUnblockTask`, but OC's pinned `repograph` wheel ships no
+  capabilities plane, so the registry is unavailable and the guard degrades. It
+  becomes load-bearing only when the capability plane is an OC runtime
+  dependency (a PlatformManifest/dep-pinning concern). Do not claim surface 1
+  closed until the registry loads in production.
+- **D1, D2** ✅ — lineage hash chain + authorship binding; external controller
+  liveness.
+
+Every flag defaults OFF; the steerable set remains empty until an edge is
+`code-computed ∧ chained ∧ durable ∧ causal` (ordering is still host-relative,
+so steering stays impossible by construction — as intended).
 **Date:** 2026-06-22
 **Related:** [[HARNESS_TRUST_HARDENING.md]], [[SELF_HEAL_LADDER.md]], `oc-harness-guide-gap-audit` (memory)
 

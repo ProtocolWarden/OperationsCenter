@@ -8263,3 +8263,23 @@ CI audit (D12 incomplete-integration gate) flagged two unwired symbols:
 display_edges() (now used by cli.render_chain to show the trust split) and
 owner_of() (removed — speculative API with no consumer; ownership is enforced
 internally in append()). D12 gate now clean. PR #388.
+
+## 2026-06-23 — Lineage/determinism follow-ups (A3, A4, A5, B3, C2)
+
+Finished the open spec items on branch feat/lineage-followups:
+- **A5 durable tier** `lineage/durable.py`: append-only JSONL ledger over the D1
+  hash chain; entries loaded VERBATIM (preserve stored hashes) so verify() catches
+  tampering; a tampered ledger vouches for nothing. Projection consults
+  durable_lineage_ids → an aged-source edge stays completeness=durable.
+- **A4 conformance gate** test_conformance.py: rebuild==rebuild determinism;
+  aged source = EXPIRED (not dropped); durable tier keeps aged lineage durable.
+- **A3 RepoGraph binding** `lineage/repograph_binding.py`: maps a chain to
+  RUN/AUDIT/EVIDENCE RepoIdentity + GraphEdge, Source.WORK_SCOPE, derived=true,
+  trust carried into metadata; lazy import; does NOT call RepoGraph.build.
+- **B3 per-root cap** propagating `lineage-root` label + max_descendants_per_root;
+  refuses follow-ups once a root's open descendants hit the cap.
+- **C2 capability owner** `capability_ownership.py`: synchronous resolve_owner +
+  opt-in verify_owner_or_degrade guard wired in BoardUnblockTask. DORMANT — OC's
+  pinned repograph wheel has no capabilities plane, so the registry is None and
+  the guard degrades; load-bearing only once the plane is an OC runtime dep.
+Full suite 8090 green (one observer perf test flakes under -n auto; passes solo).

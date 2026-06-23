@@ -535,6 +535,18 @@ class Settings(BaseModel):
     # (follow-ups, scope-splits, maintenance fix-tasks) refuse to create more
     # once reached, so a systemic fault cannot flood the board. 0 = disabled.
     max_open_fleet_tasks: int = 0
+    # Per-root descendant cap (B3, determinism surface 7). Bounds the AGGREGATE
+    # number of open follow-up/scope-split descendants sharing one lineage root,
+    # so a single runaway root cannot consume the whole global budget even when
+    # each generation is individually under the per-lineage retry cap. 0 = off.
+    max_descendants_per_root: int = 0
+    # Synchronous capability-owner check (C2, determinism surface 1). When set,
+    # owner-bearing capabilities (board_unblock) verify exactly-one-owner from the
+    # registry at invocation and refuse on ambiguity, instead of trusting the
+    # async Custodian lint. DORMANT-by-environment: OC's pinned repograph wheel has
+    # no capabilities plane, so the registry is unavailable and the guard degrades
+    # (proceeds) until that becomes a runtime dependency. False = off (default).
+    require_capability_owner: bool = False
 
     def plane_token(self) -> str:
         return os.environ[self.plane.api_token_env]

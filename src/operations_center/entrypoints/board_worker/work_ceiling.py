@@ -58,6 +58,51 @@ def fleet_open_work_count(issues: list[dict]) -> int:
     return sum(1 for issue in issues if _is_open(issue) and _is_fleet_created(issue))
 
 
+def open_descendants_of_root(issues: list[dict], root: str) -> int:
+    """Count open tasks carrying ``lineage-root: <root>`` — the aggregate size of
+    one lineage tree, regardless of per-generation retry depth."""
+
+    target = f"lineage-root: {root}".lower()
+    out = 0
+    for issue in issues:
+        if not _is_open(issue):
+            continue
+        if any(n.lower() == target for n in _label_names(issue)):
+            out += 1
+    return out
+
+
+def root_descendant_cap_reached(client, settings, root: str) -> bool:
+    """True if the lineage tree rooted at ``root`` has reached its per-root cap.
+
+    Fail-open like ``ceiling_reached``: disabled (0) or an unreadable board never
+    throttles. ``root`` falsy → no cap (can't scope a count).
+    """
+
+    cap = int(getattr(settings, "max_descendants_per_root", 0) or 0)
+    if cap <= 0 or not root:
+        return False
+    try:
+        issues = client.list_issues()
+    except Exception:
+        logger.warning("work_ceiling: failed to list issues for root cap — not throttling")
+        return False
+    count = open_descendants_of_root(issues, root)
+    if count >= cap:
+        logger.warning(
+            "work_ceiling: per-root cap REACHED — root=%s has %d/%d open descendants "
+            '{"event": "root_descendant_cap_reached", "root": "%s", "open": %d, "cap": %d}',
+            root,
+            count,
+            cap,
+            root,
+            count,
+            cap,
+        )
+        return True
+    return False
+
+
 def ceiling_reached(client, settings) -> bool:
     """True if the fleet has reached its global open-work ceiling.
 
@@ -87,4 +132,9 @@ def ceiling_reached(client, settings) -> bool:
     return False
 
 
-__all__ = ["ceiling_reached", "fleet_open_work_count"]
+__all__ = [
+    "ceiling_reached",
+    "fleet_open_work_count",
+    "open_descendants_of_root",
+    "root_descendant_cap_reached",
+]
