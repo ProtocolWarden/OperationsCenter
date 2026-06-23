@@ -42,4 +42,4 @@ def test_failure_ages_progress_and_is_stall_detectable(tmp_path: Path):
 
 
 def test_none_status_dir_is_noop():
-    _write_heartbeat(None, success=True)  # must not raise
+    assert _write_heartbeat(None, success=True) is None  # must not raise

@@ -8343,3 +8343,7 @@ the exact scenario D2 was built for. spec_hygiene now writes the shared success/
 failure schema via write_heartbeat (success on a completed cycle, success=False
 on a cycle exception), so a crash-looping maintenance loop ages last_success_at
 and is caught + restarted by the watchdog. Surface 10 now fully closed.
+
+## 2026-06-23 — T2 fix for spec_hygiene heartbeat test
+
+Added the missing assert to test_none_status_dir_is_noop (custodian T2).
