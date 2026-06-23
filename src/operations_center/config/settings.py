@@ -438,6 +438,41 @@ class ContractChangePropagationSettings(BaseModel):
     dedup_path: Path = Path("state/propagation/dedup.json")
 
 
+class TaskAdmissionSettings(BaseModel):
+    """Admission control for board tasks (determinism surface 5).
+
+    The board claims any Ready-for-AI issue with the right labels regardless of
+    who authored it — the fence (#386) stops a goal from hijacking the agent's
+    role, but it does NOT stop an unauthorized actor from getting arbitrary
+    engineering work executed against a managed repo. This gate adds an author
+    allowlist to the admission edge.
+
+    Disabled by default (empty allowlist) to preserve degrade-never-halt and
+    avoid breaking existing boards. When ``author_allowlist`` is non-empty,
+    tasks whose creator is not on it are not claimed; they are labelled for
+    operator promotion instead. Identities are matched case-insensitively
+    against the issue creator's id, email, or display name.
+    """
+
+    author_allowlist: list[str] = Field(default_factory=list)
+    # Label applied to a task rejected for an un-allowlisted author.
+    reject_label: str = "unauthorized-author"
+
+    def enforced(self) -> bool:
+        return bool(self.author_allowlist)
+
+    def allows(self, *identities: str | None) -> bool:
+        """True if admission is unenforced, or any provided identity matches."""
+
+        if not self.enforced():
+            return True
+        allow = {a.strip().lower() for a in self.author_allowlist if a and a.strip()}
+        for ident in identities:
+            if ident and ident.strip().lower() in allow:
+                return True
+        return False
+
+
 class Settings(BaseModel):
     plane: PlaneSettings
     git: GitSettings
@@ -481,6 +516,9 @@ class Settings(BaseModel):
     # S8-8: Runtime error ingestion configuration.  None = disabled.
     error_ingest: ErrorIngestSettings | None = None
     spec_author: SpecAuthorSettings = Field(default_factory=SpecAuthorSettings)
+    # Admission control (determinism surface 5). Disabled by default; when the
+    # author allowlist is set, un-allowlisted task authors are not auto-claimed.
+    task_admission: TaskAdmissionSettings = Field(default_factory=TaskAdmissionSettings)
     # Propose worker skips its generation cycle when the "Ready for AI" queue
     # already has this many or more tasks.  0 = disabled (default 8).
     propose_skip_when_ready_count: int = 8

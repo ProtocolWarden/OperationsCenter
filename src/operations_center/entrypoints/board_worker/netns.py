@@ -42,6 +42,7 @@ from urllib.parse import urlparse
 logger = logging.getLogger(__name__)
 
 _NETNS_FLAG = "OC_EGRESS_NETNS"
+_REQUIRED_FLAG = "OC_EGRESS_REQUIRED"
 _PASTA_BIN_ENV = "OC_PASTA_BIN"
 _EXTRA_PORTS_ENV = "OC_EGRESS_NETNS_PORTS"  # comma-sep extra host-loopback ports
 _OLLAMA_PORT = 11434
@@ -67,6 +68,17 @@ exec "$@"
 
 def netns_enabled() -> bool:
     return os.environ.get(_NETNS_FLAG) == "1"
+
+
+class EgressContainmentRequiredError(RuntimeError):
+    """Raised when egress confinement is REQUIRED (OC_EGRESS_REQUIRED=1) but
+    cannot be established. Default posture is fail-open (§0.1); this is the
+    operator opt-in to never run a token-holding backend with unconfined egress.
+    """
+
+
+def egress_required() -> bool:
+    return str(os.environ.get(_REQUIRED_FLAG, "")).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def pasta_path() -> str | None:
@@ -116,6 +128,10 @@ def maybe_netns(
             reason,
             reason,
         )
+        if egress_required():
+            raise EgressContainmentRequiredError(
+                f"OC_EGRESS_REQUIRED set but egress confinement unavailable ({reason})"
+            )
         return list(cmd)
     forwards: list[str] = []
     for port in _forward_ports(proxy_url):
@@ -123,4 +139,10 @@ def maybe_netns(
     return [pasta, "--config-net", *forwards, "--", "sh", "-c", _SETUP_SCRIPT, "oc-netns", *cmd]
 
 
-__all__ = ["maybe_netns", "netns_enabled", "pasta_path"]
+__all__ = [
+    "EgressContainmentRequiredError",
+    "egress_required",
+    "maybe_netns",
+    "netns_enabled",
+    "pasta_path",
+]

@@ -8174,3 +8174,22 @@ required-gate are async/out-of-repo, not synchronous edges).
 construction until Phase D1), `cli` (display view, honestly marks every
 non-steerable edge). 12 tests, ruff clean. Steerable set is empty TODAY by
 design — nothing steers until integrity (D1) + ordering land.
+
+## 2026-06-22 — Phase B (partial): admission allowlist + fail-closed containment
+
+**B1 (surface 5 — task admission):** added `TaskAdmissionSettings.author_allowlist`
+(config/settings.py) + an author gate in `claim._build_candidates` — un-allowlisted
+task authors are not claimed and get an `unauthorized-author` label for operator
+promotion. Disabled by default (empty allowlist) → no behavior change. Tolerates
+the several Plane creator shapes (bare id, nested actor email/name).
+
+**B4 (surface 8 — containment):** `OC_SANDBOX_REQUIRED` / `OC_EGRESS_REQUIRED` flip
+the fail-open sandbox/netns into fail-closed — `maybe_sandbox`/`maybe_netns` raise
+(ContainmentRequiredError / EgressContainmentRequiredError) on degrade instead of
+running un-contained. Default UNSET preserves §0.1 degrade-never-halt; a raise
+fails the cycle observably via the new heartbeat, no crash-loop. Documented in
+.env example. Tests: admission 6, sandbox required 3, netns required 3 — all green.
+
+Still open in Phase B: B2 (global work ceiling — replace the phantom "global
+budget" with a real fleet-wide open-task counter) and B3 (aggregate
+task-creation cap on follow-ups/scope-splits).

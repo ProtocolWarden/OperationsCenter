@@ -268,7 +268,7 @@ def test_build_candidates_filters_state_kind_and_repo():
         _make_issue(task_id="good", labels=[_label("task-kind: goal"), _label("repo: repoA")]),
     ]
     settings = _make_settings()
-    out = claim._build_candidates(issues, "goal", ["goal"], {"repoA"}, settings, {})
+    out = claim._build_candidates(None, issues, "goal", ["goal"], {"repoA"}, settings, {})
     assert [i["id"] for i in out] == ["good"]
 
 
@@ -277,7 +277,7 @@ def test_build_candidates_spec_author_repo_override():
     issue = _make_issue(labels=[_label("task-kind: spec-author"), _label("repo: ignored")])
     settings = _make_settings(repos={claim.SPEC_AUTHOR_REPO_KEY: _make_repo_cfg()})
     out = claim._build_candidates(
-        [issue], "spec-author", ["spec-author"], {claim.SPEC_AUTHOR_REPO_KEY}, settings, {}
+        None, [issue], "spec-author", ["spec-author"], {claim.SPEC_AUTHOR_REPO_KEY}, settings, {}
     )
     assert len(out) == 1
 
@@ -285,14 +285,14 @@ def test_build_candidates_spec_author_repo_override():
 def test_build_candidates_daily_quota_reached_skips():
     issue = _make_issue(labels=[_label("task-kind: goal"), _label("repo: repoA")])
     settings = _make_settings(repos={"repoA": _make_repo_cfg(max_daily_executions=2)})
-    out = claim._build_candidates([issue], "goal", ["goal"], {"repoA"}, settings, {"repoA": 2})
+    out = claim._build_candidates(None, [issue], "goal", ["goal"], {"repoA"}, settings, {"repoA": 2})
     assert out == []
 
 
 def test_build_candidates_under_quota_included():
     issue = _make_issue(labels=[_label("task-kind: goal"), _label("repo: repoA")])
     settings = _make_settings(repos={"repoA": _make_repo_cfg(max_daily_executions=5)})
-    out = claim._build_candidates([issue], "goal", ["goal"], {"repoA"}, settings, {"repoA": 1})
+    out = claim._build_candidates(None, [issue], "goal", ["goal"], {"repoA"}, settings, {"repoA": 1})
     assert len(out) == 1
 
 
@@ -305,7 +305,7 @@ def test_build_candidates_string_state():
         "name": "n",
     }
     settings = _make_settings()
-    out = claim._build_candidates([issue], "goal", ["goal"], {"repoA"}, settings, {})
+    out = claim._build_candidates(None, [issue], "goal", ["goal"], {"repoA"}, settings, {})
     assert len(out) == 1
 
 
@@ -313,7 +313,7 @@ def test_build_candidates_repo_cfg_missing_no_cap():
     # repo is managed but has no cfg object -> cap None -> not skipped.
     issue = _make_issue(labels=[_label("task-kind: goal"), _label("repo: repoA")])
     settings = SimpleNamespace(repos={"repoA": None}, git_token=lambda: None)
-    out = claim._build_candidates([issue], "goal", ["goal"], {"repoA"}, settings, {"repoA": 99})
+    out = claim._build_candidates(None, [issue], "goal", ["goal"], {"repoA"}, settings, {"repoA": 99})
     assert len(out) == 1
 
 

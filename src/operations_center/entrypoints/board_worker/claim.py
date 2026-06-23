@@ -14,6 +14,7 @@ from .labels import (
     STATE_READY,
     STATE_RUNNING,
     add_label,
+    has_label,
     label_value,
 )
 from .spec_author import SPEC_AUTHOR_REPO_KEY
@@ -41,7 +42,9 @@ def claim_next(client, role: str, settings) -> dict | None:
         return None
 
     exec_today = _count_daily_executions(issues)
-    candidates = _build_candidates(issues, role, kinds, managed_repos, settings, exec_today)
+    candidates = _build_candidates(
+        client, issues, role, kinds, managed_repos, settings, exec_today
+    )
 
     if not candidates:
         return None
@@ -109,6 +112,7 @@ def _count_daily_executions(issues: list[dict]) -> dict[str, int]:
 
 
 def _build_candidates(
+    client,
     issues: list[dict],
     role: str,
     kinds: list[str],
@@ -137,6 +141,12 @@ def _build_candidates(
         if repo_key not in managed_repos:
             continue
 
+        # Admission control (surface 5): refuse un-allowlisted task authors.
+        # No-op unless settings.task_admission.author_allowlist is configured.
+        if not _author_allowed(issue, settings):
+            _flag_unauthorized_author(client, issue, role, settings)
+            continue
+
         repo_cfg = settings.repos.get(repo_key)
         cap = getattr(repo_cfg, "max_daily_executions", None) if repo_cfg else None
         if cap and exec_today.get(repo_key, 0) >= int(cap):
@@ -151,6 +161,53 @@ def _build_candidates(
 
         candidates.append(issue)
     return candidates
+
+
+def _issue_author_identities(issue: dict) -> tuple[str | None, ...]:
+    """Extract comparable creator identities from a Plane issue, tolerant of the
+    several shapes the API uses (bare id string, or a nested actor dict)."""
+
+    out: list[str | None] = []
+    for key in ("created_by", "created_by_id", "author", "creator"):
+        val = issue.get(key)
+        if isinstance(val, str):
+            out.append(val)
+        elif isinstance(val, dict):
+            out.extend(
+                str(val[k]) for k in ("id", "email", "display_name", "name") if val.get(k)
+            )
+    return tuple(out)
+
+
+def _author_allowed(issue: dict, settings) -> bool:
+    admission = getattr(settings, "task_admission", None)
+    if admission is None or not admission.enforced():
+        return True
+    return admission.allows(*_issue_author_identities(issue))
+
+
+def _flag_unauthorized_author(client, issue: dict, role: str, settings) -> None:
+    """Best-effort: label the rejected task once so an operator can promote it."""
+
+    reject_label = settings.task_admission.reject_label
+    if has_label(issue.get("labels", []), reject_label):
+        return  # already flagged — don't spam the API every poll
+    try:
+        add_label(client, issue, reject_label)
+        logger.warning(
+            "board_worker[%s]: refused task_id=%s — author not in admission "
+            "allowlist (identities=%s)",
+            role,
+            issue.get("id"),
+            list(_issue_author_identities(issue)),
+        )
+    except Exception as exc:
+        logger.warning(
+            "board_worker[%s]: failed to flag unauthorized author task_id=%s — %s",
+            role,
+            issue.get("id"),
+            exc,
+        )
 
 
 def _sort_key(issue: dict) -> tuple:
