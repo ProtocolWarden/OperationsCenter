@@ -66,14 +66,21 @@ def main(argv: list[str] | None = None) -> int:
             args.task_id, runs_root=args.runs_root, state_dir=args.state_dir, now=now
         )
         if args.json:
-            print(json.dumps(chain.as_dict(), indent=2, default=str))
+            print(json.dumps(chain.as_dict(), indent=2, default=str, ensure_ascii=False))
         else:
             print(render_chain(chain))
         return 0
 
     chains = build_all(runs_root=args.runs_root, state_dir=args.state_dir, now=now)
     if args.json:
-        print(json.dumps({k: v.as_dict() for k, v in chains.items()}, indent=2, default=str))
+        print(
+            json.dumps(
+                {k: v.as_dict() for k, v in chains.items()},
+                indent=2,
+                default=str,
+                ensure_ascii=False,
+            )
+        )
     else:
         for chain in chains.values():
             print(render_chain(chain))

@@ -43,6 +43,7 @@ def entry_hash(prior_hash: str, *, lineage_id: str, author: str, payload: dict) 
         sort_keys=True,
         separators=(",", ":"),
         default=str,
+        ensure_ascii=False,
     )
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 

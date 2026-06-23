@@ -8244,3 +8244,10 @@ All 4 phases landed: A (lineage projection + trust split), B (admission allowlis
 global work ceiling, fail-closed containment), C1 (self-merge gate; C2 deferred),
 D (integrity + controller liveness). C2 (runtime capability-ownership) is the one
 documented deferral — needs RepoGraph-at-invocation, highest risk/lowest payoff.
+
+## 2026-06-23 — Custodian gate fixes for the lineage branch
+
+Cleared 8 LOW findings before push: C41 ensure_ascii=False (integrity hash +
+cli json — 3); T6/T7 added direct test files tests/unit/lineage/test_models.py +
+test_steering.py; DC1 added YAML front matter to the spec; DC7 linked the spec
+from HARNESS_TRUST_HARDENING.md. Custodian now clean; full unit suite 8050 green.

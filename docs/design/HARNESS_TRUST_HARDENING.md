@@ -621,3 +621,11 @@ edits; tamper-evidence-without-enforcement; auto-fix pointed at its own scorecar
 and hardened: different-model-family critic, append-only hash-chain, required
 non-bypassable constitution check, and auto-fix structurally forbidden from
 touching signed labels or the baseline floor.
+
+## See also
+
+The trust-axis work above hardened the *reviewer* path. A follow-on adversarial
+audit (2026-06-22) extended the lens to the *worker* axis and the running fleet,
+and the resulting design — execution lineage as a trust-labeled read-model plus
+the corrected ten-surface determinism boundary — is specified in
+[Execution Lineage & the Determinism Boundary](./EXECUTION_LINEAGE_AND_DETERMINISM_BOUNDARY.md).

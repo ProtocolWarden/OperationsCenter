@@ -1,3 +1,7 @@
+---
+status: partially-implemented
+---
+
 # Execution Lineage & the Determinism Boundary
 
 **Status:** Draft spec (adversarially reviewed)
