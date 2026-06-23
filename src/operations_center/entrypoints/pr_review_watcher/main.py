@@ -60,7 +60,16 @@ from operations_center.entrypoints.board_worker._subprocess import (
     build_allowlist_env,
     git_token_passthrough,
 )
-from operations_center.entrypoints.board_worker.sandbox import maybe_sandbox
+from operations_center.entrypoints.board_worker.netns import (
+    EgressContainmentRequiredError,
+    maybe_netns,
+    netns_enabled,
+)
+from operations_center.entrypoints.board_worker.sandbox import (
+    ContainmentRequiredError,
+    _resolve_egress_proxy,
+    maybe_sandbox,
+)
 from operations_center.entrypoints.heartbeat import write_heartbeat
 from operations_center.reviewer.instrumentation import (
     get_instrumenter,
@@ -729,6 +738,15 @@ def _run_pipeline(
                 env=exec_env,
                 enabled=True,
                 chdir=workspace,
+            )
+            # Structural egress confinement for the LEAST-trusted (reviewer)
+            # executor — the board_worker path applies this but the reviewer
+            # historically did not, so OC_EGRESS_NETNS was a no-op here. Opt-in +
+            # fail-open like the sandbox; honors OC_EGRESS_REQUIRED.
+            run_exec_cmd = maybe_netns(
+                run_exec_cmd,
+                proxy_url=_resolve_egress_proxy(exec_env),
+                enabled=netns_enabled(),
             )
         else:
             exec_env, run_exec_cmd = env, exec_cmd
@@ -3378,10 +3396,25 @@ def _poll_once(oc_root: Path, config_path: Path, settings) -> None:
                 phase = "self_review"
                 state["phase"] = "self_review"
 
-            if phase == "ci_fix":
-                _phase0_ci_fix(state, sp, pr_data, gh_client, owner, repo, oc_root, settings)
-            elif phase == "self_review":
-                _phase1(state, sp, pr_data, gh_client, owner, repo, oc_root, config_path, settings)
+            try:
+                if phase == "ci_fix":
+                    _phase0_ci_fix(state, sp, pr_data, gh_client, owner, repo, oc_root, settings)
+                elif phase == "self_review":
+                    _phase1(
+                        state, sp, pr_data, gh_client, owner, repo, oc_root, config_path, settings
+                    )
+            except (ContainmentRequiredError, EgressContainmentRequiredError) as exc:
+                # Operator opted into fail-closed containment but it is unavailable
+                # on this host. Skip JUST this PR — without this, the error would
+                # abort the entire worklist and silently stall every other PR's
+                # review/merge for the cycle.
+                logger.error(
+                    "pr_review_watcher: skipping PR #%s — containment required but "
+                    "unavailable: %s",
+                    state.get("pr_number"),
+                    exc,
+                )
+                continue
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

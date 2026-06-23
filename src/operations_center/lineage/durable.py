@@ -67,26 +67,40 @@ class DurableLineageStore:
                 continue
         return ledger
 
-    def _persist_entry(self, entry: LedgerEntry) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        line = json.dumps(asdict(entry), ensure_ascii=False, sort_keys=True)
-        # Append durably: read-existing + rewrite via atomic replace so a crash
-        # mid-write can't leave a torn last line that breaks the next load.
-        existing = self.path.read_text(encoding="utf-8") if self.path.is_file() else ""
-        tmp = self.path.with_suffix(self.path.suffix + ".tmp")
-        tmp.write_text(existing + line + "\n", encoding="utf-8")
-        os.replace(tmp, self.path)
-
     # ── public API ────────────────────────────────────────────────────────────
     def append(self, lineage_id: str, author: str, payload: dict) -> LedgerEntry:
         """Append an entry (authorship-bound, hash-chained) and persist it.
+
+        Concurrency-safe: an exclusive ``flock`` serializes appends across
+        processes/hosts, the ledger is RELOADED under the lock so this writer
+        chains off the true on-disk tip (no lost writes), and the entry is
+        ``O_APPEND``-written as a single line (no fixed-tmp clobber, no
+        read-modify-rewrite). The payload is canonicalized through a JSON
+        round-trip BEFORE hashing so the stored ``this_hash`` matches what a
+        later reload (which JSON-decodes the payload) recomputes — otherwise a
+        tuple/non-str-key payload would hash differently after reload and silently
+        break ``verify()``.
 
         Raises ``AuthorshipError`` if ``author`` does not own ``lineage_id`` — the
         forged write is neither chained nor persisted.
         """
 
-        entry = self._ledger.append(lineage_id, author, payload)
-        self._persist_entry(entry)
+        import fcntl
+
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        payload = json.loads(json.dumps(payload, ensure_ascii=False, default=str))
+        with open(self.path, "a", encoding="utf-8") as fh:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+            try:
+                # Reload under the lock so we see (and chain off) any entries other
+                # writers appended since this store was constructed.
+                self._ledger = self._load()
+                entry = self._ledger.append(lineage_id, author, payload)
+                fh.write(json.dumps(asdict(entry), ensure_ascii=False, sort_keys=True) + "\n")
+                fh.flush()
+                os.fsync(fh.fileno())
+            finally:
+                fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
         return entry
 
     def verify(self) -> bool:
@@ -113,4 +127,29 @@ def lineage_id_for_task(task_id: str) -> str:
     return f"lin-{task_id[:12]}"
 
 
-__all__ = ["DurableLineageStore", "lineage_id_for_task"]
+def record_task_completion(oc_root: Path, task_id: str, result: dict) -> None:
+    """Best-effort producer: append a completed task's lineage to the durable tier.
+
+    Records only typed, code-derived fields (status, run_id, pr_url) — NEVER the
+    free-text goal — authored as ``board_worker`` (one trust domain for all board
+    lanes). Any failure (authorship conflict, I/O) is swallowed: lineage recording
+    must never break the dispatch success path. This is the production writer that
+    makes the durable tier non-inert (Phase F1).
+    """
+    try:
+        store = DurableLineageStore(Path(oc_root) / "state" / "lineage" / "ledger.jsonl")
+        store.append(
+            lineage_id_for_task(task_id),
+            "board_worker",
+            {
+                "task_id": task_id,
+                "run_id": result.get("run_id"),
+                "status": result.get("status"),
+                "pr_url": result.get("pull_request_url") or None,
+            },
+        )
+    except Exception:  # noqa: BLE001 — never break dispatch on lineage I/O
+        pass
+
+
+__all__ = ["DurableLineageStore", "lineage_id_for_task", "record_task_completion"]

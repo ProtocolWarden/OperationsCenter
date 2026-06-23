@@ -8291,3 +8291,46 @@ undeclared OC->RepoGraph edge (OC depends on platform_manifest, which does not
 re-export the RUN/AUDIT/EVIDENCE EntityKind vocab). Rewrote A3 to emit
 RepoGraph-SHAPED dicts (kind names as strings), no repograph import — a derived
 export the manifest side hydrates. Custodian clean.
+
+## 2026-06-23 — Remediation R1+R2: heartbeat clobber + fail-closed containment
+
+R1: `_heartbeat_loop` now uses new `touch_liveness` (updates at/status, preserves
+last_success_at/consecutive_failures) instead of a success write; the poll loop
+records `success=dispatch_result` instead of unconditional True. A lane
+busy-failing real tasks now ages last_success_at → catchable by HeartbeatStallTask.
+R2a: board_worker poll loop catches ContainmentRequiredError/EgressContainment-
+RequiredError → fail_task (clean block) instead of stranding the task in Running.
+R2b: reviewer exec now routes through maybe_netns (egress confinement was a no-op
+for the least-trusted executor); worklist loop catches containment errors per-PR
+(skip one) instead of aborting the whole cycle.
+
+## 2026-06-23 — Remediation R3/R4/A1/R5/F1/F4: durable tier + model functional
+
+R3: DurableLineageStore.append now uses flock + O_APPEND single-line write +
+reload-under-lock — no lost writes, no fixed-tmp clobber, no read-modify-rewrite.
+R4: payload canonicalized (json round-trip) before hashing so non-JSON-native
+payloads survive reload-verify. A1: durable-backed edges are now `attested`
+(integrity CHAINED + completeness DURABLE + order CAUSAL via attested_trust); a
+code-computed durable edge is finally steerable — the 4-dim model is no longer
+inert-by-construction (Order was never CAUSAL anywhere). R5: build_all scans run
+dirs ONCE and shares records (was O(tasks*runs)). F1: dispatch_issue success now
+appends to the durable tier (typed fields only, best-effort) — the read-model has
+a real producer. F4: create_split_followups honors the ceiling + per-root cap and
+stamps lineage-root (was bypassing both).
+
+## 2026-06-23 — Remediation F2 + A2/A3
+
+F2: controller_liveness gained an --enforce mode (SIGTERMs a stalled supervisor
+so the watchdog PID-revive restarts it) and is now CALLED from the watchdog loop
+(scripts/operations-center.sh) for pid:heartbeat pairs incl. spec:spec_hygiene —
+closing surface 10 (the in-loop detector that died with its host). A2: added
+LineageChain.display_view() as the sanctioned human path + a regression test that
+free text reaches display_view but never steerable_facts; cli emits display_view.
+A3: documented the read/write split in lineage/__init__ — projection reads, the
+durable/integrity tier is the isolated attestation authority (the only writer).
+
+## 2026-06-23 — Remediation custodian fix
+
+Moved the F1 durable producer from dispatch.py into lineage/durable.py as
+record_task_completion (dispatch back under the 500-line C29 limit; producer now
+lives with the tier). Moved its tests to test_durable.py with asserts (T2).

@@ -317,6 +317,11 @@ def dispatch_issue(
                 improve_suggestions=improve_suggestions,
                 pr_url=result.get("pull_request_url") or None,
             )
+            # F1: populate the durable lineage tier on a real completion, so the
+            # read-model has an actual producer (the writer lives with the tier).
+            from operations_center.lineage.durable import record_task_completion
+
+            record_task_completion(oc_root, task_id, result)
         else:
             log_reason = "scope_too_wide" if scope_too_wide else status
             logger.warning(

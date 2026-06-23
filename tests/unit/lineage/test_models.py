@@ -79,3 +79,19 @@ def test_node_and_chain_serialize():
     payload = chain.as_dict()
     assert payload["task_id"] == "t"
     assert payload["nodes"][0]["attributes"] == {"k": "v"}
+
+
+def test_display_view_vs_steering_split():
+    # A2: humans see free text via display_view; lanes must use steerable_facts
+    # which strips it. Pin both halves of the split in one place.
+    from operations_center.lineage.steering import steerable_facts
+
+    task = LineageNode("task:t", "task", default_trust(provenance=Provenance.TEXT_DERIVED),
+                       attributes={"goal_text": "SECRET-MARKER"})
+    chain = LineageChain(task_id="t", nodes=(task,), edges=())
+    # human display surfaces the free text...
+    assert "SECRET-MARKER" in __import__("json").dumps(chain.display_view(), default=str)
+    # ...but the steering path never does
+    assert "SECRET-MARKER" not in __import__("json").dumps(
+        [f.attributes for f in steerable_facts(chain)], default=str
+    )

@@ -91,3 +91,27 @@ def test_durable_tier_does_not_rescue_untracked_lineage(tmp_path: Path):
         durable_lineage_ids=store.durable_lineage_ids(),
     )
     assert _run_completeness(chain) is Completeness.EXPIRED
+
+
+def test_durable_code_computed_edge_becomes_steerable(tmp_path: Path):
+    # A1: once an edge is backed by the durable tier it is attested (chained +
+    # durable + causal), so a CODE-COMPUTED edge becomes steerable — the model is
+    # no longer inert-by-construction.
+    runs, state = _corpus(tmp_path)
+    store = DurableLineageStore(tmp_path / "ledger.jsonl")
+    store.append(lineage_id_for_task(_OLD_TASK), "board_worker", {"step": "done"})
+    chain = build_chain(
+        _OLD_TASK,
+        runs_root=runs,
+        state_dir=state,
+        now=_NOW,
+        durable_lineage_ids=store.durable_lineage_ids(),
+    )
+    steerable_kinds = {e.kind for e in chain.steerable_edges()}
+    assert "executed_as" in steerable_kinds  # task->run, code-computed, now attested
+
+
+def test_without_durable_backing_nothing_is_steerable(tmp_path: Path):
+    runs, state = _corpus(tmp_path)
+    chain = build_chain(_FRESH_TASK, runs_root=runs, state_dir=state, now=_NOW)
+    assert chain.steerable_edges() == ()

@@ -88,13 +88,38 @@ def default_trust(
     provenance: Provenance,
     completeness: Completeness = Completeness.DURABLE,
 ) -> TrustFlags:
-    """Construct trust flags with the not-yet-built dimensions pinned red."""
+    """Construct trust flags with the not-yet-attested dimensions pinned red.
+
+    Used for edges NOT backed by the durable tier: integrity is unverified (no
+    chain) and order is host-relative (no per-lineage sequence), so such an edge
+    can never be steerable regardless of provenance — the safe default.
+    """
 
     return TrustFlags(
         provenance=provenance,
-        integrity=Integrity.UNVERIFIED,  # no chain yet → Phase D1
+        integrity=Integrity.UNVERIFIED,
         completeness=completeness,
-        order=Order.HOST_RELATIVE,  # no logical clock yet → Phase A ordering
+        order=Order.HOST_RELATIVE,
+    )
+
+
+def attested_trust(provenance: Provenance) -> TrustFlags:
+    """Trust flags for an edge BACKED BY THE DURABLE TIER (Phase A5/D1).
+
+    The durable ledger is hash-chained (→ ``integrity=CHAINED``), append-only and
+    retained past source GC (→ ``completeness=DURABLE``), and establishes a
+    monotonic per-lineage order via the chain itself (→ ``order=CAUSAL``). So an
+    attested edge is steerable iff its ``provenance`` is ``CODE_COMPUTED`` — the
+    one dimension the durable tier cannot vouch for. This is what makes the
+    four-dimension model functional: without it, ``order`` never goes CAUSAL and
+    ``is_steerable()`` is unreachable by construction.
+    """
+
+    return TrustFlags(
+        provenance=provenance,
+        integrity=Integrity.CHAINED,
+        completeness=Completeness.DURABLE,
+        order=Order.CAUSAL,
     )
 
 
@@ -151,6 +176,20 @@ class LineageChain:
         """Edges that are NOT admissible for steering (render greyed/flagged)."""
 
         return tuple(e for e in self.edges if not e.trust.is_steerable())
+
+    def display_view(self) -> dict[str, object]:
+        """The sanctioned HUMAN/display representation (may contain free text).
+
+        Two readers, two methods, by design (the typed-steering / display-only
+        split, spec §2): a human/auditor calls ``display_view()`` and may see
+        free-text attributes; a LANE that plans from lineage MUST call
+        ``operations_center.lineage.steering.steerable_facts`` instead, which
+        emits only typed, allowlisted fields. Reading ``.nodes``/``.edges`` raw
+        for *planning* is a misuse — those carry display attributes (incl. the
+        attacker-controllable goal text) and are not a steering surface.
+        """
+
+        return self.as_dict()
 
     def as_dict(self) -> dict[str, object]:
         return {

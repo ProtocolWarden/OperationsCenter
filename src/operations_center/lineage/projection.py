@@ -10,9 +10,11 @@ Joins three families of artifacts the fleet already writes, on stable keys:
                     → plane_task_id, pr_number, head_sha, phase, verdict
   * ci_lineage      <state_dir>/ci_lineage.json   (keyed lin-<task_id[:12]>)
 
-Nothing here writes; it only reads and joins. Every node/edge is trust-labeled
-(``models.default_trust``), so by construction the steerable set is empty until
-the integrity (Phase D1) and ordering work land — the safe default.
+Nothing here writes; it only reads and joins. Every node/edge is trust-labeled:
+edges whose lineage the durable tier vouches for are ``attested`` (steerable iff
+code-computed), all others get the not-yet-attested default (never steerable).
+So an edge becomes steerable ONLY once it is recorded in the durable/integrity
+tier — the safe default for everything else.
 """
 
 from __future__ import annotations
@@ -29,6 +31,8 @@ from .models import (
     LineageEdge,
     LineageNode,
     Provenance,
+    TrustFlags,
+    attested_trust,
     default_trust,
 )
 
@@ -125,18 +129,29 @@ def build_chain(
     now: datetime | None = None,
     retention_days: int = _DEFAULT_RETENTION_DAYS,
     durable_lineage_ids: set[str] | None = None,
+    _all_runs: list[_RunRecord] | None = None,
 ) -> LineageChain:
     """Assemble the lineage chain for one task_id from on-disk signals.
 
     ``durable_lineage_ids`` (Phase A5) is the set of lineage_ids the durable tier
-    vouches for; an edge whose lineage is durable stays ``completeness=durable``
-    even when its source record is past the GC horizon.
+    vouches for; an edge whose lineage is durable is ``attested`` — integrity
+    CHAINED, completeness DURABLE, order CAUSAL — so a code-computed durable edge
+    becomes steerable. ``_all_runs`` lets ``build_all`` scan the run dirs ONCE and
+    share the parsed records (R5), instead of re-scanning per task.
     """
 
     now = now or datetime.now(timezone.utc)
     durable = (durable_lineage_ids is not None) and (f"lin-{task_id[:12]}" in durable_lineage_ids)
-    runs = [r for r in _iter_runs(runs_root) if r.task_id == task_id]
+    all_runs = _all_runs if _all_runs is not None else _iter_runs(runs_root)
+    runs = [r for r in all_runs if r.task_id == task_id]
     pr_states = _load_pr_reviews(state_dir)
+
+    def _trust(provenance: Provenance, complete: Completeness) -> TrustFlags:
+        # A durable-backed edge is attested (3 dims green); otherwise the
+        # not-yet-attested default (integrity unverified, order host-relative).
+        if durable:
+            return attested_trust(provenance)
+        return default_trust(provenance=provenance, completeness=complete)
 
     nodes: list[LineageNode] = []
     edges: list[LineageEdge] = []
@@ -152,14 +167,12 @@ def build_chain(
         goal = goal or r.proposal.get("goal_text")
         target = r.proposal.get("target") or {}
         repo = repo or (target.get("repo_key") if isinstance(target, dict) else None)
+    task_complete = _completeness(task_ts, now=now, retention_days=retention_days, durable=durable)
     nodes.append(
         LineageNode(
             node_id=task_node_id,
             kind="task",
-            trust=default_trust(
-                provenance=Provenance.TEXT_DERIVED,
-                completeness=_completeness(task_ts, now=now, retention_days=retention_days, durable=durable),
-            ),
+            trust=_trust(Provenance.TEXT_DERIVED, task_complete),
             attributes={"task_id": task_id, "repo_key": repo, "goal_text": goal},
         )
     )
@@ -174,9 +187,7 @@ def build_chain(
             LineageNode(
                 node_id=run_node_id,
                 kind="run",
-                trust=default_trust(
-                    provenance=Provenance.CODE_COMPUTED, completeness=run_complete
-                ),
+                trust=_trust(Provenance.CODE_COMPUTED, run_complete),
                 attributes={
                     "run_id": r.run_id,
                     "proposal_id": r.proposal_id,
@@ -192,9 +203,7 @@ def build_chain(
                 src=task_node_id,
                 dst=run_node_id,
                 kind="executed_as",
-                trust=default_trust(
-                    provenance=Provenance.CODE_COMPUTED, completeness=run_complete
-                ),
+                trust=_trust(Provenance.CODE_COMPUTED, run_complete),
             )
         )
         pr_num = _pr_number_from_url(r.result.get("pull_request_url"))
@@ -205,9 +214,7 @@ def build_chain(
                     src=run_node_id,
                     dst=f"pr:{pr_num}",
                     kind="produced_pr",
-                    trust=default_trust(
-                        provenance=Provenance.CODE_COMPUTED, completeness=run_complete
-                    ),
+                    trust=_trust(Provenance.CODE_COMPUTED, run_complete),
                 )
             )
 
@@ -225,9 +232,7 @@ def build_chain(
             LineageNode(
                 node_id=pr_node_id,
                 kind="pr",
-                trust=default_trust(
-                    provenance=Provenance.CODE_COMPUTED, completeness=pr_complete
-                ),
+                trust=_trust(Provenance.CODE_COMPUTED, pr_complete),
                 attributes={
                     "pr_number": pr_num,
                     "repo_key": state.get("repo_key"),
@@ -244,9 +249,7 @@ def build_chain(
                     src=task_node_id,
                     dst=pr_node_id,
                     kind="produced_pr",
-                    trust=default_trust(
-                        provenance=Provenance.CODE_COMPUTED, completeness=pr_complete
-                    ),
+                    trust=_trust(Provenance.CODE_COMPUTED, pr_complete),
                 )
             )
         verdict = state.get("verdict")
@@ -258,9 +261,7 @@ def build_chain(
                 LineageNode(
                     node_id=verdict_node_id,
                     kind="verdict",
-                    trust=default_trust(
-                        provenance=Provenance.CODE_COMPUTED, completeness=pr_complete
-                    ),
+                    trust=_trust(Provenance.CODE_COMPUTED, pr_complete),
                     attributes={
                         "result": verdict.get("result"),
                         "failing_checks": verdict.get("failing_checks"),
@@ -272,9 +273,7 @@ def build_chain(
                     src=pr_node_id,
                     dst=verdict_node_id,
                     kind="reviewed_as",
-                    trust=default_trust(
-                        provenance=Provenance.CODE_COMPUTED, completeness=pr_complete
-                    ),
+                    trust=_trust(Provenance.CODE_COMPUTED, pr_complete),
                 )
             )
 
@@ -292,7 +291,10 @@ def build_all(
     """Build chains for every task_id discoverable in the run artifacts."""
 
     now = now or datetime.now(timezone.utc)
-    task_ids = {r.task_id for r in _iter_runs(runs_root) if r.task_id}
+    # R5: scan + parse the run dirs ONCE and share the records across every chain,
+    # instead of re-scanning runs_root per task (which was O(tasks × runs)).
+    all_runs = _iter_runs(runs_root)
+    task_ids = {r.task_id for r in all_runs if r.task_id}
     # Tasks that only show up in pr_reviews (via plane_task_id) also count.
     for state in _load_pr_reviews(state_dir):
         tid = state.get("plane_task_id")
@@ -306,6 +308,7 @@ def build_all(
             now=now,
             retention_days=retention_days,
             durable_lineage_ids=durable_lineage_ids,
+            _all_runs=all_runs,
         )
         for tid in sorted(task_ids)
     }

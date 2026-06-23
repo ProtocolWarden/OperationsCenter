@@ -34,11 +34,14 @@ import threading
 import time
 from pathlib import Path
 
-from operations_center.entrypoints.heartbeat import write_heartbeat
+from operations_center.entrypoints.heartbeat import touch_liveness, write_heartbeat
 
 from .claim import claim_next
 from .dispatch import dispatch_issue
 from .labels import ROLE_KINDS
+from .netns import EgressContainmentRequiredError
+from .outcomes import fail_task
+from .sandbox import ContainmentRequiredError
 
 logger = logging.getLogger(__name__)
 
@@ -82,9 +85,14 @@ def _write_heartbeat(
 
 
 def _heartbeat_loop(status_dir: Path, role: str, stop_event: threading.Event) -> None:
-    """Write 'executing' heartbeat every 60 s while a task runs."""
+    """Refresh liveness every 60 s while a task runs — WITHOUT stamping progress.
+
+    Uses ``touch_liveness`` (not a success write) so a task that ultimately fails
+    cannot leave behind a run of fresh ``last_success_at`` stamps that hide a
+    busy crash-loop from HeartbeatStallTask.
+    """
     while not stop_event.is_set():
-        _write_heartbeat(status_dir, role, status="executing")
+        touch_liveness(status_dir, role, status="executing")
         stop_event.wait(60)
 
 
@@ -154,6 +162,7 @@ def main() -> int:
             client = _plane_client(settings)
             try:
                 issue = claim_next(client, role, settings)
+                cycle_ok = True
                 if issue:
                     stop_event = threading.Event()
                     hb_thread = threading.Thread(
@@ -163,13 +172,33 @@ def main() -> int:
                     )
                     hb_thread.start()
                     try:
-                        dispatch_issue(issue, role, args.config, settings, client)
+                        cycle_ok = bool(
+                            dispatch_issue(issue, role, args.config, settings, client)
+                        )
+                    except (ContainmentRequiredError, EgressContainmentRequiredError) as exc:
+                        # Operator opted into fail-closed containment but it is
+                        # unavailable. Refuse to run un-contained AND block the task
+                        # cleanly — without this it would strand in Running forever.
+                        fail_task(
+                            client,
+                            str(issue["id"]),
+                            role,
+                            f"containment required but unavailable: {exc}",
+                        )
+                        cycle_ok = False
                     finally:
                         stop_event.set()
                         hb_thread.join(timeout=5)
                 else:
                     logger.debug("board_worker[%s]: nothing ready", role)
-                _write_heartbeat(status_dir, role)
+                # Record the cycle's ACTUAL outcome: a cleanly-failed dispatch
+                # (return False) must age last_success_at, not stamp success.
+                _write_heartbeat(
+                    status_dir,
+                    role,
+                    status="idle" if cycle_ok else "error",
+                    success=cycle_ok,
+                )
             finally:
                 client.close()
         except Exception as exc:

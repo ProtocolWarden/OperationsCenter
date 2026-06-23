@@ -82,11 +82,48 @@ def check_controller_liveness(
     return LivenessVerdict(role, "healthy", "live and succeeding")
 
 
+def signal_restart(pid_file: Path) -> bool:
+    """Best-effort SIGTERM the PID in ``pid_file`` so the watchdog's PID-revive
+    logic restarts the (live-but-stalled or hung) watcher. Returns True if a
+    signal was sent. Never raises — enforcement must not break the watchdog."""
+    import os
+    import signal
+
+    try:
+        pid = int(Path(pid_file).read_text(encoding="utf-8").strip())
+    except Exception:
+        return False
+    try:
+        os.kill(pid, signal.SIGTERM)
+        logger.error(
+            'controller_liveness: SIGTERM sent to stalled watcher pid=%d {"event": '
+            '"controller_restart_signaled", "pid": %d, "pid_file": "%s"}',
+            pid,
+            pid,
+            pid_file,
+        )
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("controller_liveness: failed to signal pid from %s — %s", pid_file, exc)
+        return False
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="controller-liveness")
     parser.add_argument("--status-dir", type=Path, default=_DEFAULT_STATUS_DIR)
     parser.add_argument("--role", default=_DEFAULT_ROLE)
     parser.add_argument("--max-liveness-seconds", type=int, default=_DEFAULT_MAX_LIVENESS_SECONDS)
+    parser.add_argument(
+        "--enforce",
+        action="store_true",
+        help="on dead/stalled, SIGTERM the watcher in --pid-file so it is restarted",
+    )
+    parser.add_argument(
+        "--pid-file",
+        type=Path,
+        default=None,
+        help="PID file of the supervisor to restart when --enforce and unhealthy",
+    )
     args = parser.parse_args(argv)
 
     verdict = check_controller_liveness(
@@ -102,6 +139,8 @@ def main(argv: list[str] | None = None) -> int:
             verdict.role,
             verdict.status,
         )
+        if args.enforce and args.pid_file is not None:
+            signal_restart(args.pid_file)
         return 1
     logger.info("controller_liveness: %s %s — %s", verdict.role, verdict.status, verdict.detail)
     return 0
