@@ -318,10 +318,10 @@ def dispatch_issue(
                 pr_url=result.get("pull_request_url") or None,
             )
             # F1: populate the durable lineage tier on a real completion, so the
-            # read-model has an actual producer (without this the durable tier is
-            # never written and A5's attestation is inert). Typed, code-derived
-            # fields only — never the free-text goal. Best-effort.
-            _record_durable_lineage(oc_root, task_id, result)
+            # read-model has an actual producer (the writer lives with the tier).
+            from operations_center.lineage.durable import record_task_completion
+
+            record_task_completion(oc_root, task_id, result)
         else:
             log_reason = "scope_too_wide" if scope_too_wide else status
             logger.warning(
@@ -346,35 +346,6 @@ def dispatch_issue(
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
-
-
-def _record_durable_lineage(oc_root: Path, task_id: str, result: dict) -> None:
-    """Best-effort: append a completed task's lineage to the durable tier.
-
-    Records only typed, code-derived fields (status, run_id, pr_url) — never the
-    free-text goal — authored as ``board_worker`` (one trust domain for all board
-    lanes). Any failure (authorship conflict, I/O) is swallowed: lineage recording
-    must never break the success path.
-    """
-    try:
-        from operations_center.lineage.durable import (
-            DurableLineageStore,
-            lineage_id_for_task,
-        )
-
-        store = DurableLineageStore(oc_root / "state" / "lineage" / "ledger.jsonl")
-        store.append(
-            lineage_id_for_task(task_id),
-            "board_worker",
-            {
-                "task_id": task_id,
-                "run_id": result.get("run_id"),
-                "status": result.get("status"),
-                "pr_url": result.get("pull_request_url") or None,
-            },
-        )
-    except Exception as exc:  # noqa: BLE001 — never break dispatch on lineage I/O
-        logger.debug("board_worker: durable lineage record skipped for %s — %s", task_id, exc)
 
 
 def _repo_local_path(settings, repo_key: str) -> str:

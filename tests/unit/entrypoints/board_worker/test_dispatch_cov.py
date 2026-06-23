@@ -547,30 +547,3 @@ def test_dispatch_spec_author_no_repo_cfg_uses_file_url(monkeypatch):
     assert out is False
     assert proc.call_args.kwargs["clone_url"].startswith("file://")
     assert proc.call_args.kwargs["base_branch"] == "main"
-
-
-# ── F1: durable lineage producer ───────────────────────────────────────────────
-
-
-def test_record_durable_lineage_writes_typed_fields(tmp_path):
-    from operations_center.entrypoints.board_worker import dispatch
-    from operations_center.lineage.durable import DurableLineageStore, lineage_id_for_task
-
-    dispatch._record_durable_lineage(
-        tmp_path,
-        "task-abc-123456",
-        {"run_id": "r1", "status": "succeeded", "pull_request_url": "https://x/pull/9",
-         "goal_text": "SECRET"},
-    )
-    store = DurableLineageStore(tmp_path / "state" / "lineage" / "ledger.jsonl")
-    assert store.durable_lineage_ids() == {lineage_id_for_task("task-abc-123456")}
-    payload = store.entries[0].payload
-    assert payload["status"] == "succeeded" and payload["pr_url"] == "https://x/pull/9"
-    assert "goal_text" not in payload  # free text never recorded
-
-
-def test_record_durable_lineage_is_best_effort(tmp_path):
-    from operations_center.entrypoints.board_worker import dispatch
-
-    # an unwritable path must not raise
-    dispatch._record_durable_lineage(tmp_path / "nonexistent\x00bad", "t", {"status": "x"})

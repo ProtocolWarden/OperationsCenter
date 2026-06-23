@@ -98,3 +98,29 @@ def test_non_json_native_payload_survives_verify(tmp_path: Path):
     reloaded = DurableLineageStore(p)
     assert reloaded.verify()
     assert reloaded.durable_lineage_ids() == {"lin-a"}
+
+
+# ── F1 producer ────────────────────────────────────────────────────────────────
+
+
+def test_record_task_completion_writes_typed_fields(tmp_path: Path):
+    from operations_center.lineage.durable import record_task_completion
+
+    record_task_completion(
+        tmp_path,
+        "task-abc-123456",
+        {"run_id": "r1", "status": "succeeded", "pull_request_url": "https://x/pull/9",
+         "goal_text": "SECRET"},
+    )
+    store = DurableLineageStore(tmp_path / "state" / "lineage" / "ledger.jsonl")
+    assert store.durable_lineage_ids() == {lineage_id_for_task("task-abc-123456")}
+    payload = store.entries[0].payload
+    assert payload["status"] == "succeeded" and payload["pr_url"] == "https://x/pull/9"
+    assert "goal_text" not in payload  # free text never recorded
+
+
+def test_record_task_completion_is_best_effort(tmp_path: Path):
+    from operations_center.lineage.durable import record_task_completion
+
+    # an unwritable path must not raise (returns None)
+    assert record_task_completion(tmp_path / "bad\x00path", "t", {"status": "x"}) is None

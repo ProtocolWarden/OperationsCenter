@@ -8328,3 +8328,9 @@ LineageChain.display_view() as the sanctioned human path + a regression test tha
 free text reaches display_view but never steerable_facts; cli emits display_view.
 A3: documented the read/write split in lineage/__init__ — projection reads, the
 durable/integrity tier is the isolated attestation authority (the only writer).
+
+## 2026-06-23 — Remediation custodian fix
+
+Moved the F1 durable producer from dispatch.py into lineage/durable.py as
+record_task_completion (dispatch back under the 500-line C29 limit; producer now
+lives with the tier). Moved its tests to test_durable.py with asserts (T2).

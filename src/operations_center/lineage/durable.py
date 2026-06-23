@@ -127,4 +127,29 @@ def lineage_id_for_task(task_id: str) -> str:
     return f"lin-{task_id[:12]}"
 
 
-__all__ = ["DurableLineageStore", "lineage_id_for_task"]
+def record_task_completion(oc_root: Path, task_id: str, result: dict) -> None:
+    """Best-effort producer: append a completed task's lineage to the durable tier.
+
+    Records only typed, code-derived fields (status, run_id, pr_url) — NEVER the
+    free-text goal — authored as ``board_worker`` (one trust domain for all board
+    lanes). Any failure (authorship conflict, I/O) is swallowed: lineage recording
+    must never break the dispatch success path. This is the production writer that
+    makes the durable tier non-inert (Phase F1).
+    """
+    try:
+        store = DurableLineageStore(Path(oc_root) / "state" / "lineage" / "ledger.jsonl")
+        store.append(
+            lineage_id_for_task(task_id),
+            "board_worker",
+            {
+                "task_id": task_id,
+                "run_id": result.get("run_id"),
+                "status": result.get("status"),
+                "pr_url": result.get("pull_request_url") or None,
+            },
+        )
+    except Exception:  # noqa: BLE001 — never break dispatch on lineage I/O
+        pass
+
+
+__all__ = ["DurableLineageStore", "lineage_id_for_task", "record_task_completion"]
