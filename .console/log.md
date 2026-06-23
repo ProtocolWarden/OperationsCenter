@@ -8317,3 +8317,14 @@ dirs ONCE and shares records (was O(tasks*runs)). F1: dispatch_issue success now
 appends to the durable tier (typed fields only, best-effort) — the read-model has
 a real producer. F4: create_split_followups honors the ceiling + per-root cap and
 stamps lineage-root (was bypassing both).
+
+## 2026-06-23 — Remediation F2 + A2/A3
+
+F2: controller_liveness gained an --enforce mode (SIGTERMs a stalled supervisor
+so the watchdog PID-revive restarts it) and is now CALLED from the watchdog loop
+(scripts/operations-center.sh) for pid:heartbeat pairs incl. spec:spec_hygiene —
+closing surface 10 (the in-loop detector that died with its host). A2: added
+LineageChain.display_view() as the sanctioned human path + a regression test that
+free text reaches display_view but never steerable_facts; cli emits display_view.
+A3: documented the read/write split in lineage/__init__ — projection reads, the
+durable/integrity tier is the isolated attestation authority (the only writer).

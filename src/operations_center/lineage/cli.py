@@ -71,7 +71,8 @@ def main(argv: list[str] | None = None) -> int:
             args.task_id, runs_root=args.runs_root, state_dir=args.state_dir, now=now
         )
         if args.json:
-            print(json.dumps(chain.as_dict(), indent=2, default=str, ensure_ascii=False))
+            # the sanctioned human/display representation (may include free text)
+            print(json.dumps(chain.display_view(), indent=2, default=str, ensure_ascii=False))
         else:
             print(render_chain(chain))
         return 0
@@ -80,7 +81,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
         print(
             json.dumps(
-                {k: v.as_dict() for k, v in chains.items()},
+                {k: v.display_view() for k, v in chains.items()},
                 indent=2,
                 default=str,
                 ensure_ascii=False,

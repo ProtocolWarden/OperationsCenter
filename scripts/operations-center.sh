@@ -586,6 +586,17 @@ start_watchdog() {
           '${ROOT_DIR}/scripts/operations-center.sh' watch --role \"\$_r\"
         fi
       done
+      # Liveness-SUCCESS enforcement (determinism surface 10): the PID revive
+      # above only catches DEAD watchers. controller_liveness catches a watcher
+      # that is LIVE but not succeeding (e.g. spec_hygiene crash-looping) — the
+      # blind spot HeartbeatStallTask can't cover for its own host — and SIGTERMs
+      # its supervisor so the revive restarts it. Pairs: pid-role:heartbeat-role.
+      for _pair in spec:spec_hygiene review:review goal:goal test:test improve:improve; do
+        _pidrole=\${_pair%%:*}; _hbrole=\${_pair##*:}
+        '${VENV_DIR}/bin/python' -m operations_center.entrypoints.controller_liveness \
+          --role \"\$_hbrole\" --status-dir '${WATCH_DIR}' \
+          --enforce --pid-file '${WATCH_DIR}'/\"\$_pidrole\".pid >/dev/null 2>&1 || true
+      done
     done
     echo '{\"event\":\"watchdog_exit\"}'
   " >>"${log_file}" 2>&1 < /dev/null &

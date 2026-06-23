@@ -177,6 +177,20 @@ class LineageChain:
 
         return tuple(e for e in self.edges if not e.trust.is_steerable())
 
+    def display_view(self) -> dict[str, object]:
+        """The sanctioned HUMAN/display representation (may contain free text).
+
+        Two readers, two methods, by design (the typed-steering / display-only
+        split, spec §2): a human/auditor calls ``display_view()`` and may see
+        free-text attributes; a LANE that plans from lineage MUST call
+        ``operations_center.lineage.steering.steerable_facts`` instead, which
+        emits only typed, allowlisted fields. Reading ``.nodes``/``.edges`` raw
+        for *planning* is a misuse — those carry display attributes (incl. the
+        attacker-controllable goal text) and are not a steering surface.
+        """
+
+        return self.as_dict()
+
     def as_dict(self) -> dict[str, object]:
         return {
             "task_id": self.task_id,

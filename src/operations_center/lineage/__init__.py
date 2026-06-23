@@ -1,11 +1,26 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-"""Execution-lineage projection — a derived, trust-labeled read-model.
+"""Execution-lineage — a derived read-model plus an attestation authority.
 
-See ``docs/design/EXECUTION_LINEAGE_AND_DETERMINISM_BOUNDARY.md``. The package
-reads signals the fleet already emits and joins them into per-task chains. It
-never authors; it labels each edge's trust so the projection is honest about its
-own untrustworthiness, and exposes a single sanctioned steering path.
+See ``docs/design/EXECUTION_LINEAGE_AND_DETERMINISM_BOUNDARY.md``. This package
+has two halves with deliberately separated roles:
+
+* **Projection (read-model, derived):** ``projection.py`` reads signals the fleet
+  already emits and joins them into per-task chains. It NEVER writes; it only
+  *reads* the durable tier's ``durable_lineage_ids()`` to decide which edges are
+  attested. This half upholds the spec's "lineage = derived, never authored."
+* **Durable/integrity tier (attestation authority, authored):** ``durable.py`` +
+  ``integrity.py`` are an append-only, hash-chained, authorship-bound ledger —
+  genuinely a system of record (it establishes lineage ownership). It is the ONLY
+  writer, and the projection treats it as just another source signal (identical
+  to how it reads ``pr_reviews``). Keeping it here, with this one-directional
+  boundary (projection reads, durable writes), is intentional: the "authority" is
+  isolated to ``durable.py``/``integrity.py`` and never leaks into the projection.
+
+An edge becomes *steerable* only once the durable tier attests it (``attested_trust``)
+AND its provenance is code-computed; ``steering.steerable_facts`` is the single
+sanctioned path a lane may plan from (free text stripped). Humans read
+``LineageChain.display_view()``.
 """
 
 from __future__ import annotations
