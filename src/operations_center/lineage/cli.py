@@ -45,9 +45,14 @@ def render_chain(chain: LineageChain) -> str:
     attrs = {n.kind: n.attributes for n in chain.nodes}
     if "task" in attrs:
         lines.append(f"  repo: {attrs['task'].get('repo_key')}")
-    for edge in chain.edges:
-        lines.append(f"  {edge.src} --{edge.kind}--> {edge.dst}  {_trust_glyph(edge)}")
+    # Render steerable edges first, then the display-only ones, so the honest
+    # trust split is visible at a glance rather than buried in a flat list.
     steerable = chain.steerable_edges()
+    display_only = chain.display_edges()
+    for edge in steerable:
+        lines.append(f"  {edge.src} --{edge.kind}--> {edge.dst}  {_trust_glyph(edge)}")
+    for edge in display_only:
+        lines.append(f"  {edge.src} --{edge.kind}--> {edge.dst}  {_trust_glyph(edge)}")
     lines.append(f"  steerable edges: {len(steerable)} / {len(chain.edges)}")
     return "\n".join(lines)
 

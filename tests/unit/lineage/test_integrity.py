@@ -51,10 +51,13 @@ def test_authorship_binding_rejects_foreign_writer():
     assert led.verify()
 
 
-def test_owner_is_first_writer():
+def test_first_writer_owns_subsequent_same_author_writes_ok():
     led = LineageLedger()
-    led.append("lin-z", "spec-lane", {})
-    assert led.owner_of("lin-z") == "spec-lane"
+    led.append("lin-z", "spec-lane", {"a": 1})
+    # same author may keep appending; ownership established by the first write
+    led.append("lin-z", "spec-lane", {"a": 2})
+    assert len(led.entries) == 2
+    assert led.verify()
 
 
 def test_tamper_is_detected():

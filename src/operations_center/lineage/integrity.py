@@ -70,9 +70,6 @@ class LineageLedger:
     _owner: dict[str, str] = field(default_factory=dict)
     _tip: dict[str, str] = field(default_factory=dict)
 
-    def owner_of(self, lineage_id: str) -> str | None:
-        return self._owner.get(lineage_id)
-
     def append(self, lineage_id: str, author: str, payload: dict) -> LedgerEntry:
         """Append an entry. The first author of a lineage owns it; a mismatched
         author is rejected (and recorded in ``quarantined``) — never silently

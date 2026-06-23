@@ -8256,3 +8256,10 @@ from HARNESS_TRUST_HARDENING.md. Custodian now clean; full unit suite 8050 green
 
 Added the SPDX header to the empty tests/unit/lineage/__init__.py (License
 headers CI requires SPDX on every .py file). PR #388.
+
+## 2026-06-23 — D12 ratchet fix
+
+CI audit (D12 incomplete-integration gate) flagged two unwired symbols:
+display_edges() (now used by cli.render_chain to show the trust split) and
+owner_of() (removed — speculative API with no consumer; ownership is enforced
+internally in append()). D12 gate now clean. PR #388.
