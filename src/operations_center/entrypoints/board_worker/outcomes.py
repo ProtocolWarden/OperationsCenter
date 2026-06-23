@@ -312,6 +312,27 @@ def create_split_followups(
     if not chunks:
         return []
 
+    # Scope-split is the highest-fanout creation path (≤N children, each able to
+    # re-split). It must honor the SAME aggregate brakes as create_follow_up —
+    # the global ceiling (surface 6) and the per-root cap (surface 7) — or the
+    # cap that claims to bound "a runaway scope-split" is bypassed entirely.
+    lineage_root = label_value(parent_labels, "lineage-root") or parent_id
+    if ceiling_reached(client, _settings):
+        logger.warning(
+            "board_worker: refusing scope-split — fleet work ceiling reached "
+            "(parent task_id=%s)",
+            parent_id,
+        )
+        return []
+    if root_descendant_cap_reached(client, _settings, lineage_root):
+        logger.warning(
+            "board_worker: refusing scope-split — per-root descendant cap reached "
+            "(root=%s parent task_id=%s)",
+            lineage_root,
+            parent_id,
+        )
+        return []
+
     inherited_sources = [
         (lab.get("name", "") if isinstance(lab, dict) else str(lab)).strip()
         for lab in parent_labels
@@ -342,6 +363,7 @@ def create_split_followups(
             "source: scope-split",
             *inherited_sources,
             f"original-task-id: {parent_id}",
+            f"lineage-root: {lineage_root}",
             f"handoff-reason: {reason}",
             f"retry-count: {retry_count + 1}",
         ]

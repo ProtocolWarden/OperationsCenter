@@ -88,13 +88,38 @@ def default_trust(
     provenance: Provenance,
     completeness: Completeness = Completeness.DURABLE,
 ) -> TrustFlags:
-    """Construct trust flags with the not-yet-built dimensions pinned red."""
+    """Construct trust flags with the not-yet-attested dimensions pinned red.
+
+    Used for edges NOT backed by the durable tier: integrity is unverified (no
+    chain) and order is host-relative (no per-lineage sequence), so such an edge
+    can never be steerable regardless of provenance — the safe default.
+    """
 
     return TrustFlags(
         provenance=provenance,
-        integrity=Integrity.UNVERIFIED,  # no chain yet → Phase D1
+        integrity=Integrity.UNVERIFIED,
         completeness=completeness,
-        order=Order.HOST_RELATIVE,  # no logical clock yet → Phase A ordering
+        order=Order.HOST_RELATIVE,
+    )
+
+
+def attested_trust(provenance: Provenance) -> TrustFlags:
+    """Trust flags for an edge BACKED BY THE DURABLE TIER (Phase A5/D1).
+
+    The durable ledger is hash-chained (→ ``integrity=CHAINED``), append-only and
+    retained past source GC (→ ``completeness=DURABLE``), and establishes a
+    monotonic per-lineage order via the chain itself (→ ``order=CAUSAL``). So an
+    attested edge is steerable iff its ``provenance`` is ``CODE_COMPUTED`` — the
+    one dimension the durable tier cannot vouch for. This is what makes the
+    four-dimension model functional: without it, ``order`` never goes CAUSAL and
+    ``is_steerable()`` is unreachable by construction.
+    """
+
+    return TrustFlags(
+        provenance=provenance,
+        integrity=Integrity.CHAINED,
+        completeness=Completeness.DURABLE,
+        order=Order.CAUSAL,
     )
 
 

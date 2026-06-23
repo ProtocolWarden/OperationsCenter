@@ -8303,3 +8303,17 @@ RequiredError → fail_task (clean block) instead of stranding the task in Runni
 R2b: reviewer exec now routes through maybe_netns (egress confinement was a no-op
 for the least-trusted executor); worklist loop catches containment errors per-PR
 (skip one) instead of aborting the whole cycle.
+
+## 2026-06-23 — Remediation R3/R4/A1/R5/F1/F4: durable tier + model functional
+
+R3: DurableLineageStore.append now uses flock + O_APPEND single-line write +
+reload-under-lock — no lost writes, no fixed-tmp clobber, no read-modify-rewrite.
+R4: payload canonicalized (json round-trip) before hashing so non-JSON-native
+payloads survive reload-verify. A1: durable-backed edges are now `attested`
+(integrity CHAINED + completeness DURABLE + order CAUSAL via attested_trust); a
+code-computed durable edge is finally steerable — the 4-dim model is no longer
+inert-by-construction (Order was never CAUSAL anywhere). R5: build_all scans run
+dirs ONCE and shares records (was O(tasks*runs)). F1: dispatch_issue success now
+appends to the durable tier (typed fields only, best-effort) — the read-model has
+a real producer. F4: create_split_followups honors the ceiling + per-root cap and
+stamps lineage-root (was bypassing both).

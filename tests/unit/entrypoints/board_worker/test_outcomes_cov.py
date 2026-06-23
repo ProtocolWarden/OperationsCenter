@@ -479,6 +479,50 @@ def test_create_split_followups_no_chunks():
     assert result == []
 
 
+def test_create_split_followups_respects_work_ceiling():
+    # F4: scope-split must honor the global ceiling like create_follow_up does.
+    from types import SimpleNamespace
+
+    client = _make_client(create_id="child-1")
+    client.list_issues.return_value = [
+        {"id": str(i), "state": {"name": "Ready for AI"}, "labels": [{"name": "source: board_worker"}]}
+        for i in range(5)
+    ]
+    parent = {"id": "P", "name": "Big", "labels": [{"name": "repo: web"}]}
+    settings = SimpleNamespace(max_open_fleet_tasks=3, max_descendants_per_root=0)
+    result = outcomes.create_split_followups(client, parent, settings, ["a.py", "b.py"], "r")
+    assert result == []
+    client.create_issue.assert_not_called()
+
+
+def test_create_split_followups_respects_root_cap():
+    # F4: scope-split must honor the per-root descendant cap.
+    from types import SimpleNamespace
+
+    client = _make_client(create_id="child-1")
+    client.list_issues.return_value = [
+        {"id": str(i), "state": {"name": "Ready for AI"}, "labels": [{"name": "lineage-root: P"}]}
+        for i in range(4)
+    ]
+    parent = {"id": "P", "name": "Big", "labels": [{"name": "repo: web"}]}
+    settings = SimpleNamespace(max_open_fleet_tasks=0, max_descendants_per_root=4)
+    result = outcomes.create_split_followups(client, parent, settings, ["a.py", "b.py"], "r")
+    assert result == []
+
+
+def test_create_split_followups_stamps_lineage_root():
+    # F4: split children carry lineage-root so they are countable by the cap.
+    client = _make_client(create_id="child-1")
+    parent = {
+        "id": "P",
+        "name": "Big",
+        "labels": [{"name": "repo: web"}, {"name": "lineage-root: ROOT-7"}],
+    }
+    outcomes.create_split_followups(client, parent, None, ["a.py"], "r")
+    labels = client.create_issue.call_args.kwargs["label_names"]
+    assert "lineage-root: ROOT-7" in labels  # propagated from parent
+
+
 def test_create_split_followups_happy():
     client = _make_client(create_id="child-1")
     parent = {
@@ -497,6 +541,7 @@ def test_create_split_followups_happy():
     labels = client.create_issue.call_args.kwargs["label_names"]
     assert "task-kind: goal" in labels
     assert "source: scope-split" in labels
+    assert "lineage-root: P" in labels  # falls back to parent_id when no root label
     assert "source: campaign-x" in labels  # inherited
     assert "source: board_worker" in [
         lbl for lbl in labels
