@@ -8251,3 +8251,8 @@ Cleared 8 LOW findings before push: C41 ensure_ascii=False (integrity hash +
 cli json — 3); T6/T7 added direct test files tests/unit/lineage/test_models.py +
 test_steering.py; DC1 added YAML front matter to the spec; DC7 linked the spec
 from HARNESS_TRUST_HARDENING.md. Custodian now clean; full unit suite 8050 green.
+
+## 2026-06-23 — CI fix
+
+Added the SPDX header to the empty tests/unit/lineage/__init__.py (License
+headers CI requires SPDX on every .py file). PR #388.
