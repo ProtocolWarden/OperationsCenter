@@ -92,6 +92,47 @@ def write_heartbeat(
         pass
 
 
+def touch_liveness(
+    status_dir: Path,
+    role: str,
+    *,
+    status: str = "executing",
+    now: datetime | None = None,
+) -> None:
+    """Update ONLY liveness (``at`` + ``status``), preserving the progress fields.
+
+    Used by the in-task heartbeat thread: a long-running task must keep ``at``
+    fresh so the lane looks alive, but it must NOT stamp ``last_success_at`` or
+    reset ``consecutive_failures`` — otherwise a lane busy-failing real tasks
+    (claim → run → fail → reclaim → repeat) keeps a perpetually-fresh success
+    heartbeat and re-creates the exact "live but not succeeding" blind spot the
+    success/liveness split exists to close. Only a genuinely completed *successful*
+    cycle (``write_heartbeat(success=True)``) may advance progress.
+    """
+    from datetime import UTC
+
+    ts = (now or datetime.now(UTC)).isoformat()
+    prior = read_heartbeat(status_dir, role) or {}
+    payload = {
+        "role": role,
+        "at": ts,
+        "status": status,
+        # preserved verbatim — liveness must never touch progress
+        "last_success_at": prior.get("last_success_at"),
+        "consecutive_failures": int(prior.get("consecutive_failures", 0) or 0),
+        "last_error": prior.get("last_error"),
+    }
+    try:
+        sd = Path(status_dir)
+        sd.mkdir(parents=True, exist_ok=True)
+        dest = _path(sd, role)
+        tmp = dest.with_suffix(".json.liveness.tmp")
+        tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, dest)
+    except Exception:
+        pass
+
+
 def _age_seconds(ts: str | None, now: datetime) -> float | None:
     """Seconds between ISO timestamp ``ts`` and ``now``; ``None`` if unparseable."""
     if not ts:

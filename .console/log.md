@@ -8291,3 +8291,15 @@ undeclared OC->RepoGraph edge (OC depends on platform_manifest, which does not
 re-export the RUN/AUDIT/EVIDENCE EntityKind vocab). Rewrote A3 to emit
 RepoGraph-SHAPED dicts (kind names as strings), no repograph import — a derived
 export the manifest side hydrates. Custodian clean.
+
+## 2026-06-23 — Remediation R1+R2: heartbeat clobber + fail-closed containment
+
+R1: `_heartbeat_loop` now uses new `touch_liveness` (updates at/status, preserves
+last_success_at/consecutive_failures) instead of a success write; the poll loop
+records `success=dispatch_result` instead of unconditional True. A lane
+busy-failing real tasks now ages last_success_at → catchable by HeartbeatStallTask.
+R2a: board_worker poll loop catches ContainmentRequiredError/EgressContainment-
+RequiredError → fail_task (clean block) instead of stranding the task in Running.
+R2b: reviewer exec now routes through maybe_netns (egress confinement was a no-op
+for the least-trusted executor); worklist loop catches containment errors per-PR
+(skip one) instead of aborting the whole cycle.

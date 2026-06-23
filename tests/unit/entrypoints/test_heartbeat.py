@@ -16,6 +16,7 @@ from operations_center.entrypoints.heartbeat import (
     is_live,
     read_heartbeat,
     success_stalled,
+    touch_liveness,
     write_heartbeat,
 )
 
@@ -65,6 +66,51 @@ class TestWriteRead:
 
     def test_read_missing_returns_none(self, tmp_path: Path):
         assert read_heartbeat(tmp_path, "nope") is None
+
+
+class TestTouchLiveness:
+    """R1: the in-task liveness refresh must NOT stamp progress."""
+
+    def test_preserves_progress_fields(self, tmp_path: Path):
+        t0 = datetime(2026, 6, 22, 12, 0, 0, tzinfo=UTC)
+        # three failing cycles → counter at 3, success frozen
+        write_heartbeat(tmp_path, "goal", success=True, now=t0)
+        for i in range(1, 4):
+            write_heartbeat(
+                tmp_path, "goal", success=False, error="boom", now=t0 + timedelta(minutes=i)
+            )
+        # a long task now runs and refreshes liveness every 60s
+        touch_liveness(tmp_path, "goal", now=t0 + timedelta(minutes=4))
+        hb = read_heartbeat(tmp_path, "goal")
+        # liveness advanced...
+        assert datetime.fromisoformat(hb["at"]) == t0 + timedelta(minutes=4)
+        assert hb["status"] == "executing"
+        # ...but progress is UNTOUCHED: counter not reset, success not stamped
+        assert hb["consecutive_failures"] == 3
+        assert hb["last_success_at"] == t0.isoformat()
+        assert hb["last_error"] == "boom"
+
+    def test_busy_failing_lane_stays_detectable(self, tmp_path: Path):
+        # Reproduce the bug class: a lane that fails real tasks while its in-task
+        # heartbeat fires. Progress must still age so the stall is catchable.
+        t0 = datetime(2026, 6, 22, 12, 0, 0, tzinfo=UTC)
+        write_heartbeat(tmp_path, "goal", success=True, now=t0)
+        for i in range(1, 7):
+            # mid-task liveness pings (the old bug stamped success here)
+            touch_liveness(tmp_path, "goal", now=t0 + timedelta(minutes=i, seconds=30))
+            # then the cycle fails cleanly
+            write_heartbeat(
+                tmp_path, "goal", success=False, error="task failed", now=t0 + timedelta(minutes=i, seconds=59)
+            )
+        hb = read_heartbeat(tmp_path, "goal")
+        assert hb["consecutive_failures"] == 6
+        assert hb["last_success_at"] == t0.isoformat()  # frozen at the last real success
+        assert success_stalled(
+            hb,
+            now=t0 + timedelta(hours=1),
+            max_success_age_seconds=1800,
+            min_consecutive_failures=5,
+        )
 
 
 class TestStallDetection:
