@@ -8207,3 +8207,19 @@ board. Replaces the phantom "global budget applies" comment with a real object.
 Combined with the existing per-lineage retry cap this closes the B3 escape.
 Remaining filer adoption (heartbeat-stall/drift/dependency/egress-probe) can call
 the same primitive — documented follow-up. 6 tests; outcomes suite green.
+
+## 2026-06-22 — Phase C1: self-contained self-merge gate (surface 3)
+
+`_branch_protection_ok` + new `GitHubPRClient.get_branch_protection`. When
+`reviewer.require_branch_protection` is set, `_merge_and_done` verifies (from
+code) that the base branch's protection actually requires the `reviewer-verdict`
+check AND enforces admins before self-issuing its own verdict + REST-merging; if
+not, it refuses and leaves the PR for an operator. Fail-CLOSED on opt-in (an
+unverifiable protection state refuses). Default False preserves prior behavior.
+Closes the audit's surface-3 gap (the fleet self-issues the only thing between it
+and main). 6 new tests; full reviewer suite 134 green.
+
+C2 (runtime capability-ownership) DEFERRED: needs RepoGraph capability-registry
+access at the invocation point; the capability plane is registry-lint today and
+the only OC-owned capability (board_unblock) has no runtime branch on ownership.
+Higher integration risk, lowest immediate payoff — documented, not rushed.

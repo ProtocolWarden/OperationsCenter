@@ -303,6 +303,14 @@ class ReviewerSettings(BaseModel):
     human_review_timeout_seconds: int = 86400
     # HTML marker appended to every bot-posted comment — belt-and-suspenders filter
     bot_comment_marker: str = "<!-- operations-center:bot -->"
+    # Self-merge gate (determinism surface 3). The fleet self-issues its own
+    # reviewer-verdict status then merges via REST, so the ONLY thing between it
+    # and main is the repo's branch protection — an out-of-repo setting the fleet
+    # can't see. When True, the fleet verifies (from code) that protection
+    # actually requires the reviewer-verdict check AND enforces admins before
+    # self-merging; if not, it refuses and leaves the PR for an operator. False
+    # preserves prior behavior (trust GitHub protection blindly).
+    require_branch_protection: bool = False
 
 
 class RepoSettings(BaseModel):

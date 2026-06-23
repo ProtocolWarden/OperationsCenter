@@ -941,6 +941,65 @@ _DOC_ONLY_REVIEW_RUBRIC = (
 _REVIEWER_VERDICT_STATUS_CONTEXT = "reviewer-verdict"
 
 
+def _branch_protection_ok(gh_client, owner: str, repo: str, base_branch: str, settings) -> bool:
+    """Self-merge gate (surface 3): verify the fleet's own merge is actually
+    constrained, instead of trusting an out-of-repo GitHub setting it can't see.
+
+    Returns True (allow merge) unless ``reviewer.require_branch_protection`` is
+    set AND protection is missing/misconfigured. Requires the reviewer-verdict
+    context to be a required status check and admin enforcement to be on — so the
+    self-issued verdict is not the ONLY thing standing between an attacker-pushed
+    head and main. Fail-CLOSED here is intentional: when the operator opts in, an
+    unverifiable protection state must refuse the merge, not wave it through.
+    """
+    reviewer = getattr(settings, "reviewer", None)
+    if reviewer is None or not getattr(reviewer, "require_branch_protection", False):
+        return True
+    try:
+        protection = gh_client.get_branch_protection(owner, repo, base_branch)
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "pr_review_watcher: branch-protection check failed repo=%s/%s branch=%s — %s; "
+            "refusing self-merge (require_branch_protection=True)",
+            owner,
+            repo,
+            base_branch,
+            exc,
+        )
+        return False
+    if not protection:
+        logger.error(
+            "pr_review_watcher: %s/%s branch %r has NO protection but "
+            "require_branch_protection=True — refusing self-merge",
+            owner,
+            repo,
+            base_branch,
+        )
+        return False
+    rsc = protection.get("required_status_checks") or {}
+    contexts = set(rsc.get("contexts") or [])
+    for check in rsc.get("checks") or []:
+        if isinstance(check, dict) and check.get("context"):
+            contexts.add(check["context"])
+    enforce_admins = bool((protection.get("enforce_admins") or {}).get("enabled"))
+    missing = []
+    if _REVIEWER_VERDICT_STATUS_CONTEXT not in contexts:
+        missing.append(f"required check {_REVIEWER_VERDICT_STATUS_CONTEXT!r}")
+    if not enforce_admins:
+        missing.append("enforce_admins")
+    if missing:
+        logger.error(
+            "pr_review_watcher: %s/%s branch %r protection insufficient (%s) — "
+            "refusing self-merge",
+            owner,
+            repo,
+            base_branch,
+            ", ".join(missing),
+        )
+        return False
+    return True
+
+
 def _publish_reviewer_verdict(
     gh_client,
     owner: str,
@@ -1001,6 +1060,17 @@ def _merge_and_done(
         _auto_rebase_or_escalate(state, state_path, gh_client, owner, repo, settings, reason)
         return
     state["rebase_attempts"] = 0  # mergeable — clear any rebase bookkeeping
+    # Self-merge gate (surface 3): refuse to self-issue the verdict + REST-merge
+    # unless branch protection actually constrains the fleet's own merge. No-op
+    # unless reviewer.require_branch_protection is set.
+    base_branch = (_pr_data.get("base") or {}).get("ref") or "main"
+    if not _branch_protection_ok(gh_client, owner, repo, base_branch, settings):
+        logger.error(
+            "pr_review_watcher: PR #%d not self-merged — branch protection gate "
+            "failed; leaving for operator",
+            pr_number,
+        )
+        return  # leave state file — operator must inspect
     # Bless this head with reviewer-verdict=success BEFORE merging, so the
     # required status check is satisfied for the fleet's own merge — and so the
     # non-LGTM merge paths (e.g. ci_validated_after_retraction) also clear the
