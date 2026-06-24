@@ -36,7 +36,7 @@ from operations_center.contracts.execution import ExecutionRequest, ExecutionRes
 logger = logging.getLogger(__name__)
 
 
-class BaselineValidationFailed(RuntimeError):
+class BaselineValidationError(RuntimeError):
     """Raised from ``WorkspaceManager.prepare`` when baseline validation fails
     and the request opted in via ``require_clean_validation is True``.
 
@@ -319,7 +319,7 @@ class WorkspaceManager:
             and baseline_summary.status
             in (ValidationStatus.FAILED, ValidationStatus.ERROR)
         ):
-            raise BaselineValidationFailed(
+            raise BaselineValidationError(
                 "baseline validation did not pass and require_clean_validation "
                 f"is set: status={baseline_summary.status.value}"
                 + (

@@ -8442,3 +8442,8 @@ Completes the per-task ExecutionRequest constraints (INERT_MACHINERY_INVENTORY i
   _run_baseline_validation now returns the summary.
 Defaults verified None. 275 touched-area tests green; full-suite failures are pre-existing on main (doc/fixture
 env tests, reproduce on f72c402a — CI excludes them via default addopts). Live-behavior change → fleet restart.
+
+## 2026-06-24 — S1b+S1c custodian fixes
+
+Renamed BaselineValidationFailed -> BaselineValidationError (ruff N818); added explicit asserts
+to the two require_clean "proceeds" tests (T2). No logic change. 66 workspace tests green.

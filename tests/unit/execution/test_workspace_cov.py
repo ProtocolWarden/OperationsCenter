@@ -738,13 +738,15 @@ def test_empty_request_validation_commands_uses_repo_cfg(tmp_path):
 
 def _prepare_with_baseline(mgr, req, *, summary):
     """Drive prepare() with git/subprocess mocked, forcing _run_baseline_validation
-    to return *summary*. Returns nothing; raises if the gate fires."""
+    to return *summary*. Returns True when prepare completes (the gate did not
+    fire); raises if it fires."""
     with (
         mock.patch.object(ws_mod.subprocess, "run", return_value=_fake_completed(0)),
         mock.patch.object(mgr, "_maybe_bootstrap"),
         mock.patch.object(mgr, "_run_baseline_validation", return_value=summary),
     ):
         mgr.prepare(req)
+    return True
 
 
 def _summary(status: ValidationStatus):
@@ -769,7 +771,7 @@ def test_require_clean_true_blocks_on_failed_baseline(tmp_path):
     ws = tmp_path / "ws"
     mgr = WorkspaceManager(git_client=_git_for_prepare())
     req = _make_request(ws, require_clean_validation=True)
-    with pytest.raises(ws_mod.BaselineValidationFailed, match="did not pass"):
+    with pytest.raises(ws_mod.BaselineValidationError, match="did not pass"):
         _prepare_with_baseline(mgr, req, summary=_summary(ValidationStatus.FAILED))
 
 
@@ -778,7 +780,7 @@ def test_require_clean_true_blocks_on_error_baseline(tmp_path):
     ws = tmp_path / "ws"
     mgr = WorkspaceManager(git_client=_git_for_prepare())
     req = _make_request(ws, require_clean_validation=True)
-    with pytest.raises(ws_mod.BaselineValidationFailed):
+    with pytest.raises(ws_mod.BaselineValidationError):
         _prepare_with_baseline(mgr, req, summary=_summary(ValidationStatus.ERROR))
 
 
@@ -787,7 +789,7 @@ def test_require_clean_true_proceeds_on_passed_baseline(tmp_path):
     ws = tmp_path / "ws"
     mgr = WorkspaceManager(git_client=_git_for_prepare())
     req = _make_request(ws, require_clean_validation=True)
-    _prepare_with_baseline(mgr, req, summary=_summary(ValidationStatus.PASSED))
+    assert _prepare_with_baseline(mgr, req, summary=_summary(ValidationStatus.PASSED)) is True
 
 
 def test_require_clean_true_proceeds_when_no_summary(tmp_path):
@@ -796,7 +798,7 @@ def test_require_clean_true_proceeds_when_no_summary(tmp_path):
     ws = tmp_path / "ws"
     mgr = WorkspaceManager(git_client=_git_for_prepare())
     req = _make_request(ws, require_clean_validation=True)
-    _prepare_with_baseline(mgr, req, summary=None)
+    assert _prepare_with_baseline(mgr, req, summary=None) is True
 
 
 # ── _maybe_bootstrap ─────────────────────────────────────────────────────────
