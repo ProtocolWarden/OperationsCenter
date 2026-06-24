@@ -9,6 +9,7 @@ real behavior.
 
 from __future__ import annotations
 
+import types
 from dataclasses import dataclass
 
 import pytest
@@ -113,8 +114,34 @@ def test_owner_match_proceeds():
     )
 
 
-def test_load_returns_none_in_this_environment():
-    # OC's pinned repograph wheel has no capabilities plane → None (dormant).
-    from operations_center.capability_ownership import load_capability_registry
+def test_load_activates_when_loader_present(monkeypatch):
+    # Activation contract: if an importable module exposes load_capability_registry,
+    # the guard USES it and leaves dormancy — guards against the rot where the probe
+    # can never see the plane (asserting a degenerate "None forever" would mask that).
+    from operations_center import capability_ownership
 
-    assert load_capability_registry() is None
+    sentinel = object()
+    fake = types.SimpleNamespace(load_capability_registry=lambda: sentinel)
+    monkeypatch.setattr("importlib.import_module", lambda name: fake)
+    assert capability_ownership.load_capability_registry() is sentinel
+
+
+def test_load_dormant_when_loader_absent(monkeypatch):
+    # The other half of the contract: an importable module WITHOUT the loader symbol
+    # degrades to None (dormant) — which is the real state in OC's env today.
+    from operations_center import capability_ownership
+
+    fake = types.SimpleNamespace()  # no load_capability_registry attribute
+    monkeypatch.setattr("importlib.import_module", lambda name: fake)
+    assert capability_ownership.load_capability_registry() is None
+
+
+def test_load_dormant_when_module_absent(monkeypatch):
+    # repograph not importable at all → None (never raises into the caller).
+    from operations_center import capability_ownership
+
+    def _raise(name):
+        raise ModuleNotFoundError(name)
+
+    monkeypatch.setattr("importlib.import_module", _raise)
+    assert capability_ownership.load_capability_registry() is None

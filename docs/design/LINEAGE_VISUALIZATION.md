@@ -1,11 +1,13 @@
 ---
-status: open
+status: resolved
 ---
 
 # Lineage / Operational-Graph Visualization
 
-**Status: OPEN — specced adversarially, decision pending. Do NOT implement
-unprompted.** One of four open-gap specs from the Osprey/Praetorian arc; see also
+**Status: RESOLVED (2026-06-24).** WON'T-BUILD the UI (it would re-introduce the
+attacker-controllable `goal_text` injection sink). BUILT the Tier-1 discoverability
+fix: the trust-labeled lineage tree is now reachable from operator tooling. See
+Resolution below. One of four open-gap specs from the Osprey/Praetorian arc; see also
 [Context Discipline](./CONTEXT_DISCIPLINE.md),
 [Risk-Tiered Approval](./RISK_TIERED_APPROVAL.md),
 [Runtime Capability Enforcement](./RUNTIME_CAPABILITY_ENFORCEMENT.md), and the
@@ -118,4 +120,11 @@ Even the surviving "expose the chain as a graph format" idea mostly fails:
 | Lineage CLI unreachable from the operator's tooling | **BUILD-minimal (Tier 1)** | The genuine gap is discoverability; ~3-line `operations-center.sh` verb. |
 | `--format=dot\|mermaid` graph output | **DEFER (Tier 2)** | YAGNI; no operator request on record. |
 
-**Left open** pending the operator's bigger-picture decision on this arc.
+## Resolution (2026-06-24)
+
+- **WON'T-BUILD** the visualization UI — confirmed (single operator; new attack
+  surface; would render attacker-controllable `goal_text` into a browser).
+- **Shipped (Tier 1):** an `operations-center.sh lineage` verb + an
+  `operations-center-lineage` console script (`pyproject.toml`) → the existing
+  trust-labeled tree CLI is now reachable from operator tooling. No new surface.
+- **Deferred (Tier 2):** a `--format=dot|mermaid` flag — YAGNI, no operator request.

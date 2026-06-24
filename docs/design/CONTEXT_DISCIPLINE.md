@@ -1,11 +1,16 @@
 ---
-status: open
+status: resolved
 ---
 
 # Context Discipline
 
-**Status: OPEN — specced adversarially, decision pending. Do NOT implement
-unprompted.** This maps Praetorian's "bounded context / controlled memory
+**Status: RESOLVED (2026-06-24).** WON'T-BUILD the subsystem (~80% already
+exists). Investigation reshaped the one candidate "fix": `request.timeout_seconds`
+defaults to 300 (proposal constraint), `openclaw` honors it, `dag` overrides with
+the 3600 settings value — the backends disagree on authority, and forcing `dag` to
+honor the request would *regress* live tasks 3600→300. So this shipped a
+de-silencing comment in `dag_executor/adapter.py`, not a risky change. See
+Resolution below. This maps Praetorian's "bounded context / controlled memory
 transfer / context lifecycle" primitive onto OC. One of four open-gap specs from
 the Osprey/Praetorian arc; see also
 [Lineage Visualization](./LINEAGE_VISUALIZATION.md),
@@ -144,4 +149,15 @@ no eviction/retention policy, no re-fencing of summaries or repo reads, no new C
 | `max_turns` unwired into the agent CLI | **NEEDS-OPERATOR-DECISION (Delta B)** | The real win, but lives in TeamExecutor; crosses the cross-repo line. |
 | Cross-stage summary / repo-file injection laundering | **DEFER → fold into SBX** | Bounding size ≠ bounding trust; the real fix is the (owned, deferred) sandbox/egress. |
 
-**Left open** pending the operator's bigger-picture decision on this arc.
+## Resolution (2026-06-24)
+
+- **WON'T-BUILD** the context-discipline subsystem — confirmed.
+- **Shipped:** a de-silencing comment in `dag_executor/adapter.py` documenting why
+  it uses the settings timeout (not `request.timeout_seconds`) and that the
+  authority question is open. No live behavior change.
+- **Operator decision (recorded):** are per-task proposal constraints authoritative
+  over backend settings? This one question governs timeout AND the dropped
+  `allowed_paths` / `max_changed_files` / `validation_commands` — tracked as the
+  systemic theme in [Inert Machinery Inventory](./INERT_MACHINERY_INVENTORY.md).
+- **Cross-repo (recorded):** wire `max_turns` into TeamExecutor's `claude` argv
+  (team_executor is not even installed in this env).

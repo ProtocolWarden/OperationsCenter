@@ -101,6 +101,13 @@ _BLOCKED_PATHS = [
 ]
 
 
+def sensitive_path_patterns() -> list[str]:
+    """The blast-radius path globs (review-required + always-blocked) as a flat
+    list of fnmatch patterns. Single source of truth shared with the reviewer's
+    opt-in sensitive-path ack gate (pr_review_watcher) so the two never drift."""
+    return [rule.path_pattern for rule in (_SENSITIVE_PATHS + _BLOCKED_PATHS)]
+
+
 # ---------------------------------------------------------------------------
 # Default repo policy (catch-all)
 # ---------------------------------------------------------------------------

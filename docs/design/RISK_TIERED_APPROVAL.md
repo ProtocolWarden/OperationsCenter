@@ -1,11 +1,13 @@
 ---
-status: open
+status: resolved
 ---
 
 # Risk-Tiered Approval Ladder
 
-**Status: OPEN — specced adversarially, decision pending. Do NOT implement
-unprompted.** One of four open-gap specs from the Osprey/Praetorian arc; see also
+**Status: RESOLVED (2026-06-24).** WON'T-BUILD the general ladder (it duplicates a
+dead-but-existing `policy/` engine and its "high→approve" rung violates the
+self-healing invariant). BUILT the single survivor: an opt-in, default-off
+sensitive-path ack gate. See Resolution below. One of four open-gap specs from the Osprey/Praetorian arc; see also
 [Context Discipline](./CONTEXT_DISCIPLINE.md),
 [Lineage Visualization](./LINEAGE_VISUALIZATION.md),
 [Runtime Capability Enforcement](./RUNTIME_CAPABILITY_ENFORCEMENT.md), and the
@@ -139,4 +141,16 @@ task-loss, not stricter review. Wrong layer.
 | Sensitive-path diffs merge through a blast-radius-blind gate | **BUILD-minimal** | One code-computed, fail-closed sensitive-path scope check in `verdict.py`; adds scrutiny without a human gate or router. |
 | The fully-built-but-dead `policy/` engine (fed `risk_level=low`; `REQUIRE_REVIEW` SKIPs) | **NEEDS-OPERATOR-DECISION** | Wire it (real signal + non-skip handler) or mark it dead; today it is neither a gate nor honest dead code. |
 
-**Left open** pending the operator's bigger-picture decision on this arc.
+## Resolution (2026-06-24)
+
+- **WON'T-BUILD** the general risk-tier ladder — confirmed.
+- **Shipped (opt-in, default OFF):** `ReviewerSettings.require_sensitive_path_ack`
+  + `_sensitive_path_ack_ok` in `pr_review_watcher/main.py` (a merge precondition,
+  not a human-in-the-loop tier) + `sensitive_path_patterns()` in `policy/defaults.py`
+  (single source of truth) + `sensitive_paths_in_diff()` in `verdict.py` + unit
+  tests. When enabled, a PR touching CI/migrations/secrets/infra paths is left for
+  the operator unless acked once with a `risk-reviewed` label. Default-off → no
+  live reviewer behavior change until flipped.
+- **Operator decision (recorded):** the fully-built-but-dead `policy/` risk engine
+  (fed `risk_level=low` on every live task; `REQUIRE_REVIEW` silently SKIPs) — wire
+  it or delete it. Tracked in [Inert Machinery Inventory](./INERT_MACHINERY_INVENTORY.md).

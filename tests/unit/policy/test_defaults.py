@@ -11,7 +11,11 @@ Verifies that DEFAULT_REPO_POLICY and DEFAULT_POLICY_CONFIG are:
 
 from __future__ import annotations
 
-from operations_center.policy.defaults import DEFAULT_POLICY_CONFIG, DEFAULT_REPO_POLICY
+from operations_center.policy.defaults import (
+    DEFAULT_POLICY_CONFIG,
+    DEFAULT_REPO_POLICY,
+    sensitive_path_patterns,
+)
 from operations_center.policy.validate import validate_config
 
 
@@ -152,3 +156,18 @@ class TestDefaultPolicyConfig:
     def test_get_repo_policy_returns_wildcard_for_unknown_repo(self):
         result = DEFAULT_POLICY_CONFIG.get_repo_policy("some-unknown-repo")
         assert result is not None
+
+
+class TestSensitivePathPatterns:
+    """The flat blast-radius glob list shared with the reviewer's opt-in
+    sensitive-path ack gate (single source of truth)."""
+
+    def test_includes_blast_radius_and_blocked_globs(self):
+        patterns = sensitive_path_patterns()
+        assert ".github/workflows/**" in patterns
+        assert "**/migrations/**" in patterns
+        assert "**/.ssh/**" in patterns  # blocked paths included too
+        assert "**/.gnupg/**" in patterns
+
+    def test_all_patterns_are_nonempty_strings(self):
+        assert all(isinstance(p, str) and p for p in sensitive_path_patterns())

@@ -1,11 +1,12 @@
 ---
-status: open
+status: resolved
 ---
 
 # Runtime Capability Enforcement (C2)
 
-**Status: OPEN — specced adversarially, decision pending. Do NOT implement
-unprompted.** One of four open-gap specs from the Osprey/Praetorian arc; see also
+**Status: RESOLVED (2026-06-24).** DEFER — dormant-by-environment is correct.
+SHIPPED the anti-rot guard (the test no longer cements "None forever") + a
+probe-target note. See Resolution below. One of four open-gap specs from the Osprey/Praetorian arc; see also
 [Context Discipline](./CONTEXT_DISCIPLINE.md),
 [Lineage Visualization](./LINEAGE_VISUALIZATION.md),
 [Risk-Tiered Approval](./RISK_TIERED_APPROVAL.md), and the master
@@ -145,4 +146,16 @@ prevent a non-threat). The real delta makes dormancy explicit and rot-proof:
 | Silent rot (probe can't activate via live path; test locks in "None forever") | **BUILD-minimal** | ~10-line observability + an activation-contract test, so dormancy is loud not silent. |
 | Probe target (`repograph` vs `platform_manifest.capabilities`) | **NEEDS-OPERATOR-DECISION** | Binds OC to a dependency surface; decide before any go-live. |
 
-**Left open** pending the operator's bigger-picture decision on this arc.
+## Resolution (2026-06-24)
+
+- **DEFER (keep dormant)** — confirmed correct: redundant with build-time
+  exactly-one-owns + Custodian CAP1, no live threat, un-dorming would add coupling
+  to the critical self-heal lane.
+- **Shipped:** replaced the rot-trap test (`test_load_returns_none_in_this_environment`,
+  which cemented "None forever") with activation-contract tests (loader importable
+  → the guard uses it; absent → None; module absent → None). Added a PROBE TARGET
+  docstring note in `capability_ownership.py`. The existing degrade WARNING already
+  surfaces `capability_owner_unverifiable`.
+- **Operator decision (recorded):** the probe targets bare `repograph` but the live
+  registry ships via `platform_manifest.capabilities` — decide the binding surface
+  before any go-live. Tracked in [Inert Machinery Inventory](./INERT_MACHINERY_INVENTORY.md).

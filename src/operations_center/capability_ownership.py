@@ -17,6 +17,13 @@ an OC runtime dependency. That binding is a dependency-pinning concern OC cannot
 self-resolve; this is the EVAL "blocking-deferred" pattern, not a live enforcement.
 Do not claim it closes surface 1 until the registry actually loads in production.
 
+PROBE TARGET — open operator decision. ``load_capability_registry`` below probes
+bare ``import repograph``, but the live registry actually ships through
+``platform_manifest.capabilities.load_capabilities``. If the capabilities plane
+only ever ships via the platform_manifest wrapper, this probe can never activate —
+so the *activation contract* is pinned by test (not "returns None forever"), and
+which dependency surface OC binds to is an operator decision before any go-live.
+
 Default posture is opt-in + fail-open (§0.1): the guard is a no-op unless
 ``require_capability_owner`` is set, and an unavailable registry degrades rather
 than halting critical self-healing (board_unblock).

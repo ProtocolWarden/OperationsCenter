@@ -115,6 +115,25 @@ def compute_verdict(checks: object) -> tuple[str, list[str]]:
     return (LGTM, []) if not failing else (CONCERNS, failing)
 
 
+def sensitive_paths_in_diff(changed_files: object, patterns: list[str]) -> list[str]:
+    """Return the subset of ``changed_files`` matching any sensitive-path glob.
+
+    Pure, model-free, injection-proof — it inspects the actual changed-file list,
+    not model output. ``patterns`` come from
+    ``policy.defaults.sensitive_path_patterns`` so the reviewer's blast-radius gate
+    and the policy plane share one source. Matching uses ``fnmatch`` for parity
+    with the policy engine's own path matcher.
+    """
+    import fnmatch
+
+    files = changed_files if isinstance(changed_files, (list, tuple)) else []
+    hits: list[str] = []
+    for f in files:
+        if isinstance(f, str) and any(fnmatch.fnmatch(f, p) for p in patterns):
+            hits.append(f)
+    return hits
+
+
 def failing_summary(checks: object, failing: list[str]) -> str:
     """A human- and fix-pass-readable summary of the failing checks, surfacing the
     model's quoted ``evidence_span`` per check.
@@ -176,5 +195,6 @@ __all__ = [
     "VALID_STATUS",
     "compute_verdict",
     "failing_summary",
+    "sensitive_paths_in_diff",
     "verdict_schema_prompt",
 ]
