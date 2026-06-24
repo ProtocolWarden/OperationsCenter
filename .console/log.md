@@ -8440,3 +8440,8 @@ INERT_MACHINERY_INVENTORY items 2-5, all FAIL-SAFE-DEFAULT (shipped config = cur
   (disabled tasks never run); verified non-destructive (recycle/escalate, no delete).
 - Parking: new ParkedUnparkTask (ParkedStateStore + should_unpark + RecoveryBudgetTracker); registered, enabled=False;
   empty store -> no-op. config example documents activation. Inventory items 2-5 DEAD -> WIRED. tests/unit green.
+
+## 2026-06-24 — S3 custodian fix
+
+De-backticked retry_after / triage_scan in INERT_MACHINERY_INVENTORY.md (K1/OC8 — they are a parser
+concept and a module/verb, not src def/class symbols). Doc-only, no behavior change.
