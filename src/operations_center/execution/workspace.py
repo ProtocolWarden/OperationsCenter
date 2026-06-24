@@ -30,10 +30,20 @@ from pathlib import Path
 
 from operations_center.adapters.git.client import GitClient
 from operations_center.adapters.workspace.patch_applier import PatchApplier
-from operations_center.contracts.enums import FailureReasonCategory
+from operations_center.contracts.enums import FailureReasonCategory, ValidationStatus
 from operations_center.contracts.execution import ExecutionRequest, ExecutionResult
 
 logger = logging.getLogger(__name__)
+
+
+class BaselineValidationError(RuntimeError):
+    """Raised from ``WorkspaceManager.prepare`` when baseline validation fails
+    and the request opted in via ``require_clean_validation is True``.
+
+    A ``RuntimeError`` subclass so the coordinator's existing broad
+    prepare-failure handler catches it and produces a clean FAILED
+    ExecutionResult — no new handler wiring required.
+    """
 
 
 # Branch prefixes whose runs should NOT be pushed or PR'd. Improve mode is
@@ -293,12 +303,31 @@ class WorkspaceManager:
         # config (no bootstrap fields set) is a no-op so existing repos
         # see no behavior change.
         self._maybe_bootstrap(ws, request)
-        # Baseline validation — if the repo declares validation_commands and
-        # hasn't opted out via skip_baseline_validation, run them here.
-        # Failure leaves a marker file the coordinator reads (so we don't
-        # mutate the prepare() return shape). The actual abort decision
-        # happens in the coordinator path.
-        self._run_baseline_validation(ws, request)
+        # Baseline validation — if the repo (or the per-task request) declares
+        # validation_commands and hasn't opted out via skip_baseline_validation,
+        # run them here. The summary is also persisted to a marker file.
+        #
+        # S1c gate: a FAILED/ERROR baseline blocks the run ONLY when the request
+        # explicitly opted in via require_clean_validation is True. None (every
+        # live task today) preserves the prior behavior — baseline failure does
+        # not abort. We raise so the coordinator's existing prepare-failure
+        # handler turns it into a clean FAILED ExecutionResult.
+        baseline_summary = self._run_baseline_validation(ws, request)
+        if (
+            request.require_clean_validation is True
+            and baseline_summary is not None
+            and baseline_summary.status
+            in (ValidationStatus.FAILED, ValidationStatus.ERROR)
+        ):
+            raise BaselineValidationError(
+                "baseline validation did not pass and require_clean_validation "
+                f"is set: status={baseline_summary.status.value}"
+                + (
+                    f"; {baseline_summary.failure_excerpt}"
+                    if baseline_summary.failure_excerpt
+                    else ""
+                )
+            )
         # Restore .baseline-validation.json to HEAD so create_task_branch can
         # checkout origin/task_branch without "local changes would be overwritten".
         # The file has slipped into several goal-branch commits; baseline validation
@@ -704,30 +733,58 @@ class WorkspaceManager:
             logger.warning("WorkspaceManager: PR creation failed — %s", exc)
             return None
 
-    def _run_baseline_validation(self, ws: Path, request: ExecutionRequest) -> None:
+    def _run_baseline_validation(self, ws: Path, request: ExecutionRequest):
         """Run repo's baseline validation; persist the summary to a marker file.
 
-        We write the result to ``ws/.baseline-validation.json`` so the
-        coordinator (or a later stage) can read it without WorkspaceManager
-        having to thread the contract through. Best-effort — failures here
-        log a warning but don't abort prepare(). The decision to continue
-        on FAILED status is made downstream.
+        We write the result to ``ws/.baseline-validation.json`` so a later stage
+        can read it without WorkspaceManager having to thread the contract
+        through. Best-effort — failures here log a warning but don't abort.
+
+        Returns the ``ValidationSummary`` (or None when there is no repo_cfg /
+        the run crashed) so the caller can apply the per-task
+        ``require_clean_validation`` gate (S1c). The abort decision itself is
+        made in ``prepare()``, not here.
+
+        Command source (S1c): when ``request.validation_commands`` is non-empty,
+        those per-task commands run *instead of* the repo's configured
+        ``validation_commands`` — wrapped in a small shim that still carries the
+        repo's ``validation_timeout_seconds`` and ``skip_baseline_validation``
+        so ``run_baseline_validation`` reads a complete cfg. Empty (every live
+        task today) leaves the repo_cfg path unchanged.
         """
         repo_cfg = self._repo_lookup(request.repo_key)
         if repo_cfg is None:
-            return
+            return None
+
+        # Per-task command override: only when the request explicitly set
+        # validation_commands. The shim mirrors exactly the three attributes
+        # baseline_validation.run_baseline_validation reads off repo_cfg.
+        cfg_for_validation = repo_cfg
+        if request.validation_commands:
+            from types import SimpleNamespace
+
+            cfg_for_validation = SimpleNamespace(
+                validation_commands=list(request.validation_commands),
+                validation_timeout_seconds=getattr(
+                    repo_cfg, "validation_timeout_seconds", 300
+                ),
+                skip_baseline_validation=getattr(
+                    repo_cfg, "skip_baseline_validation", False
+                ),
+            )
+
         try:
             from operations_center.execution.baseline_validation import (
                 run_baseline_validation,
             )
 
-            summary = run_baseline_validation(ws, repo_cfg=repo_cfg)
+            summary = run_baseline_validation(ws, repo_cfg=cfg_for_validation)
         except Exception as exc:
             logger.warning(
                 "WorkspaceManager.prepare: baseline validation crashed — %s",
                 exc,
             )
-            return
+            return None
         try:
             (ws / ".baseline-validation.json").write_text(
                 summary.model_dump_json(),
@@ -735,6 +792,7 @@ class WorkspaceManager:
             )
         except OSError as exc:
             logger.debug("baseline-validation marker write failed — %s", exc)
+        return summary
 
     def _maybe_bootstrap(self, ws: Path, request: ExecutionRequest) -> None:
         """Run repo-bootstrap (venv setup + dev install) when configured.

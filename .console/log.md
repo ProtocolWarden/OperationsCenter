@@ -8428,3 +8428,22 @@ max_changed_files = current behavior, so normal + self-modify tasks are unaffect
 spec-author (which sets allowed_paths=["docs/specs/"], max_changed_files=1) becomes
 scope-enforced — its intended guard. Live-behavior change → needs fleet restart.
 timeout_seconds (contract+adapters) and the validation pair are follow-up stages. 138 green.
+
+## 2026-06-24 — Wire-all S1b+S1c: timeout + validation per-task constraints (live)
+
+Completes the per-task ExecutionRequest constraints (INERT_MACHINERY_INVENTORY item 6 + Gap-1 timeout).
+- timeout_seconds: Optional[int]=None across OcExecutionRequest/ExecutionConstraints/PlanningContext; the 5
+  backend adapters (dag, direct_local, aider_local, critique, openclaw) honor request.timeout_seconds when set,
+  else fall back to backend settings — no 300<3600 regression (live path injects explicit values).
+- validation_commands: WorkspaceManager._run_baseline_validation prefers request.validation_commands when set
+  (shim over repo_cfg), else the current repo-config path (zero live callers set it today).
+- require_clean_validation: Optional[bool]=None; baseline FAILED/ERROR aborts prepare() ONLY when the request
+  explicitly opted in (is True). None (every live task) = current behavior — fail-safe on the self-modifying fleet.
+  _run_baseline_validation now returns the summary.
+Defaults verified None. 275 touched-area tests green; full-suite failures are pre-existing on main (doc/fixture
+env tests, reproduce on f72c402a — CI excludes them via default addopts). Live-behavior change → fleet restart.
+
+## 2026-06-24 — S1b+S1c custodian fixes
+
+Renamed BaselineValidationFailed -> BaselineValidationError (ruff N818); added explicit asserts
+to the two require_clean "proceeds" tests (T2). No logic change. 66 workspace tests green.

@@ -51,8 +51,9 @@ class TestExecutionConstraints:
     def test_defaults(self):
         c = ExecutionConstraints()
         assert c.max_changed_files is None
-        assert c.timeout_seconds == 300
-        assert c.require_clean_validation is True
+        # S1b/S1c: default to None (no per-task override).
+        assert c.timeout_seconds is None
+        assert c.require_clean_validation is None
         assert c.skip_baseline_validation is False
 
     def test_custom_timeout(self):

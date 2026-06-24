@@ -72,7 +72,11 @@ class AiderLocalBackendAdapter:
 
         try:
             command = self._build_command(message_file)
-            run_result = self._run(command=command, repo_path=repo_path)
+            run_result = self._run(
+                command=command,
+                repo_path=repo_path,
+                timeout_seconds=request.timeout_seconds,
+            )
         finally:
             try:
                 os.unlink(message_file)
@@ -139,13 +143,29 @@ class AiderLocalBackendAdapter:
         command += self._settings.extra_args
         return command
 
-    def _run(self, *, command: list[str], repo_path: Path) -> "_AiderLocalRunResult":
+    def _run(
+        self,
+        *,
+        command: list[str],
+        repo_path: Path,
+        timeout_seconds: int | None = None,
+    ) -> "_AiderLocalRunResult":
         env = os.environ.copy()
         # Ollama does not use OPENAI_API_KEY; set a dummy to avoid aider warnings
         if not env.get("OPENAI_API_KEY"):
             env["OPENAI_API_KEY"] = "sk-local-ollama"
 
         artifact_dir = tempfile.mkdtemp(prefix="aider-local-")
+
+        # S1b: an explicit per-task timeout (resolved by execute()) wins; when
+        # None, fall back to the backend settings timeout (treating <=0 as None).
+        effective_timeout = timeout_seconds
+        if effective_timeout is None:
+            effective_timeout = (
+                self._settings.timeout_seconds
+                if self._settings.timeout_seconds and self._settings.timeout_seconds > 0
+                else None
+            )
 
         invocation = RuntimeInvocation(
             invocation_id=_short_id(),
@@ -154,9 +174,7 @@ class AiderLocalBackendAdapter:
             working_directory=str(repo_path),
             command=list(command),
             environment=dict(env),
-            timeout_seconds=self._settings.timeout_seconds
-            if self._settings.timeout_seconds and self._settings.timeout_seconds > 0
-            else None,
+            timeout_seconds=effective_timeout,
             artifact_directory=artifact_dir,
         )
 

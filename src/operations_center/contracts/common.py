@@ -39,18 +39,24 @@ class ExecutionConstraints(BaseModel):
         default=None,
         description="Execution is aborted if more files than this are changed. None = unlimited.",
     )
-    timeout_seconds: int = Field(
-        default=300,
+    timeout_seconds: Optional[int] = Field(
+        default=None,
         ge=1,
-        description="Wall-clock timeout for the full execution run.",
+        description=(
+            "Wall-clock timeout for the full execution run. None = no per-task "
+            "override; the backend's settings timeout applies."
+        ),
     )
     allowed_paths: list[str] = Field(
         default_factory=list,
         description="Subset of TaskTarget.allowed_paths applied at execution time.",
     )
-    require_clean_validation: bool = Field(
-        default=True,
-        description="If True, execution fails unless all validation commands pass.",
+    require_clean_validation: Optional[bool] = Field(
+        default=None,
+        description=(
+            "If True, execution fails unless baseline validation passes. None = "
+            "no per-task validation gate (baseline failure does not block the run)."
+        ),
     )
     skip_baseline_validation: bool = Field(
         default=False,

@@ -73,8 +73,14 @@ class OcExecutionRequest(BaseModel):
     # Constraints (from proposal, propagated)
     allowed_paths: list[str] = Field(default_factory=list)
     max_changed_files: Optional[int] = None
-    timeout_seconds: int = Field(default=300, ge=1)
-    require_clean_validation: bool = True
+    # None = "no per-task override" — adapters fall back to their backend
+    # settings timeout (the live dispatch path injects 3600 explicitly). Only
+    # an explicit, request-level value (ge=1) overrides the backend setting.
+    timeout_seconds: Optional[int] = Field(default=None, ge=1)
+    # None = "no per-task validation gate" — every live task today leaves this
+    # unset, so baseline-validation FAILURE never blocks the run. Only an
+    # explicit True opts a task into the fail-closed baseline gate.
+    require_clean_validation: Optional[bool] = None
     validation_commands: list[str] = Field(default_factory=list)
 
     # Recovery loop signal — see execution/recovery_loop/. Defaults to False

@@ -81,8 +81,10 @@ class TestExecutionRequest:
         r = _minimal_request()
         assert r.allowed_paths == []
         assert r.max_changed_files is None
-        assert r.timeout_seconds == 300
-        assert r.require_clean_validation is True
+        # S1b/S1c: both default to None ("no per-task override") so live tasks
+        # that omit them fall back to backend settings / current behavior.
+        assert r.timeout_seconds is None
+        assert r.require_clean_validation is None
         assert r.validation_commands == []
         assert r.goal_file_path is None
         assert r.constraints_text is None
