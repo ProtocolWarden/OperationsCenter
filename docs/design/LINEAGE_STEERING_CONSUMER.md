@@ -96,7 +96,8 @@ permanent veto, NOT human escalation, NOT lineage machinery:
 This is a SEPARATE small change (a retry-cap fix), tracked on its own, gated on the
 operator confirming the behavior change (tasks that currently retry forever would
 terminate after N) — it is consequential and is the operator's call, but it is the
-*right* lever, not the lineage brake.
+*right* lever, not the lineage brake. **IMPLEMENTED** as
+[Code-Failure Retry Cap](./CODE_FAILURE_RETRY_CAP.md) (N=3 default).
 
 ## 2. What is explicitly NOT worth building
 

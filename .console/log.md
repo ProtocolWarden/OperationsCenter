@@ -8361,3 +8361,16 @@ human-semantic veto + human-in-per-correction-loop). Fix = arm the EXISTING
 self-healing count caps for clean code failures (small outcomes.py/board_unblock
 change), NOT lineage. Lineage read-model stays display-only. Linked from the
 determinism-boundary spec (DC7).
+
+## 2026-06-24 — Code-failure retry cap (fixes the SIGKILL-only retry-count bug)
+
+retry-count was SIGKILL-only, so clean code failures (validation_failed/no_changes)
+never armed any cap and looped forever, draining the exec budget. Added a dedicated
+code-fail-count label counter: handle_failure increments it on a clean code failure
+(NOT transient/env/scope_too_wide/unknown, NOT on kill — those use retry-count);
+board_unblock Rule 1 cancels when code-fail-count >= settings.code_failure_retry_cap
+(default N=3, 0=disabled). Cancel is SELF-HEALING (frees budget, no permanent veto,
+no operator escalation — the proposer may re-raise later) — deliberately NOT the
+convergence-stall/ProposalRejectionStore path the adversarial review rejected. Docs:
+CODE_FAILURE_RETRY_CAP.md. Full suite 8119 green. Default ON at N=3 (behavior change:
+tasks that currently retry forever now terminate after 3 clean code failures).

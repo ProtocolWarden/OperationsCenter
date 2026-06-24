@@ -540,6 +540,13 @@ class Settings(BaseModel):
     # so a single runaway root cannot consume the whole global budget even when
     # each generation is individually under the per-lineage retry cap. 0 = off.
     max_descendants_per_root: int = 0
+    # Code-failure retry cap. board_unblock cancels a task once it has accrued
+    # this many CLEAN code failures (validation_failed/no_changes) — retry-count
+    # is SIGKILL-only, so without this a task that keeps failing the same test/lint
+    # re-runs forever and drains the exec budget. Cancel is self-healing (frees the
+    # budget, no permanent veto; the proposer may re-raise later). 0 = disabled.
+    # See docs/design/CODE_FAILURE_RETRY_CAP.md.
+    code_failure_retry_cap: int = 3
     # Synchronous capability-owner check (C2, determinism surface 1). When set,
     # owner-bearing capabilities (board_unblock) verify exactly-one-owner from the
     # registry at invocation and refuse on ambiguity, instead of trusting the

@@ -319,6 +319,9 @@ class BoardUnblockTask:
                     stale_running_hours=self._stale_running_hours,
                     clean_blocked_min_minutes=self._clean_blocked_min_minutes,
                     mem_available_gb=mem_gb,
+                    code_failure_retry_cap=int(
+                        getattr(self._settings, "code_failure_retry_cap", 0) or 0
+                    ),
                 )
                 if a.get("task_id") not in reconciled_ids
             ]

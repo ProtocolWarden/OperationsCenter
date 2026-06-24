@@ -20,6 +20,7 @@ from .labels import (
     STATE_READY,
     STATE_REVIEW,
     add_label,
+    increment_code_failure_count,
     increment_retry_count,
     label_value,
     retry_count_from_labels,
@@ -29,6 +30,15 @@ from .work_ceiling import ceiling_reached, root_descendant_cap_reached
 logger = logging.getLogger(__name__)
 
 _MAX_FOLLOW_UP_RETRIES = 3
+
+# Clean (no-signal) failure categories that count toward the code-failure retry
+# cap — the "the approach isn't working and won't converge by re-running the same
+# thing" cases. Deliberately EXCLUDES transient/env categories (backend_error,
+# timeout, budget_exhausted, routing_error, conflict — self-resolving or handled
+# by detect_convergence_stall), scope_too_wide (handled by the split path), and
+# unknown (too ambiguous — the founding ~190× incident was a MISCLASSIFIED env
+# fault, so we never terminate on unknown). See CODE_FAILURE_RETRY_CAP.md.
+_CODE_FAILURE_CATEGORIES = frozenset({"validation_failed", "no_changes"})
 _TERMINAL_STATE_NAMES = {"cancelled", "done"}
 
 
@@ -482,6 +492,11 @@ def handle_failure(
             add_label(client, issue, f"executor-signal: {executor_signal}")
             if "sigkill" in executor_signal.lower():
                 increment_retry_count(client, issue)
+        elif category in _CODE_FAILURE_CATEGORIES:
+            # Clean code failure (no kill signal): count it so board_unblock's
+            # self-healing cancel can terminate a same-approach loop that would
+            # otherwise re-run forever — retry-count above is SIGKILL-only.
+            increment_code_failure_count(client, issue)
     except Exception as exc:
         logger.warning(
             "board_worker[%s]: post-failure transition failed task_id=%s — %s",

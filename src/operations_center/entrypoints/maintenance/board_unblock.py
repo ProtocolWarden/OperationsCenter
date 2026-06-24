@@ -238,6 +238,7 @@ _SELF_MODIFY_APPROVED_LABEL = "self-modify: approved"
 _THIN_GOAL_LABEL = "thin-goal"
 _SIGKILL_SIGNAL_PREFIX = "executor-signal:"  # value checked separately
 _RETRY_COUNT_PREFIX = "retry-count:"
+_CODE_FAIL_COUNT_PREFIX = "code-fail-count:"  # CODE_FAILURE_RETRY_CAP
 _BLOCKED_BY_PREFIX = "blocked-by:"
 _ORIGINAL_TASK_PREFIX = "original-task-id:"
 _SOURCE_AUTONOMY_LABEL = "source: autonomy"
@@ -294,6 +295,16 @@ def _retry_count(labels: list[str]) -> int:
         return 0
 
 
+def _code_fail_count(labels: list[str]) -> int:
+    raw = _label_value(labels, _CODE_FAIL_COUNT_PREFIX)
+    if raw is None:
+        return 0
+    try:
+        return int(raw)
+    except ValueError:
+        return 0
+
+
 def _blocker_task_id(labels: list[str]) -> str | None:
     return _label_value(labels, _BLOCKED_BY_PREFIX)
 
@@ -311,6 +322,7 @@ def _apply_rules(
     clean_blocked_min_minutes: int,
     mem_available_gb: float,
     cooldown_skip_reason: str | None = None,
+    code_failure_retry_cap: int = 0,
 ) -> list[dict[str, Any]]:
     id_state = _build_id_state_map(issues)
     actions = []
@@ -329,12 +341,25 @@ def _apply_rules(
             is_sigkill_exhausted = (
                 "sigkill" in executor_signal_val.lower() and _retry_count(labels) >= 3
             )
-            if is_dead or is_sigkill_exhausted:
-                reason = (
-                    "labelled dead-remediation"
-                    if is_dead
-                    else "≥3 SIGKILL retries with no safe path"
-                )
+            # CODE_FAILURE_RETRY_CAP: a clean code-failure loop (test/lint that
+            # keeps failing) — retry-count never arms for it, so cancel here once
+            # the dedicated code-fail counter hits the cap. Self-healing: Cancel
+            # frees the budget without a permanent veto; the proposer may re-raise
+            # later if still relevant.
+            is_code_fail_exhausted = (
+                code_failure_retry_cap > 0
+                and _code_fail_count(labels) >= code_failure_retry_cap
+            )
+            if is_dead or is_sigkill_exhausted or is_code_fail_exhausted:
+                if is_dead:
+                    reason = "labelled dead-remediation"
+                elif is_sigkill_exhausted:
+                    reason = "≥3 SIGKILL retries with no safe path"
+                else:
+                    reason = (
+                        f"≥{code_failure_retry_cap} clean code failures "
+                        f"(code-fail-count={_code_fail_count(labels)}) — approach not converging"
+                    )
                 actions.append(
                     {
                         "task_id": task_id,
