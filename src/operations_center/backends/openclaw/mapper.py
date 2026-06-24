@@ -94,7 +94,12 @@ def map_request(
         repo_path=Path(request.workspace_path),
         task_branch=request.task_branch,
         run_mode=resolved_mode,
-        timeout_seconds=request.timeout_seconds,
+        # S1b: an explicit per-task timeout wins; else fall back to the
+        # OpenClawPreparedRun default (300s). OpenClawPreparedRun.timeout_seconds
+        # is a non-optional int, so a None request must not pass through.
+        timeout_seconds=(
+            request.timeout_seconds if request.timeout_seconds is not None else 300
+        ),
         validation_commands=list(request.validation_commands),
         metadata=metadata,
     )

@@ -60,7 +60,12 @@ class DirectLocalBackendAdapter:
             goal=request.goal_text,
             constraints=request.constraints_text or "",
         )
-        result = self._run(command=command, repo_path=repo_path, env=env)
+        result = self._run(
+            command=command,
+            repo_path=repo_path,
+            env=env,
+            timeout_seconds=request.timeout_seconds,
+        )
 
         # G-V04 — guard against false success when the upstream backend
         # printed a capacity-exhaustion notice and exited 0.
@@ -140,11 +145,26 @@ class DirectLocalBackendAdapter:
         return command, env
 
     def _run(
-        self, *, command: list[str], repo_path: Path, env: dict[str, str]
+        self,
+        *,
+        command: list[str],
+        repo_path: Path,
+        env: dict[str, str],
+        timeout_seconds: int | None = None,
     ) -> "_DirectLocalRunResult":
         # Per-call artifact dir so ER's stdout/stderr capture doesn't
         # pollute the workspace.
         artifact_dir = tempfile.mkdtemp(prefix="direct-local-")
+
+        # S1b: an explicit per-task timeout (resolved by execute()) wins; when
+        # None, fall back to the backend settings timeout (treating <=0 as None).
+        effective_timeout = timeout_seconds
+        if effective_timeout is None:
+            effective_timeout = (
+                self._settings.timeout_seconds
+                if self._settings.timeout_seconds and self._settings.timeout_seconds > 0
+                else None
+            )
 
         invocation = RuntimeInvocation(
             invocation_id=_short_id(),
@@ -153,9 +173,7 @@ class DirectLocalBackendAdapter:
             working_directory=str(repo_path),
             command=list(command),
             environment=dict(env),
-            timeout_seconds=self._settings.timeout_seconds
-            if self._settings.timeout_seconds and self._settings.timeout_seconds > 0
-            else None,
+            timeout_seconds=effective_timeout,
             artifact_directory=artifact_dir,
         )
 
