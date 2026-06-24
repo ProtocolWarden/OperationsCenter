@@ -8374,3 +8374,8 @@ no operator escalation — the proposer may re-raise later) — deliberately NOT
 convergence-stall/ProposalRejectionStore path the adversarial review rejected. Docs:
 CODE_FAILURE_RETRY_CAP.md. Full suite 8119 green. Default ON at N=3 (behavior change:
 tasks that currently retry forever now terminate after 3 clean code failures).
+
+## 2026-06-24 — OC8 doc fix
+
+Removed backticks from failure_category VALUE words in CODE_FAILURE_RETRY_CAP.md
+(they are enum string values, not code symbols — OC8).

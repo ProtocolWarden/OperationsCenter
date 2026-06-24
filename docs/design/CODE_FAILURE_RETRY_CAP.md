@@ -40,13 +40,13 @@ A dedicated `code-fail-count:` label counter, parallel to `retry-count:`:
 
 1. **Producer** — `handle_failure` increments `code-fail-count` when a CLEAN
    (no-signal) failure has a category in `_CODE_FAILURE_CATEGORIES`. Default set:
-   `{validation_failed, no_changes}` — the canonical "the approach isn't working
-   and won't converge by re-running the same thing" cases. Deliberately EXCLUDES
-   transient/env categories (`backend_error`, `timeout`, `budget_exhausted`,
-   `routing_error`, `conflict` — self-resolving or handled by convergence-stall),
-   `scope_too_wide` (handled by the split path), and `unknown` (too ambiguous —
-   the founding incident was a misclassified env fault, so we never terminate on
-   `unknown`). Configurable.
+   the two failure_category values "validation_failed" and "no_changes" — the
+   canonical "the approach isn't working and won't converge by re-running the same
+   thing" cases. Deliberately EXCLUDES transient/env categories (backend_error,
+   timeout, budget_exhausted, routing_error, conflict — self-resolving or handled
+   by convergence-stall), scope_too_wide (handled by the split path), and unknown
+   (too ambiguous — the founding incident was a misclassified env fault, so we
+   never terminate on the unknown category). Configurable.
 
 2. **Terminal** — board_unblock Rule 1 gains a third cancel condition:
    `code-fail-count >= settings.code_failure_retry_cap`. It runs in the same
