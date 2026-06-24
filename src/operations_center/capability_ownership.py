@@ -54,6 +54,16 @@ def _edge_is_owns(edge: object) -> bool:
     return str(getattr(kind, "value", kind)).lower() == "owns"
 
 
+def _norm_owner(repo_id: object) -> str:
+    """Normalize a repo identifier for owner comparison so the SAME repo matches
+    across naming conventions — RepoGraph's snake_case repo_id ``operations_center``
+    vs OC's PascalCase ``self_repo_key`` ``OperationsCenter``. Lowercases and drops
+    all non-alphanumerics, so the gate does NOT false-refuse (and halt the critical
+    board_unblock self-heal lane) on a pure casing/separator difference, while still
+    distinguishing genuinely different repos (``custodian`` != ``operationscenter``)."""
+    return "".join(ch for ch in str(repo_id).lower() if ch.isalnum())
+
+
 def resolve_owner(registry: object, action_id: str) -> str:
     """Return the single owner repo_id of ``action_id`` or raise.
 
@@ -170,9 +180,11 @@ def verify_owner_or_degrade(
     * registry unavailable → DEGRADE (proceed) with an observable warning; never
       halt critical self-healing on a missing registry (§0.1).
     * registry available + exactly one owner (matching ``expected_owner`` if
-      given) → proceed.
-    * registry available + ambiguous owner, or owner ≠ expected → REFUSE
-      (fail-closed): this is the real integrity violation worth blocking on.
+      given — compared convention-insensitively, see ``_norm_owner``) → proceed.
+    * registry available + ambiguous owner, or a genuinely DIFFERENT owner →
+      REFUSE (fail-closed): the real integrity violation worth blocking on. A pure
+      casing/convention difference (``operations_center`` vs ``OperationsCenter``)
+      is NOT a refusal — that would falsely halt the self-heal lane.
     """
 
     if not required:
@@ -197,7 +209,7 @@ def verify_owner_or_degrade(
             action_id,
         )
         return False
-    if expected_owner is not None and owner != expected_owner:
+    if expected_owner is not None and _norm_owner(owner) != _norm_owner(expected_owner):
         logger.error(
             "capability_ownership: REFUSING %r — owner %r != expected %r",
             action_id,

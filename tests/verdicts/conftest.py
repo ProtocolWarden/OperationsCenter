@@ -312,7 +312,15 @@ def mock_settings(
             allowed_reviewer_logins=[],
             max_self_review_loops=max_self_review_loops,
             max_fix_attempts=max_fix_attempts,
+            max_fix_strategy_level=2,
             bot_comment_marker="<!-- operations-center:bot -->",
+            # Opt-in self-merge gates default OFF (mirrors tests/test_pr_review_watcher.py
+            # REVIEWER_CFG and the production default). A bare MagicMock would otherwise
+            # auto-create these as truthy attributes, spuriously activating the
+            # require_branch_protection / sensitive-path fail-closed gates against an
+            # unverifiable mocked protection state and blocking every merge-path test.
+            require_branch_protection=False,
+            require_sensitive_path_ack=False,
         ),
         repos={repo_key: repo_cfg},
         plane=MagicMock(
