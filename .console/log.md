@@ -8417,3 +8417,14 @@ All wire-or-delete operator decisions; nothing bulk-acted.
 
 236 unit tests green across touched areas. Every new control is opt-in/additive — no live
 fleet behavior change.
+
+## 2026-06-24 — Wire-all S1: per-task allowed_paths + max_changed_files (live)
+
+First stage of wiring the inert per-task constraints (INERT_MACHINERY_INVENTORY.md
+items 1, 8). WorkspaceManager now ENFORCES request.allowed_paths at the pre-commit gate
+(fail-closed, reuses ChangedFilePolicyChecker) and honors request.max_changed_files in
+_diff_oversized (min with the global cap). Both fail-safe: empty allowed_paths / None
+max_changed_files = current behavior, so normal + self-modify tasks are unaffected; only
+spec-author (which sets allowed_paths=["docs/specs/"], max_changed_files=1) becomes
+scope-enforced — its intended guard. Live-behavior change → needs fleet restart.
+timeout_seconds (contract+adapters) and the validation pair are follow-up stages. 138 green.
