@@ -24,6 +24,24 @@ logger = logging.getLogger(__name__)
 _MIN_GOAL_TEXT_CHARS = 40
 _TOUCHED_STATES = {"running", "in review", "done", "blocked"}
 _PRIORITY_ORDER = {"urgent": 0, "high": 1, "medium": 2, "low": 3, "none": 4}
+# proposal.priority (contracts.enums.Priority) — wired as a STABLE, lowest-
+# precedence tiebreaker so the *default* "normal" preserves today's claim order
+# byte-for-byte (a constant rank only ever breaks a tie the prior keys left, and
+# a stable sort then falls back to input order, exactly as before). A task opts
+# into reordering by carrying a `priority: high|normal|low|critical` label.
+_PROPOSAL_PRIORITY_ORDER = {"critical": 0, "high": 1, "normal": 2, "low": 3}
+_DEFAULT_PROPOSAL_PRIORITY = "normal"
+_DEFAULT_PROPOSAL_RANK = _PROPOSAL_PRIORITY_ORDER[_DEFAULT_PROPOSAL_PRIORITY]
+
+
+def proposal_priority_rank(labels: list) -> int:
+    """Rank an issue's proposal.priority for queue ordering (lower = sooner).
+
+    Reads a ``priority: <level>`` label; absent/unknown → the default "normal"
+    rank, which makes this key a no-op for today's all-default queue.
+    """
+    raw = (label_value(labels, "priority") or _DEFAULT_PROPOSAL_PRIORITY).strip().lower()
+    return _PROPOSAL_PRIORITY_ORDER.get(raw, _DEFAULT_PROPOSAL_RANK)
 
 
 def claim_next(client, role: str, settings) -> dict | None:
@@ -42,9 +60,7 @@ def claim_next(client, role: str, settings) -> dict | None:
         return None
 
     exec_today = _count_daily_executions(issues)
-    candidates = _build_candidates(
-        client, issues, role, kinds, managed_repos, settings, exec_today
-    )
+    candidates = _build_candidates(client, issues, role, kinds, managed_repos, settings, exec_today)
 
     if not candidates:
         return None
@@ -173,9 +189,7 @@ def _issue_author_identities(issue: dict) -> tuple[str | None, ...]:
         if isinstance(val, str):
             out.append(val)
         elif isinstance(val, dict):
-            out.extend(
-                str(val[k]) for k in ("id", "email", "display_name", "name") if val.get(k)
-            )
+            out.extend(str(val[k]) for k in ("id", "email", "display_name", "name") if val.get(k))
     return tuple(out)
 
 
@@ -218,7 +232,11 @@ def _sort_key(issue: dict) -> tuple:
     is_improve_suggestion = 0 if "source: improve-suggestion" in labs else 1
     plane_priority = str(issue.get("priority") or "none").lower()
     plane_rank = _PRIORITY_ORDER.get(plane_priority, 4)
-    return (is_improve_suggestion, plane_rank, issue.get("created_at", ""))
+    # proposal.priority is the LAST element: a pure tiebreaker that leaves the
+    # existing (improve-suggestion, plane-rank, created_at) order untouched and
+    # only orders genuine ties — and is constant (=normal) for today's queue.
+    proposal_rank = proposal_priority_rank(issue.get("labels", []))
+    return (is_improve_suggestion, plane_rank, issue.get("created_at", ""), proposal_rank)
 
 
 def _block_thin_task(client, issue: dict, role: str, goal_len: int) -> None:

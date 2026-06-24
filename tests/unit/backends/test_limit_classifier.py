@@ -9,7 +9,6 @@ from operations_center.backends.limit_classifier import (
     MODEL_WEEKLY,
     SESSION_5H,
     classify_limit,
-    models_affected,
 )
 
 
@@ -39,20 +38,3 @@ def test_session_beats_named_model() -> None:
 def test_no_signal_returns_none_kind() -> None:
     assert classify_limit("some unrelated build error") == (None, None)
     assert classify_limit(None) == (None, None)
-
-
-def test_models_affected_model_weekly_scopes_to_named_model() -> None:
-    assert models_affected("claude_code", MODEL_WEEKLY, "sonnet") == ("sonnet",)
-
-
-def test_models_affected_global_kinds_hit_all_models() -> None:
-    assert set(models_affected("claude_code", SESSION_5H, None)) == {
-        "sonnet",
-        "opus",
-        "haiku",
-    }
-    assert set(models_affected("claude_code", GLOBAL_WEEKLY, None)) == {
-        "sonnet",
-        "opus",
-        "haiku",
-    }

@@ -127,6 +127,12 @@ def dispatch_issue(
             settings.plane.project_id,
             "--task-id",
             task_id,
+            # Thread proposal.priority from the issue's `priority:` label so the
+            # built proposal carries its real priority (closes the loop with the
+            # claim-order tiebreaker). Absent label → worker default "normal", so
+            # default behavior is unchanged.
+            "--priority",
+            (label_value(labels, "priority") or "normal").strip().lower() or "normal",
             "--timeout-seconds",
             str(settings.team_executor.timeout_seconds),
         ]

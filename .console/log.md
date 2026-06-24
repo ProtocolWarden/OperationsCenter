@@ -8444,3 +8444,16 @@ INERT_MACHINERY_INVENTORY item 9 + Gap-4 capability probe.
 
 ## 2026-06-24 — S2 ruff fix
 Removed an unused redundant local import in test_capability_ownership.py (F401, CI Lint failure). No behavior change.
+
+## 2026-06-24 — Reviewer self-review isolation fix + S4 inventory cleanup
+
+A (security/deploy): the reviewer's ruff-fix (_phase0_ci_fix) AND auto-rebase (_attempt_auto_rebase) passes mutated
+the LIVE local_path working tree (stash/checkout/pull/reset/merge/push). For OC's own PRs local_path == the running
+checkout, so reviewing an OC PR contaminated main + risked loading untrusted PR code on lane revive (this broke the
+S1bc/S2/S3 deploy — required a stop/reset/start). Both now run inside an isolated `_isolated_repo_checkout` (git
+worktree to a tempdir; refs-only fetch into the shared object store, never touches local_path HEAD/index/stash). + tests.
+
+B (S4 cleanup): DELETED key_proxy (superseded by egress proxy) + limit_classifier.models_affected (dead no-op ternary,
+zero prod callers). WIRED audit_close_receipts ([project.scripts] verb) + proposal.priority (fail-safe last-tiebreaker
+in board claim ordering; all-"normal" preserves byte-for-byte order; --priority threaded in dispatch). 522 touched-suite
+tests green; the 11 integration/reviewer failures pre-exist on origin/main (verified on the pristine parent).

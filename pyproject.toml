@@ -52,6 +52,9 @@ operations-center-cleanup-stale-backlog = "operations_center.entrypoints.mainten
 operations-center-check-regressions = "operations_center.entrypoints.maintenance.check_regressions:main"
 operations-center-triage-scan       = "operations_center.entrypoints.maintenance.triage_scan:main"
 operations-center-board-unblock     = "operations_center.entrypoints.maintenance.board_unblock:main"
+# Audit closed-unmerged PRs for close receipts (salvage/dup/intentional). Orphaned
+# scanner — wired here so it has a verb like its maintenance siblings.
+operations-center-audit-close-receipts = "operations_center.entrypoints.maintenance.audit_close_receipts:main"
 # ADR 0007 Phase B — spec trigger watcher. Emits one `spec-author` Plane task
 # per cycle on drop-file or queue-drain; no LLM calls. Supersedes the trigger
 # half of spec_director (retired in Phase F).

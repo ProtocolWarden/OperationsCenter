@@ -38,6 +38,7 @@ CLI matches the reviewer role contract used by operations-center.sh:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import logging
 import os
@@ -825,6 +826,75 @@ def _run_pipeline(
 # ── Merge + Plane done ────────────────────────────────────────────────────────
 
 
+@contextlib.contextmanager
+def _isolated_repo_checkout(local_path: Path, head_ref: str, git_env: dict):
+    """Yield (cwd, _git) for a DISPOSABLE checkout of ``head_ref``, isolated from
+    the primary ``local_path`` working tree.
+
+    The reviewer's mutating git passes (ruff auto-fix, auto-rebase) must NEVER
+    stash/checkout/pull/reset/commit/push in ``local_path``. For OC's OWN repo
+    ``local_path`` is the LIVE running checkout (== oc_root): operating there
+    stashes the fleet's in-flight work and moves the deployed branch onto an
+    untrusted PR head, breaking deploys and landing PR code in the import path.
+    (2026-06: the reflog showed `pull --ff-only origin <pr-branch>` in the live
+    tree while reviewing an OC PR.)
+
+    A throwaway ``git worktree`` is added off ``local_path``'s existing git dir
+    into a private tempdir, checked out at ``origin/<head_ref>``. It shares the
+    object store (cheap — no re-clone, no extra fetch of history) but has its own
+    HEAD/index/working tree, so nothing here can perturb the primary checkout.
+    The worktree is force-removed and the tempdir deleted on exit, even on error.
+
+    Yields:
+        (cwd: Path, _git: Callable[..., subprocess.CompletedProcess]) where
+        ``_git(*args)`` runs git in the isolated worktree. The first fetch of
+        ``head_ref`` happens through the primary git dir (so the new branch ref
+        exists) before the worktree is created; if that fetch or the worktree
+        add fails the context manager raises and adds nothing.
+    """
+
+    def _primary_git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            ["git", *args], cwd=local_path, env=git_env, capture_output=True, text=True
+        )
+
+    # Fetch the PR head into the shared object store via the PRIMARY git dir.
+    # This updates remote-tracking refs only (origin/<head_ref>) — it does NOT
+    # touch the primary HEAD/index/working tree/stash.
+    _primary_git("fetch", "origin", head_ref)
+
+    tmpdir = tempfile.mkdtemp(prefix="oc-review-iso-")
+    worktree = Path(tmpdir) / "wt"
+    added = False
+    try:
+        add = _primary_git(
+            "worktree", "add", "--detach", "--force", str(worktree), f"origin/{head_ref}"
+        )
+        if add.returncode != 0:
+            raise RuntimeError(
+                f"git worktree add failed for {head_ref}: {add.stderr.strip() or add.stdout.strip()}"
+            )
+        added = True
+
+        def _git(*args: str) -> subprocess.CompletedProcess:
+            return subprocess.run(
+                ["git", *args], cwd=worktree, env=git_env, capture_output=True, text=True
+            )
+
+        # Land on a local branch named <head_ref> so commit/push semantics match
+        # the old in-place flow (push origin <head_ref> pushes the right branch).
+        _git("checkout", "-B", head_ref, f"origin/{head_ref}")
+        yield worktree, _git
+    finally:
+        if added:
+            # Remove the worktree registration from the primary git dir, then the
+            # tempdir. --force tolerates a dirty worktree (uncommitted ruff edits).
+            _primary_git("worktree", "remove", "--force", str(worktree))
+        shutil.rmtree(tmpdir, ignore_errors=True)
+        # Best-effort prune in case the dir was already gone (e.g. tmp reaped).
+        _primary_git("worktree", "prune")
+
+
 # How many auto-rebase attempts before a CONFLICTING PR is escalated for a human.
 # Orthogonal to fix_attempts — a rebase is infrastructure work, not a fix, and must
 # never consume the fix budget (that would wrongly close a good PR).
@@ -835,8 +905,8 @@ _REBASE_GRACE_SECONDS = 120
 
 
 def _attempt_auto_rebase(repo_cfg, head_ref: str, settings, pr_number: int) -> str:
-    """Merge the base branch into a CONFLICTING PR's branch and push, in the
-    repo's persistent clone (never oc_root).
+    """Merge the base branch into a CONFLICTING PR's branch and push, in an
+    ISOLATED throwaway worktree (never the primary local_path working tree).
 
     Returns one of:
       "clean"         — base merged with no real conflict; merge commit pushed.
@@ -847,11 +917,14 @@ def _attempt_auto_rebase(repo_cfg, head_ref: str, settings, pr_number: int) -> s
       "error"         — anything else; defensive, never raises.
 
     Safety: only ever creates a *merge commit* (branch moves forward only — no
-    force-push, no history rewrite). `.console/log.md` auto-resolves via a
-    union driver injected through .git/info/attributes (works even when the PR
-    branch predates the committed .gitattributes). A textually-clean-but-wrong
-    merge is NOT trusted here — the caller does not merge the result this cycle;
-    CI re-runs on the pushed commit and the next review re-validates it."""
+    force-push, no history rewrite). The merge runs in a disposable worktree off
+    local_path's git dir, so even for OC's own repo (where local_path IS the live
+    checkout) the primary HEAD/index/working tree/stash are never touched.
+    `.console/log.md` auto-resolves via a union driver injected through the shared
+    .git/info/attributes (works even when the PR branch predates the committed
+    .gitattributes). A textually-clean-but-wrong merge is NOT trusted here — the
+    caller does not merge the result this cycle; CI re-runs on the pushed commit
+    and the next review re-validates it."""
     local_path = getattr(repo_cfg, "local_path", None) if repo_cfg else None
     if not local_path or not Path(local_path).exists():
         return "unavailable"
@@ -869,44 +942,46 @@ def _attempt_auto_rebase(repo_cfg, head_ref: str, settings, pr_number: int) -> s
     if git_token:
         git_env["GH_TOKEN"] = git_token
 
-    def _git(*args: str) -> subprocess.CompletedProcess:
-        return subprocess.run(
-            ["git", *args], cwd=local_path, env=git_env, capture_output=True, text=True
-        )
-
     try:
         # Inject the union driver for the append-only journal so concurrent log
         # entries auto-keep-both instead of conflicting. .git/info/attributes is
-        # local and always applied — no dependency on the branch's committed copy.
+        # local and shared with linked worktrees, so this applies inside the
+        # isolated worktree too — and writing it touches no working tree/HEAD.
         info_dir = local_path / ".git" / "info"
         info_dir.mkdir(parents=True, exist_ok=True)
         (info_dir / "attributes").write_text(".console/log.md merge=union\n", encoding="utf-8")
 
-        _git("stash", "--include-untracked")
-        _git("fetch", "origin", head_ref, default_branch)
-        if _git("checkout", "-B", head_ref, f"origin/{head_ref}").returncode != 0:
-            return "error"
+        # Fetch base too (the worktree CM fetches head); harmless on the primary
+        # git dir — updates remote-tracking refs only.
+        subprocess.run(
+            ["git", "fetch", "origin", default_branch],
+            cwd=local_path,
+            env=git_env,
+            capture_output=True,
+            text=True,
+        )
 
-        merge = _git("merge", "--no-edit", f"origin/{default_branch}")
-        if merge.returncode == 0:
-            if "Already up to date" in (merge.stdout or ""):
-                return "noop"
-            # Merged cleanly per git — but a real (non-log) conflict path would
-            # have left the merge unfinished; double-check there are none.
-            if _git("diff", "--diff-filter=U", "--name-only").stdout.strip():
-                _git("merge", "--abort")
-                return "conflict"
-            push = _git("push", "origin", f"HEAD:{head_ref}")
-            if push.returncode == 0:
-                return "clean"
-            _git("reset", "--hard", f"origin/{head_ref}")
-            return "push_rejected"
+        with _isolated_repo_checkout(local_path, head_ref, git_env) as (_cwd, _git):
+            merge = _git("merge", "--no-edit", f"origin/{default_branch}")
+            if merge.returncode == 0:
+                if "Already up to date" in (merge.stdout or ""):
+                    return "noop"
+                # Merged cleanly per git — but a real (non-log) conflict path would
+                # have left the merge unfinished; double-check there are none.
+                if _git("diff", "--diff-filter=U", "--name-only").stdout.strip():
+                    _git("merge", "--abort")
+                    return "conflict"
+                push = _git("push", "origin", f"HEAD:{head_ref}")
+                if push.returncode == 0:
+                    return "clean"
+                _git("reset", "--hard", f"origin/{head_ref}")
+                return "push_rejected"
 
-        # Non-zero merge: conflicts. If every unmerged path is the log (union
-        # should have handled it but be defensive), there are none here → real
-        # conflict. Abort; never force a resolution.
-        _git("merge", "--abort")
-        return "conflict"
+            # Non-zero merge: conflicts. If every unmerged path is the log (union
+            # should have handled it but be defensive), there are none here → real
+            # conflict. Abort; never force a resolution.
+            _git("merge", "--abort")
+            return "conflict"
     except Exception as exc:  # noqa: BLE001 — rebase must never crash the watcher
         logger.warning("pr_review_watcher: auto-rebase PR #%d errored — %s", pr_number, exc)
         return "error"
@@ -1009,8 +1084,7 @@ def _branch_protection_ok(gh_client, owner: str, repo: str, base_branch: str, se
         missing.append("enforce_admins")
     if missing:
         logger.error(
-            "pr_review_watcher: %s/%s branch %r protection insufficient (%s) — "
-            "refusing self-merge",
+            "pr_review_watcher: %s/%s branch %r protection insufficient (%s) — refusing self-merge",
             owner,
             repo,
             base_branch,
@@ -1061,8 +1135,7 @@ def _sensitive_path_ack_ok(
     hits = sensitive_paths_in_diff(files, sensitive_path_patterns())
     if hits:
         logger.error(
-            "pr_review_watcher: PR #%d touches sensitive paths without a "
-            "'risk-reviewed' ack: %s",
+            "pr_review_watcher: PR #%d touches sensitive paths without a 'risk-reviewed' ack: %s",
             pr_number,
             ", ".join(sorted(hits)[:10]),
         )
@@ -1652,9 +1725,7 @@ def _requeue_plane_task(
     if items:
         # The concerns are model-authored and may carry attacker text (a quoted
         # evidence_span). Sanitize before reflecting to the Plane comment (INJ G-1).
-        enumerated = sanitize_for_comment(
-            "\n".join(f"{i}. {c}" for i, c in enumerate(items, 1))
-        )
+        enumerated = sanitize_for_comment("\n".join(f"{i}. {c}" for i, c in enumerate(items, 1)))
         scope_block = (
             "\n\n**Unresolved review concerns to address in the next attempt** "
             "(the previous PR could not resolve these — scope the fresh attempt to "
@@ -1915,71 +1986,58 @@ def _phase0_ci_fix(
     if git_token:
         git_env["GH_TOKEN"] = git_token
 
-    def _git(*args: str) -> subprocess.CompletedProcess:
-        return subprocess.run(
-            ["git", *args], cwd=local_path, env=git_env, capture_output=True, text=True
-        )
-
     try:
-        # Stash any in-progress work, checkout the PR branch, pull latest.
-        _git("stash", "--include-untracked")
-        checkout = _git("checkout", head_ref)
-        if checkout.returncode != 0:
-            _git("fetch", "origin", head_ref)
-            _git("checkout", "-B", head_ref, f"origin/{head_ref}")
-        _git("pull", "--ff-only", "origin", head_ref)
+        # ISOLATION (security): never stash/checkout/pull/commit/push in
+        # local_path — for OC's own repo that is the LIVE running checkout. All
+        # mutating git work happens in a throwaway worktree at the PR head; the
+        # primary checkout's HEAD/index/working tree/stash are never touched.
+        with _isolated_repo_checkout(local_path, head_ref, git_env) as (cwd, _git):
+            # Run ruff auto-fix in the isolated worktree (ruff_bin stays absolute
+            # to the primary venv; only the working directory is the worktree).
+            subprocess.run(
+                [str(ruff_bin), "check", "--fix", "."], cwd=cwd, capture_output=True, text=True
+            )
+            subprocess.run([str(ruff_bin), "format", "."], cwd=cwd, capture_output=True, text=True)
 
-        # Run ruff auto-fix.
-        subprocess.run(
-            [str(ruff_bin), "check", "--fix", "."], cwd=local_path, capture_output=True, text=True
-        )
-        subprocess.run(
-            [str(ruff_bin), "format", "."], cwd=local_path, capture_output=True, text=True
-        )
+            # Check if anything changed.
+            status = _git("status", "--porcelain")
+            if not status.stdout.strip():
+                logger.info(
+                    "pr_review_watcher: PR #%d ruff fix produced no changes "
+                    "— advancing to self_review",
+                    pr_number,
+                )
+                state["phase"] = "self_review"
+                _save_state(state_path, state)
+                return
 
-        # Check if anything changed.
-        status = _git("status", "--porcelain")
-        if not status.stdout.strip():
+            _git("add", "-A")
+            _git("commit", "-m", f"fix(ci): auto-fix ruff lint violations on {head_ref}")
+            push = _git("push", "origin", head_ref)
+            if push.returncode != 0:
+                logger.warning(
+                    "pr_review_watcher: PR #%d ci-fix push failed — %s",
+                    pr_number,
+                    push.stderr.strip(),
+                )
+                state["phase"] = "self_review"
+                _save_state(state_path, state)
+                return
+
+            state["ci_fix_attempts"] = attempts + 1
+            state["ci_fix_last_push_at"] = datetime.now(UTC).isoformat()
             logger.info(
-                "pr_review_watcher: PR #%d ruff fix produced no changes — advancing to self_review",
+                "pr_review_watcher: PR #%d ci-fix attempt %d pushed to %s — waiting for CI",
                 pr_number,
+                attempts + 1,
+                head_ref,
             )
-            state["phase"] = "self_review"
             _save_state(state_path, state)
-            return
-
-        _git("add", "-A")
-        _git("commit", "-m", f"fix(ci): auto-fix ruff lint violations on {head_ref}")
-        push = _git("push", "origin", head_ref)
-        if push.returncode != 0:
-            logger.warning(
-                "pr_review_watcher: PR #%d ci-fix push failed — %s",
-                pr_number,
-                push.stderr.strip(),
-            )
-            state["phase"] = "self_review"
-            _save_state(state_path, state)
-            return
-
-        state["ci_fix_attempts"] = attempts + 1
-        state["ci_fix_last_push_at"] = datetime.now(UTC).isoformat()
-        logger.info(
-            "pr_review_watcher: PR #%d ci-fix attempt %d pushed to %s — waiting for CI",
-            pr_number,
-            attempts + 1,
-            head_ref,
-        )
-        _save_state(state_path, state)
 
     except Exception as exc:
         logger.warning("pr_review_watcher: PR #%d ci_fix error — %s", pr_number, exc)
         state["phase"] = "self_review"
         _save_state(state_path, state)
-    finally:
-        # Return local repo to main so other watchers aren't disrupted.
-        default = getattr(repo_cfg, "default_branch", "main")
-        _git("checkout", default)
-        _git("stash", "pop")
 
 
 # ── Phase 1: self-review ──────────────────────────────────────────────────────
@@ -3334,9 +3392,7 @@ def _find_plane_task_id(settings, repo_key: str, pr_number: int, _pr_data: dict)
 # ── Heartbeat ──────────────────────────────────────────────────────────────────
 
 
-def _write_heartbeat(
-    status_dir: Path, *, success: bool = True, error: str | None = None
-) -> None:
+def _write_heartbeat(status_dir: Path, *, success: bool = True, error: str | None = None) -> None:
     """Write the reviewer heartbeat, separating liveness from progress.
 
     Historically this wrote a fresh ``"active"`` heartbeat on EVERY cycle —
@@ -3471,8 +3527,7 @@ def _poll_once(oc_root: Path, config_path: Path, settings) -> None:
                 # abort the entire worklist and silently stall every other PR's
                 # review/merge for the cycle.
                 logger.error(
-                    "pr_review_watcher: skipping PR #%s — containment required but "
-                    "unavailable: %s",
+                    "pr_review_watcher: skipping PR #%s — containment required but unavailable: %s",
                     state.get("pr_number"),
                     exc,
                 )
