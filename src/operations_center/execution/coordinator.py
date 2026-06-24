@@ -113,7 +113,8 @@ class ExecutionCoordinator:
         # Option B — task-shape → model selection at request build time.
         # When the caller doesn't supply a policy, we leave runtime_binding
         # selection off (passthrough — adapters use their built-in defaults).
-        # The bundled DEFAULT_POLICY is opt-in via from_defaults_with_runtime_policy().
+        # The bundled DEFAULT_POLICY is opt-in via ``with_runtime_binding_policy``
+        # / the ``from_defaults_with_runtime_policy`` convenience constructor.
         self._runtime_binding_policy = runtime_binding_policy
         # Recovery loop wiring. Defaults are conservative — max_attempts=1
         # means "no retry beyond the first attempt" so existing behavior is
@@ -135,6 +136,64 @@ class ExecutionCoordinator:
         # Global resource gate — runs before per-backend caps and reserves
         # host headroom for co-tenant workloads sharing the box.
         self._resource_gate: "ResourceGateSettings | None" = resource_gate
+
+    @classmethod
+    def from_defaults_with_runtime_policy(
+        cls,
+        *,
+        adapter_registry: CanonicalBackendRegistry,
+        runtime_binding_policy: "RuntimeBindingPolicy | None" = None,
+        **kwargs: Any,
+    ) -> "ExecutionCoordinator":
+        """Construct a coordinator with per-task model-tier selection enabled.
+
+        This is the advertised activation path for the otherwise-dormant
+        ``RuntimeBindingPolicy`` (inventory #2). When ``runtime_binding_policy``
+        is omitted the bundled ``DEFAULT_POLICY`` is used, so callers that want
+        the team's stock cost/quality tiers (opus for refactor/feature, sonnet
+        for tests, haiku for lint) get them with one call. Pass an explicit
+        policy (e.g. ``RuntimeBindingPolicy.from_yaml(path)``) to override.
+
+        Equivalent to ``ExecutionCoordinator(..., runtime_binding_policy=p)``;
+        it exists so the activation is discoverable and self-documenting at the
+        call site. All other coordinator kwargs pass through unchanged.
+        """
+        from operations_center.policy.runtime_binding_policy import DEFAULT_POLICY
+
+        policy = runtime_binding_policy if runtime_binding_policy is not None else DEFAULT_POLICY
+        return cls(
+            adapter_registry=adapter_registry,
+            runtime_binding_policy=policy,
+            **kwargs,
+        )
+
+    @staticmethod
+    def resolve_runtime_binding_policy(settings: Any) -> "RuntimeBindingPolicy | None":
+        """Resolve the RuntimeBindingPolicy a coordinator should use, from settings.
+
+        Fail-safe wiring for inventory #2. Returns ``None`` (the historical
+        static-team behavior) unless ``settings.runtime_binding.enabled`` is
+        True. When enabled:
+          - ``policy_path`` set  → ``RuntimeBindingPolicy.from_yaml(path)``
+            (a missing file yields an empty policy → passthrough, so a bad path
+            fails safe rather than crashing the run), and
+          - ``policy_path`` unset → the bundled ``DEFAULT_POLICY``.
+
+        Returning ``None`` keeps ``runtime_binding`` selection off so adapters
+        use their built-in model defaults — identical to today.
+        """
+        rb = getattr(settings, "runtime_binding", None)
+        if rb is None or not getattr(rb, "enabled", False):
+            return None
+        from operations_center.policy.runtime_binding_policy import (
+            DEFAULT_POLICY,
+            RuntimeBindingPolicy,
+        )
+
+        policy_path = getattr(rb, "policy_path", None)
+        if policy_path is not None:
+            return RuntimeBindingPolicy.from_yaml(policy_path)
+        return DEFAULT_POLICY
 
     def execute(
         self,

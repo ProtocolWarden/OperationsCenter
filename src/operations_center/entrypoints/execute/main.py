@@ -56,6 +56,27 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _build_recovery_policy(settings):
+    """Build a RecoveryPolicy from ``settings.recovery`` (inventory #3).
+
+    Fail-safe: with the shipped default (``max_attempts=1``) this returns a
+    policy identical to ``RecoveryPolicy()`` — single-shot, no retry. The
+    retryable/non-retryable failure-kind sets keep their conservative defaults;
+    only the attempt budget, backoff ceiling, and UNKNOWN-retry opt-in are
+    operator-tunable here. The coordinator builds the matching RecoveryEngine
+    from this policy.
+    """
+    from operations_center.execution.recovery_loop import RecoveryPolicy
+
+    rec = settings.recovery
+    return RecoveryPolicy(
+        max_attempts=int(rec.max_attempts),
+        retry_unknowns=bool(rec.retry_unknowns),
+        unknown_retry_limit=int(rec.unknown_retry_limit),
+        max_delay_seconds=float(rec.max_delay_seconds),
+    )
+
+
 def _load_bundle(path: Path) -> ProposalDecisionBundle:
     payload = json.loads(path.read_text(encoding="utf-8"))
     return ProposalDecisionBundle(
@@ -128,6 +149,31 @@ def main() -> int:
         settings,
         repo_root=Path.cwd(),
     )
+
+    # Per-task model-tier selection (inventory #2). Fail-safe: None unless
+    # settings.runtime_binding.enabled — None preserves the static-team default.
+    # A relative policy_path is resolved against the config-file directory so
+    # operators can write `policy_path: runtime_binding_policy.yaml`.
+    runtime_binding_settings = settings.runtime_binding
+    if (
+        runtime_binding_settings.enabled
+        and runtime_binding_settings.policy_path is not None
+        and not runtime_binding_settings.policy_path.is_absolute()
+    ):
+        runtime_binding_settings = runtime_binding_settings.model_copy(
+            update={
+                "policy_path": (args.config.parent / runtime_binding_settings.policy_path).resolve()
+            }
+        )
+        settings = settings.model_copy(update={"runtime_binding": runtime_binding_settings})
+    runtime_binding_policy = ExecutionCoordinator.resolve_runtime_binding_policy(settings)
+
+    # Bounded execution retry/backoff (inventory #3). Fail-safe: the shipped
+    # default max_attempts=1 is single-shot (current behavior); the engine
+    # additionally refuses to retry non-idempotent requests. Raising max_attempts
+    # in settings.recovery enables retry of transient failures.
+    recovery_policy = _build_recovery_policy(settings)
+
     coordinator = ExecutionCoordinator(
         adapter_registry=CanonicalBackendRegistry.from_settings(settings),
         workspace_manager=workspace_manager,
@@ -135,6 +181,8 @@ def main() -> int:
         usage_store=UsageStore(),
         backend_caps=settings.backend_caps,
         resource_gate=settings.resource_gate,
+        runtime_binding_policy=runtime_binding_policy,
+        recovery_policy=recovery_policy,
     )
 
     try:

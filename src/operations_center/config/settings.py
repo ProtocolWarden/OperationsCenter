@@ -452,6 +452,66 @@ class ContractChangePropagationSettings(BaseModel):
     dedup_path: Path = Path("state/propagation/dedup.json")
 
 
+class RuntimeBindingSettings(BaseModel):
+    """Per-task model-tier selection (RuntimeBindingPolicy wiring).
+
+    DISABLED by default. When ``enabled`` is False the coordinator runs with
+    ``runtime_binding_policy=None`` — the historical static behavior where every
+    task uses the executor lane's built-in model default. When ``enabled`` is
+    True the coordinator loads a ``RuntimeBindingPolicy`` and selects a model
+    tier (opus / sonnet / haiku, etc.) per (task_type, lane); the first matching
+    rule wins, the ``default:`` block applies when no rule matches, and a
+    caller-supplied binding always overrides the policy.
+
+    Source of the policy:
+      - ``policy_path`` set  → loaded from that YAML file (resolved relative to
+        the config-file directory when relative). A missing file yields an empty
+        policy (no binding selected → passthrough), so a typo'd path fails safe.
+      - ``policy_path`` unset → the bundled ``DEFAULT_POLICY`` is used.
+
+    BEHAVIOR CHANGE WHEN ENABLED: model selection varies per task (e.g. a
+    refactor on the claude lane binds opus; a lint_fix binds haiku) instead of
+    always using ``team_executor.team_name``'s default. Gated entirely behind
+    ``enabled`` so the shipped default config is identical to today.
+    """
+
+    enabled: bool = False
+    # Optional path to a runtime_binding_policy.yaml. None → bundled DEFAULT_POLICY.
+    policy_path: Path | None = None
+
+
+class RecoverySettings(BaseModel):
+    """Bounded execution retry/backoff loop (RecoveryPolicy wiring).
+
+    SINGLE-SHOT by default. ``max_attempts=1`` reproduces the historical
+    behavior: the adapter is invoked once and its result is final — every
+    retry/backoff/RATE_LIMIT code path in ``execution/recovery_loop`` stays
+    unreachable. Raise ``max_attempts`` to enable bounded retry of *transient*
+    failures (TRANSIENT / TIMEOUT / BACKEND_UNAVAILABLE).
+
+    SIDE-EFFECT SAFETY: the recovery engine refuses to retry a request that is
+    not marked ``idempotent`` unless the failure is a certified pre-send failure
+    (``BACKEND_UNAVAILABLE`` — the adapter guarantees the request never reached
+    the backend). Live execution requests default ``idempotent=False`` (they
+    write files, commit, push, open PRs), so raising ``max_attempts`` only ever
+    retries genuinely safe-to-replay situations. RATE_LIMIT retries additionally
+    require a bounded ``retry_after`` within ``max_delay_seconds``.
+
+    BEHAVIOR CHANGE WHEN ``max_attempts > 1``: a transient backend failure (and,
+    for idempotent requests, more failure classes) is retried up to
+    ``max_attempts`` times with bounded backoff, instead of failing on the first
+    attempt. Gated behind ``max_attempts`` so the shipped default (1) is
+    identical to today.
+    """
+
+    max_attempts: int = Field(default=1, ge=1)
+    max_delay_seconds: float = Field(default=30.0, ge=0.0)
+    # Retry failures the classifier could not categorize (UNKNOWN). Off by
+    # default — an uncategorized failure is treated as non-retryable.
+    retry_unknowns: bool = False
+    unknown_retry_limit: int = Field(default=0, ge=0)
+
+
 class TaskAdmissionSettings(BaseModel):
     """Admission control for board tasks (determinism surface 5).
 
@@ -530,9 +590,31 @@ class Settings(BaseModel):
     # S8-8: Runtime error ingestion configuration.  None = disabled.
     error_ingest: ErrorIngestSettings | None = None
     spec_author: SpecAuthorSettings = Field(default_factory=SpecAuthorSettings)
+    # Per-task model-tier selection (RuntimeBindingPolicy). Disabled by default;
+    # when enabled the coordinator selects a model tier per (task_type, lane)
+    # instead of always using the lane's static default. See RuntimeBindingSettings.
+    runtime_binding: RuntimeBindingSettings = Field(default_factory=RuntimeBindingSettings)
+    # Bounded execution retry/backoff (RecoveryPolicy). max_attempts=1 by default
+    # (single-shot, current behavior). Raising it enables retry of transient
+    # failures; non-idempotent requests are never retried. See RecoverySettings.
+    recovery: RecoverySettings = Field(default_factory=RecoverySettings)
     # Admission control (determinism surface 5). Disabled by default; when the
     # author allowlist is set, un-allowlisted task authors are not auto-claimed.
     task_admission: TaskAdmissionSettings = Field(default_factory=TaskAdmissionSettings)
+    # Autonomous queue-healing maintenance task (5-rule blocked-queue healer).
+    # Disabled by default: when False the QueueHealingTask is registered but the
+    # maintenance loop never schedules it (registry skips disabled tasks), so
+    # default fleet behavior is unchanged. When True the controller runs the
+    # blocked-queue healer each cycle (recycles retry-safe Blocked tasks back to
+    # Ready-for-AI/Backlog, escalates budget-exhausted lineages via comment).
+    # Never deletes a task. See queue_healing/engine.py.
+    queue_healing_enabled: bool = False
+    # Autonomous parked-state unpark maintenance task. Disabled by default (same
+    # registered-but-not-scheduled fail-safe). When True the controller loads the
+    # parked-state store each cycle and unparks an item once its root-cause
+    # evidence changes or an unpark condition is met. Empty store => no-op. See
+    # recovery/parked.py.
+    parked_unpark_enabled: bool = False
     # Propose worker skips its generation cycle when the "Ready for AI" queue
     # already has this many or more tasks.  0 = disabled (default 8).
     propose_skip_when_ready_count: int = 8

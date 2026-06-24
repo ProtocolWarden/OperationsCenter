@@ -243,3 +243,52 @@ class TestLiveLoopRegistration:
 
         assert "board_unblock" in registered
         assert {"spec_hygiene", "ledger_maintain", "board_unblock"} <= set(registered)
+
+    def test_dead_subsystem_tasks_registered_in_live_loop(self):
+        """Inventory #4 + #5: QueueHealingTask and ParkedUnparkTask must be wired
+        into the running loop (registered even though disabled-by-default), not
+        just exist as modules. Pins them so they can't silently un-register. The
+        real QueueHealingTask/ParkedUnparkTask are constructed (only the unrelated
+        sibling tasks are stubbed) so a constructor regression is also caught."""
+        from operations_center.entrypoints.spec_hygiene import main as sh
+
+        registry = mock.Mock()
+        registered_objs: list[object] = []
+        registry.register.side_effect = lambda t: registered_objs.append(t)
+
+        settings = SimpleNamespace(
+            **{**vars(_settings()), "queue_healing_enabled": False, "parked_unpark_enabled": False}
+        )
+
+        # Stub only the siblings whose constructors need richer settings; let the
+        # two subsystems under test construct for real.
+        with (
+            mock.patch.object(
+                sh, "SpecHygieneTask", lambda *a, **k: SimpleNamespace(name="spec_hygiene")
+            ),
+            mock.patch.object(
+                sh, "LedgerMaintainTask", lambda *a, **k: SimpleNamespace(name="ledger_maintain")
+            ),
+            mock.patch.object(
+                sh, "BoardUnblockTask", lambda *a, **k: SimpleNamespace(name="board_unblock")
+            ),
+            mock.patch.object(
+                sh, "EgressProbeTask", lambda *a, **k: SimpleNamespace(name="egress_probe")
+            ),
+            mock.patch.object(
+                sh, "HeartbeatStallTask", lambda *a, **k: SimpleNamespace(name="heartbeat_stall")
+            ),
+            mock.patch.object(
+                sh, "OutcomeFlaggerTask", lambda *a, **k: SimpleNamespace(name="outcome_flagger")
+            ),
+            mock.patch.object(
+                sh, "DriftMonitorTask", lambda *a, **k: SimpleNamespace(name="drift_monitor")
+            ),
+        ):
+            sh.register_maintenance_tasks(registry, settings, mock.Mock())
+
+        by_name = {t.name: t for t in registered_objs}
+        assert {"queue_healing", "parked_unpark"} <= set(by_name)
+        # And they are disabled-by-default (fail-safe).
+        assert by_name["queue_healing"].enabled is False
+        assert by_name["parked_unpark"].enabled is False

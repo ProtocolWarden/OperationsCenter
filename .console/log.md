@@ -8428,3 +8428,15 @@ max_changed_files = current behavior, so normal + self-modify tasks are unaffect
 spec-author (which sets allowed_paths=["docs/specs/"], max_changed_files=1) becomes
 scope-enforced — its intended guard. Live-behavior change → needs fleet restart.
 timeout_seconds (contract+adapters) and the validation pair are follow-up stages. 138 green.
+
+## 2026-06-24 — Wire-all S3: four dead subsystems wired functional (fail-safe-default)
+
+INERT_MACHINERY_INVENTORY items 2-5, all FAIL-SAFE-DEFAULT (shipped config = current behavior; gated off).
+- RuntimeBindingPolicy: ExecutionCoordinator.from_defaults_with_runtime_policy + resolve_runtime_binding_policy;
+  execute/main wires it; gated on settings.runtime_binding.enabled (default False -> static team model).
+- Recovery/retry loop: RecoverySettings -> RecoveryPolicy in execute/main; default max_attempts=1 (single-shot=today);
+  engine already refuses to retry non-idempotent requests (Rule 6).
+- QueueHealingEngine: shared apply_queue_healing_actions; new QueueHealingTask in spec_hygiene, enabled=False default
+  (disabled tasks never run); verified non-destructive (recycle/escalate, no delete).
+- Parking: new ParkedUnparkTask (ParkedStateStore + should_unpark + RecoveryBudgetTracker); registered, enabled=False;
+  empty store -> no-op. config example documents activation. Inventory items 2-5 DEAD -> WIRED. tests/unit green.

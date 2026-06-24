@@ -67,6 +67,46 @@ critique_executor:
   budget_pressure_threshold: 0.75
 
 # ---------------------------------------------------------------------------
+# Wire-all S3 — opt-in activation of four otherwise-inert subsystems
+# ---------------------------------------------------------------------------
+# Each block below is OFF by default. Omitting it (or leaving the values as
+# shown) reproduces today's fleet behavior EXACTLY. Uncomment + change a value
+# to activate. See docs/design/INERT_MACHINERY_INVENTORY.md items 2–5.
+
+# Per-task model-tier selection (RuntimeBindingPolicy). DEFAULT = static team
+# tier for every task. When enabled, the executor model varies by (task_type,
+# lane): opus for refactor/feature, sonnet for tests, haiku for lint, sonnet
+# fallback. policy_path is relative to this config file; omit it to use the
+# bundled DEFAULT_POLICY.
+# runtime_binding:
+#   enabled: true
+#   policy_path: runtime_binding_policy.yaml
+
+# Bounded execution retry/backoff (RecoveryPolicy). DEFAULT = single-shot
+# (max_attempts=1) — the adapter is called once and its result is final.
+# Raising max_attempts retries TRANSIENT/TIMEOUT/BACKEND_UNAVAILABLE failures.
+# SAFETY: non-idempotent requests (the live default — they write/commit/push)
+# are never retried regardless of max_attempts; only certified pre-send
+# failures and idempotent requests retry.
+# recovery:
+#   max_attempts: 3
+#   max_delay_seconds: 30.0
+#   retry_unknowns: false
+#   unknown_retry_limit: 0
+
+# Autonomous blocked-queue healer (QueueHealingEngine). DEFAULT = the
+# maintenance loop never runs it. When true, each maintenance cycle recycles
+# retry-safe Blocked tasks back to Ready-for-AI/Backlog and escalates
+# budget-exhausted lineages via a comment. NON-DESTRUCTIVE (never deletes work).
+# queue_healing_enabled: true
+
+# Autonomous parked-state unpark loop. DEFAULT = the maintenance loop never
+# runs it; an empty parked-state store is a no-op regardless. When true, each
+# cycle re-evaluates the parked root cause and unparks it once its board
+# evidence changes. Only ever clears/refreshes state/recovery/parked.json.
+# parked_unpark_enabled: true
+
+# ---------------------------------------------------------------------------
 # Repos
 # ---------------------------------------------------------------------------
 # At least one repo is required. The repo key (e.g. "MyRepo") must match the
