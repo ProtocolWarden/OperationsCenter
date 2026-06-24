@@ -347,7 +347,7 @@ class WorkspaceManager:
         # the executor going wide. Operators set OPS_CENTER_MAX_FILES /
         # OPS_CENTER_MAX_LINES higher when intentionally shipping a large
         # refactor; default is conservative.
-        oversized = self._diff_oversized(ws)
+        oversized = self._diff_oversized(ws, request)
         if oversized is not None:
             n_files, n_lines, file_list = oversized
             logger.warning(
@@ -501,6 +501,29 @@ class WorkspaceManager:
             if result.blocked_paths:
                 blocked_msg = f"\nBlocked paths: {', '.join(result.blocked_paths)}"
             return False, f"Patch validation failed: {result.reason}{blocked_msg}"
+        # Per-task write-scope allowlist — was inert (the static blocklist ran, but
+        # request.allowed_paths never reached the diff). Wired here, fail-CLOSED, but
+        # ONLY when the proposal set a non-empty allowlist: find_violations() fail-opens
+        # on an empty list, so normal/self-modify tasks (which set none) are unaffected.
+        if request.allowed_paths:
+            from operations_center.application.scope_policy import ChangedFilePolicyChecker
+
+            names = subprocess.run(
+                ["git", "diff", "--cached", "--name-only"],
+                cwd=ws,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            ).stdout.splitlines()
+            changed = [n.strip() for n in names if n.strip()]
+            violations = ChangedFilePolicyChecker().find_violations(
+                changed, list(request.allowed_paths)
+            )
+            if violations:
+                return False, (
+                    f"Patch touches paths outside the task allowlist "
+                    f"{list(request.allowed_paths)}: {', '.join(violations)}"
+                )
         return True, None
 
     def _warn_cross_repo_impact(self, ws: Path, request: ExecutionRequest) -> None:
@@ -560,7 +583,9 @@ class WorkspaceManager:
 
     # ── helpers ──────────────────────────────────────────────────────────────
 
-    def _diff_oversized(self, ws: Path) -> tuple[int, int, list[str]] | None:
+    def _diff_oversized(
+        self, ws: Path, request: ExecutionRequest
+    ) -> tuple[int, int, list[str]] | None:
         """Return (files, lines, file_list) when the staged diff exceeds caps.
 
         Returns None when within bounds. file_list is sorted alphabetically
@@ -598,7 +623,12 @@ class WorkspaceManager:
 
         for m in re.finditer(r"(\d+)\s+(?:insertion|deletion)", proc.stdout):
             n_lines += int(m.group(1))
-        if n_files > self._max_files or n_lines > self._max_lines:
+        # Per-task max_changed_files (when the proposal set it) can only TIGHTEN the
+        # operator's global file cap, never loosen it. None (normal tasks) = global cap.
+        effective_max_files = self._max_files
+        if request.max_changed_files is not None:
+            effective_max_files = min(self._max_files, request.max_changed_files)
+        if n_files > effective_max_files or n_lines > self._max_lines:
             return n_files, n_lines, file_list
         return None
 

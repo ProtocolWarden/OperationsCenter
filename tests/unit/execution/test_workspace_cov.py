@@ -405,7 +405,7 @@ def test_diff_oversized_within_bounds(tmp_path):
         return _fake_completed(0)
 
     with mock.patch.object(ws_mod.subprocess, "run", side_effect=fake_run):
-        assert mgr._diff_oversized(ws) is None
+        assert mgr._diff_oversized(ws, _make_request(ws)) is None
 
 
 def test_diff_oversized_exceeds_files(tmp_path):
@@ -421,7 +421,7 @@ def test_diff_oversized_exceeds_files(tmp_path):
         return _fake_completed(0)
 
     with mock.patch.object(ws_mod.subprocess, "run", side_effect=fake_run):
-        out = mgr._diff_oversized(ws)
+        out = mgr._diff_oversized(ws, _make_request(ws))
     assert out is not None
     n_files, n_lines, file_list = out
     assert n_files == 3
@@ -443,7 +443,7 @@ def test_diff_oversized_exceeds_lines(tmp_path):
         return _fake_completed(0)
 
     with mock.patch.object(ws_mod.subprocess, "run", side_effect=fake_run):
-        out = mgr._diff_oversized(ws)
+        out = mgr._diff_oversized(ws, _make_request(ws))
     assert out is not None
     assert out[1] == 14  # 10 + 4
 
@@ -459,7 +459,7 @@ def test_diff_oversized_calledprocesserror_returns_none(tmp_path):
         return _fake_completed(0)
 
     with mock.patch.object(ws_mod.subprocess, "run", side_effect=fake_run):
-        assert mgr._diff_oversized(ws) is None
+        assert mgr._diff_oversized(ws, _make_request(ws)) is None
 
 
 # ── _has_new_commits ─────────────────────────────────────────────────────────
