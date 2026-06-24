@@ -240,7 +240,6 @@ def test_falls_back_to_repograph_when_plane_absent(monkeypatch):
 def test_resolves_owner_from_live_platform_manifest_registry(monkeypatch):
     # End-to-end: a real-shaped registry from the platform_manifest surface flows
     # through verify_owner_or_degrade and the single-owner resolves → proceed.
-    from operations_center import capability_ownership
 
     reg = _registry(("board_unblock", "OperationsCenter", "owns"))
     cap_mod = types.SimpleNamespace(load_capabilities=lambda: reg)

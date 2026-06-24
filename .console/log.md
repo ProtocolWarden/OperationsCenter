@@ -8441,3 +8441,6 @@ INERT_MACHINERY_INVENTORY item 9 + Gap-4 capability probe.
   OC's venv -> stays DORMANT (fail-open, never halts board_unblock); auto-activates if/when the plane ships to OC's
   deps. Live activation needs an operator supply-chain decision (NOT taken).
 220 touched + 1033 broader tests green. Behavior-neutral on the live fleet.
+
+## 2026-06-24 — S2 ruff fix
+Removed an unused redundant local import in test_capability_ownership.py (F401, CI Lint failure). No behavior change.
