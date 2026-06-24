@@ -8457,3 +8457,6 @@ B (S4 cleanup): DELETED key_proxy (superseded by egress proxy) + limit_classifie
 zero prod callers). WIRED audit_close_receipts ([project.scripts] verb) + proposal.priority (fail-safe last-tiebreaker
 in board claim ordering; all-"normal" preserves byte-for-byte order; --priority threaded in dispatch). 522 touched-suite
 tests green; the 11 integration/reviewer failures pre-exist on origin/main (verified on the pristine parent).
+
+## 2026-06-24 — C29 trim
+Compacted the dispatch.py priority comment to a 1-line inline note (503 -> 499 lines, under the C29 limit).
