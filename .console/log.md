@@ -8379,3 +8379,16 @@ tasks that currently retry forever now terminate after 3 clean code failures).
 
 Removed backticks from failure_category VALUE words in CODE_FAILURE_RETRY_CAP.md
 (they are enum string values, not code symbols — OC8).
+
+## 2026-06-24 — Four open-gap adversarial specs (LEFT OPEN, unmerged)
+
+Specced the 4 remaining Osprey/Praetorian open gaps adversarially and left them
+open on this branch (not merged, not implemented): CONTEXT_DISCIPLINE.md,
+LINEAGE_VISUALIZATION.md, RISK_TIERED_APPROVAL.md, RUNTIME_CAPABILITY_ENFORCEMENT.md.
+Each ran steelman -> 2 adversarial rounds -> minimal real delta -> disposition.
+Pattern: every "gap" is mostly already-built; the real delta in each is a small
+fail-closed/observability fix, and each surfaced a concrete latent defect (per-task
+timeout dropped by the TeamExecutor adapter; lineage CLI unreachable from
+operations-center.sh; policy/ risk engine fed risk_level=low on every live task;
+capability probe imports bare repograph not the live platform_manifest.capabilities
+path). No code changed. Awaiting operator direction.
