@@ -58,7 +58,9 @@ def _permissive_engine(repo_key: str = "demo") -> PolicyEngine:
         repo_key=repo_key,
         enabled=True,
         path_policy=PathPolicy(rules=[], default_mode="allow"),
-        branch_guardrail=BranchGuardrail(allow_direct_commit=True, require_pr=False),
+        branch_guardrail=BranchGuardrail(
+            allow_direct_commit=True, require_branch=False, require_pr=False
+        ),
         tool_guardrail=ToolGuardrail(network_mode="allowed"),
         validation_requirements=[],
         review_requirement=ReviewRequirement(autonomous_allowed=True),

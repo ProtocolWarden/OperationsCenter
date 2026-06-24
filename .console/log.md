@@ -8428,3 +8428,16 @@ max_changed_files = current behavior, so normal + self-modify tasks are unaffect
 spec-author (which sets allowed_paths=["docs/specs/"], max_changed_files=1) becomes
 scope-enforced — its intended guard. Live-behavior change → needs fleet restart.
 timeout_seconds (contract+adapters) and the validation pair are follow-up stages. 138 green.
+
+## 2026-06-24 — Wire-all S2: policy/validate fail-closed + capability probe (defensive)
+
+INERT_MACHINERY_INVENTORY item 9 + Gap-4 capability probe.
+- validate_config now LOAD-BEARING: PolicyEngine.from_config/from_defaults run policy.validate.validate_config and
+  raise InvalidPolicyConfigError on any inconsistency. Default config is valid -> live fleet unchanged; a
+  misconfigured custom PolicyConfig is now refused at startup instead of silently misbehaving. Surfaced + fixed a
+  real prod typo (demo run.py risk_profile="demo" -> "standard") and inconsistent test-helper configs.
+- capability probe: load_capability_registry now tries platform_manifest.capabilities.load_capabilities() first
+  (the real registry API), falls back to bare repograph; both fail-open. Confirmed the capabilities plane is NOT in
+  OC's venv -> stays DORMANT (fail-open, never halts board_unblock); auto-activates if/when the plane ships to OC's
+  deps. Live activation needs an operator supply-chain decision (NOT taken).
+220 touched + 1033 broader tests green. Behavior-neutral on the live fleet.

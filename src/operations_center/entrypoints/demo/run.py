@@ -68,7 +68,11 @@ def _build_demo_policy(repo_key: str) -> PolicyEngine:
     demo_repo_policy = RepoPolicy(
         repo_key=repo_key,
         enabled=True,
-        risk_profile="demo",
+        # risk_profile is descriptive metadata constrained to
+        # standard/elevated/critical; "standard" matches the permissive intent.
+        # (Was the repo_key "demo" — an invalid value the engine silently ignored;
+        # now caught fail-closed by validate_config at from_config.)
+        risk_profile="standard",
         path_policy=PathPolicy(rules=[], default_mode="allow"),
         branch_guardrail=BranchGuardrail(
             allow_direct_commit=True,

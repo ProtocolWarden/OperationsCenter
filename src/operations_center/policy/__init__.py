@@ -20,7 +20,7 @@ Public API:
 """
 
 from .defaults import DEFAULT_POLICY_CONFIG, DEFAULT_REPO_POLICY
-from .engine import PolicyEngine
+from .engine import InvalidPolicyConfigError, PolicyEngine
 from .explain import explain
 from .models import (
     BranchGuardrail,
@@ -41,6 +41,7 @@ from .validate import validate_config
 
 __all__ = [
     "PolicyEngine",
+    "InvalidPolicyConfigError",
     "PolicyDecision",
     "PolicyStatus",
     "PolicyConfig",

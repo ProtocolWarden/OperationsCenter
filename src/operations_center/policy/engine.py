@@ -50,8 +50,25 @@ from .models import (
     RepoPolicy,
     ValidationRequirement,
 )
+from .validate import validate_config
 
 logger = logging.getLogger(__name__)
+
+
+class InvalidPolicyConfigError(ValueError):
+    """A PolicyConfig failed ``validate_config`` and cannot back a PolicyEngine.
+
+    Raised fail-closed at engine construction (``from_config``/``from_defaults``)
+    so a logically-contradictory or malformed guardrail config refuses to start
+    the execution path instead of silently misbehaving at evaluation time.
+    """
+
+    def __init__(self, errors: list[str]) -> None:
+        self.errors = list(errors)
+        joined = "; ".join(self.errors)
+        super().__init__(
+            f"PolicyConfig is invalid ({len(self.errors)} error(s)): {joined}"
+        )
 
 # Lane names that are considered "local" execution.
 _LOCAL_LANES = frozenset({LaneName.AIDER_LOCAL.value})
@@ -132,14 +149,36 @@ class PolicyEngine:
 
     @classmethod
     def from_defaults(cls) -> "PolicyEngine":
-        """Create with the default conservative policy config."""
+        """Create with the default conservative policy config.
+
+        Validated at construction (fail-closed). DEFAULT_POLICY_CONFIG is already
+        valid (``test_defaults``/``test_validate`` assert ``validate_config`` returns
+        ``[]``), so the live ``from_defaults`` path — the only PolicyConfig load on
+        the execute entrypoint — is behavior-preserving. The validation is here so a
+        bundled-default regression cannot silently ship a contradictory guardrail.
+        """
         from .defaults import DEFAULT_POLICY_CONFIG
 
-        return cls(DEFAULT_POLICY_CONFIG)
+        return cls.from_config(DEFAULT_POLICY_CONFIG)
 
     @classmethod
     def from_config(cls, config: PolicyConfig) -> "PolicyEngine":
-        """Create with a custom policy config."""
+        """Create with a custom policy config, validated fail-closed.
+
+        ``PolicyConfig``/``RepoPolicy`` are plain dataclasses with free-form ``str``
+        fields, so an invalid custom config (e.g. ``network_mode='wifi_only'`` or a
+        contradictory ``allow_direct_commit``/``require_branch`` pair) is NOT caught
+        at construction and would otherwise silently misbehave at evaluation time —
+        ``validate_config`` catches exactly those logical contradictions. We refuse
+        to build an engine (and thereby refuse to start the execution path) on a
+        genuinely-misconfigured config rather than evaluate against it.
+
+        Raises:
+            InvalidPolicyConfigError: if ``validate_config`` returns any errors.
+        """
+        errors = validate_config(config)
+        if errors:
+            raise InvalidPolicyConfigError(errors)
         return cls(config)
 
 

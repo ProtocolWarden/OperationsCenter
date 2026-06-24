@@ -9,6 +9,13 @@ An empty list means the config is valid.
 This is a defensive check, not a schema validator. It catches logical
 contradictions and obviously dangerous configurations that would silently
 misbehave at evaluation time.
+
+Wired fail-closed at ``PolicyEngine.from_config``/``from_defaults`` (engine.py):
+constructing an engine validates its config and raises
+``InvalidPolicyConfigError`` on any error, so a malformed guardrail config
+refuses to start the execution path rather than evaluating against it. The
+bundled ``DEFAULT_POLICY_CONFIG`` is valid, so the live ``from_defaults`` path
+is behavior-preserving.
 """
 
 from __future__ import annotations

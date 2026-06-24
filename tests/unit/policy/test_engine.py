@@ -15,10 +15,14 @@ Structure:
 
 from __future__ import annotations
 
+import pytest
+
 from operations_center.contracts.enums import RiskLevel, TaskType
-from operations_center.policy.engine import PolicyEngine
+from operations_center.policy.defaults import DEFAULT_POLICY_CONFIG
+from operations_center.policy.engine import InvalidPolicyConfigError, PolicyEngine
 from operations_center.policy.models import (
     PathScopeRule,
+    PolicyConfig,
     PolicyStatus,
     ValidationRequirement,
 )
@@ -341,7 +345,11 @@ class TestBlock:
         assert "branch.base_branch_not_allowed" in rule_ids
 
     def test_blocked_without_human_blocks(self):
-        engine = self._engine(blocked_without_human=True)
+        # blocked_without_human implies non-autonomous; autonomous_allowed=False
+        # keeps the config internally consistent for validate_config (the gate at
+        # PolicyEngine.from_config) — the engine short-circuits on
+        # blocked_without_human regardless.
+        engine = self._engine(blocked_without_human=True, autonomous_allowed=False)
         proposal = make_proposal(allowed_paths=["src/x.py"])
         decision = engine.evaluate(proposal, remote_decision(proposal.proposal_id))
         assert decision.status == PolicyStatus.BLOCK
@@ -516,3 +524,63 @@ class TestFromDefaults:
         decision = engine.evaluate(proposal, remote_decision(proposal.proposal_id))
         blocking = [v for v in decision.violations if v.blocking]
         assert any(v.rule_id == "validation.required_unavailable" for v in blocking)
+
+
+# ---------------------------------------------------------------------------
+# TestFromConfigValidation — fail-closed config validation at construction
+#
+# validate_config() is wired into PolicyEngine.from_config / from_defaults so a
+# logically-contradictory custom PolicyConfig refuses to back an engine (and so
+# refuses to start the execution path) instead of silently misbehaving at
+# evaluation time. The bundled DEFAULT_POLICY_CONFIG is valid, so the live
+# from_defaults() path is behavior-preserving.
+# ---------------------------------------------------------------------------
+
+
+class TestFromConfigValidation:
+    def test_default_config_builds_engine(self):
+        # behavior-preserving: the bundled default is valid and must still build.
+        engine = PolicyEngine.from_config(DEFAULT_POLICY_CONFIG)
+        assert engine is not None
+
+    def test_from_defaults_builds_engine(self):
+        # from_defaults routes through the same validated factory.
+        assert PolicyEngine.from_defaults() is not None
+
+    def test_valid_custom_config_builds_engine(self):
+        engine = PolicyEngine.from_config(make_policy_config(make_repo_policy()))
+        assert engine is not None
+
+    def test_invalid_network_mode_is_rejected(self):
+        bad = make_policy_config(make_repo_policy(network_mode="wifi_only"))
+        with pytest.raises(InvalidPolicyConfigError) as ei:
+            PolicyEngine.from_config(bad)
+        assert any("network_mode" in e for e in ei.value.errors)
+        assert any("wifi_only" in e for e in ei.value.errors)
+
+    def test_invalid_risk_profile_is_rejected(self):
+        bad = make_policy_config(make_repo_policy(risk_profile="extreme"))
+        with pytest.raises(InvalidPolicyConfigError):
+            PolicyEngine.from_config(bad)
+
+    def test_contradictory_review_requirement_is_rejected(self):
+        # blocked_without_human=True contradicts autonomous_allowed=True
+        bad = make_policy_config(
+            make_repo_policy(blocked_without_human=True, autonomous_allowed=True)
+        )
+        with pytest.raises(InvalidPolicyConfigError) as ei:
+            PolicyEngine.from_config(bad)
+        assert any(
+            "blocked_without_human" in e and "autonomous_allowed" in e
+            for e in ei.value.errors
+        )
+
+    def test_duplicate_repo_keys_is_rejected(self):
+        p = make_repo_policy(repo_key="dup")
+        bad = PolicyConfig(repo_policies=[p, p], default_policy=p)
+        with pytest.raises(InvalidPolicyConfigError):
+            PolicyEngine.from_config(bad)
+
+    def test_error_is_a_valueerror_subclass(self):
+        # callers (e.g. entrypoints) can catch ValueError generically.
+        assert issubclass(InvalidPolicyConfigError, ValueError)
