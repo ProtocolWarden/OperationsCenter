@@ -29,6 +29,14 @@ All build items shipped (PRs #388, #389):
 Every flag defaults OFF; the steerable set remains empty until an edge is
 `code-computed ∧ chained ∧ durable ∧ causal` (ordering is still host-relative,
 so steering stays impossible by construction — as intended).
+
+**Follow-up decision (won't-build):** whether a lane should *consume*
+`steerable_facts` to steer planning was examined over three adversarial rounds and
+resolved as won't-build — see
+[Lineage Steering Consumer — Decision Record](./LINEAGE_STEERING_CONSUMER.md). The
+read-model stays display-only; the one real underlying problem it surfaced (a
+code-failure retry loop) is to be fixed with a self-healing retry-cap change, not
+lineage machinery.
 **Date:** 2026-06-22
 **Related:** [[HARNESS_TRUST_HARDENING.md]], [[SELF_HEAL_LADDER.md]], `oc-harness-guide-gap-audit` (memory)
 
