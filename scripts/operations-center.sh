@@ -200,6 +200,7 @@ Usage:
   scripts/operations-center.sh promote-backlog [--family FAMILY] [--execute]
   scripts/operations-center.sh worker-backend-status [--json]
   scripts/operations-center.sh worker-backend-probe [--json] [--timeout N]
+  scripts/operations-center.sh lineage [TASK-ID] [--json]
   scripts/operations-center.sh watchdog-loop-acquire
   scripts/operations-center.sh watchdog-loop-release
   scripts/operations-center.sh watchdog-loop-status
@@ -971,6 +972,13 @@ PYEOF
     ensure_venv
     load_env_file
     "${VENV_DIR}/bin/python" -m operations_center.entrypoints.worker_backend_probe.main "$@"
+    ;;
+  lineage)
+    # Execution-lineage read-model (trust-labeled, display-only). The CLI was
+    # complete but unreachable from operator tooling — this verb wires it in.
+    ensure_venv
+    load_env_file
+    "${VENV_DIR}/bin/python" -m operations_center.lineage.cli "$@"
     ;;
   plane-doctor)
     ensure_venv

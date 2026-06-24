@@ -311,6 +311,12 @@ class ReviewerSettings(BaseModel):
     # self-merging; if not, it refuses and leaves the PR for an operator. False
     # preserves prior behavior (trust GitHub protection blindly).
     require_branch_protection: bool = False
+    # Sensitive-path ack gate (opt-in). When True, a PR whose diff touches a
+    # blast-radius path (CI workflows, migrations, secrets, infra config) is NOT
+    # self-merged unless the operator acked it ONCE with a 'risk-reviewed' label —
+    # extra scrutiny on high-blast-radius diffs without putting a human in the
+    # per-correction loop. False (default) preserves prior behavior.
+    require_sensitive_path_ack: bool = False
 
 
 class RepoSettings(BaseModel):

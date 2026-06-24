@@ -15,8 +15,10 @@ from operations_center.entrypoints.pr_review_watcher.verdict import (
     LGTM,
     REVIEW_CHECKS,
     compute_verdict,
+    sensitive_paths_in_diff,
     verdict_schema_prompt,
 )
+from operations_center.policy.defaults import sensitive_path_patterns
 
 
 def _all_pass() -> list[dict]:
@@ -126,3 +128,31 @@ class TestFailingSummary:
 
     def test_malformed_checks_safe(self):
         assert "Failed checks" in failing_summary(None, ["x"])
+
+
+class TestSensitivePathsInDiff:
+    """The opt-in blast-radius gate's pure matcher (Gap 3). Model-free: it inspects
+    the real changed-file list, so injection cannot suppress a sensitive hit."""
+
+    def test_matches_blast_radius_paths(self):
+        patterns = sensitive_path_patterns()
+        files = [
+            "src/operations_center/foo.py",
+            ".github/workflows/ci.yml",
+            "db/migrations/0003_add.py",
+            "README.md",
+        ]
+        hits = sensitive_paths_in_diff(files, patterns)
+        assert ".github/workflows/ci.yml" in hits
+        assert "db/migrations/0003_add.py" in hits
+        assert "src/operations_center/foo.py" not in hits
+        assert "README.md" not in hits
+
+    def test_clean_diff_is_empty(self):
+        hits = sensitive_paths_in_diff(["src/a.py", "docs/b.md"], sensitive_path_patterns())
+        assert hits == []
+
+    def test_tolerates_non_list_and_non_str(self):
+        # A malformed file list must never crash the merge gate.
+        assert sensitive_paths_in_diff(None, ["*.env"]) == []
+        assert sensitive_paths_in_diff(["keep", 5, None], ["*"]) == ["keep"]

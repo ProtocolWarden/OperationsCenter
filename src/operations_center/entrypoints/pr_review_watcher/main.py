@@ -87,8 +87,10 @@ from operations_center.entrypoints.pr_review_watcher.verdict import (
     CONCERNS,
     compute_verdict,
     failing_summary,
+    sensitive_paths_in_diff,
     verdict_schema_prompt,
 )
+from operations_center.policy.defaults import sensitive_path_patterns
 
 logger = logging.getLogger(__name__)
 
@@ -1018,6 +1020,56 @@ def _branch_protection_ok(gh_client, owner: str, repo: str, base_branch: str, se
     return True
 
 
+def _sensitive_path_ack_ok(
+    gh_client,
+    owner: str,
+    repo: str,
+    pr_number: int,
+    pr_data: dict,
+    settings,
+) -> bool:
+    """Opt-in blast-radius gate (mirrors ``_branch_protection_ok``'s shape).
+
+    Returns True (allow merge) unless ``reviewer.require_sensitive_path_ack`` is
+    set AND the PR's diff touches a sensitive path without an operator
+    'risk-reviewed' ack label. The ack is an encode-once root action (label the
+    PR), never a per-correction approval — the fleet still produced the LGTM; this
+    only adds a merge precondition it cannot satisfy by editing code, so a
+    sensitive PR is left for the operator instead of looping a fix.
+
+    Fail-OPEN on its own errors (cannot list files): a gate that can't evaluate
+    must not wedge a clean LGTM merge on a GitHub API hiccup — the operator opted
+    into scrutiny, not into a brittle block.
+    """
+    reviewer = getattr(settings, "reviewer", None)
+    if reviewer is None or not getattr(reviewer, "require_sensitive_path_ack", False):
+        return True
+    for lab in pr_data.get("labels") or []:
+        name = lab.get("name", "") if isinstance(lab, dict) else str(lab)
+        if name.startswith("risk-reviewed"):
+            return True  # operator acked once at the root
+    try:
+        files = gh_client.list_pr_files(owner, repo, pr_number)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "pr_review_watcher: sensitive-path gate could not list files for PR #%d "
+            "— %s; allowing merge (fail-open)",
+            pr_number,
+            exc,
+        )
+        return True
+    hits = sensitive_paths_in_diff(files, sensitive_path_patterns())
+    if hits:
+        logger.error(
+            "pr_review_watcher: PR #%d touches sensitive paths without a "
+            "'risk-reviewed' ack: %s",
+            pr_number,
+            ", ".join(sorted(hits)[:10]),
+        )
+        return False
+    return True
+
+
 def _publish_reviewer_verdict(
     gh_client,
     owner: str,
@@ -1089,6 +1141,16 @@ def _merge_and_done(
             pr_number,
         )
         return  # leave state file — operator must inspect
+    # Sensitive-path ack gate (opt-in; blast-radius scrutiny). No-op unless
+    # reviewer.require_sensitive_path_ack is set. Keeps the human at the
+    # encode-once root (a 'risk-reviewed' label), never the per-correction loop.
+    if not _sensitive_path_ack_ok(gh_client, owner, repo, pr_number, _pr_data, settings):
+        logger.error(
+            "pr_review_watcher: PR #%d not self-merged — sensitive-path ack gate "
+            "failed; leaving for operator",
+            pr_number,
+        )
+        return  # leave state file — operator must inspect/ack
     # Bless this head with reviewer-verdict=success BEFORE merging, so the
     # required status check is satisfied for the fleet's own merge — and so the
     # non-LGTM merge paths (e.g. ci_validated_after_retraction) also clear the

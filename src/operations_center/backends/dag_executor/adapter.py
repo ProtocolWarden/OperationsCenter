@@ -94,6 +94,12 @@ class DAGExecutorBackendAdapter:
             runner = DAGExecutorRunner(
                 artifacts_dir=artifacts_dir,
                 working_directory=str(workspace),
+                # Timeout authority is an OPEN operator decision (CONTEXT_DISCIPLINE.md):
+                # we use the backend SETTINGS timeout, not request.timeout_seconds —
+                # the latter defaults to 300s from proposal.constraints and would cut
+                # tasks below the operator-configured value. The openclaw adapter honors
+                # the request instead, so backends disagree on which is authoritative;
+                # aligning them changes live task runtimes, so it is not a silent fix.
                 timeout_seconds=self._settings.timeout_seconds or None,
                 worker_backend=worker_backend,
             )

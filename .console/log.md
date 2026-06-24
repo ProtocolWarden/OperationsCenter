@@ -8379,3 +8379,41 @@ tasks that currently retry forever now terminate after 3 clean code failures).
 
 Removed backticks from failure_category VALUE words in CODE_FAILURE_RETRY_CAP.md
 (they are enum string values, not code symbols — OC8).
+
+## 2026-06-24 — Four open-gap adversarial specs (LEFT OPEN, unmerged)
+
+Specced the 4 remaining Osprey/Praetorian open gaps adversarially and left them
+open on this branch (not merged, not implemented): CONTEXT_DISCIPLINE.md,
+LINEAGE_VISUALIZATION.md, RISK_TIERED_APPROVAL.md, RUNTIME_CAPABILITY_ENFORCEMENT.md.
+Each ran steelman -> 2 adversarial rounds -> minimal real delta -> disposition.
+Pattern: every "gap" is mostly already-built; the real delta in each is a small
+fail-closed/observability fix, and each surfaced a concrete latent defect (per-task
+timeout dropped by the TeamExecutor adapter; lineage CLI unreachable from
+operations-center.sh; policy/ risk engine fed risk_level=low on every live task;
+capability probe imports bare repograph not the live platform_manifest.capabilities
+path). No code changed. Awaiting operator direction.
+
+## 2026-06-24 — Closed the 4 open-gap minimal deltas + inert-machinery inventory
+
+Finished the 4 Osprey/Praetorian open-gap specs (branch gaps/close-four-minimal):
+- Gap 2 (visualization): WON'T-BUILD UI; wired the trust-tree CLI in via an
+  operations-center.sh `lineage` verb + operations-center-lineage console script.
+- Gap 3 (risk-tier): WON'T-BUILD ladder; shipped an OPT-IN default-OFF sensitive-path
+  ack merge gate (ReviewerSettings.require_sensitive_path_ack + _sensitive_path_ack_ok
+  in pr_review_watcher; sensitive_path_patterns in policy/defaults as single source;
+  sensitive_paths_in_diff in verdict; unit tests).
+- Gap 4 (capability): DEFER dormant; replaced the rot-trap test with activation-contract
+  tests + a probe-target docstring note.
+- Gap 1 (timeout): investigation flipped it to operator-decision — request.timeout_seconds
+  (300 default) is honored by openclaw but overridden by dag's settings (3600); forcing
+  dag to honor it would regress 3600->300. Shipped a de-silencing comment only.
+All 4 specs moved open->resolved.
+
+Plus: a background inert-garbage sweep found 12 more built-but-inert items, captured in
+INERT_MACHINERY_INVENTORY.md. Headline (spot-verified): per-task allowed_paths write-scope
+is never enforced at the patch gate (operator gets only the static blocklist). Systemic
+theme: the live path drops most per-task ExecutionRequest constraints for env/settings.
+All wire-or-delete operator decisions; nothing bulk-acted.
+
+236 unit tests green across touched areas. Every new control is opt-in/additive — no live
+fleet behavior change.
