@@ -145,3 +145,114 @@ def test_load_dormant_when_module_absent(monkeypatch):
 
     monkeypatch.setattr("importlib.import_module", _raise)
     assert capability_ownership.load_capability_registry() is None
+
+
+# ── probe order: platform_manifest.capabilities first, repograph fallback ────────
+#
+# The real registry ships through platform_manifest.capabilities.load_capabilities,
+# not bare repograph. The probe tries that surface FIRST (fail-open) and falls back.
+# Live activation requires the operator to ship the plane into OC's deps; these tests
+# pin the activation contract so it cannot silently rot to "None forever".
+
+
+def test_both_surfaces_absent_returns_none(monkeypatch):
+    # Neither platform_manifest.capabilities nor repograph's loader present (today's
+    # real env) → None, so the guard degrades.
+    from operations_center import capability_ownership
+
+    def _raise(name):
+        raise ModuleNotFoundError(name)
+
+    monkeypatch.setattr("importlib.import_module", _raise)
+    assert capability_ownership.load_capability_registry() is None
+
+
+def test_uses_platform_manifest_capabilities_first(monkeypatch):
+    # When platform_manifest.capabilities.load_capabilities yields a registry with
+    # .edges, the probe USES it (and never consults repograph).
+    from operations_center import capability_ownership
+
+    sentinel_reg = types.SimpleNamespace(edges=[])
+    cap_mod = types.SimpleNamespace(load_capabilities=lambda: sentinel_reg)
+
+    def _import(name):
+        if name == "platform_manifest.capabilities":
+            return cap_mod
+        raise AssertionError(f"repograph fallback should not be reached, got {name!r}")
+
+    monkeypatch.setattr("importlib.import_module", _import)
+    assert capability_ownership.load_capability_registry() is sentinel_reg
+
+
+def test_platform_manifest_present_but_no_edges_falls_back(monkeypatch):
+    # A load_capabilities that returns a non-registry (no .edges) is not trusted; the
+    # probe degrades past it to the repograph fallback (which is also absent → None).
+    from operations_center import capability_ownership
+
+    cap_mod = types.SimpleNamespace(load_capabilities=lambda: object())
+
+    def _import(name):
+        if name == "platform_manifest.capabilities":
+            return cap_mod
+        raise ModuleNotFoundError(name)  # repograph fallback absent
+
+    monkeypatch.setattr("importlib.import_module", _import)
+    assert capability_ownership.load_capability_registry() is None
+
+
+def test_platform_manifest_load_raises_falls_back(monkeypatch):
+    # load_capabilities raising must not propagate — degrade to the fallback (absent).
+    from operations_center import capability_ownership
+
+    def _boom():
+        raise RuntimeError("registry build failed")
+
+    cap_mod = types.SimpleNamespace(load_capabilities=_boom)
+
+    def _import(name):
+        if name == "platform_manifest.capabilities":
+            return cap_mod
+        raise ModuleNotFoundError(name)
+
+    monkeypatch.setattr("importlib.import_module", _import)
+    assert capability_ownership.load_capability_registry() is None
+
+
+def test_falls_back_to_repograph_when_plane_absent(monkeypatch):
+    # platform_manifest.capabilities absent but legacy repograph loader present →
+    # the fallback path still activates the guard.
+    from operations_center import capability_ownership
+
+    sentinel = object()
+    repograph_mod = types.SimpleNamespace(load_capability_registry=lambda: sentinel)
+
+    def _import(name):
+        if name == "platform_manifest.capabilities":
+            raise ModuleNotFoundError(name)
+        if name == "repograph":
+            return repograph_mod
+        raise ModuleNotFoundError(name)
+
+    monkeypatch.setattr("importlib.import_module", _import)
+    assert capability_ownership.load_capability_registry() is sentinel
+
+
+def test_resolves_owner_from_live_platform_manifest_registry(monkeypatch):
+    # End-to-end: a real-shaped registry from the platform_manifest surface flows
+    # through verify_owner_or_degrade and the single-owner resolves → proceed.
+
+    reg = _registry(("board_unblock", "OperationsCenter", "owns"))
+    cap_mod = types.SimpleNamespace(load_capabilities=lambda: reg)
+
+    def _import(name):
+        if name == "platform_manifest.capabilities":
+            return cap_mod
+        raise ModuleNotFoundError(name)
+
+    monkeypatch.setattr("importlib.import_module", _import)
+    assert (
+        verify_owner_or_degrade(
+            "board_unblock", required=True, expected_owner="OperationsCenter"
+        )
+        is True
+    )

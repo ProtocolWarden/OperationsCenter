@@ -128,7 +128,7 @@ def _simple_policy(**kwargs) -> RepoPolicy:
         repo_key="repo-a",
         enabled=True,
         path_policy=PathPolicy(rules=[], default_mode="allow"),
-        branch_guardrail=BranchGuardrail(allow_direct_commit=True),
+        branch_guardrail=BranchGuardrail(allow_direct_commit=True, require_branch=False),
         tool_guardrail=ToolGuardrail(network_mode="allowed", allow_destructive_actions=True),
         validation_requirements=[],
         review_requirement=ReviewRequirement(autonomous_allowed=True),
