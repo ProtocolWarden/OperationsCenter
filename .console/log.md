@@ -8347,3 +8347,17 @@ and is caught + restarted by the watchdog. Surface 10 now fully closed.
 ## 2026-06-23 — T2 fix for spec_hygiene heartbeat test
 
 Added the missing assert to test_none_status_dir_is_noop (custodian T2).
+
+## 2026-06-24 — Lineage steering consumer: DECIDED won't-build (3 adversarial rounds)
+
+docs/design/LINEAGE_STEERING_CONSUMER.md (decision record). v1 LLM-prompt framing
+and v2 standalone-policy framing both refuted; round 3 attacked the surviving
+code-failure-brake option from both sides. Resolution: the unbounded code-failure
+loop is REAL (retry-count is SIGKILL-only so clean code failures never arm the
+existing caps; board_unblock recycles them; proposer never stamps lineage-root so
+per-root caps reset on re-proposal — drains the shared exec budget) BUT the
+convergence-stall/ProposalRejectionStore path is invariant-incompatible (permanent
+human-semantic veto + human-in-per-correction-loop). Fix = arm the EXISTING
+self-healing count caps for clean code failures (small outcomes.py/board_unblock
+change), NOT lineage. Lineage read-model stays display-only. Linked from the
+determinism-boundary spec (DC7).
