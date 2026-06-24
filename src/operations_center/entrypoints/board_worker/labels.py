@@ -61,15 +61,25 @@ def has_label(labels: list, value: str) -> bool:
     return False
 
 
-def retry_count_from_labels(labels: list) -> int:
+def count_from_labels(labels: list, prefix: str) -> int:
+    """Parse the integer value of a ``<prefix>: N`` counter label (0 if absent)."""
+    prefix = prefix.lower()
     for lab in labels:
         name = (lab.get("name", "") if isinstance(lab, dict) else str(lab)).strip().lower()
-        if name.startswith("retry-count:"):
+        if name.startswith(prefix):
             try:
                 return int(name.split(":", 1)[1].strip())
             except ValueError:
                 return 0
     return 0
+
+
+def retry_count_from_labels(labels: list) -> int:
+    return count_from_labels(labels, "retry-count:")
+
+
+def code_failure_count_from_labels(labels: list) -> int:
+    return count_from_labels(labels, "code-fail-count:")
 
 
 def add_label(client, issue: dict, new_label: str) -> None:
@@ -96,12 +106,13 @@ def add_label(client, issue: dict, new_label: str) -> None:
         )
 
 
-def increment_retry_count(client, issue: dict) -> None:
-    """Bump retry-count label by 1 (adds 'retry-count: 1' if absent).
+def increment_count_label(client, issue: dict, prefix: str) -> None:
+    """Bump a ``<prefix> N`` counter label by 1 (adds ``<prefix> 1`` if absent).
 
-    Removes the old retry-count: N and adds retry-count: N+1 so
-    board_unblock Rule 1 can cancel tasks that SIGKILL repeatedly.
+    Removes the old ``<prefix> N`` and adds ``<prefix> N+1`` so board_unblock
+    Rule 1 can cancel tasks that exhaust a count cap.
     """
+    label_prefix = prefix.rstrip()  # e.g. "retry-count:"
     existing = [
         (lab.get("name", "") if isinstance(lab, dict) else str(lab)).strip()
         for lab in issue.get("labels", [])
@@ -110,19 +121,32 @@ def increment_retry_count(client, issue: dict) -> None:
     current = 0
     filtered = []
     for label in existing:
-        if label.lower().startswith("retry-count:"):
+        if label.lower().startswith(label_prefix.lower()):
             try:
                 current = int(label.split(":", 1)[1].strip())
             except ValueError:
                 pass
         else:
             filtered.append(label)
-    filtered.append(f"retry-count: {current + 1}")
+    filtered.append(f"{label_prefix} {current + 1}")
     try:
         client.update_issue_labels(str(issue["id"]), filtered)
     except Exception as exc:
         logger.warning(
-            "board_worker: failed to increment retry-count for task_id=%s — %s",
+            "board_worker: failed to increment %s for task_id=%s — %s",
+            label_prefix,
             issue.get("id"),
             exc,
         )
+
+
+def increment_retry_count(client, issue: dict) -> None:
+    """Bump retry-count by 1 so board_unblock Rule 1 can cancel SIGKILL loops."""
+    increment_count_label(client, issue, "retry-count:")
+
+
+def increment_code_failure_count(client, issue: dict) -> None:
+    """Bump code-fail-count by 1 so board_unblock Rule 1 can cancel a clean
+    code-failure loop (CODE_FAILURE_RETRY_CAP). retry-count is SIGKILL-only, so a
+    clean test/lint failure would otherwise re-run forever."""
+    increment_count_label(client, issue, "code-fail-count:")

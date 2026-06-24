@@ -308,6 +308,33 @@ def test_rule1_skips_terminal_state():
     assert not _by_rule(actions, "DEAD_REMEDIATION_CANCEL")
 
 
+# Rule 1 — CODE_FAILURE_RETRY_CAP cancel
+def test_rule1_code_fail_exhausted_cancels():
+    actions = _run(
+        [_issue("1", state="Blocked", labels=["task-kind: goal", "code-fail-count: 3"])],
+        code_failure_retry_cap=3,
+    )
+    a = _by_rule(actions, "DEAD_REMEDIATION_CANCEL")
+    assert a and "clean code failures" in a[0]["reason"]
+    assert a[0]["to_state"] == "Cancelled"
+
+
+def test_rule1_code_fail_under_cap_not_cancelled():
+    actions = _run(
+        [_issue("1", state="Blocked", labels=["code-fail-count: 2"], updated_at=_FRESH)],
+        code_failure_retry_cap=3,
+    )
+    assert not _by_rule(actions, "DEAD_REMEDIATION_CANCEL")
+
+
+def test_rule1_code_fail_cap_disabled_by_default():
+    # default cap is 0 (disabled) → even an exhausted counter is not cancelled
+    actions = _run(
+        [_issue("1", state="Blocked", labels=["code-fail-count: 9"], updated_at=_FRESH)]
+    )
+    assert not _by_rule(actions, "DEAD_REMEDIATION_CANCEL")
+
+
 # ---------------------------------------------------------------------------
 # Rule 2 — INVESTIGATE_DEPRIORITISE
 # ---------------------------------------------------------------------------
