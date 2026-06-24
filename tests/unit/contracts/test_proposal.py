@@ -58,7 +58,9 @@ class TestTaskProposalConstruction:
         p = _minimal_proposal()
         assert p.priority == Priority.NORMAL
         assert p.risk_level == RiskLevel.LOW
-        assert p.constraints.timeout_seconds == 300
+        # S1b: ExecutionConstraints.timeout_seconds now defaults to None
+        # (no per-task override; backend settings timeout applies).
+        assert p.constraints.timeout_seconds is None
         assert p.branch_policy.push_on_success is True
         assert p.labels == []
         assert p.proposer is None
