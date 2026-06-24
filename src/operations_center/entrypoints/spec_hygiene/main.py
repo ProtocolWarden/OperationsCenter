@@ -43,6 +43,8 @@ from operations_center.entrypoints.maintenance.heartbeat_stall import HeartbeatS
 from operations_center.entrypoints.maintenance.outcome_flagger_task import (
     OutcomeFlaggerTask,
 )
+from operations_center.entrypoints.maintenance.parked_unpark_task import ParkedUnparkTask
+from operations_center.entrypoints.maintenance.queue_healing_task import QueueHealingTask
 from operations_center.maintenance.ledger_maintain import LedgerMaintainTask
 from operations_center.spec_author.campaign_builder import CampaignBuilder
 from operations_center.spec_author.models import (
@@ -694,6 +696,20 @@ def register_maintenance_tasks(
     # semantic reviewer miss the deterministic gate is blind to. Skipped until
     # OC_EVAL_DRIFT_MONITOR=1 + a model extractor is wired (no model, no false drift).
     registry.register(DriftMonitorTask(settings, plane_client=client))
+    # Deterministic blocked-queue healer (inventory #4). Recycles retry-safe
+    # Blocked tasks back to Ready-for-AI/Backlog and escalates budget-exhausted
+    # lineages — non-destructively (never deletes). FAIL-SAFE: registered but
+    # DISABLED by default (enabled <- settings.queue_healing_enabled), so the
+    # registry never schedules it until an operator opts in. Even when enabled it
+    # no-ops on a board with no retry-safe Blocked tasks.
+    registry.register(QueueHealingTask(settings, plane_client=client))
+    # Parked-state oversight consumer (inventory #5). Re-evaluates the parked
+    # root cause each cycle and unparks it once its evidence changes, driving the
+    # RecoveryBudgetTracker. FAIL-SAFE: registered but DISABLED by default
+    # (enabled <- settings.parked_unpark_enabled); an empty parked-state store is
+    # a no-op regardless. Only ever clears/refreshes the parked sidecar — never
+    # touches Plane work items.
+    registry.register(ParkedUnparkTask(settings, plane_client=client))
     return registry
 
 
