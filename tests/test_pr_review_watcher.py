@@ -1106,6 +1106,141 @@ def test_requeue_plane_task_returns_false_when_plane_unavailable(tmp_path: Path)
     assert ok is False
 
 
+# ── Workstream A: reviewer self-review isolation ──────────────────────────────
+#
+# The ci_fix (ruff auto-fix) and auto-rebase passes must NEVER stash/checkout/
+# pull/reset/commit/push in the repo's PRIMARY working tree (local_path). For
+# OC's OWN repo local_path IS the live running checkout: mutating it stashes the
+# fleet's in-flight work and moves the deployed branch onto an untrusted PR head
+# (2026-06 reflog: `pull --ff-only origin <pr-branch>` in the live tree). All
+# mutating git work must happen in a disposable worktree.
+
+# Verbs that mutate a working tree / HEAD / index / stash. None may target local_path.
+_MUTATING_GIT_VERBS = {"stash", "checkout", "pull", "reset", "commit", "add", "merge"}
+
+
+def _record_git_runs(calls: list[dict]):
+    """Return a subprocess.run replacement that records argv+cwd and fakes git/ruff.
+
+    worktree-add succeeds; `status --porcelain` reports a dirty tree (so the fix
+    pass proceeds to commit+push); everything else returns rc=0.
+    """
+
+    def _fake_run(cmd, *args, **kwargs):
+        cwd = kwargs.get("cwd")
+        argv = list(cmd) if isinstance(cmd, (list, tuple)) else [cmd]
+        calls.append({"argv": argv, "cwd": str(cwd) if cwd is not None else None})
+        stdout = ""
+        if argv[:1] == ["git"] and "status" in argv and "--porcelain" in argv:
+            stdout = " M foo.py\n"  # pretend ruff changed something
+        return MagicMock(returncode=0, stdout=stdout, stderr="")
+
+    return _fake_run
+
+
+def test_ci_fix_never_mutates_primary_checkout(tmp_path: Path) -> None:
+    """ci_fix must run no mutating git verb against local_path and must operate
+    in a fresh temp worktree (the security fix for the live-tree clobber)."""
+    local_path = tmp_path / "live_checkout"
+    (local_path / ".venv" / "bin").mkdir(parents=True)
+    ruff = local_path / ".venv" / "bin" / "ruff"
+    ruff.write_text("#!/bin/sh\nexit 0\n")
+    ruff.chmod(0o755)
+
+    repo_cfg = MagicMock(
+        local_path=str(local_path),
+        venv_dir=".venv",
+        default_branch="main",
+        ci_ignored_checks=[],
+    )
+    settings = MagicMock(
+        repos={REPO_KEY: repo_cfg},
+        git=MagicMock(author_name="Bot", author_email="bot@x"),
+    )
+    settings.git_token.return_value = "tok"
+
+    gh = _make_gh()
+    gh.get_failed_checks.return_value = ["Lint (ruff): failure"]
+
+    state, sp = _make_state(tmp_path)
+    state["phase"] = "ci_fix"
+
+    calls: list[dict] = []
+    with patch.object(watcher.subprocess, "run", side_effect=_record_git_runs(calls)):
+        watcher._phase0_ci_fix(state, sp, _pr_data(), gh, "owner", "repo", tmp_path, settings)
+
+    git_calls = [c for c in calls if c["argv"][:1] == ["git"]]
+    assert git_calls, "expected git to be invoked"
+
+    # 1. No MUTATING verb ever targets the primary checkout. (`worktree add`
+    #    contains the token "add" but creates a SEPARATE checkout — not a
+    #    mutation of the primary working tree — so exclude worktree commands.)
+    for c in git_calls:
+        if "worktree" in c["argv"]:
+            continue
+        verbs = set(c["argv"][1:]) & _MUTATING_GIT_VERBS
+        if verbs:
+            assert c["cwd"] != str(local_path), (
+                f"mutating git {verbs} ran against the primary checkout {local_path}: {c['argv']}"
+            )
+
+    # 2. A throwaway worktree was created off the primary git dir...
+    add_calls = [c for c in git_calls if "worktree" in c["argv"] and "add" in c["argv"]]
+    assert add_calls, "expected `git worktree add` to create an isolated checkout"
+    worktree_path = add_calls[0]["argv"][-2]  # ... add --detach --force <worktree> <ref>
+    assert worktree_path != str(local_path)  # worktree is a SEPARATE dir
+    assert "oc-review-iso" in worktree_path  # disposable temp checkout
+
+    # 3. ...and commit/push happened FROM that worktree, not local_path.
+    push_calls = [c for c in git_calls if "push" in c["argv"]]
+    assert push_calls, "expected a push from the isolated worktree"
+    for c in push_calls:
+        assert c["cwd"] == worktree_path
+        assert c["cwd"] != str(local_path)
+
+    # 4. The only git calls allowed to target local_path are non-mutating
+    #    (fetch + worktree management).
+    for c in git_calls:
+        if c["cwd"] == str(local_path):
+            assert ("fetch" in c["argv"]) or ("worktree" in c["argv"]), (
+                f"unexpected non-fetch/worktree git on primary checkout: {c['argv']}"
+            )
+
+
+def test_auto_rebase_never_mutates_primary_checkout(tmp_path: Path) -> None:
+    """auto-rebase must merge/push in an isolated worktree, never local_path."""
+    local_path = tmp_path / "live_checkout"
+    local_path.mkdir()
+
+    repo_cfg = MagicMock(local_path=str(local_path), default_branch="main")
+    settings = MagicMock(git=MagicMock(author_name="Bot", author_email="bot@x"))
+    settings.git_token.return_value = "tok"
+
+    calls: list[dict] = []
+    with patch.object(watcher.subprocess, "run", side_effect=_record_git_runs(calls)):
+        outcome = watcher._attempt_auto_rebase(repo_cfg, "goal/7", settings, 7)
+
+    # Clean merge (status path returns no unmerged + push rc=0) → "clean".
+    assert outcome in {"clean", "noop"}
+
+    git_calls = [c for c in calls if c["argv"][:1] == ["git"]]
+    for c in git_calls:
+        if "worktree" in c["argv"]:
+            continue
+        verbs = set(c["argv"][1:]) & _MUTATING_GIT_VERBS
+        if verbs:
+            assert c["cwd"] != str(local_path), (
+                f"mutating git {verbs} ran against primary checkout: {c['argv']}"
+            )
+
+    # merge + push ran from the isolated worktree.
+    merge_calls = [c for c in git_calls if "merge" in c["argv"]]
+    push_calls = [c for c in git_calls if "push" in c["argv"]]
+    assert merge_calls and push_calls
+    for c in merge_calls + push_calls:
+        assert "oc-review-iso" in (c["cwd"] or "")
+
+
 def test_run_fix_pass_noop_returns_false(tmp_path: Path) -> None:
     # Executor ran cleanly but pushed nothing → must NOT report a push.
     outcome = {"result": {"success": True, "branch_pushed": False}}
@@ -2879,8 +3014,14 @@ def test_run_pipeline_sandboxes_exec_when_enabled(tmp_path: Path, monkeypatch) -
     sentinel = ["bwrap", "WRAPPED", "execute.main"]
     with patch.object(watcher, "maybe_sandbox", return_value=sentinel) as msbx:
         watcher._run_pipeline(
-            tmp_path, tmp_path / "cfg.yaml", REPO_KEY, "goal", _pipeline_settings(),
-            source="reviewer_self", state_key=STATE_KEY, branch_suffix="abc",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            REPO_KEY,
+            "goal",
+            _pipeline_settings(),
+            source="reviewer_self",
+            state_key=STATE_KEY,
+            branch_suffix="abc",
         )
     # exec wrapped via maybe_sandbox with enabled=True, and Popen got the wrap
     msbx.assert_called_once()
@@ -2893,8 +3034,14 @@ def test_run_pipeline_no_sandbox_when_disabled(tmp_path: Path, monkeypatch) -> N
     popen = _patched_pipeline_run(monkeypatch, tmp_path)
     with patch.object(watcher, "maybe_sandbox") as msbx:
         watcher._run_pipeline(
-            tmp_path, tmp_path / "cfg.yaml", REPO_KEY, "goal", _pipeline_settings(),
-            source="reviewer_self", state_key=STATE_KEY, branch_suffix="abc",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            REPO_KEY,
+            "goal",
+            _pipeline_settings(),
+            source="reviewer_self",
+            state_key=STATE_KEY,
+            branch_suffix="abc",
         )
     # flag off -> no sandbox wrap, Popen gets the raw execute.main command
     msbx.assert_not_called()

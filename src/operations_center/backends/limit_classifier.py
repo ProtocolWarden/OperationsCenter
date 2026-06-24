@@ -32,7 +32,6 @@ import re
 __all__ = [
     "detect_model",
     "classify_limit",
-    "models_affected",
 ]
 
 # limit_kind values
@@ -100,18 +99,3 @@ def classify_limit(
     if _LIMIT_SIGNAL_RE.search(text):
         return (GENERIC, model)
     return (None, model)
-
-
-def models_affected(
-    worker_backend: str, limit_kind: str | None, model: str | None
-) -> tuple[str, ...]:
-    """Which of ``worker_backend``'s models a limit takes down.
-
-    A ``model_weekly`` limit affects only the named model; account-wide kinds
-    (``session_5h``/``global_weekly``) affect every model; an unattributed
-    ``generic`` limit conservatively affects all models.
-    """
-    known = WORKER_BACKEND_MODELS.get(worker_backend, ())
-    if limit_kind == MODEL_WEEKLY and model:
-        return (model,) if model in known else (model,)
-    return known

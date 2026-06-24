@@ -127,6 +127,8 @@ def dispatch_issue(
             settings.plane.project_id,
             "--task-id",
             task_id,
+            "--priority",  # from the issue `priority:` label; absent -> "normal" (order unchanged)
+            (label_value(labels, "priority") or "normal").strip().lower() or "normal",
             "--timeout-seconds",
             str(settings.team_executor.timeout_seconds),
         ]

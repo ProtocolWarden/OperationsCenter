@@ -285,14 +285,18 @@ def test_build_candidates_spec_author_repo_override():
 def test_build_candidates_daily_quota_reached_skips():
     issue = _make_issue(labels=[_label("task-kind: goal"), _label("repo: repoA")])
     settings = _make_settings(repos={"repoA": _make_repo_cfg(max_daily_executions=2)})
-    out = claim._build_candidates(None, [issue], "goal", ["goal"], {"repoA"}, settings, {"repoA": 2})
+    out = claim._build_candidates(
+        None, [issue], "goal", ["goal"], {"repoA"}, settings, {"repoA": 2}
+    )
     assert out == []
 
 
 def test_build_candidates_under_quota_included():
     issue = _make_issue(labels=[_label("task-kind: goal"), _label("repo: repoA")])
     settings = _make_settings(repos={"repoA": _make_repo_cfg(max_daily_executions=5)})
-    out = claim._build_candidates(None, [issue], "goal", ["goal"], {"repoA"}, settings, {"repoA": 1})
+    out = claim._build_candidates(
+        None, [issue], "goal", ["goal"], {"repoA"}, settings, {"repoA": 1}
+    )
     assert len(out) == 1
 
 
@@ -313,7 +317,9 @@ def test_build_candidates_repo_cfg_missing_no_cap():
     # repo is managed but has no cfg object -> cap None -> not skipped.
     issue = _make_issue(labels=[_label("task-kind: goal"), _label("repo: repoA")])
     settings = SimpleNamespace(repos={"repoA": None}, git_token=lambda: None)
-    out = claim._build_candidates(None, [issue], "goal", ["goal"], {"repoA"}, settings, {"repoA": 99})
+    out = claim._build_candidates(
+        None, [issue], "goal", ["goal"], {"repoA"}, settings, {"repoA": 99}
+    )
     assert len(out) == 1
 
 
@@ -345,6 +351,84 @@ def test_sort_key_string_labels():
     issue = {"labels": ["source: improve-suggestion"], "priority": "high", "created_at": "x"}
     key = claim._sort_key(issue)
     assert key[0] == 0
+
+
+# ── proposal.priority tiebreaker (S4 wiring) ──────────────────────────────────
+
+
+def test_proposal_priority_rank_defaults_to_normal():
+    # No label, unknown label, and explicit normal all rank the same → default.
+    assert claim.proposal_priority_rank([]) == claim._DEFAULT_PROPOSAL_RANK
+    assert claim.proposal_priority_rank([_label("priority: bogus")]) == claim._DEFAULT_PROPOSAL_RANK
+    assert (
+        claim.proposal_priority_rank([_label("priority: normal")]) == claim._DEFAULT_PROPOSAL_RANK
+    )
+    # Ordering: critical < high < normal < low (lower = claimed sooner).
+    assert claim.proposal_priority_rank(
+        [_label("priority: critical")]
+    ) < claim.proposal_priority_rank([_label("priority: high")])
+    assert claim.proposal_priority_rank([_label("priority: high")]) < claim.proposal_priority_rank(
+        [_label("priority: normal")]
+    )
+    assert claim.proposal_priority_rank(
+        [_label("priority: normal")]
+    ) < claim.proposal_priority_rank([_label("priority: low")])
+
+
+def test_sort_key_proposal_priority_is_last_tiebreaker_only():
+    # proposal.priority is the LAST tuple element; the first three keys
+    # (improve-suggestion, plane-rank, created_at) are unchanged.
+    issue = _make_issue(priority="high", created_at="2026-01-05", labels=[_label("priority: high")])
+    key = claim._sort_key(issue)
+    assert len(key) == 4
+    assert key[:3] == (1, 1, "2026-01-05")  # unchanged legacy keys
+    assert key[3] == claim._PROPOSAL_PRIORITY_ORDER["high"]
+
+
+def test_sort_key_default_normal_preserves_prior_order_exactly():
+    # Two issues identical on the legacy keys but no priority label → the
+    # proposal-priority key is constant, so their relative order is unchanged
+    # (today's queue: all-default == prior behavior).
+    a = _make_issue(task_id="a", priority="high", created_at="2026-01-01")
+    b = _make_issue(task_id="b", priority="high", created_at="2026-01-01")
+    # Legacy 3-key prefix is identical...
+    assert claim._sort_key(a)[:3] == claim._sort_key(b)[:3]
+    # ...and the appended priority key is also identical (both default normal),
+    # so a stable sort preserves input order exactly.
+    assert claim._sort_key(a) == claim._sort_key(b)
+
+
+def test_sort_key_priority_breaks_a_genuine_tie():
+    # Same legacy keys; only proposal.priority differs → high beats normal beats low.
+    base = dict(priority="medium", created_at="2026-01-01")
+    high = _make_issue(task_id="h", labels=[_label("priority: high")], **base)
+    normal = _make_issue(task_id="n", labels=[_label("priority: normal")], **base)
+    low = _make_issue(task_id="l", labels=[_label("priority: low")], **base)
+    ordered = sorted([low, normal, high], key=claim._sort_key)
+    assert [i["id"] for i in ordered] == ["h", "n", "l"]
+
+
+def test_claim_next_high_priority_wins_a_tie():
+    # End-to-end through claim_next: two equally-old, same-plane-priority goal
+    # tasks; the one labeled priority:high is claimed first.
+    normal = _make_issue(
+        task_id="normal-task",
+        labels=[_label("task-kind: goal"), _label("repo: repoA")],
+        description=_GOOD_DESC,
+        priority="medium",
+        created_at="2026-01-01",
+    )
+    high = _make_issue(
+        task_id="high-task",
+        labels=[_label("task-kind: goal"), _label("repo: repoA"), _label("priority: high")],
+        description=_GOOD_DESC,
+        priority="medium",
+        created_at="2026-01-01",
+    )
+    c = _client([normal, high])
+    result = claim.claim_next(c, "goal", _make_settings())
+    assert result is not None
+    assert result["id"] == "high-task"
 
 
 def test_claim_next_sort_picks_best_candidate():
