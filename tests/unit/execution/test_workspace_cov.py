@@ -663,6 +663,144 @@ def test_baseline_validation_marker_write_oserror_is_nonfatal(tmp_path):
     assert not (ws / ".baseline-validation.json").exists()
 
 
+# ── S1c: validation_commands per-task override ───────────────────────────────
+
+
+def _capture_baseline_cfg(monkeypatch_modules):
+    """Return (fake_module, captured) where captured['cfg'] holds the repo_cfg
+    passed to run_baseline_validation on the next call."""
+    captured: dict = {}
+
+    def _fake_run(ws, *, repo_cfg):
+        captured["cfg"] = repo_cfg
+        summary = mock.Mock()
+        summary.model_dump_json.return_value = '{"status": "passed"}'
+        return summary
+
+    fake_module = SimpleNamespace(run_baseline_validation=_fake_run)
+    return fake_module, captured
+
+
+def test_request_validation_commands_preferred_over_repo_cfg(tmp_path):
+    """S1c: when the request sets validation_commands, those run instead of the
+    repo_cfg's — wrapped in a shim that still carries the repo's timeout/skip."""
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    repo_cfg = SimpleNamespace(
+        validation_commands=["repo-cmd"],
+        validation_timeout_seconds=900,
+        skip_baseline_validation=False,
+    )
+    mgr = WorkspaceManager(repo_settings_lookup=lambda k: repo_cfg)
+    req = _make_request(ws, validation_commands=["task-cmd-1", "task-cmd-2"])
+
+    fake_module, captured = _capture_baseline_cfg(None)
+    with mock.patch.dict(
+        "sys.modules",
+        {"operations_center.execution.baseline_validation": fake_module},
+    ):
+        mgr._run_baseline_validation(ws, req)
+
+    cfg = captured["cfg"]
+    # The per-task commands win …
+    assert list(cfg.validation_commands) == ["task-cmd-1", "task-cmd-2"]
+    # … and the shim still carries the repo's timeout + skip flag (complete cfg).
+    assert cfg.validation_timeout_seconds == 900
+    assert cfg.skip_baseline_validation is False
+
+
+def test_empty_request_validation_commands_uses_repo_cfg(tmp_path):
+    """S1c: an empty request validation_commands (every live task) leaves the
+    repo_cfg path unchanged — the repo_cfg object itself is passed through."""
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    repo_cfg = SimpleNamespace(
+        validation_commands=["repo-cmd"],
+        validation_timeout_seconds=300,
+        skip_baseline_validation=False,
+    )
+    mgr = WorkspaceManager(repo_settings_lookup=lambda k: repo_cfg)
+    req = _make_request(ws)  # validation_commands defaults to []
+
+    fake_module, captured = _capture_baseline_cfg(None)
+    with mock.patch.dict(
+        "sys.modules",
+        {"operations_center.execution.baseline_validation": fake_module},
+    ):
+        mgr._run_baseline_validation(ws, req)
+
+    # The exact repo_cfg object is passed unchanged (not the shim).
+    assert captured["cfg"] is repo_cfg
+
+
+# ── S1c: require_clean_validation gate (the risky one) ───────────────────────
+
+
+def _prepare_with_baseline(mgr, req, *, summary):
+    """Drive prepare() with git/subprocess mocked, forcing _run_baseline_validation
+    to return *summary*. Returns True when prepare completes (the gate did not
+    fire); raises if it fires."""
+    with (
+        mock.patch.object(ws_mod.subprocess, "run", return_value=_fake_completed(0)),
+        mock.patch.object(mgr, "_maybe_bootstrap"),
+        mock.patch.object(mgr, "_run_baseline_validation", return_value=summary),
+    ):
+        mgr.prepare(req)
+    return True
+
+
+def _summary(status: ValidationStatus):
+    from operations_center.contracts.common import ValidationSummary
+
+    return ValidationSummary(status=status)
+
+
+def test_require_clean_none_does_not_block_on_failed_baseline(tmp_path):
+    """S1c behavior-preserving core: require_clean_validation=None (every live
+    task today) must NOT abort even when baseline validation FAILED."""
+    ws = tmp_path / "ws"
+    mgr = WorkspaceManager(git_client=_git_for_prepare())
+    req = _make_request(ws)  # require_clean_validation defaults to None
+    assert req.require_clean_validation is None
+    # No raise — a FAILED baseline is tolerated when the task didn't opt in.
+    _prepare_with_baseline(mgr, req, summary=_summary(ValidationStatus.FAILED))
+
+
+def test_require_clean_true_blocks_on_failed_baseline(tmp_path):
+    """S1c opt-in: require_clean_validation=True + FAILED baseline aborts prepare."""
+    ws = tmp_path / "ws"
+    mgr = WorkspaceManager(git_client=_git_for_prepare())
+    req = _make_request(ws, require_clean_validation=True)
+    with pytest.raises(ws_mod.BaselineValidationError, match="did not pass"):
+        _prepare_with_baseline(mgr, req, summary=_summary(ValidationStatus.FAILED))
+
+
+def test_require_clean_true_blocks_on_error_baseline(tmp_path):
+    """S1c: ERROR (e.g. baseline command timeout) also blocks when opted in."""
+    ws = tmp_path / "ws"
+    mgr = WorkspaceManager(git_client=_git_for_prepare())
+    req = _make_request(ws, require_clean_validation=True)
+    with pytest.raises(ws_mod.BaselineValidationError):
+        _prepare_with_baseline(mgr, req, summary=_summary(ValidationStatus.ERROR))
+
+
+def test_require_clean_true_proceeds_on_passed_baseline(tmp_path):
+    """S1c: require_clean_validation=True + PASSED baseline proceeds (no raise)."""
+    ws = tmp_path / "ws"
+    mgr = WorkspaceManager(git_client=_git_for_prepare())
+    req = _make_request(ws, require_clean_validation=True)
+    assert _prepare_with_baseline(mgr, req, summary=_summary(ValidationStatus.PASSED)) is True
+
+
+def test_require_clean_true_proceeds_when_no_summary(tmp_path):
+    """S1c: when baseline produced no summary (no repo_cfg / crash) the gate is a
+    no-op even if opted in — there's nothing to gate on."""
+    ws = tmp_path / "ws"
+    mgr = WorkspaceManager(git_client=_git_for_prepare())
+    req = _make_request(ws, require_clean_validation=True)
+    assert _prepare_with_baseline(mgr, req, summary=None) is True
+
+
 # ── _maybe_bootstrap ─────────────────────────────────────────────────────────
 
 

@@ -47,12 +47,14 @@ class PlanningContext:
     risk_level: str = "low"  # low / medium / high
     priority: str = "normal"  # low / normal / high / critical
     max_changed_files: Optional[int] = None
-    timeout_seconds: int = 300
+    # None = no per-task timeout override; the backend's settings timeout applies.
+    timeout_seconds: Optional[int] = None
 
     # Validation
     validation_profile_name: str = "default"
     validation_commands: list[str] = field(default_factory=list)
-    require_clean_validation: bool = True
+    # None = no per-task validation gate (baseline failure does not block).
+    require_clean_validation: Optional[bool] = None
 
     # Tracing
     task_id: str = ""

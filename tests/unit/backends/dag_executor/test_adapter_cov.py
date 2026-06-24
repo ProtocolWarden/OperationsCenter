@@ -415,6 +415,55 @@ def test_runner_artifacts_and_timeout_falsy_become_none(monkeypatch, tmp_path):
     assert seen["timeout_seconds"] is None
 
 
+def test_explicit_request_timeout_overrides_settings(monkeypatch, tmp_path):
+    """S1b: an explicit per-task request.timeout_seconds wins over settings."""
+    seen = {}
+
+    class _Runner:
+        def __init__(self, **kw):
+            seen.update(kw)
+
+        def run_graph(self, spec):
+            return {"status": "succeeded"}
+
+    _install_fake_dag_executor(monkeypatch, runner_cls=_Runner)
+    execution = _execution(selected_backend="claude_code", payload={"status": "succeeded"})
+    _stub_selectors(monkeypatch, execution=execution, invoke_run=True)
+
+    # Backend settings say 3600, but the request explicitly asks for 120.
+    settings = DAGExecutorSettings(artifacts_dir="/art", timeout_seconds=3600)
+    adapter = DAGExecutorBackendAdapter(settings)
+    req = _request(workspace=tmp_path).model_copy(update={"timeout_seconds": 120})
+    adapter.execute_and_capture(req)
+
+    assert seen["timeout_seconds"] == 120
+
+
+def test_none_request_timeout_falls_back_to_settings_no_300_regression(monkeypatch, tmp_path):
+    """S1b regression guard: a request with timeout_seconds=None must fall back
+    to the backend settings timeout (3600), NOT to the old 300 default."""
+    seen = {}
+
+    class _Runner:
+        def __init__(self, **kw):
+            seen.update(kw)
+
+        def run_graph(self, spec):
+            return {"status": "succeeded"}
+
+    _install_fake_dag_executor(monkeypatch, runner_cls=_Runner)
+    execution = _execution(selected_backend="claude_code", payload={"status": "succeeded"})
+    _stub_selectors(monkeypatch, execution=execution, invoke_run=True)
+
+    settings = DAGExecutorSettings(artifacts_dir="/art", timeout_seconds=3600)
+    adapter = DAGExecutorBackendAdapter(settings)
+    req = _request(workspace=tmp_path)  # timeout_seconds defaults to None now
+    assert req.timeout_seconds is None
+    adapter.execute_and_capture(req)
+
+    assert seen["timeout_seconds"] == 3600
+
+
 # --------------------------------------------------------------------------
 # execute_and_capture: error / unavailable / fallback branches
 # --------------------------------------------------------------------------

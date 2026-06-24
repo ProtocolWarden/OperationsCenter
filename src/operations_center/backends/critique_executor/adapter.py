@@ -85,7 +85,13 @@ class CritiqueExecutorBackendAdapter:
             critic_backend_efforts={"codex_cli": profile["codex_cli"]["effort"]},
             max_rounds=self._settings.max_rounds,
             working_dir=working_dir,
-            timeout_seconds=self._settings.timeout_seconds,
+            # S1b: per-task request.timeout_seconds wins; else backend settings.
+            # request defaults to None (no override) so live tasks are unchanged.
+            timeout_seconds=(
+                request.timeout_seconds
+                if request.timeout_seconds is not None
+                else (self._settings.timeout_seconds or None)
+            ),
             worker_backend=self._settings.worker_backend,
         )
 
