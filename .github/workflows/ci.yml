@@ -137,6 +137,34 @@ jobs:
         # collection-count assertions.
         run: pytest -q tests/test_pr_review_watcher.py -p no:flaky-detection
 
+  reviewer-integration:
+    name: Reviewer integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -e .[dev]
+      - name: Run reviewer integration tests
+        # tests/integration/reviewer exercises the verdict-consolidation +
+        # merge-decision state machine (happy path, CI-green gate, verdict
+        # override, timeout recovery, safety paths, instrumentation) end-to-end
+        # through pr_review_watcher._phase1. Despite living under tests/integration/,
+        # these are HERMETIC: the GitHub and Plane clients are fully mocked
+        # (tests/verdicts/conftest.py), so there are NO live services and NO
+        # network — they run in <1s. The blanket "integration/ needs live services,
+        # run on demand" policy that excludes the rest of tests/integration/ from CI
+        # let this suite DRIFT against the evolving self-merge gates (e.g. the
+        # require_branch_protection fail-closed gate added in #388). This dedicated
+        # job runs them on every PR so they cannot rot again.
+        # -p no:flaky-detection — see the "Test (pytest)" job (plugin is opt-in;
+        # its pytest11 entry point imports the observer package before coverage
+        # instrumentation). Isolated from tests/unit so it cannot perturb the
+        # doc-accuracy suite's collection-count assertions.
+        run: pytest -q tests/integration/reviewer -p no:flaky-detection
+
   performance:
     name: Performance regression tests
     runs-on: ubuntu-latest

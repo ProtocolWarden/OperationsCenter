@@ -8460,3 +8460,20 @@ tests green; the 11 integration/reviewer failures pre-exist on origin/main (veri
 
 ## 2026-06-24 — C29 trim
 Compacted the dispatch.py priority comment to a 1-line inline note (503 -> 499 lines, under the C29 limit).
+
+## 2026-06-24 — Reviewer integration tests in CI + capability-owner naming fix (the 2 open threads)
+
+Thread 2 (DONE): the 11 tests/integration/reviewer failures were ONE drifted fixture — tests/verdicts/conftest.py
+mock_settings() left require_branch_protection/require_sensitive_path_ack unset, so the bare MagicMock auto-created
+them truthy and flipped the #388 self-merge gate ON in tests -> merge refused. Fixed the fixture (set them False,
+mirroring REVIEWER_CFG + prod defaults); added a reviewer-integration CI job so the hermetic suite is gated and
+can't drift again. 101 pass.
+
+Thread 1 (dangerous halt-blocker REMOVED; full activation still cross-repo): verify_owner_or_degrade compared
+owner != expected_owner by exact string — but the registry owns board_unblock as `operations_center` (RepoGraph
+repo_id) while OC passes self_repo_key `OperationsCenter`, so enabling require_capability_owner would REFUSE ->
+halt board_unblock every cycle. Added _norm_owner (lowercase + strip non-alphanumerics) so the same repo matches
+across conventions without over-matching different repos -> the gate is now SAFE to enable. Full activation still
+needs (cross-repo, recorded): a plane-bearing repograph release (OC's transitive repograph@v0.2.0 is planeless) +
+PM topology compat (the plane-bearing PM commit dropped legacy_names, breaking OC impact-analysis). Behavior-neutral
+on the live fleet (capability path dormant; CI/test-only otherwise) -> no urgent deploy.

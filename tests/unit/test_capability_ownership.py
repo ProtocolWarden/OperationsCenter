@@ -114,6 +114,32 @@ def test_owner_match_proceeds():
     )
 
 
+def test_owner_match_is_convention_insensitive():
+    # The registry uses RepoGraph's repo_id casing (operations_center); OC's gate
+    # passes self_repo_key ("OperationsCenter"). Same repo — the gate must NOT refuse
+    # on the casing/separator difference (else require_capability_owner halts
+    # board_unblock every cycle).
+    reg = _registry(("board_unblock", "operations_center", "owns"))
+    assert (
+        verify_owner_or_degrade(
+            "board_unblock", required=True, expected_owner="OperationsCenter", registry=reg
+        )
+        is True
+    )
+
+
+def test_owner_normalization_does_not_overmatch():
+    # A genuinely different repo still refuses — normalization collapses convention,
+    # not identity.
+    reg = _registry(("board_unblock", "Custodian", "owns"))
+    assert (
+        verify_owner_or_degrade(
+            "board_unblock", required=True, expected_owner="OperationsCenter", registry=reg
+        )
+        is False
+    )
+
+
 def test_load_activates_when_loader_present(monkeypatch):
     # Activation contract: if an importable module exposes load_capability_registry,
     # the guard USES it and leaves dormancy — guards against the rot where the probe
