@@ -116,59 +116,7 @@ def main() -> int:
             entry["action"] = "would_transition"
         awaiting_actions.append(entry)
 
-    queue_healing_actions: list[dict] = []
-    for task, decision in queue_healing:
-        entry: dict[str, Any] = {
-            "task_id": decision.task_id,
-            "transition": decision.transition.value,
-            "reason": decision.reason,
-            # Structured task metadata — loop reads these directly instead of
-            # inferring from label text in log output (a5dbf034).
-            "blocked_reason": task.blocked_reason,
-            "blocked_by_backend": task.blocked_by_backend,
-            "backend_dependency": task.backend_dependency,
-            "executor_exit_code": _parse_executor_exit_code(task.labels),
-            "executor_signal": _label_value(task.labels, "executor-signal:") or None,
-            "retry_lineage_id": decision.retry_lineage_id,
-            "safe": decision.safe,
-            "escalate": decision.escalate,
-        }
-        if decision.transition == QueueTransition.NONE:
-            entry["action"] = "none"
-        elif decision.escalate:
-            entry["action"] = "escalate"
-            if args.apply:
-                try:
-                    client.comment_issue(
-                        decision.task_id,
-                        "Queue healing escalation: "
-                        f"{decision.reason} (lineage={decision.retry_lineage_id or 'unknown'}).",
-                    )
-                    entry["action"] = "escalation_commented"
-                except Exception as exc:
-                    entry["action"] = "error"
-                    entry["error"] = str(exc)
-        elif args.apply and decision.safe:
-            target_state = (
-                "Ready for AI"
-                if decision.transition == QueueTransition.BLOCKED_TO_READY_FOR_AI
-                else "Backlog"
-            )
-            try:
-                client.transition_issue(decision.task_id, target_state)
-                client.comment_issue(
-                    decision.task_id,
-                    "Queue healing applied: "
-                    f"{decision.transition.value} because {decision.reason} "
-                    f"(lineage={decision.retry_lineage_id or 'unknown'}).",
-                )
-                entry["action"] = "transitioned"
-            except Exception as exc:
-                entry["action"] = "error"
-                entry["error"] = str(exc)
-        else:
-            entry["action"] = "would_transition"
-        queue_healing_actions.append(entry)
+    queue_healing_actions = apply_queue_healing_actions(client, queue_healing, apply=args.apply)
 
     client.close()
     print(
@@ -314,6 +262,80 @@ def _queue_healing_actions(
         if decision.transition != QueueTransition.NONE or decision.escalate:
             decisions.append((task, decision))
     return decisions
+
+
+def apply_queue_healing_actions(
+    client: PlaneClient,
+    decisions: list[tuple["QueueHealingTask", "QueueHealingDecision"]],
+    *,
+    apply: bool,
+) -> list[dict[str, Any]]:
+    """Apply (or dry-run) queue-healing decisions to Plane.
+
+    Shared by the standalone ``triage_scan`` CLI and ``QueueHealingTask`` so the
+    apply semantics are identical in both call paths. NON-DESTRUCTIVE by
+    construction — the only mutations are:
+      * ESCALATE       → a comment on the task (no state change)
+      * BLOCKED→READY  → transition to "Ready for AI" + explanatory comment
+      * BLOCKED→BACKLOG→ transition to "Backlog" + explanatory comment
+    No issue is ever deleted. A per-decision exception is captured on that entry
+    and the loop continues. With ``apply=False`` nothing is mutated; entries are
+    annotated ``would_transition`` / ``escalate`` / ``none`` for the dry-run view.
+    """
+    out: list[dict[str, Any]] = []
+    for task, decision in decisions:
+        entry: dict[str, Any] = {
+            "task_id": decision.task_id,
+            "transition": decision.transition.value,
+            "reason": decision.reason,
+            # Structured task metadata — loop reads these directly instead of
+            # inferring from label text in log output (a5dbf034).
+            "blocked_reason": task.blocked_reason,
+            "blocked_by_backend": task.blocked_by_backend,
+            "backend_dependency": task.backend_dependency,
+            "executor_exit_code": _parse_executor_exit_code(task.labels),
+            "executor_signal": _label_value(task.labels, "executor-signal:") or None,
+            "retry_lineage_id": decision.retry_lineage_id,
+            "safe": decision.safe,
+            "escalate": decision.escalate,
+        }
+        if decision.transition == QueueTransition.NONE:
+            entry["action"] = "none"
+        elif decision.escalate:
+            entry["action"] = "escalate"
+            if apply:
+                try:
+                    client.comment_issue(
+                        decision.task_id,
+                        "Queue healing escalation: "
+                        f"{decision.reason} (lineage={decision.retry_lineage_id or 'unknown'}).",
+                    )
+                    entry["action"] = "escalation_commented"
+                except Exception as exc:
+                    entry["action"] = "error"
+                    entry["error"] = str(exc)
+        elif apply and decision.safe:
+            target_state = (
+                "Ready for AI"
+                if decision.transition == QueueTransition.BLOCKED_TO_READY_FOR_AI
+                else "Backlog"
+            )
+            try:
+                client.transition_issue(decision.task_id, target_state)
+                client.comment_issue(
+                    decision.task_id,
+                    "Queue healing applied: "
+                    f"{decision.transition.value} because {decision.reason} "
+                    f"(lineage={decision.retry_lineage_id or 'unknown'}).",
+                )
+                entry["action"] = "transitioned"
+            except Exception as exc:
+                entry["action"] = "error"
+                entry["error"] = str(exc)
+        else:
+            entry["action"] = "would_transition"
+        out.append(entry)
+    return out
 
 
 if __name__ == "__main__":

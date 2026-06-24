@@ -8429,21 +8429,19 @@ spec-author (which sets allowed_paths=["docs/specs/"], max_changed_files=1) beco
 scope-enforced — its intended guard. Live-behavior change → needs fleet restart.
 timeout_seconds (contract+adapters) and the validation pair are follow-up stages. 138 green.
 
-## 2026-06-24 — Wire-all S1b+S1c: timeout + validation per-task constraints (live)
+## 2026-06-24 — Wire-all S3: four dead subsystems wired functional (fail-safe-default)
 
-Completes the per-task ExecutionRequest constraints (INERT_MACHINERY_INVENTORY item 6 + Gap-1 timeout).
-- timeout_seconds: Optional[int]=None across OcExecutionRequest/ExecutionConstraints/PlanningContext; the 5
-  backend adapters (dag, direct_local, aider_local, critique, openclaw) honor request.timeout_seconds when set,
-  else fall back to backend settings — no 300<3600 regression (live path injects explicit values).
-- validation_commands: WorkspaceManager._run_baseline_validation prefers request.validation_commands when set
-  (shim over repo_cfg), else the current repo-config path (zero live callers set it today).
-- require_clean_validation: Optional[bool]=None; baseline FAILED/ERROR aborts prepare() ONLY when the request
-  explicitly opted in (is True). None (every live task) = current behavior — fail-safe on the self-modifying fleet.
-  _run_baseline_validation now returns the summary.
-Defaults verified None. 275 touched-area tests green; full-suite failures are pre-existing on main (doc/fixture
-env tests, reproduce on f72c402a — CI excludes them via default addopts). Live-behavior change → fleet restart.
+INERT_MACHINERY_INVENTORY items 2-5, all FAIL-SAFE-DEFAULT (shipped config = current behavior; gated off).
+- RuntimeBindingPolicy: ExecutionCoordinator.from_defaults_with_runtime_policy + resolve_runtime_binding_policy;
+  execute/main wires it; gated on settings.runtime_binding.enabled (default False -> static team model).
+- Recovery/retry loop: RecoverySettings -> RecoveryPolicy in execute/main; default max_attempts=1 (single-shot=today);
+  engine already refuses to retry non-idempotent requests (Rule 6).
+- QueueHealingEngine: shared apply_queue_healing_actions; new QueueHealingTask in spec_hygiene, enabled=False default
+  (disabled tasks never run); verified non-destructive (recycle/escalate, no delete).
+- Parking: new ParkedUnparkTask (ParkedStateStore + should_unpark + RecoveryBudgetTracker); registered, enabled=False;
+  empty store -> no-op. config example documents activation. Inventory items 2-5 DEAD -> WIRED. tests/unit green.
 
-## 2026-06-24 — S1b+S1c custodian fixes
+## 2026-06-24 — S3 custodian fix
 
-Renamed BaselineValidationFailed -> BaselineValidationError (ruff N818); added explicit asserts
-to the two require_clean "proceeds" tests (T2). No logic change. 66 workspace tests green.
+De-backticked retry_after / triage_scan in INERT_MACHINERY_INVENTORY.md (K1/OC8 — they are a parser
+concept and a module/verb, not src def/class symbols). Doc-only, no behavior change.
