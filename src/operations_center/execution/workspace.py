@@ -24,13 +24,19 @@ the coordinator without one, preserving the existing pure-coordinator surface.
 from __future__ import annotations
 
 import logging
+import os
+import shutil
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
 from operations_center.adapters.git.client import GitClient
 from operations_center.adapters.workspace.patch_applier import PatchApplier
-from operations_center.contracts.enums import FailureReasonCategory, ValidationStatus
+from operations_center.contracts.enums import (
+    ExecutionStatus,
+    FailureReasonCategory,
+    ValidationStatus,
+)
 from operations_center.contracts.execution import ExecutionRequest, ExecutionResult
 
 logger = logging.getLogger(__name__)
@@ -80,6 +86,8 @@ class WorkspaceManager:
         max_files: int | None = None,
         max_lines: int | None = None,
         repo_settings_lookup: Callable[[str], object] | None = None,
+        settings: object | None = None,
+        oc_root: Path | None = None,
     ) -> None:
         self._git = git_client or GitClient()
         self._token = github_token
@@ -91,6 +99,15 @@ class WorkspaceManager:
         # bootstrap step (C-K3) and the open_pr_default gate (C-K9). Decoupled
         # from the full Settings object so callers can pass a lambda.
         self._repo_lookup = repo_settings_lookup or (lambda _k: None)
+        # Optional full Settings object. Read defensively (getattr with a
+        # default) so the many tests / callers that construct WorkspaceManager
+        # without settings keep working. Used by the pre-PR custodian gate.
+        self._settings = settings
+        # OperationsCenter checkout root — used to resolve the custodian-multi
+        # binary from OC's own venv as a last fallback. Defaults to the repo
+        # root inferred from this module's location (.../src/operations_center/
+        # execution/workspace.py -> repo root).
+        self._oc_root = oc_root or Path(__file__).resolve().parents[3]
         # SBX pre-push applier: validates patches before commit/push
         self._patch_applier = PatchApplier()
 
@@ -316,8 +333,7 @@ class WorkspaceManager:
         if (
             request.require_clean_validation is True
             and baseline_summary is not None
-            and baseline_summary.status
-            in (ValidationStatus.FAILED, ValidationStatus.ERROR)
+            and baseline_summary.status in (ValidationStatus.FAILED, ValidationStatus.ERROR)
         ):
             raise BaselineValidationError(
                 "baseline validation did not pass and require_clean_validation "
@@ -458,6 +474,34 @@ class WorkspaceManager:
         squash_message = self._commit_message(request)
         squashed = self._git.squash_commits(ws, request.base_branch, squash_message)
 
+        # Pre-PR custodian gate. Run AFTER the squash but BEFORE the push so a
+        # custodian-failing run produces a clean failure with NO orphan branch
+        # pushed and NO PR opened (its required `audit` CI check would just go
+        # red on arrival). Fail-safe: only a real findings exit blocks; a missing
+        # binary / crash / timeout degrades to the prior behavior (push + PR).
+        findings = self._run_pre_pr_custodian_gate(request)
+        if findings is not None:
+            logger.warning(
+                "WorkspaceManager.finalize: pre-PR custodian gate BLOCKED %s — "
+                "not pushing, not opening PR. %s",
+                request.task_branch,
+                findings.splitlines()[0] if findings else "custodian findings",
+            )
+            return result.model_copy(
+                update={
+                    "status": ExecutionStatus.FAILED,
+                    "success": False,
+                    "branch_pushed": False,
+                    "failure_category": FailureReasonCategory.POLICY_BLOCKED,
+                    "failure_reason": (
+                        "pre-PR custodian gate: the task branch has custodian "
+                        "findings; refusing to push or open a PR that would fail "
+                        "the required `audit` CI check. Resolve the findings and "
+                        f"re-run.\n{findings}"
+                    ),
+                }
+            )
+
         try:
             if squashed:
                 self._git.push_branch_force(ws, request.task_branch)
@@ -482,6 +526,116 @@ class WorkspaceManager:
                 "pull_request_url": pr_url,
             }
         )
+
+    # ── pre-PR custodian gate ──────────────────────────────
+
+    def _resolve_custodian_bin(self, request: ExecutionRequest) -> str | None:
+        """Resolve the ``custodian-multi`` binary, or None if not found.
+
+        Mirrors ``_phase0_ci_fix``\'s ruff resolution (pr_review_watcher): prefer
+        the repo\'s own venv bin, then a system ``custodian-multi`` on PATH, then
+        OC\'s own ``.venv/bin``. Unlike the ruff fallback we do NOT fall through to
+        a bare ``custodian-multi`` name — a missing binary must be a clean
+        "not found" so the gate fail-safes (degrade → proceed) cleanly.
+        """
+        # 1) repo venv bin (the repo being built may ship custodian itself)
+        repo_cfg = self._repo_lookup(request.repo_key)
+        venv_dir = (getattr(repo_cfg, "venv_dir", None) or ".venv") if repo_cfg else ".venv"
+        local_path = getattr(repo_cfg, "local_path", None) if repo_cfg else None
+        if local_path:
+            cand = Path(local_path) / venv_dir / "bin" / "custodian-multi"
+            if cand.exists():
+                return str(cand)
+        # 2) system custodian-multi on PATH
+        which = shutil.which("custodian-multi")
+        if which:
+            return which
+        # 3) OC\'s own venv bin (the fleet runs OC/.venv)
+        oc_bin = self._oc_root / ".venv" / "bin" / "custodian-multi"
+        if oc_bin.exists():
+            return str(oc_bin)
+        return None
+
+    def _run_pre_pr_custodian_gate(self, request: ExecutionRequest) -> str | None:
+        """Run custodian on the workspace; return findings text iff it BLOCKS.
+
+        Returns:
+            - ``None`` to PROCEED (gate disabled, custodian clean, OR any
+              fail-safe condition: binary missing, crash, timeout, or a non
+              findings error exit). When unsure -> proceed.
+            - a non-empty findings summary string to BLOCK (push + PR skipped).
+              Only returned when custodian actually RAN and reported findings
+              (the ``--fail-on-findings`` contract: exit code 1 with a findings
+              table on stdout).
+        """
+        # Gate behind the Settings flag. Read defensively so callers / tests
+        # that construct WorkspaceManager without a Settings object default to
+        # gate-ON (the safe default), and a config with the field absent (older
+        # config) also defaults ON.
+        if not getattr(self._settings, "pre_pr_custodian_gate", True):
+            logger.debug("WorkspaceManager: pre-PR custodian gate disabled via settings — skipping")
+            return None
+
+        bin_path = self._resolve_custodian_bin(request)
+        if bin_path is None:
+            # FAIL-SAFE: no custodian binary anywhere -> degrade to prior behavior.
+            logger.warning(
+                "WorkspaceManager: pre-PR custodian gate could not find a "
+                "custodian-multi binary — proceeding without the gate (fail-safe)"
+            )
+            return None
+
+        ws = str(request.workspace_path)
+        env = dict(os.environ)
+        # Some detectors (boundary checks) need the disclosure artifact; pass it
+        # through when present. Absence must NOT hard-fail — the fail-safe below
+        # treats a non-findings error exit as "proceed", and findings exits are
+        # the only thing that blocks.
+        artifact = os.environ.get("REPOGRAPH_BOUNDARY_ARTIFACT_FILE")
+        if artifact:
+            env["REPOGRAPH_BOUNDARY_ARTIFACT_FILE"] = artifact
+
+        try:
+            proc = subprocess.run(
+                [bin_path, "--repos", ws, "--fail-on-findings", "--no-color"],
+                capture_output=True,
+                text=True,
+                timeout=180,
+                env=env,
+            )
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            # FAIL-SAFE: timeout or spawn failure -> proceed.
+            logger.warning(
+                "WorkspaceManager: pre-PR custodian gate did not complete (%s) — "
+                "proceeding without the gate (fail-safe)",
+                exc,
+            )
+            return None
+
+        # custodian-multi --fail-on-findings contract:
+        #   0  -> clean (no findings)        -> PROCEED
+        #   1  -> findings present           -> BLOCK
+        #   other (>=2 / negative signal)    -> tool/env error -> PROCEED (fail-safe)
+        if proc.returncode == 0:
+            return None
+        if proc.returncode != 1:
+            logger.warning(
+                "WorkspaceManager: pre-PR custodian gate exited %s (not a clean "
+                "findings exit) — proceeding without the gate (fail-safe). stderr: %s",
+                proc.returncode,
+                (proc.stderr or "").strip()[:300],
+            )
+            return None
+
+        # Exit 1 = real findings. Surface the findings table (stdout) trimmed.
+        summary = (proc.stdout or "").strip() or (proc.stderr or "").strip()
+        if not summary:
+            # Defensive: exit 1 but no output at all is ambiguous; treat the bare
+            # signal as findings (block) since --fail-on-findings only returns 1
+            # when it found something.
+            summary = "custodian reported findings (no detail captured)"
+        # Keep the message bounded — the full table can be large.
+        return summary[:4000]
 
     def _validate_patch_before_commit(
         self, ws: Path, request: ExecutionRequest
@@ -765,12 +919,8 @@ class WorkspaceManager:
 
             cfg_for_validation = SimpleNamespace(
                 validation_commands=list(request.validation_commands),
-                validation_timeout_seconds=getattr(
-                    repo_cfg, "validation_timeout_seconds", 300
-                ),
-                skip_baseline_validation=getattr(
-                    repo_cfg, "skip_baseline_validation", False
-                ),
+                validation_timeout_seconds=getattr(repo_cfg, "validation_timeout_seconds", 300),
+                skip_baseline_validation=getattr(repo_cfg, "skip_baseline_validation", False),
             )
 
         try:

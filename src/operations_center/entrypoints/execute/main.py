@@ -144,6 +144,9 @@ def main() -> int:
         max_files=_env_int("OPS_CENTER_MAX_FILES"),
         max_lines=_env_int("OPS_CENTER_MAX_LINES"),
         repo_settings_lookup=lambda key: (settings.repos or {}).get(key),
+        # Full Settings object so the pre-PR custodian gate can read
+        # settings.pre_pr_custodian_gate (defaults ON; fail-safe).
+        settings=settings,
     )
     repo_graph = build_effective_repo_graph_from_settings(
         settings,

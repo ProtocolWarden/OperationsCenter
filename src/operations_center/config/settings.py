@@ -657,6 +657,16 @@ class Settings(BaseModel):
     # self-heal can still resolve it). Set to 0 to disable (always-block, prior behavior).
     open_pr_gate_stale_hours: float = 12.0
 
+    # Pre-PR custodian gate (workspace.finalize). When True, the executor runs
+    # custodian-multi on the task workspace AFTER squashing but BEFORE pushing;
+    # if custodian actually runs and reports findings, the run fails (retryable)
+    # and NO branch is pushed / PR opened — so a custodian-failing change can no
+    # longer produce a PR whose required `audit` CI check is red on arrival.
+    # Fail-safe by construction: a missing binary, a crash, or a timeout DEGRADES
+    # to the prior behavior (warn + proceed to push/PR); only a clean findings
+    # exit blocks. False disables the gate entirely → prior (pre-gate) behavior.
+    pre_pr_custodian_gate: bool = True
+
     def plane_token(self) -> str:
         return os.environ[self.plane.api_token_env]
 

@@ -1,3 +1,19 @@
+## 2026-06-25 — HARDEN: pre-PR custodian gate in the executor (prevent bad PRs at source)
+
+The board_worker could produce code with custodian findings (e.g. T2 no-assert tests), open the
+PR anyway, and the required `audit` CI check went red on arrival — the #387 class. Added a
+fail-safe pre-PR gate in `WorkspaceManager.finalize`: AFTER the squash but BEFORE the push, run
+`custodian-multi --repos <workspace> --fail-on-findings`; on a real findings exit (code 1) the
+run returns a FAILED result (`success=False`, `failure_category=POLICY_BLOCKED`, findings in
+`failure_reason`) and NO branch is pushed / PR opened — so no orphan branch, and the
+board_worker routes it to `handle_failure` (BLOCKED/retryable, not a transient-retry category).
+**Fail-safe by construction**: a missing `custodian-multi` binary, a crash, a timeout (180s), or
+any non-findings exit (≥2) DEGRADES to the prior behavior (warn + push + PR) — only a clean
+findings exit blocks. Gated by `settings.pre_pr_custodian_gate` (default True, read via getattr;
+False = prior behavior). `WorkspaceManager` gained an optional `settings` ctor arg, wired through
+`entrypoints/execute/main.py`. 16 new tests (clean→PR, findings→fail+no-push, binary-missing/
+crash→proceed, disabled→skip); full tests/unit/execution green.
+
 ## 2026-06-25 — HARDEN: OPEN_PR_GATE staleness escape (degrade-never-halt)
 
 The goal lane refuses to start a new task while a non-spec PR is open for the repo (serializes
