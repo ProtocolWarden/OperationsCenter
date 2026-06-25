@@ -9,12 +9,12 @@ build-backend = "setuptools.build_meta"
 # `repograph` in this venv otherwise comes transitively from context-lifecycle,
 # which pins the PLANELESS repograph@v0.2.0 (no CapabilityRegistry). A
 # [tool.uv.sources] entry is insufficient — uv honors the transitive consumer's
-# own version pin; only override-dependencies wins. Pinned to RepoGraph e0b205e
-# (#7, descendant of v0.2.1) which ships the capabilities plane. No release tag
-# carries the plane yet; bump to the first plane-bearing tag when one exists.
+# own version pin; only override-dependencies wins. Pinned to RepoGraph v0.3.0
+# (e0b205e, #7) — the first release tag carrying the capabilities plane (the
+# v0.2.x tags are planeless).
 [tool.uv]
 override-dependencies = [
-  "repograph @ git+https://github.com/ProtocolWarden/RepoGraph.git@e0b205e1c92ba840595f528b52be423e10c6a31b",
+  "repograph @ git+https://github.com/ProtocolWarden/RepoGraph.git@v0.3.0",
 ]
 
 [project]
@@ -32,12 +32,11 @@ dependencies = [
   "source-registry @ git+https://github.com/ProtocolWarden/SourceRegistry.git",
   "rxp @ git+https://github.com/ProtocolWarden/RxP.git",
   "core-runner @ git+https://github.com/ProtocolWarden/CoreRunner.git",
-  # Capabilities plane (C2 runtime enforcement). Pinned to the plane-bearing
-  # PlatformManifest commit (17095f433 — descendant of v1.0.0) which ships
-  # src/platform_manifest/capabilities.py + data/capabilities.yaml. No release
-  # tag carries the plane yet (v1.0.0 is planeless), so this is a bare SHA pin;
-  # bump to the first plane-bearing tag when one exists.
-  "platform-manifest @ git+https://github.com/ProtocolWarden/PlatformManifest.git@17095f433a086aee1668f88b7a5597d669c0786b",
+  # Capabilities plane (C2 runtime enforcement). Pinned to PlatformManifest
+  # v1.1.0 (17095f433) — the first release tag shipping
+  # src/platform_manifest/capabilities.py + data/capabilities.yaml (v1.0.0 is
+  # planeless).
+  "platform-manifest @ git+https://github.com/ProtocolWarden/PlatformManifest.git@v1.1.0",
   # ADR 0002 P4 — dispatcher CL wrap.
   "context-lifecycle @ git+https://github.com/ProtocolWarden/ContextLifecycle.git@v0.3.1",
   # EVAL answer-key signatures (Ed25519) — operations_center.eval.signing.

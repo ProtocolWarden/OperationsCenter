@@ -1,3 +1,18 @@
+## 2026-06-24 — RELEASE: cut PM v1.1.0 + RepoGraph v0.3.0, pin capability deps to tags
+
+The capability plane was consumed via bare-SHA pins because no plane-bearing release tag
+existed. Cut the first plane-bearing tags on both upstreams — PlatformManifest **v1.1.0**
+(`17095f433`, ships `platform_manifest.capabilities` + `data/capabilities.yaml`; v1.0.0 is
+planeless) and RepoGraph **v0.3.0** (`e0b205e`, ships the `CapabilityRegistry`; v0.2.x are
+planeless) — and moved OC's pins from the SHAs to the tags: `platform-manifest @ …@v1.1.0`
+and the `[tool.uv] override-dependencies` `repograph @ …@v0.3.0`. **Code-neutral**: the tags
+resolve to the exact verified commits OC is already deployed against. Verified in a fresh
+tag-built venv (`uv pip install` honoring the override): plane loads 34 edges, `board_unblock`
+owner resolves to `operations_center`, the gate proceeds for OperationsCenter / refuses a wrong
+owner, full `tests/unit` green (8183 passed). No proactive fleet deploy required (identical
+commits); the live venv converges to tag-provenance on the next restart's `ensure_venv`
+re-sync, which the tag-built install proves works.
+
 ## 2026-06-22 — HARDEN: 3 top gaps from the fresh guide-vs-harness adversarial audit
 
 Closes the three highest-priority findings the fresh audit (vs the harness-engineering
