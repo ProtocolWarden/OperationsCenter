@@ -401,6 +401,14 @@ def build_sandbox_argv(
             continue
         argv += ["--setenv", k, str(v)]
     argv += ["--setenv", "HOME", home]
+    # The executor runs as uid 0 inside the sandbox (the pasta egress netns maps the
+    # process to root), and the agent CLI REFUSES `--dangerously-skip-permissions`
+    # under root "for security reasons" → `claude exited 1` and every goal task fails
+    # at the agent launch. `IS_SANDBOX=1` is the agent's explicit signal that an outer
+    # sandbox already provides the isolation, so the skip is allowed as root. Setting
+    # it here is correct by construction: build_sandbox_argv only runs when the bwrap
+    # sandbox is active, which IS the isolation it attests to.
+    argv += ["--setenv", "IS_SANDBOX", "1"]
     argv += ["--chdir", str(chdir if chdir is not None else rw_root)]
     return [*argv, *inner_cmd]
 
