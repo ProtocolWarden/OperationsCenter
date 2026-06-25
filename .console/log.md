@@ -1,3 +1,9 @@
+## 2026-06-25 — PROBE (throwaway, never merged): red-PR to verify the CI-green merge gate e2e
+
+A deliberately-failing test on a throwaway branch (`test/ci-green-gate-e2e-probe`) to confirm,
+against real GitHub CI, that the deployed `_merge_and_done` refuses to self-merge a red PR.
+Branch is closed + deleted after the check; this entry never reaches main.
+
 ## 2026-06-25 — FIX: reviewer self-merged RED PRs — add a CI-green precondition to _merge_and_done
 
 The reviewer auto-merged #405 and #406 with FAILING CI. Root cause: `_merge_and_done` (the single
