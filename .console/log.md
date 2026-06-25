@@ -1,3 +1,16 @@
+## 2026-06-25 — HARDEN: OPEN_PR_GATE staleness escape (degrade-never-halt)
+
+The goal lane refuses to start a new task while a non-spec PR is open for the repo (serializes
+work). A PR stuck red (un-mergeable CI) would otherwise halt the lane **forever** — exactly the
+#387 deadlock (2.5 days). Added a staleness escape in `_open_pr_gate_clear` (claim.py): a
+candidate PR whose GitHub `updated_at` is older than `settings.open_pr_gate_stale_hours`
+(default 12.0, set 0 to disable) no longer hard-blocks the lane — the lane proceeds and the
+stale PR is surfaced via a structured WARNING (never auto-closed; an operator or the reviewer
+self-heal can still resolve it). Defensive float-coercion of the threshold so a non-numeric
+(test MagicMock) settings value degrades to disabled rather than raising. Tests: stale PR
+escaped, fresh PR still blocks, disabled (0h) still blocks. This is the degrade-never-halt
+safety net so a single stuck PR can never deadlock a lane again, regardless of cause.
+
 ## 2026-06-25 — FIX: SwitchBoard 422 — omit null constraints from the routing payload
 
 Unblocking the goal lane (#387) exposed that EVERY task crash-looped at planning: the worker
