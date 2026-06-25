@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from ._text import desc_text, extract_goal
 from .labels import (
@@ -265,10 +265,23 @@ def _block_thin_task(client, issue: dict, role: str, goal_len: int) -> None:
     )
 
 
+def _parse_iso(ts_raw: object) -> datetime | None:
+    """Parse a GitHub ISO-8601 timestamp (``...Z``) to an aware datetime, or None."""
+    if not isinstance(ts_raw, str) or not ts_raw:
+        return None
+    try:
+        return datetime.fromisoformat(ts_raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
 def _open_pr_gate_clear(client, issue: dict, settings, task_id: str) -> bool:
     """Return True if no blocking open PRs exist for this task's repo.
 
     Excludes spec-author branches and PRs with mergeable=UNKNOWN (CI in-flight).
+    A candidate PR that has been idle beyond ``settings.open_pr_gate_stale_hours``
+    is escaped (no longer blocking) so a single stuck PR cannot deadlock the lane
+    forever — the #387 incident. Stale PRs are surfaced (warning), never auto-closed.
     """
     labels = issue.get("labels", [])
     gate_repo_key = label_value(labels, "repo")
@@ -286,7 +299,9 @@ def _open_pr_gate_clear(client, issue: dict, settings, task_id: str) -> bool:
         owner, repo_name = GitHubPRClient.owner_repo_from_clone_url(gate_clone_url)
         open_prs = gh.list_open_prs(owner, repo_name)
 
-        def _is_blocking(pr: dict) -> bool:
+        def _is_candidate(pr: dict) -> bool:
+            # Spec-author branches never block; mergeable=UNKNOWN means CI is still
+            # in-flight, so don't block on it yet.
             ref = (pr.get("head") or {}).get("ref", "")
             if ref.startswith("spec-author/"):
                 return False
@@ -294,16 +309,46 @@ def _open_pr_gate_clear(client, issue: dict, settings, task_id: str) -> bool:
                 return False
             return True
 
-        blocking = [pr for pr in open_prs if _is_blocking(pr)]
+        try:
+            stale_hours = float(getattr(settings, "open_pr_gate_stale_hours", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            stale_hours = 0.0
+        stale_cutoff = (
+            datetime.now(UTC) - timedelta(hours=stale_hours) if stale_hours > 0 else None
+        )
+
+        def _is_stale(pr: dict) -> bool:
+            if stale_cutoff is None:
+                return False
+            updated = _parse_iso(pr.get("updated_at"))
+            return updated is not None and updated < stale_cutoff
+
+        candidates = [pr for pr in open_prs if _is_candidate(pr)]
+        stale = [pr for pr in candidates if _is_stale(pr)]
+        blocking = [pr for pr in candidates if not _is_stale(pr)]
+
+        if stale:
+            logger.warning(
+                "board_worker[goal]: OPEN_PR_GATE staleness escape — repo=%s PR(s) %s "
+                "idle >%.1fh; NOT blocking the lane (degrade-never-halt) — resolve or "
+                "close them. task_id=%s",
+                gate_repo_key,
+                [pr.get("number") for pr in stale[:5]],
+                stale_hours,
+                task_id,
+            )
+
         if blocking:
             pr_nums = [pr.get("number") for pr in blocking[:5]]
             logger.info(
                 "board_worker[goal]: OPEN_PR_GATE — repo=%s has %d blocking PR(s) %s "
-                "(%d spec-author PRs excluded); skipping task_id=%s until merged",
+                "(%d spec-author/in-flight excluded, %d stale-escaped); skipping "
+                "task_id=%s until merged",
                 gate_repo_key,
                 len(blocking),
                 pr_nums,
-                len(open_prs) - len(blocking),
+                len(open_prs) - len(candidates),
+                len(stale),
                 task_id,
             )
             add_label(client, issue, "OPEN_PR_GATE")

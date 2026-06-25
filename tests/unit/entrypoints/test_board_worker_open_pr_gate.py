@@ -12,11 +12,12 @@ The gate must:
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 
-def _make_pr(number: int, ref: str) -> dict:
-    return {"number": number, "head": {"ref": ref}}
+def _make_pr(number: int, ref: str, updated_at: str = "2026-05-01T00:00:00Z") -> dict:
+    return {"number": number, "head": {"ref": ref}, "updated_at": updated_at}
 
 
 def _make_issue(task_kind: str = "goal") -> dict:
@@ -48,7 +49,7 @@ def _make_settings(clone_url: str = "git@github.com:owner/my-repo.git") -> Magic
     return settings
 
 
-def _call_claim_next(open_prs: list[dict]) -> dict | None:
+def _call_claim_next(open_prs: list[dict], stale_hours: float = 0.0) -> dict | None:
     from operations_center.entrypoints.board_worker.claim import claim_next as _claim_next
 
     client = MagicMock()
@@ -56,6 +57,7 @@ def _call_claim_next(open_prs: list[dict]) -> dict | None:
     client.transition_issue.return_value = None
 
     settings = _make_settings()
+    settings.open_pr_gate_stale_hours = stale_hours
 
     with patch("operations_center.adapters.github_pr.GitHubPRClient") as MockGH:
         gh_instance = MagicMock()
@@ -102,3 +104,26 @@ class TestOpenPrGateSpecAuthorExclusion:
         prs = [_make_pr(99, "spec-author-extra/not-a-spec")]
         result = _call_claim_next(prs)
         assert result is None, "only exact 'spec-author/' prefix should be excluded"
+
+
+class TestOpenPrGateStalenessEscape:
+    """A blocking PR idle beyond open_pr_gate_stale_hours must stop blocking the lane
+    (degrade-never-halt), so a single stuck PR cannot deadlock it — the #387 incident."""
+
+    def test_stale_blocking_pr_is_escaped(self):
+        stale_ts = (datetime.now(UTC) - timedelta(hours=24)).isoformat()
+        prs = [_make_pr(42, "goal/stuck", updated_at=stale_ts)]
+        result = _call_claim_next(prs, stale_hours=12.0)
+        assert result is not None, "a PR idle >12h must be escaped so the lane proceeds"
+
+    def test_fresh_blocking_pr_still_blocks(self):
+        fresh_ts = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+        prs = [_make_pr(42, "goal/active", updated_at=fresh_ts)]
+        result = _call_claim_next(prs, stale_hours=12.0)
+        assert result is None, "a PR idle <12h must still block the lane"
+
+    def test_staleness_disabled_still_blocks_old_pr(self):
+        old_ts = (datetime.now(UTC) - timedelta(hours=99)).isoformat()
+        prs = [_make_pr(42, "goal/old", updated_at=old_ts)]
+        result = _call_claim_next(prs, stale_hours=0.0)
+        assert result is None, "stale_hours=0 disables the escape (prior always-block behavior)"

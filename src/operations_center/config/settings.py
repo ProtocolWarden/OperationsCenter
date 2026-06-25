@@ -648,6 +648,15 @@ class Settings(BaseModel):
     # enabling it by default cannot deadlock the board_unblock lane. True = on.
     require_capability_owner: bool = True
 
+    # OPEN_PR_GATE staleness escape (degrade-never-halt). The goal lane refuses to
+    # start a new task while a non-spec PR is open for the repo, to serialize work.
+    # A PR stuck red (un-mergeable CI) would otherwise halt the lane forever — exactly
+    # the #387 deadlock (2.5 days). When a blocking PR has had no activity for longer
+    # than this many hours, it no longer hard-blocks the lane: the lane proceeds, and
+    # the PR is logged + labeled stale (never auto-closed — an operator or the reviewer
+    # self-heal can still resolve it). Set to 0 to disable (always-block, prior behavior).
+    open_pr_gate_stale_hours: float = 12.0
+
     def plane_token(self) -> str:
         return os.environ[self.plane.api_token_env]
 
