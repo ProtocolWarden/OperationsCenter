@@ -48,10 +48,22 @@ _EXTRA_PORTS_ENV = "OC_EGRESS_NETNS_PORTS"  # comma-sep extra host-loopback port
 _OLLAMA_PORT = 11434
 
 # In-netns setup: lock egress to loopback (the proxy lives on the host loopback that
-# pasta maps in), drop CAP_NET_ADMIN so the agent can't undo it, then exec the cmd.
-# Fail-open at every step: a missing/failing iptables or setpriv degrades to running
-# the command without that protection rather than halting (§0.1).
-_SETUP_SCRIPT = r"""
+# pasta maps in), then exec the cmd. Fail-open at every step: a missing/failing
+# iptables or setpriv degrades to running the command without that protection rather
+# than halting (§0.1).
+#
+# The cap-drop (`setpriv --bounding-set=-all`) is applied ONLY when the payload runs
+# DIRECTLY in this netns (sandbox off). When the payload is the bwrap sandbox the
+# cap-drop is both redundant AND fatal, so it is omitted (see ``maybe_netns``'s
+# ``drop_caps``):
+#   - redundant: the agent runs inside bwrap's CHILD user namespace and cannot reach
+#     this parent-owned netns firewall regardless of its caps (docstring §3);
+#   - fatal: `--bounding-set=-all` empties the bounding set, which PERSISTS into
+#     bwrap's child userns and masks CAP_SYS_ADMIN there, so bwrap can no longer
+#     create its pid/uts/ipc namespaces — bwrap aborts with "Creating new namespace
+#     failed: Operation not permitted" and the two SBX layers compose fail-CLOSED
+#     (the executor never starts; the lane churns claim→no-result forever).
+_FIREWALL_SETUP = r"""
 set -u
 if command -v iptables >/dev/null 2>&1; then
   iptables -A OUTPUT -o lo -j ACCEPT 2>/dev/null \
@@ -59,11 +71,27 @@ if command -v iptables >/dev/null 2>&1; then
     && iptables -P OUTPUT DROP 2>/dev/null \
     || echo "oc-netns: egress filter not applied (fail-open)" >&2
 fi
+"""
+
+# Drop all caps before exec so a payload running DIRECTLY in the netns can't flush the
+# firewall. Fail-open: a missing setpriv degrades to exec'ing without the drop.
+_CAPDROP_EXEC = r"""
 if command -v setpriv >/dev/null 2>&1; then
   exec setpriv --inh-caps=-all --bounding-set=-all --ambient-caps=-all "$@"
 fi
 exec "$@"
 """
+
+# Sandboxed payload: bwrap is the containment, so exec it WITH caps intact (it needs
+# CAP_SYS_ADMIN in its own child userns to build its namespaces).
+_PLAIN_EXEC = r"""
+exec "$@"
+"""
+
+
+def _setup_script(*, drop_caps: bool) -> str:
+    """In-netns setup script: firewall always; the cap-drop only when ``drop_caps``."""
+    return _FIREWALL_SETUP + (_CAPDROP_EXEC if drop_caps else _PLAIN_EXEC)
 
 
 def netns_enabled() -> bool:
@@ -103,13 +131,19 @@ def _forward_ports(proxy_url: str) -> list[int]:
 
 
 def maybe_netns(
-    cmd: Sequence[str], *, proxy_url: str | None, enabled: bool
+    cmd: Sequence[str], *, proxy_url: str | None, enabled: bool, drop_caps: bool = True
 ) -> list[str]:
     """Wrap ``cmd`` to run inside a pasta netns whose only egress is the proxy.
 
     pasta ``-T <port>`` forwards each host-loopback service (proxy, ollama) to the
     netns ``127.0.0.1:<port>`` so the executor's existing env (``HTTPS_PROXY=
     127.0.0.1:8889``) works unchanged; the in-netns iptables drops everything else.
+
+    ``drop_caps`` (default True) runs ``setpriv --bounding-set=-all`` before exec so a
+    payload running directly in the netns can't flush the firewall. Pass ``False``
+    when ``cmd`` is the bwrap sandbox: the cap-drop is redundant there (bwrap's child
+    userns can't reach this netns firewall) and fatal (it masks the CAP_SYS_ADMIN
+    bwrap needs to build its namespaces). See ``_setup_script``.
 
     Fail-open: returns ``cmd`` unchanged when disabled, when pasta is unavailable,
     or when no egress proxy is configured (a locked netns with no proxy would have
@@ -136,7 +170,8 @@ def maybe_netns(
     forwards: list[str] = []
     for port in _forward_ports(proxy_url):
         forwards += ["-T", str(port)]
-    return [pasta, "--config-net", *forwards, "--", "sh", "-c", _SETUP_SCRIPT, "oc-netns", *cmd]
+    script = _setup_script(drop_caps=drop_caps)
+    return [pasta, "--config-net", *forwards, "--", "sh", "-c", script, "oc-netns", *cmd]
 
 
 __all__ = [

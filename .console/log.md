@@ -1,3 +1,22 @@
+## 2026-06-25 — FIX: SBX layers composed fail-CLOSED — bwrap-in-netns cap-drop broke the executor
+
+The goal lane churned claim→"execute produced no result" every ~30s: the executor subprocess never
+launched. Root cause is a fail-CLOSED *composition* of two individually-fail-open SBX layers. With
+both `OC_BWRAP_SANDBOX=1` and `OC_EGRESS_NETNS=1`, `run_executor` wraps the bwrap argv inside the
+pasta netns, whose in-netns setup script runs `setpriv --inh-caps=-all --bounding-set=-all
+--ambient-caps=-all` *before* exec'ing bwrap. That emptied bounding set PERSISTS into bwrap's child
+user namespace and masks the CAP_SYS_ADMIN bwrap needs to create its pid/uts/ipc namespaces, so
+bwrap aborts `Creating new namespace failed: Operation not permitted` (rc 1) → no result → churn.
+Isolated with a 4-config bisect under the live env: bwrap alone ✓, pasta+bwrap (no setpriv) ✓,
+pasta+setpriv+bwrap ✗ — the cap-drop is the culprit. It is also *redundant* in this mode: the agent
+runs in bwrap's child userns and (per netns.py §3) cannot reach the parent-owned netns firewall
+regardless of caps. Fix: `maybe_netns` takes `drop_caps` (default True); `run_executor` passes
+`drop_caps=False` when the resolved payload is actually bwrap (basename check, so the sandbox
+fail-open path that returns the bare executor STILL gets the cap-drop). The firewall (`OUTPUT DROP`)
+stays unconditional. Verified end to end under the real live env: bwrap+netns now rc 0, raw external
+egress still BLOCKED, loopback proxy still CONNECTED. 4 new tests incl. a decisive bwrap-in-netns
+e2e regression. Unblocks goal-task autonomy; continues [[oc-autonomy-hardening-deadlock]].
+
 ## 2026-06-25 — FIX: reviewer self-merged RED PRs — add a CI-green precondition to _merge_and_done
 
 The reviewer auto-merged #405 and #406 with FAILING CI. Root cause: `_merge_and_done` (the single
