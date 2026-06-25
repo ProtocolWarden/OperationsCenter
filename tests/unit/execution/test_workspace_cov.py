@@ -9,7 +9,11 @@ from unittest import mock
 
 import pytest
 
-from operations_center.contracts.enums import ExecutionStatus, ValidationStatus
+from operations_center.contracts.enums import (
+    ExecutionStatus,
+    FailureReasonCategory,
+    ValidationStatus,
+)
 from operations_center.contracts.execution import ExecutionRequest, ExecutionResult
 from operations_center.execution import workspace as ws_mod
 from operations_center.execution.workspace import WorkspaceManager
@@ -1061,3 +1065,298 @@ def test_finalize_full_chain_with_validation_summary(tmp_path):
         out = mgr.finalize(req, result)
     assert out.pull_request_url == "http://pr/7"
     assert out.validation.status == ValidationStatus.PASSED
+
+
+# ── pre-PR custodian gate ─────────────────────────────────────────────────────
+#
+# The autouse _no_real_custodian fixture stubs _run_pre_pr_custodian_gate to
+# return None. The finalize-wiring tests below re-patch it explicitly per case.
+# The gate-logic tests capture the REAL unbound implementation so they exercise
+# the actual subprocess / exit-code / settings logic.
+
+_REAL_GATE = WorkspaceManager.__dict__["_run_pre_pr_custodian_gate"]
+_REAL_RESOLVE = WorkspaceManager.__dict__["_resolve_custodian_bin"]
+
+
+# (a) custodian clean → branch pushed + PR opened (existing behavior preserved)
+def test_finalize_custodian_clean_pushes_and_opens_pr(tmp_path):
+    ws = _git_repo(tmp_path)
+    git = _finalize_git_ok()
+    git.squash_commits.return_value = True
+    mgr = WorkspaceManager(git_client=git)
+    req = _make_request(ws)
+    result = _make_result(success=True)
+    with (
+        mock.patch.object(mgr, "_diff_oversized", return_value=None),
+        mock.patch.object(mgr, "_has_new_commits", return_value=True),
+        mock.patch.object(mgr, "_warn_cross_repo_impact"),
+        mock.patch.object(mgr, "_maybe_create_pr", return_value="http://pr/9"),
+        # gate explicitly clean → None
+        mock.patch.object(mgr, "_run_pre_pr_custodian_gate", return_value=None),
+    ):
+        out = mgr.finalize(req, result)
+    git.push_branch_force.assert_called_once_with(ws, "goal/fix-widget")
+    assert out.success is True
+    assert out.branch_pushed is True
+    assert out.pull_request_url == "http://pr/9"
+
+
+# (b) custodian findings → no push, no PR, failed/retryable result with findings
+def test_finalize_custodian_findings_blocks_push_and_pr(tmp_path):
+    ws = _git_repo(tmp_path)
+    git = _finalize_git_ok()
+    git.squash_commits.return_value = True
+    mgr = WorkspaceManager(git_client=git)
+    req = _make_request(ws)
+    result = _make_result(success=True)
+    findings = "T2 no-assert test: tests/test_x.py:5\nB1 boundary violation: src/y.py"
+    with (
+        mock.patch.object(mgr, "_diff_oversized", return_value=None),
+        mock.patch.object(mgr, "_has_new_commits", return_value=True),
+        mock.patch.object(mgr, "_warn_cross_repo_impact") as warn,
+        mock.patch.object(mgr, "_maybe_create_pr") as pr,
+        mock.patch.object(mgr, "_run_pre_pr_custodian_gate", return_value=findings),
+    ):
+        out = mgr.finalize(req, result)
+    # neither push variant fired; no PR; no cross-repo warn (we returned before)
+    git.push_branch.assert_not_called()
+    git.push_branch_force.assert_not_called()
+    pr.assert_not_called()
+    warn.assert_not_called()
+    # retryable FAILURE convention (mirrors coordinator prep-failure results)
+    assert out.success is False
+    assert out.status == ExecutionStatus.FAILED
+    assert out.branch_pushed is False
+    assert out.failure_category == FailureReasonCategory.POLICY_BLOCKED
+    assert "custodian" in out.failure_reason.lower()
+    assert "T2 no-assert" in out.failure_reason
+
+
+# (c) binary missing / subprocess error → proceeds (fail-safe), PR opens
+def test_finalize_custodian_binary_missing_proceeds(tmp_path):
+    ws = _git_repo(tmp_path)
+    git = _finalize_git_ok()
+    git.squash_commits.return_value = False
+    mgr = WorkspaceManager(git_client=git)
+    req = _make_request(ws)
+    result = _make_result(success=True)
+    # Bind the REAL gate to this manager (the autouse fixture stubbed the class
+    # method). The gate runs, finds no binary -> returns None -> finalize proceeds.
+    mgr._run_pre_pr_custodian_gate = _REAL_GATE.__get__(mgr)
+    with (
+        mock.patch.object(mgr, "_diff_oversized", return_value=None),
+        mock.patch.object(mgr, "_has_new_commits", return_value=True),
+        mock.patch.object(mgr, "_warn_cross_repo_impact"),
+        mock.patch.object(mgr, "_maybe_create_pr", return_value="http://pr/ok"),
+        mock.patch.object(mgr, "_resolve_custodian_bin", return_value=None),
+    ):
+        out = mgr.finalize(req, result)
+    git.push_branch.assert_called_once_with(ws, "goal/fix-widget")
+    assert out.success is True
+    assert out.branch_pushed is True
+    assert out.pull_request_url == "http://pr/ok"
+
+
+def test_finalize_custodian_subprocess_error_proceeds(tmp_path):
+    ws = _git_repo(tmp_path)
+    git = _finalize_git_ok()
+    git.squash_commits.return_value = False
+    mgr = WorkspaceManager(git_client=git)
+    req = _make_request(ws)
+    result = _make_result(success=True)
+    # The custodian subprocess raises OSError; only the custodian invocation is
+    # affected (the pre-gate patch-validation git calls run normally). Fail-safe
+    # -> the gate returns None -> finalize proceeds to push + PR.
+    mgr._run_pre_pr_custodian_gate = _REAL_GATE.__get__(mgr)
+
+    def fake_run(cmd, **kw):
+        if cmd and "custodian-multi" in str(cmd[0]):
+            raise OSError("exec format error")
+        return _fake_completed(0)
+
+    with (
+        mock.patch.object(mgr, "_diff_oversized", return_value=None),
+        mock.patch.object(mgr, "_has_new_commits", return_value=True),
+        mock.patch.object(mgr, "_validate_patch_before_commit", return_value=(True, None)),
+        mock.patch.object(mgr, "_warn_cross_repo_impact"),
+        mock.patch.object(mgr, "_maybe_create_pr", return_value="http://pr/ok2"),
+        mock.patch.object(mgr, "_resolve_custodian_bin", return_value="/usr/bin/custodian-multi"),
+        mock.patch.object(ws_mod.subprocess, "run", side_effect=fake_run),
+    ):
+        out = mgr.finalize(req, result)
+    git.push_branch.assert_called_once_with(ws, "goal/fix-widget")
+    assert out.success is True
+    assert out.branch_pushed is True
+
+
+# (d) pre_pr_custodian_gate=False → gate skipped entirely (binary never resolved)
+def test_finalize_gate_disabled_skips_entirely(tmp_path):
+    ws = _git_repo(tmp_path)
+    git = _finalize_git_ok()
+    git.squash_commits.return_value = False
+    settings = SimpleNamespace(pre_pr_custodian_gate=False)
+    mgr = WorkspaceManager(git_client=git, settings=settings)
+    req = _make_request(ws)
+    result = _make_result(success=True)
+    with (
+        mock.patch.object(mgr, "_diff_oversized", return_value=None),
+        mock.patch.object(mgr, "_has_new_commits", return_value=True),
+        mock.patch.object(mgr, "_warn_cross_repo_impact"),
+        mock.patch.object(mgr, "_maybe_create_pr", return_value="http://pr/dis"),
+        mock.patch.object(mgr, "_resolve_custodian_bin") as resolve,
+    ):
+        mgr._run_pre_pr_custodian_gate = _REAL_GATE.__get__(mgr)
+        out = mgr.finalize(req, result)
+    resolve.assert_not_called()  # disabled → never even resolves the binary
+    git.push_branch.assert_called_once_with(ws, "goal/fix-widget")
+    assert out.success is True
+    assert out.branch_pushed is True
+
+
+# ── _run_pre_pr_custodian_gate unit logic ─────────────────────────────────────
+
+
+def _gate_mgr(**kw):
+    mgr = WorkspaceManager(**kw)
+    mgr._run_pre_pr_custodian_gate = _REAL_GATE.__get__(mgr)
+    mgr._resolve_custodian_bin = _REAL_RESOLVE.__get__(mgr)
+    return mgr
+
+
+def test_gate_disabled_via_settings_returns_none(tmp_path):
+    mgr = _gate_mgr(settings=SimpleNamespace(pre_pr_custodian_gate=False))
+    req = _make_request(tmp_path)
+    # subprocess must never be called when disabled
+    with mock.patch.object(ws_mod.subprocess, "run") as run:
+        assert mgr._run_pre_pr_custodian_gate(req) is None
+    run.assert_not_called()
+
+
+def test_gate_default_on_when_no_settings(tmp_path):
+    # No settings object → getattr default True → gate runs (resolves binary).
+    mgr = _gate_mgr()
+    req = _make_request(tmp_path)
+    with (
+        mock.patch.object(mgr, "_resolve_custodian_bin", return_value=None) as resolve,
+    ):
+        assert mgr._run_pre_pr_custodian_gate(req) is None
+    resolve.assert_called_once()
+
+
+def test_gate_clean_exit_zero_returns_none(tmp_path):
+    mgr = _gate_mgr()
+    req = _make_request(tmp_path)
+    with (
+        mock.patch.object(mgr, "_resolve_custodian_bin", return_value="/x/custodian-multi"),
+        mock.patch.object(
+            ws_mod.subprocess, "run", return_value=_fake_completed(0, stdout="clean")
+        ),
+    ):
+        assert mgr._run_pre_pr_custodian_gate(req) is None
+
+
+def test_gate_findings_exit_one_blocks_with_summary(tmp_path):
+    mgr = _gate_mgr()
+    req = _make_request(tmp_path)
+    table = "FINDINGS\nT2: tests/test_a.py:3 no assert"
+    with (
+        mock.patch.object(mgr, "_resolve_custodian_bin", return_value="/x/custodian-multi"),
+        mock.patch.object(ws_mod.subprocess, "run", return_value=_fake_completed(1, stdout=table)),
+    ):
+        out = mgr._run_pre_pr_custodian_gate(req)
+    assert out is not None
+    assert "T2" in out and "no assert" in out
+
+
+def test_gate_error_exit_two_proceeds(tmp_path):
+    # exit 2 = tool/env error (not a clean findings exit) → fail-safe proceed
+    mgr = _gate_mgr()
+    req = _make_request(tmp_path)
+    with (
+        mock.patch.object(mgr, "_resolve_custodian_bin", return_value="/x/custodian-multi"),
+        mock.patch.object(ws_mod.subprocess, "run", return_value=_fake_completed(2, stderr="boom")),
+    ):
+        assert mgr._run_pre_pr_custodian_gate(req) is None
+
+
+def test_gate_timeout_proceeds(tmp_path):
+    mgr = _gate_mgr()
+    req = _make_request(tmp_path)
+    with (
+        mock.patch.object(mgr, "_resolve_custodian_bin", return_value="/x/custodian-multi"),
+        mock.patch.object(
+            ws_mod.subprocess,
+            "run",
+            side_effect=subprocess.TimeoutExpired(cmd="custodian-multi", timeout=180),
+        ),
+    ):
+        assert mgr._run_pre_pr_custodian_gate(req) is None
+
+
+def test_gate_passes_boundary_artifact_env(tmp_path, monkeypatch):
+    mgr = _gate_mgr()
+    req = _make_request(tmp_path)
+    monkeypatch.setenv("REPOGRAPH_BOUNDARY_ARTIFACT_FILE", "/path/to/artifact.json")
+    captured = {}
+
+    def fake_run(cmd, **kw):
+        captured["cmd"] = cmd
+        captured["env"] = kw.get("env")
+        captured["timeout"] = kw.get("timeout")
+        return _fake_completed(0)
+
+    with (
+        mock.patch.object(mgr, "_resolve_custodian_bin", return_value="/x/custodian-multi"),
+        mock.patch.object(ws_mod.subprocess, "run", side_effect=fake_run),
+    ):
+        assert mgr._run_pre_pr_custodian_gate(req) is None
+    assert captured["cmd"][1:] == [
+        "--repos",
+        str(req.workspace_path),
+        "--fail-on-findings",
+        "--no-color",
+    ]
+    assert captured["env"]["REPOGRAPH_BOUNDARY_ARTIFACT_FILE"] == "/path/to/artifact.json"
+    assert captured["timeout"] == 180
+
+
+# ── _resolve_custodian_bin fallback order ─────────────────────────────────────
+
+
+def test_resolve_custodian_prefers_repo_venv(tmp_path):
+    repo = tmp_path / "repo"
+    venv_bin = repo / ".venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    cand = venv_bin / "custodian-multi"
+    cand.write_text("#!/bin/sh\n")
+    cfg = SimpleNamespace(local_path=str(repo), venv_dir=".venv")
+    mgr = _gate_mgr(repo_settings_lookup=lambda _k: cfg)
+    req = _make_request(tmp_path)
+    assert mgr._resolve_custodian_bin(req) == str(cand)
+
+
+def test_resolve_custodian_falls_back_to_path(tmp_path):
+    mgr = _gate_mgr()
+    req = _make_request(tmp_path)
+    with mock.patch.object(ws_mod.shutil, "which", return_value="/usr/local/bin/custodian-multi"):
+        assert mgr._resolve_custodian_bin(req) == "/usr/local/bin/custodian-multi"
+
+
+def test_resolve_custodian_falls_back_to_oc_venv(tmp_path):
+    oc_root = tmp_path / "oc"
+    oc_bin = oc_root / ".venv" / "bin"
+    oc_bin.mkdir(parents=True)
+    (oc_bin / "custodian-multi").write_text("#!/bin/sh\n")
+    mgr = _gate_mgr(oc_root=oc_root)
+    req = _make_request(tmp_path)
+    with mock.patch.object(ws_mod.shutil, "which", return_value=None):
+        assert mgr._resolve_custodian_bin(req) == str(oc_bin / "custodian-multi")
+
+
+def test_resolve_custodian_returns_none_when_absent(tmp_path):
+    oc_root = tmp_path / "oc-empty"
+    oc_root.mkdir()
+    mgr = _gate_mgr(oc_root=oc_root)
+    req = _make_request(tmp_path)
+    with mock.patch.object(ws_mod.shutil, "which", return_value=None):
+        assert mgr._resolve_custodian_bin(req) is None
