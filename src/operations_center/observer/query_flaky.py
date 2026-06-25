@@ -25,6 +25,14 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from operations_center.observer.models import RepoStateSnapshot
 
+# Bare exception type names produced by parse_non_assertion_exception() when
+# the exception carries no args — these are placeholders, not diagnostic content.
+_BARE_EXCEPTION_TYPE_NAMES: frozenset[str] = frozenset(
+    {"TimeoutError", "ConnectionError", "OSError"}
+)
+# Minimum character count for an assertion message to be considered informative.
+_MESSAGE_QUALITY_MIN_LENGTH: int = 10
+
 
 @dataclass
 class FlakyTest:
@@ -108,6 +116,21 @@ class ExtractionHealth:
             - truncated_messages: count of assertion messages truncated to 200 chars
             - special_chars: count of messages containing special characters
             - malformed_exceptions: count of non-standard exception formats
+        gaps: Sample list (up to 10) of pytest node IDs where both test_name and
+            assertion_message are None — the full count is in ``no_extraction``
+        edge_cases: Sample list (up to 10) of dicts with keys ``test_id`` and
+            ``issue`` (one of "truncated_message", "special_chars",
+            "malformed_exception") — full counts are in ``edge_case_summary``
+        message_quality_rate: Percentage of extracted assertion messages that are
+            informative (0.0-100.0), or None when no tests carry an
+            assertion_message. An informative message is non-empty, at least
+            ``_MESSAGE_QUALITY_MIN_LENGTH`` characters, and not a bare exception
+            type name such as "TimeoutError".
+        low_quality_messages: Sample list (up to 10) of dicts with keys
+            ``test_id`` (pytest node ID) and ``reason`` (one of "empty",
+            "too_short", "bare_exception_type") for messages classified as
+            low-quality. Full count is derivable from
+            ``message_quality_rate`` and the tests-with-assertion denominator.
     """
 
     success_rate: float = 0.0
@@ -117,6 +140,8 @@ class ExtractionHealth:
     edge_case_summary: dict[str, int] = dataclass_field(default_factory=dict)
     gaps: list[str] = dataclass_field(default_factory=list)
     edge_cases: list[dict] = dataclass_field(default_factory=list)
+    message_quality_rate: float | None = None
+    low_quality_messages: list[dict] = dataclass_field(default_factory=list)
 
 
 class FlakyTestQueryMixin(ABC):
@@ -367,6 +392,9 @@ class FlakyTestQueryMixin(ABC):
         }
         gap_samples: list[str] = []
         edge_case_samples: list[dict] = []
+        quality_with_message = 0
+        quality_informative = 0
+        low_quality_samples: list[dict] = []
 
         for test in flaky_tests:
             has_test_name = test.test_name is not None
@@ -381,22 +409,39 @@ class FlakyTestQueryMixin(ABC):
                 if len(gap_samples) < 10:
                     gap_samples.append(test.name)
 
-            if test.assertion_message:
-                if len(test.assertion_message) >= 200:
+            if test.assertion_message is not None:
+                msg = test.assertion_message
+                if msg and len(msg) >= 200:
                     edge_case_counts["truncated_messages"] += 1
                     if len(edge_case_samples) < 10:
                         edge_case_samples.append(
                             {"test_id": test.name, "issue": "truncated_message"}
                         )
-                if any(
-                    ord(c) < 32 or ord(c) > 126 for c in test.assertion_message if c not in "\n\r\t"
-                ):
+                if msg and any(ord(c) < 32 or ord(c) > 126 for c in msg if c not in "\n\r\t"):
                     edge_case_counts["special_chars"] += 1
                     if len(edge_case_samples) < 10:
                         edge_case_samples.append({"test_id": test.name, "issue": "special_chars"})
 
+                # Quality check: is this message informative?
+                quality_with_message += 1
+                quality_reason: str | None = None
+                if not msg:
+                    quality_reason = "empty"
+                elif msg in _BARE_EXCEPTION_TYPE_NAMES:
+                    quality_reason = "bare_exception_type"
+                elif len(msg) < _MESSAGE_QUALITY_MIN_LENGTH:
+                    quality_reason = "too_short"
+
+                if quality_reason is None:
+                    quality_informative += 1
+                elif len(low_quality_samples) < 10:
+                    low_quality_samples.append({"test_id": test.name, "reason": quality_reason})
+
         total = len(flaky_tests)
         success_rate = ((complete + partial) / total * 100.0) if total > 0 else 0.0
+        message_quality_rate: float | None = (
+            quality_informative / quality_with_message * 100.0 if quality_with_message > 0 else None
+        )
 
         return ExtractionHealth(
             success_rate=success_rate,
@@ -406,6 +451,8 @@ class FlakyTestQueryMixin(ABC):
             edge_case_summary=edge_case_counts,
             gaps=gap_samples,
             edge_cases=edge_case_samples,
+            message_quality_rate=message_quality_rate,
+            low_quality_messages=low_quality_samples,
         )
 
     def filter_by_extraction_status(

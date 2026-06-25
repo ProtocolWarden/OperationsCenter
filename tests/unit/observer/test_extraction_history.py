@@ -1357,3 +1357,133 @@ class TestHistoryTrackingEdgeCases:
         assert trend.success_rate_min == 0.0
         assert trend.success_rate_max == 100.0
         assert trend.success_rate_mean == 50.0
+
+
+class TestSnapshotMessageQualityRate:
+    """Tests for message_quality_rate storage in ExtractionHealthSnapshot (Stage 3)."""
+
+    def _make_snapshot(self, message_quality_rate: float | None = None) -> ExtractionHealthSnapshot:
+        return ExtractionHealthSnapshot(
+            observed_at=datetime.now(UTC),
+            success_rate=80.0,
+            complete_extraction=4,
+            partial_extraction=0,
+            no_extraction=1,
+            total_flaky_tests=5,
+            message_quality_rate=message_quality_rate,
+        )
+
+    def test_snapshot_accepts_message_quality_rate(self) -> None:
+        """ExtractionHealthSnapshot accepts message_quality_rate as a field."""
+        snap = self._make_snapshot(message_quality_rate=85.0)
+        assert snap.message_quality_rate == 85.0
+
+    def test_snapshot_message_quality_rate_defaults_to_none(self) -> None:
+        """message_quality_rate defaults to None when not supplied."""
+        snap = ExtractionHealthSnapshot(
+            observed_at=datetime.now(UTC),
+            success_rate=80.0,
+            complete_extraction=4,
+            partial_extraction=0,
+            no_extraction=1,
+            total_flaky_tests=5,
+        )
+        assert snap.message_quality_rate is None
+
+    def test_to_dict_includes_message_quality_rate_value(self) -> None:
+        """to_dict() serialises message_quality_rate when it has a value."""
+        snap = self._make_snapshot(message_quality_rate=75.5)
+        d = snap.to_dict()
+        assert "message_quality_rate" in d
+        assert d["message_quality_rate"] == 75.5
+
+    def test_to_dict_includes_message_quality_rate_null(self) -> None:
+        """to_dict() serialises message_quality_rate as None when unset."""
+        snap = self._make_snapshot(message_quality_rate=None)
+        d = snap.to_dict()
+        assert "message_quality_rate" in d
+        assert d["message_quality_rate"] is None
+
+    def test_from_dict_loads_message_quality_rate(self) -> None:
+        """from_dict() restores message_quality_rate from serialised form."""
+        now = datetime.now(UTC)
+        data = {
+            "observed_at": now.isoformat(),
+            "success_rate": 80.0,
+            "complete_extraction": 4,
+            "partial_extraction": 0,
+            "no_extraction": 1,
+            "total_flaky_tests": 5,
+            "message_quality_rate": 66.7,
+        }
+        snap = ExtractionHealthSnapshot.from_dict(data)
+        assert snap.message_quality_rate == 66.7
+
+    def test_from_dict_null_quality_rate_stays_none(self) -> None:
+        """from_dict() with null message_quality_rate gives None."""
+        now = datetime.now(UTC)
+        data = {
+            "observed_at": now.isoformat(),
+            "success_rate": 80.0,
+            "complete_extraction": 4,
+            "partial_extraction": 0,
+            "no_extraction": 1,
+            "total_flaky_tests": 5,
+            "message_quality_rate": None,
+        }
+        snap = ExtractionHealthSnapshot.from_dict(data)
+        assert snap.message_quality_rate is None
+
+    def test_from_dict_missing_quality_rate_key_defaults_none(self) -> None:
+        """Old JSONL rows without message_quality_rate load with None (backwards compat)."""
+        now = datetime.now(UTC)
+        data = {
+            "observed_at": now.isoformat(),
+            "success_rate": 80.0,
+            "complete_extraction": 4,
+            "partial_extraction": 0,
+            "no_extraction": 1,
+            "total_flaky_tests": 5,
+            # no message_quality_rate key
+        }
+        snap = ExtractionHealthSnapshot.from_dict(data)
+        assert snap.message_quality_rate is None
+
+    def test_storage_round_trip_preserves_quality_rate(self, tmp_path: any) -> None:
+        """Saving and reloading a snapshot preserves message_quality_rate."""
+        storage = ExtractionHistoryStorage(tmp_path / "hist")
+        snap = self._make_snapshot(message_quality_rate=92.3)
+        storage.save_snapshot(snap)
+        loaded = storage.load_all_snapshots()
+        assert len(loaded) == 1
+        assert loaded[0].message_quality_rate == 92.3
+
+    def test_collector_collect_snapshot_accepts_quality_rate(self, tmp_path: any) -> None:
+        """ExtractionHistoryCollector.collect_snapshot() stores message_quality_rate."""
+        collector = ExtractionHistoryCollector(tmp_path / "hist")
+        snap = collector.collect_snapshot(
+            success_rate=80.0,
+            complete_extraction=4,
+            partial_extraction=0,
+            no_extraction=1,
+            total_flaky_tests=5,
+            message_quality_rate=88.0,
+        )
+        assert snap.message_quality_rate == 88.0
+        loaded = collector.storage.load_all_snapshots()
+        assert loaded[0].message_quality_rate == 88.0
+
+    def test_collector_collect_snapshot_quality_rate_none(self, tmp_path: any) -> None:
+        """collect_snapshot() persists message_quality_rate=None correctly."""
+        collector = ExtractionHistoryCollector(tmp_path / "hist")
+        snap = collector.collect_snapshot(
+            success_rate=0.0,
+            complete_extraction=0,
+            partial_extraction=0,
+            no_extraction=3,
+            total_flaky_tests=3,
+            message_quality_rate=None,
+        )
+        assert snap.message_quality_rate is None
+        loaded = collector.storage.load_all_snapshots()
+        assert loaded[0].message_quality_rate is None

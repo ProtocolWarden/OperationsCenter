@@ -49,6 +49,7 @@ class ExtractionHistoryCollector:
         edge_case_summary: dict[str, int] | None = None,
         snapshot_id: str | None = None,
         collection_run_id: str | None = None,
+        message_quality_rate: float | None = None,
     ) -> ExtractionHealthSnapshot:
         """Record a snapshot of current extraction health.
 
@@ -61,6 +62,8 @@ class ExtractionHistoryCollector:
             edge_case_summary: Dict of edge case counts (optional).
             snapshot_id: Reference to source signal (optional).
             collection_run_id: Unique identifier for collection cycle (optional).
+            message_quality_rate: Percentage of assertion messages that are informative
+                (0-100), or None when no tests carry an assertion_message.
 
         Returns:
             The created and stored ExtractionHealthSnapshot.
@@ -79,15 +82,20 @@ class ExtractionHistoryCollector:
             edge_case_summary=edge_case_summary,
             snapshot_id=snapshot_id,
             collection_run_id=collection_run_id,
+            message_quality_rate=message_quality_rate,
         )
 
         try:
             self.storage.save_snapshot(snapshot)
+            quality_str = (
+                f"{message_quality_rate:.1f}%" if message_quality_rate is not None else "N/A"
+            )
             logger.debug(
-                "Recorded extraction health snapshot: success_rate=%.1f%%, extracted=%d/%d",
+                "Recorded extraction health snapshot: success_rate=%.1f%%, extracted=%d/%d, quality=%s",
                 success_rate,
                 complete_extraction + partial_extraction,
                 total_flaky_tests,
+                quality_str,
             )
         except OSError as e:
             logger.error("Failed to save extraction health snapshot: %s", e)

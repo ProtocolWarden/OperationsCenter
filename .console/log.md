@@ -1,3 +1,22 @@
+## 2026-06-25 — Stage 5: documentation and examples for extraction fidelity metric
+
+Created `docs/reference/EXTRACTION_FIDELITY_METRIC.md` — a comprehensive reference covering:
+- Overview of `success_rate` (presence) vs `message_quality_rate` (quality) distinction
+- CLI usage examples for both `--format json` and `--format table`, with annotated output showing all
+  new fields (`message_quality_rate`, `low_quality_messages`, `gaps`, `edge_cases`)
+- Quality gate definitions and constants (`_BARE_EXCEPTION_TYPE_NAMES`, `_MESSAGE_QUALITY_MIN_LENGTH`)
+- Alert integration: thresholds, channel routing, and programmatic usage of
+  `FlakyTestAlertManager.check_message_quality_rate()`
+- Storage/time-series schema for `ExtractionHealthSnapshot` with backwards-compatibility note
+- Integration points for future extension (adding new quality gates, extending the bare-type set,
+  promoting `message_quality_rate` to a `FlakyTestSignal` field)
+- Interpretation guide mapping rate ranges to likely causes and recommended actions
+
+Updated `docs/specs/STAGE1_EXTRACTION_FIDELITY_METRIC.md` to `status: implemented` and added a
+banner pointing to the reference doc.
+
+All 239 extraction-health tests pass; 1685 observer tests pass (1 pre-existing sandbox failure unchanged).
+
 ## 2026-06-25 — FIX: agent refused to run as root in the sandbox — set IS_SANDBOX=1 (egress confirmed live)
 
 With the workspace env fixed, a goal task ran the FULL workspace prep + backend and reached the agent

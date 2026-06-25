@@ -1000,6 +1000,34 @@ def cmd_extraction_health(
         except Exception as e:  # noqa: BLE001 — alerts are supplementary, never fatal
             logger.debug("extraction success rate alert dispatch skipped: %s", e)
 
+        # Threshold alert: fire if message quality rate is below configured threshold.
+        # Best-effort — never fatal to the command output.
+        try:
+            alert_cfg = FlakyTestAlertConfig()
+            for quality_alert in FlakyTestAlertManager.check_message_quality_rate(
+                health.message_quality_rate, alert_cfg
+            ):
+                severity_str = quality_alert.severity.value.upper()
+                channel_names = alert_cfg.get_channels_for_alert(
+                    quality_alert.alert_type, severity_str
+                )
+                alert_context = {
+                    "condition_name": quality_alert.alert_type,
+                    "severity": severity_str,
+                    "collector_name": "extraction-health",
+                    "error_count": round(quality_alert.details.get("current_rate", 0)),
+                    "threshold": quality_alert.details.get("threshold", 0),
+                    "time_window_minutes": hours * 60,
+                    "metrics_summary": quality_alert.details,
+                    "description": quality_alert.description,
+                }
+                for channel in AlertChannelFactory.create_channels_from_config(
+                    channel_names
+                ).values():
+                    channel.notify(alert_context)
+        except Exception as e:  # noqa: BLE001 — alerts are supplementary, never fatal
+            logger.debug("message quality rate alert dispatch skipped: %s", e)
+
         # Record this reading into the extraction-history time series and surface
         # the longitudinal trend. Best-effort: the point-in-time health is the
         # contract STEP 3 depends on and must always emit, so any history failure
@@ -1018,6 +1046,7 @@ def cmd_extraction_health(
                 no_extraction=health.no_extraction,
                 total_flaky_tests=total_flaky,
                 edge_case_summary=dict(health.edge_case_summary),
+                message_quality_rate=health.message_quality_rate,
             )
             # Two complementary views over the same storage: the mixin on
             # TestSignalQuery (daily trend, regression slope, anomaly detection,
@@ -1053,6 +1082,9 @@ def cmd_extraction_health(
                 f"partial={payload['partial_extraction']}  "
                 f"none={payload['no_extraction']}"
             )
+            quality_rate = payload.get("message_quality_rate")
+            if quality_rate is not None:
+                console.print(f"message_quality_rate={quality_rate:.1f}%")
             gaps = payload.get("gaps", [])
             if gaps:
                 console.print(
@@ -1067,6 +1099,11 @@ def cmd_extraction_health(
                 )
                 for entry in edge_cases:
                     console.print(f"  {entry['test_id']}  [{entry['issue']}]", markup=False)
+            low_quality = payload.get("low_quality_messages", [])
+            if low_quality:
+                console.print(f"low_quality_messages (showing {len(low_quality)}):")
+                for entry in low_quality:
+                    console.print(f"  {entry['test_id']}  [{entry['reason']}]", markup=False)
         raise typer.Exit(EXIT_SUCCESS)
 
     except typer.Exit:

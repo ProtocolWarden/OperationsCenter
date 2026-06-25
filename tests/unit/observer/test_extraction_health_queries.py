@@ -679,6 +679,237 @@ class TestExtractionHealthEdgeCasesFormat:
         assert len(health.edge_cases) <= 10
 
 
+class TestMessageQualityRate:
+    """Tests for message_quality_rate and low_quality_messages."""
+
+    def _make_snapshot(self, tests: list[dict]) -> MagicMock:
+        snapshot = MagicMock()
+        flaky_signal = MagicMock()
+        flaky_signal.status = "available"
+        flaky_signal.most_problematic_tests = tests
+        snapshot.signals.flaky_test_signal = flaky_signal
+        return snapshot
+
+    def _test_entry(
+        self,
+        name: str,
+        assertion_message: str | None,
+        test_name: str | None = "some_test",
+    ) -> dict:
+        return {
+            "name": name,
+            "failure_rate": 0.5,
+            "run_count": 5,
+            "category": "INTERMITTENT",
+            "test_name": test_name,
+            "assertion_message": assertion_message,
+        }
+
+    def test_all_informative_messages_yields_100(self) -> None:
+        """All non-empty, sufficiently long, non-bare-type messages → quality rate 100.0."""
+        snapshot = self._make_snapshot(
+            [
+                self._test_entry("mod::test_a", "Expected foo == bar but got baz"),
+                self._test_entry("mod::test_b", "Connection failed after 30s retry"),
+            ]
+        )
+        query = MockFlakyTestQuery([snapshot])
+        health = query.get_extraction_health()
+
+        assert health.message_quality_rate == 100.0
+        assert health.low_quality_messages == []
+
+    def test_none_when_no_assertion_messages(self) -> None:
+        """message_quality_rate is None when no tests carry an assertion_message."""
+        snapshot = self._make_snapshot(
+            [
+                self._test_entry("mod::test_a", None),
+                self._test_entry("mod::test_b", None),
+            ]
+        )
+        query = MockFlakyTestQuery([snapshot])
+        health = query.get_extraction_health()
+
+        assert health.message_quality_rate is None
+        assert health.low_quality_messages == []
+
+    def test_empty_message_is_low_quality(self) -> None:
+        """Empty string assertion_message is flagged as low-quality with reason 'empty'."""
+        snapshot = self._make_snapshot(
+            [
+                self._test_entry("mod::test_empty", ""),
+            ]
+        )
+        query = MockFlakyTestQuery([snapshot])
+        health = query.get_extraction_health()
+
+        assert health.message_quality_rate == 0.0
+        assert len(health.low_quality_messages) == 1
+        assert health.low_quality_messages[0]["test_id"] == "mod::test_empty"
+        assert health.low_quality_messages[0]["reason"] == "empty"
+
+    def test_bare_exception_type_is_low_quality(self) -> None:
+        """Bare exception type name (e.g. 'TimeoutError') is flagged with reason 'bare_exception_type'."""
+        snapshot = self._make_snapshot(
+            [
+                self._test_entry("mod::test_timeout", "TimeoutError"),
+                self._test_entry("mod::test_conn", "ConnectionError"),
+                self._test_entry("mod::test_os", "OSError"),
+            ]
+        )
+        query = MockFlakyTestQuery([snapshot])
+        health = query.get_extraction_health()
+
+        assert health.message_quality_rate == 0.0
+        reasons = [e["reason"] for e in health.low_quality_messages]
+        assert all(r == "bare_exception_type" for r in reasons)
+        assert len(health.low_quality_messages) == 3
+
+    def test_too_short_message_is_low_quality(self) -> None:
+        """Message with fewer than 10 chars is flagged with reason 'too_short'."""
+        snapshot = self._make_snapshot(
+            [
+                self._test_entry("mod::test_short", "No data"),  # 7 chars
+            ]
+        )
+        query = MockFlakyTestQuery([snapshot])
+        health = query.get_extraction_health()
+
+        assert health.message_quality_rate == 0.0
+        assert health.low_quality_messages[0]["reason"] == "too_short"
+
+    def test_exactly_10_chars_is_informative(self) -> None:
+        """Message of exactly 10 characters is considered informative (boundary)."""
+        snapshot = self._make_snapshot(
+            [
+                self._test_entry("mod::test_boundary", "1234567890"),  # exactly 10 chars
+            ]
+        )
+        query = MockFlakyTestQuery([snapshot])
+        health = query.get_extraction_health()
+
+        assert health.message_quality_rate == 100.0
+        assert health.low_quality_messages == []
+
+    def test_9_chars_is_low_quality(self) -> None:
+        """Message of 9 characters is below the threshold → too_short."""
+        snapshot = self._make_snapshot(
+            [
+                self._test_entry("mod::test_nine", "123456789"),
+            ]
+        )
+        query = MockFlakyTestQuery([snapshot])
+        health = query.get_extraction_health()
+
+        assert health.message_quality_rate == 0.0
+        assert health.low_quality_messages[0]["reason"] == "too_short"
+
+    def test_mixed_quality_computes_correct_rate(self) -> None:
+        """Rate reflects proportion of informative messages among those present."""
+        snapshot = self._make_snapshot(
+            [
+                self._test_entry("mod::test_good", "Expected 42 but got 0"),
+                self._test_entry("mod::test_empty", ""),
+                self._test_entry("mod::test_no_msg", None),  # excluded from denominator
+            ]
+        )
+        query = MockFlakyTestQuery([snapshot])
+        health = query.get_extraction_health()
+
+        # 1 informative / 2 with assertion_message = 50.0%
+        assert health.message_quality_rate == 50.0
+        assert len(health.low_quality_messages) == 1
+
+    def test_tests_without_assertion_message_excluded_from_denominator(self) -> None:
+        """Tests with assertion_message=None don't count toward the quality denominator."""
+        snapshot = self._make_snapshot(
+            [
+                self._test_entry("mod::test_no_msg", None),
+                self._test_entry("mod::test_no_msg2", None, test_name=None),
+                self._test_entry("mod::test_good", "Assertion failed: value mismatch"),
+            ]
+        )
+        query = MockFlakyTestQuery([snapshot])
+        health = query.get_extraction_health()
+
+        # Only 1 test has assertion_message; it's informative → 100%
+        assert health.message_quality_rate == 100.0
+
+    def test_low_quality_messages_capped_at_10(self) -> None:
+        """low_quality_messages list contains at most 10 entries."""
+        snapshot = self._make_snapshot(
+            [self._test_entry(f"mod::test_short_{i}", "tiny") for i in range(15)]
+        )
+        query = MockFlakyTestQuery([snapshot])
+        health = query.get_extraction_health()
+
+        assert len(health.low_quality_messages) == 10
+        # quality rate still reflects the full count
+        assert health.message_quality_rate == 0.0
+
+    def test_low_quality_entry_has_test_id_and_reason_keys(self) -> None:
+        """Each low_quality_messages entry has exactly test_id and reason keys."""
+        snapshot = self._make_snapshot(
+            [
+                self._test_entry("mod::test_short", "short"),
+            ]
+        )
+        query = MockFlakyTestQuery([snapshot])
+        health = query.get_extraction_health()
+
+        for entry in health.low_quality_messages:
+            assert set(entry.keys()) == {"test_id", "reason"}
+
+    def test_truncated_message_is_still_informative(self) -> None:
+        """A 200-char truncated message is informative — truncation is tracked separately."""
+        snapshot = self._make_snapshot(
+            [
+                self._test_entry("mod::test_trunc", "x" * 205),
+            ]
+        )
+        query = MockFlakyTestQuery([snapshot])
+        health = query.get_extraction_health()
+
+        assert health.message_quality_rate == 100.0
+        assert health.low_quality_messages == []
+
+    def test_sample_snapshot_quality_rate(self, sample_snapshot: RepoStateSnapshot) -> None:
+        """Verify quality rate on the shared sample_snapshot fixture."""
+        # sample_snapshot has 4 tests with assertion_message:
+        #   "Expected foo == bar, but got baz" (informative)
+        #   "Connection timeout after 30s"     (informative)
+        #   "x" * 205                          (informative — truncated but long)
+        #   test_partial_assertion_only: "Connection timeout after 30s" — wait,
+        #   let me check: test_partial_test_name_only has assertion_message=None,
+        #   test_partial_assertion_only has assertion_message="Connection timeout after 30s"
+        # So: 3 have assertion_message; all 3 are informative → 100%
+        query = MockFlakyTestQuery([sample_snapshot])
+        health = query.get_extraction_health()
+
+        assert health.message_quality_rate == 100.0
+
+
+class TestMessageQualityRateDataclass:
+    """Tests for new ExtractionHealth dataclass fields."""
+
+    def test_message_quality_rate_defaults_to_none(self) -> None:
+        health = ExtractionHealth()
+        assert health.message_quality_rate is None
+
+    def test_low_quality_messages_defaults_to_empty_list(self) -> None:
+        health = ExtractionHealth()
+        assert health.low_quality_messages == []
+
+    def test_message_quality_rate_accepts_float(self) -> None:
+        health = ExtractionHealth(message_quality_rate=75.0)
+        assert health.message_quality_rate == 75.0
+
+    def test_low_quality_messages_accepts_list_of_dicts(self) -> None:
+        entries = [{"test_id": "mod::test_a", "reason": "empty"}]
+        health = ExtractionHealth(low_quality_messages=entries)
+        assert health.low_quality_messages == entries
+
+
 class TestIntegrationWithExistingMethods:
     """Test interaction with existing query methods."""
 

@@ -72,8 +72,8 @@ class TestFlakyTestAlertConfig:
     def test_initialization(self) -> None:
         config = FlakyTestAlertConfig()
         assert config is not None
-        assert len(config.channel_routes) == 5
-        assert len(config.thresholds) == 4
+        assert len(config.channel_routes) == 6
+        assert len(config.thresholds) == 5
 
     def test_default_channel_routes(self) -> None:
         config = FlakyTestAlertConfig()

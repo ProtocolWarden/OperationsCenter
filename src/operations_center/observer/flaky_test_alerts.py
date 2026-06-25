@@ -11,6 +11,7 @@ Alert Types:
   - CRITICAL_FLAKINESS: Failure rate >30% (CRITICAL severity)
   - MODULE_OUTBREAK: >20% of module tests are flaky (WARNING severity)
   - EXTRACTION_SUCCESS_RATE_LOW: Extraction success rate below threshold (WARNING–EMERGENCY)
+  - MESSAGE_QUALITY_RATE_LOW: Assertion message quality rate below threshold (WARNING–EMERGENCY)
 
 Usage:
     alerts = FlakyTestAlertManager.check_alerts(agg_report)
@@ -20,6 +21,11 @@ Usage:
     # Check extraction success rate from a FlakyTestSignal:
     extraction_alerts = FlakyTestAlertManager.check_extraction_success_rate(signal)
     for alert in extraction_alerts:
+        print(f"[{alert.severity.value}] {alert.description}")
+
+    # Check message quality rate:
+    quality_alerts = FlakyTestAlertManager.check_message_quality_rate(health.message_quality_rate)
+    for alert in quality_alerts:
         print(f"[{alert.severity.value}] {alert.description}")
 """
 
@@ -320,6 +326,50 @@ class FlakyTestAlertManager:
             severity=severity,
             description=(
                 f"Extraction success rate {rate:.1f}% is below {severity_str.lower()} "
+                f"threshold of {threshold:.1f}%"
+            ),
+            details={
+                "current_rate": rate,
+                "threshold": threshold,
+                "gap": threshold - rate,
+                "severity": severity_str,
+            },
+        )
+        return [alert]
+
+    @staticmethod
+    def check_message_quality_rate(
+        rate: float | None,
+        config: FlakyTestAlertConfig | None = None,
+    ) -> list[FlakyTestAlert]:
+        """Check if message quality rate is below threshold.
+
+        Args:
+            rate: message_quality_rate (0-100), or None when no assertion messages exist.
+            config: Alert configuration; uses defaults if None.
+
+        Returns:
+            List of alerts (0 or 1 items). Empty when rate is None.
+        """
+        if rate is None:
+            return []
+
+        if config is None:
+            config = FlakyTestAlertConfig()
+
+        should_alert, severity_str = config.should_alert_on_message_quality_rate(rate)
+
+        if not should_alert:
+            return []
+
+        severity = AlertSeverity[severity_str]
+        threshold = config.get_threshold("message_quality_rate", severity_str)
+
+        alert = FlakyTestAlert(
+            alert_type="MESSAGE_QUALITY_RATE_LOW",
+            severity=severity,
+            description=(
+                f"Message quality rate {rate:.1f}% is below {severity_str.lower()} "
                 f"threshold of {threshold:.1f}%"
             ),
             details={

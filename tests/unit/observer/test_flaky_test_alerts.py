@@ -470,3 +470,116 @@ class TestCheckExtractionSuccessRate:
             signal = self._make_signal(rate, status="measured")
             alerts = FlakyTestAlertManager.check_extraction_success_rate(signal)
             assert len(alerts) <= 1, f"Expected ≤1 alert for rate={rate}, got {len(alerts)}"
+
+
+class TestCheckMessageQualityRate:
+    """Tests for FlakyTestAlertManager.check_message_quality_rate() (Stage 3)."""
+
+    def test_none_rate_produces_no_alert(self) -> None:
+        """No alert when message_quality_rate is None (no assertion messages)."""
+        alerts = FlakyTestAlertManager.check_message_quality_rate(None)
+        assert alerts == []
+
+    def test_high_quality_rate_produces_no_alert(self) -> None:
+        """No alert when quality rate is above the warning threshold."""
+        alerts = FlakyTestAlertManager.check_message_quality_rate(90.0)
+        assert alerts == []
+
+    def test_rate_at_100_produces_no_alert(self) -> None:
+        """Perfect quality rate produces no alert."""
+        alerts = FlakyTestAlertManager.check_message_quality_rate(100.0)
+        assert alerts == []
+
+    def test_rate_below_warning_threshold_produces_warning(self) -> None:
+        """Rate below the warning threshold triggers a WARNING alert."""
+        alerts = FlakyTestAlertManager.check_message_quality_rate(70.0)
+        assert len(alerts) == 1
+        assert alerts[0].severity == AlertSeverity.WARNING
+        assert alerts[0].alert_type == "MESSAGE_QUALITY_RATE_LOW"
+
+    def test_rate_below_critical_threshold_produces_critical(self) -> None:
+        """Rate below the critical threshold triggers a CRITICAL alert."""
+        alerts = FlakyTestAlertManager.check_message_quality_rate(40.0)
+        assert len(alerts) == 1
+        assert alerts[0].severity == AlertSeverity.CRITICAL
+
+    def test_rate_below_emergency_threshold_produces_emergency(self) -> None:
+        """Rate below the emergency threshold triggers an EMERGENCY alert."""
+        alerts = FlakyTestAlertManager.check_message_quality_rate(5.0)
+        assert len(alerts) == 1
+        assert alerts[0].severity == AlertSeverity.EMERGENCY
+
+    def test_alert_description_includes_rate_and_threshold(self) -> None:
+        """Alert description mentions the current rate."""
+        alerts = FlakyTestAlertManager.check_message_quality_rate(60.0)
+        assert len(alerts) == 1
+        assert "60.0%" in alerts[0].description or "60.0" in alerts[0].description
+
+    def test_alert_details_include_current_rate(self) -> None:
+        """Alert details dict includes current_rate."""
+        alerts = FlakyTestAlertManager.check_message_quality_rate(55.0)
+        assert len(alerts) == 1
+        assert "current_rate" in alerts[0].details
+        assert alerts[0].details["current_rate"] == 55.0
+
+    def test_at_most_one_alert_per_call(self) -> None:
+        """Each call produces at most one alert."""
+        for rate in [0.0, 5.0, 30.0, 65.0, 79.9]:
+            alerts = FlakyTestAlertManager.check_message_quality_rate(rate)
+            assert len(alerts) <= 1, f"Expected ≤1 alert for rate={rate}"
+
+    def test_custom_config_overrides_threshold(self) -> None:
+        """Custom config object is respected for threshold lookup."""
+        config = FlakyTestAlertConfig()
+        config.thresholds["message_quality_rate"] = AlertThreshold(
+            alert_type="message_quality_rate",
+            info_threshold=95.0,
+            warning_threshold=90.0,
+            critical_threshold=50.0,
+            emergency_threshold=10.0,
+        )
+        # 85% is below the custom 90% warning threshold → should alert
+        alerts = FlakyTestAlertManager.check_message_quality_rate(85.0, config=config)
+        assert len(alerts) == 1
+        assert alerts[0].severity == AlertSeverity.WARNING
+
+
+class TestMessageQualityRateAlertConfig:
+    """Tests for FlakyTestAlertConfig.should_alert_on_message_quality_rate() (Stage 3)."""
+
+    def test_method_exists(self) -> None:
+        """FlakyTestAlertConfig has should_alert_on_message_quality_rate method."""
+        config = FlakyTestAlertConfig()
+        assert hasattr(config, "should_alert_on_message_quality_rate")
+
+    def test_threshold_key_exists(self) -> None:
+        """Default thresholds include 'message_quality_rate' key."""
+        config = FlakyTestAlertConfig()
+        assert "message_quality_rate" in config.thresholds
+
+    def test_high_rate_no_alert(self) -> None:
+        """Rate above warning threshold returns (False, '')."""
+        config = FlakyTestAlertConfig()
+        should, sev = config.should_alert_on_message_quality_rate(95.0)
+        assert not should
+        assert sev == ""
+
+    def test_low_rate_returns_warning(self) -> None:
+        """Rate below warning threshold returns (True, 'WARNING')."""
+        config = FlakyTestAlertConfig()
+        should, sev = config.should_alert_on_message_quality_rate(70.0)
+        assert should
+        assert sev == "WARNING"
+
+    def test_very_low_rate_returns_emergency(self) -> None:
+        """Rate below emergency threshold returns (True, 'EMERGENCY')."""
+        config = FlakyTestAlertConfig()
+        should, sev = config.should_alert_on_message_quality_rate(5.0)
+        assert should
+        assert sev == "EMERGENCY"
+
+    def test_channel_route_exists_for_alert_type(self) -> None:
+        """Channel route for MESSAGE_QUALITY_RATE_LOW is configured."""
+        config = FlakyTestAlertConfig()
+        channels = config.get_channels_for_alert("MESSAGE_QUALITY_RATE_LOW", "WARNING")
+        assert len(channels) > 0
