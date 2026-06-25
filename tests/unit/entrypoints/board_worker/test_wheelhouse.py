@@ -129,6 +129,20 @@ def test_provision_env_merges_wheelhouse_and_tiktoken(monkeypatch, tmp_path):
     monkeypatch.setenv("OC_BWRAP_SANDBOX", "1")
     monkeypatch.setattr(wh, "ensure_wheelhouse", lambda *a, **k: tmp_path / "wh")
     monkeypatch.setattr(wh, "ensure_tiktoken_cache", lambda *a, **k: tmp_path / "tk")
-    out = wh.provision_env("Repo", "/x", python_bin="python3")
+    out = wh.provision_env("Repo", "/x", python_bin="/oc/.venv/bin/python")
     assert out["OC_WHEELHOUSE"] == str(tmp_path / "wh")
     assert out["TIKTOKEN_CACHE_DIR"] == str(tmp_path / "tk")
+    # The wheels are tag-locked to the builder python — export it so the workspace
+    # venv is created with the SAME interpreter (else cp-tag mismatch breaks install).
+    assert out["OC_WHEELHOUSE_PYTHON"] == "/oc/.venv/bin/python"
+
+
+def test_provision_env_no_wheelhouse_python_when_build_fails(monkeypatch, tmp_path):
+    # Wheelhouse build fail-opens to None → no OC_WHEELHOUSE and no OC_WHEELHOUSE_PYTHON
+    # (nothing to tag-match against); tiktoken can still wire independently.
+    monkeypatch.setenv("OC_BWRAP_SANDBOX", "1")
+    monkeypatch.setattr(wh, "ensure_wheelhouse", lambda *a, **k: None)
+    monkeypatch.setattr(wh, "ensure_tiktoken_cache", lambda *a, **k: tmp_path / "tk")
+    out = wh.provision_env("Repo", "/x", python_bin="/oc/.venv/bin/python")
+    assert "OC_WHEELHOUSE" not in out
+    assert "OC_WHEELHOUSE_PYTHON" not in out

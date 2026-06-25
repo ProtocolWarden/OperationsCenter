@@ -860,7 +860,8 @@ def test_bootstrap_custom_command_failure_aborts(tmp_path):
     assert run.call_count == 1
 
 
-def test_bootstrap_standard_install_success(tmp_path):
+def test_bootstrap_standard_install_success(tmp_path, monkeypatch):
+    monkeypatch.delenv("OC_WHEELHOUSE_PYTHON", raising=False)
     ws = tmp_path / "ws"
     cfg = SimpleNamespace(
         bootstrap_commands=None,
@@ -879,7 +880,45 @@ def test_bootstrap_standard_install_success(tmp_path):
     assert install_call.args[0] == "pip install -e ."
 
 
-def test_bootstrap_defaults_venv_and_python(tmp_path):
+def test_bootstrap_uses_wheelhouse_python_over_config(tmp_path, monkeypatch):
+    # When an offline wheelhouse is active, the venv MUST be created with the
+    # interpreter that BUILT it (OC_WHEELHOUSE_PYTHON), not the repo's python_binary,
+    # or the cp-tagged wheels won't match and the `--no-index` install fails (the
+    # host python3 may be a different version than a cp312 wheelhouse).
+    ws = tmp_path / "ws"
+    cfg = SimpleNamespace(
+        bootstrap_commands=None,
+        install_dev_command="pip install -e .",
+        venv_dir=".venv",
+        python_binary="python3",
+    )
+    monkeypatch.setenv("OC_WHEELHOUSE_PYTHON", "/oc/.venv/bin/python")
+    mgr = WorkspaceManager(repo_settings_lookup=lambda k: cfg)
+    with mock.patch.object(ws_mod.subprocess, "run", return_value=_fake_completed(0)) as run:
+        mgr._maybe_bootstrap(ws, _make_request(ws))
+    venv_call = run.call_args_list[0]
+    assert venv_call.args[0] == ["/oc/.venv/bin/python", "-m", "venv", ".venv"]
+
+
+def test_bootstrap_falls_back_to_config_python_without_wheelhouse(tmp_path, monkeypatch):
+    # No wheelhouse → use the repo's configured python_binary (existing behavior).
+    monkeypatch.delenv("OC_WHEELHOUSE_PYTHON", raising=False)
+    ws = tmp_path / "ws"
+    cfg = SimpleNamespace(
+        bootstrap_commands=None,
+        install_dev_command="pip install -e .",
+        venv_dir=".venv",
+        python_binary="python3.12",
+    )
+    mgr = WorkspaceManager(repo_settings_lookup=lambda k: cfg)
+    with mock.patch.object(ws_mod.subprocess, "run", return_value=_fake_completed(0)) as run:
+        mgr._maybe_bootstrap(ws, _make_request(ws))
+    venv_call = run.call_args_list[0]
+    assert venv_call.args[0] == ["python3.12", "-m", "venv", ".venv"]
+
+
+def test_bootstrap_defaults_venv_and_python(tmp_path, monkeypatch):
+    monkeypatch.delenv("OC_WHEELHOUSE_PYTHON", raising=False)
     ws = tmp_path / "ws"
     cfg = SimpleNamespace(
         bootstrap_commands=None,

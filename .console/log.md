@@ -1,3 +1,28 @@
+## 2026-06-25 — HARDEN: executor workspace env — wheelhouse/venv python match + self-healing backends
+
+With the sandbox launch fixed, a goal task ran real work (~20s) but FAILED at two env layers; both
+fixed here so this CLASS can't block autonomy. (1) **Wheelhouse/venv python drift.** The workspace
+venv was created with `repo_cfg.python_binary` = `python3` (host system **3.14**), but the offline
+wheelhouse is built with OC's venv (**3.12**) → cp312 wheels. The `pip --no-index --find-links` install
+then failed `PyYAML>=6.0 … from versions: none`, `.venv/bin/pytest` exit 127, task failed. Single
+source of truth: `provision_env` now exports `OC_WHEELHOUSE_PYTHON` (the interpreter that BUILT the
+wheelhouse) and `WorkspaceManager._maybe_bootstrap` creates the venv with it (falls back to
+`python_binary` when no wheelhouse) — so the venv and the wheels are tag-locked to the same python and
+can't drift. Verified in-sandbox: 3.14 → "No matching distribution"; `$OC_WHEELHOUSE_PYTHON` (3.12) →
+"Successfully installed PyYAML-6.0.3 … pytest-9.1.1". (2) **Execute backend missing.** `team_executor`/
+`dag_executor` are sibling CHECKOUTS, not declared OC deps — `uv pip install -e .[dev]` never installs
+them and the Jun-22 re-sync DROPPED them, so `backends/team_executor/adapter.py` hit
+`from team_executor.executor import …` → ImportError → "team_executor not installed" → every goal task
+failed at execute. They import on neither host NOR sandbox. Fix: repaired OC's venv now
+(`uv pip install -e ../TeamExecutor -e ../DAGExecutor`; repograph plane override intact;
+`_editable_install_dirs` now binds both into the sandbox; SANDBOX_BACKEND_IMPORT_OK), and made it
+durable — `scripts/operations-center.sh` gains `ensure_executor_backends`, a SELF-HEALING check that
+(re)installs the siblings whenever they aren't importable, every launch (import probe is ~free), so a
+future drop recovers on the next fleet start instead of silently stalling the lane. All 4 recent goal
+failures were this same env pair (the `EffectiveRepoGraph … videofoundry … manifest not found` line is
+non-fatal — PrivateManifest isn't bound in the sandbox; "continuing without graph context"). 4 tests.
+Both env blockers now clear; [[oc-autonomy-hardening-deadlock]].
+
 ## 2026-06-25 — FIX: complete the venv-interpreter bind — uv's version-alias symlink was still dangling
 
 The first interpreter-bind fix (#412) was INCOMPLETE: it bound only the realpath'd patch dir
