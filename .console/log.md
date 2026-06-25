@@ -1,3 +1,20 @@
+## 2026-06-25 — FIX: reviewer self-merged RED PRs — add a CI-green precondition to _merge_and_done
+
+The reviewer auto-merged #405 and #406 with FAILING CI. Root cause: `_merge_and_done` (the single
+self-merge path) gated only on `get_mergeable()` (conflicts) + opt-in branch-protection/sensitive-
+path gates, then published its own `reviewer-verdict=success` and called `merge_pr` (REST). Because
+the fleet satisfies branch protection with that self-issued verdict, GitHub does NOT enforce the
+other required checks on the fleet's own merge — so the reviewer had to verify CI itself, and
+didn't. Fix: before publishing the verdict + merging, require CI GREEN — refuse if
+`get_failed_checks` is non-empty OR `get_incomplete_checks` is non-empty (a queued/in_progress run
+has no conclusion yet, so a "nothing failed?" check would merge a still-running head; the helper's
+own docstring says a green gate MUST treat incomplete as not-green). Centralized in
+`_merge_and_done` so it covers every merge path (self_review LGTM, ci_validated_after_retraction,
+auto_merge_on_ci_green). On not-green → leave the state file, re-checked next poll (the ci_fix /
+audit-autofix loop drives it to green or escalates). `_make_gh` test mock now defaults
+`get_failed_checks=[]` (green). 2 new tests (red → no merge, pending → no merge); reviewer suites
+green (246). Closes the [[oc-autonomy-hardening-deadlock]] critical follow-up.
+
 ## 2026-06-25 — HARDEN: reviewer auto-fixes failing `audit` (custodian) checks (self-heal)
 
 The reviewer's Phase-0 ci_fix only knew how to fix ruff (`ruff --fix` codemod); a failing

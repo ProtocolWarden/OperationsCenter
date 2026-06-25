@@ -70,8 +70,10 @@ def _make_gh(*, comment_id: int = 0) -> MagicMock:
     gh.post_comment.return_value = {"id": comment_id} if comment_id else {}
     gh.merge_pr.return_value = {}
     gh.update_comment.return_value = {}
-    # Default: CI has settled (no checks still running). The premature-green gate
-    # treats a non-empty result as "not green yet"; tests override as needed.
+    # Default: CI is green — nothing failed and nothing still running. The merge
+    # gate (_merge_and_done) treats a non-empty failed OR incomplete result as
+    # "not green yet" and refuses to merge; tests override as needed.
+    gh.get_failed_checks.return_value = []
     gh.get_incomplete_checks.return_value = []
     # Default: CI has reported on the current head (Guard C requires ≥1 completed
     # check before declaring green); the "no CI on this head yet" path overrides [].
@@ -137,6 +139,49 @@ def test_phase1_lgtm_merges_and_removes_state(tmp_path: Path) -> None:
 
     gh.merge_pr.assert_called_once_with("owner", "repo", PR_NUMBER, merge_method="squash")
     assert not sp.exists()
+
+
+def test_phase1_lgtm_does_not_merge_when_ci_failing(tmp_path: Path) -> None:
+    """LGTM must NOT self-merge a PR with failing CI — the #405/#406 hole."""
+    state, sp = _make_state(tmp_path, phase="self_review")
+    gh = _make_gh()
+    gh.get_failed_checks.return_value = ["Test (pytest): assertion error"]
+
+    with (
+        patch.object(
+            watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}
+        ),
+        patch.object(watcher, "_plane_client") as mock_pc,
+    ):
+        mock_pc.return_value = MagicMock()
+        mock_pc.return_value.close = MagicMock()
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+
+    gh.merge_pr.assert_not_called()
+
+
+def test_phase1_lgtm_does_not_merge_when_ci_pending(tmp_path: Path) -> None:
+    """LGTM must NOT self-merge before CI settles (a still-running check has no
+    conclusion yet, so a 'nothing failed?' check would merge a green-so-far head)."""
+    state, sp = _make_state(tmp_path, phase="self_review")
+    gh = _make_gh()
+    gh.get_incomplete_checks.return_value = ["Test (pytest)"]
+
+    with (
+        patch.object(
+            watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}
+        ),
+        patch.object(watcher, "_plane_client") as mock_pc,
+    ):
+        mock_pc.return_value = MagicMock()
+        mock_pc.return_value.close = MagicMock()
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+
+    gh.merge_pr.assert_not_called()
 
 
 def test_phase1_lgtm_increments_loop_count(tmp_path: Path) -> None:
