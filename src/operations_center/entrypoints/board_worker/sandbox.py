@@ -235,6 +235,40 @@ def _editable_install_dirs(oc_root: Path) -> list[str]:
     return dirs
 
 
+def _venv_interpreter_roots(venv_python: Path) -> list[str]:
+    """Install root(s) to ro-bind so ``venv_python`` resolves inside the sandbox.
+
+    Returns the install root (the dir holding ``bin/``) of both the realpath'd
+    interpreter AND the immediate symlink target, deduped. A uv-managed venv points
+    ``.venv/bin/python`` at a version-alias dir (``cpython-3.12-…``) that is itself a
+    symlink to the patch dir (``cpython-3.12.13-…``); binding only the realpath'd
+    patch dir leaves that alias path dangling, so both are needed. Existing/real
+    paths only (a copied — non-symlink — venv python yields just its own root)."""
+    roots: list[str] = []
+
+    def _push(root: str) -> None:
+        if root and os.path.exists(root) and root not in roots:
+            roots.append(root)
+
+    vp = str(venv_python)
+    rp = _real(vp)  # realpath target's install root (has bin + lib)
+    if rp:
+        _push(os.path.dirname(os.path.dirname(rp)))
+    # The immediate symlink target's install root — the version-alias dir the symlink
+    # traverses. Do NOT realpath it: realpath would collapse the very alias we must
+    # bind (its dir is itself a symlink to the patch dir already added above).
+    try:
+        if os.path.islink(vp):
+            link = os.readlink(vp)
+            link_abs = (
+                link if os.path.isabs(link) else os.path.normpath(os.path.join(os.path.dirname(vp), link))
+            )
+            _push(os.path.dirname(os.path.dirname(link_abs)))
+    except OSError:
+        pass
+    return roots
+
+
 def _toolchain_ro_binds(oc_root: Path, env: dict) -> list[str]:
     """Read-only host paths the executor toolchain needs. Derived from the
     resolved binaries + env so it tracks where things actually live."""
@@ -249,20 +283,25 @@ def _toolchain_ro_binds(oc_root: Path, env: dict) -> list[str]:
     add(str(oc_root / "src"))
     add(str(oc_root / ".venv"))
     # A uv-managed venv symlinks `.venv/bin/python` to an interpreter OUTSIDE the
-    # bound system dirs (under ~/.local/share/uv/python/cpython-*/). Binding only
-    # .venv leaves that symlink dangling inside the sandbox, so bwrap aborts
-    # `execvp .../.venv/bin/python: No such file or directory` and the executor
-    # never starts (→ "execute produced no result", the lane churns). Bind the
-    # interpreter's install root (parent of its bin/) so the symlink resolves.
-    # Skipped when the interpreter already lives under a bound system dir (a system
-    # python needs no extra bind).
-    real_py = _real(str(oc_root / ".venv" / "bin" / "python"))
-    if real_py:
-        interp_root = os.path.dirname(os.path.dirname(real_py))
-        if not any(
+    # bound system dirs, AND through a version-alias symlink:
+    #   .venv/bin/python -> <store>/cpython-3.12-<plat>/bin/python3.12
+    #   <store>/cpython-3.12-<plat>        (a symlink) -> <store>/cpython-3.12.13-<plat>
+    # Binding only the *realpath'd* patch dir (cpython-3.12.13-…) leaves the ALIAS
+    # path (cpython-3.12-…) the symlink actually traverses dangling inside the
+    # sandbox, so bwrap aborts `execvp .../.venv/bin/python: No such file or
+    # directory` and the executor never starts (→ "execute produced no result", the
+    # lane churns). Bind the install root of BOTH the realpath target and the
+    # immediate symlink target so the whole chain resolves. Each is skipped when it
+    # already lives under a bound system dir (a system python needs no extra bind).
+    # Append VERBATIM, not via add(): add() realpaths, which would collapse the
+    # version-alias dir back onto the patch dir and lose the alias path the venv
+    # symlink actually traverses. _venv_interpreter_roots already returns existing,
+    # correct paths.
+    for interp_root in _venv_interpreter_roots(oc_root / ".venv" / "bin" / "python"):
+        if interp_root not in binds and not any(
             interp_root == d or interp_root.startswith(d + os.sep) for d in _RO_SYSTEM_DIRS
         ):
-            add(interp_root)
+            binds.append(interp_root)
     # Editable-installed sibling-repo deps (team_executor, dag_executor, …).
     for d in _editable_install_dirs(oc_root):
         add(d)

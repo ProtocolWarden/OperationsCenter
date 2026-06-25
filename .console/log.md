@@ -1,3 +1,20 @@
+## 2026-06-25 — FIX: complete the venv-interpreter bind — uv's version-alias symlink was still dangling
+
+The first interpreter-bind fix (#412) was INCOMPLETE: it bound only the realpath'd patch dir
+(`…/uv/python/cpython-3.12.13-…`), but `.venv/bin/python` targets a **version-alias** path
+(`…/uv/python/cpython-3.12-…/bin/python3.12`) whose dir is itself a symlink to the patch dir. The
+alias path was never bound, so inside the sandbox it still dangled → `bwrap: execvp …/.venv/bin/python:
+No such file or directory` → still no result. Two compounding reasons it slipped through #412: (1) the
+#412 "rc 0" verification ran execute.main via a PLAIN subprocess (un-sandboxed), so it never exercised
+the bwrap execvp at all — fixed by verifying through `run_executor` (bwrap+netns) this time; (2)
+`add()` realpaths every bind, which collapses the alias back onto the patch dir, so even returning the
+alias from the resolver lost it. Fix: `_venv_interpreter_roots(.venv/bin/python)` returns the install
+root of BOTH the realpath target AND the immediate `readlink` target (the alias dir), and the loop
+appends them VERBATIM (bypassing `add()`'s realpath). Verified end to end via the real sandboxed path:
+`run_executor` of the venv python → rc 0; a full plan→execute through `run_executor` → rc 0 with
+result.json written. 43 sandbox tests (added a uv version-alias case). Completes #412; both bwrap-namespace
+and venv-interpreter blockers are now closed. [[oc-autonomy-hardening-deadlock]]
+
 ## 2026-06-25 — FIX: sandbox didn't bind the venv's uv interpreter — bwrap execvp failed → no result
 
 Second, distinct cause of the goal-lane "execute produced no result" churn (the first was the
