@@ -1,3 +1,13 @@
+## 2026-06-25 — FIX: de-flake observer perf test (was reliably red on CI, blocked every PR)
+
+`test_list_snapshots_scales_linearly` asserted `time_for_50 < time_for_10 * 10`, but the
+10-snapshot baseline is sub-millisecond so CI timing noise made the ratio explode — it failed
+on CI while passing locally, and (because the reviewer red-merges) it rode in on #405 and #406
+and would fail every subsequent PR's CI. Replaced the noisy ratio with a generous absolute
+budget (`time_for_50 < 2.0s`, cf. the existing 5s store budget) that still catches pathological
+scaling. My amend carrying this fix lost a force-push race when the reviewer merged #406 at my
+pre-amend SHA, so this lands as a small standalone PR.
+
 ## 2026-06-25 — FIX: pre-PR custodian gate broke pytest (#405 merged red) — gate requires settings
 
 #405 (the pre-PR custodian gate) merged with FAILING pytest: 4 finalize tests in
