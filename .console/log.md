@@ -1,3 +1,17 @@
+## 2026-06-25 — FIX: SwitchBoard 422 — omit null constraints from the routing payload
+
+Unblocking the goal lane (#387) exposed that EVERY task crash-looped at planning: the worker
+POSTs its proposal to SwitchBoard `/route`, which 422'd because OC sent
+`constraints.timeout_seconds` / `require_clean_validation` / `max_changed_files` = **null**.
+SwitchBoard's `TaskProposal` declares those non-nullable with defaults (300 / True); it wants
+them **omitted**, not null. The nulls came from wire-all S1bc (#396) making the fields
+`Optional[...]=None` — that fixed OC's internal handling but broke the OC→SwitchBoard wire, and
+the OPEN_PR_GATE deadlock masked it (planning never ran). Fix: `routing/client.py` `select_lane`
+serializes with `model_dump(mode="json", exclude_none=True)` so unset constraints fall back to
+SwitchBoard's defaults. Verified 422→200 against live SwitchBoard. OC's own executor is
+unaffected (it reads the original proposal, not SwitchBoard's echo). Regression test added: the
+routing payload must omit null constraints while preserving concrete falsy values (False / []).
+
 ## 2026-06-24 — FIX: unblock goal-lane #387 (extraction-health-dashboard) — real asserts + console hygiene
 
 #387 (goal/42275c3a, extraction-health-dashboard) had been OPEN and stuck ~2.5 days on the

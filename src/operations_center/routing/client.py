@@ -62,7 +62,13 @@ class HttpLaneRoutingClient:
 
     def select_lane(self, proposal: OcPlanningProposal) -> OcRoutingDecision:
         try:
-            response = self._client.post("/route", json=proposal.model_dump(mode="json"))
+            # exclude_none: OC's ExecutionConstraints made timeout_seconds /
+            # require_clean_validation / max_changed_files Optional (wire-all S1bc),
+            # but SwitchBoard's TaskProposal declares them non-nullable with defaults
+            # (300 / True). Sending null 422s every proposal; omitting the unset
+            # fields lets SwitchBoard apply its defaults. None == "unset" == default.
+            payload = proposal.model_dump(mode="json", exclude_none=True)
+            response = self._client.post("/route", json=payload)
             response.raise_for_status()
         except httpx.ConnectError as exc:
             raise SwitchBoardUnavailableError(
