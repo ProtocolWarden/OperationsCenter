@@ -568,12 +568,17 @@ class WorkspaceManager:
               (the ``--fail-on-findings`` contract: exit code 1 with a findings
               table on stdout).
         """
-        # Gate behind the Settings flag. Read defensively so callers / tests
-        # that construct WorkspaceManager without a Settings object default to
-        # gate-ON (the safe default), and a config with the field absent (older
-        # config) also defaults ON.
-        if not getattr(self._settings, "pre_pr_custodian_gate", True):
-            logger.debug("WorkspaceManager: pre-PR custodian gate disabled via settings — skipping")
+        # Gate requires a real Settings object. Production wires one through
+        # (entrypoints/execute/main.py, default True); the many callers / tests
+        # that construct WorkspaceManager WITHOUT settings skip the gate, so unit
+        # tests never shell out to a real custodian-multi against a fake workspace
+        # — that no-settings-default-ON behavior was the #405 test-pollution
+        # regression. With a Settings object the field defaults True (older config
+        # missing the field still enables it).
+        if self._settings is None or not getattr(
+            self._settings, "pre_pr_custodian_gate", True
+        ):
+            logger.debug("WorkspaceManager: pre-PR custodian gate inactive — skipping")
             return None
 
         bin_path = self._resolve_custodian_bin(request)

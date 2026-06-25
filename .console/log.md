@@ -1,3 +1,18 @@
+## 2026-06-25 — FIX: pre-PR custodian gate broke pytest (#405 merged red) — gate requires settings
+
+#405 (the pre-PR custodian gate) merged with FAILING pytest: 4 finalize tests in
+test_workspace_cov.py blocked because the gate ran a real `custodian-multi` on their fake
+workspaces. Root cause was MINE: rebasing the implementation worktree dropped the agent's
+autouse `_no_real_custodian` fixture, so nothing neutralized the gate — and the gate defaulted
+ON even with no Settings object, so it shelled out to custodian in unit tests. Fix (more robust
+than the fragile fixture): the gate now requires a real Settings object —
+`_run_pre_pr_custodian_gate` returns early when `self._settings is None`. Production always wires
+settings (entrypoints/execute/main.py, default True); the many tests that build WorkspaceManager
+without settings now skip the gate DETERMINISTICALLY (no monkeypatch to lose or pollute).
+Gate-logic tests get settings via `_gate_mgr` (defaults gate-ON); `test_gate_inactive_when_no_
+settings` replaces the old default-on test. tests/unit/execution green (751). NOTE: #405 should
+not have merged red — the reviewer/verdict path let a red PR through (separate follow-up).
+
 ## 2026-06-25 — HARDEN: pre-PR custodian gate in the executor (prevent bad PRs at source)
 
 The board_worker could produce code with custodian findings (e.g. T2 no-assert tests), open the
