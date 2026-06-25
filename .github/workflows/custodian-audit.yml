@@ -17,9 +17,15 @@ jobs:
           python-version: "3.12"
 
       - name: Install Custodian
+        # Pinned to the SHA pyproject.toml declares (NOT a moving @main). A required
+        # gate must use a reproducible tool version: tracking Custodian@main let a
+        # mid-day upstream change (the known R1/R2 detector-id collision, #48) start
+        # emitting a phantom finding fleet-wide despite OC's `r1_enabled: false`,
+        # red-failing the audit on every repo between two PRs. Bump this SHA in
+        # lockstep with pyproject when intentionally adopting newer detectors.
         run: |
           python -m pip install --upgrade pip
-          pip install "custodian[tools] @ git+https://github.com/ProtocolWarden/Custodian.git@main"
+          pip install "custodian[tools] @ git+https://github.com/ProtocolWarden/Custodian.git@d6ba8ab245c6f4e79e9f8fffd4e4221bfaf266e8"
           pip install ruff vulture ty
 
       - name: Install repo (best-effort, for adapter passes)

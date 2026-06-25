@@ -1,3 +1,21 @@
+## 2026-06-25 — FIX: pin CI custodian to pyproject's SHA — Custodian@main regression red-failed the fleet
+
+The required `audit` gate started failing fleet-wide on a phantom LOW finding. Root cause is upstream,
+not in any repo: `custodian-audit.yml` installed `custodian[tools] @ ...@main`, a MOVING ref reinstalled
+fresh each CI run. A Custodian/main change mid-morning (the known R1/R2 detector-id collision, #48 —
+"2 detectors register it, findings merge") made an advisory `.console/*.md` line-budget finding fire in
+CI's environment **despite** OC's `.custodian/config.yaml: r1_enabled: false`, and `--fail-on-findings`
+turned the advisory into a hard red. Proof it was the moving ref, not the code: #411 PASSED the audit at
+10:46 with the identical oversized .console (log.md 8667 lines, backlog.md 1671), and #412 FAILED at
+11:14 with no relevant change — only @main moved. Locally both the pinned SHA and @main are clean (the
+phantom is env/registration-order dependent — exactly the #48 collision signature). Fix: pin the
+workflow install to the SHA `pyproject.toml` already declares
+(`d6ba8ab245c6f4e79e9f8fffd4e4221bfaf266e8`) so the required gate is reproducible and an upstream
+regression can't break the whole fleet between two PRs. Verified both CI audit commands (main +
+D12/DC10) clean on that SHA. Bump in lockstep with pyproject to adopt newer detectors deliberately. Root
+fix for #48 (rename the colliding IDs) stays upstream in Custodian. To roll out fleet-wide, apply the
+same one-line pin to the other custodian-audit.yml consumers.
+
 ## 2026-06-25 — FIX: SBX layers composed fail-CLOSED — bwrap-in-netns cap-drop broke the executor
 
 The goal lane churned claim→"execute produced no result" every ~30s: the executor subprocess never
