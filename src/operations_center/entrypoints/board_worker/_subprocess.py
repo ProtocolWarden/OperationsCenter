@@ -313,8 +313,18 @@ def run_executor(
     # whose only egress is the proxy. Opt-in (OC_EGRESS_NETNS=1) + fail-open. Wraps
     # bwrap but stays INSIDE the systemd-run scope (so systemd-run keeps the host
     # user bus). See netns.py.
+    #
+    # Skip the netns cap-drop when the payload is ACTUALLY bwrap (basename check, not
+    # the flag — `maybe_sandbox` fail-opens to the bare command when bwrap is
+    # unavailable, and that bare executor DOES need the cap-drop). bwrap is its own
+    # containment, and `setpriv --bounding-set=-all` would mask the CAP_SYS_ADMIN it
+    # needs to build its namespaces (fail-CLOSED composition). See maybe_netns.
+    sandboxed = bool(run_cmd) and os.path.basename(run_cmd[0]) == "bwrap"
     run_cmd = maybe_netns(
-        run_cmd, proxy_url=_resolve_egress_proxy(env), enabled=netns_enabled()
+        run_cmd,
+        proxy_url=_resolve_egress_proxy(env),
+        enabled=netns_enabled(),
+        drop_caps=not sandboxed,
     )
     rlimits = os.environ.get(_RLIMIT_ENV_FLAG) == "1"
     run_cmd = resource_limit_argv(run_cmd, enabled=rlimits)
