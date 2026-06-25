@@ -487,14 +487,13 @@ class TestSnapshotRepositoryPerformance:
 
             times.append((batch_size, end - start))
 
-        # Times should scale reasonably (roughly linear)
-        # Ratio between 50 snapshots and 10 snapshots should be reasonable
+        # Absolute budget instead of a ratio against the 10-snapshot baseline:
+        # that baseline is sub-millisecond, so CI timing noise makes the ratio
+        # explode (this flaked on CI while passing locally — it red-merged #405
+        # and #406). Listing the largest batch well under two seconds still proves
+        # listing does not scale pathologically (cf. the 5s store budget above).
         time_for_50 = times[2][1]
-        time_for_10 = times[0][1]
-
-        # Should be at most 5x slower for 5x more snapshots
-        # (allowing some overhead but checking it doesn't scale exponentially)
-        assert time_for_50 < time_for_10 * 10
+        assert time_for_50 < 2.0, f"listing snapshots scaled poorly: {time_for_50:.3f}s"
 
     def test_load_snapshot_sub_millisecond(self, tmp_path: Path) -> None:
         """Test that loading individual snapshots is fast."""
