@@ -1,3 +1,19 @@
+## 2026-06-25 — FIX: agent refused to run as root in the sandbox — set IS_SANDBOX=1 (egress confirmed live)
+
+With the workspace env fixed, a goal task ran the FULL workspace prep + backend and reached the agent
+launch (~3 min of real work), then failed: `claude … --dangerously-skip-permissions cannot be used with
+root/sudo privileges for security reasons` → `claude exited 1` → task failed. Inside the sandbox the
+executor runs as **uid 0** (the pasta egress netns maps the process to root — confirmed `id -u` = 0),
+and the agent CLI refuses the skip flag under root. The agent's own escape hatch is `IS_SANDBOX=1`,
+which attests that an outer sandbox already provides the isolation. Fix: `build_sandbox_argv` adds
+`--setenv IS_SANDBOX 1` — correct by construction (it only runs when the bwrap sandbox is active, which
+IS the isolation it attests). Verified through `run_executor` (real bwrap+netns, no manual env): without
+it → root-blocked; with it → the agent runs AND reaches the model — `claude -p` returned `PING_OK`,
+which also proves egress works end to end (subscription auth through the netns + L7 proxy). This was a
+newly-exposed layer: pre-#411 the agent never ran inside the netns (bwrap-in-netns failed outright), so
+the root path was only reached once the cap-drop composition was fixed. 44 sandbox tests.
+[[oc-autonomy-hardening-deadlock]]
+
 ## 2026-06-25 — HARDEN: executor workspace env — wheelhouse/venv python match + self-healing backends
 
 With the sandbox launch fixed, a goal task ran real work (~20s) but FAILED at two env layers; both

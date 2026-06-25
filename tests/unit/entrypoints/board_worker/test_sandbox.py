@@ -118,6 +118,16 @@ class TestArgvContract:
         )
         assert argv[-3:] == ["python", "-m", "x"]
 
+    def test_is_sandbox_env_set(self, tmp_path: Path):
+        # The agent runs as uid 0 in the sandbox (the pasta egress netns maps the
+        # process to root) and refuses --dangerously-skip-permissions under root unless
+        # IS_SANDBOX=1 attests the outer sandbox provides isolation. Must be set
+        # whenever we wrap in bwrap.
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        argv = build_sandbox_argv(["x"], oc_root=tmp_path, rw_root=ws, env=_env(tmp_path))
+        assert "--setenv IS_SANDBOX 1" in " ".join(argv)
+
     def test_workspace_venv_bin_prepended_to_path(self, tmp_path: Path):
         # The agent must run bare `pytest`/`ruff`; the workspace .venv/bin is
         # prepended to PATH (resolved at exec time, after the bootstrap makes it).
