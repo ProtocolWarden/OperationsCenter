@@ -1,3 +1,20 @@
+## 2026-06-25 — FIX: sandbox didn't bind the venv's uv interpreter — bwrap execvp failed → no result
+
+Second, distinct cause of the goal-lane "execute produced no result" churn (the first was the
+bwrap-in-netns cap-drop). With that fixed, the executor STILL fast-failed — dispatch discards the
+execute subprocess's stderr, so the real error was masked. Reproduced the plan→execute path under the
+live env and captured it: `bwrap: execvp /…/OperationsCenter/.venv/bin/python: No such file or
+directory`. Root cause: `.venv/bin/python` is a symlink to a **uv-managed** interpreter
+(`~/.local/share/uv/python/cpython-3.12.13-…/bin/python3.12`) that lives OUTSIDE the bound system
+dirs. The sandbox bound `.venv` but not the symlink target, so it dangled inside bwrap and execvp
+failed before execute.main even started (→ no result.json → churn). The venv was re-synced to that
+uv interpreter on Jun 22, AFTER the Jun 21 end-to-end success — the next layer of the documented
+sandbox-completeness cascade (`…→venv-PATH→venv-interpreter`). Fix: `_toolchain_ro_binds` resolves
+`.venv/bin/python` and ro-binds the interpreter's install root (parent of its bin/), skipped when it
+already lives under a bound system dir. Verified e2e: the plan→execute repro now returns rc 0 with
+result.json written (success path). 2 new sandbox tests. With the cap-drop fix, both together unblock
+goal-task autonomy; continues [[oc-autonomy-hardening-deadlock]].
+
 ## 2026-06-25 — FIX: pin CI custodian to pyproject's SHA — Custodian@main regression red-failed the fleet
 
 The required `audit` gate started failing fleet-wide on a phantom LOW finding. Root cause is upstream,

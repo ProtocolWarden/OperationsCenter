@@ -129,6 +129,51 @@ class TestArgvContract:
         path_val = argv[argv.index("PATH") + 1]
         assert path_val.startswith(f"{ws}/.venv/bin:")
 
+    def test_venv_python_interpreter_root_is_bound(self, tmp_path: Path):
+        # A uv-managed venv symlinks .venv/bin/python to an interpreter OUTSIDE the
+        # bound system dirs; the sandbox must bind that interpreter's install root or
+        # bwrap can't execvp the venv python ("No such file or directory") and the
+        # executor never starts. Regression for the "execute produced no result" churn.
+        oc = tmp_path / "oc"
+        (oc / ".venv" / "bin").mkdir(parents=True)
+        interp_root = tmp_path / "uv" / "cpython-3.12"  # outside /usr
+        (interp_root / "bin").mkdir(parents=True)
+        real_py = interp_root / "bin" / "python3.12"
+        real_py.write_text("#!/bin/true\n")
+        real_py.chmod(0o755)
+        (oc / ".venv" / "bin" / "python").symlink_to(real_py)
+        ws = oc / "ws"
+        ws.mkdir()
+        argv = build_sandbox_argv(["python"], oc_root=oc, rw_root=ws, env=_env(tmp_path))
+        ro_srcs = [
+            argv[i + 1] for i, a in enumerate(argv) if a == "--ro-bind" and i + 1 < len(argv)
+        ]
+        assert str(interp_root) in ro_srcs, ro_srcs
+
+    def test_interpreter_under_system_dir_not_double_bound(
+        self, tmp_path: Path, monkeypatch
+    ):
+        # When .venv/bin/python resolves under a bound system dir, the guard skips the
+        # extra interpreter bind (the system dir is already bound) — it appears once,
+        # not twice. Simulate by treating the fake interpreter's root as a system dir.
+        oc = tmp_path / "oc"
+        (oc / ".venv" / "bin").mkdir(parents=True)
+        interp_root = tmp_path / "syspy"
+        (interp_root / "bin").mkdir(parents=True)
+        real_py = interp_root / "bin" / "python3.12"
+        real_py.write_text("#!/bin/true\n")
+        real_py.chmod(0o755)
+        (oc / ".venv" / "bin" / "python").symlink_to(real_py)
+        monkeypatch.setattr(sbx, "_RO_SYSTEM_DIRS", (str(interp_root),))
+        ws = oc / "ws"
+        ws.mkdir()
+        argv = build_sandbox_argv(["python"], oc_root=oc, rw_root=ws, env=_env(tmp_path))
+        ro_srcs = [
+            argv[i + 1] for i, a in enumerate(argv) if a == "--ro-bind" and i + 1 < len(argv)
+        ]
+        # bound once (as a system dir), NOT a second time as a toolchain entry
+        assert ro_srcs.count(str(interp_root)) == 1, ro_srcs
+
 
 class TestFailOpen:
     def test_disabled_returns_unchanged(self, tmp_path: Path):
