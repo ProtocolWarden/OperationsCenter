@@ -1078,6 +1078,88 @@ def cmd_extraction_health(
         raise typer.Exit(EXIT_CONFIG_ERROR)
 
 
+@app.command("extraction-health-dashboard")
+def cmd_extraction_health_dashboard(
+    days: int = typer.Option(30, "--days", help="Days of history to display (default: 30)"),
+    granularity: str = typer.Option(
+        "daily",
+        "--granularity",
+        help="Aggregation granularity: hourly|daily|weekly|monthly (default: daily)",
+    ),
+    format_str: str = typer.Option("table", "--format", help="Output format: table|json"),
+    storage_root: Path | None = typer.Option(
+        None,
+        "--storage-root",
+        help="Storage root for history (default: tools/report/operations_center/observer)",
+    ),
+    recent: int = typer.Option(10, "--recent", help="Rows in breakdown table (default: 10)"),
+    anomaly_threshold: float = typer.Option(
+        5.0,
+        "--anomaly-threshold",
+        help="Anomaly detection threshold %% (default: 5.0)",
+    ),
+) -> None:
+    """Render the extraction health trends dashboard.
+
+    Displays a Rich terminal dashboard with time-series visualisation of
+    ExtractionHealthSnapshot data: success-rate sparkline, trend summary,
+    extraction breakdown table, edge-case trends, and detected anomalies.
+    Use ``--format json`` to get the full payload as JSON for scripting.
+
+    The dashboard reads from the extraction-history JSONL file written by
+    repeated ``extraction-health`` runs; if no history exists, only the header
+    panel is shown.
+
+    Examples:
+
+        # Default terminal view (last 30 days, daily granularity)
+        cli extraction-health-dashboard
+
+        # JSON output for scripting
+        cli extraction-health-dashboard --format json --days 7
+
+        # Weekly granularity over last 90 days
+        cli extraction-health-dashboard --days 90 --granularity weekly
+    """
+    from operations_center.observer.extraction_health_dashboard import (
+        ExtractionDashboardQuery,
+        ExtractionHealthDashboardRenderer,
+    )
+    from operations_center.observer.extraction_health_history import ExtractionHistoryStorage
+
+    try:
+        root = storage_root or Path("tools/report/operations_center/observer")
+
+        if not root.exists():
+            console.print(f"[yellow]Warning: storage root does not exist: {root}[/yellow]")
+            raise typer.Exit(EXIT_NOT_FOUND)
+
+        history_root = root / "extraction_history"
+        storage = ExtractionHistoryStorage(history_root)
+        query = ExtractionDashboardQuery(storage)
+        data = query.get_dashboard_data(
+            days=days,
+            granularity=granularity,
+            recent_count=recent,
+            anomaly_threshold_pct=anomaly_threshold,
+        )
+
+        if format_str == "json":
+            typer.echo(json.dumps(data.to_dict(), indent=2, ensure_ascii=False))
+        else:
+            renderer = ExtractionHealthDashboardRenderer()
+            renderer.render(data, console)
+
+        raise typer.Exit(EXIT_SUCCESS)
+
+    except typer.Exit:
+        raise
+    except Exception as e:
+        console.print(f"[red]Error rendering extraction health dashboard: {e}[/red]")
+        logger.exception("Error in extraction-health-dashboard command")
+        raise typer.Exit(EXIT_CONFIG_ERROR)
+
+
 def main() -> None:
     """Entry point for CLI."""
     app()
