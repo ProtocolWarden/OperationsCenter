@@ -150,6 +150,33 @@ class TestArgvContract:
         ]
         assert str(interp_root) in ro_srcs, ro_srcs
 
+    def test_venv_python_version_alias_binds_both_roots(self, tmp_path: Path):
+        # uv layout: .venv/bin/python -> <store>/cpython-3.12-/bin/python3.12, and
+        # <store>/cpython-3.12- is itself a symlink to the patch dir <store>/
+        # cpython-3.12.13-. Binding only the realpath'd patch dir leaves the ALIAS
+        # path dangling in the sandbox (bwrap execvp fails). BOTH install roots must
+        # be bound. Regression for the incomplete first interpreter-bind fix.
+        oc = tmp_path / "oc"
+        (oc / ".venv" / "bin").mkdir(parents=True)
+        store = tmp_path / "store"
+        store.mkdir()
+        real_dir = store / "cpython-3.12.13"
+        (real_dir / "bin").mkdir(parents=True)
+        real_py = real_dir / "bin" / "python3.12"
+        real_py.write_text("#!/bin/true\n")
+        real_py.chmod(0o755)
+        alias_dir = store / "cpython-3.12"  # version-alias DIR symlink -> patch dir
+        alias_dir.symlink_to(real_dir)
+        (oc / ".venv" / "bin" / "python").symlink_to(alias_dir / "bin" / "python3.12")
+        ws = oc / "ws"
+        ws.mkdir()
+        argv = build_sandbox_argv(["python"], oc_root=oc, rw_root=ws, env=_env(tmp_path))
+        ro_srcs = [
+            argv[i + 1] for i, a in enumerate(argv) if a == "--ro-bind" and i + 1 < len(argv)
+        ]
+        assert str(real_dir) in ro_srcs, ro_srcs  # realpath target's root (bin + lib)
+        assert str(alias_dir) in ro_srcs, ro_srcs  # the alias path the symlink traverses
+
     def test_interpreter_under_system_dir_not_double_bound(
         self, tmp_path: Path, monkeypatch
     ):
