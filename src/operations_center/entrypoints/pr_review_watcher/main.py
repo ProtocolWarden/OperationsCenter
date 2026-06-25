@@ -1866,8 +1866,83 @@ def _custodian_findings(oc_root: Path, repo_key: str, settings) -> str:
 _MAX_CI_FIX_ATTEMPTS = 3
 _CI_FIX_WAIT_SECONDS = 120  # wait after pushing before re-checking CI
 
-# Checks whose failure we know how to auto-fix locally.
+# Checks whose failure we fix with a local ruff codemod (deterministic, no agent).
 _AUTOFIX_CHECK_NAMES = {"lint (ruff)", "ruff", "lint"}
+
+# The `audit` CI check runs `custodian-multi --fail-on-findings`. Its failures are
+# NOT codemod-fixable (a custodian T2 finding — a test with no assert — can't be
+# fixed by `custodian fix`; it needs an agent to add a real assertion). So `audit`
+# is routed to the agent-based fix pass (the SAME machinery as self_review
+# concerns), kept DISTINCT from the ruff codemod path above. Match by check-name
+# prefix the way GitHub reports it (e.g. "audit", "audit (custodian): failure").
+_AUDIT_CHECK_NAMES = {"audit"}
+
+
+def _is_audit_check(check_name: str) -> bool:
+    cn = str(check_name).lower().split(":")[0].strip()
+    return cn in _AUDIT_CHECK_NAMES or any(cn.startswith(k) for k in _AUDIT_CHECK_NAMES)
+
+
+def _custodian_audit_findings(repo_cfg, oc_root: Path) -> list[str]:
+    """Per-finding custodian detail for the repo's local clone, as a list of
+    ``"<code>: <path:line: message>"`` strings — the exact lines the `audit` CI
+    check (``custodian-multi --fail-on-findings``) would report.
+
+    These are DETERMINISTIC tool output (the structured ``findings[].sample``
+    field of ``custodian-multi --json``), not free-form model text, so they are
+    safe to hand to the fix pass as concrete fix instructions. Returns ``[]``
+    (NOT an error) when custodian is unavailable, the repo has no local clone, or
+    anything fails — the caller treats an empty list as "can't enumerate" and
+    falls back to self_review, so this never makes the reviewer worse than today.
+    """
+    local_path = getattr(repo_cfg, "local_path", None) if repo_cfg else None
+    if not local_path or not Path(local_path).exists():
+        return []
+    custodian_bin = oc_root / ".venv" / "bin" / "custodian-multi"
+    if not custodian_bin.exists():
+        return []
+    try:
+        proc = subprocess.run(
+            [str(custodian_bin), "--repos", str(local_path), "--json", "--fail-on-findings"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        output = (proc.stdout or "").strip()
+        if not output:
+            return []
+        results = json.loads(output)
+        findings: list[str] = []
+        for repo_result in results:
+            for finding in repo_result.get("findings") or []:
+                code = str(finding.get("code", "?"))
+                sample = str(finding.get("sample", "")).strip()
+                findings.append(f"{code}: {sample}" if sample else code)
+        return findings
+    except Exception as exc:  # noqa: BLE001 — enumeration must never raise into the loop
+        logger.warning("pr_review_watcher: custodian audit enumeration failed — %s", exc)
+        return []
+
+
+def _format_audit_concerns(findings: list[str]) -> str:
+    """Render custodian findings as an enumerated concern list for the fix pass.
+
+    The leading directive frames them as the `audit` (custodian) CI gate so the
+    agent resolves the ROOT cause (e.g. adds a real assertion for a T2 finding,
+    not a `# noqa`). Output flows through ``_build_fix_goal`` →
+    ``_structure_concerns`` which splits this bulleted list back into one
+    addressable concern per finding.
+    """
+    bullets = "\n".join(f"- {f}" for f in findings)
+    return (
+        "The `audit` CI check (custodian-multi --fail-on-findings) is failing on "
+        "this PR's branch with the following findings. Resolve the ROOT CAUSE of "
+        "each in the code (for example, a `T2` finding means a test function has "
+        "no assert — add a real, meaningful assertion that exercises the behavior "
+        "under test; do NOT silence the detector with a noqa/ignore). After "
+        "fixing, re-run `custodian-multi --repos . --fail-on-findings` and confirm "
+        "it is clean:\n\n" + bullets
+    )
 
 
 def _ci_checks_failing(
@@ -1880,6 +1955,141 @@ def _ci_checks_failing(
         return []
 
 
+def _phase0_audit_autofix(
+    state: dict,
+    state_path: Path,
+    pr_data: dict,
+    gh_client,
+    owner: str,
+    repo: str,
+    oc_root: Path,
+    config_path: Path,
+    settings,
+    *,
+    failed: list[str],
+    attempts: int,
+) -> None:
+    """Fix a PR failing the `audit` (custodian) CI check via the agent-based fix
+    pass — the SAME machinery (`_run_fix_pass`) the reviewer uses for self_review
+    concerns, which clones the PR branch into a throwaway executor workspace (it
+    never touches the live ``local_path`` checkout), has the agent edit the code,
+    and re-pushes the PR branch.
+
+    Bounds (this can NEVER loop forever):
+      - Shares the ``ci_fix_attempts`` budget capped at ``_MAX_CI_FIX_ATTEMPTS``.
+        On exhaustion → advance to self_review (today's fall-through) AND post a
+        PR comment listing the unresolved custodian findings (escalation /
+        visibility), so a stuck custodian PR is never silently abandoned.
+      - The post-push ``_CI_FIX_WAIT_SECONDS`` gate (enforced by the caller)
+        spaces attempts out so CI can re-run between them.
+
+    Fail-safe: on ANY error (custodian can't enumerate, dispatch raises, no head
+    ref) → log a WARNING and advance to self_review. Never worse than today.
+    """
+    pr_number = int(state["pr_number"])
+    repo_key = state["repo_key"]
+    repo_cfg = settings.repos.get(repo_key)
+    head_ref = ((pr_data.get("head") or {}).get("ref") or "").strip()
+
+    # Enumerate the actual findings up front — both the dispatch (fix instructions)
+    # and the exhaustion comment (escalation) need them. Empty means we couldn't
+    # enumerate (custodian unavailable / errored): there is nothing concrete to
+    # hand the agent, so fall back rather than dispatch a blind pass.
+    findings = _custodian_audit_findings(repo_cfg, oc_root)
+
+    if attempts >= _MAX_CI_FIX_ATTEMPTS:
+        # Exhausted: advance to self_review (today's behavior) + post escalation.
+        logger.info(
+            "pr_review_watcher: PR #%d exhausted %d audit fix attempts — advancing to "
+            "self_review and posting unresolved-findings comment",
+            pr_number,
+            attempts,
+        )
+        if findings:
+            try:
+                marker = getattr(settings.reviewer, "bot_comment_marker", "")
+                # findings are deterministic custodian tool output, but defang
+                # belt-and-suspenders before reflecting to GitHub (a `sample` line
+                # echoes a repo path/symbol name that is ultimately repo content).
+                body = (
+                    f"{marker}\n"
+                    f"**Audit auto-fix exhausted** — the `audit` (custodian) check is still "
+                    f"failing after {attempts} automated fix attempt(s). These findings "
+                    f"remain unresolved and need a human:\n\n"
+                    + sanitize_for_comment("\n".join(f"- {f}" for f in findings))
+                )
+                gh_client.post_comment(owner, repo, pr_number, body)
+            except Exception as exc:  # noqa: BLE001 — comment is best-effort visibility
+                logger.warning(
+                    "pr_review_watcher: PR #%d failed to post audit-exhausted comment — %s",
+                    pr_number,
+                    exc,
+                )
+        state["phase"] = "self_review"
+        _save_state(state_path, state)
+        return
+
+    if not head_ref or not findings:
+        # No head ref (can't push a fix) or nothing enumerable → fall back safely.
+        logger.warning(
+            "pr_review_watcher: PR #%d audit auto-fix unavailable (head_ref=%r, "
+            "%d findings) — advancing to self_review",
+            pr_number,
+            head_ref,
+            len(findings),
+        )
+        state["phase"] = "self_review"
+        _save_state(state_path, state)
+        return
+
+    # Pre-save the attempt counter BEFORE the (potentially long) agent pass so the
+    # budget survives a restart mid-dispatch — exactly like the ruff path records
+    # its attempt only on a successful push, but here we charge the attempt up
+    # front because the agent pass is expensive and a crash mid-pass must still
+    # count toward the cap (otherwise a repeatedly-crashing pass loops forever).
+    state["ci_fix_attempts"] = attempts + 1
+    state["ci_fix_last_push_at"] = datetime.now(UTC).isoformat()
+    _save_state(state_path, state)
+
+    concerns = _format_audit_concerns(findings)
+    logger.info(
+        "pr_review_watcher: PR #%d audit failing (%s) — dispatching agent fix pass "
+        "%d/%d on branch %s (%d findings)",
+        pr_number,
+        [c for c in failed if _is_audit_check(c)],
+        attempts + 1,
+        _MAX_CI_FIX_ATTEMPTS,
+        head_ref,
+        len(findings),
+    )
+    try:
+        pushed = _run_fix_pass(
+            oc_root,
+            config_path,
+            repo_key,
+            head_ref,
+            concerns,
+            settings,
+            state_key=state["state_key"],
+        )
+    except Exception as exc:  # noqa: BLE001 — dispatch failure must never wedge the loop
+        logger.warning("pr_review_watcher: PR #%d audit fix dispatch error — %s", pr_number, exc)
+        state["phase"] = "self_review"
+        _save_state(state_path, state)
+        return
+
+    if not pushed:
+        logger.warning(
+            "pr_review_watcher: PR #%d audit fix pass pushed no changes (attempt %d/%d)",
+            pr_number,
+            attempts + 1,
+            _MAX_CI_FIX_ATTEMPTS,
+        )
+    # Stay in ci_fix: the caller's _CI_FIX_WAIT_SECONDS gate defers the next sweep
+    # so CI re-runs on the pushed commit; the next pass re-enumerates findings and
+    # either sees green (→ self_review) or charges the next bounded attempt.
+
+
 def _phase0_ci_fix(
     state: dict,
     state_path: Path,
@@ -1889,10 +2099,19 @@ def _phase0_ci_fix(
     repo: str,
     oc_root: Path,
     settings,
+    config_path: Path | None = None,
 ) -> None:
     """Phase 0: if CI is failing on an autonomy PR, push an auto-fix and wait.
 
+    Two fix paths, both bounded by ``ci_fix_attempts``/``_MAX_CI_FIX_ATTEMPTS``:
+      - ruff lint failures → a deterministic local ``ruff --fix`` codemod.
+      - ``audit`` (custodian) failures → the agent-based fix pass (same machinery
+        as self_review concerns), since custodian findings aren't codemod-fixable.
+
     Transitions to self_review when CI is green or when attempts are exhausted.
+    ``config_path`` is required for the audit agent-fix path (it dispatches the
+    executor pipeline); when None that path degrades to the prior behavior
+    (audit failures fall through to self_review).
     """
     pr_number = int(state["pr_number"])
     repo_key = state["repo_key"]
@@ -1925,6 +2144,36 @@ def _phase0_ci_fix(
             return
 
     attempts = state.get("ci_fix_attempts", 0)
+
+    # --- audit (custodian) failures → agent-based fix pass ---------------------
+    # Routed BEFORE the generic attempt-cap and the ruff codemod path: custodian
+    # findings (e.g. a T2 "test with no assert") are not codemod-fixable, so they
+    # go to the SAME agent-fix machinery the reviewer uses for self_review
+    # concerns. The branch owns its own exhaustion handling (escalation comment),
+    # so it must run before the shared cap check below. Gated on the opt-out
+    # setting and on having a config_path to dispatch the pipeline; either absent
+    # degrades to the prior fall-through-to-self_review behavior.
+    audit_failing = [c for c in failed if _is_audit_check(c)]
+    if (
+        audit_failing
+        and getattr(settings, "reviewer_autofix_audit", False)
+        and config_path is not None
+    ):
+        _phase0_audit_autofix(
+            state,
+            state_path,
+            pr_data,
+            gh_client,
+            owner,
+            repo,
+            oc_root,
+            config_path,
+            settings,
+            failed=failed,
+            attempts=attempts,
+        )
+        return
+
     if attempts >= _MAX_CI_FIX_ATTEMPTS:
         logger.info(
             "pr_review_watcher: PR #%d exhausted %d CI fix attempts (%s still failing) "
@@ -3516,7 +3765,9 @@ def _poll_once(oc_root: Path, config_path: Path, settings) -> None:
 
             try:
                 if phase == "ci_fix":
-                    _phase0_ci_fix(state, sp, pr_data, gh_client, owner, repo, oc_root, settings)
+                    _phase0_ci_fix(
+                        state, sp, pr_data, gh_client, owner, repo, oc_root, settings, config_path
+                    )
                 elif phase == "self_review":
                     _phase1(
                         state, sp, pr_data, gh_client, owner, repo, oc_root, config_path, settings

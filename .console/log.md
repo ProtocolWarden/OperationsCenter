@@ -1,3 +1,21 @@
+## 2026-06-25 — HARDEN: reviewer auto-fixes failing `audit` (custodian) checks (self-heal)
+
+The reviewer's Phase-0 ci_fix only knew how to fix ruff (`ruff --fix` codemod); a failing
+`audit` (custodian) check was "non-auto-fixable" → it advanced to self_review and the PR sat red
+forever (goal-lane #387: 2.5 days on 3 T2 no-assert findings until a human added the asserts).
+Now, when `audit` is among the failing checks, the reviewer enumerates the custodian findings
+(`custodian-multi --json`, the deterministic `findings[].sample` lines) and routes them as
+concerns into the SAME agent fix pass (`_run_fix_pass`) it already uses for self_review — the
+agent clones the PR branch into a throwaway executor workspace (never touches the live checkout),
+edits the code (adds the missing assert, etc.), and re-pushes. Bounded by the existing
+`ci_fix_attempts` cap (3, charged up-front so a crash mid-pass still counts → can never loop);
+on exhaustion it advances to self_review AND posts a PR comment listing the unresolved findings
+(escalation). Fail-safe: custodian unavailable / no findings / dispatch error → advance to
+self_review (never worse than today). Gated by `settings.reviewer_autofix_audit` (default True).
+8 new tests; reviewer suites green (256). Combined with the pre-PR gate (#77/#406) and the
+OPEN_PR_GATE staleness escape (#75), the #387 deadlock class is now prevented, self-healed, AND
+unable to halt the lane.
+
 ## 2026-06-25 — FIX: de-flake observer perf test (was reliably red on CI, blocked every PR)
 
 `test_list_snapshots_scales_linearly` asserted `time_for_50 < time_for_10 * 10`, but the

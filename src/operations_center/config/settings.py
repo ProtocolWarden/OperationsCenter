@@ -576,6 +576,17 @@ class Settings(BaseModel):
     self_repo_key: str | None = None
     escalation: EscalationSettings = Field(default_factory=EscalationSettings)
     scheduled_tasks: list[ScheduledTask] = Field(default_factory=list)
+    # Reviewer Phase-0 ci_fix: when a PR's `audit` (custodian) CI check fails,
+    # route the custodian findings into the SAME agent-based fix pass the reviewer
+    # uses for self_review concerns (the agent edits the code — e.g. adds a missing
+    # assert for a T2 finding — and re-pushes the PR branch), bounded by the
+    # existing ci_fix attempt cap. Custodian T2-class findings are NOT codemod-
+    # fixable (`custodian fix` can't invent an assertion), so before this the PR
+    # sat red forever (goal-lane #387: 2.5 days on 3 T2 findings until a human
+    # added the asserts). When False, audit failures fall through to self_review
+    # (the prior behavior — the PR stays red but is never auto-fixed). Read
+    # defensively (getattr) so older config files default to the prior behavior.
+    reviewer_autofix_audit: bool = True
     # Number of days a PR can remain open without activity before stale-PR scan
     # closes it and requeues the task.
     stale_pr_days: int = 7

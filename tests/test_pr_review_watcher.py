@@ -1251,6 +1251,242 @@ def test_run_fix_pass_noop_returns_false(tmp_path: Path) -> None:
     assert pushed is False
 
 
+# ── Phase 0 audit (custodian) auto-fix → agent fix pass ───────────────────────
+
+
+def _audit_settings(*, autofix_audit: bool = True) -> MagicMock:
+    """Settings for the audit auto-fix path: a repo with a local clone + venv,
+    a git token, and the reviewer_autofix_audit toggle."""
+    repo_cfg = MagicMock(
+        local_path="/tmp/does-not-matter",  # _run_fix_pass is mocked; never read
+        venv_dir=".venv",
+        default_branch="main",
+        ci_ignored_checks=[],
+        clone_url=f"git@github.com:owner/{REPO_KEY}.git",
+    )
+    settings = MagicMock(
+        reviewer=REVIEWER_CFG,
+        repos={REPO_KEY: repo_cfg},
+        plane=MagicMock(base_url="http://plane.local", project_id="proj", workspace_slug="ws"),
+        git=MagicMock(author_name="Bot", author_email="bot@x"),
+        reviewer_autofix_audit=autofix_audit,
+    )
+    settings.git_token.return_value = "tok"
+    return settings
+
+
+# Two custodian findings as the enumeration helper yields them.
+_AUDIT_FINDINGS = [
+    "T2: tests/unit/test_x.py:1: test_x() — no assert",
+    "T2: tests/unit/test_y.py:9: test_y() — no assert",
+]
+
+
+def test_audit_failure_dispatches_agent_fix_pass(tmp_path: Path) -> None:
+    """(a) An `audit`-failing PR routes the custodian findings into the SAME
+    agent fix pass the reviewer uses for self_review concerns, and stays in
+    ci_fix (does NOT prematurely advance to self_review)."""
+    settings = _audit_settings()
+    gh = _make_gh()
+    gh.get_failed_checks.return_value = ["audit (custodian): failure"]
+
+    state, sp = _make_state(tmp_path)
+    state["phase"] = "ci_fix"
+
+    with (
+        patch.object(watcher, "_custodian_audit_findings", return_value=list(_AUDIT_FINDINGS)),
+        patch.object(watcher, "_run_fix_pass", return_value=True) as fix,
+    ):
+        watcher._phase0_ci_fix(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, settings, tmp_path / "cfg.yaml"
+        )
+
+    # The agent fix pass was dispatched on the PR head branch with the findings
+    # carried as concerns (NOT the ruff codemod).
+    fix.assert_called_once()
+    args, kwargs = fix.call_args
+    # positional: (oc_root, config_path, repo_key, head_ref, concerns, settings)
+    assert args[3] == f"goal/{PR_NUMBER}"  # head_ref
+    concerns = args[4]
+    assert "audit" in concerns.lower() and "custodian" in concerns.lower()
+    assert "test_x.py" in concerns and "test_y.py" in concerns
+    # Bounded counter charged; still in ci_fix so CI can re-run on the push.
+    assert state["ci_fix_attempts"] == 1
+    assert state["phase"] == "ci_fix"
+    assert state.get("ci_fix_last_push_at")
+
+
+def test_audit_autofix_bounded_then_escalates(tmp_path: Path) -> None:
+    """(b) When attempts are exhausted, advance to self_review (today's behavior)
+    AND post an escalation comment listing the unresolved findings — never an
+    infinite loop, and the dispatch is NOT re-run."""
+    settings = _audit_settings()
+    gh = _make_gh()
+    gh.get_failed_checks.return_value = ["audit"]
+
+    state, sp = _make_state(tmp_path)
+    state["phase"] = "ci_fix"
+    state["ci_fix_attempts"] = watcher._MAX_CI_FIX_ATTEMPTS  # already exhausted
+    # Past the post-push wait window so the cap check is reached this sweep.
+    state["ci_fix_last_push_at"] = None
+
+    with (
+        patch.object(watcher, "_custodian_audit_findings", return_value=list(_AUDIT_FINDINGS)),
+        patch.object(watcher, "_run_fix_pass", return_value=True) as fix,
+    ):
+        watcher._phase0_ci_fix(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, settings, tmp_path / "cfg.yaml"
+        )
+
+    fix.assert_not_called()  # no further dispatch once exhausted
+    assert state["phase"] == "self_review"  # advances like today
+    # Escalation comment posted, listing the unresolved findings for a human.
+    gh.post_comment.assert_called_once()
+    body = gh.post_comment.call_args.args[3]
+    assert "test_x.py" in body and "test_y.py" in body
+    assert "exhausted" in body.lower()
+
+
+def test_audit_autofix_dispatch_error_falls_back(tmp_path: Path) -> None:
+    """(c) Any error in the fix path → fall back to self_review (fail-safe);
+    never worse than today."""
+    settings = _audit_settings()
+    gh = _make_gh()
+    gh.get_failed_checks.return_value = ["audit"]
+
+    state, sp = _make_state(tmp_path)
+    state["phase"] = "ci_fix"
+
+    with (
+        patch.object(watcher, "_custodian_audit_findings", return_value=list(_AUDIT_FINDINGS)),
+        patch.object(watcher, "_run_fix_pass", side_effect=RuntimeError("dispatch boom")),
+    ):
+        watcher._phase0_ci_fix(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, settings, tmp_path / "cfg.yaml"
+        )
+
+    assert state["phase"] == "self_review"  # safe fall-back, no crash propagated
+
+
+def test_audit_autofix_no_findings_falls_back(tmp_path: Path) -> None:
+    """Custodian unavailable / can't enumerate (empty findings) → fall back to
+    self_review without dispatching a blind agent pass (fail-safe)."""
+    settings = _audit_settings()
+    gh = _make_gh()
+    gh.get_failed_checks.return_value = ["audit"]
+
+    state, sp = _make_state(tmp_path)
+    state["phase"] = "ci_fix"
+
+    with (
+        patch.object(watcher, "_custodian_audit_findings", return_value=[]),
+        patch.object(watcher, "_run_fix_pass", return_value=True) as fix,
+    ):
+        watcher._phase0_ci_fix(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, settings, tmp_path / "cfg.yaml"
+        )
+
+    fix.assert_not_called()
+    assert state["phase"] == "self_review"
+
+
+def test_audit_autofix_disabled_falls_back(tmp_path: Path) -> None:
+    """(e) reviewer_autofix_audit=False → prior behavior: audit failure falls
+    through to self_review, no custodian enumeration, no agent dispatch."""
+    settings = _audit_settings(autofix_audit=False)
+    gh = _make_gh()
+    gh.get_failed_checks.return_value = ["audit"]
+
+    state, sp = _make_state(tmp_path)
+    state["phase"] = "ci_fix"
+
+    with (
+        patch.object(
+            watcher, "_custodian_audit_findings", return_value=list(_AUDIT_FINDINGS)
+        ) as enum,
+        patch.object(watcher, "_run_fix_pass", return_value=True) as fix,
+    ):
+        watcher._phase0_ci_fix(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, settings, tmp_path / "cfg.yaml"
+        )
+
+    enum.assert_not_called()
+    fix.assert_not_called()
+    assert state["phase"] == "self_review"
+
+
+def test_audit_autofix_no_config_path_falls_back(tmp_path: Path) -> None:
+    """No config_path (can't dispatch the pipeline) → prior behavior, fail-safe."""
+    settings = _audit_settings()
+    gh = _make_gh()
+    gh.get_failed_checks.return_value = ["audit"]
+
+    state, sp = _make_state(tmp_path)
+    state["phase"] = "ci_fix"
+
+    with (
+        patch.object(
+            watcher, "_custodian_audit_findings", return_value=list(_AUDIT_FINDINGS)
+        ) as enum,
+        patch.object(watcher, "_run_fix_pass", return_value=True) as fix,
+    ):
+        # config_path omitted (defaults to None).
+        watcher._phase0_ci_fix(state, sp, _pr_data(), gh, "owner", "repo", tmp_path, settings)
+
+    enum.assert_not_called()
+    fix.assert_not_called()
+    assert state["phase"] == "self_review"
+
+
+def test_ruff_path_unchanged_when_only_ruff_fails(tmp_path: Path) -> None:
+    """(d) The ruff codemod path is unchanged: a ruff-only failure runs the local
+    ruff --fix in an isolated worktree and never touches the agent fix pass, even
+    with reviewer_autofix_audit on."""
+    local_path = tmp_path / "live_checkout"
+    (local_path / ".venv" / "bin").mkdir(parents=True)
+    ruff = local_path / ".venv" / "bin" / "ruff"
+    ruff.write_text("#!/bin/sh\nexit 0\n")
+    ruff.chmod(0o755)
+
+    repo_cfg = MagicMock(
+        local_path=str(local_path),
+        venv_dir=".venv",
+        default_branch="main",
+        ci_ignored_checks=[],
+        clone_url=f"git@github.com:owner/{REPO_KEY}.git",
+    )
+    settings = MagicMock(
+        reviewer=REVIEWER_CFG,
+        repos={REPO_KEY: repo_cfg},
+        git=MagicMock(author_name="Bot", author_email="bot@x"),
+        reviewer_autofix_audit=True,
+    )
+    settings.git_token.return_value = "tok"
+
+    gh = _make_gh()
+    gh.get_failed_checks.return_value = ["Lint (ruff): failure"]
+
+    state, sp = _make_state(tmp_path)
+    state["phase"] = "ci_fix"
+
+    calls: list[dict] = []
+    with (
+        patch.object(watcher.subprocess, "run", side_effect=_record_git_runs(calls)),
+        patch.object(watcher, "_run_fix_pass", return_value=True) as fix,
+        patch.object(watcher, "_custodian_audit_findings", return_value=[]) as enum,
+    ):
+        watcher._phase0_ci_fix(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, settings, tmp_path / "cfg.yaml"
+        )
+
+    # Ruff path: isolated worktree + push, and NO audit machinery touched.
+    fix.assert_not_called()
+    enum.assert_not_called()
+    push_calls = [c for c in calls if c["argv"][:1] == ["git"] and "push" in c["argv"]]
+    assert push_calls, "expected the ruff codemod to push from the isolated worktree"
+    assert state["ci_fix_attempts"] == 1
+
+
 # ── Self-Heal Ladder Phase 1: structured concerns + anti-no-op acceptance bar ──
 
 
