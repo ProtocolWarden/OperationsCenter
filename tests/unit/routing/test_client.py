@@ -116,6 +116,38 @@ def test_http_client_serializes_canonical_proposal() -> None:
     assert seen["goal_text"] == "Fix lint errors in src/"
 
 
+def test_http_client_omits_none_constraints() -> None:
+    """OC's ExecutionConstraints made timeout_seconds / require_clean_validation /
+    max_changed_files Optional (wire-all S1bc), but SwitchBoard's TaskProposal declares
+    them non-nullable with defaults. The client must OMIT unset (None) fields via
+    exclude_none so SwitchBoard applies its defaults rather than 422ing on null."""
+    seen: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(json.loads(request.content.decode("utf-8")))
+        return httpx.Response(200, json=_stub_cxrp_response())
+
+    client = HttpLaneRoutingClient(
+        "http://switchboard.local", transport=httpx.MockTransport(handler)
+    )
+    # _ctx() sets no timeout/validation overrides -> those constraints are None.
+    proposal = build_proposal(_ctx())
+    try:
+        client.select_lane(proposal)
+    finally:
+        client.close()
+
+    constraints = seen.get("constraints") or {}
+    # Null-valued optionals must be omitted (SwitchBoard 422s on explicit null).
+    assert "timeout_seconds" not in constraints
+    assert "require_clean_validation" not in constraints
+    assert "max_changed_files" not in constraints
+    # exclude_none must NOT drop concrete falsy values (False / []).
+    assert constraints.get("skip_baseline_validation") is False
+    # and no explicit null leaks through anywhere at the top level.
+    assert None not in seen.values()
+
+
 def test_http_client_from_env_prefers_operations_center_specific_url(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
