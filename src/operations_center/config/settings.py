@@ -638,10 +638,15 @@ class Settings(BaseModel):
     # Synchronous capability-owner check (C2, determinism surface 1). When set,
     # owner-bearing capabilities (board_unblock) verify exactly-one-owner from the
     # registry at invocation and refuse on ambiguity, instead of trusting the
-    # async Custodian lint. DORMANT-by-environment: OC's pinned repograph wheel has
-    # no capabilities plane, so the registry is unavailable and the guard degrades
-    # (proceeds) until that becomes a runtime dependency. False = off (default).
-    require_capability_owner: bool = False
+    # async Custodian lint. LIVE as of the capabilities-plane pin: OC now depends
+    # on the plane-bearing platform-manifest (capabilities.py + data/
+    # capabilities.yaml) and an override-pinned plane-bearing repograph, so the
+    # registry loads and the guard is load-bearing — board_unblock resolves to
+    # owner operations_center (matches self_repo_key OperationsCenter convention-
+    # insensitively → PROCEED). Remains fail-open by construction: an unavailable
+    # registry DEGRADES (proceeds) rather than halting self-healing (§0.1), so
+    # enabling it by default cannot deadlock the board_unblock lane. True = on.
+    require_capability_owner: bool = True
 
     def plane_token(self) -> str:
         return os.environ[self.plane.api_token_env]

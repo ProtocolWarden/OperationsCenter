@@ -2,9 +2,13 @@
 # Copyright (C) 2026 ProtocolWarden
 """Tests for the synchronous capability-owner check (Phase C2, surface 1).
 
-The registry is dormant-by-environment in OC today, so these exercise the
-mechanism against a fake registry plus the degrade/no-op paths that govern its
-real behavior.
+Most cases exercise the mechanism against a fake registry plus the degrade/no-op
+paths that govern its behavior. With the capabilities-plane pin now in OC's deps
+(plane-bearing platform-manifest + override-pinned plane-bearing repograph), the
+guard is LIVE: ``TestLiveRegistryActivation`` loads the REAL registry and asserts
+board_unblock proceeds against it (skipped where the plane is absent, e.g. an
+unbumped venv, so the activation contract is checked where it can be and never
+false-fails where it can't).
 """
 
 from __future__ import annotations
@@ -282,3 +286,95 @@ def test_resolves_owner_from_live_platform_manifest_registry(monkeypatch):
         )
         is True
     )
+
+
+# ── live activation: the REAL plane is pinned into OC's deps ─────────────────────
+#
+# These do NOT monkeypatch the loader — they exercise the registry that actually
+# ships in OC's environment via platform_manifest.capabilities. Skipped (not
+# failed) where the plane is absent, so the suite stays green on an unbumped venv
+# while still pinning the live activation where the plane is present.
+
+
+def _live_registry():
+    from operations_center.capability_ownership import load_capability_registry
+
+    return load_capability_registry()
+
+
+class TestLiveRegistryActivation:
+    def test_real_registry_loads_with_edges(self):
+        reg = _live_registry()
+        if reg is None:
+            pytest.skip("capabilities plane not installed in this environment")
+        assert hasattr(reg, "edges")
+        assert len(reg.edges) > 0
+
+    def test_board_unblock_proceeds_against_real_registry(self):
+        # The exact gate the live board_unblock self-heal lane runs:
+        # action_id='board_unblock', expected_owner=self_repo_key ('OperationsCenter').
+        # Must PROCEED (the registry owns board_unblock as operations_center, which
+        # matches convention-insensitively).
+        reg = _live_registry()
+        if reg is None:
+            pytest.skip("capabilities plane not installed in this environment")
+        assert (
+            verify_owner_or_degrade(
+                "board_unblock", required=True, expected_owner="OperationsCenter"
+            )
+            is True
+        )
+
+    def test_board_unblock_owner_is_operations_center(self):
+        reg = _live_registry()
+        if reg is None:
+            pytest.skip("capabilities plane not installed in this environment")
+        # Convention-insensitive: registry uses repo_id 'operations_center'.
+        from operations_center.capability_ownership import _norm_owner
+
+        assert _norm_owner(resolve_owner(reg, "board_unblock")) == _norm_owner(
+            "OperationsCenter"
+        )
+
+    def test_wrong_owner_refuses_against_real_registry(self):
+        # The gate is genuinely load-bearing, not a no-op: a different expected
+        # owner must REFUSE even against the real registry.
+        reg = _live_registry()
+        if reg is None:
+            pytest.skip("capabilities plane not installed in this environment")
+        assert (
+            verify_owner_or_degrade(
+                "board_unblock", required=True, expected_owner="Custodian"
+            )
+            is False
+        )
+
+
+# ── enforcement default: require_capability_owner is now ON ──────────────────────
+
+
+def test_require_capability_owner_default_is_true():
+    # The capabilities plane is pinned into OC's deps, so the synchronous owner
+    # check is enabled by default. Fail-open by construction: an unavailable
+    # registry still degrades (proceeds), so a True default cannot deadlock the
+    # board_unblock lane. Asserted via the declared field default (Settings has
+    # required plane/git fields, so we check the default without instantiating).
+    from operations_center.config.settings import Settings
+
+    assert Settings.model_fields["require_capability_owner"].default is True
+
+
+def test_require_capability_owner_true_on_constructed_settings():
+    # Belt-and-suspenders: a fully constructed Settings carries the True default.
+    from operations_center.config.settings import GitSettings, PlaneSettings, Settings
+
+    s = Settings(
+        plane=PlaneSettings(
+            base_url="http://x",
+            api_token_env="T",
+            workspace_slug="w",
+            project_id="p",
+        ),
+        git=GitSettings(),
+    )
+    assert s.require_capability_owner is True

@@ -8477,3 +8477,16 @@ across conventions without over-matching different repos -> the gate is now SAFE
 needs (cross-repo, recorded): a plane-bearing repograph release (OC's transitive repograph@v0.2.0 is planeless) +
 PM topology compat (the plane-bearing PM commit dropped legacy_names, breaking OC impact-analysis). Behavior-neutral
 on the live fleet (capability path dormant; CI/test-only otherwise) -> no urgent deploy.
+
+## 2026-06-24 — Capability enforcement ACTIVATED (cross-repo)
+
+Full activation of C2 (operator: "drive the full activation, cross-repo and all"). Bumped OC deps to consume the
+plane-bearing upstream commits: platform-manifest -> 17095f433 (ships capabilities.py + data/capabilities.yaml);
+repograph -> e0b205e via [tool.uv] override-dependencies (the planeless repograph@v0.2.0 came transitively via
+context-lifecycle; only an override wins). The plane now loads (34 edges). Reconciled the 6-test blast radius from
+PM's topology evolution (legacy_names dropped -> canonical_name/runtime_role; CxRP consumers 3->6) MEANINGFULLY (no
+test deletions). SAFETY-verified vs the real registry: board_unblock -> PROCEED (operations_center matches
+OperationsCenter via #400's _norm_owner), wrong owner -> REFUSE; all 12 capabilities resolve to exactly one owner.
+Enabled require_capability_owner default True (fail-open -> can't deadlock). Full tests/unit 8183 passed, 0 failed.
+DEPLOY NOTE: needs a LIVE VENV RE-SYNC (uv sync with the override) + restart; the deployed gate degrades safely until
+then. Bare-SHA pins (no plane-bearing tag exists on PM/RepoGraph yet).

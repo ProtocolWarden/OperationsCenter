@@ -268,10 +268,19 @@ class TestPropagatorEndToEnd:
         )
         graph = build_effective_repo_graph()
         record = prop.propagate(target_repo_id="cxrp", target_version="v1", graph=graph)
-        # CxRP has 3 platform consumers — tasks for each
-        assert len(creator.calls) == 3
+        # CxRP has 6 platform consumers — the three top-level repos plus the
+        # three executor backends (TeamExecutor/DAGExecutor/CritiqueExecutor that
+        # depends_on_contracts_from CxRP) — one task each.
+        assert len(creator.calls) == 6
         consumer_canonicals = {o.consumer_canonical for o in record.outcomes}
-        assert {"OperationsCenter", "SwitchBoard", "OperatorConsole"}.issubset(consumer_canonicals)
+        assert {
+            "OperationsCenter",
+            "SwitchBoard",
+            "OperatorConsole",
+            "TeamExecutor",
+            "DAGExecutor",
+            "CritiqueExecutor",
+        }.issubset(consumer_canonicals)
         # All landed in BACKLOG (not promoted)
         assert all(call["promote_to_ready"] is False for call in creator.calls)
         # Each body contains the parent-link block

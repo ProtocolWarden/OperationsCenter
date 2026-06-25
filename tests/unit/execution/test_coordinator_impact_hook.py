@@ -139,9 +139,16 @@ class TestContractRepoImpactLogged:
             set(ci["public_affected"])
         )
 
-    def test_legacy_alias_resolves_in_repo_key(self, caplog: pytest.LogCaptureFixture) -> None:
+    def test_canonical_repo_key_resolves_in_impact_hook(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # The impact hook resolves request.repo_key through the graph's name
+        # index (canonical_name / repo_id, case-insensitive). The v1 manifest
+        # schema dropped free-text legacy_names, so the historical
+        # "ExecutionContractProtocol" label no longer resolves to CxRP — drive
+        # the hook with the canonical name instead and assert it still fires.
         graph = build_effective_repo_graph()
-        bundle = _bundle("ExecutionContractProtocol")
+        bundle = _bundle("CxRP")
         adapter = _RecordingAdapter(_success(bundle))
         coord = ExecutionCoordinator(
             adapter_registry=_Registry(adapter),
@@ -152,6 +159,22 @@ class TestContractRepoImpactLogged:
             outcome = coord.execute(bundle, _runtime())
         assert any("contract change in CxRP" in rec.message for rec in caplog.records)
         assert outcome.record.metadata.get("contract_impact", {}).get("target") == "CxRP"
+
+    def test_dropped_legacy_alias_is_silent(self, caplog: pytest.LogCaptureFixture) -> None:
+        # The removed legacy alias resolves to nothing now, so the hook stays
+        # silent (no contract-impact metadata) — same path as an unknown repo.
+        graph = build_effective_repo_graph()
+        bundle = _bundle("ExecutionContractProtocol")
+        adapter = _RecordingAdapter(_success(bundle))
+        coord = ExecutionCoordinator(
+            adapter_registry=_Registry(adapter),
+            policy_engine=_allow(),
+            repo_graph=graph,
+        )
+        with caplog.at_level(logging.INFO):
+            outcome = coord.execute(bundle, _runtime())
+        assert all("contract change" not in rec.message for rec in caplog.records)
+        assert "contract_impact" not in (outcome.record.metadata or {})
 
 
 class TestLeafRepoSilent:
