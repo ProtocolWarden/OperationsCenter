@@ -1000,7 +1000,19 @@ class WorkspaceManager:
 
         # Standard path: create venv, run install_dev_command.
         venv_dir = getattr(repo_cfg, "venv_dir", None) or ".venv"
-        python_bin = getattr(repo_cfg, "python_binary", None) or "python3"
+        # When an offline wheelhouse is in play, its wheels are tag-locked to the
+        # interpreter that built it (OC_WHEELHOUSE_PYTHON, set by provision_env). The
+        # venv that installs from it MUST be that same interpreter or the cp-tagged
+        # wheels won't match (e.g. host python3=3.14 vs a cp312 wheelhouse → the
+        # `--no-index --find-links` install fails "from versions: none" and the task
+        # is blocked). Prefer it; fall back to the repo's configured python_binary
+        # (and finally `python3`) when no wheelhouse is active. Single source of truth
+        # with the wheelhouse builder, so the two can never drift.
+        python_bin = (
+            os.environ.get("OC_WHEELHOUSE_PYTHON")
+            or getattr(repo_cfg, "python_binary", None)
+            or "python3"
+        )
         try:
             subprocess.run(
                 [python_bin, "-m", "venv", venv_dir],

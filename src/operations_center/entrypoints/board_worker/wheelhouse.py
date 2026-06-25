@@ -167,6 +167,15 @@ def provision_env(
     bwrap sandbox is on (else ``{}``, fail-open). Wires the offline wheelhouse
     (``OC_WHEELHOUSE``) and the tiktoken encoding cache (``TIKTOKEN_CACHE_DIR``) —
     both bound into the sandbox — so the executor needs no pypi / CDN egress.
+
+    Also exports ``OC_WHEELHOUSE_PYTHON`` = the interpreter that BUILT the
+    wheelhouse. The offline install is by definition tag-locked to that interpreter
+    (``pip --no-index --find-links`` over cp-tagged wheels), so the consumer — the
+    workspace venv (``WorkspaceManager._maybe_bootstrap``) — must be created with the
+    SAME interpreter or the wheels won't match (the host ``python3`` may be a
+    different version than OC's venv; e.g. 3.14 vs a cp312 wheelhouse). Single source
+    of truth: whatever python builds the wheelhouse also creates the venv that
+    installs from it, so the two can never drift.
     """
     if os.environ.get("OC_BWRAP_SANDBOX") != "1":
         return {}
@@ -174,6 +183,7 @@ def provision_env(
     wh = ensure_wheelhouse(repo_key, repo_local_path, python_bin=python_bin)
     if wh is not None:
         out["OC_WHEELHOUSE"] = str(wh)
+        out["OC_WHEELHOUSE_PYTHON"] = python_bin
     tk = ensure_tiktoken_cache(python_bin)
     if tk is not None:
         out["TIKTOKEN_CACHE_DIR"] = str(tk)

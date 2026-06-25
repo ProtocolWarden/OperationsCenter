@@ -66,6 +66,32 @@ ensure_venv() {
     uv pip install --python "${VENV_DIR}/bin/python" -e '.[dev]'
     touch "${BOOTSTRAP_STAMP}"
   fi
+  ensure_executor_backends
+}
+
+# The execute backends (team_executor, dag_executor) are sibling CHECKOUTS, not
+# declared OC dependencies — `uv pip install -e .[dev]` never installs them and a
+# `uv sync` / venv-recreate actively DROPS them. When that happens the executor
+# can't load its backend ("team_executor not installed: No module named
+# 'team_executor'") and EVERY goal task fails at execute → the whole lane stalls
+# with no obvious cause. Self-heal: whenever the backends aren't importable, (re)install
+# them editable. Runs every launch but the import check is ~free and the install only
+# fires when actually missing, so a mid-life drop recovers on the next fleet start
+# rather than blocking autonomy until a human notices.
+ensure_executor_backends() {
+  if "${VENV_DIR}/bin/python" -c "import team_executor, dag_executor" 2>/dev/null; then
+    return 0
+  fi
+  echo "operations-center.sh: executor backends missing — (re)installing siblings" >&2
+  local _sib
+  for _sib in TeamExecutor DAGExecutor; do
+    if [[ -f "${ROOT_DIR}/../${_sib}/pyproject.toml" ]]; then
+      uv pip install --python "${VENV_DIR}/bin/python" -e "${ROOT_DIR}/../${_sib}" \
+        || echo "operations-center.sh: WARNING failed to install ${_sib} — execute backend unavailable" >&2
+    else
+      echo "operations-center.sh: WARNING sibling checkout ${_sib} not found at ${ROOT_DIR}/../${_sib}" >&2
+    fi
+  done
 }
 
 # Ensure the user-level pip config requires a virtualenv for all pip installs.
