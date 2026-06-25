@@ -1069,10 +1069,12 @@ def test_finalize_full_chain_with_validation_summary(tmp_path):
 
 # ── pre-PR custodian gate ─────────────────────────────────────────────────────
 #
-# The autouse _no_real_custodian fixture stubs _run_pre_pr_custodian_gate to
-# return None. The finalize-wiring tests below re-patch it explicitly per case.
-# The gate-logic tests capture the REAL unbound implementation so they exercise
-# the actual subprocess / exit-code / settings logic.
+# The gate is inactive unless WorkspaceManager is built with a Settings object
+# (production wires one; default ON), so finalize tests that construct the manager
+# without settings never run it. The finalize-wiring tests below re-patch the gate
+# method explicitly per case; the gate-logic tests capture the REAL unbound
+# implementation (and supply settings via _gate_mgr) to exercise the actual
+# subprocess / exit-code / settings logic.
 
 _REAL_GATE = WorkspaceManager.__dict__["_run_pre_pr_custodian_gate"]
 _REAL_RESOLVE = WorkspaceManager.__dict__["_resolve_custodian_bin"]
@@ -1217,6 +1219,10 @@ def test_finalize_gate_disabled_skips_entirely(tmp_path):
 
 
 def _gate_mgr(**kw):
+    # The gate now requires a real Settings object (production always wires one);
+    # default these gate-logic tests to gate-ON unless the test passes its own
+    # settings (e.g. settings=None to exercise the inactive path).
+    kw.setdefault("settings", SimpleNamespace(pre_pr_custodian_gate=True))
     mgr = WorkspaceManager(**kw)
     mgr._run_pre_pr_custodian_gate = _REAL_GATE.__get__(mgr)
     mgr._resolve_custodian_bin = _REAL_RESOLVE.__get__(mgr)
@@ -1232,15 +1238,16 @@ def test_gate_disabled_via_settings_returns_none(tmp_path):
     run.assert_not_called()
 
 
-def test_gate_default_on_when_no_settings(tmp_path):
-    # No settings object → getattr default True → gate runs (resolves binary).
-    mgr = _gate_mgr()
+def test_gate_inactive_when_no_settings(tmp_path):
+    # No Settings object → gate inactive (production always wires one), so it
+    # never even resolves the binary. Deterministic replacement for the dropped
+    # autouse stub: unit tests that build WorkspaceManager without settings never
+    # shell out to a real custodian-multi (the #405 regression).
+    mgr = _gate_mgr(settings=None)
     req = _make_request(tmp_path)
-    with (
-        mock.patch.object(mgr, "_resolve_custodian_bin", return_value=None) as resolve,
-    ):
+    with mock.patch.object(mgr, "_resolve_custodian_bin") as resolve:
         assert mgr._run_pre_pr_custodian_gate(req) is None
-    resolve.assert_called_once()
+    resolve.assert_not_called()
 
 
 def test_gate_clean_exit_zero_returns_none(tmp_path):
