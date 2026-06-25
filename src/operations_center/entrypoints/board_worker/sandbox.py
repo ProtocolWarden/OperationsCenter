@@ -248,6 +248,21 @@ def _toolchain_ro_binds(oc_root: Path, env: dict) -> list[str]:
     # The OC source tree (PYTHONPATH) + its venv (python/pytest/ruff).
     add(str(oc_root / "src"))
     add(str(oc_root / ".venv"))
+    # A uv-managed venv symlinks `.venv/bin/python` to an interpreter OUTSIDE the
+    # bound system dirs (under ~/.local/share/uv/python/cpython-*/). Binding only
+    # .venv leaves that symlink dangling inside the sandbox, so bwrap aborts
+    # `execvp .../.venv/bin/python: No such file or directory` and the executor
+    # never starts (→ "execute produced no result", the lane churns). Bind the
+    # interpreter's install root (parent of its bin/) so the symlink resolves.
+    # Skipped when the interpreter already lives under a bound system dir (a system
+    # python needs no extra bind).
+    real_py = _real(str(oc_root / ".venv" / "bin" / "python"))
+    if real_py:
+        interp_root = os.path.dirname(os.path.dirname(real_py))
+        if not any(
+            interp_root == d or interp_root.startswith(d + os.sep) for d in _RO_SYSTEM_DIRS
+        ):
+            add(interp_root)
     # Editable-installed sibling-repo deps (team_executor, dag_executor, …).
     for d in _editable_install_dirs(oc_root):
         add(d)
