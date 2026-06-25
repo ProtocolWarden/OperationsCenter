@@ -8490,3 +8490,11 @@ OperationsCenter via #400's _norm_owner), wrong owner -> REFUSE; all 12 capabili
 Enabled require_capability_owner default True (fail-open -> can't deadlock). Full tests/unit 8183 passed, 0 failed.
 DEPLOY NOTE: needs a LIVE VENV RE-SYNC (uv sync with the override) + restart; the deployed gate degrades safely until
 then. Bare-SHA pins (no plane-bearing tag exists on PM/RepoGraph yet).
+
+## 2026-06-24 — Capability activation: deploy-mechanism fix + T3
+
+ensure_venv now uses `uv pip install` (not plain pip) so the fleet's venv honors pyproject [tool.uv]
+override-dependencies (the plane-bearing repograph e0b205e). Plain pip silently dropped it -> the deployed plane
+would stay dormant AND repograph would downgrade to planeless on every pyproject change. Gated the live-registry
+tests with a declarative skipif on plane availability (custodian T3, not a per-test runtime skip). Verified: in the
+activated venv the live tests run+pass (27); planeless -> skip.

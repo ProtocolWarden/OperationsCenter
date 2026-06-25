@@ -302,22 +302,27 @@ def _live_registry():
     return load_capability_registry()
 
 
+_PLANE_AVAILABLE = _live_registry() is not None
+
+
+@pytest.mark.skipif(
+    not _PLANE_AVAILABLE,
+    reason="capabilities plane not installed in this environment (probe returned None)",
+)
 class TestLiveRegistryActivation:
+    """Runs only where the real capabilities plane is installed (the activated env);
+    gated declaratively by a plane-availability probe, not a per-test runtime skip."""
+
     def test_real_registry_loads_with_edges(self):
         reg = _live_registry()
-        if reg is None:
-            pytest.skip("capabilities plane not installed in this environment")
         assert hasattr(reg, "edges")
         assert len(reg.edges) > 0
 
     def test_board_unblock_proceeds_against_real_registry(self):
         # The exact gate the live board_unblock self-heal lane runs:
         # action_id='board_unblock', expected_owner=self_repo_key ('OperationsCenter').
-        # Must PROCEED (the registry owns board_unblock as operations_center, which
-        # matches convention-insensitively).
-        reg = _live_registry()
-        if reg is None:
-            pytest.skip("capabilities plane not installed in this environment")
+        # PROCEEDs (registry owns board_unblock as operations_center, matched
+        # convention-insensitively).
         assert (
             verify_owner_or_degrade(
                 "board_unblock", required=True, expected_owner="OperationsCenter"
@@ -326,22 +331,15 @@ class TestLiveRegistryActivation:
         )
 
     def test_board_unblock_owner_is_operations_center(self):
-        reg = _live_registry()
-        if reg is None:
-            pytest.skip("capabilities plane not installed in this environment")
-        # Convention-insensitive: registry uses repo_id 'operations_center'.
         from operations_center.capability_ownership import _norm_owner
 
-        assert _norm_owner(resolve_owner(reg, "board_unblock")) == _norm_owner(
+        assert _norm_owner(resolve_owner(_live_registry(), "board_unblock")) == _norm_owner(
             "OperationsCenter"
         )
 
     def test_wrong_owner_refuses_against_real_registry(self):
-        # The gate is genuinely load-bearing, not a no-op: a different expected
-        # owner must REFUSE even against the real registry.
-        reg = _live_registry()
-        if reg is None:
-            pytest.skip("capabilities plane not installed in this environment")
+        # Genuinely load-bearing: a different expected owner REFUSES even against
+        # the real registry.
         assert (
             verify_owner_or_degrade(
                 "board_unblock", required=True, expected_owner="Custodian"
