@@ -61,7 +61,9 @@ ensure_venv() {
   fi
   if [[ ! -f "${BOOTSTRAP_STAMP}" || "${ROOT_DIR}/pyproject.toml" -nt "${BOOTSTRAP_STAMP}" ]]; then
     "${VENV_DIR}/bin/python" -m pip install --upgrade pip
-    "${VENV_DIR}/bin/python" -m pip install -e '.[dev]'
+    # uv (not plain pip): honors pyproject [tool.uv] override-dependencies — the
+    # capabilities-plane repograph pin (e0b205e) that plain pip silently drops.
+    uv pip install --python "${VENV_DIR}/bin/python" -e '.[dev]'
     touch "${BOOTSTRAP_STAMP}"
   fi
 }

@@ -36,13 +36,18 @@ class TestPlatformContractImpact:
         g = build_effective_repo_graph()
         assert compute_contract_impact(g, "ghost-repo") is None
 
-    def test_legacy_alias_resolves(self) -> None:
+    def test_canonical_and_repo_id_resolve(self) -> None:
         g = build_effective_repo_graph()
-        # ExecutionContractProtocol is the historical label for CxRP.
-        summary = compute_contract_impact(g, "ExecutionContractProtocol")
-        assert summary is not None
-        assert summary.target.canonical_name == "CxRP"
-        assert summary.has_impact()
+        # The v1 manifest schema dropped free-text legacy_names, so the
+        # historical "ExecutionContractProtocol" label for CxRP no longer
+        # resolves (returns None — pass-through). Resolution is by canonical_name
+        # and repo_id (case-insensitive); both must reach CxRP and report impact.
+        for name in ("CxRP", "cxrp"):
+            summary = compute_contract_impact(g, name)
+            assert summary is not None
+            assert summary.target.canonical_name == "CxRP"
+            assert summary.has_impact()
+        assert compute_contract_impact(g, "ExecutionContractProtocol") is None
 
     def test_non_contract_repo_has_no_consumers(self) -> None:
         g = build_effective_repo_graph()
@@ -115,8 +120,19 @@ class TestEffectiveGraphWithProject:
         summary = compute_contract_impact(g, "CxRP")
         assert summary is not None
         names = {n.canonical_name for n in summary.affected}
-        assert {"OperationsCenter", "SwitchBoard", "OperatorConsole", "VFAApi"} == names
-        assert len(summary.public_affected) == 3
+        # Platform CxRP consumers now include the three executor backends
+        # (TeamExecutor/DAGExecutor/CritiqueExecutor depends_on_contracts_from
+        # CxRP), plus the private project consumer.
+        assert {
+            "OperationsCenter",
+            "SwitchBoard",
+            "OperatorConsole",
+            "TeamExecutor",
+            "DAGExecutor",
+            "CritiqueExecutor",
+            "VFAApi",
+        } == names
+        assert len(summary.public_affected) == 6
         assert len(summary.private_affected) == 1
 
 
@@ -211,15 +227,19 @@ class TestEffectiveGraphWithWorkScope:
         summary = compute_contract_impact(g, "CxRP")
         assert summary is not None
         names = {n.canonical_name for n in summary.affected}
-        # Public platform consumers PLUS both private include consumers
+        # Public platform consumers (incl. the three executor backends that
+        # depends_on_contracts_from CxRP) PLUS both private include consumers
         assert {
             "OperationsCenter",
             "SwitchBoard",
             "OperatorConsole",
+            "TeamExecutor",
+            "DAGExecutor",
+            "CritiqueExecutor",
             "ProjectAAPI",
             "ProjectBAPI",
         } == names
-        assert len(summary.public_affected) == 3
+        assert len(summary.public_affected) == 6
         assert len(summary.private_affected) == 2
         # Privates are both Visibility.PRIVATE
         assert all(n.visibility is Visibility.PRIVATE for n in summary.private_affected)

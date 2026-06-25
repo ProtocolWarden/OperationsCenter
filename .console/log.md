@@ -8477,3 +8477,24 @@ across conventions without over-matching different repos -> the gate is now SAFE
 needs (cross-repo, recorded): a plane-bearing repograph release (OC's transitive repograph@v0.2.0 is planeless) +
 PM topology compat (the plane-bearing PM commit dropped legacy_names, breaking OC impact-analysis). Behavior-neutral
 on the live fleet (capability path dormant; CI/test-only otherwise) -> no urgent deploy.
+
+## 2026-06-24 — Capability enforcement ACTIVATED (cross-repo)
+
+Full activation of C2 (operator: "drive the full activation, cross-repo and all"). Bumped OC deps to consume the
+plane-bearing upstream commits: platform-manifest -> 17095f433 (ships capabilities.py + data/capabilities.yaml);
+repograph -> e0b205e via [tool.uv] override-dependencies (the planeless repograph@v0.2.0 came transitively via
+context-lifecycle; only an override wins). The plane now loads (34 edges). Reconciled the 6-test blast radius from
+PM's topology evolution (legacy_names dropped -> canonical_name/runtime_role; CxRP consumers 3->6) MEANINGFULLY (no
+test deletions). SAFETY-verified vs the real registry: board_unblock -> PROCEED (operations_center matches
+OperationsCenter via #400's _norm_owner), wrong owner -> REFUSE; all 12 capabilities resolve to exactly one owner.
+Enabled require_capability_owner default True (fail-open -> can't deadlock). Full tests/unit 8183 passed, 0 failed.
+DEPLOY NOTE: needs a LIVE VENV RE-SYNC (uv sync with the override) + restart; the deployed gate degrades safely until
+then. Bare-SHA pins (no plane-bearing tag exists on PM/RepoGraph yet).
+
+## 2026-06-24 — Capability activation: deploy-mechanism fix + T3
+
+ensure_venv now uses `uv pip install` (not plain pip) so the fleet's venv honors pyproject [tool.uv]
+override-dependencies (the plane-bearing repograph e0b205e). Plain pip silently dropped it -> the deployed plane
+would stay dormant AND repograph would downgrade to planeless on every pyproject change. Gated the live-registry
+tests with a declarative skipif on plane availability (custodian T3, not a per-test runtime skip). Verified: in the
+activated venv the live tests run+pass (27); planeless -> skip.

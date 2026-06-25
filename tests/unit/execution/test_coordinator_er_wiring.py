@@ -228,7 +228,14 @@ class TestLifecycleWiring:
 class TestRepoGraphWiring:
     def test_default_loader_resolves_canonical(self) -> None:
         graph = load_default_repo_graph()
-        assert graph.resolve("ControlPlane").canonical_name == "OperationsCenter"
+        # The default (platform-only) loader resolves by canonical_name,
+        # case-insensitively. The v1 manifest schema dropped free-text
+        # legacy_names (canonical_name/runtime_role; aliases now surface only via
+        # the indexed public_alias), so the historical "ControlPlane" label no
+        # longer resolves — assert that explicitly so this guards the resolver.
+        assert graph.resolve("OperationsCenter").canonical_name == "OperationsCenter"
+        assert graph.resolve("operationscenter").canonical_name == "OperationsCenter"
+        assert graph.resolve("ControlPlane") is None
 
     def test_default_loader_is_cached(self) -> None:
         a = load_default_repo_graph()
