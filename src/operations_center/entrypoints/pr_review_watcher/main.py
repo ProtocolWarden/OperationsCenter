@@ -1224,6 +1224,39 @@ def _merge_and_done(
             pr_number,
         )
         return  # leave state file — operator must inspect/ack
+    # CI-GREEN PRECONDITION. The fleet self-merges via the REST merge API plus the
+    # self-issued reviewer-verdict published just below, which together clear branch
+    # protection WITHOUT GitHub enforcing the OTHER required checks — so the reviewer
+    # must verify CI itself. A PR is green only when nothing has FAILED *and* nothing
+    # is still PENDING: a queued/in_progress run has no conclusion yet, so
+    # get_failed_checks alone cannot see it. Refusing here is what stops the fleet
+    # from self-merging red (the hole that landed #405 and #406 with red pytest/perf).
+    _repo_cfg_ci = (
+        settings.repos.get(state["repo_key"]) if getattr(settings, "repos", None) else None
+    )
+    _ci_ignored = list(getattr(_repo_cfg_ci, "ci_ignored_checks", []) or [])
+    _ci_failed = (
+        gh_client.get_failed_checks(
+            owner, repo, pr_number, pr_data=_pr_data, ignored_checks=_ci_ignored
+        )
+        or []
+    )
+    _ci_pending = (
+        gh_client.get_incomplete_checks(
+            owner, repo, pr_number, pr_data=_pr_data, ignored_checks=_ci_ignored
+        )
+        or []
+    )
+    if _ci_failed or _ci_pending:
+        logger.warning(
+            "pr_review_watcher: PR #%d NOT merged — CI not green (failed=%s pending=%s); "
+            "re-evaluated next poll (reason=%s)",
+            pr_number,
+            _ci_failed,
+            _ci_pending,
+            reason,
+        )
+        return  # leave state file — re-checked next poll once CI settles
     # Bless this head with reviewer-verdict=success BEFORE merging, so the
     # required status check is satisfied for the fleet's own merge — and so the
     # non-LGTM merge paths (e.g. ci_validated_after_retraction) also clear the
