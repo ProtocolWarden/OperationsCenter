@@ -469,6 +469,118 @@ class TestExtractionHealthCommand:
         # sum of edge_case_summary = 6
         assert "6" in result.stdout
 
+    @patch("operations_center.observer.cli.ExtractionHistoryCollector")
+    @patch("operations_center.observer.cli.TestSignalQuery")
+    def test_json_output_includes_message_quality_rate_key(
+        self, mock_cls: MagicMock, _mock_collector: MagicMock
+    ) -> None:
+        """JSON output includes a message_quality_rate key."""
+        mock_cls.return_value = _query_returning(
+            ExtractionHealth(
+                success_rate=80.0,
+                complete_extraction=4,
+                message_quality_rate=75.0,
+            )
+        )
+        with patch("pathlib.Path.exists", return_value=True):
+            result = runner.invoke(app, ["extraction-health", "--format", "json"])
+        assert result.exit_code == 0
+        payload = json.loads(result.stdout)
+        assert "message_quality_rate" in payload
+        assert payload["message_quality_rate"] == 75.0
+
+    @patch("operations_center.observer.cli.ExtractionHistoryCollector")
+    @patch("operations_center.observer.cli.TestSignalQuery")
+    def test_json_output_includes_low_quality_messages_key(
+        self, mock_cls: MagicMock, _mock_collector: MagicMock
+    ) -> None:
+        """JSON output includes a low_quality_messages key."""
+        mock_cls.return_value = _query_returning(
+            ExtractionHealth(low_quality_messages=[{"test_id": "mod::test_a", "reason": "empty"}])
+        )
+        with patch("pathlib.Path.exists", return_value=True):
+            result = runner.invoke(app, ["extraction-health", "--format", "json"])
+        assert result.exit_code == 0
+        payload = json.loads(result.stdout)
+        assert "low_quality_messages" in payload
+        assert isinstance(payload["low_quality_messages"], list)
+        assert payload["low_quality_messages"][0]["reason"] == "empty"
+
+    @patch("operations_center.observer.cli.ExtractionHistoryCollector")
+    @patch("operations_center.observer.cli.TestSignalQuery")
+    def test_json_message_quality_rate_is_null_when_none(
+        self, mock_cls: MagicMock, _mock_collector: MagicMock
+    ) -> None:
+        """JSON message_quality_rate is null when no assertion messages exist."""
+        mock_cls.return_value = _query_returning(ExtractionHealth(message_quality_rate=None))
+        with patch("pathlib.Path.exists", return_value=True):
+            result = runner.invoke(app, ["extraction-health", "--format", "json"])
+        assert result.exit_code == 0
+        payload = json.loads(result.stdout)
+        assert "message_quality_rate" in payload
+        assert payload["message_quality_rate"] is None
+
+    @patch("operations_center.observer.cli.ExtractionHistoryCollector")
+    @patch("operations_center.observer.cli.TestSignalQuery")
+    def test_table_format_shows_message_quality_rate_when_present(
+        self, mock_cls: MagicMock, _mock_collector: MagicMock
+    ) -> None:
+        """Table format shows message_quality_rate line when value is not None."""
+        mock_cls.return_value = _query_returning(
+            ExtractionHealth(success_rate=80.0, message_quality_rate=85.7)
+        )
+        with patch("pathlib.Path.exists", return_value=True):
+            result = runner.invoke(app, ["extraction-health", "--format", "table"])
+        assert result.exit_code == 0
+        assert "message_quality_rate=85.7%" in result.stdout
+
+    @patch("operations_center.observer.cli.ExtractionHistoryCollector")
+    @patch("operations_center.observer.cli.TestSignalQuery")
+    def test_table_format_omits_quality_line_when_none(
+        self, mock_cls: MagicMock, _mock_collector: MagicMock
+    ) -> None:
+        """Table format omits quality line when message_quality_rate is None."""
+        mock_cls.return_value = _query_returning(
+            ExtractionHealth(success_rate=0.0, message_quality_rate=None)
+        )
+        with patch("pathlib.Path.exists", return_value=True):
+            result = runner.invoke(app, ["extraction-health", "--format", "table"])
+        assert result.exit_code == 0
+        assert "message_quality_rate" not in result.stdout
+
+    @patch("operations_center.observer.cli.ExtractionHistoryCollector")
+    @patch("operations_center.observer.cli.TestSignalQuery")
+    def test_table_format_shows_low_quality_messages_section_when_non_empty(
+        self, mock_cls: MagicMock, _mock_collector: MagicMock
+    ) -> None:
+        """Table format shows low_quality_messages sample lines when list is non-empty."""
+        mock_cls.return_value = _query_returning(
+            ExtractionHealth(
+                message_quality_rate=50.0,
+                low_quality_messages=[{"test_id": "mod::test_a", "reason": "empty"}],
+            )
+        )
+        with patch("pathlib.Path.exists", return_value=True):
+            result = runner.invoke(app, ["extraction-health", "--format", "table"])
+        assert result.exit_code == 0
+        assert "low_quality_messages" in result.stdout
+        assert "mod::test_a" in result.stdout
+        assert "empty" in result.stdout
+
+    @patch("operations_center.observer.cli.ExtractionHistoryCollector")
+    @patch("operations_center.observer.cli.TestSignalQuery")
+    def test_table_format_omits_low_quality_section_when_empty(
+        self, mock_cls: MagicMock, _mock_collector: MagicMock
+    ) -> None:
+        """Table format omits low_quality_messages section when list is empty."""
+        mock_cls.return_value = _query_returning(
+            ExtractionHealth(message_quality_rate=100.0, low_quality_messages=[])
+        )
+        with patch("pathlib.Path.exists", return_value=True):
+            result = runner.invoke(app, ["extraction-health", "--format", "table"])
+        assert result.exit_code == 0
+        assert "low_quality_messages" not in result.stdout
+
     def test_records_history_and_attaches_trend(self, tmp_path) -> None:
         # End-to-end through the REAL TestSignalQuery + ExtractionHistoryCollector
         # (no mocks): proves the command actually wires collect_snapshot + the
@@ -502,3 +614,77 @@ class TestExtractionHealthCommand:
         assert isinstance(h["anomalies"], list)
         assert h["observations"] >= 2
         assert isinstance(h["recent"], list) and len(h["recent"]) >= 2
+
+
+class TestMessageQualityRateStorageAndAlerts:
+    """Stage 3: message_quality_rate is stored to history and alerts are fired."""
+
+    @patch("operations_center.observer.cli.ExtractionHistoryCollector")
+    @patch("operations_center.observer.cli.TestSignalQuery")
+    def test_collect_snapshot_receives_message_quality_rate(
+        self, mock_cls: MagicMock, mock_collector_cls: MagicMock
+    ) -> None:
+        """collect_snapshot() is called with the health's message_quality_rate value."""
+        mock_cls.return_value = _query_returning(
+            ExtractionHealth(
+                success_rate=80.0,
+                complete_extraction=4,
+                partial_extraction=0,
+                no_extraction=1,
+                message_quality_rate=72.5,
+            )
+        )
+        mock_collector_instance = MagicMock()
+        mock_collector_cls.return_value = mock_collector_instance
+
+        with patch("pathlib.Path.exists", return_value=True):
+            result = runner.invoke(app, ["extraction-health", "--format", "json"])
+        assert result.exit_code == 0
+
+        call_kwargs = mock_collector_instance.collect_snapshot.call_args
+        kwargs = call_kwargs.kwargs if call_kwargs.kwargs else {}
+        passed_quality = kwargs.get("message_quality_rate", None)
+        assert passed_quality == 72.5, (
+            f"Expected collect_snapshot to receive message_quality_rate=72.5, got {passed_quality}"
+        )
+
+    @patch("operations_center.observer.cli.ExtractionHistoryCollector")
+    @patch("operations_center.observer.cli.TestSignalQuery")
+    def test_collect_snapshot_receives_none_quality_rate(
+        self, mock_cls: MagicMock, mock_collector_cls: MagicMock
+    ) -> None:
+        """collect_snapshot() is called with message_quality_rate=None when unset."""
+        mock_cls.return_value = _query_returning(
+            ExtractionHealth(
+                success_rate=0.0,
+                message_quality_rate=None,
+            )
+        )
+        mock_collector_instance = MagicMock()
+        mock_collector_cls.return_value = mock_collector_instance
+
+        with patch("pathlib.Path.exists", return_value=True):
+            result = runner.invoke(app, ["extraction-health", "--format", "json"])
+        assert result.exit_code == 0
+
+        call_kwargs = mock_collector_instance.collect_snapshot.call_args
+        kwargs = call_kwargs.kwargs if call_kwargs.kwargs else {}
+        passed_quality = kwargs.get("message_quality_rate", "SENTINEL")
+        assert passed_quality is None, (
+            f"Expected collect_snapshot to receive message_quality_rate=None, got {passed_quality}"
+        )
+
+    def test_quality_rate_stored_in_jsonl(self, tmp_path: any) -> None:
+        """End-to-end: quality rate written into the JSONL history file."""
+        root = tmp_path / "obs"
+        root.mkdir()
+        result = runner.invoke(
+            app,
+            ["extraction-health", "--storage-root", str(root), "--format", "json"],
+        )
+        assert result.exit_code == 0
+        hist_file = root / "extraction_history" / "extraction_health_history.jsonl"
+        assert hist_file.exists()
+        row = json.loads(hist_file.read_text(encoding="utf-8").strip().splitlines()[0])
+        # message_quality_rate key must be present (value may be None if no flaky tests)
+        assert "message_quality_rate" in row

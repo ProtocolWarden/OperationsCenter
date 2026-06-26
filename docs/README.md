@@ -63,6 +63,7 @@ Backend docs:
 - [architecture/ci/ci_integration_guide.md](architecture/ci/ci_integration_guide.md)
 - [architecture/ci/coverage-gating.md](architecture/ci/coverage-gating.md) — Coverage threshold gating: mechanism, configuration, and gap analysis.
 - [coverage-threshold-configuration.md](coverage-threshold-configuration.md) — Coverage threshold configuration reference: thresholds, developer workflow, and FAQ.
+- [reference/EXTRACTION_FIDELITY_METRIC.md](reference/EXTRACTION_FIDELITY_METRIC.md) — Extraction fidelity metric (message_quality_rate): measuring test-failure message quality, not just presence.
 - [architecture/audit/code_health_audit.md](architecture/audit/code_health_audit.md)
 - [architecture/contracts/contract-map.md](architecture/contracts/contract-map.md)
 - [architecture/contracts/platform_manifest_consumption.md](architecture/contracts/platform_manifest_consumption.md) —

@@ -67,6 +67,7 @@ class ExtractionHealthSnapshot:
     edge_case_summary: dict[str, int] = field(default_factory=dict)
     snapshot_id: str | None = None
     collection_run_id: str | None = None
+    message_quality_rate: float | None = None
 
     def __post_init__(self) -> None:
         """Validate and normalize snapshot data."""
@@ -95,6 +96,7 @@ class ExtractionHealthSnapshot:
             "edge_case_summary": self.edge_case_summary,
             "snapshot_id": self.snapshot_id,
             "collection_run_id": self.collection_run_id,
+            "message_quality_rate": self.message_quality_rate,
         }
 
     @classmethod
@@ -111,6 +113,7 @@ class ExtractionHealthSnapshot:
             edge_case_summary=data.get("edge_case_summary", {}),
             snapshot_id=data.get("snapshot_id"),
             collection_run_id=data.get("collection_run_id"),
+            message_quality_rate=data.get("message_quality_rate"),
         )
 
 

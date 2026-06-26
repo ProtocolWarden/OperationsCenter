@@ -72,8 +72,8 @@ class TestFlakyTestAlertConfig:
     def test_initialization(self) -> None:
         config = FlakyTestAlertConfig()
         assert config is not None
-        assert len(config.channel_routes) == 5
-        assert len(config.thresholds) == 4
+        assert len(config.channel_routes) == 6
+        assert len(config.thresholds) == 5
 
     def test_default_channel_routes(self) -> None:
         config = FlakyTestAlertConfig()
@@ -265,3 +265,48 @@ class TestExtractionSuccessRateConfig:
         config = FlakyTestAlertConfig()
         channels = config.get_channels_for_alert("EXTRACTION_SUCCESS_RATE_LOW", "INFO")
         assert "operator_log" in channels
+
+
+class TestMessageQualityRateThresholdValues:
+    """Verify the exact configured threshold values and boundary behaviour for
+    should_alert_on_message_quality_rate()."""
+
+    def test_warning_threshold_value_is_80(self) -> None:
+        config = FlakyTestAlertConfig()
+        assert config.get_threshold("message_quality_rate", "WARNING") == 80.0
+
+    def test_critical_threshold_value_is_50(self) -> None:
+        config = FlakyTestAlertConfig()
+        assert config.get_threshold("message_quality_rate", "CRITICAL") == 50.0
+
+    def test_emergency_threshold_value_is_10(self) -> None:
+        config = FlakyTestAlertConfig()
+        assert config.get_threshold("message_quality_rate", "EMERGENCY") == 10.0
+
+    def test_exactly_at_warning_threshold_does_not_alert(self) -> None:
+        """80.0 is not *below* 80.0 → no alert."""
+        config = FlakyTestAlertConfig()
+        should, sev = config.should_alert_on_message_quality_rate(80.0)
+        assert not should
+        assert sev == ""
+
+    def test_just_below_warning_threshold_alerts_warning(self) -> None:
+        """79.9 is below 80.0 → WARNING."""
+        config = FlakyTestAlertConfig()
+        should, sev = config.should_alert_on_message_quality_rate(79.9)
+        assert should
+        assert sev == "WARNING"
+
+    def test_exactly_at_critical_threshold_alerts_warning_not_critical(self) -> None:
+        """50.0 is not below the 50.0 critical threshold, but it is below 80.0 → WARNING."""
+        config = FlakyTestAlertConfig()
+        should, sev = config.should_alert_on_message_quality_rate(50.0)
+        assert should
+        assert sev == "WARNING"
+
+    def test_zero_rate_alerts_emergency(self) -> None:
+        """0.0 is below every threshold → EMERGENCY."""
+        config = FlakyTestAlertConfig()
+        should, sev = config.should_alert_on_message_quality_rate(0.0)
+        assert should
+        assert sev == "EMERGENCY"
