@@ -488,13 +488,11 @@ class FlakyTestQueryMixin(ABC):
             has_test_name = test.test_name is not None
             has_assertion = test.assertion_message is not None
 
-            test_status = None
+            test_status = "missing"
             if has_test_name and has_assertion:
                 test_status = "complete"
             elif has_test_name or has_assertion:
                 test_status = "partial"
-            else:
-                test_status = "missing"
 
             if test_status == status.lower():
                 filtered.append(test)
