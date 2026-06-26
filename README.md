@@ -1037,13 +1037,179 @@ pytest tests/ -v -m "edge_case"
 
 ### Test Failure Extraction and Analysis
 
-OperationsCenter extracts and categorizes test failures at multiple levels, enabling deep failure analysis and patterns understanding. When tests fail, the system extracts:
+OperationsCenter extracts and tracks test failures along two complementary axes:
 
-- **Test names** — function names of failing tests (with parameterized test support)
-- **Assertion messages** — extracted exception messages and error details (200 char max)
-- **Failure categories** — 4-layer categorization system (execution → contracts → validation → test-level)
+- **Presence** (`success_rate`) — whether `test_name` and `assertion_message` were captured at all
+- **Quality** (`message_quality_rate`) — whether captured assertion messages are informative enough for diagnosis
 
-#### Query Extracted Test Failure Data
+A healthy pipeline keeps both metrics above 95%. A pipeline with high `success_rate` but low `message_quality_rate` is recording placeholder messages (for example, bare `"TimeoutError"` strings) that look complete but carry no diagnostic value.
+
+#### Monitoring Extraction Health
+
+> **Reference**: [`docs/reference/EXTRACTION_FIDELITY_METRIC.md`](docs/reference/EXTRACTION_FIDELITY_METRIC.md) — full schema, quality gate internals, storage format, and extension guide.
+
+**Via CLI (JSON — default):**
+```bash
+# Default JSON output (24-hour window)
+operations-center observer extraction-health --format json --hours 24
+
+# Extend the look-back window
+operations-center observer extraction-health --format json --hours 48
+```
+
+**JSON output shape:**
+```json
+{
+  "success_rate": 87.5,
+  "complete_extraction": 14,
+  "partial_extraction": 0,
+  "no_extraction": 2,
+  "edge_case_summary": {
+    "truncated_messages": 1,
+    "special_chars": 0,
+    "malformed_exceptions": 0
+  },
+  "gaps": [
+    "tests/unit/auth/test_token_refresh.py::test_expired_token",
+    "tests/unit/db/test_pool.py::TestPool::test_timeout"
+  ],
+  "edge_cases": [
+    {
+      "test_id": "tests/unit/queue/test_drain.py::test_drain_under_load",
+      "issue": "truncated_message"
+    }
+  ],
+  "message_quality_rate": 92.3,
+  "low_quality_messages": [
+    {
+      "test_id": "tests/unit/net/test_connector.py::test_connect_timeout",
+      "reason": "bare_exception_type"
+    }
+  ],
+  "history": {
+    "window_days": 7,
+    "trend": {
+      "granularity": "daily",
+      "success_rate_mean": 88.5,
+      "success_rate_min": 82.0,
+      "success_rate_max": 95.0,
+      "success_rate_std_dev": 4.2,
+      "success_rate_trend": 0.1,
+      "complete_extraction_mean": 14.0,
+      "partial_extraction_mean": 0.0,
+      "no_extraction_mean": 1.9,
+      "observation_count": 7,
+      "edge_case_trends": {},
+      "anomalies": []
+    },
+    "weekly_trend": { "granularity": "weekly", "observation_count": 7 },
+    "slope": { "slope": 0.1, "r_squared": 0.85, "confidence": "stable" },
+    "anomalies": [],
+    "observations": 12,
+    "recent": [],
+    "snapshots_pruned": 0
+  }
+}
+```
+
+**JSON field reference:**
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `success_rate` | `float` | `(complete + partial) / total × 100` |
+| `complete_extraction` | `int` | Tests with both `test_name` and `assertion_message` |
+| `partial_extraction` | `int` | Tests with only one of the two fields |
+| `no_extraction` | `int` | Tests with neither field (full gaps) |
+| `edge_case_summary` | `dict` | Counts of truncated, special-char, and malformed messages |
+| `gaps` | `list[str]` | Up to 10 pytest node IDs where both fields are missing |
+| `edge_cases` | `list[{test_id, issue}]` | Up to 10 per-test quality issues |
+| `message_quality_rate` | `float \| null` | `informative / with_assertion × 100`; `null` when no assertion messages exist |
+| `low_quality_messages` | `list[{test_id, reason}]` | Up to 10 messages below the quality bar |
+| `history` | `dict` | Trend summary over `--trend-days` (omitted when no history exists); `trend`/`weekly_trend` are aggregated metrics objects; `slope` is `{slope, r_squared, confidence}` |
+
+**Via CLI (table):**
+```bash
+operations-center observer extraction-health --format table
+```
+
+Example output:
+```
+extraction success_rate=87.5%  complete=14  partial=0  none=2
+message_quality_rate=92.3%
+gaps (2 tests, showing 2):
+  tests/unit/auth/test_token_refresh.py::test_expired_token
+  tests/unit/db/test_pool.py::TestPool::test_timeout
+edge_cases (1 issues, showing 1):
+  tests/unit/queue/test_drain.py::test_drain_under_load  [truncated_message]
+low_quality_messages (showing 1):
+  tests/unit/net/test_connector.py::test_connect_timeout  [bare_exception_type]
+```
+
+`message_quality_rate`, `gaps`, `edge_cases`, and `low_quality_messages` sections are omitted when empty or `null`.
+
+#### Gaps and Edge Cases
+
+The `extraction-health` output surfaces three sample lists that identify where and how extraction is falling short.
+
+**Gaps** (`gaps` field) — tests where both `test_name` and `assertion_message` are `None`. The full count is `no_extraction`; `gaps` shows up to 10 node IDs.
+
+```json
+"gaps": [
+  "tests/unit/auth/test_token_refresh.py::test_expired_token"
+]
+```
+
+**Edge cases** (`edge_cases` field) — tests whose assertion message was captured but is imperfect. The `issue` key identifies the problem:
+
+| `issue` value | Meaning |
+|---------------|---------|
+| `truncated_message` | Message exceeded 200 characters and was cut off |
+| `special_chars` | Message contains non-ASCII or control characters |
+| `malformed_exception` | Exception format was non-standard (no `args`, unusual chain) |
+
+**Low-quality messages** (`low_quality_messages` field) — tests whose assertion message was captured but fails the quality bar. The `reason` key identifies why:
+
+| `reason` value | Condition |
+|----------------|-----------|
+| `empty` | Cleaned message is `""` |
+| `too_short` | Cleaned message is fewer than 10 characters |
+| `bare_exception_type` | Message is a bare exception name (`TimeoutError`, `ConnectionError`, `OSError`) |
+
+Low-quality messages count against `message_quality_rate` even though they appear in the `assertion_message` field — the extraction succeeded, but the message is not informative enough for diagnosis.
+
+#### Alert Integration
+
+Both extraction metrics fire alerts when they fall below their configured thresholds. Thresholds use **inverted semantics**: lower is worse.
+
+**Thresholds:**
+
+| Metric | INFO | WARNING | CRITICAL | EMERGENCY |
+|--------|------|---------|----------|-----------|
+| `extraction_success_rate` | < 95% | < 80% | < 50% | < 10% |
+| `message_quality_rate` | < 95% | < 80% | < 50% | < 10% |
+
+**Channel routing:**
+
+| Alert type | INFO | WARNING | CRITICAL | EMERGENCY |
+|------------|------|---------|----------|-----------|
+| `EXTRACTION_SUCCESS_RATE_LOW` | operator_log | operator_log, slack | operator_log, slack, email | operator_log, slack, email, pagerduty |
+| `MESSAGE_QUALITY_RATE_LOW` | operator_log | operator_log, slack | operator_log, slack, email | operator_log, slack, email, pagerduty |
+
+**Programmatic check:**
+```python
+from operations_center.observer.flaky_test_alerts import FlakyTestAlertManager
+from operations_center.observer.flaky_test_alert_config import FlakyTestAlertConfig
+
+config = FlakyTestAlertConfig()
+alerts = FlakyTestAlertManager.check_message_quality_rate(rate=72.5, config=config)
+for alert in alerts:
+    print(f"[{alert.severity.value.upper()}] {alert.description}")
+    # [WARNING] Message quality rate 72.5% is below warning threshold of 80.0%
+```
+
+`check_message_quality_rate()` returns an empty list when `rate` is `None`, so callers do not need to guard separately.
+
+#### Querying Failing Test Data
 
 **Via CLI:**
 ```bash
@@ -1065,21 +1231,72 @@ operations-center-observer query-flaky-tests --format markdown
 
 **Via Python API:**
 ```python
-from operations_center.observer.query_flaky import FlakyTestQueryMixin
-from operations_center.observer.query import TestSignalQuery
-from operations_center.observer.models import TimeRange
+from operations_center.observer.query import TestSignalQuery, TimeRange
 
 # Get failing test names
 query = TestSignalQuery()
 test_names = query.get_failing_test_names(TimeRange.last_hours(24))
 # Returns: {"test_foo": 5, "test_bar": 3, ...}
 
-# Get assertion messages
+# Get assertion message occurrence counts
 assertion_msgs = query.get_failing_assertion_messages(TimeRange.last_hours(24))
-# Returns: {"test_foo": ["assert x == 5", ...], "test_bar": [...], ...}
+# Returns: {"assert x == 5 (got False)": 8, "TimeoutError": 3, ...}
 
 # Filter by specific test name
 flaky_tests = query.filter_by_test_name("test_foo", TimeRange.last_hours(24))
+```
+
+**Example output:**
+
+Table format:
+```
+Test Failures (Last 24 Hours)
+┌────────────────────────────────────┬────────┬──────────────┐
+│ Test Name                          │ Count  │ Percentage   │
+├────────────────────────────────────┼────────┼──────────────┤
+│ test_observer_initialization       │ 12     │ 25.5%        │
+│ test_snapshot_validation           │ 8      │ 17.0%        │
+│ test_metrics_aggregation           │ 7      │ 14.9%        │
+│ test_data_persistence              │ 5      │ 10.6%        │
+└────────────────────────────────────┴────────┴──────────────┘
+
+Assertion Messages
+┌──────────────────────────────────────────────────────────┬───────┐
+│ Message                                                  │ Count │
+├──────────────────────────────────────────────────────────┼───────┤
+│ assert signal.status == 'passing' (got 'flaky')          │ 8     │
+│ assert len(metrics) > 0 (got 0)                          │ 5     │
+│ TimeoutError: test execution exceeded 30s                │ 4     │
+└──────────────────────────────────────────────────────────┴───────┘
+```
+
+JSON format:
+```json
+{
+  "test_names": [
+    {
+      "name": "test_observer_initialization",
+      "count": 12,
+      "percentage": "25.5%"
+    },
+    {
+      "name": "test_snapshot_validation",
+      "count": 8,
+      "percentage": "17.0%"
+    }
+  ],
+  "total_count": 47,
+  "unique_tests": 7,
+  "assertion_messages": {
+    "test_observer_initialization": [
+      "assert signal.status == 'passing' (got 'flaky')",
+      "KeyError: 'test_metrics'"
+    ],
+    "test_snapshot_validation": [
+      "assert len(metrics) > 0 (got 0)"
+    ]
+  }
+}
 ```
 
 #### Extraction Process
@@ -1115,76 +1332,25 @@ Query & Reporting
 - Aggregated into flaky test reports with counts and patterns
 - Included in repository state snapshots for historical analysis
 
-#### Example Query Output
+#### Troubleshooting
 
-**Table Format:**
-```
-Test Failures (Last 24 Hours)
-┌────────────────────────────────────┬────────┬──────────────┐
-│ Test Name                          │ Count  │ Percentage   │
-├────────────────────────────────────┼────────┼──────────────┤
-│ test_observer_initialization       │ 12     │ 25.5%        │
-│ test_snapshot_validation           │ 8      │ 17.0%        │
-│ test_metrics_aggregation           │ 7      │ 14.9%        │
-│ test_data_persistence              │ 5      │ 10.6%        │
-└────────────────────────────────────┴────────┴──────────────┘
+Use `message_quality_rate` to diagnose what the extraction pipeline is producing:
 
-Assertion Messages
-┌──────────────────────────────────────────────────────────┬───────┐
-│ Message                                                  │ Count │
-├──────────────────────────────────────────────────────────┼───────┤
-│ assert signal.status == 'passing' (got 'flaky')          │ 8     │
-│ assert len(metrics) > 0 (got 0)                          │ 5     │
-│ TimeoutError: test execution exceeded 30s                │ 4     │
-└──────────────────────────────────────────────────────────┴───────┘
-```
+| `message_quality_rate` | Interpretation | Action |
+|------------------------|----------------|--------|
+| `null` | No tests carried an assertion message in the window | Check `success_rate`; if also low, the plugin may not be capturing failures |
+| 0–49% | Most messages are low-quality | Check `low_quality_messages` for `bare_exception_type` entries — tests may be raising raw exception types without messages |
+| 50–79% | Mixed quality; WARNING alert active | Investigate `low_quality_messages`; check if `too_short` entries suggest truncation upstream |
+| 80–94% | Acceptable; INFO alert active | Monitor trend; no immediate action required |
+| 95–100% | Healthy | Pipeline is producing informative messages |
 
-**JSON Format:**
-```json
-{
-  "test_names": [
-    {
-      "name": "test_observer_initialization",
-      "count": 12,
-      "percentage": "25.5%"
-    },
-    {
-      "name": "test_snapshot_validation",
-      "count": 8,
-      "percentage": "17.0%"
-    }
-  ],
-  "total_count": 47,
-  "unique_tests": 7,
-  "assertion_messages": {
-    "test_observer_initialization": [
-      "assert signal.status == 'passing' (got 'flaky')",
-      "KeyError: 'test_metrics'"
-    ],
-    "test_snapshot_validation": [
-      "assert len(metrics) > 0 (got 0)"
-    ]
-  }
-}
-```
+A sudden drop in `message_quality_rate` without a corresponding drop in `success_rate` signals a change in how tests raise exceptions (e.g., a dependency started raising bare `ConnectionError` instead of a descriptive message), not a problem with the extraction code itself.
+
+For full quality gate internals, the bare-exception-type list, and the JSONL storage schema, see [`docs/reference/EXTRACTION_FIDELITY_METRIC.md`](docs/reference/EXTRACTION_FIDELITY_METRIC.md).
 
 #### Inline Documentation
 
-All extraction functions include comprehensive docstrings explaining:
-
-- **Purpose**: What the function extracts and why
-- **Parameters**: Input types and expected formats
-- **Returns**: Output structure and semantics
-- **Examples**: Usage patterns with expected outputs
-- **Edge cases**: Special handling (parameterized tests, exception chaining, etc.)
-
-Key documented functions:
-
-- `extract_assertion_from_excinfo(excinfo)` — Entry point for assertion extraction
-- `parse_assertion_error(msg)` — Parse AssertionError with context
-- `parse_non_assertion_exception(exc)` — Parse timeout/connection errors
-- `clean_assertion_message(msg)` — Normalize and truncate messages
-- `_extract_test_name(item)` — Extract test name from pytest.Item
+Extraction functions are documented in [`src/operations_center/observer/assertion_extractor.py`](src/operations_center/observer/assertion_extractor.py) and [`src/operations_center/observer/pytest_flaky_plugin.py`](src/operations_center/observer/pytest_flaky_plugin.py).
 
 #### Parallel Test Execution
 

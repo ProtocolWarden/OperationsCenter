@@ -1,3 +1,55 @@
+## 2026-06-26 — README example validation: "Test Failure Extraction and Analysis" (Stage 3)
+
+Stage 3 (validate examples and test accuracy) complete. Three inaccuracies found and fixed in `README.md`:
+
+1. **`history` JSON object** — `trend` showed a fictional `{direction, delta}` shape; actual type is
+   `ExtractionHealthTrend.to_dict()` with fields `granularity`, `success_rate_mean/min/max/std_dev`,
+   `success_rate_trend`, `complete/partial/no_extraction_mean`, `observation_count`, `edge_case_trends`,
+   `anomalies`. `slope` was shown as `0.1` (float) but is actually `{slope, r_squared, confidence}` (dict).
+   `weekly_trend`, `recent`, and `snapshots_pruned` were missing from the history object entirely.
+
+2. **Python API import** — `TimeRange` was imported from `operations_center.observer.models`; it lives in
+   `operations_center.observer.query`. Unused `FlakyTestQueryMixin` import removed.
+
+3. **`get_failing_assertion_messages` return type comment** — claimed `{"test_foo": ["assert x == 5", ...]}`;
+   actual return is `dict[str, int]` (message → count), e.g. `{"assert x == 5 (got False)": 8}`.
+
+All content verified against: `ExtractionHealthTrend.to_dict()` in `extraction_health_history.py`,
+`get_extraction_trend_slope()` in `query_extraction_history.py`, `get_failing_assertion_messages()` in
+`query.py`, `cli.py:1058–1070` (history construction). 227 related tests pass.
+
+## 2026-06-26 — README section rewrite: "Test Failure Extraction and Analysis" (Stage 2)
+
+Stage 2 (implementation) complete. Rewrote `README.md:1038–1188` in-place.
+
+- **New subsections added**: Monitoring Extraction Health, Gaps and Edge Cases, Alert Integration,
+  Troubleshooting.
+- **Reordered**: health monitoring now precedes querying individual failures.
+- **Content verified against source**: all CLI examples match `cli.py` output format;
+  JSON field table matches `ExtractionHealth` dataclass; alert threshold tables match
+  `FlakyTestAlertConfig`; channel routing table matches `AlertChannelConfig` defaults.
+- **Inline Documentation** section slimmed to a single sentence with source file links.
+- Section grew from ~150 lines to ~302 lines; no surrounding content disturbed.
+- **Test suite**: 9,915 tests pass, 5 pre-existing sandbox failures (unchanged from before
+  this stage).
+
+## 2026-06-26 — README section design: "Test Failure Extraction and Analysis"
+
+Stage 1 (research and design) complete. Key findings:
+
+- Current README section (lines 1038–1189) covers only `query-flaky-tests` and the raw
+  extraction pipeline. Seven capabilities added since 2026-06-14 are absent: `extraction-health`
+  command, `success_rate`, `message_quality_rate`, `gaps`, `edge_cases`, `low_quality_messages`,
+  and alert integration.
+- Proposed outline: 7 subsections — Overview (two-axis model), Querying Failing Test Data,
+  Monitoring Extraction Health, Gaps and Edge Cases, Alert Integration, Extraction Process,
+  Troubleshooting.
+- Reordering decision: health monitoring subsection before querying, because operators verify
+  pipeline health before drilling into individual failures.
+- Decided to slim "Inline Documentation" to a single sentence; enumerating function docstrings
+  in the README adds maintenance burden without helping operators.
+- Full design captured in `.console/task.md`.
+
 ## 2026-06-26 — Stage 5: complete verification of extraction fidelity metric implementation
 
 Full test-suite and linter verification confirmed the branch is mergeable as-is:

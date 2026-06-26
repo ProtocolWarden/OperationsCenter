@@ -4,6 +4,22 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## Done
 
+### 2026-06-26: Stage 2 — README section rewrite: "Test Failure Extraction and Analysis" (✅ COMPLETE)
+- **Objective**: Rewrite `README.md:1038–1188` to cover `extraction-health`, `message_quality_rate`,
+  `gaps`, `edge_cases`, `low_quality_messages`, alert integration, and troubleshooting guide
+- **Status**: ✅ COMPLETE — All acceptance criteria met; 9,915 tests pass; no new failures
+- **Changes**:
+  - `README.md` — 7 subsections (Overview updated, Monitoring Extraction Health NEW, Gaps and Edge
+    Cases NEW, Alert Integration NEW, Querying Failing Test Data renamed, Extraction Process kept,
+    Troubleshooting NEW, Inline Documentation slimmed)
+- **Acceptance Criteria — ALL MET** ✅
+  1. ✅ All subsections from design outline present and accurate
+  2. ✅ `extraction-health` CLI examples match actual command output shape in `cli.py`
+  3. ✅ JSON field reference table matches `ExtractionHealth` dataclass fields
+  4. ✅ Alert threshold tables match `FlakyTestAlertConfig` configured values
+  5. ✅ No broken cross-links
+  6. ✅ Test suite and linter pass (9,915 tests pass; 5 pre-existing failures unchanged)
+
 ### 2026-06-26: Stage 5 — Verify complete implementation and test suite (✅ COMPLETE)
 - **Objective**: Full test-suite, linting, and verification that the `message_quality_rate` implementation is complete and mergeable
 - **Status**: ✅ COMPLETE — All acceptance criteria met; branch green and PR-ready
@@ -394,6 +410,20 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 - **Conclusion**: Concern resolved through verification. Code is production-ready.
 
 ## In Progress
+
+### 2026-06-26: README — "Test Failure Extraction and Analysis" section update
+- **Objective**: Rewrite the README section at lines 1038–1189 to cover all extraction
+  capabilities added since 2026-06-14: `extraction-health` command, `message_quality_rate`,
+  `gaps`, `edge_cases`, `low_quality_messages`, alert integration, and troubleshooting guide.
+- **Status**: Stage 1 (design) ✅ COMPLETE — Stage 2 (implementation) pending
+- **Stage 1 Deliverables**:
+  - Audience: operators (health CLI), developers (query CLI), engineers (data flow)
+  - Gap analysis: 7 missing items identified; current content to keep identified
+  - Outline: 7 subsections — Overview, Querying Failing Test Data, Monitoring Extraction Health,
+    Gaps and Edge Cases, Alert Integration, Extraction Process, Troubleshooting
+  - Key decisions: reorder (health first), add two-axis model to overview, slim Inline Documentation
+  - Design captured in `.console/task.md`
+- **Next**: Stage 2 — implement the rewritten section in README.md
 
 ### 2026-06-19: Stage 4 — Run full test suite and linters, fix any failures (✅ COMPLETE)
 - **Objective**: Execute full test suite and linters, fix any failures before finishing
