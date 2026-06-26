@@ -4,6 +4,42 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## Done
 
+### 2026-06-26: Stage 3 — Comprehensive test suite for extraction fidelity metric (✅ COMPLETE)
+- **Objective**: Write a comprehensive test suite covering edge cases, formula accuracy, and alert threshold boundaries for `message_quality_rate`
+- **Status**: ✅ COMPLETE — 32 new tests added; 271 fidelity tests total, all passing; 0 ruff violations
+- **Changes**:
+  - `tests/unit/observer/test_extraction_health_queries.py` — added `TestMessageQualityRateEdgeCases` (12 tests) and `TestMessageQualityRateFormula` (5 tests)
+  - `tests/unit/observer/test_flaky_test_alerts.py` — added `TestMessageQualityRateThresholdBoundaries` (8 tests)
+  - `tests/unit/observer/test_flaky_test_alert_config.py` — added `TestMessageQualityRateThresholdValues` (7 tests)
+- **New coverage**:
+  - Whitespace-only messages → `too_short`; each bare exception type individually; case-sensitivity of frozenset; `"ValueError"` at 10 chars → informative; `OSError` hits bare-exception gate before too-short; `rate=0.0` vs `None` distinction; partial-extraction tests count toward quality denominator; all three reasons in one run; cap does not affect computed rate; exact fractional formula (1/3, 2/3, 2/5); exact threshold boundary values (80.0/79.9/50.0/49.9/10.0/9.9/0.0); alert `details` keys
+- **Acceptance Criteria — ALL MET** ✅
+  1. ✅ Unit tests for metric calculation across quality scenarios
+  2. ✅ Tests for edge cases and boundary conditions
+  3. ✅ Integration tests verifying metric exports correctly
+  4. ✅ Tests confirm metric values match expected formulas
+  5. ✅ Test coverage sufficient per project requirements (271 fidelity tests)
+
+### 2026-06-26: Stage 1 — Design spec for extraction fidelity metric (✅ COMPLETE)
+- **Objective**: Produce design document for `message_quality_rate` metric
+- **Status**: ✅ COMPLETE — All 5 acceptance criteria met
+- **Changes**:
+  - `docs/specs/STAGE1_EXTRACTION_FIDELITY_METRIC.md` (NEW) — design spec covering:
+    - Measurement approach: formula (`informative / with_assertion × 100`), `None` sentinel, quality
+      gates (empty / bare_exception_type / too_short), constants and rationale
+    - Files modified/created: 5 implementation files, 5 test files, 2 documentation files
+    - Observer integration diagram showing data flow from `FlakyTest` → `ExtractionHealth` →
+      CLI / alerts / JSONL history
+    - Test plan: 5 test classes, 46 scenarios spanning unit (calculation, dataclass, alert
+      thresholds, alert config) and integration (CLI + storage, snapshot round-trip) layers
+    - Acceptance criteria: 8 verifiable criteria, all met by implementation in HEAD (2702e07)
+- **Acceptance Criteria — ALL MET** ✅
+  1. ✅ Measurement approach defined with thresholds and formula
+  2. ✅ All files requiring modification/creation identified
+  3. ✅ Integration with observer infrastructure documented
+  4. ✅ Unit and integration test plan written
+  5. ✅ Acceptance criteria for quality measurement established
+
 ### 2026-06-25: Stage 6 — Final verification and merge readiness (✅ COMPLETE)
 - **Objective**: Run full test suite, linters/formatters, and end-to-end verification; create PR
 - **Status**: ✅ COMPLETE — All acceptance criteria met; PR created

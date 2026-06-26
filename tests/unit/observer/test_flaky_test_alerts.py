@@ -583,3 +583,66 @@ class TestMessageQualityRateAlertConfig:
         config = FlakyTestAlertConfig()
         channels = config.get_channels_for_alert("MESSAGE_QUALITY_RATE_LOW", "WARNING")
         assert len(channels) > 0
+
+
+class TestMessageQualityRateThresholdBoundaries:
+    """Exact boundary values for message_quality_rate alert thresholds.
+
+    Thresholds (inverted semantics — *below* triggers):
+        WARNING   < 80.0
+        CRITICAL  < 50.0
+        EMERGENCY < 10.0
+    """
+
+    def test_rate_exactly_at_warning_threshold_produces_no_alert(self) -> None:
+        """80.0 is NOT below the 80.0 warning threshold → no alert."""
+        alerts = FlakyTestAlertManager.check_message_quality_rate(80.0)
+        assert alerts == []
+
+    def test_rate_just_below_warning_threshold_produces_warning(self) -> None:
+        """79.9 is below the 80.0 warning threshold → WARNING."""
+        alerts = FlakyTestAlertManager.check_message_quality_rate(79.9)
+        assert len(alerts) == 1
+        assert alerts[0].severity == AlertSeverity.WARNING
+
+    def test_rate_exactly_at_critical_threshold_produces_warning(self) -> None:
+        """50.0 is NOT below the 50.0 critical threshold; it IS below 80.0 → WARNING."""
+        alerts = FlakyTestAlertManager.check_message_quality_rate(50.0)
+        assert len(alerts) == 1
+        assert alerts[0].severity == AlertSeverity.WARNING
+
+    def test_rate_just_below_critical_threshold_produces_critical(self) -> None:
+        """49.9 is below the 50.0 critical threshold → CRITICAL."""
+        alerts = FlakyTestAlertManager.check_message_quality_rate(49.9)
+        assert len(alerts) == 1
+        assert alerts[0].severity == AlertSeverity.CRITICAL
+
+    def test_rate_exactly_at_emergency_threshold_produces_critical(self) -> None:
+        """10.0 is NOT below the 10.0 emergency threshold; it IS below 50.0 → CRITICAL."""
+        alerts = FlakyTestAlertManager.check_message_quality_rate(10.0)
+        assert len(alerts) == 1
+        assert alerts[0].severity == AlertSeverity.CRITICAL
+
+    def test_rate_just_below_emergency_threshold_produces_emergency(self) -> None:
+        """9.9 is below the 10.0 emergency threshold → EMERGENCY."""
+        alerts = FlakyTestAlertManager.check_message_quality_rate(9.9)
+        assert len(alerts) == 1
+        assert alerts[0].severity == AlertSeverity.EMERGENCY
+
+    def test_rate_zero_produces_emergency(self) -> None:
+        """0.0 is below every threshold → EMERGENCY."""
+        alerts = FlakyTestAlertManager.check_message_quality_rate(0.0)
+        assert len(alerts) == 1
+        assert alerts[0].severity == AlertSeverity.EMERGENCY
+
+    def test_alert_details_contain_gap_threshold_and_severity(self) -> None:
+        """Alert details dict carries current_rate, threshold, gap, and severity keys."""
+        alerts = FlakyTestAlertManager.check_message_quality_rate(60.0)
+        assert len(alerts) == 1
+        details = alerts[0].details
+        assert "current_rate" in details
+        assert "threshold" in details
+        assert "gap" in details
+        assert "severity" in details
+        assert details["current_rate"] == 60.0
+        assert details["gap"] == pytest.approx(details["threshold"] - 60.0)

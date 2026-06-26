@@ -1,3 +1,32 @@
+## 2026-06-26 — Stage 3: comprehensive test suite for extraction fidelity metric
+
+Added 32 new tests across 3 files to comprehensively cover `message_quality_rate` edge cases,
+formula accuracy, and alert threshold boundaries. Files modified:
+
+- `tests/unit/observer/test_extraction_health_queries.py` — added `TestMessageQualityRateEdgeCases`
+  (12 tests covering: whitespace-only → too_short; each bare exception type individually;
+  case-sensitivity of frozenset lookup; "ValueError" at 10-char boundary; 0.0 vs None distinction;
+  partial-extraction tests counting toward quality denominator; all three reasons in one run;
+  cap preserving rate accuracy; denominator exclusion of None messages) and `TestMessageQualityRateFormula`
+  (5 tests verifying exact fractional outputs: 1/3, 2/3, 2/5, float type, single-test case).
+
+- `tests/unit/observer/test_flaky_test_alerts.py` — added `TestMessageQualityRateThresholdBoundaries`
+  (8 tests: exact boundary values 80.0/79.9/50.0/49.9/10.0/9.9/0.0; alert details keys).
+
+- `tests/unit/observer/test_flaky_test_alert_config.py` — added `TestMessageQualityRateThresholdValues`
+  (7 tests: exact configured values 80.0/50.0/10.0; boundary behaviour of
+  `should_alert_on_message_quality_rate()` at each threshold).
+
+Total fidelity tests: 271 (was 239). All pass. Ruff: 0 violations, 1 file reformatted.
+
+## 2026-06-26 — Stage 1: design spec for extraction fidelity metric
+
+Created `docs/specs/STAGE1_EXTRACTION_FIDELITY_METRIC.md` — the design document for
+`message_quality_rate` that the reference doc had been pointing to but which was never written.
+Covers: measurement formula, quality gates, constants, files modified, observer integration
+diagram, full test plan (unit + integration), and acceptance criteria. All 8 acceptance
+criteria are met by the existing implementation (HEAD commit 2702e07).
+
 ## 2026-06-25 — Stage 5: documentation and examples for extraction fidelity metric
 
 Created `docs/reference/EXTRACTION_FIDELITY_METRIC.md` — a comprehensive reference covering:
