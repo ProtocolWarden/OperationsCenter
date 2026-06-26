@@ -20,3 +20,9 @@ def test_definition_of_done_preserves_goal_and_demands_completeness() -> None:
     assert "lint" in lowered or "linter" in lowered
     # No partial / stub hand-offs.
     assert "todo" in lowered and "stub" in lowered
+    # The verification bar is "no NEW failures", NOT a fully-green pre-existing suite:
+    # a repo with pre-existing/unrelated test failures must not block a clean change
+    # (the over-strict "zero total failures" reading stalled goal-task autonomy).
+    assert "zero new failures" in lowered
+    assert "out of scope" in lowered
+    assert "required ci checks" in lowered
