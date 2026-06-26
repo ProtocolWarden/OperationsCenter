@@ -1,3 +1,17 @@
+## 2026-06-26 — Stage 4 (consistency pass) COMPLETE: Three anomaly-related doc discrepancies fixed
+
+Verified all Stage 4 acceptance criteria against source code and fixed three discrepancies:
+
+1. **`anomalies` table description** — was "2 std-devs below the mean"; corrected to "fell or rose >5% from the 5-point moving average; empty if fewer than 10 snapshots" (matches `detect_anomalies()` in `extraction_health_history.py:390`).
+2. **Anomaly example JSON keys** — was `{"recorded_at": ..., "success_rate": ...}`; corrected to full structure `{"type", "timestamp", "metric", "delta_pct", "previous_avg", "current_value"}` (matches `detect_anomalies()` return value at `extraction_health_history.py:392-400`).
+3. **Diagnostic Workflow Step 2** — was `Note the \`recorded_at\` timestamp`; corrected to `Note the \`timestamp\` of the earliest anomaly`.
+
+New test added to `test_cli_extraction_health.py`: `test_anomaly_structure_uses_timestamp_not_recorded_at` — seeds 10 snapshots with a sharp drop, invokes the CLI with `--trend-days 30`, and pins the anomaly dict keys.
+
+All five cross-references still resolve to real headings. Section formatting, terminology, and placement are consistent with the rest of the document. Step 35 in Suggested Debugging Order links back to `#extraction-health-diagnosis`.
+
+**Results:** 12/12 extraction-health CLI tests pass, 1538/1539 observer tests pass (pre-existing read-only dir failure, unrelated). Ruff: clean.
+
 ## 2026-06-21 — Stage 6 COMPLETE: Changes committed and pushed to feature branch
 
 All 6 acceptance criteria met:
@@ -8007,3 +8021,40 @@ Tooling artifacts in diff: 0 ✅
 - Config accepts `None` and constructs defaults inline to keep caller ergonomics simple.
 
 **Result:** 1,535 tests pass (37 new), linter clean.
+
+## 2026-06-26 — Stage 2: Write Extraction Health Diagnosis section (final criterion)
+
+**What changed:**
+- `docs/operator/diagnostics.md`: Added explicit `Remediation` column to the `### Common Failure Modes` table. The prior version had Failure/Symptom/Root Cause columns but no dedicated remediation; this satisfies acceptance criterion 4 ("7+ failure patterns and remediations").
+
+**Decisions:**
+- Remediation kept as a new column in the same table rather than a separate subsection — avoids duplication with Step 8 while still satisfying the criterion for a table with remediations.
+- Step 8 ("Remediate") in the Diagnostic Workflow retains its Finding→Action format for operator workflow use; the Common Failure Modes table Remediation column serves as a quick lookup reference.
+
+**All Stage 2 acceptance criteria met:**
+1. ✅ Extraction Metrics Reference table (7 metrics × Healthy/WARNING/CRITICAL/EMERGENCY columns)
+2. ✅ 8 CLI commands with descriptions and example outputs
+3. ✅ Diagnostic Workflow with 8 explicit troubleshooting steps
+4. ✅ Common Failure Modes table with 7 patterns + Remediation column
+5. ✅ Related Sections table and source file references
+
+**Result:** 259 extraction tests pass, ruff clean.
+
+## 2026-06-26 — Stage 3: Test documented commands, fix discrepancies
+
+**What changed:**
+- `docs/operator/diagnostics.md`: Fixed 10 occurrences of non-existent `operations-center observer` command — replaced with `./scripts/operations-center.sh observer` (consistent with rest of file and actual shell script routing). Fixed alert log example: `74/80 errors` → `74/80.0 errors` (threshold is a Python float). Fixed JSONL entry field name: `recorded_at` → `observed_at` and expanded JSONL example to show all actual fields (`total_flaky_tests`, `extracted_count`, `edge_case_summary`, `snapshot_id`, `collection_run_id`). Added empty-state caveat to command 8 (snapshot one-liner raises `IndexError` when no `observe-repo` runs exist yet).
+- `tests/unit/observer/test_cli_extraction_health.py`: Added 3 new tests: `test_jsonl_entry_uses_observed_at_not_recorded_at`, `test_table_format_multiline_header`, `test_alert_log_format_includes_float_threshold`.
+
+**Discrepancies found and fixed:**
+1. `operations-center observer` — binary doesn't exist; script is `operations-center.sh`; shell script routes `observer` subcommand to `operations-center-observer-snapshot`
+2. Alert log threshold printed as `80.0` (float), not `80` (int) — OperatorLogChannel uses Python f-string on the raw float value
+3. JSONL field name is `observed_at` not `recorded_at` — confirmed from `ExtractionHealthSnapshot` dataclass and live JSONL output
+4. Command 8 one-liner: `sorted(glob.glob(...))[-1]` raises `IndexError` when no snapshots exist — caveat added
+
+**Decisions:**
+- Used `./scripts/operations-center.sh observer` as the canonical invocation form (consistent with the other 15+ commands in diagnostics.md that all use the shell script).
+- JSONL example now shows all actual fields rather than a trimmed subset, preventing future confusion about the schema.
+- Kept `message_quality_rate: null` out of the JSONL example since that field is only present in the main repo branch (not the workspace branch source).
+
+**Result:** 11 extraction CLI tests pass (3 new), 1537 observer tests pass (1 pre-existing failure in `test_snapshot_edge_cases.py` unrelated to this change), ruff clean.
