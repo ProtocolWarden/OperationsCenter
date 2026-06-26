@@ -1,5 +1,9 @@
 # Current Task
 
+## Overall Plan
+
+_(section heading restored by board-unblock console-repair to satisfy the .console structure audit; the board worker's task.md rewrite dropped it)_
+
 _The active assignment. One objective at a time._
 _Replace contents when the objective changes. History belongs in log.md._
 
