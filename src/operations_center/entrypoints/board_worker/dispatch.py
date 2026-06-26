@@ -371,11 +371,12 @@ def _append_definition_of_done(goal_text: str) -> str:
         "   not leave TODOs, stubs, or 'follow-up' gaps; a partial change is rejected\n"
         "   in review.\n"
         "2. Add or update tests/checks that prove the work is correct.\n"
-        "3. Run the repository's test suite and linters/formatters and make them\n"
-        "   pass locally. If anything fails, fix it before finishing — do not hand\n"
-        "   off a red build.\n"
-        "4. Only consider the task done when the full change is in place AND verified\n"
-        "   green. The PR you open should be mergeable as-is.\n"
+        "3. Run the tests/linters relevant to your change and make them pass: your\n"
+        "   change must introduce ZERO NEW failures. Pre-existing or unrelated\n"
+        "   failures/skips are OUT OF SCOPE — do not block on or fix them; the repo's\n"
+        "   REQUIRED CI checks are the merge gate, not a fully-green pre-existing suite.\n"
+        "4. Done = full change in place, self-verified, no NEW failures; PR mergeable\n"
+        "   as-is (green on the required CI checks).\n"
     )
 
 

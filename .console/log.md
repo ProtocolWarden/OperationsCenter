@@ -1,3 +1,19 @@
+## 2026-06-26 — FIX: goal-task DoD demanded "zero TOTAL test failures" — relaxed to "zero NEW failures"
+
+A goal task (89fdd864) did clean work + opened a mergeable PR but then FAILED its own self-verification:
+the team_executor verifier's acceptance criterion was "Zero test failures or skipped tests" against the
+FULL suite, which has 5 pre-existing failures + 21 skips (tests/ root + sandbox-gated tests CI doesn't
+run). The agent correctly noted "zero NEW failures, branch is clean, ready for PR" but rejected itself
+on the strict criterion — an autonomy stall caused by mis-specified done-ness, not bad work. Root cause:
+`_append_definition_of_done` (dispatch.py) said "run the test suite and make them pass / verified green",
+which the team_executor `stage_planner` (it LLM-derives acceptance_criteria from the goal text — not
+hardcoded) turned into "zero failures". Fix: reword DoD criteria 3+4 to "your change must introduce ZERO
+NEW failures; pre-existing/unrelated failures+skips are OUT OF SCOPE, do not block on them or fix them;
+the merge gate is the repo's REQUIRED CI checks, not a fully-green pre-existing local suite." So the
+planner now generates a no-regression criterion the verifier can actually satisfy. Test asserts the new
+intent. NOTE: the 5 pre-existing full-suite failures are a separate repo-health item (CI runs only
+tests/unit, which is green — see [[oc-reviewer-tests-not-in-ci]]). [[oc-autonomy-hardening-deadlock]]
+
 ## 2026-06-26 — Stage 5: complete verification of extraction fidelity metric implementation
 
 Full test-suite and linter verification confirmed the branch is mergeable as-is:
