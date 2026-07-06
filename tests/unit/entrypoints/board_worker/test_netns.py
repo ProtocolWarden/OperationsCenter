@@ -253,3 +253,35 @@ def test_bwrap_inside_netns_runs_when_caps_kept():
     assert wrapped[0].endswith("pasta")
     r = subprocess.run(wrapped, capture_output=True, text=True, timeout=60)
     assert r.returncode == 0 and "NS-OK" in r.stdout, (r.returncode, r.stderr)
+
+
+# ── run_executor wall timeout (audit Track A4) ───────────────────────────────
+
+
+def test_run_executor_timeout_returns_completed_process_124(monkeypatch, tmp_path):
+    from operations_center.entrypoints.board_worker import _subprocess
+
+    def fake_run(cmd, **kw):
+        assert kw.get("timeout") == 4500.0  # default: inner cap 3600 + grace
+        raise _subprocess.subprocess.TimeoutExpired(cmd, kw["timeout"], output="partial", stderr="err")
+
+    monkeypatch.setattr(_subprocess.subprocess, "run", fake_run)
+    monkeypatch.delenv("OC_EXECUTOR_TIMEOUT_SEC", raising=False)
+    monkeypatch.delenv("OC_SANDBOX_RLIMITS", raising=False)
+    proc = _subprocess.run_executor(
+        ["echo", "hi"], oc_root=tmp_path, rw_root=tmp_path, workspace=tmp_path, env={}
+    )
+    assert proc.returncode == 124
+    assert "timed out after" in proc.stderr
+    assert proc.stdout == "partial"
+
+
+def test_executor_timeout_env_override_and_opt_out(monkeypatch):
+    from operations_center.entrypoints.board_worker import _subprocess
+
+    monkeypatch.setenv("OC_EXECUTOR_TIMEOUT_SEC", "120")
+    assert _subprocess.executor_timeout_seconds() == 120.0
+    monkeypatch.setenv("OC_EXECUTOR_TIMEOUT_SEC", "0")
+    assert _subprocess.executor_timeout_seconds() is None
+    monkeypatch.setenv("OC_EXECUTOR_TIMEOUT_SEC", "junk")
+    assert _subprocess.executor_timeout_seconds() == 4500.0
