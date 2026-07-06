@@ -1,3 +1,22 @@
+## 2026-07-06 — Track B: watchdog loop migrated to the PseudoOperator engine
+
+tools/loop/controller.py (1152 lines) replaced by a thin exec shim into
+`cl loop` (ContextLifecycle #34/#35, pinned v0.4.0). Policy in
+.console/workers.yaml `pseudo_operator:` (fail-closed schema): 45min session
+wall, ENFORCED caps 200 iterations / 5 consecutive failures (the old OC copy
+had NONE — and still had the TOCTOU lock the engine replaces with the atomic
+hostname-aware one), schedule_state delays (CRITICAL 180 … HEALTHY 3600,
+default 600), env_file + log_file preserved. OC-unique behaviors ported to
+entrypoints/loop_bridge as engine hooks: seed-cooldowns / on-cooldown (usage
+store bridge, per-model limit state for the pane) + self-update (git pull +
+watcher child bounce, sha state in tools/loop/state/last_update_sha). Session
+prompt schedule path -> tools/loop/state/schedule.json. Old root-level
+controller tests removed (generic logic now tested in CL; OC-unique tests
+ported to tests/unit/entrypoints/loop_bridge — these DO run in CI). Launch
+paths unchanged (operations-center.sh loop-*). NOTE: OperatorConsole pane
+still reads logs/local/loop_controller_state.json — path update lands in
+OperatorConsole next. (C11: hook subprocess timeouts added; ty: RSA key-type narrow in github_app.)
+
 ## 2026-07-06 — Track A6: sandbox token hardening (per-task App tokens)
 
 Audit defect: the long-lived gho_ OAuth token (write-capable everywhere,

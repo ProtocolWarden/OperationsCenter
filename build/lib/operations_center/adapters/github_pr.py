@@ -1,0 +1,643 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 ProtocolWarden
+from __future__ import annotations
+
+import base64
+import json
+import logging
+import re
+import time
+from typing import Any
+
+import httpx
+
+_logger = logging.getLogger(__name__)
+
+_GH_RATE_LIMIT_MAX_RETRIES = 3
+_GH_RATE_LIMIT_WARN_THRESHOLD = 10
+_GH_RATE_LIMIT_DEFAULT_BACKOFF_SECONDS = 60
+
+
+class GitHubPRClient:
+    """Thin wrapper around the GitHub REST API for PR create + merge."""
+
+    _API = "https://api.github.com"
+
+    def __init__(self, token: str) -> None:
+        self._headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+
+    def _request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        """HTTP request with rate-limit retry and low-quota warning.
+
+        On 429 responses, reads the ``Retry-After`` header (defaulting to
+        ``_GH_RATE_LIMIT_DEFAULT_BACKOFF_SECONDS``) and retries up to
+        ``_GH_RATE_LIMIT_MAX_RETRIES`` times before giving up and returning
+        the last response.  Logs a warning whenever ``X-RateLimit-Remaining``
+        drops below ``_GH_RATE_LIMIT_WARN_THRESHOLD`` so operators have
+        advance notice before hard throttling kicks in.
+        """
+        kwargs.setdefault("timeout", 30)
+        kwargs.setdefault("follow_redirects", True)
+        resp: httpx.Response | None = None
+        for attempt in range(_GH_RATE_LIMIT_MAX_RETRIES + 1):
+            resp = httpx.request(method, url, headers=self._headers, **kwargs)
+            remaining_raw = resp.headers.get("X-RateLimit-Remaining")
+            if remaining_raw is not None:
+                try:
+                    if int(remaining_raw) < _GH_RATE_LIMIT_WARN_THRESHOLD:
+                        _logger.warning(
+                            json.dumps(
+                                {
+                                    "event": "github_rate_limit_low",
+                                    "remaining": int(remaining_raw),
+                                    "reset_epoch": resp.headers.get("X-RateLimit-Reset"),
+                                },
+                                ensure_ascii=False,
+                            )
+                        )
+                except (ValueError, TypeError):
+                    pass
+            if resp.status_code != 429 or attempt >= _GH_RATE_LIMIT_MAX_RETRIES:
+                return resp
+            retry_after_raw = resp.headers.get("Retry-After", "")
+            try:
+                retry_after = int(retry_after_raw)
+            except (ValueError, TypeError):
+                retry_after = _GH_RATE_LIMIT_DEFAULT_BACKOFF_SECONDS
+            _logger.warning(
+                json.dumps(
+                    {
+                        "event": "github_rate_limited",
+                        "attempt": attempt + 1,
+                        "retry_after_seconds": retry_after,
+                        "url": url,
+                    },
+                    ensure_ascii=False,
+                )
+            )
+            time.sleep(retry_after)
+        if resp is None:
+            raise RuntimeError("HTTP retry loop exited without a response")
+        return resp
+
+    @staticmethod
+    def owner_repo_from_clone_url(clone_url: str) -> tuple[str, str]:
+        """Parse owner/repo from an https or ssh clone URL."""
+        # ssh: git@github.com:owner/repo.git
+        # https: https://github.com/owner/repo.git
+        m = re.search(r"[:/]([^/]+)/([^/]+?)(?:\.git)?$", clone_url)
+        if not m:
+            raise ValueError(f"Cannot parse owner/repo from clone URL: {clone_url!r}")
+        return m.group(1), m.group(2)
+
+    def create_pr(
+        self,
+        owner: str,
+        repo: str,
+        *,
+        head: str,
+        base: str,
+        title: str,
+        body: str = "",
+    ) -> dict:
+        resp = self._request(
+            "POST",
+            f"{self._API}/repos/{owner}/{repo}/pulls",
+            json={"title": title, "head": head, "base": base, "body": body},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_pr(self, owner: str, repo: str, pr_number: int) -> dict:
+        """Fetch a single pull request by number from the GitHub REST API.
+
+        Returns the full PR resource as a dict (see GitHub docs for schema).
+        Raises ``httpx.HTTPStatusError`` on non-2xx responses.
+        """
+        resp = self._request("GET", f"{self._API}/repos/{owner}/{repo}/pulls/{pr_number}")
+        resp.raise_for_status()
+        return resp.json()
+
+    def merge_pr(
+        self, owner: str, repo: str, pr_number: int, *, merge_method: str = "squash"
+    ) -> dict:
+        resp = self._request(
+            "PUT",
+            f"{self._API}/repos/{owner}/{repo}/pulls/{pr_number}/merge",
+            json={"merge_method": merge_method},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_branch_protection(self, owner: str, repo: str, branch: str) -> dict | None:
+        """Return the branch-protection config, or None if unprotected/inaccessible.
+
+        Used by the self-merge gate (determinism surface 3) to verify the fleet's
+        own merge is actually constrained by required checks + admin enforcement,
+        rather than trusting an out-of-repo setting the fleet can't see.
+        """
+        resp = self._request(
+            "GET",
+            f"{self._API}/repos/{owner}/{repo}/branches/{branch}/protection",
+        )
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        return resp.json()
+
+    def delete_branch(self, owner: str, repo: str, branch: str) -> None:
+        resp = self._request(
+            "DELETE",
+            f"{self._API}/repos/{owner}/{repo}/git/refs/heads/{branch}",
+        )
+        resp.raise_for_status()
+
+    def get_pr_reactions(self, owner: str, repo: str, pr_number: int) -> list[dict]:
+        resp = self._request(
+            "GET",
+            f"{self._API}/repos/{owner}/{repo}/issues/{pr_number}/reactions",
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def list_pr_comments(self, owner: str, repo: str, pr_number: int) -> list[dict]:
+        resp = self._request(
+            "GET",
+            f"{self._API}/repos/{owner}/{repo}/issues/{pr_number}/comments",
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def list_pr_review_comments(self, owner: str, repo: str, pr_number: int) -> list[dict]:
+        """Fetch inline/line-level review comments from the PR review comments API."""
+        resp = self._request(
+            "GET",
+            f"{self._API}/repos/{owner}/{repo}/pulls/{pr_number}/comments",
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_comment_reactions(self, owner: str, repo: str, comment_id: int) -> list[dict]:
+        resp = self._request(
+            "GET",
+            f"{self._API}/repos/{owner}/{repo}/issues/comments/{comment_id}/reactions",
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def update_pr_description(self, owner: str, repo: str, pr_number: int, body: str) -> dict:
+        """Update the PR description body via PATCH /pulls/:number."""
+        resp = self._request(
+            "PATCH",
+            f"{self._API}/repos/{owner}/{repo}/pulls/{pr_number}",
+            json={"body": body},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def post_comment(self, owner: str, repo: str, pr_number: int, body: str) -> dict:
+        resp = self._request(
+            "POST",
+            f"{self._API}/repos/{owner}/{repo}/issues/{pr_number}/comments",
+            json={"body": body},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def update_comment(self, owner: str, repo: str, comment_id: int, body: str) -> dict:
+        """Edit an existing issue comment body."""
+        resp = self._request(
+            "PATCH",
+            f"{self._API}/repos/{owner}/{repo}/issues/comments/{comment_id}",
+            json={"body": body},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def set_commit_status(
+        self,
+        owner: str,
+        repo: str,
+        sha: str,
+        *,
+        state: str,
+        context: str,
+        description: str = "",
+        target_url: str | None = None,
+    ) -> dict:
+        """Publish a commit status (``success``/``failure``/``pending``/``error``).
+
+        Used to surface the reviewer's verdict as a first-class status check on
+        the PR head SHA, so it can be made a *required* status check — closing
+        the gap where a manual ``gh pr merge`` bypasses the (comment-only)
+        review verdict.
+        """
+        payload: dict[str, Any] = {
+            "state": state,
+            "context": context,
+            "description": description[:140],
+        }
+        if target_url:
+            payload["target_url"] = target_url
+        resp = self._request(
+            "POST",
+            f"{self._API}/repos/{owner}/{repo}/statuses/{sha}",
+            json=payload,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_check_runs(self, owner: str, repo: str, ref: str) -> list[dict]:
+        """Return all check-runs for a given commit SHA or ref."""
+        resp = self._request(
+            "GET",
+            f"{self._API}/repos/{owner}/{repo}/commits/{ref}/check-runs",
+            params={"per_page": 100},
+        )
+        resp.raise_for_status()
+        return resp.json().get("check_runs", [])
+
+    def get_failed_checks(
+        self,
+        owner: str,
+        repo: str,
+        pr_number: int,
+        *,
+        pr_data: dict | None = None,
+        ignored_checks: list[str] | None = None,
+    ) -> list[str]:
+        """Return human-readable descriptions of failing CI checks for the PR's head commit.
+
+        Checks whose names contain any string in *ignored_checks* are excluded —
+        use this for known pre-existing failures on the base branch that are
+        unrelated to PR changes.
+        """
+        if pr_data is None:
+            pr_data = self.get_pr(owner, repo, pr_number)
+        head_sha = (pr_data.get("head") or {}).get("sha", "")
+        if not head_sha:
+            return []
+        try:
+            check_runs = self.get_check_runs(owner, repo, head_sha)
+        except Exception:
+            return []
+        ignored = [s.lower() for s in (ignored_checks or [])]
+        # Deduplicate by name: when multiple runs exist for the same check (e.g.
+        # after a force-push triggers two CI runs on the same HEAD SHA), keep only
+        # the most recent run per name so a stale failure doesn't block a PR that
+        # has since been fixed. GitHub IDs are monotonically increasing.
+        latest: dict[str, dict] = {}
+        for cr in check_runs:
+            name = cr.get("name", "unknown")
+            if cr.get("id", 0) > latest.get(name, {}).get("id", 0):
+                latest[name] = cr
+        failed = []
+        for cr in latest.values():
+            if cr.get("conclusion") in ("failure", "timed_out", "cancelled"):
+                name = cr.get("name", "unknown")
+                if ignored and any(pat in name.lower() for pat in ignored):
+                    continue
+                summary = (cr.get("output") or {}).get("title") or cr.get("conclusion", "failed")
+                failed.append(f"{name}: {summary}")
+        return failed
+
+    def get_incomplete_checks(
+        self,
+        owner: str,
+        repo: str,
+        pr_number: int,
+        *,
+        pr_data: dict | None = None,
+        ignored_checks: list[str] | None = None,
+    ) -> list[str]:
+        """Return names of checks not yet in a terminal state for the PR head.
+
+        A check is "incomplete" when its ``status`` is anything other than
+        ``completed`` (e.g. ``queued`` / ``in_progress``) — such a run has no
+        ``conclusion`` yet, so :meth:`get_failed_checks` cannot see it.
+
+        Callers gating a merge on green CI MUST treat a non-empty result as
+        "not green yet": an empty failure list means only "nothing has failed
+        *so far*", which is true while CI is still running. Declaring green in
+        that window is how a PR can be merged before its tests finish and then
+        turn the base branch red.
+        """
+        if pr_data is None:
+            pr_data = self.get_pr(owner, repo, pr_number)
+        head_sha = (pr_data.get("head") or {}).get("sha", "")
+        if not head_sha:
+            return []
+        try:
+            check_runs = self.get_check_runs(owner, repo, head_sha)
+        except Exception:
+            return []
+        ignored = [s.lower() for s in (ignored_checks or [])]
+        # Dedupe by name (keep the newest run) — same rationale as get_failed_checks.
+        latest: dict[str, dict] = {}
+        for cr in check_runs:
+            name = cr.get("name", "unknown")
+            if cr.get("id", 0) > latest.get(name, {}).get("id", 0):
+                latest[name] = cr
+        pending = []
+        for cr in latest.values():
+            if cr.get("status") != "completed":
+                name = cr.get("name", "unknown")
+                if ignored and any(pat in name.lower() for pat in ignored):
+                    continue
+                pending.append(name)
+        return pending
+
+    def get_completed_checks(
+        self,
+        owner: str,
+        repo: str,
+        pr_number: int,
+        *,
+        pr_data: dict | None = None,
+        ignored_checks: list[str] | None = None,
+    ) -> list[str]:
+        """Return names of checks in a terminal (``completed``) state for the PR head.
+
+        An EMPTY result means CI has not produced any result on the current head
+        yet — which happens in the window after a branch is pushed or auto-rebased,
+        before its checks register. In that window :meth:`get_failed_checks` and
+        :meth:`get_incomplete_checks` both return empty, so a gate that only asks
+        "nothing failed and nothing pending?" would declare green on a head that
+        has no CI at all. Callers gating a merge MUST additionally require this to
+        be non-empty so the green they merge on is the green of the *current* head.
+        """
+        if pr_data is None:
+            pr_data = self.get_pr(owner, repo, pr_number)
+        head_sha = (pr_data.get("head") or {}).get("sha", "")
+        if not head_sha:
+            return []
+        try:
+            check_runs = self.get_check_runs(owner, repo, head_sha)
+        except Exception:
+            return []
+        ignored = [s.lower() for s in (ignored_checks or [])]
+        latest: dict[str, dict] = {}
+        for cr in check_runs:
+            name = cr.get("name", "unknown")
+            if cr.get("id", 0) > latest.get(name, {}).get("id", 0):
+                latest[name] = cr
+        completed = []
+        for cr in latest.values():
+            if cr.get("status") == "completed":
+                name = cr.get("name", "unknown")
+                if ignored and any(pat in name.lower() for pat in ignored):
+                    continue
+                completed.append(name)
+        return completed
+
+    def list_open_prs(self, owner: str, repo: str) -> list[dict]:
+        resp = self._request(
+            "GET",
+            f"{self._API}/repos/{owner}/{repo}/pulls",
+            params={"state": "open", "per_page": 100},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def list_closed_prs(self, owner: str, repo: str) -> list[dict]:
+        resp = self._request(
+            "GET",
+            f"{self._API}/repos/{owner}/{repo}/pulls",
+            params={"state": "closed", "per_page": 100},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def find_pr_by_head(self, owner: str, repo: str, head_ref: str) -> dict | None:
+        """Return the most-recently-created PR whose head branch is ``head_ref``
+        (any state: open/closed/merged), or ``None`` if there is none.
+
+        Matches ``head.ref`` locally rather than via the API's
+        ``head={user}:{ref}`` filter: that filter keys off the head *owner*, which
+        is unreliable when a repo's org has redirected (e.g. a clone URL pointing
+        at ``Velascat/…`` that now resolves to ``ProtocolWarden/…``) — the branch
+        lives under the canonical owner, so the stale-owner filter silently
+        matches nothing. The repo path itself follows the redirect. Scans the 100
+        most-recent PRs (ample for reconciling currently-stuck tasks, whose PRs are
+        recent). Best-effort: returns ``None`` on any error so a board-reconcile
+        cycle never hardens into a failure. A merged PR has a non-null
+        ``merged_at``.
+        """
+        try:
+            resp = self._request(
+                "GET",
+                f"{self._API}/repos/{owner}/{repo}/pulls",
+                params={
+                    "state": "all",
+                    "per_page": 100,
+                    "sort": "created",
+                    "direction": "desc",
+                },
+            )
+            resp.raise_for_status()
+            prs = resp.json()
+        except Exception:
+            return None
+        if not isinstance(prs, list):
+            return None
+        for pr in prs:
+            if isinstance(pr, dict) and ((pr.get("head") or {}).get("ref")) == head_ref:
+                return pr
+        return None
+
+    def list_pr_files(self, owner: str, repo: str, pr_number: int) -> list[str]:
+        """Return the list of filenames changed in a pull request.
+
+        Uses ``GET /repos/{owner}/{repo}/pulls/{pull_number}/files``.
+        Returns an empty list on any error (best-effort — callers must not rely
+        on completeness for correctness).
+        """
+        try:
+            resp = self._request(
+                "GET",
+                f"{self._API}/repos/{owner}/{repo}/pulls/{pr_number}/files",
+                params={"per_page": 100},
+            )
+            resp.raise_for_status()
+            return [
+                item["filename"]
+                for item in resp.json()
+                if isinstance(item, dict) and "filename" in item
+            ]
+        except Exception:
+            return []
+
+    def get_pr_diff(self, owner: str, repo: str, pr_number: int) -> str:
+        """Return the unified diff for a pull request as a string.
+
+        Uses the GitHub ``diff`` media type on the pulls endpoint.
+        On 406 (diff too large for the API), falls back to a file-list
+        summary so the review watcher can still process the PR.
+        Returns an empty string only when both methods fail.
+        """
+        try:
+            diff_headers = dict(self._headers)
+            diff_headers["Accept"] = "application/vnd.github.v3.diff"
+            resp = httpx.get(
+                f"{self._API}/repos/{owner}/{repo}/pulls/{pr_number}",
+                headers=diff_headers,
+                timeout=30,
+                follow_redirects=True,
+            )
+            if resp.status_code == 406:
+                return self._pr_diff_too_large_summary(owner, repo, pr_number)
+            resp.raise_for_status()
+            return resp.text
+        except Exception:
+            return ""
+
+    def _pr_diff_too_large_summary(self, owner: str, repo: str, pr_number: int) -> str:
+        """Return a file-list summary when the full diff exceeds GitHub's API limit."""
+        try:
+            resp = self._request(
+                "GET",
+                f"{self._API}/repos/{owner}/{repo}/pulls/{pr_number}/files",
+                params={"per_page": 100},
+            )
+            resp.raise_for_status()
+            files = resp.json()
+            lines = [f"[DIFF_TOO_LARGE — showing {len(files)} changed files only]\n"]
+            for f in files:
+                if not isinstance(f, dict):
+                    continue
+                status = f.get("status", "modified")
+                path = f.get("filename", "")
+                adds = f.get("additions", 0)
+                dels = f.get("deletions", 0)
+                lines.append(f"{status:8s} {path} (+{adds}/-{dels})")
+            return "\n".join(lines)
+        except Exception:
+            return ""
+
+    def get_mergeable(self, owner: str, repo: str, pr_number: int) -> bool | None:
+        """Return the GitHub ``mergeable`` flag, or ``None`` while GitHub is computing it."""
+        try:
+            pr = self.get_pr(owner, repo, pr_number)
+            val = pr.get("mergeable")
+            if val is None:
+                return None
+            return bool(val)
+        except Exception:
+            return None
+
+    def close_pr(self, owner: str, repo: str, pr_number: int) -> dict:
+        """Close a pull request without merging it."""
+        resp = self._request(
+            "PATCH",
+            f"{self._API}/repos/{owner}/{repo}/pulls/{pr_number}",
+            json={"state": "closed"},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def list_pr_reviews(self, owner: str, repo: str, pr_number: int) -> list[dict]:
+        """Return all submitted reviews for a PR."""
+        resp = self._request(
+            "GET",
+            f"{self._API}/repos/{owner}/{repo}/pulls/{pr_number}/reviews",
+            params={"per_page": 100},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def pr_has_changes_requested(self, owner: str, repo: str, pr_number: int) -> bool:
+        """Return True if any reviewer submitted CHANGES_REQUESTED."""
+        try:
+            reviews = self.list_pr_reviews(owner, repo, pr_number)
+            return any(r.get("state") == "CHANGES_REQUESTED" for r in reviews)
+        except Exception:
+            return False
+
+    def get_branch_head(self, owner: str, repo: str, branch: str) -> str | None:
+        """Return the HEAD commit SHA of *branch*, or None on failure."""
+        try:
+            resp = self._request(
+                "GET",
+                f"{self._API}/repos/{owner}/{repo}/branches/{branch}",
+            )
+            resp.raise_for_status()
+            return str((resp.json().get("commit") or {}).get("sha", "")) or None
+        except Exception:
+            return None
+
+    def get_file_content(
+        self, owner: str, repo: str, path: str, ref: str
+    ) -> tuple[str, str] | None:
+        """Return ``(decoded_text, blob_sha)`` for *path* at *ref*, or None.
+
+        ``blob_sha`` is required to update the file (optimistic concurrency)."""
+        try:
+            resp = self._request(
+                "GET",
+                f"{self._API}/repos/{owner}/{repo}/contents/{path}",
+                params={"ref": ref},
+            )
+            resp.raise_for_status()
+            body = resp.json()
+            if body.get("encoding") != "base64" or "content" not in body:
+                return None
+            text = base64.b64decode(body["content"]).decode("utf-8", "replace")
+            return text, str(body.get("sha", ""))
+        except Exception:
+            return None
+
+    def update_file(
+        self,
+        owner: str,
+        repo: str,
+        path: str,
+        *,
+        new_text: str,
+        message: str,
+        branch: str,
+        blob_sha: str,
+    ) -> bool:
+        """Commit ``new_text`` to *path* on *branch* (Contents API). Returns success."""
+        try:
+            resp = self._request(
+                "PUT",
+                f"{self._API}/repos/{owner}/{repo}/contents/{path}",
+                json={
+                    "message": message,
+                    "content": base64.b64encode(new_text.encode("utf-8")).decode("ascii"),
+                    "sha": blob_sha,
+                    "branch": branch,
+                },
+            )
+            resp.raise_for_status()
+            return True
+        except Exception as exc:  # noqa: BLE001 — repair is best-effort, never raise
+            _logger.warning("github update_file failed for %s on %s — %s", path, branch, exc)
+            return False
+
+    @staticmethod
+    def has_thumbs_up(reactions: list[dict]) -> bool:
+        return any(r["content"] == "+1" for r in reactions)
+
+    def create_and_merge(
+        self,
+        owner: str,
+        repo: str,
+        *,
+        head: str,
+        base: str,
+        title: str,
+        body: str = "",
+        merge_method: str = "squash",
+    ) -> str:
+        """Create a PR, merge it, then delete the head branch. Returns the PR html_url."""
+        pr = self.create_pr(owner, repo, head=head, base=base, title=title, body=body)
+        pr_number = pr["number"]
+        pr_url = pr["html_url"]
+        self.merge_pr(owner, repo, pr_number, merge_method=merge_method)
+        self.delete_branch(owner, repo, head)
+        return pr_url

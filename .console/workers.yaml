@@ -10,10 +10,39 @@ clp_version: "0.2"
 repo: "OperationsCenter"
 
 loop:
-  relaunch_command: "python tools/loop/controller.py"
-  relaunch_args: []
+  # relaunch_command retired: the live loop is `cl loop run` (see
+  # pseudo_operator below); tools/loop/controller.py is a thin exec shim.
   max_cycle_minutes: 60
   checkpoint_on_stop: true
+
+# PseudoOperator (Track B): the watchdog session loop, driven by the shared
+# engine in ContextLifecycle (`cl loop run --config .console/workers.yaml`).
+# Fail-closed schema — unknown keys refuse the launch. Backends default to
+# the fleet-standard claude/opus/codex ladder (claude-sonnet-5 first).
+pseudo_operator:
+  loop_name: oc
+  session_prompt_file: tools/loop/oc_session_prompt.txt
+  session_timeout_seconds: 2700          # 45min hard wall per session
+  max_iterations: 200                    # enforced cap (OC's old loop had NONE)
+  max_consecutive_failures: 5            # non-rate-limit failures
+  env_file: .env.operations-center.local # fleet env sourced into sessions
+  log_file: logs/local/loop_controller.log
+  delay:
+    kind: schedule_state                 # session-written health state
+    default_delay_seconds: 600           # STALLED-equivalent fallback
+    state_delays:
+      CRITICAL: 180
+      DEGRADED: 300
+      STALLED: 600
+      ACTIVE: 900
+      PARKED_OPERATOR_BLOCKED: 1800
+      HEALTHY: 3600
+  hooks:
+    # OC-specific behaviors ported from the old controller — see
+    # operations_center/entrypoints/loop_bridge/main.py.
+    pre_iteration: [".venv/bin/python", "-m", "operations_center.entrypoints.loop_bridge.main", "self-update"]
+    seed_cooldowns: [".venv/bin/python", "-m", "operations_center.entrypoints.loop_bridge.main", "seed-cooldowns"]
+    on_cooldown: [".venv/bin/python", "-m", "operations_center.entrypoints.loop_bridge.main", "on-cooldown"]
 
 workers:
   - id: "investigation-worker"

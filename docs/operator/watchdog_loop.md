@@ -1,5 +1,16 @@
 # OperationsCenter Platform Watchdog Loop Runbook
 
+> **MIGRATED (2026-07-06, Track B):** the loop engine now lives in
+> ContextLifecycle (`cl loop run --config .console/workers.yaml`, config in the
+> `pseudo_operator:` section). `tools/loop/controller.py` is a thin exec shim
+> kept so `scripts/operations-center.sh loop-*` keeps working; loop state moved
+> to `tools/loop/state/`; OC-specific behaviors (usage-store cooldown bridge,
+> code-update watcher restart) live in
+> `operations_center/entrypoints/loop_bridge/` as engine hooks. The engine also
+> adds what the old OC copy lacked: atomic hostname-aware locking and enforced
+> iteration/consecutive-failure caps.
+
+
 This runbook describes the **OC/Platform watchdog loop** — a self-paced
 audit-and-stabilization cycle driven by Claude Code's `/loop` skill and
 `ScheduleWakeup`. It is **not** the internal `watchdog` role that revives
