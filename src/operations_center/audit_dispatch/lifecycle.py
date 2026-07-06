@@ -42,10 +42,19 @@ class PostExecutionDiscovery:
     artifact_manifest_path: str | None = None
     failure_kind: FailureKind | None = None
     failure_reason: str | None = None
+    # The parsed run_status.json `status` value (None when parsing never got
+    # that far). Lets the dispatch decision refuse to report COMPLETED for a
+    # producer whose own status is still non-terminal (audit Track A5).
+    run_status_value: str | None = None
 
     @property
     def succeeded(self) -> bool:
         return self.failure_kind is None
+
+
+def _status_value(run_status) -> str | None:
+    val = getattr(run_status, "status", None)
+    return getattr(val, "value", val)
 
 
 def _find_run_status_path(
@@ -149,15 +158,18 @@ def discover_post_execution(
             run_status_path=str(run_status_path),
             failure_kind=FailureKind.MANIFEST_PATH_MISSING,
             failure_reason=str(exc),
+            run_status_value=_status_value(run_status),
         )
     except ArtifactManifestPathResolutionError as exc:
         return PostExecutionDiscovery(
             run_status_path=str(run_status_path),
             failure_kind=FailureKind.MANIFEST_PATH_UNRESOLVABLE,
             failure_reason=str(exc),
+            run_status_value=_status_value(run_status),
         )
 
     return PostExecutionDiscovery(
         run_status_path=str(run_status_path),
         artifact_manifest_path=str(manifest_path),
+        run_status_value=_status_value(run_status),
     )

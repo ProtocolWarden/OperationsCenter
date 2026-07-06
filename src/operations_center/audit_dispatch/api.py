@@ -35,6 +35,7 @@ from .executor import ManagedAuditExecutor
 from .lifecycle import discover_post_execution
 from .locks import acquire_audit_lock
 from .models import (
+    TERMINAL_RUN_STATUSES,
     DispatchStatus,
     FailureKind,
     ManagedAuditDispatchRequest,
@@ -228,6 +229,16 @@ def dispatch_managed_audit(
         status = DispatchStatus.FAILED
         failure_kind = FailureKind.PROCESS_NONZERO_EXIT
         error = f"process exited with code {proc_result.exit_code}"
+    elif discovery.run_status_value not in TERMINAL_RUN_STATUSES:
+        # Producer exited 0 and the contract files parse, but its OWN status is
+        # still pending/running/in_progress — the audit did not finish; reporting
+        # COMPLETED here was the audit Track A5 false-success hole.
+        status = DispatchStatus.FAILED
+        failure_kind = FailureKind.RUN_STATUS_NOT_TERMINAL
+        error = (
+            f"run_status.json reports non-terminal status "
+            f"{discovery.run_status_value!r} despite process exit 0"
+        )
     else:
         status = DispatchStatus.COMPLETED
         failure_kind = None

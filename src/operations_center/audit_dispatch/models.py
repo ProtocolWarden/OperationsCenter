@@ -10,6 +10,17 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
+from operations_center.audit_contracts.vocabulary import RunStatus
+
+# Run-status values that mean the producer actually finished. A run_status.json
+# still saying pending/running/in_progress after the process exited 0 means the
+# producer died before finalizing (or OC matched a stale bucket) — that is a
+# FAILURE, not a completion. Shared by the dispatch decision (api.py) and the
+# watcher so the two cannot drift.
+TERMINAL_RUN_STATUSES = frozenset(
+    {RunStatus.COMPLETED.value, RunStatus.FAILED.value, RunStatus.INTERRUPTED.value}
+)
+
 
 class DispatchStatus(str, Enum):
     """Canonical status of a dispatch attempt, aligned with Phase 2 RunStatus vocabulary."""
@@ -33,6 +44,9 @@ class FailureKind(str, Enum):
     RUN_STATUS_MISSING = "run_status_missing"
     RUN_STATUS_INVALID = "run_status_invalid"
     MANIFEST_PATH_MISSING = "manifest_path_missing"
+    # Producer exited 0 and contract files parse, but run_status.json is not in
+    # a terminal state — the audit did not actually finish (audit Track A5).
+    RUN_STATUS_NOT_TERMINAL = "run_status_not_terminal"
     MANIFEST_PATH_UNRESOLVABLE = "manifest_path_unresolvable"
     UNKNOWN = "unknown"
 
@@ -55,8 +69,12 @@ class ManagedAuditDispatchRequest(BaseModel, frozen=True):
         ),
     )
     timeout_seconds: float | None = Field(
-        default=None,
-        description="Hard wall-clock timeout in seconds. None = no timeout.",
+        default=1800.0,
+        description=(
+            "Hard wall-clock timeout in seconds. Defaults to 1800 (audit Track "
+            "A5: a wedged producer must not hang the dispatcher forever). "
+            "None = no timeout (explicit opt-out)."
+        ),
     )
     requested_by: str | None = Field(
         default=None,
