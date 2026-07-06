@@ -49,7 +49,7 @@ attempts:
       validation_command_hashes:
         - "sha256:c3d2..."
       runtime_binding_kind: "cli_subscription"
-      runtime_binding_model: "claude-sonnet-4-6"
+      runtime_binding_model: "claude-sonnet-5"
       clp_schema_version: "0.1"
       oc_schema_version: "0.3"
 
@@ -94,6 +94,6 @@ attempts:
       validation_command_hashes:
         - "sha256:c3d2..."
       runtime_binding_kind: "cli_subscription"
-      runtime_binding_model: "claude-sonnet-4-6"
+      runtime_binding_model: "claude-sonnet-5"
       clp_schema_version: "0.1"
       oc_schema_version: "0.3"

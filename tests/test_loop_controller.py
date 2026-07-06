@@ -14,7 +14,7 @@ def test_claude_session_command() -> None:
 
     assert Path(cmd[0]).name == "claude"
     assert cmd[1:4] == ["-p", "hello world", "--model"]
-    assert "claude-sonnet-4-6" in cmd
+    assert "claude-sonnet-5" in cmd
     assert "--effort" in cmd
     assert "medium" in cmd
     assert cmd[-2:] == ["--output-format", "text"]

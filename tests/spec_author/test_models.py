@@ -54,7 +54,7 @@ def test_compliance_verdict_fields():
         spec_coverage=0.9,
         violations=[],
         notes="looks good",
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5",
         prompt_tokens=100,
         completion_tokens=50,
     )

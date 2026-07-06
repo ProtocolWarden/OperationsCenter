@@ -99,7 +99,7 @@ A fully autonomous spec-driven development chain giving OperationsCenter a sixth
 
 **Recovery service** (`spec_director/recovery.py`): Stall detection (24 h), spec revision via Anthropic API (budget 3), abandon + self-cancel (72 h).
 
-**Spec compliance reviewer** (`spec_director/compliance.py`): Direct Anthropic API call (claude-sonnet-4-6) that compares PR diff against the spec and returns a structured JSON verdict (`LGTM`/`CONCERNS`/`FAIL`). Wired into the reviewer watcher as an upstream step before executor self-review.
+**Spec compliance reviewer** (`spec_director/compliance.py`): Direct Anthropic API call (claude-sonnet-5) that compares PR diff against the spec and returns a structured JSON verdict (`LGTM`/`CONCERNS`/`FAIL`). Wired into the reviewer watcher as an upstream step before executor self-review.
 
 **New task kinds**: `test_campaign` (executor test mode), `improve_campaign` (executor improve mode). Both are claimed by their corresponding role workers via `ROLE_TASK_KINDS` in `worker/main.py`.
 

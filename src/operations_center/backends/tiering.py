@@ -12,7 +12,7 @@ _TIER_PROFILES = {
         "codex_cli": {"model": "gpt-5.4-mini", "effort": "low"},
     },
     "standard": {
-        "claude_code": {"model": "claude-sonnet-4-6", "effort": "medium"},
+        "claude_code": {"model": "claude-sonnet-5", "effort": "medium"},
         "codex_cli": {"model": "gpt-5.4", "effort": "medium"},
     },
     "premium": {
