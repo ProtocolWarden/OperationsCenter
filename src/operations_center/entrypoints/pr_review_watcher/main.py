@@ -60,6 +60,7 @@ from operations_center.close_invariants import (
 from operations_center.entrypoints.board_worker._subprocess import (
     build_allowlist_env,
     git_token_passthrough,
+    harden_git_token,
 )
 from operations_center.entrypoints.board_worker.netns import (
     EgressContainmentRequiredError,
@@ -735,6 +736,12 @@ def _run_pipeline(
         if _sandbox_enabled():
             exec_env = build_allowlist_env(
                 oc_root, passthrough=git_token_passthrough(settings, repo_cfg)
+            )
+            # Track A6: per-task App installation token instead of the
+            # long-lived credential — the reviewer executor runs the
+            # least-trusted input of all.
+            exec_env = harden_git_token(
+                exec_env, settings=settings, clone_url=getattr(repo_cfg, "clone_url", "")
             )
             run_exec_cmd = maybe_sandbox(
                 exec_cmd,

@@ -212,6 +212,79 @@ def git_token_passthrough(settings: Any, repo_cfg: Any) -> tuple[str, ...]:
     return (name,) if isinstance(name, str) else ()
 
 
+# Env var names that may carry the git token into the executor env (mirrors
+# sandbox._GIT_TOKEN_ENVS; the WorkspaceManager inside the executor reads the
+# configured token_env, which is one of these in every live config).
+_GIT_TOKEN_VARS = ("GITHUB_TOKEN", "GIT_TOKEN")
+_warned_long_lived_token = False
+
+
+def harden_git_token(env: dict, *, settings: Any, clone_url: str) -> dict:
+    """Swap the long-lived git token in ``env`` for a per-task App token.
+
+    Sandbox token hardening (audit Track A6): when git.github_app_id +
+    git.github_app_key_path are configured, every token-carrying env var is
+    replaced with a freshly minted installation token (~1h TTL, one-repo
+    scope, contents+pull_requests write). The long-lived operator credential
+    then never enters the sandbox. Minting failure fails CLOSED via
+    ContainmentRequiredError (the worker fails the task, not the fleet);
+    opt out with OC_APP_TOKEN_REQUIRED=0 to degrade to the configured token
+    with an observable warning.
+
+    Unconfigured App => env returned unchanged, with a once-per-process
+    warning that a long-lived credential is entering the sandbox.
+    """
+    global _warned_long_lived_token
+    from .sandbox import ContainmentRequiredError, sandbox_enabled
+
+    token_vars = [v for v in _GIT_TOKEN_VARS if env.get(v)]
+    if not token_vars:
+        return env
+    git_cfg = getattr(settings, "git", None)
+    app_id = getattr(git_cfg, "github_app_id", None)
+    key_path = getattr(git_cfg, "github_app_key_path", None)
+    if not (app_id and key_path):
+        if sandbox_enabled() and not _warned_long_lived_token:
+            _warned_long_lived_token = True
+            logger.warning(
+                "board_worker: forwarding a LONG-LIVED git token into the sandbox — "
+                "configure git.github_app_id + git.github_app_key_path for per-task "
+                'tokens {"event": "long_lived_token_in_sandbox"}'
+            )
+        return env
+    from operations_center.adapters.github_app import GitHubAppTokenError, mint_installation_token
+    from operations_center.adapters.github_pr import GitHubPRClient
+
+    try:
+        owner, repo = GitHubPRClient.owner_repo_from_clone_url(clone_url)
+        token = mint_installation_token(
+            app_id=str(app_id), private_key_path=str(key_path), owner=owner, repo=repo
+        )
+    except (GitHubAppTokenError, ValueError) as exc:
+        required = str(os.environ.get("OC_APP_TOKEN_REQUIRED", "1")).strip().lower() not in {
+            "0",
+            "false",
+            "no",
+            "off",
+        }
+        logger.error(
+            'board_worker: per-task App token mint FAILED — %s '
+            '{"event": "token_hardening_degraded", "required": %s}',
+            exc,
+            str(required).lower(),
+        )
+        if required:
+            raise ContainmentRequiredError(
+                f"per-task App token required (git.github_app_id configured; opt out "
+                f"with OC_APP_TOKEN_REQUIRED=0) but minting failed: {exc}"
+            ) from exc
+        return env
+    hardened = dict(env)
+    for var in token_vars:
+        hardened[var] = token
+    return hardened
+
+
 def build_env(oc_root: Path) -> dict:
     """Deprecated: use build_allowlist_env() instead."""
     return build_allowlist_env(oc_root)
