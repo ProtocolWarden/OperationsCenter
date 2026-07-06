@@ -1,3 +1,9 @@
+## 2026-07-06 — fix: loop_bridge ty errors (post-#428)
+
+ty flagged snapshot.get(...).get("cooldowns") as not-iterable (untyped usage
+snapshot). Extracted _cooldown_details() with explicit isinstance narrowing.
+ty is not a required check, so #428 merged red — this restores green.
+
 ## 2026-07-06 — Track B: watchdog loop migrated to the PseudoOperator engine
 
 tools/loop/controller.py (1152 lines) replaced by a thin exec shim into

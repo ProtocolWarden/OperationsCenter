@@ -53,6 +53,14 @@ _WORKER_BACKEND_FOR: dict[str, tuple[str, str]] = {
 # ── seed-cooldowns ────────────────────────────────────────────────────────────
 
 
+def _cooldown_details(snapshot: dict, backend_key: str) -> list[dict]:
+    raw = snapshot.get(backend_key)
+    details = raw.get("cooldowns") if isinstance(raw, dict) else None
+    if not isinstance(details, list):
+        return []
+    return [d for d in details if isinstance(d, dict)]
+
+
 def seed_cooldowns() -> int:
     """Print ``{backend: iso8601|null}`` seeded from the executor usage store."""
     from operations_center.execution.usage_store import UsageStore
@@ -76,9 +84,7 @@ def seed_cooldowns() -> int:
         if current is None or reset_at.strftime("%Y-%m-%dT%H:%M:%SZ") > current:
             out[backend] = reset_at.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    for detail in snapshot.get("claude_code", {}).get("cooldowns", []):
-        if not isinstance(detail, dict):
-            continue
+    for detail in _cooldown_details(snapshot, "claude_code"):
         model = detail.get("model")
         if detail.get("limit_kind") == "model_weekly" and model == "sonnet":
             apply("claude", detail.get("reset_at"))
@@ -87,9 +93,8 @@ def seed_cooldowns() -> int:
         elif detail.get("limit_kind") != "model_weekly":
             apply("claude", detail.get("reset_at"))
             apply("opus", detail.get("reset_at"))
-    for detail in snapshot.get("codex_cli", {}).get("cooldowns", []):
-        if isinstance(detail, dict):
-            apply("codex", detail.get("reset_at"))
+    for detail in _cooldown_details(snapshot, "codex_cli"):
+        apply("codex", detail.get("reset_at"))
 
     print(json.dumps(out, ensure_ascii=False))
     return 0
