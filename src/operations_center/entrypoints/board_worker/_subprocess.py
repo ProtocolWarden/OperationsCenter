@@ -15,6 +15,30 @@ from typing import Any
 from .netns import maybe_netns, netns_enabled
 from .sandbox import _resolve_egress_proxy, maybe_sandbox, sandbox_enabled
 
+# Hard wall-clock cap on the executor subprocess (audit Track A4). The reviewer
+# path caps its executor at 1800s; the board path had NO timeout, so a wedged
+# agent pinned a worker slot forever. Default = the inner team-executor cap
+# (3600s) + 15min grace so the outer wall never races the inner one; override
+# with OC_EXECUTOR_TIMEOUT_SEC. Values <= 0 disable (explicit opt-out).
+_EXECUTOR_TIMEOUT_ENV = "OC_EXECUTOR_TIMEOUT_SEC"
+_EXECUTOR_TIMEOUT_DEFAULT = 4500
+
+
+def executor_timeout_seconds() -> float | None:
+    raw = os.environ.get(_EXECUTOR_TIMEOUT_ENV, "")
+    try:
+        val = float(raw) if raw.strip() else float(_EXECUTOR_TIMEOUT_DEFAULT)
+    except ValueError:
+        logger.warning(
+            "board_worker: invalid %s=%r — using default %ds",
+            _EXECUTOR_TIMEOUT_ENV,
+            raw,
+            _EXECUTOR_TIMEOUT_DEFAULT,
+        )
+        val = float(_EXECUTOR_TIMEOUT_DEFAULT)
+    return val if val > 0 else None
+
+
 # SBX Layer 3 (resource limits): gated on this flag. Wraps the executor in a
 # transient systemd-user cgroup scope with memory/pids/cpu caps + a wall-timeout
 # backstop, so a runaway/stuck sandboxed run can't exhaust the host. Defaults are
@@ -329,4 +353,29 @@ def run_executor(
         # re-add ONLY those for the outer hop. bwrap --clearenv keeps them out of
         # the sandbox; un-sandboxed they are harmless (not secrets).
         run_env = {**env, **{k: os.environ[k] for k in _USER_BUS_ENV if k in os.environ}}
-    return subprocess.run(run_cmd, cwd=oc_root, env=run_env, capture_output=True, text=True)
+    timeout = executor_timeout_seconds()
+    try:
+        return subprocess.run(
+            run_cmd, cwd=oc_root, env=run_env, capture_output=True, text=True, timeout=timeout
+        )
+    except subprocess.TimeoutExpired as exc:
+        # subprocess.run has already killed the child. Synthesize a completed
+        # process so every caller's existing failure path handles it uniformly
+        # (returncode 124 = the conventional timeout exit code).
+        def _text(stream: bytes | str | None) -> str:
+            if stream is None:
+                return ""
+            return stream.decode(errors="replace") if isinstance(stream, bytes) else stream
+
+        logger.error(
+            "board_worker: executor subprocess exceeded %ss wall timeout — killed "
+            '{"event": "executor_timeout", "timeout_s": %s}',
+            timeout,
+            timeout,
+        )
+        return subprocess.CompletedProcess(
+            args=list(run_cmd),
+            returncode=124,
+            stdout=_text(exc.stdout),
+            stderr=(_text(exc.stderr) + f"\n[board_worker] executor timed out after {timeout}s").strip(),
+        )

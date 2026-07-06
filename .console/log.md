@@ -1,3 +1,13 @@
+## 2026-07-06 — Track A4: board-path executor wall timeout
+
+Audit defect: the reviewer path caps its executor at 1800s but the board path
+had NO timeout — a wedged agent pinned a worker slot forever. run_executor now
+enforces a wall timeout (default 4500s = inner team-executor cap 3600s + 15min
+grace, so the outer wall never races the inner; OC_EXECUTOR_TIMEOUT_SEC
+overrides, <=0 opts out). On expiry the child is killed and a synthesized
+CompletedProcess(returncode=124) flows through the existing failure paths —
+no caller changes needed. Structured executor_timeout log event.
+
 ## 2026-07-06 — Track A3: containment default-on + fail-closed per task
 
 Audit defect: bwrap/netns/egress were opt-in AND fail-open — a missing binary
