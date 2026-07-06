@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 ProtocolWarden
 """DEPRECATED shim — the OC watchdog loop moved to ContextLifecycle.
 
 The engine is `context_lifecycle.pseudo_operator` (Track B of the grounded

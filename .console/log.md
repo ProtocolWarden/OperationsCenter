@@ -1,3 +1,7 @@
+## 2026-07-06 — fix: SPDX headers on the loop shim + test package init
+
+CI license check flagged the two new files from the loop migration.
+
 ## 2026-07-06 — fix: untrack the stale build/ artifact dir
 
 #428's git add -A committed 556 stale build/lib files (a local setuptools
