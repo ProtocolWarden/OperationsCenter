@@ -496,8 +496,6 @@ audit:
       # code under audit — they probe via subprocess + filesystem.
       - tests/test_architecture_cleanup_guards.py
       - tests/unit/audit_dispatch/test_lock_store_concurrency.py
-      # Loop-controller tests exercise the top-level tool entrypoint directly.
-      - tests/test_loop_controller.py
       # Slow-test tracker tests exercise conftest.py hooks via subprocess — no src imports.
       - tests/test_slow_test_hooks_integration.py
       - tests/test_slow_test_tracker.py

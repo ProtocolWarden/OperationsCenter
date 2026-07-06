@@ -1,3 +1,8 @@
+## 2026-07-06 — fix: drop stale T8 exclusion for the removed controller tests
+
+tests/test_loop_controller.py was removed by the loop migration (#428);
+Custodian doctor flags the now-matchless glob.
+
 ## 2026-07-06 — fix: SPDX headers on the loop shim + test package init
 
 CI license check flagged the two new files from the loop migration.
