@@ -95,8 +95,10 @@ def cmd_run(
         "--allow-unverified",
         help="Allow audit types with command_status='not_yet_run'.",
     ),
-    timeout: float | None = typer.Option(
-        None, "--timeout", help="Hard timeout in seconds. Omit for no timeout."
+    timeout: float = typer.Option(
+        1800.0,
+        "--timeout",
+        help="Hard timeout in seconds (default 1800). Pass 0 to disable (no timeout).",
     ),
     requested_by: str | None = typer.Option(None, "--requested-by", help="Caller identity."),
     log_dir: str | None = typer.Option(None, "--log-dir", help="Override stdout/stderr log dir."),
@@ -107,7 +109,7 @@ def cmd_run(
         repo_id=repo,
         audit_type=audit_type,
         allow_unverified_command=allow_unverified,
-        timeout_seconds=timeout,
+        timeout_seconds=timeout if timeout and timeout > 0 else None,
         requested_by=requested_by,
     )
 
@@ -194,7 +196,9 @@ def cmd_dispatch(
     repo_id: str = typer.Argument(..., help="Managed repo ID."),
     audit_type: str = typer.Argument(..., help="Audit type."),
     allow_unverified: bool = typer.Option(False, "--allow-unverified"),
-    timeout: float | None = typer.Option(None, "--timeout"),
+    timeout: float = typer.Option(
+        1800.0, "--timeout", help="Hard timeout in seconds (default 1800). 0 disables."
+    ),
     requested_by: str | None = typer.Option(None, "--requested-by"),
     log_dir: str | None = typer.Option(None, "--log-dir"),
     json_output: bool = typer.Option(False, "--json"),

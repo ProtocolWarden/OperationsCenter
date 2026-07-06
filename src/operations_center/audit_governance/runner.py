@@ -94,7 +94,7 @@ def run_governed_audit(
     output_dir: Path | str | None = None,
     config_dir: Path | str | None = None,
     log_dir: Path | str | None = None,
-    dispatch_timeout_seconds: float | None = None,
+    dispatch_timeout_seconds: float | None = 1800.0,
 ) -> AuditGovernedRunResult:
     """Evaluate governance and optionally call Phase 6 dispatch.
 

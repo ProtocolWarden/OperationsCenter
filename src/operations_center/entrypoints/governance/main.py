@@ -201,7 +201,11 @@ def cmd_run(
     ),
     known_repos: str = typer.Option("", "--known-repos", help="Comma-separated known repo IDs."),
     known_types: str = typer.Option("", "--known-types", help="Comma-separated audit types."),
-    timeout: float | None = typer.Option(None, "--timeout", help="Dispatch timeout in seconds."),
+    timeout: float = typer.Option(
+        1800.0,
+        "--timeout",
+        help="Dispatch timeout in seconds (default 1800). Pass 0 to disable.",
+    ),
 ) -> None:
     """Evaluate governance and run the audit if approved."""
     try:
@@ -238,7 +242,7 @@ def cmd_run(
         approval=approval,
         governance_config=cfg,
         output_dir=output_dir,
-        dispatch_timeout_seconds=timeout,
+        dispatch_timeout_seconds=timeout if timeout and timeout > 0 else None,
     )
 
     color = _status_color(result.governance_status)

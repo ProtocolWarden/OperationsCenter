@@ -60,8 +60,15 @@ class TestDispatchRequestValidation:
         )
         assert req.timeout_seconds == 300.0
 
-    def test_timeout_none_is_valid(self) -> None:
+    def test_timeout_defaults_to_1800(self) -> None:
+        # Audit Track A5: a wedged producer must not hang the dispatcher forever.
         req = ManagedAuditDispatchRequest(repo_id="example_managed_repo", audit_type="audit_type_1")
+        assert req.timeout_seconds == 1800.0
+
+    def test_timeout_none_is_explicit_opt_out(self) -> None:
+        req = ManagedAuditDispatchRequest(
+            repo_id="example_managed_repo", audit_type="audit_type_1", timeout_seconds=None
+        )
         assert req.timeout_seconds is None
 
     def test_default_metadata_is_empty_dict(self) -> None:

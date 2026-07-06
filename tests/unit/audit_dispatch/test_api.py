@@ -385,6 +385,46 @@ manifest.write_text(json.dumps({{
         assert result.artifact_manifest_path is not None
         assert result.process_exit_code == 0
 
+    def test_nonterminal_run_status_reports_failed(self, tmp_path: Path) -> None:
+        # Audit Track A5: exit 0 + parseable contract files but run_status.json
+        # still says in_progress => the audit did NOT finish; COMPLETED here was
+        # the false-success hole.
+        from operations_center.audit_dispatch.lifecycle import PostExecutionDiscovery
+        from operations_center.audit_dispatch.models import FailureKind
+
+        run_id = _RUN_ID
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        prepared = _make_fake_invocation(tmp_path, run_id)
+        prepared.request.command = self._build_fake_command(tmp_path, run_id)
+        prepared.request.expected_output_dir = "output"
+
+        with (
+            patch(
+                "operations_center.audit_dispatch.api.prepare_managed_audit_invocation",
+                return_value=prepared,
+            ),
+            patch(
+                "operations_center.audit_dispatch.api._resolve_abs_working_dir",
+                return_value=str(tmp_path),
+            ),
+            patch(
+                "operations_center.audit_dispatch.api.discover_post_execution",
+                return_value=PostExecutionDiscovery(
+                    run_status_path="rs.json",
+                    artifact_manifest_path="am.json",
+                    run_status_value="in_progress",
+                ),
+            ),
+        ):
+            req = _make_request(cwd_override=str(tmp_path))
+            result = dispatch_managed_audit(req, config_dir=_CONFIG_DIR, log_dir=tmp_path / "logs")
+
+        assert result.status == DispatchStatus.FAILED
+        assert result.failure_kind == FailureKind.RUN_STATUS_NOT_TERMINAL
+        assert "in_progress" in (result.error or "")
+
     def test_audit_run_id_passed_in_env(self, tmp_path: Path) -> None:
         """Verify AUDIT_RUN_ID appears in the process environment."""
         run_id = _RUN_ID

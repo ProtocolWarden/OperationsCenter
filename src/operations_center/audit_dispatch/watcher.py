@@ -20,13 +20,9 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-from operations_center.audit_contracts.vocabulary import RunStatus
+from operations_center.audit_dispatch.models import TERMINAL_RUN_STATUSES
 
-_TERMINAL_STATUSES = {
-    RunStatus.COMPLETED.value,
-    RunStatus.FAILED.value,
-    RunStatus.INTERRUPTED.value,
-}
+_TERMINAL_STATUSES = TERMINAL_RUN_STATUSES
 
 
 @dataclass(frozen=True, slots=True)
