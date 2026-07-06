@@ -22,6 +22,14 @@ plane:
 git:
   provider: github
   token_env: GITHUB_TOKEN               # env var holding your GitHub token (global fallback)
+  # Sandbox token hardening (Track A6): when both are set, each task gets a
+  # freshly minted GitHub App installation token (repo-scoped, ~1h TTL,
+  # contents+pull_requests write) instead of the long-lived token above — the
+  # long-lived credential never enters the executor sandbox. The key file must
+  # NOT live under a path bound into the sandbox. Minting failure fails the
+  # task (opt out with OC_APP_TOKEN_REQUIRED=0).
+  # github_app_id: "123456"
+  # github_app_key_path: /secure/path/oc-github-app.private-key.pem
   open_pr_default: false                # open a PR by default after push (per-repo overrides this)
   push_on_validation_failure: true      # push a draft branch even when validation fails
   author_name: Operations Center Bot

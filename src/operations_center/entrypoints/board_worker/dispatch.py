@@ -14,7 +14,7 @@ from typing import Any
 
 from operations_center.injection import wrap_untrusted_goal
 
-from ._subprocess import build_allowlist_env, git_token_passthrough, run_executor
+from ._subprocess import build_allowlist_env, git_token_passthrough, harden_git_token, run_executor
 from ._subprocess import is_transient_failure, persist_failure_diagnostics, venv_python
 from .wheelhouse import provision_env
 from ._text import append_rejection_patterns, desc_text, extract_goal, task_type_from_kind
@@ -91,6 +91,9 @@ def dispatch_issue(
     oc_root = Path(__file__).resolve().parents[4]
     python = venv_python(oc_root)
     env = build_allowlist_env(oc_root, passthrough=git_token_passthrough(settings, repo_cfg))
+    # Track A6: swap the long-lived git token for a per-task App installation
+    # token (repo-scoped, ~1h TTL) before anything sandbox-bound sees the env.
+    env = harden_git_token(env, settings=settings, clone_url=clone_url)
     env.update(provision_env(repo_key, repo_path, python_bin=python))  # offline deps
     short_id = task_id[:8]
 

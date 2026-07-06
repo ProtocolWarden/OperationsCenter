@@ -20,6 +20,14 @@ class PlaneSettings(BaseModel):
 
 class GitSettings(BaseModel):
     token_env: str | None = None
+    # Sandbox token hardening (audit Track A6). When both are set, the board
+    # worker mints a per-task GitHub App installation token (~1h TTL, scoped to
+    # the task's repo, contents+pull_requests write only) and forwards THAT
+    # into the executor sandbox instead of the long-lived token in token_env.
+    # The App private key itself never enters the sandbox. Spec:
+    # PlatformManifest docs/architecture/sandbox-token-hardening-spec.md.
+    github_app_id: str | None = None
+    github_app_key_path: str | None = None
     open_pr_default: bool = True
     push_on_validation_failure: bool = True
     author_name: str = "Operations Center Bot"

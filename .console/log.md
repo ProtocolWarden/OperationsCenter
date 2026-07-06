@@ -1,3 +1,19 @@
+## 2026-07-06 — Track A6: sandbox token hardening (per-task App tokens)
+
+Audit defect: the long-lived gho_ OAuth token (write-capable everywhere,
+never expires) was forwarded into the bwrap sandbox env. New
+adapters/github_app.py mints a per-task GitHub App installation token
+(repo-scoped, ~1h TTL, contents+pull_requests write; RS256 JWT built with
+cryptography — no new dependency) in the PARENT process; harden_git_token in
+_subprocess swaps every token-carrying env var before the sandbox spawns
+(board dispatch + reviewer pipeline both wired). App key never enters the
+sandbox. Mint failure fails the TASK closed (OC_APP_TOKEN_REQUIRED=0 opts
+out). Unconfigured App = unchanged behavior + a once-per-process
+long_lived_token_in_sandbox warning. DEPLOY PREREQUISITE: register the App
+(or accept the warning), set git.github_app_id + github_app_key_path in
+operations_center.local.yaml. Spec: PlatformManifest
+docs/architecture/sandbox-token-hardening-spec.md. (C41 ensure_ascii fix.)
+
 ## 2026-07-06 — Track A4: board-path executor wall timeout
 
 Audit defect: the reviewer path caps its executor at 1800s but the board path
