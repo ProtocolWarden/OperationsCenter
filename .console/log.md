@@ -1,3 +1,16 @@
+## 2026-07-06 — Track C: loop trust-anchor wiring (awaiting operator ceremony)
+
+CL pinned v0.4.1 (signed loop config, CL #37): `cl loop run` now verifies the
+pseudo_operator section against an ed25519-signed reference — drift runs the
+SIGNED reference (restore-by-consumption), bad signature refuses, unsigned
+warns. Staged the anchoring surface: .console/operator_pubkey.ed25519
+placeholder (same paste-in pattern as eval/constitution) + CODEOWNERS pins on
+the pubkey and the signed reference files. OPERATOR CEREMONY (one human step,
+same key can anchor EVAL too): keygen offline -> paste pubkey hex ->
+`cl loop sign-config --config .console/workers.yaml --key <priv>` -> commit
+the .signed.json/.sig -> add --require-signed to loop_start. Until then the
+loop runs in loud unsigned mode.
+
 ## 2026-07-06 — fix: loop_bridge ty errors (post-#428)
 
 ty flagged snapshot.get(...).get("cooldowns") as not-iterable (untyped usage

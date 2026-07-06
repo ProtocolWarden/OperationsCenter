@@ -16,3 +16,9 @@
 
 # CODEOWNERS itself — so the pin cannot be quietly removed.
 /.github/CODEOWNERS   @ProtocolWarden
+
+# Loop trust anchor (Track C): the pinned operator pubkey + the signed
+# pseudo_operator reference are root-of-trust files — operator-only.
+/.console/operator_pubkey.ed25519        @ProtocolWarden
+/.console/pseudo_operator.signed.json    @ProtocolWarden
+/.console/pseudo_operator.signed.sig     @ProtocolWarden
