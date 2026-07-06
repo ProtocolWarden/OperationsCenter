@@ -1,0 +1,454 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 ProtocolWarden
+"""Subprocess and environment helpers for board_worker."""
+
+from __future__ import annotations
+
+import logging
+import os
+import shutil
+import subprocess
+from collections.abc import Sequence
+from pathlib import Path
+from typing import Any
+
+from .netns import maybe_netns, netns_enabled
+from .sandbox import _resolve_egress_proxy, maybe_sandbox, sandbox_enabled
+
+# Hard wall-clock cap on the executor subprocess (audit Track A4). The reviewer
+# path caps its executor at 1800s; the board path had NO timeout, so a wedged
+# agent pinned a worker slot forever. Default = the inner team-executor cap
+# (3600s) + 15min grace so the outer wall never races the inner one; override
+# with OC_EXECUTOR_TIMEOUT_SEC. Values <= 0 disable (explicit opt-out).
+_EXECUTOR_TIMEOUT_ENV = "OC_EXECUTOR_TIMEOUT_SEC"
+_EXECUTOR_TIMEOUT_DEFAULT = 4500
+
+
+def executor_timeout_seconds() -> float | None:
+    raw = os.environ.get(_EXECUTOR_TIMEOUT_ENV, "")
+    try:
+        val = float(raw) if raw.strip() else float(_EXECUTOR_TIMEOUT_DEFAULT)
+    except ValueError:
+        logger.warning(
+            "board_worker: invalid %s=%r — using default %ds",
+            _EXECUTOR_TIMEOUT_ENV,
+            raw,
+            _EXECUTOR_TIMEOUT_DEFAULT,
+        )
+        val = float(_EXECUTOR_TIMEOUT_DEFAULT)
+    return val if val > 0 else None
+
+
+# SBX Layer 3 (resource limits): gated on this flag. Wraps the executor in a
+# transient systemd-user cgroup scope with memory/pids/cpu caps + a wall-timeout
+# backstop, so a runaway/stuck sandboxed run can't exhaust the host. Defaults are
+# generous (cap runaways, don't throttle legit work) and env-overridable.
+_RLIMIT_ENV_FLAG = "OC_SANDBOX_RLIMITS"
+# systemd-run --user needs the user-bus vars; the minimized executor env drops
+# them, so we re-add ONLY these for the systemd-run hop (bwrap --clearenv keeps
+# them out of the sandbox).
+_USER_BUS_ENV = ("XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS")
+
+logger = logging.getLogger(__name__)
+
+# Keep the persisted diagnostics bounded — enough to diagnose, not unbounded.
+_DIAG_MAX_STREAM_CHARS = 200_000
+_DIAG_TAIL_CHARS = 1200
+
+_TRANSIENT_CATEGORIES = {"backend_error", "timeout"}
+_TRANSIENT_REASON_PATTERNS = (
+    "connection refused",
+    "connection reset",
+    "timed out",
+    "timeout",
+    "502",
+    "503",
+    "504",
+    "bad gateway",
+    "gateway timeout",
+    "service unavailable",
+    "remote disconnected",
+    "network is unreachable",
+    "temporary failure",
+)
+
+# Pinned, non-secret base env. Static values, never inherited from the parent.
+MINIMAL_ENV_ALLOWLIST = {
+    "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    "CI": "true",
+    "LANG": "en_US.UTF-8",
+    "LC_ALL": "en_US.UTF-8",
+}
+
+# Agent-backend CLIs (claude_code → `claude`, codex_cli → `codex`, aider_local →
+# `aider`) plus the `cl`/`uv` toolchain install into USER-LOCAL bin dirs
+# (e.g. ~/.local/bin, a repo-local bin) that the pinned system PATH omits.
+# Pinning PATH to the system dirs alone hides them, so dispatch hard-fails with
+# "<bin> not found in PATH" — a fleet-halt and a §0.1 self-healing violation.
+# We discover each tool's dir from the PARENT PATH (the fleet process resolves
+# them fine) and prepend only those specific dirs — not the whole parent PATH —
+# preserving the Phase-0 blast-radius cut while keeping the backends runnable.
+_EXECUTOR_TOOLS = ("claude", "codex", "aider", "cl", "uv", "node", "npm", "git")
+
+
+def executor_path() -> str:
+    """The PATH for worker subprocesses: pinned system dirs, with the dirs that
+    actually hold the agent-backend CLIs prepended (discovered from the parent
+    PATH). ``~/.local/bin`` is always prepended when ``HOME`` is set — the
+    canonical user-local install dir for these tools (a missing dir on PATH is
+    harmless). The parent PATH itself is NOT inherited — only the specific dirs
+    that hold the needed tools — so the Phase-0 blast-radius cut is preserved."""
+    base = MINIMAL_ENV_ALLOWLIST["PATH"]
+    base_dirs = base.split(":")
+    extra: list[str] = []
+
+    def _add(directory: str | None) -> None:
+        if directory and directory not in base_dirs and directory not in extra:
+            extra.append(directory)
+
+    home = os.environ.get("HOME")
+    if home:
+        _add(os.path.join(home, ".local", "bin"))
+    for tool in _EXECUTOR_TOOLS:
+        found = shutil.which(tool)
+        if found:
+            _add(os.path.dirname(found))
+    return ":".join([*extra, base]) if extra else base
+
+
+# Operational + model-access vars forwarded from the parent IF present. These are
+# load-bearing: the worker toolchain needs HOME/cache dirs, and it MUST be able to
+# reach a model or the fleet cannot run/review/fix — the self-healing invariant
+# (HARNESS_TRUST_HARDENING.md §0.1). Model creds + the git token stay in Phase 0;
+# full cloud-key containment is Phase 3 (the localhost key-proxy).
+_ENV_PASSTHROUGH = (
+    # operational
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "TERM",
+    "TMPDIR",
+    "XDG_CACHE_HOME",
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+    "SSL_CERT_FILE",
+    "SSL_CERT_DIR",
+    "REQUESTS_CA_BUNDLE",
+    # model access (local ollama floor + cloud backends)
+    "OPENAI_API_KEY",
+    "OPENAI_API_BASE",
+    "OPENAI_BASE_URL",
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_BASE_URL",
+    "OLLAMA_API_BASE",
+    "OLLAMA_HOST",
+    # ContextLifecycle anchoring. OC's CLAUDE.md ContextGuard REQUIRES CL_ANCHOR:
+    # an agent dispatched into the OC clone without it returns a prose refusal
+    # ("CL_ANCHOR is not set… run `eval $(cl session start …)`") instead of a JSON
+    # plan, so the planner stage fails and the whole run dies. operations-center.sh
+    # deliberately sets CL_ANCHOR for the fleet; this forwards it (and the cl
+    # session context) to the executor subprocess so the agent stays anchored and
+    # cl_dispatch_wrap()'s hydrate/capture is not silently disabled. Dropping it was
+    # a Phase-0 over-minimization (regressed the #311 CL_ANCHOR unblock).
+    "CL_ANCHOR",
+    "CL_HOME",
+    "CL_SESSION_ID",
+)
+
+# Never forwarded, even if a caller adds them to `passthrough`. The worker provably
+# does not need these; dropping them is the Phase-0 blast-radius cut.
+_ENV_DENY = frozenset(
+    {
+        "PLANE_API_TOKEN",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_SESSION_TOKEN",
+    }
+)
+
+
+def build_allowlist_env(oc_root: Path, *, passthrough: Sequence[str] = ()) -> dict:
+    """Build a minimized environment for worker subprocesses.
+
+    Starts from a pinned non-secret base and forwards only an explicit allowlist of
+    operational + model-access vars (`_ENV_PASSTHROUGH`) plus any caller-supplied
+    names in ``passthrough`` (e.g. the *active* repo's git-token var, so push still
+    works while sibling-repo tokens, the Plane token, and host secrets are dropped).
+    Names in ``_ENV_DENY`` are never forwarded.
+
+    The allowlist intentionally preserves model creds and the active git token so a
+    minimized worker can still run/review/fix/merge — dropping them would hard-halt
+    the fleet, violating the self-healing invariant (HARNESS_TRUST_HARDENING.md
+    §0.1). Tighter cloud-key containment is Phase 3.
+    """
+    env = dict(MINIMAL_ENV_ALLOWLIST)
+    # Prepend the agent-tool dirs so claude_code/codex_cli/aider_local can find
+    # their CLI binaries (the pinned system PATH alone omits ~/.local/bin etc.).
+    env["PATH"] = executor_path()
+    env["PYTHONPATH"] = str(oc_root / "src")
+    env["GITHUB_ACTIONS"] = os.environ.get("GITHUB_ACTIONS", "false")
+    for name in (*_ENV_PASSTHROUGH, *passthrough):
+        if name in _ENV_DENY:
+            continue
+        value = os.environ.get(name)
+        if value is not None:
+            env[name] = value
+    return env
+
+
+def git_token_passthrough(settings: Any, repo_cfg: Any) -> tuple[str, ...]:
+    """The env-var name holding the ACTIVE repo's git token, if any.
+
+    Forwarded into the minimized worker env (via ``build_allowlist_env``'s
+    ``passthrough``) so push still works, while sibling repos' token vars are left
+    behind. A repo-specific ``token_env`` overrides the global git token var.
+    """
+    name = None
+    if repo_cfg is not None:
+        name = getattr(repo_cfg, "token_env", None)
+    if not name:
+        git_cfg = getattr(settings, "git", None)
+        name = getattr(git_cfg, "token_env", None) if git_cfg is not None else None
+    return (name,) if isinstance(name, str) else ()
+
+
+# Env var names that may carry the git token into the executor env (mirrors
+# sandbox._GIT_TOKEN_ENVS; the WorkspaceManager inside the executor reads the
+# configured token_env, which is one of these in every live config).
+_GIT_TOKEN_VARS = ("GITHUB_TOKEN", "GIT_TOKEN")
+_warned_long_lived_token = False
+
+
+def harden_git_token(env: dict, *, settings: Any, clone_url: str) -> dict:
+    """Swap the long-lived git token in ``env`` for a per-task App token.
+
+    Sandbox token hardening (audit Track A6): when git.github_app_id +
+    git.github_app_key_path are configured, every token-carrying env var is
+    replaced with a freshly minted installation token (~1h TTL, one-repo
+    scope, contents+pull_requests write). The long-lived operator credential
+    then never enters the sandbox. Minting failure fails CLOSED via
+    ContainmentRequiredError (the worker fails the task, not the fleet);
+    opt out with OC_APP_TOKEN_REQUIRED=0 to degrade to the configured token
+    with an observable warning.
+
+    Unconfigured App => env returned unchanged, with a once-per-process
+    warning that a long-lived credential is entering the sandbox.
+    """
+    global _warned_long_lived_token
+    from .sandbox import ContainmentRequiredError, sandbox_enabled
+
+    token_vars = [v for v in _GIT_TOKEN_VARS if env.get(v)]
+    if not token_vars:
+        return env
+    git_cfg = getattr(settings, "git", None)
+    app_id = getattr(git_cfg, "github_app_id", None)
+    key_path = getattr(git_cfg, "github_app_key_path", None)
+    if not (app_id and key_path):
+        if sandbox_enabled() and not _warned_long_lived_token:
+            _warned_long_lived_token = True
+            logger.warning(
+                "board_worker: forwarding a LONG-LIVED git token into the sandbox — "
+                "configure git.github_app_id + git.github_app_key_path for per-task "
+                'tokens {"event": "long_lived_token_in_sandbox"}'
+            )
+        return env
+    from operations_center.adapters.github_app import GitHubAppTokenError, mint_installation_token
+    from operations_center.adapters.github_pr import GitHubPRClient
+
+    try:
+        owner, repo = GitHubPRClient.owner_repo_from_clone_url(clone_url)
+        token = mint_installation_token(
+            app_id=str(app_id), private_key_path=str(key_path), owner=owner, repo=repo
+        )
+    except (GitHubAppTokenError, ValueError) as exc:
+        required = str(os.environ.get("OC_APP_TOKEN_REQUIRED", "1")).strip().lower() not in {
+            "0",
+            "false",
+            "no",
+            "off",
+        }
+        logger.error(
+            'board_worker: per-task App token mint FAILED — %s '
+            '{"event": "token_hardening_degraded", "required": %s}',
+            exc,
+            str(required).lower(),
+        )
+        if required:
+            raise ContainmentRequiredError(
+                f"per-task App token required (git.github_app_id configured; opt out "
+                f"with OC_APP_TOKEN_REQUIRED=0) but minting failed: {exc}"
+            ) from exc
+        return env
+    hardened = dict(env)
+    for var in token_vars:
+        hardened[var] = token
+    return hardened
+
+
+def build_env(oc_root: Path) -> dict:
+    """Deprecated: use build_allowlist_env() instead."""
+    return build_allowlist_env(oc_root)
+
+
+def venv_python(oc_root: Path) -> str:
+    p = oc_root / ".venv" / "bin" / "python"
+    return str(p) if p.exists() else "python3"
+
+
+def is_transient_failure(result: dict) -> bool:
+    """Return True when an execution failure looks like a transient blip.
+
+    Conservative match: requires category to be backend_error or timeout
+    AND the reason text to contain a network-shaped phrase. Avoids
+    over-retrying genuine bugs.
+    """
+    cat = (result.get("failure_category") or "").lower()
+    if cat not in _TRANSIENT_CATEGORIES:
+        return False
+    reason = (result.get("failure_reason") or "").lower()
+    return any(p in reason for p in _TRANSIENT_REASON_PATTERNS)
+
+
+def persist_failure_diagnostics(
+    result: dict,
+    oc_root: Path,
+    role: str,
+    short_id: str,
+    proc: Any,
+    result_text: str = "",
+) -> Path | None:
+    """Persist the executor subprocess output for a FAILED dispatch and enrich
+    ``result['failure_reason']`` with a pointer, so the failure is investigable.
+
+    Why this exists: the executor captures stdout/stderr (``capture_output=True``)
+    but on every failure path that output is discarded; the ``team_executor``
+    library persists no run artifacts; and the task records only a summary like
+    "N of N stages failed". So a recurring execution failure cannot be
+    root-caused — the controller can only blind-requeue. This writes the raw
+    output to ``logs/local/failures/<role>-<short_id>.log`` (a durable, operator-
+    and controller-readable artifact) and appends a ``[diagnostics: <path>]``
+    pointer plus a short tail to the failure reason that flows into the task
+    comment. Best-effort: never raises (a diagnostics-write failure must not turn
+    a recoverable task failure into a crash).
+    """
+    try:
+        out_dir = oc_root / "logs" / "local" / "failures"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        path = out_dir / f"{role}-{short_id}.log"
+        stdout = (getattr(proc, "stdout", "") or "")[-_DIAG_MAX_STREAM_CHARS:]
+        stderr = (getattr(proc, "stderr", "") or "")[-_DIAG_MAX_STREAM_CHARS:]
+        rc = getattr(proc, "returncode", "?")
+        path.write_text(
+            f"# role={role} task={short_id} returncode={rc}\n"
+            f"# === stderr ===\n{stderr}\n"
+            f"# === stdout ===\n{stdout}\n"
+            f"# === result.json ===\n{result_text}\n",
+            encoding="utf-8",
+        )
+        tail = (stderr.strip() or stdout.strip())[-_DIAG_TAIL_CHARS:]
+        base = result.get("failure_reason") or result.get("status") or "execution failed"
+        result["failure_reason"] = f"{base} [diagnostics: {path}]"
+        if tail:
+            result["failure_reason"] += f"\n--- executor tail ---\n{tail}"
+        logger.warning("board_worker[%s]: task=%s failure diagnostics → %s", role, short_id, path)
+        return path
+    except Exception as exc:  # noqa: BLE001 — diagnostics must never crash dispatch
+        logger.warning("board_worker[%s]: failed to persist diagnostics — %s", role, exc)
+        return None
+
+
+def resource_limit_argv(cmd: Sequence[str], *, enabled: bool) -> list:
+    """Prepend a transient ``systemd-run --user --scope`` with cgroup caps
+    (memory/pids/cpu) + a ``RuntimeMaxSec`` wall-timeout, so a runaway or wedged
+    sandboxed executor can't exhaust the host. Gated on ``OC_SANDBOX_RLIMITS=1``,
+    **fail-open**: if disabled or ``systemd-run`` is unavailable it returns the
+    command unchanged (degrade, never halt — §0.1). Caps are env-overridable and
+    default generous (cap runaways, don't throttle legit work)."""
+    if not enabled or shutil.which("systemd-run") is None:
+        return list(cmd)
+    mem = os.environ.get("OC_RLIMIT_MEM", "8G")
+    tasks = os.environ.get("OC_RLIMIT_TASKS", "512")
+    cpu = os.environ.get("OC_RLIMIT_CPU_PCT", "400%")
+    wall = os.environ.get("OC_RLIMIT_WALL_SEC", "7200")
+    return [
+        "systemd-run", "--user", "--scope", "--quiet", "--collect",
+        "-p", f"MemoryMax={mem}",
+        "-p", f"TasksMax={tasks}",
+        "-p", f"CPUQuota={cpu}",
+        "-p", f"RuntimeMaxSec={wall}",
+        *cmd,
+    ]
+
+
+def run_executor(
+    cmd: Sequence[str],
+    *,
+    oc_root: Path,
+    rw_root: Path,
+    workspace: Path,
+    env: dict,
+) -> subprocess.CompletedProcess:
+    """Spawn the executor subprocess, optionally inside the bwrap sandbox and a
+    resource-limited cgroup scope.
+
+    Centralizes the SBX wraps so dispatch's spawn sites stay one-liners. The bwrap
+    sandbox is default-on + fail-closed per task (``sandbox_enabled`` /
+    ``OC_SANDBOX_REQUIRED``, audit Track A3); the Layer-3 cgroup caps stay gated on
+    ``OC_SANDBOX_RLIMITS=1``. The outer ``env`` is still passed (harmless: bwrap
+    ``--clearenv`` + ``--setenv`` re-establishes a controlled env inside;
+    un-sandboxed it is the real env)."""
+    enabled = sandbox_enabled()
+    run_cmd = maybe_sandbox(
+        cmd, oc_root=oc_root, rw_root=rw_root, env=env, enabled=enabled, chdir=workspace
+    )
+    # Structural egress confinement (B1): run bwrap inside a rootless pasta netns
+    # whose only egress is the proxy. Opt-in (OC_EGRESS_NETNS=1) + fail-open. Wraps
+    # bwrap but stays INSIDE the systemd-run scope (so systemd-run keeps the host
+    # user bus). See netns.py.
+    #
+    # Skip the netns cap-drop when the payload is ACTUALLY bwrap (basename check, not
+    # the flag — `maybe_sandbox` fail-opens to the bare command when bwrap is
+    # unavailable, and that bare executor DOES need the cap-drop). bwrap is its own
+    # containment, and `setpriv --bounding-set=-all` would mask the CAP_SYS_ADMIN it
+    # needs to build its namespaces (fail-CLOSED composition). See maybe_netns.
+    sandboxed = bool(run_cmd) and os.path.basename(run_cmd[0]) == "bwrap"
+    run_cmd = maybe_netns(
+        run_cmd,
+        proxy_url=_resolve_egress_proxy(env),
+        enabled=netns_enabled(),
+        drop_caps=not sandboxed,
+    )
+    rlimits = os.environ.get(_RLIMIT_ENV_FLAG) == "1"
+    run_cmd = resource_limit_argv(run_cmd, enabled=rlimits)
+    run_env = env
+    if rlimits and run_cmd and run_cmd[0].endswith("systemd-run"):
+        # systemd-run --user needs the user-bus vars the minimized env drops;
+        # re-add ONLY those for the outer hop. bwrap --clearenv keeps them out of
+        # the sandbox; un-sandboxed they are harmless (not secrets).
+        run_env = {**env, **{k: os.environ[k] for k in _USER_BUS_ENV if k in os.environ}}
+    timeout = executor_timeout_seconds()
+    try:
+        return subprocess.run(
+            run_cmd, cwd=oc_root, env=run_env, capture_output=True, text=True, timeout=timeout
+        )
+    except subprocess.TimeoutExpired as exc:
+        # subprocess.run has already killed the child. Synthesize a completed
+        # process so every caller's existing failure path handles it uniformly
+        # (returncode 124 = the conventional timeout exit code).
+        def _text(stream: bytes | str | None) -> str:
+            if stream is None:
+                return ""
+            return stream.decode(errors="replace") if isinstance(stream, bytes) else stream
+
+        logger.error(
+            "board_worker: executor subprocess exceeded %ss wall timeout — killed "
+            '{"event": "executor_timeout", "timeout_s": %s}',
+            timeout,
+            timeout,
+        )
+        return subprocess.CompletedProcess(
+            args=list(run_cmd),
+            returncode=124,
+            stdout=_text(exc.stdout),
+            stderr=(_text(exc.stderr) + f"\n[board_worker] executor timed out after {timeout}s").strip(),
+        )

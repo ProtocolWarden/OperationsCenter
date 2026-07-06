@@ -30,7 +30,7 @@ from pathlib import Path
 
 import httpx
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +55,8 @@ def _app_jwt(app_id: str, private_key_pem: bytes) -> str:
         key = serialization.load_pem_private_key(private_key_pem, password=None)
     except (ValueError, TypeError) as exc:
         raise GitHubAppTokenError(f"cannot load GitHub App private key: {exc}") from exc
+    if not isinstance(key, rsa.RSAPrivateKey):
+        raise GitHubAppTokenError("GitHub App private key must be an RSA key (RS256)")
     now = int(time.time())
     header = _b64url(json.dumps({"alg": "RS256", "typ": "JWT"}, ensure_ascii=False).encode())
     payload = _b64url(
