@@ -19,6 +19,7 @@ from ._subprocess import is_transient_failure, persist_failure_diagnostics, venv
 from .wheelhouse import provision_env
 from ._text import append_rejection_patterns, desc_text, extract_goal, task_type_from_kind
 from .labels import GITHUB_DIR, add_label, build_forwarded_labels, label_value
+from .scope_check import verify_pushed_scope
 from .outcomes import (
     fail_task,
     handle_failure,
@@ -304,6 +305,21 @@ def dispatch_issue(
             and result.get("branch_pushed") is False
             and result.get("failure_category") == "scope_too_wide"
         )
+
+        # Track A8: out-of-process scope verification. The executor's own scope
+        # gates run INSIDE the sandbox; the parent re-diffs the PUSHED branch
+        # from the remote (the committed tree) against the declared allowlist.
+        if success and not scope_too_wide:
+            scope_error = verify_pushed_scope(
+                bundle=bundle,
+                result=result,
+                repo_path=repo_path,
+                base_branch=base_branch,
+                task_branch=f"{role}/{short_id}",
+            )
+            if scope_error:
+                fail_task(client, task_id, role, scope_error)
+                return False
 
         if success and not scope_too_wide:
             logger.info(
