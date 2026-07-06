@@ -3259,8 +3259,9 @@ def test_sandbox_enabled_reads_flag(monkeypatch) -> None:
     assert watcher._sandbox_enabled() is True
     monkeypatch.setenv("OC_BWRAP_SANDBOX", "0")
     assert watcher._sandbox_enabled() is False
+    # Track A3: default-on — an unset flag means enabled.
     monkeypatch.delenv("OC_BWRAP_SANDBOX", raising=False)
-    assert watcher._sandbox_enabled() is False
+    assert watcher._sandbox_enabled() is True
 
 
 def _pipeline_settings() -> MagicMock:
@@ -3291,6 +3292,9 @@ def _patched_pipeline_run(monkeypatch, tmp_path: Path):
 
 def test_run_pipeline_sandboxes_exec_when_enabled(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("OC_BWRAP_SANDBOX", "1")
+    # keep the test about the SANDBOX wrap: netns default-on would raise on a
+    # host with no egress proxy configured
+    monkeypatch.setenv("OC_EGRESS_NETNS", "0")
     popen = _patched_pipeline_run(monkeypatch, tmp_path)
     sentinel = ["bwrap", "WRAPPED", "execute.main"]
     with patch.object(watcher, "maybe_sandbox", return_value=sentinel) as msbx:
@@ -3311,7 +3315,8 @@ def test_run_pipeline_sandboxes_exec_when_enabled(tmp_path: Path, monkeypatch) -
 
 
 def test_run_pipeline_no_sandbox_when_disabled(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.delenv("OC_BWRAP_SANDBOX", raising=False)
+    # Track A3: default-on — disabling now takes an explicit opt-out.
+    monkeypatch.setenv("OC_BWRAP_SANDBOX", "0")
     popen = _patched_pipeline_run(monkeypatch, tmp_path)
     with patch.object(watcher, "maybe_sandbox") as msbx:
         watcher._run_pipeline(

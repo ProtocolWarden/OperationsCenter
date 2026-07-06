@@ -1,3 +1,20 @@
+## 2026-07-06 — Track A3: containment default-on + fail-closed per task
+
+Audit defect: bwrap/netns/egress were opt-in AND fail-open — a missing binary
+or dead proxy silently ran the token-holding backend un-contained. Now:
+OC_BWRAP_SANDBOX + OC_EGRESS_NETNS default ON (set =0 to disable);
+OC_SANDBOX_REQUIRED + OC_EGRESS_REQUIRED default ON (a degrade raises, and
+board_worker/reviewer catch it as a failed TASK + fault — the fleet keeps
+serving, so §0.1 degrade-never-halt holds at fleet level). New single gate
+sandbox_enabled() consumed by dispatch, reviewer, wheelhouse (no drift); new
+verify_containment() startup self-check logs containment_selfcheck_failed at
+boot instead of discovering the gap at task N. Unit-test conftest pins
+containment OFF for orchestration tests; containment tests opt in explicitly.
+Posture layer extracted to containment.py (sandbox.py was over C29's limit).
+DEPLOY NOTE: live .env already sets sandbox/netns/proxy; required-flags were
+unset and now default to required — if bwrap/pasta/proxy break, tasks fail
+visibly instead of running un-contained.
+
 ## 2026-07-06 — Track A1: trusted-source label provenance gate (forgeable-label bypass)
 
 Audit defect: `source: autonomy`/`spec-campaign`/`board_worker` labels set

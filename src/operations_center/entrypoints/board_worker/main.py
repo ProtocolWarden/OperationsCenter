@@ -41,7 +41,7 @@ from .dispatch import dispatch_issue
 from .labels import ROLE_KINDS
 from .netns import EgressContainmentRequiredError
 from .outcomes import fail_task
-from .sandbox import ContainmentRequiredError
+from .sandbox import ContainmentRequiredError, verify_containment
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +153,19 @@ def main() -> int:
     )
 
     logger.info("board_worker[%s]: starting — poll_interval=%ds", role, args.poll_interval)
+
+    # Containment self-check (audit Track A3): surface a broken posture at boot,
+    # not at task N. Per-task enforcement still fails closed via
+    # ContainmentRequiredError / EgressContainmentRequiredError; this makes the
+    # gap visible the moment the worker starts.
+    for problem in verify_containment():
+        logger.error(
+            'board_worker[%s]: containment self-check FAILED — %s '
+            '{"event": "containment_selfcheck_failed", "problem": "%s"}',
+            role,
+            problem,
+            problem,
+        )
 
     _reconcile_in_flight_at_startup(args.config, role)
 

@@ -25,11 +25,14 @@ This closes it structurally and rootless, validated end to end:
 Net: an agent that does ``unset HTTPS_PROXY`` + a raw socket is kernel-blocked,
 while HTTPS-through-the-proxy keeps working. The honor-system hole is closed.
 
-**Opt-in + fail-open (§0.1 degrade-never-halt).** Gated on ``OC_EGRESS_NETNS=1``.
-If pasta is missing, no proxy is configured (a locked netns with no proxy would
-have *no* egress at all), or any setup step fails, it degrades to the prior
-shared-netns behavior rather than halting the fleet. Enable-and-observe like the
-other SBX layers."""
+**Default-on + fail-closed per task (audit Track A3).** Enabled unless
+``OC_EGRESS_NETNS=0`` and required unless ``OC_EGRESS_REQUIRED=0``: when pasta is
+missing or no proxy is configured (a locked netns with no proxy would have *no*
+egress at all), the dispatch raises ``EgressContainmentRequiredError`` — the
+worker fails THAT TASK with a visible fault and keeps serving (degrade-never-halt
+holds at fleet level, §0.1; the task, not the fleet, is what fails closed). An
+operator who explicitly opts out with ``OC_EGRESS_REQUIRED=0`` restores the old
+observable fail-open degrade."""
 
 from __future__ import annotations
 
@@ -94,19 +97,27 @@ def _setup_script(*, drop_caps: bool) -> str:
     return _FIREWALL_SETUP + (_CAPDROP_EXEC if drop_caps else _PLAIN_EXEC)
 
 
+_FALSY = {"0", "false", "no", "off"}
+
+
 def netns_enabled() -> bool:
-    return os.environ.get(_NETNS_FLAG) == "1"
+    """Egress netns confinement is ON unless explicitly disabled
+    (``OC_EGRESS_NETNS=0``). Default-on per audit Track A3: containment that
+    must be remembered at deploy time is containment that silently rots."""
+    return str(os.environ.get(_NETNS_FLAG, "1")).strip().lower() not in _FALSY
 
 
 class EgressContainmentRequiredError(RuntimeError):
-    """Raised when egress confinement is REQUIRED (OC_EGRESS_REQUIRED=1) but
-    cannot be established. Default posture is fail-open (§0.1); this is the
-    operator opt-in to never run a token-holding backend with unconfined egress.
+    """Raised when egress confinement cannot be established and the operator has
+    not explicitly opted out (``OC_EGRESS_REQUIRED=0``). Dispatch turns it into
+    a failed task + fault — the fleet keeps serving (§0.1 holds at fleet level).
     """
 
 
 def egress_required() -> bool:
-    return str(os.environ.get(_REQUIRED_FLAG, "")).strip().lower() in {"1", "true", "yes", "on"}
+    """Fail-closed by default (audit Track A3): a degrade raises unless the
+    operator explicitly opts out with ``OC_EGRESS_REQUIRED=0``."""
+    return str(os.environ.get(_REQUIRED_FLAG, "1")).strip().lower() not in _FALSY
 
 
 def pasta_path() -> str | None:
@@ -164,7 +175,8 @@ def maybe_netns(
         )
         if egress_required():
             raise EgressContainmentRequiredError(
-                f"OC_EGRESS_REQUIRED set but egress confinement unavailable ({reason})"
+                f"egress confinement required (default; opt out with "
+                f"OC_EGRESS_REQUIRED=0) but unavailable ({reason})"
             )
         return list(cmd)
     forwards: list[str] = []

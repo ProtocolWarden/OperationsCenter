@@ -27,11 +27,15 @@ listening, no proxy env is injected and the sandbox keeps direct egress (losing
 all HTTPS to a dead proxy would be a §0.1 violation). localhost (ollama floor +
 key-proxy) always bypasses the proxy via ``NO_PROXY``.
 
-SELF-HEALING INVARIANT (§0.1): this is **fail-open**. If bwrap is missing, the
-config flag is off, or any bind path is absent, ``maybe_sandbox`` returns the
-command UNCHANGED — the fleet runs un-sandboxed rather than halting. A wrong
-sandbox must never deadlock the fleet (the bootstrap-deadlock lesson from the
-PATH/CL_ANCHOR regressions). Turning it on is an explicit, observed step.
+CONTAINMENT POSTURE (audit Track A3): **default-on, fail-closed per task.**
+The sandbox is enabled unless ``OC_BWRAP_SANDBOX=0`` and required unless
+``OC_SANDBOX_REQUIRED=0``: a degrade (missing bwrap, absent workspace,
+construction error) raises ``ContainmentRequiredError``, which dispatch turns
+into a failed task + fault — the FLEET keeps serving (§0.1 degrade-never-halt
+holds at fleet level; it is the task, not the fleet, that fails closed). An
+operator who explicitly opts out with ``OC_SANDBOX_REQUIRED=0`` restores the
+old observable fail-open degrade (the pre-audit posture, where a missing bwrap
+silently ran the token-holding backend un-sandboxed — the exact finding).
 """
 
 from __future__ import annotations
@@ -41,10 +45,18 @@ import json
 import logging
 import os
 import shutil
-import socket
 from collections.abc import Sequence
 from pathlib import Path
-from urllib.parse import urlparse
+
+from .containment import (  # noqa: F401 — re-exported for existing importers
+    ContainmentRequiredError,
+    _containment_required,
+    _proxy_reachable,
+    _resolve_egress_proxy,
+    bwrap_available,
+    sandbox_enabled,
+    verify_containment,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -60,31 +72,6 @@ def _warn_degraded(reason: str) -> None:
         reason,
         reason,
     )
-
-
-class ContainmentRequiredError(RuntimeError):
-    """Raised when containment is REQUIRED (operator opt-in) but unavailable.
-
-    The default posture is fail-open (§0.1: degrade-never-halt). An operator who
-    wants the stronger guarantee — never run a token-holding backend
-    un-contained — sets ``OC_SANDBOX_REQUIRED=1``; then a degrade raises this
-    instead of silently dropping the sandbox. Dispatch turns it into a blocked
-    task + fault, not a crash-loop.
-    """
-
-
-def _containment_required(env: dict | None, *, var: str) -> bool:
-    """True if the operator has opted into fail-closed containment for ``var``.
-
-    Checks the passed worker env first (the minimized, authoritative env) then
-    the process env, so the flag works whether or not it survived minimization.
-    """
-
-    for source in (env or {}, os.environ):
-        val = source.get(var)
-        if val is not None:
-            return str(val).strip().lower() in {"1", "true", "yes", "on"}
-    return False
 
 
 # HOME subdirectories that hold host credentials — NEVER bound into the sandbox.
@@ -112,40 +99,6 @@ _EGRESS_PROXY_ENV_FLAG = "OC_EGRESS_PROXY"
 # and the localhost cloud-key proxy (D-OP-1) live on loopback and are not
 # "egress" — routing them through the CONNECT proxy would break the local floor.
 _PROXY_BYPASS = "127.0.0.1,localhost,::1"
-
-
-def bwrap_available() -> bool:
-    """Check if bwrap (bubblewrap) is available in the PATH."""
-    return shutil.which("bwrap") is not None
-
-
-def _proxy_reachable(url: str, *, timeout: float = 0.5) -> bool:
-    """True if the egress proxy host:port accepts a TCP connection. This is the
-    gate that keeps proxy wiring FAIL-OPEN (§0.1): if the proxy is down we inject
-    nothing and the sandbox keeps direct egress rather than losing all HTTPS."""
-    try:
-        parsed = urlparse(url if "://" in url else f"http://{url}")
-        host = parsed.hostname or "127.0.0.1"
-        port = parsed.port or 8889
-    except ValueError:
-        return False
-    try:
-        with socket.create_connection((host, port), timeout=timeout):
-            return True
-    except OSError:
-        return False
-
-
-def _resolve_egress_proxy(env: dict) -> str | None:
-    """The egress proxy URL to wire into the sandbox, or ``None``. Reads
-    ``OC_EGRESS_PROXY`` from the controlled env (falling back to the parent
-    process env, where the fleet actually sets it) and returns it only when the
-    proxy is reachable — so a dead/missing proxy degrades to direct egress
-    instead of breaking every HTTPS call (fail-open, §0.1)."""
-    url = env.get(_EGRESS_PROXY_ENV_FLAG) or os.environ.get(_EGRESS_PROXY_ENV_FLAG)
-    if not url or not _proxy_reachable(url):
-        return None
-    return url
 
 
 def _proxy_env(url: str, *, existing_no_proxy: str = "") -> dict[str, str]:
@@ -436,7 +389,8 @@ def maybe_sandbox(
         _warn_degraded(reason)
         if required:
             raise ContainmentRequiredError(
-                f"OC_SANDBOX_REQUIRED set but sandbox unavailable ({reason})"
+                f"sandbox containment required (default; opt out with "
+                f"OC_SANDBOX_REQUIRED=0) but unavailable ({reason})"
             )
         return list(inner_cmd)
 
@@ -472,4 +426,6 @@ __all__ = [
     "build_sandbox_argv",
     "bwrap_available",
     "maybe_sandbox",
+    "sandbox_enabled",
+    "verify_containment",
 ]
