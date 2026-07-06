@@ -131,7 +131,7 @@ def test_adapter_downgrades_premium_to_standard_under_pressure(monkeypatch) -> N
 
     adapter.execute(_request(model="opus", config_ref="team_executor:premium"))
 
-    assert captured["config"].proposer_model == "claude-sonnet-4-6"
+    assert captured["config"].proposer_model == "claude-sonnet-5"
 
 
 def test_adapter_falls_back_to_codex_when_claude_backend_is_cooling_down(monkeypatch) -> None:

@@ -14,7 +14,7 @@ progress. When healthy it backs off to maintenance frequency.
 
 The loop is controller-driven: `tools/loop/controller.py` spawns a fresh agent
 session for each iteration so context never accumulates. Claude is the primary
-backend and is pinned to `claude-sonnet-4-6` at `medium` effort. When Claude
+backend and is pinned to `claude-sonnet-5` at `medium` effort. When Claude
 usage is rate-limited the controller runs the same prompt through Codex CLI,
 pinned to `gpt-5.4` at `medium` reasoning effort, until the reset time passes.
 Each session exits cleanly after writing `.console/loop_schedule.json`; the

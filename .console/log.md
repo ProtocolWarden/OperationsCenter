@@ -1,3 +1,10 @@
+## 2026-07-06 — Sonnet tier rename: claude-sonnet-4-6 -> claude-sonnet-5
+
+Operator directive: move all live pinned Sonnet references to Sonnet 5.
+Touched: loop controller model pin, backends tiering default, setup entrypoint
+cursor alias, operator/design docs, and the tests asserting those pins.
+docs/history left untouched (they record what actually ran).
+
 ## 2026-06-26 — FIX: goal-task DoD demanded "zero TOTAL test failures" — relaxed to "zero NEW failures"
 
 A goal task (89fdd864) did clean work + opened a mergeable PR but then FAILED its own self-verification:
@@ -117,7 +124,7 @@ failed at execute. They import on neither host NOR sandbox. Fix: repaired OC's v
 durable — `scripts/operations-center.sh` gains `ensure_executor_backends`, a SELF-HEALING check that
 (re)installs the siblings whenever they aren't importable, every launch (import probe is ~free), so a
 future drop recovers on the next fleet start instead of silently stalling the lane. All 4 recent goal
-failures were this same env pair (the `EffectiveRepoGraph … videofoundry … manifest not found` line is
+failures were this same env pair (the `EffectiveRepoGraph … manifest not found` line is
 non-fatal — PrivateManifest isn't bound in the sandbox; "continuing without graph context"). 4 tests.
 Both env blockers now clear; [[oc-autonomy-hardening-deadlock]].
 

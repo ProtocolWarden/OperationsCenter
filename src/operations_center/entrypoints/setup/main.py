@@ -152,7 +152,7 @@ def provider_default_orchestrator(provider_key: str) -> str:
         "claude": "claude-code:opus",
         "codex": "codex:gpt-5.4",
         "gemini": "gemini-cli:gemini-3-flash",
-        "cursor": "cursor:sonnet-4-6",
+        "cursor": "cursor:sonnet-5",
     }
     return mapping.get(provider_key, "codex:gpt-5.4")
 
