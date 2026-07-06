@@ -308,9 +308,12 @@ class ReviewerSettings(BaseModel):
     # and main is the repo's branch protection — an out-of-repo setting the fleet
     # can't see. When True, the fleet verifies (from code) that protection
     # actually requires the reviewer-verdict check AND enforces admins before
-    # self-merging; if not, it refuses and leaves the PR for an operator. False
-    # preserves prior behavior (trust GitHub protection blindly).
-    require_branch_protection: bool = False
+    # self-merging; if not, it refuses and leaves the PR for an operator.
+    # Default True (audit Track A2): the fleet must PROVE its self-merge is
+    # constrained before performing it. Set False only to restore the old
+    # trust-GitHub-blindly behavior on a repo where protection is managed
+    # out-of-band and the API check is unavailable.
+    require_branch_protection: bool = True
     # Sensitive-path ack gate (opt-in). When True, a PR whose diff touches a
     # blast-radius path (CI workflows, migrations, secrets, infra config) is NOT
     # self-merged unless the operator acked it ONCE with a 'risk-reviewed' label —
