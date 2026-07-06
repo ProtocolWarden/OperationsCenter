@@ -18,7 +18,7 @@ from ._subprocess import build_allowlist_env, git_token_passthrough, run_executo
 from ._subprocess import is_transient_failure, persist_failure_diagnostics, venv_python
 from .wheelhouse import provision_env
 from ._text import append_rejection_patterns, desc_text, extract_goal, task_type_from_kind
-from .labels import GITHUB_DIR, add_label, label_value
+from .labels import GITHUB_DIR, add_label, build_forwarded_labels, label_value
 from .outcomes import (
     fail_task,
     handle_failure,
@@ -106,7 +106,7 @@ def dispatch_issue(
         tmp = Path(tmpdir)
 
         # ── Step 1: Planning ──────────────────────────────────────────────────
-        forwarded_labels = _build_forwarded_labels(labels, repo_cfg)
+        forwarded_labels = build_forwarded_labels(labels, repo_cfg, issue=issue, settings=settings)
         plan_cmd = [
             python,
             "-m",
@@ -400,32 +400,6 @@ def _append_improve_output_prompt(goal_text: str) -> str:
         "(complexity:small ≈ <50 LOC, medium ≈ <200 LOC, large flagged for split). "
         "Limit to 5 suggestions; pick the highest-impact ones."
     )
-
-
-def _build_forwarded_labels(labels: list, repo_cfg) -> list[str]:
-    """Build the label list to forward to the planning subprocess.
-
-    Filters source labels based on the repo's require_explicit_approval setting.
-    """
-    explicit_required = bool(getattr(repo_cfg, "require_explicit_approval", False))
-    forwarded: list[str] = []
-    for label in labels:
-        name = (label.get("name", "") if isinstance(label, dict) else str(label)).strip()
-        low = name.lower()
-        if low == "review_required":
-            forwarded.append(name)
-            continue
-        if low.startswith("source:"):
-            if explicit_required and low in {
-                "source: autonomy",
-                "source: spec-campaign",
-                "source: board_worker",
-            }:
-                continue
-            forwarded.append(name)
-    if explicit_required:
-        forwarded.append("review_required")
-    return forwarded
 
 
 def _dispatch_spec_author(

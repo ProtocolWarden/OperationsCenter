@@ -6,6 +6,9 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any
+
+from operations_center.policy.engine import TRUSTED_SOURCE_LABELS
 
 # Public API of this module — declared explicitly (consumed library; some
 # functions are tested as the boundary but not all internally wired).
@@ -15,6 +18,8 @@ __all__ = [
     "retry_count_from_labels",
     "add_label",
     "increment_retry_count",
+    "issue_author_identities",
+    "build_forwarded_labels",
 ]
 
 logger = logging.getLogger(__name__)
@@ -150,3 +155,67 @@ def increment_code_failure_count(client, issue: dict) -> None:
     code-failure loop (CODE_FAILURE_RETRY_CAP). retry-count is SIGKILL-only, so a
     clean test/lint failure would otherwise re-run forever."""
     increment_count_label(client, issue, "code-fail-count:")
+
+
+def issue_author_identities(issue: dict) -> tuple[str | None, ...]:
+    """Extract comparable creator identities from a Plane issue, tolerant of the
+    several shapes the API uses (bare id string, or a nested actor dict)."""
+
+    out: list[str | None] = []
+    for key in ("created_by", "created_by_id", "author", "creator"):
+        val = issue.get(key)
+        if isinstance(val, str):
+            out.append(val)
+        elif isinstance(val, dict):
+            out.extend(str(val[k]) for k in ("id", "email", "display_name", "name") if val.get(k))
+    return tuple(out)
+
+
+def build_forwarded_labels(
+    labels: list,
+    repo_cfg,
+    *,
+    issue: dict | None = None,
+    settings: Any = None,
+) -> list[str]:
+    """Build the label list to forward to the planning subprocess.
+
+    Filters source labels based on the repo's require_explicit_approval setting.
+
+    Trusted source labels (TRUSTED_SOURCE_LABELS) bypass the policy engine's
+    review gates, so they pass through here only when the issue creator is on
+    ``task_admission.trusted_label_authors`` — a Plane label is a plain string
+    any board author can attach, and the issue creator is the only provenance
+    the API exposes. Unconfigured (empty allowlist) fails closed: the label is
+    stripped and the task goes through the normal review gates.
+    """
+    explicit_required = bool(getattr(repo_cfg, "require_explicit_approval", False))
+    admission = getattr(settings, "task_admission", None) if settings is not None else None
+    creator_trusted = bool(
+        admission is not None
+        and issue is not None
+        and admission.label_trust_allows(*issue_author_identities(issue))
+    )
+    forwarded: list[str] = []
+    for label in labels:
+        name = (label.get("name", "") if isinstance(label, dict) else str(label)).strip()
+        low = name.lower()
+        if low == "review_required":
+            forwarded.append(name)
+            continue
+        if low.startswith("source:"):
+            if low in TRUSTED_SOURCE_LABELS:
+                if explicit_required or not creator_trusted:
+                    if not explicit_required:
+                        logger.warning(
+                            "board_worker: stripping trusted source label %r from task %s — "
+                            "issue creator not in task_admission.trusted_label_authors "
+                            "(review-gate bypass denied)",
+                            name,
+                            (issue or {}).get("id", "<unknown>"),
+                        )
+                    continue
+            forwarded.append(name)
+    if explicit_required:
+        forwarded.append("review_required")
+    return forwarded

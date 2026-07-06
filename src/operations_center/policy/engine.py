@@ -518,13 +518,21 @@ def _validation_req_applies(
     return risk_match and type_match
 
 
-_TRUSTED_SOURCE_LABELS = frozenset(
+# Labels that mark a task as coming from a pre-authorized lane. Their mere
+# presence bypasses the risk/task-type review gates below, so they are only
+# safe when their PROVENANCE is enforced upstream: board_worker dispatch strips
+# them unless the issue creator is on task_admission.trusted_label_authors
+# (Plane records no per-label applier, so the issue creator is the only
+# available provenance). Public so the dispatch boundary and this gate cannot
+# drift apart.
+TRUSTED_SOURCE_LABELS = frozenset(
     {
         "source: autonomy",
         "source: spec-campaign",
         "source: board_worker",  # follow-up tasks emitted by an already-trusted run
     }
 )
+_TRUSTED_SOURCE_LABELS = TRUSTED_SOURCE_LABELS
 
 
 def _check_review_requirements(

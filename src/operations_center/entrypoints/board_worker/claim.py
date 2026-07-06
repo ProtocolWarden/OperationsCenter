@@ -9,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 
 from ._text import desc_text, extract_goal
 from .labels import (
+    issue_author_identities as _issue_author_identities,
     ROLE_KINDS,
     STATE_BLOCKED,
     STATE_READY,
@@ -177,20 +178,6 @@ def _build_candidates(
 
         candidates.append(issue)
     return candidates
-
-
-def _issue_author_identities(issue: dict) -> tuple[str | None, ...]:
-    """Extract comparable creator identities from a Plane issue, tolerant of the
-    several shapes the API uses (bare id string, or a nested actor dict)."""
-
-    out: list[str | None] = []
-    for key in ("created_by", "created_by_id", "author", "creator"):
-        val = issue.get(key)
-        if isinstance(val, str):
-            out.append(val)
-        elif isinstance(val, dict):
-            out.extend(str(val[k]) for k in ("id", "email", "display_name", "name") if val.get(k))
-    return tuple(out)
 
 
 def _author_allowed(issue: dict, settings) -> bool:
