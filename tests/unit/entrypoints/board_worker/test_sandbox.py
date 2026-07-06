@@ -20,6 +20,7 @@ from pathlib import Path
 
 import pytest
 
+from operations_center.entrypoints.board_worker import containment
 from operations_center.entrypoints.board_worker import sandbox as sbx
 from operations_center.entrypoints.board_worker.sandbox import (
     build_sandbox_argv,
@@ -222,31 +223,66 @@ class TestFailOpen:
             == cmd
         )
 
-    def test_missing_workspace_returns_unchanged(self, tmp_path: Path):
+    def test_missing_workspace_raises_by_default(self, tmp_path: Path, monkeypatch):
+        # Track A3: containment is required unless explicitly opted out — a
+        # degrade fails the task, it does not silently run un-sandboxed.
+        monkeypatch.delenv("OC_SANDBOX_REQUIRED", raising=False)
+        with pytest.raises(sbx.ContainmentRequiredError):
+            maybe_sandbox(
+                ["python"], oc_root=tmp_path, rw_root=tmp_path / "nope", env={}, enabled=True
+            )
+
+    def test_missing_workspace_fail_open_when_opted_out(self, tmp_path: Path):
         cmd = ["python"]
-        out = maybe_sandbox(cmd, oc_root=tmp_path, rw_root=tmp_path / "nope", env={}, enabled=True)
+        out = maybe_sandbox(
+            cmd,
+            oc_root=tmp_path,
+            rw_root=tmp_path / "nope",
+            env={"OC_SANDBOX_REQUIRED": "0"},
+            enabled=True,
+        )
         assert out == cmd
 
-    def test_no_bwrap_returns_unchanged(self, tmp_path: Path, monkeypatch):
+    def test_no_bwrap_raises_by_default(self, tmp_path: Path, monkeypatch):
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        monkeypatch.setattr(
+            "operations_center.entrypoints.board_worker.sandbox.bwrap_available", lambda: False
+        )
+        monkeypatch.delenv("OC_SANDBOX_REQUIRED", raising=False)
+        with pytest.raises(sbx.ContainmentRequiredError):
+            maybe_sandbox(["python"], oc_root=tmp_path, rw_root=ws, env={}, enabled=True)
+
+    def test_no_bwrap_fail_open_when_opted_out(self, tmp_path: Path, monkeypatch):
         ws = tmp_path / "ws"
         ws.mkdir()
         monkeypatch.setattr(
             "operations_center.entrypoints.board_worker.sandbox.bwrap_available", lambda: False
         )
         cmd = ["python"]
-        assert maybe_sandbox(cmd, oc_root=tmp_path, rw_root=ws, env={}, enabled=True) == cmd
+        out = maybe_sandbox(
+            cmd, oc_root=tmp_path, rw_root=ws, env={"OC_SANDBOX_REQUIRED": "0"}, enabled=True
+        )
+        assert out == cmd
 
     def test_enabled_but_degraded_logs_observable_warning(
         self, tmp_path: Path, monkeypatch, caplog
     ):
-        # Audit fix: enabled-but-degraded fail-open must be OBSERVABLE, not silent.
+        # Audit fix: enabled-but-degraded must be OBSERVABLE, not silent —
+        # the warning fires on the opted-out fail-open path too.
         ws = tmp_path / "ws"
         ws.mkdir()
         monkeypatch.setattr(
             "operations_center.entrypoints.board_worker.sandbox.bwrap_available", lambda: False
         )
         with caplog.at_level("WARNING"):
-            maybe_sandbox(["python"], oc_root=tmp_path, rw_root=ws, env={}, enabled=True)
+            maybe_sandbox(
+                ["python"],
+                oc_root=tmp_path,
+                rw_root=ws,
+                env={"OC_SANDBOX_REQUIRED": "0"},
+                enabled=True,
+            )
         assert any("sandbox_degraded" in r.message for r in caplog.records)
 
     def test_disabled_does_not_warn(self, tmp_path: Path, monkeypatch, caplog):
@@ -285,16 +321,57 @@ class TestFailOpen:
         with pytest.raises(sbx.ContainmentRequiredError):
             maybe_sandbox(["python"], oc_root=tmp_path, rw_root=ws, env={}, enabled=True)
 
-    def test_not_required_still_fail_open(self, tmp_path: Path, monkeypatch):
+    def test_explicit_opt_out_fail_open(self, tmp_path: Path, monkeypatch):
         ws = tmp_path / "ws"
         ws.mkdir()
         monkeypatch.setattr(
             "operations_center.entrypoints.board_worker.sandbox.bwrap_available", lambda: False
         )
-        # default (flag unset) preserves degrade-never-halt
+        # explicit opt-out restores the observable fail-open degrade
+        monkeypatch.setenv("OC_SANDBOX_REQUIRED", "0")
         assert maybe_sandbox(
             ["python"], oc_root=tmp_path, rw_root=ws, env={}, enabled=True
         ) == ["python"]
+
+    def test_required_by_default_when_flag_unset(self, tmp_path: Path, monkeypatch):
+        # Track A3 pin: an UNSET flag means required — this is the posture the
+        # audit flipped; a regression back to opt-in must fail here.
+        monkeypatch.delenv("OC_SANDBOX_REQUIRED", raising=False)
+        assert sbx._containment_required({}, var="OC_SANDBOX_REQUIRED") is True
+        assert sbx._containment_required({"OC_SANDBOX_REQUIRED": "0"}, var="OC_SANDBOX_REQUIRED") is False
+
+
+class TestDefaultsAndSelfCheck:
+    def test_sandbox_enabled_by_default(self, monkeypatch):
+        monkeypatch.delenv("OC_BWRAP_SANDBOX", raising=False)
+        assert sbx.sandbox_enabled() is True
+        monkeypatch.setenv("OC_BWRAP_SANDBOX", "0")
+        assert sbx.sandbox_enabled() is False
+        monkeypatch.setenv("OC_BWRAP_SANDBOX", "1")
+        assert sbx.sandbox_enabled() is True
+
+    def test_verify_containment_reports_missing_bwrap(self, monkeypatch):
+        monkeypatch.delenv("OC_BWRAP_SANDBOX", raising=False)
+        monkeypatch.setenv("OC_EGRESS_NETNS", "0")
+        monkeypatch.setattr(containment, "bwrap_available", lambda: False)
+        problems = sbx.verify_containment()
+        assert any("bwrap" in p for p in problems)
+
+    def test_verify_containment_reports_netns_gaps(self, monkeypatch):
+        monkeypatch.setenv("OC_BWRAP_SANDBOX", "0")
+        monkeypatch.delenv("OC_EGRESS_NETNS", raising=False)  # default on
+        monkeypatch.delenv("OC_EGRESS_PROXY", raising=False)
+        monkeypatch.setattr(
+            "operations_center.entrypoints.board_worker.netns.pasta_path", lambda: None
+        )
+        problems = sbx.verify_containment()
+        assert any("pasta" in p for p in problems)
+        assert any("OC_EGRESS_PROXY" in p for p in problems)
+
+    def test_verify_containment_clean_when_all_disabled(self, monkeypatch):
+        monkeypatch.setenv("OC_BWRAP_SANDBOX", "0")
+        monkeypatch.setenv("OC_EGRESS_NETNS", "0")
+        assert sbx.verify_containment() == []
 
 
 @pytest.mark.skipif(not _HAS_BWRAP, reason="bwrap not installed")
@@ -361,11 +438,11 @@ class TestEgressProxyWiring:
 
     def test_resolve_returns_none_when_unreachable(self, monkeypatch):
         # Set the flag but make the reachability probe fail -> fail-open (None).
-        monkeypatch.setattr(sbx, "_proxy_reachable", lambda url, **kw: False)
+        monkeypatch.setattr(containment, "_proxy_reachable", lambda url, **kw: False)
         assert sbx._resolve_egress_proxy({"OC_EGRESS_PROXY": "http://127.0.0.1:8889"}) is None
 
     def test_resolve_returns_url_when_reachable(self, monkeypatch):
-        monkeypatch.setattr(sbx, "_proxy_reachable", lambda url, **kw: True)
+        monkeypatch.setattr(containment, "_proxy_reachable", lambda url, **kw: True)
         assert (
             sbx._resolve_egress_proxy({"OC_EGRESS_PROXY": "http://127.0.0.1:8889"})
             == "http://127.0.0.1:8889"
@@ -373,14 +450,14 @@ class TestEgressProxyWiring:
 
     def test_resolve_falls_back_to_parent_env(self, monkeypatch):
         monkeypatch.setenv("OC_EGRESS_PROXY", "http://127.0.0.1:9999")
-        monkeypatch.setattr(sbx, "_proxy_reachable", lambda url, **kw: True)
+        monkeypatch.setattr(containment, "_proxy_reachable", lambda url, **kw: True)
         assert sbx._resolve_egress_proxy({}) == "http://127.0.0.1:9999"
 
     def test_maybe_sandbox_injects_proxy_when_reachable(self, tmp_path: Path, monkeypatch):
         ws = tmp_path / "ws"
         ws.mkdir()
         monkeypatch.setattr(sbx, "bwrap_available", lambda: True)
-        monkeypatch.setattr(sbx, "_proxy_reachable", lambda url, **kw: True)
+        monkeypatch.setattr(containment, "_proxy_reachable", lambda url, **kw: True)
         env = {"HOME": str(tmp_path / "home"), "OC_EGRESS_PROXY": "http://127.0.0.1:8889"}
         argv = maybe_sandbox(["x"], oc_root=tmp_path, rw_root=ws, env=env, enabled=True)
         joined = " ".join(argv)
@@ -391,7 +468,7 @@ class TestEgressProxyWiring:
         ws = tmp_path / "ws"
         ws.mkdir()
         monkeypatch.setattr(sbx, "bwrap_available", lambda: True)
-        monkeypatch.setattr(sbx, "_proxy_reachable", lambda url, **kw: False)
+        monkeypatch.setattr(containment, "_proxy_reachable", lambda url, **kw: False)
         env = {"HOME": str(tmp_path / "home"), "OC_EGRESS_PROXY": "http://127.0.0.1:8889"}
         argv = maybe_sandbox(["x"], oc_root=tmp_path, rw_root=ws, env=env, enabled=True)
         # dead proxy => no proxy env injected => still sandboxed, direct egress

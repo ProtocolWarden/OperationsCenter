@@ -121,7 +121,9 @@ def test_tiktoken_cache_fail_open(tmp_path, monkeypatch):
 
 
 def test_provision_env_empty_when_sandbox_off(monkeypatch):
-    monkeypatch.delenv("OC_BWRAP_SANDBOX", raising=False)
+    # Track A3: the sandbox is default-ON — an explicit opt-out is what skips
+    # provisioning now.
+    monkeypatch.setenv("OC_BWRAP_SANDBOX", "0")
     assert wh.provision_env("Repo", "/x", python_bin="python3") == {}
 
 

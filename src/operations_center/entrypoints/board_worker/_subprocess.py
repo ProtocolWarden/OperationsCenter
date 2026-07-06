@@ -13,13 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from .netns import maybe_netns, netns_enabled
-from .sandbox import _resolve_egress_proxy, maybe_sandbox
-
-# SBX Phase 2: the bwrap sandbox is OFF by default and enabled by setting this
-# env var to "1" in the fleet environment. Off-by-default + fail-open means
-# merging the sandbox changes nothing in production until it is deliberately
-# turned on and observed (the staged rollout the trust-hardening §0.1 requires).
-_SANDBOX_ENV_FLAG = "OC_BWRAP_SANDBOX"
+from .sandbox import _resolve_egress_proxy, maybe_sandbox, sandbox_enabled
 
 # SBX Layer 3 (resource limits): gated on this flag. Wraps the executor in a
 # transient systemd-user cgroup scope with memory/pids/cpu caps + a wall-timeout
@@ -300,12 +294,13 @@ def run_executor(
     """Spawn the executor subprocess, optionally inside the bwrap sandbox and a
     resource-limited cgroup scope.
 
-    Centralizes the SBX wraps so dispatch's spawn sites stay one-liners. Both are
-    gated + fail-open: the bwrap sandbox on ``OC_BWRAP_SANDBOX=1`` (off/unavailable
-    => runs as before); the Layer-3 cgroup caps on ``OC_SANDBOX_RLIMITS=1``. The
-    outer ``env`` is still passed (harmless: bwrap ``--clearenv`` + ``--setenv``
-    re-establishes a controlled env inside; un-sandboxed it is the real env)."""
-    enabled = os.environ.get(_SANDBOX_ENV_FLAG) == "1"
+    Centralizes the SBX wraps so dispatch's spawn sites stay one-liners. The bwrap
+    sandbox is default-on + fail-closed per task (``sandbox_enabled`` /
+    ``OC_SANDBOX_REQUIRED``, audit Track A3); the Layer-3 cgroup caps stay gated on
+    ``OC_SANDBOX_RLIMITS=1``. The outer ``env`` is still passed (harmless: bwrap
+    ``--clearenv`` + ``--setenv`` re-establishes a controlled env inside;
+    un-sandboxed it is the real env)."""
+    enabled = sandbox_enabled()
     run_cmd = maybe_sandbox(
         cmd, oc_root=oc_root, rw_root=rw_root, env=env, enabled=enabled, chdir=workspace
     )

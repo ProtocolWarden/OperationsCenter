@@ -177,7 +177,9 @@ def provision_env(
     of truth: whatever python builds the wheelhouse also creates the venv that
     installs from it, so the two can never drift.
     """
-    if os.environ.get("OC_BWRAP_SANDBOX") != "1":
+    from .sandbox import sandbox_enabled
+
+    if not sandbox_enabled():
         return {}
     out: dict[str, str] = {}
     wh = ensure_wheelhouse(repo_key, repo_local_path, python_bin=python_bin)

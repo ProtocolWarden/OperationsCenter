@@ -21,36 +21,38 @@ def test_disabled_returns_cmd_unchanged():
     assert netns.maybe_netns(cmd, proxy_url="http://127.0.0.1:8889", enabled=False) == cmd
 
 
-def test_no_proxy_fails_open(monkeypatch):
+def test_no_proxy_fails_open_when_opted_out(monkeypatch):
     monkeypatch.setattr(netns, "pasta_path", lambda: "/usr/bin/pasta")
+    monkeypatch.setenv("OC_EGRESS_REQUIRED", "0")
     cmd = ["bwrap", "x"]
     assert netns.maybe_netns(cmd, proxy_url=None, enabled=True) == cmd
 
 
-def test_missing_pasta_fails_open(monkeypatch):
+def test_missing_pasta_fails_open_when_opted_out(monkeypatch):
     monkeypatch.setattr(netns, "pasta_path", lambda: None)
+    monkeypatch.setenv("OC_EGRESS_REQUIRED", "0")
     cmd = ["bwrap", "x"]
     assert netns.maybe_netns(cmd, proxy_url="http://127.0.0.1:8889", enabled=True) == cmd
 
 
-def test_required_raises_when_pasta_missing(monkeypatch):
-    # B4: OC_EGRESS_REQUIRED flips fail-open into fail-closed.
+def test_required_by_default_raises_when_pasta_missing(monkeypatch):
+    # Track A3: fail-closed is the DEFAULT — an unset flag means required.
     monkeypatch.setattr(netns, "pasta_path", lambda: None)
-    monkeypatch.setenv("OC_EGRESS_REQUIRED", "1")
+    monkeypatch.delenv("OC_EGRESS_REQUIRED", raising=False)
     with pytest.raises(netns.EgressContainmentRequiredError):
         netns.maybe_netns(["bwrap", "x"], proxy_url="http://127.0.0.1:8889", enabled=True)
 
 
-def test_required_raises_when_no_proxy(monkeypatch):
+def test_required_by_default_raises_when_no_proxy(monkeypatch):
     monkeypatch.setattr(netns, "pasta_path", lambda: "/usr/bin/pasta")
-    monkeypatch.setenv("OC_EGRESS_REQUIRED", "1")
+    monkeypatch.delenv("OC_EGRESS_REQUIRED", raising=False)
     with pytest.raises(netns.EgressContainmentRequiredError):
         netns.maybe_netns(["bwrap", "x"], proxy_url=None, enabled=True)
 
 
-def test_not_required_still_fails_open(monkeypatch):
+def test_explicit_opt_out_fails_open(monkeypatch):
     monkeypatch.setattr(netns, "pasta_path", lambda: None)
-    monkeypatch.delenv("OC_EGRESS_REQUIRED", raising=False)
+    monkeypatch.setenv("OC_EGRESS_REQUIRED", "0")
     cmd = ["bwrap", "x"]
     assert netns.maybe_netns(cmd, proxy_url="http://127.0.0.1:8889", enabled=True) == cmd
 
@@ -108,7 +110,10 @@ def test_extra_ports_forwarded(monkeypatch):
 def test_enabled_flag(monkeypatch):
     monkeypatch.setenv("OC_EGRESS_NETNS", "1")
     assert netns.netns_enabled() is True
+    # Track A3: default-on — an unset flag means enabled.
     monkeypatch.delenv("OC_EGRESS_NETNS")
+    assert netns.netns_enabled() is True
+    monkeypatch.setenv("OC_EGRESS_NETNS", "0")
     assert netns.netns_enabled() is False
 
 

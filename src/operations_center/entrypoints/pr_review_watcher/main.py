@@ -70,6 +70,8 @@ from operations_center.entrypoints.board_worker.sandbox import (
     ContainmentRequiredError,
     _resolve_egress_proxy,
     maybe_sandbox,
+    sandbox_enabled,
+    verify_containment,
 )
 from operations_center.entrypoints.heartbeat import write_heartbeat
 from operations_center.reviewer.instrumentation import (
@@ -399,10 +401,10 @@ def _build_env(oc_root: Path) -> dict:
 
 
 def _sandbox_enabled() -> bool:
-    """True when the bwrap sandbox is enabled for worker subprocesses. Mirrors
-    board_worker._subprocess's gate (OC_BWRAP_SANDBOX=1) so the reviewer's
+    """True when the bwrap sandbox is enabled for worker subprocesses. Delegates
+    to board_worker's single gate (default-on, audit Track A3) so the reviewer's
     executor is contained on exactly the same switch as board_worker dispatch."""
-    return os.environ.get("OC_BWRAP_SANDBOX") == "1"
+    return sandbox_enabled()
 
 
 class OCSourceTreeUncleanError(RuntimeError):
@@ -3854,6 +3856,15 @@ def main() -> int:
         return 0
 
     logger.info("pr_review_watcher: starting — poll_interval=%ds", args.poll_interval)
+
+    # Containment self-check (audit Track A3): surface a broken posture at boot.
+    for problem in verify_containment():
+        logger.error(
+            'pr_review_watcher: containment self-check FAILED — %s '
+            '{"event": "containment_selfcheck_failed", "problem": "%s"}',
+            problem,
+            problem,
+        )
     while True:
         try:
             settings = _load_settings(args.config)
