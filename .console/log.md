@@ -1,3 +1,8 @@
+## 2026-07-06 — fix: untrack the stale build/ artifact dir
+
+#428's git add -A committed 556 stale build/lib files (a local setuptools
+build artifact), tripping CI ruff over dead copies. Untracked + gitignored.
+
 ## 2026-07-06 — Track C: loop trust-anchor wiring (awaiting operator ceremony)
 
 CL pinned v0.4.1 (signed loop config, CL #37): `cl loop run` now verifies the

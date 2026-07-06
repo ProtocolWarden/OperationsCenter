@@ -84,3 +84,4 @@ improve-output.json
 operator_priv.pem
 *operator_priv*.pem
 eval/**/operator_priv*
+build/
