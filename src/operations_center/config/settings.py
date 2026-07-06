@@ -531,6 +531,18 @@ class TaskAdmissionSettings(BaseModel):
     author_allowlist: list[str] = Field(default_factory=list)
     # Label applied to a task rejected for an un-allowlisted author.
     reject_label: str = "unauthorized-author"
+    # Trusted-source label provenance gate. `source: autonomy` /
+    # `source: spec-campaign` / `source: board_worker` labels bypass the policy
+    # engine's risk/task-type review gates (TRUSTED_SOURCE_LABELS in
+    # policy/engine.py) — but a Plane label is a plain string any board author
+    # can attach, and the API records no per-label applier. The only provenance
+    # available is the issue CREATOR, so dispatch forwards a trusted source
+    # label to planning only when the issue creator matches this allowlist
+    # (same identity matching as author_allowlist: id, email, or display name,
+    # case-insensitive). Empty (the default) FAILS CLOSED: no issue may carry a
+    # trusted source label through dispatch. To re-enable the autonomy-lane
+    # bypass, allowlist the fleet's own Plane service account here.
+    trusted_label_authors: list[str] = Field(default_factory=list)
 
     def enforced(self) -> bool:
         return bool(self.author_allowlist)
@@ -541,6 +553,21 @@ class TaskAdmissionSettings(BaseModel):
         if not self.enforced():
             return True
         allow = {a.strip().lower() for a in self.author_allowlist if a and a.strip()}
+        for ident in identities:
+            if ident and ident.strip().lower() in allow:
+                return True
+        return False
+
+    def label_trust_allows(self, *identities: str | None) -> bool:
+        """True only if a provided identity matches ``trusted_label_authors``.
+
+        Unlike ``allows``, an empty allowlist means NO ONE — the review-gate
+        bypass fails closed rather than open when unconfigured.
+        """
+
+        allow = {a.strip().lower() for a in self.trusted_label_authors if a and a.strip()}
+        if not allow:
+            return False
         for ident in identities:
             if ident and ident.strip().lower() in allow:
                 return True

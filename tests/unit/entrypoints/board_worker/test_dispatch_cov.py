@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from operations_center.entrypoints.board_worker import dispatch
+from operations_center.entrypoints.board_worker import labels as labels_mod
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -101,6 +102,16 @@ def test_append_improve_output_prompt():
 # ── _build_forwarded_labels ──────────────────────────────────────────────────
 
 
+def _make_admission_settings(trusted_label_authors=()):
+    from operations_center.config.settings import TaskAdmissionSettings
+
+    return SimpleNamespace(
+        task_admission=TaskAdmissionSettings(
+            trusted_label_authors=list(trusted_label_authors)
+        )
+    )
+
+
 def test_build_forwarded_labels_no_explicit_required():
     labels = [
         {"name": "review_required"},
@@ -109,13 +120,53 @@ def test_build_forwarded_labels_no_explicit_required():
         {"name": "repo: x"},
         "plain-string",
     ]
-    out = dispatch._build_forwarded_labels(labels, _make_repo_cfg(require_explicit_approval=False))
+    out = labels_mod.build_forwarded_labels(labels, _make_repo_cfg(require_explicit_approval=False))
     assert "review_required" in out
-    assert "source: autonomy" in out
-    assert "source: human" in out
+    # Trusted source labels fail closed without a provenance allowlist —
+    # any board author could have attached the string.
+    assert "source: autonomy" not in out
+    assert "source: human" in out  # untrusted source labels pass through
     # Non-source / non-review labels are dropped.
     assert "repo: x" not in out
     assert "plain-string" not in out
+
+
+def test_build_forwarded_labels_trusted_creator_keeps_trusted_labels():
+    labels = [{"name": "source: autonomy"}, {"name": "source: board_worker"}]
+    issue = {"id": "t-1", "created_by": "svc-account-id"}
+    out = labels_mod.build_forwarded_labels(
+        labels,
+        _make_repo_cfg(require_explicit_approval=False),
+        issue=issue,
+        settings=_make_admission_settings(trusted_label_authors=["svc-account-id"]),
+    )
+    assert "source: autonomy" in out
+    assert "source: board_worker" in out
+
+
+def test_build_forwarded_labels_untrusted_creator_strips_trusted_labels():
+    labels = [{"name": "source: autonomy"}, {"name": "source: human"}]
+    issue = {"id": "t-2", "created_by": "random-author"}
+    out = labels_mod.build_forwarded_labels(
+        labels,
+        _make_repo_cfg(require_explicit_approval=False),
+        issue=issue,
+        settings=_make_admission_settings(trusted_label_authors=["svc-account-id"]),
+    )
+    assert "source: autonomy" not in out
+    assert "source: human" in out
+
+
+def test_build_forwarded_labels_empty_allowlist_fails_closed():
+    labels = [{"name": "source: spec-campaign"}]
+    issue = {"id": "t-3", "created_by": "svc-account-id"}
+    out = labels_mod.build_forwarded_labels(
+        labels,
+        _make_repo_cfg(require_explicit_approval=False),
+        issue=issue,
+        settings=_make_admission_settings(trusted_label_authors=[]),
+    )
+    assert out == []
 
 
 def test_build_forwarded_labels_explicit_required_filters_and_appends():
@@ -123,14 +174,19 @@ def test_build_forwarded_labels_explicit_required_filters_and_appends():
         {"name": "source: autonomy"},
         {"name": "source: human"},
     ]
-    out = dispatch._build_forwarded_labels(labels, _make_repo_cfg(require_explicit_approval=True))
-    assert "source: autonomy" not in out  # filtered out
+    out = labels_mod.build_forwarded_labels(
+        labels,
+        _make_repo_cfg(require_explicit_approval=True),
+        issue={"id": "t-4", "created_by": "svc-account-id"},
+        settings=_make_admission_settings(trusted_label_authors=["svc-account-id"]),
+    )
+    assert "source: autonomy" not in out  # explicit approval outranks label trust
     assert "source: human" in out  # kept
     assert "review_required" in out  # appended
 
 
 def test_build_forwarded_labels_none_repo_cfg():
-    out = dispatch._build_forwarded_labels([{"name": "source: x"}], None)
+    out = labels_mod.build_forwarded_labels([{"name": "source: x"}], None)
     assert out == ["source: x"]
 
 

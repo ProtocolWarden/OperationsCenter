@@ -1,3 +1,19 @@
+## 2026-07-06 — Track A1: trusted-source label provenance gate (forgeable-label bypass)
+
+Audit defect: `source: autonomy`/`spec-campaign`/`board_worker` labels set
+trusted=True in the policy engine and skip the risk/task-type review gates —
+but a Plane label is a plain string ANY board author can attach, and the API
+records no per-label applier. Fix at the dispatch boundary (the only place
+labels enter planning): trusted source labels are forwarded only when the
+issue CREATOR matches new `task_admission.trusted_label_authors` (the issue
+creator is the only provenance Plane exposes). Empty allowlist = fail closed.
+DEPLOY PREREQUISITE: before fleet restart, add the fleet's own Plane service
+account to trusted_label_authors in operations_center.local.yaml, or the
+autonomy lane loses its review-gate bypass (degrades safe, not broken —
+tasks route through normal review). TRUSTED_SOURCE_LABELS made public in
+policy/engine.py so dispatch and the gate can't drift. Label helpers moved
+to labels.py (dispatch.py was over the C29 500-line limit).
+
 ## 2026-07-06 — Sonnet tier rename: claude-sonnet-4-6 -> claude-sonnet-5
 
 Operator directive: move all live pinned Sonnet references to Sonnet 5.

@@ -86,3 +86,33 @@ def test_claim_next_allows_authorized_author():
 
     assert result is not None
     client.transition_issue.assert_called_once()  # claimed → Running
+
+
+# ── label_trust_allows (trusted-source label provenance) ────────────────────
+
+
+def test_label_trust_allows_empty_allowlist_fails_closed():
+    from operations_center.config.settings import TaskAdmissionSettings
+
+    admission = TaskAdmissionSettings()
+    assert admission.label_trust_allows("anyone") is False
+    assert admission.label_trust_allows(None) is False
+
+
+def test_label_trust_allows_matches_case_insensitively():
+    from operations_center.config.settings import TaskAdmissionSettings
+
+    admission = TaskAdmissionSettings(trusted_label_authors=["Svc-Account"])
+    assert admission.label_trust_allows("svc-account") is True
+    assert admission.label_trust_allows("other", "SVC-ACCOUNT") is True
+    assert admission.label_trust_allows("other") is False
+
+
+def test_label_trust_independent_of_author_allowlist():
+    from operations_center.config.settings import TaskAdmissionSettings
+
+    # author_allowlist unset (admission open) must NOT open the label gate.
+    admission = TaskAdmissionSettings(author_allowlist=[], trusted_label_authors=["svc"])
+    assert admission.allows("anyone") is True
+    assert admission.label_trust_allows("anyone") is False
+    assert admission.label_trust_allows("svc") is True
