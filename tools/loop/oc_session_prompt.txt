@@ -357,14 +357,21 @@ COMMIT DISCIPLINE: Only commit if you made a meaningful change (code fix, config
 new test). Do NOT commit if the cycle was observation-only (no files changed). The
 chore(watchdog): cycle N commit pattern is retired — do not use it.
 IMPORTANT: Run git diff --staged before committing to ensure only loop-owned files are staged.
-Commit only after validation passes. If not on main or not allowed: create a branch:
+NEVER commit on main — this is the fleet's live shared checkout; a commit on local main
+contaminates every watcher and future branch. BEFORE your first edit, create the branch:
   git checkout -b oc-watchdog/<YYYYMMDD-HHMM>-<short-topic>
+Commit only after validation passes, on that branch.
 One logical commit per repo per cycle. Commit message must name: root cause, affected repo,
 gate/check fixed. Never force-push, amend old loop commits, or commit generated noise.
 
-PUSH AFTER COMMIT — push immediately after a successful commit. Do not wait for operator:
+PUSH + PR AFTER COMMIT — push immediately after a successful commit. Do not wait for operator:
   git push origin <current-branch>
-Push applies to all branches (main, oc-watchdog/*, operations-center-testing-branch).
+Then OPEN A PULL REQUEST for it (a pushed branch with no PR is invisible to the reviewer
+lane and rots): gh pr create --fill (or a short title/body naming root cause + fix).
+The reviewer watcher takes it from there — do not merge it yourself.
+FINALLY return the shared checkout to clean main: git checkout main
+(never leave the fleet checkout on a work branch or with local commits on main).
+Push applies to oc-watchdog/* and operations-center-testing-branch only — never push main.
 Invariant gate (STEP 7) passing is sufficient self-review — no additional operator approval needed.
 If push fails (non-auth error): note it in the cycle summary and continue; do not retry in a loop.
 If push fails with auth error: classify as infra-blocked and note in cycle summary.
