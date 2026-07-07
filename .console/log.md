@@ -1,3 +1,13 @@
+## 2026-07-07 — fix(board_worker): retry workspace-prep clone on ssh permission flake
+
+Watchdog cycle: 6 goal-worker runs failed workspace prep with "Bad owner or
+permissions on /etc/ssh/ssh_config.d/..." / "Could not read from remote
+repository" — a transient host-side ssh StrictModes flake, not reproducible
+on manual re-clone seconds later. is_transient_failure() already retries
+backend_error failures on network-shaped patterns but didn't recognize this
+ssh/permissions class, so every hit went straight to FAILED with zero
+retries. Added the two observed patterns to the transient-reason list.
+
 ## 2026-07-06 — fix: drop stale T8 exclusion for the removed controller tests
 
 tests/test_loop_controller.py was removed by the loop migration (#428);
