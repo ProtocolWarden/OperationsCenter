@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from custodian.audit_kit.detector import AuditContext
+from operations_center.observer.query_flaky import ExtractionHealth
 
 _custodian_path = Path(__file__).parent.parent.parent.parent / ".custodian"
 if str(_custodian_path.parent) not in sys.path:
@@ -44,6 +45,7 @@ def _write(path: Path, text: str) -> None:
 
 
 def test_existing_field_definition_is_not_flagged(ctx: AuditContext) -> None:
+    assert ExtractionHealth.__name__ == "ExtractionHealth"
     _write(
         ctx.src_root / "models.py",
         "from dataclasses import dataclass\n\n"
