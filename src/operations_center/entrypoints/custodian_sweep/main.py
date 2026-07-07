@@ -38,7 +38,7 @@ from typing import Any
 
 _DEFAULT_HISTORY_PATH = Path("state/custodian_sweep/last_sweep.json")
 _DEDUP_LABEL_PREFIX = "custodian-sweep:"  # one label per repo for dedup
-_DEFAULT_TIMEOUT_SECONDS = 180
+_DEFAULT_TIMEOUT_SECONDS = 300
 
 
 @dataclass(frozen=True)
