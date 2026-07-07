@@ -70,6 +70,8 @@ _TRANSIENT_REASON_PATTERNS = (
     "remote disconnected",
     "network is unreachable",
     "temporary failure",
+    "bad owner or permissions",
+    "could not read from remote repository",
 )
 
 # Pinned, non-secret base env. Static values, never inherited from the parent.
