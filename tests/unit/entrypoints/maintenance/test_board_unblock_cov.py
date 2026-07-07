@@ -450,6 +450,21 @@ def test_rule4_sigkill_skipped():
     assert "SIGKILL" in a[0]["reason"]
 
 
+def test_rule4_blocked_reason_policy_skipped():
+    actions = _run(
+        [
+            _issue(
+                "1",
+                state="Blocked",
+                labels=["self-modify: approved", "blocked-reason: policy"],
+            )
+        ]
+    )
+    a = _by_rule(actions, "SELF_MODIFY_REQUEUE")
+    assert a and a[0]["skipped"] is True
+    assert "blocked-reason:policy" in a[0]["reason"]
+
+
 def test_rule4_exit_code_zero_no_signal_skipped():
     actions = _run(
         [
