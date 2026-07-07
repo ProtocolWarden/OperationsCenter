@@ -466,7 +466,10 @@ class WorkspaceManager:
                 request.task_branch,
                 request.base_branch,
             )
-            return result
+            # Success is preserved (a legitimate "already done / analysis only"
+            # outcome), but make the no-push explicit so downstream messaging
+            # doesn't claim a deliverable that was never pushed.
+            return result.model_copy(update={"branch_pushed": False})
 
         # Squash all stage commits into one before pushing (ADR 0009 P4).
         # Rewritten history requires force-push; single-commit branches use
@@ -508,8 +511,26 @@ class WorkspaceManager:
             else:
                 self._git.push_branch(ws, request.task_branch)
         except Exception as exc:
+            # The workspace is ephemeral: an unpushed work product is LOST when
+            # dispatch tears the tempdir down. Reporting success here let tasks
+            # reach In Review with nothing to review (claims-vs-reality gap).
+            # Fail the task instead — backend_error is transient-retryable, so
+            # network blips get the existing retry machinery.
             logger.warning("WorkspaceManager.finalize: push failed — %s", exc)
-            return result
+            return result.model_copy(
+                update={
+                    "status": ExecutionStatus.FAILED,
+                    "success": False,
+                    "branch_pushed": False,
+                    "failure_category": FailureReasonCategory.BACKEND_ERROR,
+                    "failure_reason": (
+                        f"push of {request.task_branch} failed after execution "
+                        f"succeeded: {exc}. The ephemeral workspace is deleted on "
+                        "return, so the work product would be lost — failing the "
+                        "task so it retries."
+                    ),
+                }
+            )
 
         # Cross-repo impact warning: if the changed files touch any other
         # repo's declared impact_report_paths, log the affected neighbours

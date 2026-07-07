@@ -110,6 +110,8 @@ def handle_success(
     *,
     improve_suggestions: list[dict] | None = None,
     pr_url: str | None = None,
+    branch_pushed: bool = False,
+    branch_name: str | None = None,
 ) -> None:
     task_id = str(issue["id"])
     labels = issue.get("labels", [])
@@ -122,6 +124,15 @@ def handle_success(
 
     try:
         if role == "goal":
+            # Claims-vs-reality: say what was actually delivered. A goal task
+            # can succeed with nothing pushed (no new commits — already done /
+            # analysis outcome); the comment must not imply a reviewable branch.
+            if branch_pushed and branch_name:
+                delivered = f"branch `{branch_name}` pushed"
+                if pr_url:
+                    delivered += f", PR: {pr_url}"
+            else:
+                delivered = "no branch pushed — no new commits, nothing to review"
             if needs_verification:
                 follow_id = create_follow_up(
                     client,
@@ -132,17 +143,19 @@ def handle_success(
                 )
                 client.comment_issue(
                     task_id,
-                    f"Implementation complete — created verification task #{follow_id}",
+                    f"Implementation complete ({delivered}) — created verification task #{follow_id}",
                 )
                 client.transition_issue(task_id, STATE_DONE)
             elif await_review:
                 client.transition_issue(task_id, STATE_REVIEW)
                 if pr_url:
                     add_label(client, issue, f"pr-url: {pr_url}")
-                client.comment_issue(task_id, "Implementation complete — moved to In Review")
+                client.comment_issue(
+                    task_id, f"Implementation complete ({delivered}) — moved to In Review"
+                )
             else:
                 client.transition_issue(task_id, STATE_DONE)
-                client.comment_issue(task_id, "Implementation complete")
+                client.comment_issue(task_id, f"Implementation complete ({delivered})")
 
         elif role == "test":
             client.transition_issue(task_id, STATE_DONE)

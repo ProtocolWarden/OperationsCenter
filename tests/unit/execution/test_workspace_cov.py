@@ -314,7 +314,8 @@ def test_finalize_no_new_commits_returns_early(tmp_path):
         mock.patch.object(mgr, "_has_new_commits", return_value=False),
     ):
         out = mgr.finalize(req, result)
-    assert out is result
+    assert out.success is True
+    assert out.branch_pushed is False  # explicit: nothing pushed
     git.commit_all.assert_called_once()
     git.push_branch.assert_not_called()
 
@@ -376,7 +377,10 @@ def test_finalize_push_force_when_squashed(tmp_path):
     assert out.pull_request_url is None
 
 
-def test_finalize_push_failure_is_nonfatal(tmp_path):
+def test_finalize_push_failure_fails_the_task(tmp_path):
+    """Claims-vs-reality: the workspace is deleted on return, so an unpushed
+    work product is lost — a failed push must FAIL the task (transient-
+    retryable), not report success with nothing to review."""
     ws = _git_repo(tmp_path)
     git = _finalize_git_ok()
     git.squash_commits.return_value = False
@@ -389,8 +393,26 @@ def test_finalize_push_failure_is_nonfatal(tmp_path):
         mock.patch.object(mgr, "_has_new_commits", return_value=True),
     ):
         out = mgr.finalize(req, result)
-    assert out is result
+    assert out.success is False
     assert out.branch_pushed is False
+    assert out.failure_category == FailureReasonCategory.BACKEND_ERROR
+    assert "push of goal/fix-widget failed" in (out.failure_reason or "")
+
+
+def test_finalize_no_new_commits_reports_branch_not_pushed(tmp_path):
+    ws = _git_repo(tmp_path)
+    git = _finalize_git_ok()
+    mgr = WorkspaceManager(git_client=git)
+    req = _make_request(ws)
+    result = _make_result(success=True)
+    with (
+        mock.patch.object(mgr, "_diff_oversized", return_value=None),
+        mock.patch.object(mgr, "_has_new_commits", return_value=False),
+    ):
+        out = mgr.finalize(req, result)
+    assert out.success is True  # legitimate already-done/analysis outcome
+    assert out.branch_pushed is False
+    git.push_branch.assert_not_called()
 
 
 # ── _diff_oversized ──────────────────────────────────────────────────────────

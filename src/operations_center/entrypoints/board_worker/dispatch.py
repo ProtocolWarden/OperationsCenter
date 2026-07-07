@@ -306,9 +306,8 @@ def dispatch_issue(
             and result.get("failure_category") == "scope_too_wide"
         )
 
-        # Track A8: out-of-process scope verification. The executor's own scope
-        # gates run INSIDE the sandbox; the parent re-diffs the PUSHED branch
-        # from the remote (the committed tree) against the declared allowlist.
+        # Track A8: out-of-process scope verification — the parent re-diffs the
+        # PUSHED branch from the remote against the declared allowlist.
         if success and not scope_too_wide:
             scope_error = verify_pushed_scope(
                 bundle=bundle,
@@ -337,9 +336,10 @@ def dispatch_issue(
                 settings,
                 improve_suggestions=improve_suggestions,
                 pr_url=result.get("pull_request_url") or None,
+                branch_pushed=bool(result.get("branch_pushed")),
+                branch_name=result.get("branch_name") or None,
             )
-            # F1: populate the durable lineage tier on a real completion, so the
-            # read-model has an actual producer (the writer lives with the tier).
+            # F1: the durable lineage tier gets its producer on a real completion.
             from operations_center.lineage.durable import record_task_completion
 
             record_task_completion(oc_root, task_id, result)
