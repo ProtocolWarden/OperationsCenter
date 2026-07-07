@@ -1,3 +1,12 @@
+## 2026-07-07 — docs(config): document task_admission in the example config
+
+trusted_label_authors (Track A1) was configurable but undocumented in
+operations_center.example.yaml — a fresh provision would silently run with
+the autonomy lane fail-closed and no pointer to why. Commented section added
+beside the git/github_app hardening notes. (Applied live on this host today:
+the fleet's Plane identity is allowlisted and the goal lane executes
+autonomy-labeled tasks without strips.)
+
 ## 2026-07-07 — fix(loop_bridge): fetch before the self_update sha compare
 
 Iteration-3 deploy gap: reviewer merged #437 at 08:41Z but the 08:50Z

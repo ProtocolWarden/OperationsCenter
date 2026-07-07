@@ -38,6 +38,19 @@ git:
   signing_key: null                     # GPG key ID if sign_commits: true
 
 # ---------------------------------------------------------------------------
+# Task admission (label provenance, Track A1)
+# ---------------------------------------------------------------------------
+# Trusted source labels (source: autonomy / source: board_worker) let a task
+# bypass the review gate. Dispatch forwards such a label ONLY when the Plane
+# issue creator matches trusted_label_authors (id, email, or display name,
+# case-insensitive — same matching as author_allowlist). Empty/omitted FAILS
+# CLOSED: every trusted label is stripped and the task routes through normal
+# review. Allowlist the Plane identity the fleet creates tasks with.
+# task_admission:
+#   trusted_label_authors:
+#     - "<plane-user-uuid-or-email-of-the-fleet-service-account>"
+
+# ---------------------------------------------------------------------------
 # Team executor settings
 # ---------------------------------------------------------------------------
 # See src/operations_center/backends/team_executor/
