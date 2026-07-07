@@ -1,3 +1,15 @@
+## 2026-07-07 — fix(reviewer): backend-unavailable parks auto-expire
+
+PR #443 sat parked "Needs human attention (reviewer_backend_unavailable)"
+after the Claude session limit hit — but the limit RESETS on its own, and the
+park only cleared on a human or a new push, so green watchdog PRs rotted.
+Escalations now record reason+timestamp; reviewer_backend_unavailable parks
+auto-expire after 3600s (flag comment struck through with the resolution),
+resuming autonomous review on the SAME head. Concern/quality escalations are
+untouched — only the transient-infra reason expires. 2 tests (expire +
+hold-within-cooldown) in tests/test_pr_review_watcher.py (local-only suite).
+Unparked #443 by hand this pass (operator action).
+
 ## 2026-07-07 — docs(config): document task_admission in the example config
 
 trusted_label_authors (Track A1) was configurable but undocumented in
