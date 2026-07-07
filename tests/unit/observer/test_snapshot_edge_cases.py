@@ -273,7 +273,9 @@ class TestSnapshotManagerEdgeCases:
     ) -> None:
         """Test cleanup with zero retention count."""
         manager = SnapshotManager(
-            LocalSnapshotRepository(root=tmp_path / "snapshots", retention_count=1)
+            LocalSnapshotRepository(
+                root=tmp_path / "snapshots", retention_count=1, retention_days=36500
+            )
         )
 
         manager.save_snapshot(test_snapshot)
