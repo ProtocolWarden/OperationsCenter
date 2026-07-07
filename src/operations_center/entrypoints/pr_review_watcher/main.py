@@ -1434,6 +1434,11 @@ _MAX_CI_WAIT_CYCLES = 20
 _MAX_CI_GREEN_RETRACTIONS = 3
 _DIFF_LIMIT = 60_000
 
+# A reviewer_backend_unavailable escalation is TRANSIENT infra (session limit,
+# crash) — the backend recovers on its own, so the park auto-expires after this
+# cooldown and autonomous review resumes without a human or a new push.
+_BACKEND_UNAVAILABLE_RESUME_S = 3600
+
 
 def _run_fix_pass(
     oc_root: Path,
@@ -1585,6 +1590,8 @@ def _escalate_needs_human(
     pr_number = state["pr_number"]
     if current_head_sha:
         state["escalated_head_sha"] = current_head_sha
+    state["escalated_reason"] = reason
+    state["escalated_at_utc"] = datetime.now(UTC).isoformat()
     if not state.get("escalated_needs_human"):
         marker = settings.reviewer.bot_comment_marker
         try:
@@ -2596,6 +2603,41 @@ def _phase1(
             pr_number,
         )
         _save_state(state_path, state)
+
+    # Transient-infra escalations auto-expire: a backend session limit resets
+    # on its own, so resume autonomous review after a cooldown instead of
+    # parking the PR until a human or a new push arrives.
+    if (
+        state.get("escalated_needs_human")
+        and state.get("escalated_reason") == "reviewer_backend_unavailable"
+    ):
+        raw_ts = str(state.get("escalated_at_utc") or "")
+        try:
+            escalated_at = datetime.fromisoformat(raw_ts)
+        except ValueError:
+            escalated_at = None
+        if (
+            escalated_at is None
+            or (datetime.now(UTC) - escalated_at).total_seconds() >= _BACKEND_UNAVAILABLE_RESUME_S
+        ):
+            _retract_flag(
+                state,
+                gh_client,
+                owner,
+                repo,
+                resolution="backend cooldown elapsed — automated review resumed",
+            )
+            state["escalated_needs_human"] = False
+            state.pop("escalated_head_sha", None)
+            state.pop("escalated_reason", None)
+            state.pop("escalated_at_utc", None)
+            state["backend_error_passes"] = 0
+            logger.info(
+                "pr_review_watcher: PR #%d backend-unavailable park expired; "
+                "resuming automated review",
+                pr_number,
+            )
+            _save_state(state_path, state)
 
     # Once a PR is escalated for human attention, do not keep burning review
     # passes on the same unchanged head. Resume autonomous review only after a

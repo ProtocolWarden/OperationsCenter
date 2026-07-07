@@ -574,6 +574,74 @@ def test_phase1_skips_escalated_pr_without_new_head(tmp_path: Path) -> None:
     assert loaded["escalated_head_sha"] == "abc123"
 
 
+def test_phase1_backend_unavailable_park_autoexpires(tmp_path: Path) -> None:
+    """A session-limit park is transient infra — after the cooldown the watcher
+    must resume autonomous review without a human or a new push."""
+    from datetime import UTC, datetime, timedelta
+
+    stale = (datetime.now(UTC) - timedelta(seconds=watcher._BACKEND_UNAVAILABLE_RESUME_S + 60)).isoformat()
+    state, sp = _make_state(
+        tmp_path,
+        phase="self_review",
+        escalated_needs_human=True,
+        escalated_head_sha="abc123",
+        escalated_reason="reviewer_backend_unavailable",
+        escalated_at_utc=stale,
+        no_verdict_passes=0,
+    )
+    gh = _make_gh()
+
+    with patch.object(watcher, "_run_direct_review") as mock_review:
+        mock_review.return_value = None
+        watcher._phase1(
+            state,
+            sp,
+            _pr_data(head_sha="abc123"),  # SAME head — only the cooldown expired
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            SETTINGS,
+        )
+
+    loaded = watcher._load_state(sp)
+    assert loaded["escalated_needs_human"] is False
+    assert "escalated_reason" not in loaded
+
+
+def test_phase1_backend_unavailable_park_holds_within_cooldown(tmp_path: Path) -> None:
+    from datetime import UTC, datetime
+
+    state, sp = _make_state(
+        tmp_path,
+        phase="self_review",
+        escalated_needs_human=True,
+        escalated_head_sha="abc123",
+        escalated_reason="reviewer_backend_unavailable",
+        escalated_at_utc=datetime.now(UTC).isoformat(),
+        no_verdict_passes=0,
+    )
+    gh = _make_gh()
+
+    with patch.object(watcher, "_run_direct_review") as mock_review:
+        watcher._phase1(
+            state,
+            sp,
+            _pr_data(head_sha="abc123"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            SETTINGS,
+        )
+
+    mock_review.assert_not_called()
+    loaded = watcher._load_state(sp)
+    assert loaded["escalated_needs_human"] is True
+
+
 def test_phase1_concern_escalation_not_retracted_on_green_ci(tmp_path: Path) -> None:
     # Regression for #313: a fix_pass_no_progress escalation carrying unresolved
     # concerns on THIS unchanged head must NOT be retracted just because CI is
