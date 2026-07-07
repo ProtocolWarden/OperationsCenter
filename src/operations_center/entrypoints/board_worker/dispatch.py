@@ -461,6 +461,12 @@ def _dispatch_spec_author(
     oc_root = Path(__file__).resolve().parents[4]
     python = venv_python(oc_root)
     env = build_allowlist_env(oc_root, passthrough=git_token_passthrough(settings, repo_cfg))
+    # Same offline tiktoken cache the goal/improve dispatch path wires in
+    # (see dispatch_issue below) — without it the spec-author executor hits a
+    # live openaipublic.blob.core.windows.net fetch that the egress proxy 403s,
+    # failing every spec-author run with the same backend_error (confirmed via
+    # 3 consecutive identical failures on the same task in watch-all logs).
+    env.update(provision_env(repo_key, _repo_local_path(settings, repo_key), python_bin=python))
     short_id = task_id[:8]
 
     logger.info(

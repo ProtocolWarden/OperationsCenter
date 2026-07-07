@@ -66,6 +66,9 @@ Applies ten rules on every run:
       - No "executor-exit-code:" label (executor never ran — pre-execution failure)
       - Not "self-modify: approved" (those are handled by Rule 4)
       - Not "thin-goal" (board_worker adds this when goal text is too short; needs human to enrich)
+      - Not "blocked-reason: policy" (deterministic policy gate — e.g. review.required —
+        that will re-block identically on every retry; recycling it Blocked->Backlog->
+        Ready for AI is a closed loop, not a transient infra failure)
       - Blocked for at least --clean-blocked-min-minutes (default 5) minutes
     → move to Backlog for retry.
     These represent pre-execution failures (workspace preparation errors, missing
@@ -246,6 +249,7 @@ _SOURCE_IMPROVE_SUGGESTION_LABEL = "source: improve-suggestion"
 _SOURCE_BOARD_WORKER_LABEL = "source: board_worker"
 _HANDOFF_IMPROVEMENT_LABEL = "handoff-reason: improvement_applied"
 _PR_URL_PREFIX = "pr-url:"
+_BLOCKED_REASON_POLICY_LABEL = "blocked-reason: policy"
 
 
 def _labels(issue: dict[str, Any]) -> list[str]:
@@ -615,6 +619,7 @@ def _apply_rules(
             and not _has_label_prefix(labels, _SIGKILL_SIGNAL_PREFIX)
             and not _has_label_prefix(labels, "executor-exit-code:")
             and not _has_label_prefix(labels, _BLOCKED_BY_PREFIX)
+            and not _has_label(labels, _BLOCKED_REASON_POLICY_LABEL)
         )
         if is_clean_blocked:
             updated_at = _parse_updated_at(issue)

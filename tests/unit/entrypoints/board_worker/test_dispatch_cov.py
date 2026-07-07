@@ -575,6 +575,43 @@ def test_dispatch_spec_author_happy(monkeypatch):
     assert kwargs["spec_slug"] == "x"
 
 
+def test_dispatch_spec_author_wires_provision_env(monkeypatch):
+    # Regression: spec-author used to build its own env via build_allowlist_env
+    # without calling provision_env, so its executor never got TIKTOKEN_CACHE_DIR
+    # and hit a live openaipublic.blob.core.windows.net fetch that the egress
+    # proxy 403s on every run (same backend_error every time — a closed loop).
+    _install_common_patches(monkeypatch)
+    monkeypatch.setattr(dispatch, "venv_python", lambda r: "/py")
+    monkeypatch.setattr(dispatch, "build_allowlist_env", lambda r, **kw: {})
+
+    import operations_center.entrypoints.board_worker._text as text_mod
+
+    monkeypatch.setattr(
+        text_mod, "parse_spec_author_payload", lambda d: {"target_path": "p", "spec_slug": "s"}
+    )
+    monkeypatch.setattr(text_mod, "build_spec_author_goal_text", lambda p, rid: "G")
+
+    proc = MagicMock(return_value=True)
+    monkeypatch.setattr(dispatch, "process_spec_author", proc)
+    pe = MagicMock(return_value={"TIKTOKEN_CACHE_DIR": "/cache/tk"})
+    monkeypatch.setattr(dispatch, "provision_env", pe)
+
+    dispatch._dispatch_spec_author(
+        issue=_make_issue(),
+        role="goal",
+        settings=_make_settings(),
+        client=MagicMock(),
+        config_path="/cfg.yaml",
+        description="yaml here",
+        labels=[],
+        task_id="t1",
+    )
+    pe.assert_called_once()
+    assert pe.call_args.args[0] == dispatch.SPEC_AUTHOR_REPO_KEY
+    env_passed = proc.call_args.kwargs["env"]
+    assert env_passed["TIKTOKEN_CACHE_DIR"] == "/cache/tk"
+
+
 def test_dispatch_spec_author_no_repo_cfg_uses_file_url(monkeypatch):
     _install_common_patches(monkeypatch)
     monkeypatch.setattr(dispatch, "venv_python", lambda r: "/py")

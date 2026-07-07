@@ -488,6 +488,15 @@ def handle_failure(
             )
         if executor_exit_code is not None:
             add_label(client, issue, f"executor-exit-code: {executor_exit_code}")
+        if category == "policy_blocked":
+            # Deterministic policy gate (e.g. review.required) — the executor never
+            # ran, so this has no executor-signal/exit-code label and would otherwise
+            # match Rule 8 CLEAN_BLOCKED_RETRY's "pre-execution infra failure" pattern
+            # and get recycled Blocked->Backlog->Ready for AI every cycle forever,
+            # hitting the same policy gate each time (confirmed via ghost-audit G5:
+            # 26 policy-blocked re-dispatches in one hour). This label marks the block
+            # as policy-driven so Rule 8 can exclude it.
+            add_label(client, issue, "blocked-reason: policy")
         if executor_signal:
             add_label(client, issue, f"executor-signal: {executor_signal}")
             if "sigkill" in executor_signal.lower():

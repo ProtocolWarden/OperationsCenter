@@ -663,6 +663,29 @@ def test_handle_failure_clean_code_failure_increments_code_fail_count():
     assert "code-fail-count: 1" in _all_update_labels(client)
 
 
+def test_handle_failure_policy_blocked_adds_policy_label():
+    # policy_blocked (e.g. review.required) has no executor-signal/exit-code label
+    # since the executor never ran — without this label, board_unblock's Rule 8
+    # CLEAN_BLOCKED_RETRY would treat it as a retryable pre-execution infra failure
+    # and recycle it Blocked->Backlog->Ready for AI forever against a policy gate
+    # that never changes.
+    client = _make_client()
+    issue = {"id": "p1", "labels": []}
+    outcomes.handle_failure(
+        client, issue, "goal", "goal", {"failure_category": "policy_blocked"}, _make_settings()
+    )
+    assert "blocked-reason: policy" in _all_update_labels(client)
+
+
+def test_handle_failure_non_policy_category_no_policy_label():
+    client = _make_client()
+    issue = {"id": "p2", "labels": []}
+    outcomes.handle_failure(
+        client, issue, "goal", "goal", {"failure_category": "validation_failed"}, _make_settings()
+    )
+    assert "blocked-reason: policy" not in _all_update_labels(client)
+
+
 def test_handle_failure_transient_category_does_not_count():
     # Env/transient categories are NOT code failures — must not bump the counter.
     for cat in ("backend_error", "timeout", "unknown", "scope_too_wide"):

@@ -8950,3 +8950,19 @@ override-dependencies (the plane-bearing repograph e0b205e). Plain pip silently 
 would stay dormant AND repograph would downgrade to planeless on every pyproject change. Gated the live-registry
 tests with a declarative skipif on plane availability (custodian T3, not a per-test runtime skip). Verified: in the
 activated venv the live tests run+pass (27); planeless -> skip.
+
+## 2026-07-07 — Watchdog: policy-blocked task closed-loop + spec-author tiktoken egress fix
+
+Root cause 1: board_unblock Rule 8 (CLEAN_BLOCKED_RETRY) treated tasks blocked by a
+deterministic policy gate (review.required) identically to transient pre-execution infra
+failures — both have no executor-signal/exit-code label. Result: 5 goal tasks cycled
+Blocked->Backlog->Ready for AI->Blocked every ~30min (ghost-audit G5: 26 policy-blocked
+re-dispatches in 1h), burning backend slots for zero net progress. Fix: handle_failure
+now labels policy_blocked failures `blocked-reason: policy`; Rule 8 excludes it.
+
+Root cause 2: spec-author dispatch (`_dispatch_spec_author`) built its own env via
+build_allowlist_env but never called provision_env — unlike the goal/improve path — so
+its executor never got TIKTOKEN_CACHE_DIR and always hit a live
+openaipublic.blob.core.windows.net fetch that the egress proxy 403s. Confirmed via 3
+identical consecutive failures on the same spec-author task. Fix: wire provision_env into
+the spec-author path too.
