@@ -351,6 +351,9 @@ Write the cycle summary to logs/local/watchdog_cycles/<YYYYMMDD>_cycle.md (appen
 Do NOT write to .console/log.md — that file is operator-owned. The ONLY exception:
 if you completed a work order item from .console/task.md, append one line to log.md
 noting it (e.g. "## YYYY-MM-DD — P3: open-PR gate implemented"). Nothing else.
+The pre-commit hook exempts oc-watchdog/* branches from the log.md requirement —
+do not stage .console/log.md to satisfy it; your PR body + cycle summary carry
+the rationale.
 Do NOT touch .console/backlog.md — it is operator-curated.
 
 COMMIT DISCIPLINE: Only commit if you made a meaningful change (code fix, config change,

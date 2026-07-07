@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 # Require .console/log.md to be updated when committing source changes.
 # Install: git config core.hooksPath .hooks
+#
+# Exemption: oc-watchdog/* branches (autonomous loop sessions). log.md is
+# operator-owned (see tools/loop/oc_session_prompt.txt STEP 10); loop cycles
+# record rationale in the PR body + logs/local/watchdog_cycles/. Requiring
+# log.md here forced every watchdog PR to edit the same insertion point,
+# guaranteeing merge conflicts between consecutive autonomous PRs.
+
+branch=$(git symbolic-ref --quiet --short HEAD || true)
+case "$branch" in
+    oc-watchdog/*) exit 0 ;;
+esac
 
 TRIVIAL='^(\.console/|uv\.lock|package-lock\.json|poetry\.lock|\.gitignore|\.hooks/)'
 
