@@ -8986,3 +8986,5 @@ its executor never got TIKTOKEN_CACHE_DIR and always hit a live
 openaipublic.blob.core.windows.net fetch that the egress proxy 403s. Confirmed via 3
 identical consecutive failures on the same spec-author task. Fix: wire provision_env into
 the spec-author path too.
+
+## 2026-07-07 — Work order verified already complete: gaps/edge_cases CLI exposure (PR #374, pre-existing)
