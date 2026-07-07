@@ -1,3 +1,13 @@
+## 2026-07-07 — chore(hooks): exempt oc-watchdog/* from the log.md pre-commit gate
+
+The hook required .console/log.md in every non-trivial commit while the
+session prompt declares it operator-owned — sessions squared the circle by
+writing full log entries, and every watchdog PR then edited the same
+insertion point, guaranteeing merge conflicts between consecutive autonomous
+PRs (bit #435). Hook is now branch-aware: oc-watchdog/* skips the gate
+(rationale lives in the PR body + logs/local/watchdog_cycles/); operator
+branches unchanged. Prompt STEP 10 notes the exemption.
+
 ## 2026-07-07 — fix(board_worker): retry workspace-prep clone on ssh permission flake
 
 Watchdog cycle: 6 goal-worker runs failed workspace prep with "Bad owner or
