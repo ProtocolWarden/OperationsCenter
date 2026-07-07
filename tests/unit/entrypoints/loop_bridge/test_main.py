@@ -183,6 +183,30 @@ def test_self_update_pulls_and_bounces_on_new_sha(monkeypatch, tmp_path: Path) -
     assert sha_file.read_text(encoding="utf-8") == "new111"
 
 
+def test_self_update_fetches_before_comparing(monkeypatch, tmp_path: Path) -> None:
+    """Deploy-gap regression: without a fetch, the local origin/main ref never
+    moves and reviewer-merged fixes stay invisible until something else pulls."""
+    sha_file = tmp_path / "last_sha"
+    sha_file.write_text("old000", encoding="utf-8")
+    monkeypatch.setattr(bridge, "_LAST_SHA_FILE", sha_file)
+    _seed_watcher_pidfiles(monkeypatch, tmp_path, {})
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+
+        class R:
+            stdout = "new111\n"
+
+        return R()
+
+    monkeypatch.setattr(bridge.subprocess, "run", fake_run)
+    assert bridge.self_update() == 0
+    fetch_idx = calls.index(["git", "fetch", "origin", "main", "--quiet"])
+    revparse_idx = calls.index(["git", "rev-parse", "origin/main"])
+    assert fetch_idx < revparse_idx
+
+
 # ── config wiring ─────────────────────────────────────────────────────────────
 
 

@@ -1,3 +1,13 @@
+## 2026-07-07 — fix(loop_bridge): fetch before the self_update sha compare
+
+Iteration-3 deploy gap: reviewer merged #437 at 08:41Z but the 08:50Z
+pre_iteration self_update was a no-op — `git rev-parse origin/main` reads the
+LOCAL ref, which only moves when something else fetches. The session had to
+pull + restart watchers manually; the hook then "noticed" one cycle late
+(09:14Z restart). self_update now fetches origin main (quiet, 120s, failure
+tolerated → stale-ref behavior) before comparing. Regression test asserts
+fetch precedes rev-parse.
+
 ## 2026-07-07 — chore(hooks): exempt oc-watchdog/* from the log.md pre-commit gate
 
 The hook required .console/log.md in every non-trivial commit while the

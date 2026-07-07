@@ -182,6 +182,17 @@ def _restart_watchers() -> None:
 
 def self_update() -> int:
     """git-pull + watcher restart when origin/main moved since the last check."""
+    # rev-parse reads the LOCAL origin/main ref; without a fetch it only moves
+    # when something else happens to fetch, so reviewer-merged fixes stayed
+    # invisible for a full cycle (the iteration-3 deploy gap, 2026-07-07).
+    # Fetch failure (offline) is tolerated — we proceed on the stale ref.
+    subprocess.run(
+        ["git", "fetch", "origin", "main", "--quiet"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        timeout=120,
+        check=False,
+    )
     current_sha = subprocess.run(
         ["git", "rev-parse", "origin/main"],
         cwd=REPO_ROOT,
