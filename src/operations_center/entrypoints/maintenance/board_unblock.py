@@ -31,6 +31,10 @@ Applies ten rules on every run:
     Exception: tasks with "executor-signal: SIGKILL" are skipped — a SIGKILL indicates
     a systemic failure (timeout, OOM) that requires triage review before re-dispatch.
     Rule 1 cancels such tasks once retry-count reaches ≥3.
+    Exception: tasks with "blocked-reason: policy" are skipped — a deterministic policy
+    gate (e.g. review.required) will re-block identically on every retry regardless of
+    self-modify approval; requeueing burns a backend slot every cycle for no gain
+    (same failure mode Rule 8 already excludes this label for).
 
   Rule 5 — STALE_IN_REVIEW
     Tasks in "In Review" state for longer than --stale-blocked-hours (default 4h) →
@@ -440,7 +444,23 @@ def _apply_rules(
             exit_code_zero_no_signal = (
                 executor_exit_code_val.strip() == "0" and not executor_signal_val
             )
-            if "sigkill" in executor_signal_val.lower():
+            if _has_label(labels, _BLOCKED_REASON_POLICY_LABEL):
+                actions.append(
+                    {
+                        "task_id": task_id,
+                        "title": title,
+                        "rule": "SELF_MODIFY_REQUEUE",
+                        "from_state": state,
+                        "to_state": "Ready for AI",
+                        "reason": (
+                            "SKIPPED — blocked-reason:policy present; deterministic policy "
+                            "gate (e.g. review.required) requires operator review, "
+                            "self-modify:approved does not override it"
+                        ),
+                        "skipped": True,
+                    }
+                )
+            elif "sigkill" in executor_signal_val.lower():
                 actions.append(
                     {
                         "task_id": task_id,
