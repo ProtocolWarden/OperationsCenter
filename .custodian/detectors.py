@@ -284,43 +284,42 @@ def _detect_oc3_orphaned_entrypoints(ctx: AuditContext) -> DetectorResult:
     ep_root = ctx.src_root / "entrypoints"
     if not ep_root.is_dir():
         return DetectorResult(count=0, samples=[])
+    search_roots = (
+        ctx.src_root,
+        ctx.tests_root,
+        ctx.repo_root / "scripts",
+        ctx.repo_root / "docs",
+    )
+    searchable_texts: list[str] = []
+    for root in search_roots:
+        if not root.exists():
+            continue
+        for f in root.rglob("*"):
+            if not f.is_file() or "__pycache__" in f.parts:
+                continue
+            try:
+                if str(f.relative_to(ctx.repo_root)).startswith("src/operations_center/entrypoints/"):
+                    continue
+            except ValueError:
+                continue
+            try:
+                searchable_texts.append(f.read_text(errors="replace"))
+            except OSError:
+                continue
+    pyproject_text = ""
+    pyproj = ctx.repo_root / "pyproject.toml"
+    if pyproj.exists():
+        try:
+            pyproject_text = pyproj.read_text(encoding="utf-8")
+        except OSError:
+            pass
+
     samples: list[str] = []
     for sub in sorted(ep_root.iterdir()):
         if not sub.is_dir() or sub.name.startswith("_"):
             continue
-        ref_count = 0
         rx = f"operations_center.entrypoints.{sub.name}"
-        for root in (
-            ctx.src_root,
-            ctx.tests_root,
-            ctx.repo_root / "scripts",
-            ctx.repo_root / "docs",
-        ):
-            if not root.exists():
-                continue
-            for f in root.rglob("*"):
-                if not f.is_file() or "__pycache__" in f.parts:
-                    continue
-                if str(f.relative_to(ctx.repo_root)).startswith(
-                    f"src/operations_center/entrypoints/{sub.name}"
-                ):
-                    continue
-                try:
-                    if rx in f.read_text(errors="replace"):
-                        ref_count += 1
-                        break
-                except OSError:
-                    continue
-            if ref_count:
-                break
-        pyproj = ctx.repo_root / "pyproject.toml"
-        if pyproj.exists():
-            try:
-                if rx in pyproj.read_text():
-                    ref_count += 1
-            except OSError:
-                pass
-        if ref_count == 0:
+        if rx not in pyproject_text and not any(rx in text for text in searchable_texts):
             samples.append(f"entrypoints/{sub.name}/")
     return DetectorResult(count=len(samples), samples=samples[:10])
 
@@ -351,38 +350,47 @@ def _detect_oc8_phantom_symbols(ctx: AuditContext) -> DetectorResult:
         re.IGNORECASE,
     )
 
-    src_text = ""
-    src_test_text = ""
-    for f in _py_files(ctx.src_root):
+    defined_symbols: set[str] = set()
+    field_symbols: set[str] = set()
+    event_symbols: set[str] = set()
+
+    def _index_symbol_file(path: Path) -> None:
         try:
-            src_text += f.read_text(errors="replace") + "\n"
-        except OSError:
-            continue
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError, UnicodeDecodeError):
+            return
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                defined_symbols.add(node.name)
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                field_symbols.add(node.target.id)
+            elif isinstance(node, ast.Dict):
+                for key, value in zip(node.keys, node.values, strict=False):
+                    if (
+                        isinstance(key, ast.Constant)
+                        and key.value == "event"
+                        and isinstance(value, ast.Constant)
+                        and isinstance(value.value, str)
+                    ):
+                        event_symbols.add(value.value)
+
+    for f in _py_files(ctx.src_root):
+        _index_symbol_file(f)
     if ctx.tests_root.exists():
         for f in _py_files(ctx.tests_root):
-            try:
-                src_test_text += f.read_text(errors="replace") + "\n"
-            except OSError:
-                continue
+            _index_symbol_file(f)
 
     audit_cfg = ctx.config.get("audit", {}) or {}
     common_words = set(audit_cfg.get("common_words", []) or [])
     stale_handlers = set(audit_cfg.get("stale_handlers", []) or [])
 
-    field_def_re_template = r"^\s+{name}\s*:\s*[A-Za-z]"
-
     def _exists(name: str) -> bool:
-        if name in common_words:
-            return True
-        if re.search(rf"\b(def|class)\s+{re.escape(name)}\b", src_text):
-            return True
-        if re.search(field_def_re_template.format(name=re.escape(name)), src_text, re.MULTILINE):
-            return True
-        if re.search(rf"\b(def|class)\s+{re.escape(name)}\b", src_test_text):
-            return True
-        if re.search(rf'"event"\s*:\s*"{re.escape(name)}"', src_text):
-            return True
-        return False
+        return (
+            name in common_words
+            or name in defined_symbols
+            or name in field_symbols
+            or name in event_symbols
+        )
 
     deferred_words = ("deferred", "out of scope", "not yet implemented", "future:", "deprecated")
     seen: dict[str, tuple[Path, int]] = {}
@@ -670,6 +678,8 @@ def _detect_oc12_model_field_mismatch(ctx: AuditContext) -> DetectorResult:
     if not checkable:
         return DetectorResult(count=0, samples=[])
 
+    candidate_calls = {f"{name}(" for name in checkable}
+
     # Pass 2: scan src + tests for bare Model(field=...) calls with unknown kwargs.
     # A construction is only checked when we can confirm the bare Name binds to OUR
     # registered class (and not a same-named class imported from another package —
@@ -684,37 +694,41 @@ def _detect_oc12_model_field_mismatch(ctx: AuditContext) -> DetectorResult:
     for root in roots:
         for py in root.rglob("*.py"):
             try:
-                tree = ast.parse(py.read_text(encoding="utf-8"))
-            except (OSError, SyntaxError):
+                text = py.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            if not any(marker in text for marker in candidate_calls):
+                continue
+            try:
+                tree = ast.parse(text)
+            except SyntaxError:
                 continue
             rel = py.relative_to(ctx.repo_root)
             # Lines inside a `with pytest.raises(...)` / `with raises(...)` block are
             # negative tests asserting the model REJECTS bad input — never flag them.
             raises_lines: set[int] = set()
-            for node in ast.walk(tree):
-                if not isinstance(node, ast.With):
-                    continue
-                for item in node.items:
-                    ce = item.context_expr
-                    fn = ce.func if isinstance(ce, ast.Call) else None
-                    fn_name = (
-                        fn.attr
-                        if isinstance(fn, ast.Attribute)
-                        else fn.id
-                        if isinstance(fn, ast.Name)
-                        else None
-                    )
-                    if fn_name == "raises":
-                        for inner in ast.walk(node):
-                            ln = getattr(inner, "lineno", None)
-                            if isinstance(ln, int):
-                                raises_lines.add(ln)
             # name → imported module's final component (for `from a.b.c import Name`
             # → "c"; for `import a.b as Name` → "b"); None marks "imported but
             # un-stemmable" which we treat as a non-match (skip).
             imported_from_stem: dict[str, str | None] = {}
             for node in ast.walk(tree):
-                if isinstance(node, ast.ImportFrom):
+                if isinstance(node, ast.With):
+                    for item in node.items:
+                        ce = item.context_expr
+                        fn = ce.func if isinstance(ce, ast.Call) else None
+                        fn_name = (
+                            fn.attr
+                            if isinstance(fn, ast.Attribute)
+                            else fn.id
+                            if isinstance(fn, ast.Name)
+                            else None
+                        )
+                        if fn_name == "raises":
+                            for inner in ast.walk(node):
+                                ln = getattr(inner, "lineno", None)
+                                if isinstance(ln, int):
+                                    raises_lines.add(ln)
+                elif isinstance(node, ast.ImportFrom):
                     stem = node.module.rsplit(".", 1)[-1] if node.module else None
                     for alias in node.names:
                         imported_from_stem[alias.asname or alias.name] = stem
@@ -825,10 +839,17 @@ def _detect_oc13_test_reimplements_metric(ctx: AuditContext) -> DetectorResult:
         return DetectorResult(count=0, samples=[])
     production = _flaky_metric_symbols(ctx.src_root)
     samples: list[str] = []
+    metric_markers = ("math.log", "math.log2", "math.log10", " log(", " log2(", " log10(")
     for py in tests.rglob("*.py"):
         try:
-            tree = ast.parse(py.read_text(encoding="utf-8"))
-        except (OSError, SyntaxError):
+            text = py.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if not any(marker in text for marker in metric_markers):
+            continue
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:
             continue
         rel = py.relative_to(ctx.repo_root)
         for node in ast.walk(tree):
