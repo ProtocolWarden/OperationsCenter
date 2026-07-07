@@ -692,6 +692,24 @@ def test_rule8_no_updated_at_no_action():
     assert not _by_rule(actions, "CLEAN_BLOCKED_RETRY")
 
 
+def test_rule8_policy_blocked_excluded():
+    # A deterministic policy gate (e.g. review.required) re-blocks identically on
+    # every retry — recycling it Blocked->Backlog->Ready for AI is a closed loop,
+    # not a transient pre-execution infra failure. Confirmed live via ghost-audit
+    # G5 (26 policy-blocked re-dispatches in one hour) before this exclusion.
+    actions = _run(
+        [
+            _issue(
+                "1",
+                state="Blocked",
+                labels=["task-kind: goal", "blocked-reason: policy"],
+                updated_at=_STALE,
+            )
+        ]
+    )
+    assert not _by_rule(actions, "CLEAN_BLOCKED_RETRY")
+
+
 # ---------------------------------------------------------------------------
 # Rule 9 — SPEC_AUTHOR_BACKLOG_PROMOTE
 # ---------------------------------------------------------------------------
