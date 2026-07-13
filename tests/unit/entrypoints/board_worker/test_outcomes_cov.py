@@ -175,6 +175,31 @@ def test_handle_success_goal_plain_done():
     assert any("Implementation complete" in c.args[1] for c in client.comment_issue.mock_calls)
 
 
+def test_handle_success_goal_comment_names_pushed_branch():
+    client = _make_client()
+    issue = {"id": "g5", "labels": [{"name": "repo: web"}]}
+    settings = _make_settings({"web": _make_repo_cfg(await_review=True)})
+    outcomes.handle_success(
+        client, issue, "goal", "goal", False, settings,
+        pr_url="http://pr/2", branch_pushed=True, branch_name="goal/abc12345",
+    )
+    comments = [c.args[1] for c in client.comment_issue.mock_calls]
+    assert any("goal/abc12345" in c and "http://pr/2" in c for c in comments)
+
+
+def test_handle_success_goal_comment_says_nothing_pushed():
+    """Claims-vs-reality: In Review with no pushed branch must say so, not
+    imply a reviewable deliverable exists."""
+    client = _make_client()
+    issue = {"id": "g6", "labels": [{"name": "repo: web"}]}
+    settings = _make_settings({"web": _make_repo_cfg(await_review=True)})
+    outcomes.handle_success(
+        client, issue, "goal", "goal", False, settings, branch_pushed=False,
+    )
+    comments = [c.args[1] for c in client.comment_issue.mock_calls]
+    assert any("no branch pushed" in c for c in comments)
+
+
 def test_handle_success_goal_no_repo_key():
     client = _make_client()
     issue = {"id": "g5", "labels": []}
