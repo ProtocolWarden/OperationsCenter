@@ -9032,3 +9032,12 @@ honest residual-gap table vs. the Track C signature (local checker patching + Gi
 account compromise stay open; the key remains a compatible later upgrade). Rollout:
 Custodian DC1/DC7 satisfied (front matter + linked from HARNESS_TRUST_HARDENING). CL committed-truth check first, then reviewer council mode (fail-open empty path set,
 populated in a follow-up that is the council's first live case), then EVAL panel.
+
+## 2026-07-13 — budget_guard wired (CL v0.4.3 pin + workers.yaml hook)
+
+CL v0.4.3 ships the per-iteration budget_guard hook (extend-only cooldown merge).
+Wired in workers.yaml to `loop_bridge budget-guard` (#452) and bumped the CL pin.
+Deploy: OC venv already on v0.4.3; loop restart (also activates #449 session_end)
+after this + #452 merge. With this live, over-budget claude usage diverts the loop
+ladder to codex until the 5h bucket rolls — the operator's 25% reserve is enforced
+mechanically across loop + board workers (usage-store synthetic cooldown).

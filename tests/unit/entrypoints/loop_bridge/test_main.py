@@ -219,6 +219,7 @@ def test_workers_yaml_pseudo_operator_section_is_valid() -> None:
     assert cfg.delay.state_delays["HEALTHY"] == 3600
     assert cfg.hooks.pre_iteration and cfg.hooks.seed_cooldowns and cfg.hooks.on_cooldown
     assert cfg.hooks.session_end
+    assert cfg.hooks.budget_guard
     assert cfg.prompt_path.exists()
 
 

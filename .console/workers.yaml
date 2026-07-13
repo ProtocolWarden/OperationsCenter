@@ -47,6 +47,10 @@ pseudo_operator:
     # main and open a PR for the session's pushed-but-PR-less branch. The
     # prompt's STEP 10 asks sessions to do this; the hook guarantees it.
     session_end: [".venv/bin/python", "-m", "operations_center.entrypoints.loop_bridge.main", "session-end"]
+    # Subscription budget guard (operator directive 2026-07-13): leave ~25% of
+    # every 5h claude bucket unspent. Emits {claude/opus: bucket_end|null};
+    # the engine merges extend-only, so over-budget diverts the ladder to codex.
+    budget_guard: [".venv/bin/python", "-m", "operations_center.entrypoints.loop_bridge.main", "budget-guard"]
 
 workers:
   - id: "investigation-worker"
