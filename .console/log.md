@@ -9009,3 +9009,14 @@ identical consecutive failures on the same spec-author task. Fix: wire provision
 the spec-author path too.
 
 ## 2026-07-07 — Work order verified already complete: gaps/edge_cases CLI exposure (PR #374, pre-existing)
+
+## 2026-07-13 — git_token() boot-keyring self-heal (post-reboot fleet outage)
+
+Root cause: fleet auto-started at boot (systemd linger) sources .env.operations-center.local
+before the login keyring is unlocked, so `gh auth token` yields nothing and
+GITHUB_TOKEN/GIT_TOKEN are exported EMPTY for the life of every worker process. The review
+watcher hit "no GitHub token — set GIT_TOKEN in .env" for 31 consecutive cycles (4.5h,
+last_success_at=null) until a manual fleet restart; every reboot reproduces this. Fix:
+Settings.git_token() now falls back to `gh auth token` at call time when the env var is
+empty and caches the recovered value back into os.environ (so the board-worker token
+passthrough heals too). Any gh failure degrades to the prior no-token behavior.
