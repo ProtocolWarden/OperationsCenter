@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import shutil
+import subprocess
 from pathlib import Path
 
 import yaml
@@ -722,7 +724,19 @@ class Settings(BaseModel):
     def git_token(self) -> str | None:
         if self.git.token_env is None:
             return None
-        return os.environ.get(self.git.token_env)
+        token = os.environ.get(self.git.token_env)
+        if token:
+            return token
+        # A fleet started at boot (systemd linger) sources .env before the login
+        # keyring is unlocked, so `gh auth token` yields nothing and the token env
+        # var is exported EMPTY — permanently, since env is captured at process
+        # start. Re-resolve at call time and cache back into os.environ so every
+        # consumer (including the board-worker env passthrough) heals once the
+        # keyring becomes available, instead of erroring until a manual restart.
+        token = _gh_auth_token_fallback()
+        if token:
+            os.environ[self.git.token_env] = token
+        return token
 
     def repo_git_token(self, repo_key: str) -> str | None:
         repo = self.repos.get(repo_key)
@@ -732,6 +746,29 @@ class Settings(BaseModel):
 
     def execution_controls(self) -> ExecutionControlSettings:
         return ExecutionControlSettings.from_env()
+
+
+def _gh_auth_token_fallback() -> str | None:
+    """Best-effort token recovery via `gh auth token` when the env var is empty.
+
+    Never raises: any failure (gh missing, keyring still locked, timeout)
+    returns None and the caller degrades to its existing no-token behavior.
+    """
+    gh = shutil.which("gh")
+    if not gh:
+        return None
+    try:
+        out = subprocess.run(  # noqa: S603
+            [gh, "auth", "token"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    token = out.stdout.strip()
+    return token or None
 
 
 def _resolve_binary(binary: str, config_dir: Path) -> str:
