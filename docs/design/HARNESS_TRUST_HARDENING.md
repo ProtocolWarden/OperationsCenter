@@ -59,6 +59,11 @@ that re-opens the INJ verdict hole. None is complete alone.
 > unblocking it. The operator may encode a judgment **once** (offline, anchored);
 > the system must reconfirm and correct **forever** after.
 
+(While the operator's signing ceremony is deferred, guardrail-surface changes are
+gated by cross-family council review instead — see
+[COUNCIL_VERDICT.md](COUNCIL_VERDICT.md) for the mechanism and its honest residual
+gaps vs. the signature.)
+
 This is a hard constraint on every capability, not a feature of EVAL alone. It has
 three operational tests every design here must pass:
 

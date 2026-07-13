@@ -9020,3 +9020,15 @@ last_success_at=null) until a manual fleet restart; every reboot reproduces this
 Settings.git_token() now falls back to `gh auth token` at call time when the env var is
 empty and caches the recovered value back into os.environ (so the board-worker token
 passthrough heals too). Any gh failure degrades to the prior no-token behavior.
+
+## 2026-07-13 — Council-verdict spec (operator decision: keyless change control)
+
+Operator declined the ed25519 ceremony (for now) and chose council-of-agents change
+control instead: guardrail-path PRs require a cross-family panel (claude sonnet/opus +
+codex gpt-5, distinct lenses, unanimous LGTM), a keyless launch-time committed-truth
+check covers local drift (run origin/main's copy + flag), and the EVAL panel gets the
+same cross-family treatment later. Spec: docs/design/COUNCIL_VERDICT.md — includes the
+honest residual-gap table vs. the Track C signature (local checker patching + GitHub
+account compromise stay open; the key remains a compatible later upgrade). Rollout:
+Custodian DC1/DC7 satisfied (front matter + linked from HARNESS_TRUST_HARDENING). CL committed-truth check first, then reviewer council mode (fail-open empty path set,
+populated in a follow-up that is the council's first live case), then EVAL panel.
