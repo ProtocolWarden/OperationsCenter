@@ -541,6 +541,23 @@ stop_watch_role() {
   local pid_file
   pid_file="$(watch_pid_file "${role}")"
 
+  # Signal the tracked supervisor directly. start_watch_role launches every
+  # role via `setsid /bin/bash -lc "..." &`, so the recorded pid is both the
+  # supervisor's pid AND its process-group id. Each supervisor installs
+  # `trap 'kill $_child_pid; exit 0' TERM INT` (or kills all siblings for the
+  # multi-process "spec" role), so signaling the group with a negative pid
+  # reaches the supervisor and every child/sibling it spawned in one shot —
+  # this is the only reliable stop path for roles like review/intake/propose
+  # whose child command line has no "--role X" flag (see stray-kill fallback
+  # below, which only matches board_worker.main --role invocations).
+  if [[ -f "${pid_file}" ]]; then
+    local supervisor_pid
+    supervisor_pid="$(cat "${pid_file}" 2>/dev/null)"
+    if [[ -n "${supervisor_pid}" ]] && kill -0 "${supervisor_pid}" >/dev/null 2>&1; then
+      kill -TERM -- "-${supervisor_pid}" >/dev/null 2>&1 || true
+    fi
+  fi
+
   # Always kill any stray watcher processes for this role, regardless of the
   # PID file.  Multiple watcher processes for the same role can accumulate if
   # previous stops failed or the PID file was overwritten without terminating
