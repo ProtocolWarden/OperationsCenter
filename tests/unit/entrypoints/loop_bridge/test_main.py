@@ -315,3 +315,69 @@ def test_session_end_existing_pr_not_duplicated(monkeypatch) -> None:
     )
     assert bridge.session_end("{}") == 0
     assert all(c[:3] != ["gh", "pr", "create"] for c in calls)
+
+
+# ── budget-guard ──────────────────────────────────────────────────────────────
+
+
+def test_budget_guard_ok_prints_null_cooldowns(monkeypatch, tmp_path: Path, capsys) -> None:
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))  # no transcripts → no usage
+    monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
+    assert bridge.budget_guard() == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out == {"claude": None, "opus": None}
+
+
+def test_budget_guard_exhausted_emits_reset_and_store_cooldown(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    from datetime import timezone as _tz
+
+    projects = tmp_path / "projects" / "p1"
+    projects.mkdir(parents=True)
+    now = datetime.now(_tz.utc)
+    projects.joinpath("s.jsonl").write_text(
+        json.dumps(
+            {
+                "timestamp": now.isoformat(),
+                "message": {"model": "claude-sonnet-5", "usage": {"output_tokens": 10_000}},
+            }
+        )
+        + "\n"
+    )
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("OC_CLAUDE_BUDGET_CAP_WEIGHTED", "1000")
+    monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
+    assert bridge.budget_guard() == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["claude"] is not None and out["claude"] == out["opus"]
+    until = UsageStore().worker_backend_cooldown_until("claude_code", now=now)
+    assert until is not None and until > now
+
+
+def test_main_dispatches_budget_guard_subcommand(monkeypatch, tmp_path: Path, capsys) -> None:
+    # Guards audit F1: workers.yaml wires `... budget-guard`, so main() MUST route
+    # it. A missing case would exit 2 and be swallowed as a silent no-op.
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))  # no transcripts → no usage
+    monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
+    monkeypatch.setattr(bridge.sys, "argv", ["loop_bridge", "budget-guard"])
+    assert bridge.main() == 0
+    assert json.loads(capsys.readouterr().out) == {"claude": None, "opus": None}
+
+
+def test_main_unknown_subcommand_exits_nonzero(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(bridge.sys, "argv", ["loop_bridge", "budget-gaurd"])  # typo
+    assert bridge.main() == 2
+
+
+def test_budget_guard_estimation_failure_is_loud_not_fatal(monkeypatch, capsys) -> None:
+    # Audit pattern P-I: an estimator bug must surface a no-cooldown result and
+    # exit 0 (degrade-never-halt), not raise out of the hook.
+    def _boom(*_a, **_k):
+        raise RuntimeError("transcript scan blew up")
+
+    monkeypatch.setattr(
+        "operations_center.execution.usage_budget.budget_status", _boom
+    )
+    assert bridge.budget_guard() == 0
+    assert json.loads(capsys.readouterr().out) == {"claude": None, "opus": None}

@@ -330,12 +330,60 @@ def session_end(payload_json: str) -> int:
     return 0
 
 
+def budget_guard() -> int:
+    """Report claude-family cooldowns when the subscription budget is spent.
+
+    Operator directive 2026-07-13: the system must leave ~25% of every 5h
+    subscription bucket unspent. Prints ``{"claude": iso|null, "opus":
+    iso|null}`` (seed-cooldowns format) so the engine's budget_guard hook can
+    merge it before backend selection — over-budget looks like a cooldown and
+    the existing ladder diverts to codex. When exhausted, also records a
+    synthetic ``budget_reserve`` cooldown in the usage store so board workers
+    and status surfaces see the same horizon.
+    """
+    from operations_center.execution.usage_budget import budget_status
+    from operations_center.execution.usage_store import UsageStore
+
+    try:
+        status = budget_status()
+    except Exception as exc:  # noqa: BLE001
+        # Fail LOUD but not FATAL: an estimator bug must be visible in the loop
+        # log (not silently swallowed like an unwired hook), yet must never halt
+        # the loop — degrade-never-halt. Emit a no-cooldown result and move on.
+        logger.error("loop_bridge: budget guard estimation failed, not throttling: %s", exc)
+        print(json.dumps({"claude": None, "opus": None}, ensure_ascii=False))
+        return 0
+
+    resume = status.bucket_end.isoformat() if status.exhausted else None
+    logger.info(
+        "loop_bridge: claude budget %s — %.0f%% of threshold used (window %s→%s)",
+        "DISABLED" if status.disabled else ("EXHAUSTED" if status.exhausted else "ok"),
+        100.0 * status.used_weighted / max(status.threshold_weighted, 1.0),
+        status.bucket_start.strftime("%H:%MZ"),
+        status.bucket_end.strftime("%H:%MZ"),
+    )
+    if status.exhausted:
+        try:
+            UsageStore().record_worker_backend_cooldown(
+                worker_backend="claude_code",
+                reset_at=status.bucket_end,
+                now=datetime.now(timezone.utc),
+                limit_kind="budget_reserve",
+                model=None,
+            )
+        except Exception as exc:  # noqa: BLE001 — guard must still print for the engine
+            logger.warning("loop_bridge: budget cooldown store write failed: %s", exc)
+    print(json.dumps({"claude": resume, "opus": resume}, ensure_ascii=False))
+    return 0
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     args = sys.argv[1:]
     if not args:
         print(
-            "usage: loop_bridge {seed-cooldowns|on-cooldown JSON|self-update|session-end JSON}",
+            "usage: loop_bridge {seed-cooldowns|on-cooldown JSON|self-update|session-end JSON"
+            "|budget-guard}",
             file=sys.stderr,
         )
         return 2
@@ -351,7 +399,14 @@ def main() -> int:
         return self_update()
     if cmd == "session-end":
         return session_end(args[1] if len(args) > 1 else "{}")
-    print(f"unknown loop_bridge command {cmd!r}", file=sys.stderr)
+    if cmd == "budget-guard":
+        return budget_guard()
+    # A hook wired in workers.yaml to a command this bridge doesn't implement is
+    # a config↔code drift (e.g. a half-merged feature). The engine treats a
+    # non-zero hook as best-effort and swallows it, so log at error level to make
+    # the drift visible in the loop log rather than silent. Fully closing this
+    # gap is a CL-side protocol-version check (audit F4).
+    logger.error("unknown loop_bridge command %r — check workers.yaml hook wiring", cmd)
     return 2
 
 
