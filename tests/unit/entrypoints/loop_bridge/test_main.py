@@ -41,9 +41,7 @@ def test_seed_cooldowns_maps_models_to_backends(monkeypatch, tmp_path: Path, cap
     assert out["codex"] is None
 
 
-def test_seed_cooldowns_account_wide_limit_cools_both(
-    monkeypatch, tmp_path: Path, capsys
-) -> None:
+def test_seed_cooldowns_account_wide_limit_cools_both(monkeypatch, tmp_path: Path, capsys) -> None:
     monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
     now = datetime.now(timezone.utc)
     reset_at = now + timedelta(hours=3)
@@ -76,7 +74,9 @@ def test_on_cooldown_records_into_usage_store(monkeypatch, tmp_path: Path) -> No
     assert bridge.on_cooldown(payload) == 0
     snapshot = UsageStore().current_worker_backend_cooldowns(now=datetime.now(timezone.utc))
     details = snapshot.get("claude_code", {}).get("cooldowns", [])
-    assert any(d.get("model") == "sonnet" and d.get("limit_kind") == "model_weekly" for d in details)
+    assert any(
+        d.get("model") == "sonnet" and d.get("limit_kind") == "model_weekly" for d in details
+    )
 
 
 def test_on_cooldown_unknown_backend_is_noop(monkeypatch, tmp_path: Path) -> None:
@@ -117,9 +117,7 @@ def test_restart_watchers_never_touches_watchdog(monkeypatch, tmp_path: Path) ->
     _seed_watcher_pidfiles(monkeypatch, tmp_path, {"watchdog": 999, "review": 4242})
     monkeypatch.setattr(bridge.os, "kill", lambda pid, sig: None)
     bounced: list[str] = []
-    monkeypatch.setattr(
-        bridge.subprocess, "run", lambda cmd, **kw: bounced.append(cmd[3]) or None
-    )
+    monkeypatch.setattr(bridge.subprocess, "run", lambda cmd, **kw: bounced.append(cmd[3]) or None)
 
     bridge._restart_watchers()
 
@@ -141,9 +139,7 @@ def test_restart_watchers_skips_dead_wrapper(monkeypatch, tmp_path: Path) -> Non
     assert calls == []
 
 
-def test_self_update_first_run_records_baseline_without_pull(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_self_update_first_run_records_baseline_without_pull(monkeypatch, tmp_path: Path) -> None:
     sha_file = tmp_path / "last_sha"
     monkeypatch.setattr(bridge, "_LAST_SHA_FILE", sha_file)
     calls: list[list[str]] = []
@@ -222,4 +218,99 @@ def test_workers_yaml_pseudo_operator_section_is_valid() -> None:
     assert cfg.delay.kind == "schedule_state"
     assert cfg.delay.state_delays["HEALTHY"] == 3600
     assert cfg.hooks.pre_iteration and cfg.hooks.seed_cooldowns and cfg.hooks.on_cooldown
+    assert cfg.hooks.session_end
     assert cfg.prompt_path.exists()
+
+
+# ── session-end ───────────────────────────────────────────────────────────────
+
+
+class _FakeProc:
+    def __init__(self, stdout: str = "", returncode: int = 0):
+        self.stdout = stdout
+        self.stderr = ""
+        self.returncode = returncode
+
+
+def _fake_run_factory(monkeypatch, responses: dict[tuple[str, ...], _FakeProc]):
+    """subprocess.run stub keyed on a command-prefix tuple; records all calls."""
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, **kw):
+        calls.append(list(cmd))
+        for prefix, proc in responses.items():
+            if tuple(cmd[: len(prefix)]) == prefix:
+                return proc
+        return _FakeProc()
+
+    monkeypatch.setattr(bridge.subprocess, "run", fake_run)
+    return calls
+
+
+def test_session_end_noop_on_main(monkeypatch) -> None:
+    calls = _fake_run_factory(monkeypatch, {("git", "symbolic-ref"): _FakeProc(stdout="main\n")})
+    assert bridge.session_end('{"iteration": 3}') == 0
+    assert all(c[:2] != ["git", "checkout"] for c in calls)
+
+
+def test_session_end_dirty_tree_untouched(monkeypatch) -> None:
+    calls = _fake_run_factory(
+        monkeypatch,
+        {
+            ("git", "symbolic-ref"): _FakeProc(stdout="oc-watchdog/x\n"),
+            ("git", "status"): _FakeProc(stdout=" M src/foo.py\n"),
+        },
+    )
+    assert bridge.session_end("{}") == 0
+    assert all(c[:2] != ["git", "checkout"] for c in calls)
+
+
+def test_session_end_returns_clean_checkout_and_opens_pr(monkeypatch) -> None:
+    calls = _fake_run_factory(
+        monkeypatch,
+        {
+            ("git", "symbolic-ref"): _FakeProc(stdout="oc-watchdog/x\n"),
+            ("git", "status"): _FakeProc(stdout=""),
+            ("git", "checkout"): _FakeProc(),
+            ("git", "rev-parse", "--verify"): _FakeProc(returncode=0),
+            ("git", "rev-list"): _FakeProc(stdout="1\n"),
+            ("git", "log"): _FakeProc(stdout="fix: something\n"),
+            ("gh", "pr", "list"): _FakeProc(stdout="[]"),
+            ("gh", "pr", "create"): _FakeProc(stdout="https://x/pull/9"),
+        },
+    )
+    assert bridge.session_end('{"iteration": 1}') == 0
+    assert ["git", "checkout", "main"] in calls
+    create = [c for c in calls if c[:3] == ["gh", "pr", "create"]]
+    assert create and "fix: something" in create[0]
+
+
+def test_session_end_unpushed_branch_no_pr(monkeypatch) -> None:
+    calls = _fake_run_factory(
+        monkeypatch,
+        {
+            ("git", "symbolic-ref"): _FakeProc(stdout="oc-watchdog/x\n"),
+            ("git", "status"): _FakeProc(stdout=""),
+            ("git", "checkout"): _FakeProc(),
+            ("git", "rev-parse", "--verify"): _FakeProc(returncode=1),
+        },
+    )
+    assert bridge.session_end("{}") == 0
+    assert ["git", "checkout", "main"] in calls
+    assert all(c[0] != "gh" for c in calls)
+
+
+def test_session_end_existing_pr_not_duplicated(monkeypatch) -> None:
+    calls = _fake_run_factory(
+        monkeypatch,
+        {
+            ("git", "symbolic-ref"): _FakeProc(stdout="oc-watchdog/x\n"),
+            ("git", "status"): _FakeProc(stdout=""),
+            ("git", "checkout"): _FakeProc(),
+            ("git", "rev-parse", "--verify"): _FakeProc(returncode=0),
+            ("git", "rev-list"): _FakeProc(stdout="2\n"),
+            ("gh", "pr", "list"): _FakeProc(stdout='[{"number": 448}]'),
+        },
+    )
+    assert bridge.session_end("{}") == 0
+    assert all(c[:3] != ["gh", "pr", "create"] for c in calls)
