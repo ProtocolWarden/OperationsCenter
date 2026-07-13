@@ -1,3 +1,36 @@
+## 2026-07-13 — feat(budget): claude 25% reserve guard + audit fixes (F1/F2/F16)
+
+Lands the operator's 2026-07-13 directive (leave ~25% of every 5h claude bucket
+free) as a working control, and closes the audit findings that made the first
+cut a silent no-op. #453 had already wired `budget_guard` in workers.yaml +
+bumped the CL pin to v0.4.3, but the `budget-guard` subcommand and the
+`usage_budget` estimator lived only in this (conflicting) PR — so main called a
+command that didn't exist, exited 2, and CL swallowed it (F1). Rebased onto main
+so wiring + implementation land together, with `main()` dispatching `budget-guard`
+(now covered by a test that runs the subcommand end-to-end).
+
+Estimator hardening from the audit:
+- **F2 (fail-open under load):** replaced the boundary-chaining `_bucket_start`
+  (which collapsed `used`→~0 under continuous >5h usage — failing open exactly
+  when the fleet is busiest) with a fixed trailing-5h rolling window plus a
+  relief horizon computed from when the oldest still-counted usage ages out.
+  Never collapses; conservative (over- not under-counts). Regression test pins it.
+- **F16 (silent-disable edges):** defensive env parse (a mistyped CAP/RESERVE
+  logs + falls back instead of throwing → guard off), reserve clamped to
+  [0, 0.95], non-positive cap rejected, naive transcript timestamps coerced to
+  UTC (no more TypeError aborting the scan), model match is now substring-based
+  (region-prefixed `us.anthropic.claude-opus-*` and legacy `claude-3-5-*`
+  resolve) with unknown non-empty ids counted as most-expensive (fail early, not
+  late), and DISABLED accepts any truthy value + is surfaced in the log line.
+- **P-I (fail-loud not fatal):** the loop_bridge hook wraps `budget_status()` so
+  an estimator bug logs at error level and emits a no-cooldown result — visible
+  in the loop log, but degrade-never-halt; the unknown-subcommand path also logs
+  loudly now (full config↔code drift check is CL-side, tracked as audit F4).
+
+Over-budget still looks like a cooldown: the ladder diverts to codex and board
+workers see a synthetic `budget_reserve` usage-store cooldown. 32 tests pass.
+Full audit + remaining findings in the 2026-07-13 system-audit spec.
+
 ## 2026-07-07 — fix(reviewer): backend-unavailable parks auto-expire
 
 PR #443 sat parked "Needs human attention (reviewer_backend_unavailable)"
