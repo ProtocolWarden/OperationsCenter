@@ -6,7 +6,7 @@ The loop is the operator for all conditions handled here.  Do not add "operator 
 required" notes for patterns this tool covers.  When a new stuck pattern emerges, add a
 rule here rather than logging it and waiting.
 
-Applies ten rules on every run:
+Applies twelve rules on every run:
 
   Rule 1 — DEAD_REMEDIATION_CANCEL
     Tasks with label "dead-remediation" OR (executor-signal: sigkill + retry-count ≥ 3)
@@ -15,6 +15,12 @@ Applies ten rules on every run:
   Rule 2 — INVESTIGATE_DEPRIORITISE
     Tasks with label "task-kind: investigate" in Ready for AI → move to Backlog.
     (No board_worker consumer exists for this task-kind; they starve R4AI.)
+
+  Rule 2.5 — OPEN_PR_GATE_PARK
+    Goal tasks in Ready for AI whose repo is currently blocked by OPEN_PR_GATE
+    → move to Backlog and add the OPEN_PR_GATE label. These tasks are
+    non-consumable while the repo has open non-spec PRs, so leaving them in
+    Ready for AI creates queue pressure with no executor path.
 
   Rule 3 — IMPROVE_UNBLOCK
     Tasks with label "task-kind: improve" or "task-kind: goal" in Blocked state,
@@ -87,7 +93,14 @@ Applies ten rules on every run:
     Skipped when memory is below the executor dispatch threshold or when any active retry
     blocker is present (budget_exhausted, session_limit, global_rate_exceeded, etc.).
 
-  Rule 10 — ORPHANED_IN_FLIGHT_CLEAR
+  Rule 10 — OPEN_PR_GATE_REQUEUE
+    Goal tasks in Backlog carrying OPEN_PR_GATE whose repo no longer has blocking
+    non-spec PRs → move back to Ready for AI and remove OPEN_PR_GATE. This
+    closes the park/unpark loop for Rule 2.5.
+    Skipped when memory is below the executor dispatch threshold or when the
+    worker backend cooldown gate is active.
+
+  Rule 11 — ORPHANED_IN_FLIGHT_CLEAR
     Usage-store ``execution_started`` events whose matching ``execution_finished`` was never
     written, where the task no longer exists in Plane (404) or is in a terminal state
     (Done/Cancelled) → write ``execution_finished`` to close the orphaned in-flight slot.
@@ -123,6 +136,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 
+from operations_center.adapters.github_pr import GitHubPRClient
 from operations_center.adapters.plane import PlaneClient
 from operations_center.config import load_settings
 from operations_center.execution.usage_store import UsageStore
@@ -254,6 +268,7 @@ _SOURCE_BOARD_WORKER_LABEL = "source: board_worker"
 _HANDOFF_IMPROVEMENT_LABEL = "handoff-reason: improvement_applied"
 _PR_URL_PREFIX = "pr-url:"
 _BLOCKED_REASON_POLICY_LABEL = "blocked-reason: policy"
+_OPEN_PR_GATE_LABEL = "OPEN_PR_GATE"
 
 
 def _labels(issue: dict[str, Any]) -> list[str]:
@@ -313,12 +328,94 @@ def _code_fail_count(labels: list[str]) -> int:
         return 0
 
 
+def _parse_timestamp(raw: object) -> datetime | None:
+    if not isinstance(raw, str) or not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed
+
+
 def _blocker_task_id(labels: list[str]) -> str | None:
     return _label_value(labels, _BLOCKED_BY_PREFIX)
 
 
 def _build_id_state_map(issues: list[dict[str, Any]]) -> dict[str, str]:
     return {str(issue["id"]): _state_name(issue) for issue in issues}
+
+
+def _open_pr_gate_blocked_repos(
+    issues: list[dict[str, Any]],
+    settings: Any,
+    *,
+    now: datetime,
+    gh_client: GitHubPRClient | None = None,
+) -> set[str]:
+    """Repos whose goal lane is currently blocked by non-stale open PRs.
+
+    Mirrors the OPEN_PR_GATE semantics used by board_worker claim logic:
+    spec-author branches never block, PRs with mergeable=UNKNOWN are treated as
+    in-flight CI and do not block yet, and stale PRs older than
+    open_pr_gate_stale_hours are escaped so the queue degrades but does not
+    deadlock forever.
+    """
+    git_token_fn = getattr(settings, "git_token", None)
+    if callable(git_token_fn):
+        token = git_token_fn()
+    else:
+        token_env = getattr(getattr(settings, "git", None), "token_env", "")
+        token = os.environ.get(token_env, "") if token_env else ""
+    if not token:
+        return set()
+
+    repo_keys: set[str] = set()
+    for issue in issues:
+        labels = _labels(issue)
+        if not _has_label(labels, _GOAL_LABEL):
+            continue
+        repo_key = _label_value(labels, "repo:")
+        if repo_key:
+            repo_keys.add(repo_key)
+    if not repo_keys:
+        return set()
+
+    client = gh_client or GitHubPRClient(token)
+    try:
+        stale_hours = float(getattr(settings, "open_pr_gate_stale_hours", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        stale_hours = 0.0
+    stale_cutoff = now - timedelta(hours=stale_hours) if stale_hours > 0 else None
+
+    blocked: set[str] = set()
+    for repo_key in sorted(repo_keys):
+        repo_cfg = settings.repos.get(repo_key)
+        clone_url = getattr(repo_cfg, "clone_url", None)
+        if not clone_url:
+            continue
+        try:
+            owner, repo_name = GitHubPRClient.owner_repo_from_clone_url(clone_url)
+            open_prs = client.list_open_prs(owner, repo_name)
+        except Exception:
+            continue
+        if not isinstance(open_prs, list):
+            continue
+
+        for pr in open_prs:
+            ref = str((pr.get("head") or {}).get("ref", "") or "")
+            if ref.startswith("spec-author/"):
+                continue
+            if pr.get("mergeable") == "UNKNOWN":
+                continue
+            updated_at = _parse_timestamp(pr.get("updated_at"))
+            is_stale = (
+                stale_cutoff is not None and updated_at is not None and updated_at < stale_cutoff
+            )
+            if not is_stale:
+                blocked.add(repo_key)
+                break
+    return blocked
 
 
 def _apply_rules(
@@ -331,9 +428,11 @@ def _apply_rules(
     mem_available_gb: float,
     cooldown_skip_reason: str | None = None,
     code_failure_retry_cap: int = 0,
+    open_pr_gate_blocked_repos: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     id_state = _build_id_state_map(issues)
     actions = []
+    open_pr_gate_blocked_repos = open_pr_gate_blocked_repos or set()
 
     for issue in issues:
         task_id = str(issue["id"])
@@ -341,6 +440,7 @@ def _apply_rules(
         state = _state_name(issue)
         labels = _labels(issue)
         state_lower = state.lower()
+        repo_key = _label_value(labels, "repo:")
 
         # Rule 1 — dead-remediation cancel
         if not _is_terminal(state):
@@ -390,6 +490,29 @@ def _apply_rules(
                     "from_state": state,
                     "to_state": "Backlog",
                     "reason": "task-kind:investigate has no board_worker consumer; starving R4AI slot",
+                }
+            )
+            continue
+
+        # Rule 2.5 — park goal tasks that are currently non-consumable behind OPEN_PR_GATE.
+        if (
+            state_lower == "ready for ai"
+            and _has_label(labels, _GOAL_LABEL)
+            and repo_key in open_pr_gate_blocked_repos
+        ):
+            actions.append(
+                {
+                    "task_id": task_id,
+                    "title": title,
+                    "rule": "OPEN_PR_GATE_PARK",
+                    "from_state": state,
+                    "to_state": "Backlog",
+                    "reason": (
+                        f"repo {repo_key} has active non-spec open PRs; task is "
+                        "non-consumable until the OPEN_PR_GATE clears"
+                    ),
+                    "labels_to_add": [_OPEN_PR_GATE_LABEL],
+                    "_issue_labels": labels,
                 }
             )
             continue
@@ -578,6 +701,45 @@ def _apply_rules(
                     )
 
         # Rule 7 — goal tasks whose parent task is terminal (patterns A and B).
+        if (
+            state_lower == "backlog"
+            and _has_label(labels, _GOAL_LABEL)
+            and _has_label(labels, _OPEN_PR_GATE_LABEL)
+            and repo_key not in open_pr_gate_blocked_repos
+            and not _has_label(labels, _THIN_GOAL_LABEL)
+            and not _has_label_prefix(labels, _SIGKILL_SIGNAL_PREFIX)
+            and mem_available_gb >= _MEM_R4AI_THRESHOLD_GB
+        ):
+            if cooldown_skip_reason:
+                actions.append(
+                    {
+                        "task_id": task_id,
+                        "title": title,
+                        "rule": "OPEN_PR_GATE_REQUEUE",
+                        "from_state": state,
+                        "to_state": "Ready for AI",
+                        "reason": f"SKIPPED — {cooldown_skip_reason}",
+                        "skipped": True,
+                    }
+                )
+            else:
+                actions.append(
+                    {
+                        "task_id": task_id,
+                        "title": title,
+                        "rule": "OPEN_PR_GATE_REQUEUE",
+                        "from_state": state,
+                        "to_state": "Ready for AI",
+                        "reason": (
+                            f"repo {repo_key} no longer has blocking non-spec open PRs; "
+                            "restore task to Ready for AI"
+                        ),
+                        "labels_to_remove": [_OPEN_PR_GATE_LABEL],
+                        "_issue_labels": labels,
+                    }
+                )
+                continue
+
         _is_improve_suggestion = _has_label(labels, _SOURCE_AUTONOMY_LABEL) and _has_label(
             labels, _SOURCE_IMPROVE_SUGGESTION_LABEL
         )
@@ -794,11 +956,12 @@ def main() -> int:
         clean_blocked_min_minutes=args.clean_blocked_min_minutes,
         mem_available_gb=mem_gb,
         cooldown_skip_reason=cooldown_skip_reason,
+        open_pr_gate_blocked_repos=_open_pr_gate_blocked_repos(issues, settings, now=now),
     )
 
     results = []
     for action in actions:
-        entry = {k: v for k, v in action.items()}
+        entry = {k: v for k, v in action.items() if not k.startswith("_")}
         if action.get("skipped"):
             results.append(entry)
             continue
@@ -807,6 +970,17 @@ def main() -> int:
         else:
             try:
                 client.transition_issue(action["task_id"], action["to_state"])
+                existing = list(action.get("_issue_labels", []))
+                if existing and (
+                    action.get("labels_to_add") or action.get("labels_to_remove")
+                ):
+                    removed = {lab.lower() for lab in action.get("labels_to_remove", [])}
+                    updated = [lab for lab in existing if lab.lower() not in removed]
+                    for new_label in action.get("labels_to_add", []):
+                        if not any(lab.lower() == new_label.lower() for lab in updated):
+                            updated.append(new_label)
+                    if updated != existing:
+                        client.update_issue_labels(action["task_id"], updated)
                 client.comment_issue(
                     action["task_id"],
                     f"Board unblock (autonomous): {action['rule']} — "

@@ -18,6 +18,7 @@ from unittest import mock
 
 from operations_center.entrypoints.maintenance.board_unblock_task import (
     BoardUnblockTask,
+    apply_board_actions,
     reconcile_merged_pr_tasks,
 )
 from operations_center.maintenance.contracts import MaintenanceContext, MaintenanceTask
@@ -113,6 +114,29 @@ class TestReconcileMergedPrTasks:
 
 
 class TestBoardUnblockTask:
+    def test_apply_board_actions_updates_labels_for_gate_park(self):
+        plane = mock.Mock()
+        action = {
+            "task_id": "t1",
+            "title": "Task t1",
+            "rule": "OPEN_PR_GATE_PARK",
+            "from_state": "Ready for AI",
+            "to_state": "Backlog",
+            "reason": "repo OperationsCenter has active non-spec open PRs",
+            "labels_to_add": ["OPEN_PR_GATE"],
+            "_issue_labels": ["task-kind: goal", "repo: OperationsCenter"],
+        }
+
+        results = apply_board_actions(plane, [action], apply=True)
+
+        assert results[0]["action"] == "applied"
+        plane.transition_issue.assert_called_once_with("t1", "Backlog")
+        plane.update_issue_labels.assert_called_once_with(
+            "t1",
+            ["task-kind: goal", "repo: OperationsCenter", "OPEN_PR_GATE"],
+        )
+        plane.comment_issue.assert_called_once()
+
     def test_satisfies_maintenance_task_protocol(self):
         task = BoardUnblockTask(_settings())
         assert isinstance(task, MaintenanceTask)
