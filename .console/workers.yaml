@@ -43,6 +43,10 @@ pseudo_operator:
     pre_iteration: [".venv/bin/python", "-m", "operations_center.entrypoints.loop_bridge.main", "self-update"]
     seed_cooldowns: [".venv/bin/python", "-m", "operations_center.entrypoints.loop_bridge.main", "seed-cooldowns"]
     on_cooldown: [".venv/bin/python", "-m", "operations_center.entrypoints.loop_bridge.main", "on-cooldown"]
+    # Post-session invariant enforcement: return a stranded clean checkout to
+    # main and open a PR for the session's pushed-but-PR-less branch. The
+    # prompt's STEP 10 asks sessions to do this; the hook guarantees it.
+    session_end: [".venv/bin/python", "-m", "operations_center.entrypoints.loop_bridge.main", "session-end"]
 
 workers:
   - id: "investigation-worker"

@@ -15,6 +15,10 @@ invoked by the engine as hook commands configured in ``.console/workers.yaml``:
   self-update      — detect code merged since the last check, ``git pull``
                      and bounce the watcher children so fixes take effect
                      without manual intervention (hook: ``pre_iteration``).
+  session-end JSON — enforce post-session checkout invariants: return a
+                     stranded clean checkout to main and open a PR for the
+                     session's pushed-but-PR-less branch (hook:
+                     ``session_end``).
 
 All commands are best-effort by contract (the engine logs and continues on
 hook failure) but exit non-zero on genuine errors so the failure is visible.
@@ -225,11 +229,115 @@ def self_update() -> int:
     return 0
 
 
+def _git(*argv: str, timeout: int = 60) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", *argv],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+
+
+def session_end(payload_json: str) -> int:
+    """Enforce post-session checkout invariants (hook: ``session_end``).
+
+    Sessions are PROMPTED to branch, push, open a PR, and return the shared
+    checkout to clean main (STEP 10), but a session that dies or drifts can
+    leave the checkout stranded on its branch with the work pushed and no PR
+    (observed iter_0001 2026-07-13) — which also breaks the next iteration's
+    ``self-update`` pull. The prompt is guidance; this hook is the guarantee:
+
+      1. Checkout on a non-main branch and CLEAN → record the branch, switch
+         back to main. A DIRTY tree is never touched (in-flight work wins) —
+         log loudly and leave it for the next session.
+      2. If the stranded branch is pushed, ahead of origin/main, and has no
+         open PR → open one on the session's behalf (best-effort; needs gh).
+    """
+    try:
+        payload = json.loads(payload_json)
+    except json.JSONDecodeError:
+        payload = {}
+    iteration = payload.get("iteration")
+
+    branch = _git("symbolic-ref", "--quiet", "--short", "HEAD").stdout.strip()
+    if not branch or branch == "main":
+        return 0
+    if _git("status", "--porcelain").stdout.strip():
+        logger.warning(
+            "loop_bridge: session (iter %s) left checkout DIRTY on %r — not touching it",
+            iteration,
+            branch,
+        )
+        return 0
+    logger.info(
+        "loop_bridge: session (iter %s) left checkout on %r — returning to main", iteration, branch
+    )
+    if _git("checkout", "main").returncode != 0:
+        logger.warning("loop_bridge: checkout main failed — leaving %r in place", branch)
+        return 0
+
+    # Best-effort PR for the stranded branch's pushed work. Scope is ONLY the
+    # branch the session stranded us on — never sweep other local branches.
+    if _git("rev-parse", "--verify", "--quiet", f"origin/{branch}").returncode != 0:
+        logger.warning("loop_bridge: stranded branch %r was never pushed — no PR opened", branch)
+        return 0
+    ahead = _git("rev-list", "--count", f"origin/main..origin/{branch}").stdout.strip()
+    if ahead in ("", "0"):
+        return 0
+    try:
+        listed = subprocess.run(
+            ["gh", "pr", "list", "--head", branch, "--state", "open", "--json", "number"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        if listed.returncode != 0 or json.loads(listed.stdout or "[]"):
+            return 0
+        subject = _git("log", "-1", "--format=%s", f"origin/{branch}").stdout.strip()
+        created = subprocess.run(
+            [
+                "gh",
+                "pr",
+                "create",
+                "--head",
+                branch,
+                "--title",
+                subject or f"loop session branch {branch}",
+                "--body",
+                f"Opened by loop_bridge session-end (iteration {iteration}): the session "
+                f"pushed this branch but exited without opening a PR.",
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        if created.returncode == 0:
+            logger.info("loop_bridge: opened PR for %r: %s", branch, created.stdout.strip())
+        else:
+            logger.warning(
+                "loop_bridge: gh pr create failed for %r: %s",
+                branch,
+                (created.stderr or created.stdout).strip()[:200],
+            )
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
+        logger.warning("loop_bridge: PR check/create for %r failed: %s", branch, exc)
+    return 0
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     args = sys.argv[1:]
     if not args:
-        print("usage: loop_bridge {seed-cooldowns|on-cooldown JSON|self-update}", file=sys.stderr)
+        print(
+            "usage: loop_bridge {seed-cooldowns|on-cooldown JSON|self-update|session-end JSON}",
+            file=sys.stderr,
+        )
         return 2
     cmd = args[0]
     if cmd == "seed-cooldowns":
@@ -241,6 +349,8 @@ def main() -> int:
         return on_cooldown(args[1])
     if cmd == "self-update":
         return self_update()
+    if cmd == "session-end":
+        return session_end(args[1] if len(args) > 1 else "{}")
     print(f"unknown loop_bridge command {cmd!r}", file=sys.stderr)
     return 2
 
