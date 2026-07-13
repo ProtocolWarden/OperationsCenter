@@ -32,13 +32,17 @@ import logging
 import os
 import subprocess
 import sys
+import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+from operations_center.entrypoints.heartbeat import touch_liveness, write_heartbeat
+
 _TRIGGER_STATE_PATH = Path("state/pipeline_trigger_state.json")
 _DEFAULT_MIN_INTERVAL = 300  # 5 minutes between triggered runs
 _DEFAULT_POLL_INTERVAL = 30  # check every 30 seconds
+_HEARTBEAT_INTERVAL_SECONDS = 30
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +113,26 @@ def _has_changed(old: dict[str, float], new: dict[str, float]) -> list[str]:
     return changed
 
 
-def _run_pipeline(config_path: str, *, execute: bool) -> bool:
+def _write_heartbeat(
+    status_dir: Path | None,
+    *,
+    success: bool,
+    status: str,
+    error: str | None = None,
+) -> None:
+    if status_dir is None:
+        return
+    write_heartbeat(status_dir, "propose", status=status, success=success, error=error)
+
+
+def _heartbeat_loop(status_dir: Path | None, stop_event: threading.Event) -> None:
+    if status_dir is None:
+        return
+    while not stop_event.wait(_HEARTBEAT_INTERVAL_SECONDS):
+        touch_liveness(status_dir, "propose", status="executing")
+
+
+def _run_pipeline(config_path: str, *, execute: bool, status_dir: Path | None = None) -> bool:
     """Run autonomy-cycle. Returns True on success."""
     cmd = [
         sys.executable,
@@ -131,9 +154,23 @@ def _run_pipeline(config_path: str, *, execute: bool) -> bool:
             ensure_ascii=False,
         )
     )
+    stop_event = threading.Event()
+    heartbeat_thread: threading.Thread | None = None
     try:
+        touch_liveness(status_dir, "propose", status="executing")
+        if status_dir is not None:
+            heartbeat_thread = threading.Thread(
+                target=_heartbeat_loop, args=(status_dir, stop_event), daemon=True
+            )
+            heartbeat_thread.start()
         result = subprocess.run(cmd, timeout=600, capture_output=False)
         success = result.returncode == 0
+        _write_heartbeat(
+            status_dir,
+            success=success,
+            status="idle" if success else "error",
+            error=None if success else f"autonomy_cycle_exit_{result.returncode}",
+        )
         logger.info(
             json.dumps(
                 {
@@ -146,13 +183,24 @@ def _run_pipeline(config_path: str, *, execute: bool) -> bool:
         )
         return success
     except subprocess.TimeoutExpired:
+        _write_heartbeat(
+            status_dir,
+            success=False,
+            status="error",
+            error="autonomy_cycle_timeout",
+        )
         logger.warning(json.dumps({"event": "pipeline_trigger_timeout"}, ensure_ascii=False))
         return False
     except Exception as exc:
+        _write_heartbeat(status_dir, success=False, status="error", error=str(exc))
         logger.warning(
             json.dumps({"event": "pipeline_trigger_error", "error": str(exc)}, ensure_ascii=False)
         )
         return False
+    finally:
+        stop_event.set()
+        if heartbeat_thread is not None:
+            heartbeat_thread.join(timeout=1)
 
 
 def run_trigger_loop(
@@ -161,6 +209,7 @@ def run_trigger_loop(
     execute: bool = False,
     min_interval_seconds: int = _DEFAULT_MIN_INTERVAL,
     poll_interval_seconds: int = _DEFAULT_POLL_INTERVAL,
+    status_dir: Path | None = None,
 ) -> None:
     """Watch trigger sources and fire the pipeline on change.
 
@@ -182,6 +231,7 @@ def run_trigger_loop(
             ensure_ascii=False,
         )
     )
+    _write_heartbeat(status_dir, success=True, status="idle")
 
     while True:
         time.sleep(poll_interval_seconds)
@@ -190,6 +240,7 @@ def run_trigger_loop(
         changed = _has_changed(snapshot, new_snapshot)
 
         if not changed:
+            _write_heartbeat(status_dir, success=True, status="idle")
             continue
 
         now = time.time()
@@ -207,6 +258,7 @@ def run_trigger_loop(
                 )
             )
             snapshot = new_snapshot
+            _write_heartbeat(status_dir, success=True, status="idle")
             continue
 
         logger.info(
@@ -220,7 +272,7 @@ def run_trigger_loop(
             )
         )
 
-        _run_pipeline(config_path, execute=execute)
+        _run_pipeline(config_path, execute=execute, status_dir=status_dir)
         last_run_at = time.time()
         state["last_run_at"] = last_run_at
         state["last_triggered_by"] = changed
@@ -257,6 +309,12 @@ def main() -> None:
         dest="poll_interval",
         help=f"How often to check for trigger file changes in seconds (default: {_DEFAULT_POLL_INTERVAL}).",
     )
+    parser.add_argument(
+        "--status-dir",
+        type=Path,
+        default=None,
+        help="Directory for heartbeat_propose.json",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -268,6 +326,7 @@ def main() -> None:
             execute=args.execute,
             min_interval_seconds=args.min_interval,
             poll_interval_seconds=args.poll_interval,
+            status_dir=args.status_dir,
         )
     except KeyboardInterrupt:
         logger.info(json.dumps({"event": "pipeline_trigger_stopped"}, ensure_ascii=False))
