@@ -177,6 +177,51 @@ def test_rule8_thin_goal_label_prevents_retry():
     assert len(retry_actions) == 0
 
 
+def test_open_pr_gate_ready_goal_is_parked_to_backlog():
+    issue = _issue(
+        "t_gate_ready",
+        state="Ready for AI",
+        labels=["task-kind: goal", "repo: OperationsCenter"],
+    )
+    actions = _apply_rules(
+        [issue],
+        **_RULES_KWARGS,
+        open_pr_gate_blocked_repos={"OperationsCenter"},
+    )
+    parked = [a for a in actions if a["rule"] == "OPEN_PR_GATE_PARK"]
+    assert len(parked) == 1
+    assert parked[0]["to_state"] == "Backlog"
+    assert parked[0]["labels_to_add"] == ["OPEN_PR_GATE"]
+
+
+def test_open_pr_gate_backlog_goal_requeues_when_gate_clears():
+    issue = _issue(
+        "t_gate_backlog",
+        state="Backlog",
+        labels=["task-kind: goal", "repo: OperationsCenter", "OPEN_PR_GATE"],
+    )
+    actions = _apply_rules([issue], **_RULES_KWARGS, open_pr_gate_blocked_repos=set())
+    requeued = [a for a in actions if a["rule"] == "OPEN_PR_GATE_REQUEUE"]
+    assert len(requeued) == 1
+    assert requeued[0]["to_state"] == "Ready for AI"
+    assert requeued[0]["labels_to_remove"] == ["OPEN_PR_GATE"]
+
+
+def test_open_pr_gate_backlog_goal_stays_parked_while_repo_still_blocked():
+    issue = _issue(
+        "t_gate_blocked",
+        state="Backlog",
+        labels=["task-kind: goal", "repo: OperationsCenter", "OPEN_PR_GATE"],
+    )
+    actions = _apply_rules(
+        [issue],
+        **_RULES_KWARGS,
+        open_pr_gate_blocked_repos={"OperationsCenter"},
+    )
+    requeued = [a for a in actions if a["rule"] == "OPEN_PR_GATE_REQUEUE"]
+    assert requeued == []
+
+
 # --- Worker-backend cooldown gate (Rules 4, 6, 7, 9 defer R4AI promotion) ---
 
 _COOLDOWN_REASON = (
@@ -243,6 +288,23 @@ def test_rule8_park_still_fires_during_cooldown():
     assert len(retry) == 1
     assert retry[0]["to_state"] == "Backlog"
     assert not retry[0].get("skipped")
+
+
+def test_open_pr_gate_requeue_deferred_during_cooldown():
+    issue = _issue(
+        "t_cd_gate",
+        state="Backlog",
+        labels=["task-kind: goal", "repo: OperationsCenter", "OPEN_PR_GATE"],
+    )
+    actions = _apply_rules(
+        [issue],
+        **_RULES_KWARGS,
+        cooldown_skip_reason=_COOLDOWN_REASON,
+        open_pr_gate_blocked_repos=set(),
+    )
+    requeue = [a for a in actions if a["rule"] == "OPEN_PR_GATE_REQUEUE"]
+    assert len(requeue) == 1
+    assert requeue[0].get("skipped") is True
 
 
 def test_no_cooldown_reason_promotes_normally():
