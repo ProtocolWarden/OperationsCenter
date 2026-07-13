@@ -5,7 +5,10 @@ _Replace contents when the objective changes. History belongs in log.md._
 
 ## Objective
 
-Expose the sample `gaps` and `edge_cases` lists in the extraction-health CLI so an operator can inspect them directly. Definition of done: the CLI surfaces both lists; tests cover the new output.
+**COMPLETE** (shipped in PR #374, verified again 2026-07-07 and 2026-07-13 watchdog cycles).
+Expose the sample `gaps` and `edge_cases` lists in the extraction-health CLI so an operator can inspect them directly. Definition of done: the CLI surfaces both lists; tests cover the new output — both met (111/111 tests passing in tests/unit/observer/test_extraction_health_queries.py + test_cli_extraction_health.py).
+
+No active operator directive. Proceeding to standard watchdog steps.
 
 ## Overall Plan
 
