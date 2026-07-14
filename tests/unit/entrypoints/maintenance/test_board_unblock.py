@@ -307,6 +307,53 @@ def test_open_pr_gate_requeue_deferred_during_cooldown():
     assert requeue[0].get("skipped") is True
 
 
+def test_rule7_goal_backlog_promote_skips_open_pr_gate_label():
+    parent = _issue("p_gate", state="Done", labels=["task-kind: improve"])
+    child = _issue(
+        "t_gate",
+        state="Backlog",
+        labels=[
+            "task-kind: goal",
+            "source: autonomy",
+            "source: improve-suggestion",
+            "original-task-id: p_gate",
+            "repo: OperationsCenter",
+            "OPEN_PR_GATE",
+        ],
+    )
+    actions = _apply_rules(
+        [parent, child],
+        **_RULES_KWARGS,
+        open_pr_gate_blocked_repos=set(),
+    )
+    promote = [a for a in actions if a["rule"] == "GOAL_BACKLOG_PROMOTE"]
+    assert promote == []
+    requeue = [a for a in actions if a["rule"] == "OPEN_PR_GATE_REQUEUE"]
+    assert len(requeue) == 1
+
+
+def test_rule7_goal_backlog_promote_skips_open_pr_gate_blocked_repo():
+    parent = _issue("p_gate_repo", state="Done", labels=["task-kind: improve"])
+    child = _issue(
+        "t_gate_repo",
+        state="Backlog",
+        labels=[
+            "task-kind: goal",
+            "source: autonomy",
+            "source: improve-suggestion",
+            "original-task-id: p_gate_repo",
+            "repo: OperationsCenter",
+        ],
+    )
+    actions = _apply_rules(
+        [parent, child],
+        **_RULES_KWARGS,
+        open_pr_gate_blocked_repos={"OperationsCenter"},
+    )
+    promote = [a for a in actions if a["rule"] == "GOAL_BACKLOG_PROMOTE"]
+    assert promote == []
+
+
 def test_no_cooldown_reason_promotes_normally():
     """With no cooldown reason, promotion rules apply as before (regression guard)."""
     issue = _issue("t_nocd", state="Backlog", labels=["task-kind: spec-author"])

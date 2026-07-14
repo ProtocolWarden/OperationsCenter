@@ -653,6 +653,38 @@ def test_rule7_no_matching_source_pattern():
     assert not _by_rule(actions, "GOAL_BACKLOG_PROMOTE")
 
 
+def test_rule7_open_pr_gate_label_skips_generic_promote():
+    actions = _run(
+        _goal_backlog(
+            [
+                "task-kind: goal",
+                "source: autonomy",
+                "source: improve-suggestion",
+                "repo: OperationsCenter",
+                "OPEN_PR_GATE",
+            ]
+        ),
+        open_pr_gate_blocked_repos=set(),
+    )
+    assert not _by_rule(actions, "GOAL_BACKLOG_PROMOTE")
+    assert _by_rule(actions, "OPEN_PR_GATE_REQUEUE")
+
+
+def test_rule7_open_pr_gate_blocked_repo_skips_generic_promote():
+    actions = _run(
+        _goal_backlog(
+            [
+                "task-kind: goal",
+                "source: autonomy",
+                "source: improve-suggestion",
+                "repo: OperationsCenter",
+            ]
+        ),
+        open_pr_gate_blocked_repos={"OperationsCenter"},
+    )
+    assert not _by_rule(actions, "GOAL_BACKLOG_PROMOTE")
+
+
 # ---------------------------------------------------------------------------
 # Rule 8 — CLEAN_BLOCKED_RETRY
 # ---------------------------------------------------------------------------
