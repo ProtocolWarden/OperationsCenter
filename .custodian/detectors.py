@@ -138,6 +138,31 @@ def _py_files(root: Path) -> list[Path]:
     return [p for p in root.rglob("*.py") if "__pycache__" not in p.parts]
 
 
+def _iter_ast_files(ctx: AuditContext, *, include_tests: bool = False) -> list[tuple[Path, ast.AST]]:
+    items: list[tuple[Path, ast.AST]] = []
+    graph = getattr(ctx, "graph", None)
+    ast_forest = None if graph is None else graph.ast_forest
+    tests_forest = None if graph is None else graph.tests_forest
+    if ast_forest is not None:
+        items.extend((path, tree) for path, tree, _src in ast_forest.items())
+    else:
+        for path in _py_files(ctx.src_root):
+            try:
+                items.append((path, ast.parse(path.read_text(encoding="utf-8"))))
+            except (OSError, SyntaxError, UnicodeDecodeError):
+                continue
+    if include_tests:
+        if tests_forest is not None:
+            items.extend((path, tree) for path, tree, _src in tests_forest.items())
+        elif ctx.tests_root.exists():
+            for path in _py_files(ctx.tests_root):
+                try:
+                    items.append((path, ast.parse(path.read_text(encoding="utf-8"))))
+                except (OSError, SyntaxError, UnicodeDecodeError):
+                    continue
+    return items
+
+
 # ── OC1: .console/ directory presence validator ───────────────────────────────
 
 
@@ -354,11 +379,7 @@ def _detect_oc8_phantom_symbols(ctx: AuditContext) -> DetectorResult:
     field_symbols: set[str] = set()
     event_symbols: set[str] = set()
 
-    def _index_symbol_file(path: Path) -> None:
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-        except (OSError, SyntaxError, UnicodeDecodeError):
-            return
+    def _index_symbol_tree(tree: ast.AST) -> None:
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 defined_symbols.add(node.name)
@@ -374,11 +395,8 @@ def _detect_oc8_phantom_symbols(ctx: AuditContext) -> DetectorResult:
                     ):
                         event_symbols.add(value.value)
 
-    for f in _py_files(ctx.src_root):
-        _index_symbol_file(f)
-    if ctx.tests_root.exists():
-        for f in _py_files(ctx.tests_root):
-            _index_symbol_file(f)
+    for _path, tree in _iter_ast_files(ctx, include_tests=True):
+        _index_symbol_tree(tree)
 
     audit_cfg = ctx.config.get("audit", {}) or {}
     common_words = set(audit_cfg.get("common_words", []) or [])
@@ -622,11 +640,7 @@ def _detect_oc12_model_field_mismatch(ctx: AuditContext) -> DetectorResult:
     defining_file: dict[str, Path] = {}  # class name → defining file path
     duplicate_names: set[str] = set()
 
-    for py in src.rglob("*.py"):
-        try:
-            tree = ast.parse(py.read_text(encoding="utf-8"))
-        except (OSError, SyntaxError):
-            continue
+    for py, tree in _iter_ast_files(ctx):
         for node in ast.walk(tree):
             if not isinstance(node, ast.ClassDef):
                 continue
@@ -688,20 +702,12 @@ def _detect_oc12_model_field_mismatch(ctx: AuditContext) -> DetectorResult:
     # component matches the class's defining file stem, OR the call site is in the
     # defining file itself with no shadowing import.
     samples: list[str] = []
-    roots = [src]
-    if ctx.tests_root.is_dir():
-        roots.append(ctx.tests_root)
-    for root in roots:
-        for py in root.rglob("*.py"):
+    for py, tree in _iter_ast_files(ctx, include_tests=True):
             try:
                 text = py.read_text(encoding="utf-8")
             except OSError:
                 continue
             if not any(marker in text for marker in candidate_calls):
-                continue
-            try:
-                tree = ast.parse(text)
-            except SyntaxError:
                 continue
             rel = py.relative_to(ctx.repo_root)
             # Lines inside a `with pytest.raises(...)` / `with raises(...)` block are
