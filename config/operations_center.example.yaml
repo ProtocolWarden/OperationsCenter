@@ -212,6 +212,34 @@ repos:
 #   max_self_review_loops: 2
 #   # HTML marker appended to every bot-posted comment — prevents re-processing own comments.
 #   bot_comment_marker: "<!-- operations-center:bot -->"
+#   # C1 — cross-family reviewer council for guardrail-surface PRs (COUNCIL_VERDICT.md).
+#   # A PR whose diff touches any of council.guardrail_paths is adjudicated by a
+#   # K=3 cross-family panel (claude/sonnet, claude/opus, codex) instead of the
+#   # single self-review; unanimous LGTM merges, any CONCERN feeds the existing
+#   # fix ladder, and an unmet quorum parks (fail-closed) rather than merging
+#   # under-reviewed. council.guardrail_paths defaults EMPTY ⇒ feature OFF — the
+#   # rollout PR that introduces the council must not deadlock on the gate it
+#   # introduces. Populating this list is a DELIBERATE FOLLOW-UP PR, not part of
+#   # this one; the commented set below is the COUNCIL_VERDICT.md §G1 candidate
+#   # list, left inactive here on purpose.
+#   council:
+#     guardrail_paths: []
+#       # - .console/workers.yaml
+#       # - .console/guidelines.md
+#       # - tools/loop/oc_session_prompt.txt
+#       # - .hooks/**
+#       # - scripts/operations-center.sh
+#       # - eval/**
+#       # - src/operations_center/entrypoints/pr_review_watcher/**  # council guards its own code
+#       # - src/operations_center/entrypoints/loop_bridge/**
+#       # - config/operations_center.local.yaml                     # untracked, but pin anyway
+#       # - docs/design/COUNCIL_VERDICT.md                          # this spec
+#     # A park that outlasts this many hours is surfaced to the operator with a
+#     # distinct reason (council_unavailable_capped) instead of re-parking forever.
+#     max_council_park_hours: 24
+#     # Minimum runnable panel seats required to proceed. 3 = strict unanimity of
+#     # all families; 2 allows a degraded quorum (unanimity among the two available).
+#     min_council_members: 3
 
 # ---------------------------------------------------------------------------
 # Scheduled tasks — periodic Plane work-item seeders

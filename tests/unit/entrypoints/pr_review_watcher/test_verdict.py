@@ -10,11 +10,15 @@ malformed / unknown inputs fail safe to CONCERNS, never an auto-LGTM.
 from __future__ import annotations
 
 from operations_center.entrypoints.pr_review_watcher.verdict import (
-    failing_summary,
+    _COUNCIL_PANEL,
     CONCERNS,
     LGTM,
     REVIEW_CHECKS,
+    aggregate_council,
     compute_verdict,
+    council_lens_fragment,
+    failing_summary,
+    last_json_object,
     sensitive_paths_in_diff,
     verdict_schema_prompt,
 )
@@ -156,3 +160,97 @@ class TestSensitivePathsInDiff:
         # A malformed file list must never crash the merge gate.
         assert sensitive_paths_in_diff(None, ["*.env"]) == []
         assert sensitive_paths_in_diff(["keep", 5, None], ["*"]) == ["keep"]
+
+
+# ── C1 council mode (COUNCIL_VERDICT.md G1/C1) ────────────────────────────────
+
+
+def _member(backend: str, model: str, lens: str, result: str, failing=None, summary="") -> dict:
+    return {
+        "backend": backend,
+        "model": model,
+        "lens": lens,
+        "result": result,
+        "failing_checks": failing or [],
+        "summary": summary,
+    }
+
+
+class TestAggregateCouncil:
+    def test_unanimous_lgtm(self):
+        members = [_member(b, m, lens, LGTM) for (b, m, lens) in _COUNCIL_PANEL]
+        out = aggregate_council(members)
+        assert out["result"] == LGTM
+        assert out["failing_checks"] == []
+        assert len(out["per_member"]) == 3
+        assert "unanimous" in out["summary"].lower()
+
+    def test_any_concern_forces_concerns_and_unions_failing_checks(self):
+        members = [
+            _member("claude_code", "sonnet", "correctness", LGTM),
+            _member(
+                "claude_code",
+                "opus",
+                "security-capability",
+                CONCERNS,
+                failing=["code_quality"],
+            ),
+            _member(
+                "codex_cli",
+                "codex",
+                "convergence-operational",
+                CONCERNS,
+                failing=["code_quality", "no_tooling_artifacts"],
+            ),
+        ]
+        out = aggregate_council(members)
+        assert out["result"] == CONCERNS
+        assert set(out["failing_checks"]) == {"code_quality", "no_tooling_artifacts"}
+        # Attributed — each dissenting member's label appears in the summary.
+        assert "claude_code/opus" in out["summary"]
+        assert "codex_cli/codex" in out["summary"]
+
+    def test_empty_panel_is_concerns_fail_safe(self):
+        out = aggregate_council([])
+        assert out["result"] == CONCERNS
+        assert out["per_member"] == []
+
+    def test_malformed_member_result_defaults_to_concerns(self):
+        # A member missing/garbling its "result" must never read as LGTM.
+        out = aggregate_council([{"backend": "claude_code", "model": "sonnet", "lens": "x"}])
+        assert out["result"] == CONCERNS
+
+    def test_result_is_case_normalized(self):
+        members = [_member(b, m, lens, "lgtm") for (b, m, lens) in _COUNCIL_PANEL]
+        assert aggregate_council(members)["result"] == LGTM
+
+
+class TestCouncilLensFragment:
+    def test_known_lenses_return_nonempty_distinct_fragments(self):
+        fragments = {lens: council_lens_fragment(lens) for (_b, _m, lens) in _COUNCIL_PANEL}
+        assert all(fragments.values())
+        assert len(set(fragments.values())) == len(fragments)  # each lens is distinct
+
+    def test_unknown_lens_returns_empty_string(self):
+        assert council_lens_fragment("not-a-real-lens") == ""
+
+
+class TestLastJsonObject:
+    def test_parses_trailing_json_object_from_stdout(self):
+        text = 'Here is my review:\n{"checks": [], "summary": "ok"}\n'
+        assert last_json_object(text) == {"checks": [], "summary": "ok"}
+
+    def test_returns_last_object_when_multiple_present(self):
+        text = '{"a": 1}\nsome commentary\n{"b": 2}'
+        assert last_json_object(text) == {"b": 2}
+
+    def test_no_object_returns_none(self):
+        assert last_json_object("no json here at all") is None
+        assert last_json_object("[1, 2, 3]") is None  # a list, not an object
+
+    def test_non_string_input_returns_none(self):
+        assert last_json_object(None) is None
+        assert last_json_object(12345) is None
+
+    def test_malformed_braces_do_not_crash(self):
+        assert last_json_object("{not valid json") is None

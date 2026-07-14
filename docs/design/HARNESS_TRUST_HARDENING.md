@@ -59,10 +59,14 @@ that re-opens the INJ verdict hole. None is complete alone.
 > unblocking it. The operator may encode a judgment **once** (offline, anchored);
 > the system must reconfirm and correct **forever** after.
 
-(While the operator's signing ceremony is deferred, guardrail-surface changes are
-gated by cross-family council review instead — see
+(While the operator's signing ceremony is deferred, guardrail-surface changes
+will be gated by cross-family council review instead — see
 [COUNCIL_VERDICT.md](COUNCIL_VERDICT.md) for the mechanism and its honest residual
-gaps vs. the signature.)
+gaps vs. the signature. Status: the council engine — per-member dispatch,
+aggregation, quorum park, degraded-quorum and park-cap mitigations — shipped
+under C1, but `reviewer.council.guardrail_paths` ships EMPTY, so the gate is
+not live on any real path yet. Populating it is a deliberate, tracked
+follow-up, not an oversight.)
 
 This is a hard constraint on every capability, not a feature of EVAL alone. It has
 three operational tests every design here must pass:

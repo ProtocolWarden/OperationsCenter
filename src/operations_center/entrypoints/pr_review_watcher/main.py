@@ -88,9 +88,13 @@ from operations_center.entrypoints.pr_review_watcher.inj import (
     sanitize_for_comment,
 )
 from operations_center.entrypoints.pr_review_watcher.verdict import (
+    _COUNCIL_PANEL,
     CONCERNS,
+    aggregate_council,
     compute_verdict,
+    council_lens_fragment,
     failing_summary,
+    last_json_object,
     sensitive_paths_in_diff,
     verdict_schema_prompt,
 )
@@ -99,6 +103,10 @@ from operations_center.policy.defaults import sensitive_path_patterns
 logger = logging.getLogger(__name__)
 
 _STATE_SUBDIR = Path("state") / "pr_reviews"
+# C1 — per-PR council audit record (per-member backend/model/lens/verdict +
+# the aggregate). Separate from _STATE_SUBDIR (the review state machine's own
+# bookkeeping) so the council record is a pure, append-free audit artifact.
+_COUNCIL_SUBDIR = Path("state") / "council"
 
 
 # ── State file helpers ────────────────────────────────────────────────────────
@@ -110,6 +118,10 @@ def _state_key(repo_key: str, pr_number: int) -> str:
 
 def _state_path(oc_root: Path, repo_key: str, pr_number: int) -> Path:
     return oc_root / _STATE_SUBDIR / f"{_state_key(repo_key, pr_number)}.json"
+
+
+def _council_state_path(oc_root: Path, repo_key: str, pr_number: int) -> Path:
+    return oc_root / _COUNCIL_SUBDIR / f"{_state_key(repo_key, pr_number)}.json"
 
 
 def _prune_orphan_state_files(oc_root: Path, repo_key: str, open_numbers: set[int]) -> None:
@@ -549,16 +561,59 @@ def _select_review_backend(settings, *, usage_store=None, now=None):
         return None
 
 
-def _run_direct_review(
+def _build_member_argv(backend: str, model: str, prompt: str) -> list[str] | None:
+    """Build the CLI argv for one review-panel member.
+
+    Mirrors :func:`worker_backend_probe._probe_command` — the same binary/flag
+    shape the controller and the cooldown-probe already use — so the reviewer's
+    own invocation matches the rest of the fleet instead of a bespoke one-off.
+    Returns ``None`` for an unsupported ``(backend, model)`` pair.
+    """
+    if backend == "claude_code":
+        # Preserve the live single-review invocation exactly (only the model
+        # varies per council seat): `--effort low` keeps reviews cheap+fast, and
+        # NOT passing --dangerously-skip-permissions matches the path that has
+        # run in production — a reviewer in an empty tmpdir needs neither.
+        return [
+            "claude",
+            "--model",
+            model,
+            "-p",
+            "--effort",
+            "low",
+            prompt,
+        ]
+    if backend == "codex_cli":
+        return [
+            "codex",
+            "exec",
+            "--dangerously-bypass-approvals-and-sandbox",
+            prompt,
+        ]
+    return None
+
+
+def _run_member_review(
     oc_root: Path,
     goal_text: str,
     state_key: str,
+    *,
+    backend: str = "claude_code",
+    model: str = "haiku",
 ) -> dict | None:
-    """Run a self-review via a direct ``claude -p`` call in an empty temp directory.
+    """Run one review-panel member (the self-review's sole member, or one
+    council seat) via a direct CLI call in an empty temp directory.
 
     Bypasses the TeamExecutor pipeline so the workspace's CLAUDE.md cannot
-    override the review goal.  The diff is already embedded in ``goal_text``
-    so no repo clone is needed.  Returns the parsed verdict dict or None.
+    override the review goal. The diff is already embedded in ``goal_text`` so
+    no repo clone is needed. Returns the parsed verdict dict or None.
+
+    The member is expected to write ``verdict.json`` to its cwd (the typed
+    schema from ``verdict_schema_prompt()``). Some backends (codex, observed
+    not to reliably honor the file-write contract) may instead print their
+    answer to stdout — in that case the last balanced JSON object on stdout is
+    used as a fallback (:func:`verdict.last_json_object`) before this is
+    treated as a genuine no-verdict.
     """
     conflicted = _oc_source_conflict_markers(oc_root)
     if conflicted:
@@ -570,36 +625,43 @@ def _run_direct_review(
             "to run the reviewer (it would crash at import)."
         )
 
+    argv = _build_member_argv(backend, model, goal_text)
+    if argv is None:
+        raise ReviewerBackendError(
+            f"no CLI invocation known for backend={backend!r} model={model!r} "
+            f"(state_key={state_key})"
+        )
+
     with tempfile.TemporaryDirectory(prefix="oc-review-direct-") as tmpdir:
         tmp = Path(tmpdir)
         verdict_path = tmp / "verdict.json"
         try:
             proc = subprocess.run(
-                [
-                    "claude",
-                    "--model",
-                    "claude-haiku-4-5-20251001",
-                    "-p",
-                    "--effort",
-                    "low",
-                    goal_text,
-                ],
+                argv,
                 cwd=str(tmp),
                 capture_output=True,
                 text=True,
                 timeout=300,
             )
         except subprocess.TimeoutExpired:
-            raise ReviewerBackendError(f"direct review timed out (300s) for state_key={state_key}")
+            raise ReviewerBackendError(
+                f"member review timed out (300s) for state_key={state_key} "
+                f"backend={backend} model={model}"
+            )
+
+        raw: dict | None = None
         if verdict_path.exists():
             try:
                 raw = json.loads(verdict_path.read_text(encoding="utf-8"))
             except Exception:
-                logger.warning(
-                    "pr_review_watcher: malformed verdict.json from direct review for %s",
-                    state_key,
-                )
-                return None  # clean exit, bad JSON — genuine no-verdict
+                raw = None
+        if raw is None:
+            # Fallback for a backend that answered on stdout instead of writing
+            # the file (observed with codex) — scan for the last balanced JSON
+            # object before concluding there is genuinely no verdict.
+            raw = last_json_object(proc.stdout)
+
+        if raw is not None:
             # INJ Phase 1 (D-INJ-1): the merge decision is COMPUTED BY CODE from
             # the model's typed per-check statuses — any model-authored "result"
             # in `raw` is ignored. This is the trust boundary: an injected diff
@@ -614,24 +676,113 @@ def _run_direct_review(
             else:
                 summary = (raw.get("summary") if isinstance(raw, dict) else None) or ""
             return {"result": result, "failing_checks": failing, "summary": summary}
-        # No verdict.json written.
+
+        # No parseable verdict anywhere (file absent/malformed, stdout not JSON).
         if proc.returncode != 0:
             # Non-zero exit = crash, signal kill, or rate-limit — infra failure,
             # not a PR quality problem.  Don't charge the no_verdict budget.
             stdout_tail = (proc.stdout or "").strip()[-500:]
             raise ReviewerBackendError(
                 f"reviewer process exited with rc={proc.returncode} "
-                f"for state_key={state_key} (stdout_tail={stdout_tail!r})"
+                f"for state_key={state_key} backend={backend} model={model} "
+                f"(stdout_tail={stdout_tail!r})"
             )
-        # returncode == 0, no verdict.json — the reviewer ran cleanly but chose
-        # not to write a file.  Genuine no-verdict; charge the budget.
+        # returncode == 0, no verdict anywhere — the reviewer ran cleanly but
+        # produced nothing usable.  Genuine no-verdict; charge the budget.
         stdout_tail = (proc.stdout or "").strip()[-500:]
         logger.warning(
-            "pr_review_watcher: no verdict.json from direct review for %s (rc=0, stdout_tail=%r)",
+            "pr_review_watcher: no verdict from member review for %s "
+            "backend=%s model=%s (rc=0, stdout_tail=%r)",
             state_key,
+            backend,
+            model,
             stdout_tail,
         )
         return None
+
+
+def _run_direct_review(
+    oc_root: Path,
+    goal_text: str,
+    state_key: str,
+) -> dict | None:
+    """Back-compat name for the single self-review member (claude/haiku).
+
+    Kept as a thin alias — rather than renaming this call site inline — so the
+    existing test suite (which patches ``_run_direct_review`` directly) keeps
+    working unchanged. Prefer :func:`_run_member_review` for any new caller
+    that needs a specific backend/model (e.g. the C1 council).
+    """
+    return _run_member_review(oc_root, goal_text, state_key, backend="claude_code", model="haiku")
+
+
+def _member_on_cooldown(usage_store, backend: str, model: str, *, now: datetime) -> bool:
+    """True when this council member's ``(backend, model)`` is currently cooled.
+
+    Model-aware (unlike ``_select_review_backend``, which is backend-grained
+    and can't tell a cooled sonnet from a runnable opus): a lone
+    ``model_weekly`` cooldown for a DIFFERENT model does not cool this member —
+    the backend's other models remain runnable. An account-wide cooldown
+    (``session_5h`` / ``global_weekly`` / unattributed) cools every model of
+    the backend, including this one.
+
+    Fails OPEN (not cooled) on a store-read error: a broken usage store must
+    never itself deadlock the council quorum check (degrade-never-halt).
+    """
+    try:
+        details = usage_store.worker_backend_cooldown_details(backend, now=now)
+    except Exception as exc:  # noqa: BLE001 — never block the gate on a store read
+        logger.warning(
+            "pr_review_watcher: council cooldown check failed for %s/%s — "
+            "treating as available: %s",
+            backend,
+            model,
+            exc,
+        )
+        return False
+    from operations_center.backends.limit_classifier import MODEL_WEEKLY
+
+    for entry in details:
+        if entry.get("limit_kind") == MODEL_WEEKLY:
+            if entry.get("model") == model:
+                return True
+            continue
+        return True  # account-wide / unattributed — blocks every model of the backend
+    return False
+
+
+# Branch prefixes that are exempt from the council and fall back to single
+# review. Deliberately NARROW: only the reviewer's OWN fix-pass branches
+# (``review/<suffix>``, created by _run_fix_pass when a PR has no task branch).
+# It must NOT include the fleet's primary feature branches (goal/, test/,
+# improve/, spec-author/): the council's PRIMARY purpose (COUNCIL_VERDICT.md
+# threat table, row 1) is to stop the FLEET from merging a guardrail change on
+# a single-reviewer LGTM — and nearly every PR here is fleet-authored on a
+# goal/ branch, so exempting those would make the council inert against its own
+# reason to exist. Genuine deadlock (a guardrail PR parked because a family is
+# cooled) is bounded instead by the park-cap escalation (F14) + degraded quorum;
+# spec C1.4 explicitly permits guardrail parks to wait for a human.
+_COUNCIL_EXEMPT_BRANCH_PREFIXES = ("review/",)
+
+
+def _council_exempt_self_fix(state: dict, pr_data: dict) -> bool:
+    """F14 bootstrap-deadlock guard: True only when this PR is the reviewer's
+    OWN fix-pass branch (``review/…``), so the reviewer's self-heal fixes are
+    never gated by the very council they might be fixing — the narrowest escape
+    that keeps the control plane self-healing.
+
+    NOTE (operator policy): this exemption is intentionally scoped to the
+    reviewer's own ``review/`` branches, NOT the fleet's primary feature
+    branches. A fleet ``goal/`` PR that touches a guardrail surface DOES get the
+    full council — that is the control's primary threat (fleet quietly merges a
+    guardrail change). Deadlock avoidance for a legitimately-parked guardrail PR
+    is handled by the park-cap escalation + degraded quorum, not by widening
+    this exemption. Widening it (e.g. to exempt goal/ PRs) is a trust-model
+    change for the operator to decide before ``guardrail_paths`` is populated.
+    """
+    del state  # unused — branch identity alone determines the exemption
+    head_ref = str(((pr_data or {}).get("head") or {}).get("ref") or "").strip().lower()
+    return bool(head_ref) and head_ref.startswith(_COUNCIL_EXEMPT_BRANCH_PREFIXES)
 
 
 def _run_pipeline(
@@ -2643,7 +2794,56 @@ def _phase1(
             escalated_at = datetime.fromisoformat(raw_ts)
         except ValueError:
             escalated_at = None
-        if (
+
+        # F14 park-cap: a COUNCIL park (unmet cross-family quorum) is capped
+        # independently of the generic 1h backend-unavailable resume above.
+        # Without this, the 1h auto-resume clears the escalation, _run_council
+        # immediately re-parks on the same unmet quorum (the general resume
+        # window is far shorter than a real capacity outage), and the pair
+        # repeats forever with no operator-visible signal. council_park_started_at
+        # is set ONCE by _run_council on first park and is NOT reset by this
+        # block's resume/re-park cycling, so the cap tracks total time parked,
+        # not time since the most recent re-park.
+        _council_capped_hold = False
+        if state.get("council_park"):
+            cap_hours = getattr(settings.reviewer.council, "max_council_park_hours", 24)
+            started_raw = str(state.get("council_park_started_at") or raw_ts)
+            try:
+                started_at = datetime.fromisoformat(started_raw)
+            except ValueError:
+                started_at = escalated_at
+            if (
+                started_at is not None
+                and (datetime.now(UTC) - started_at).total_seconds() >= cap_hours * 3600
+            ):
+                _council_capped_hold = True
+                if state.get("escalated_reason") != "council_unavailable_capped":
+                    detail = (
+                        f"Reviewer council has been parked (insufficient cross-family "
+                        f"quorum) for over {cap_hours}h — this is no longer a transient "
+                        "backend cooldown. Surfacing distinctly instead of continuing to "
+                        "silently auto-resume and re-park."
+                    )
+                    state["escalated_needs_human"] = False  # force a fresh, distinct comment
+                    _escalate_needs_human(
+                        state,
+                        state_path,
+                        gh_client,
+                        owner,
+                        repo,
+                        settings,
+                        reason="council_unavailable_capped",
+                        detail=detail,
+                        current_head_sha=current_head_sha,
+                    )
+                    logger.error(
+                        "pr_review_watcher: PR #%d council park capped at %dh; escalated "
+                        "distinctly (council_unavailable_capped)",
+                        pr_number,
+                        cap_hours,
+                    )
+
+        if not _council_capped_hold and (
             escalated_at is None
             or (datetime.now(UTC) - escalated_at).total_seconds() >= _BACKEND_UNAVAILABLE_RESUME_S
         ):
@@ -2659,6 +2859,8 @@ def _phase1(
             state.pop("escalated_reason", None)
             state.pop("escalated_at_utc", None)
             state["backend_error_passes"] = 0
+            state.pop("council_park", None)
+            state.pop("council_park_started_at", None)
             logger.info(
                 "pr_review_watcher: PR #%d backend-unavailable park expired; "
                 "resuming automated review",
@@ -3213,6 +3415,46 @@ def _phase1(
     )
     doc_rubric = _DOC_ONLY_REVIEW_RUBRIC if docs_only else ""
 
+    # These budgets are read by BOTH review modes' post-verdict tail
+    # (_dispatch_verdict_outcome) — must be set before the C1 fork below, since
+    # a guardrail PR may return via _run_council without ever reaching the
+    # single-review goal_text/setdefault block further down.
+    state.setdefault("fix_attempts", 0)
+    state.setdefault("no_verdict_passes", 0)
+    state.setdefault("env_unclean_passes", 0)
+    state.setdefault("backend_error_passes", 0)
+    state.setdefault("no_verdict_escalation_count", 0)
+
+    # C1 — cross-family council fork (COUNCIL_VERDICT.md G1/C1). guardrail_paths
+    # defaults to [] (not a list on a bare MagicMock in older/ad-hoc settings
+    # either) — isinstance-gated so the feature stays OFF unless a REAL glob
+    # list is configured, never accidentally on via a truthy mock/sentinel.
+    council = getattr(reviewer, "council", None)
+    _raw_guardrail_paths = getattr(council, "guardrail_paths", None)
+    guardrail_paths = _raw_guardrail_paths if isinstance(_raw_guardrail_paths, list) else []
+    guardrail_hits = sensitive_paths_in_diff(_pr_files, guardrail_paths) if guardrail_paths else []
+    if guardrail_hits and not _council_exempt_self_fix(state, pr_data):
+        _run_council(
+            state,
+            state_path,
+            pr_data,
+            gh_client,
+            owner,
+            repo,
+            oc_root,
+            config_path,
+            settings,
+            current_head_sha=current_head_sha,
+            diff=diff,
+            diff_excerpt=diff_excerpt,
+            title=title,
+            spec_section=spec_section,
+            custodian_section=custodian_section,
+            guardrail_hits=guardrail_hits,
+            nonce=nonce,
+        )
+        return
+
     goal_text = (
         "## TASK TYPE: Read-only code review\n"
         "## SINGLE REQUIRED ACTION: Write verdict.json — no other file changes allowed\n\n"
@@ -3241,12 +3483,6 @@ def _phase1(
         repo_key,
         state["self_review_loops"],
     )
-
-    state.setdefault("fix_attempts", 0)
-    state.setdefault("no_verdict_passes", 0)
-    state.setdefault("env_unclean_passes", 0)
-    state.setdefault("backend_error_passes", 0)
-    state.setdefault("no_verdict_escalation_count", 0)
 
     # D1: consult the shared fleet ladder BEFORE spawning a claude review. If
     # claude is on cooldown or over the 25% budget reserve, don't burn it —
@@ -3429,13 +3665,63 @@ def _phase1(
         summary = "Failed checks: " + ", ".join(str(c) for c in failing_checks)
     else:
         summary = str(verdict.get("summary") or "(no summary)")
+
+    _dispatch_verdict_outcome(
+        state,
+        state_path,
+        pr_data,
+        gh_client,
+        owner,
+        repo,
+        oc_root,
+        config_path,
+        settings,
+        result=result,
+        failing_checks=failing_checks,
+        summary=summary,
+        current_head_sha=current_head_sha,
+        diff=diff,
+    )
+
+
+def _dispatch_verdict_outcome(
+    state: dict,
+    state_path: Path,
+    pr_data: dict,
+    gh_client,
+    owner: str,
+    repo: str,
+    oc_root: Path,
+    config_path: Path,
+    settings,
+    *,
+    result: str,
+    failing_checks: list,
+    summary: str,
+    current_head_sha: str,
+    diff: str,
+) -> None:
+    """Shared post-verdict tail: LGTM merges; any CONCERNS feeds the existing
+    fix ladder (post-once concern comment, Self-Heal Ladder, fix-pass dispatch,
+    close-and-requeue on exhaustion).
+
+    Both the single self-review path and the C1 council path call this once
+    they have a final ``{result, failing_checks, summary}`` — the council
+    aggregates its per-member verdicts into exactly this shape first
+    (``verdict.aggregate_council``). There is ONE merge/fix-ladder/close
+    implementation regardless of which review mode produced the verdict.
+    """
+    pr_number = int(state["pr_number"])
+    repo_key = state["repo_key"]
+    state_key = state["state_key"]
+    reviewer = settings.reviewer
     normalized_summary = _normalize_concerns_summary(summary)
 
     # Track when concerns are raised (for improved retraction guard)
     if result == "CONCERNS" and current_head_sha:
         _track_concern_raised(state, summary, current_head_sha)
 
-    logger.info("pr_review_watcher: PR #%d self-review verdict=%s", pr_number, result)
+    logger.info("pr_review_watcher: PR #%d review verdict=%s", pr_number, result)
 
     # Surface the verdict as a required status check on the reviewed head, so an
     # unresolved CONCERNS verdict blocks merge for humans (manual gh pr merge)
@@ -3740,6 +4026,263 @@ def _phase1(
     except Exception:
         pass
     _save_state(state_path, state)
+
+
+def _run_council(
+    state: dict,
+    state_path: Path,
+    pr_data: dict,
+    gh_client,
+    owner: str,
+    repo: str,
+    oc_root: Path,
+    config_path: Path,
+    settings,
+    *,
+    current_head_sha: str,
+    diff: str,
+    diff_excerpt: str,
+    title: str,
+    spec_section: str,
+    custodian_section: str,
+    guardrail_hits: list[str],
+    nonce: str,
+    usage_store=None,
+) -> None:
+    """C1 — cross-family reviewer council for a guardrail-surface PR.
+
+    Kept thin: the aggregation logic (unanimity, fail-safe empty-panel, union
+    of failing checks, attributed summary) lives in ``verdict.aggregate_council``,
+    pure and unit-tested. This orchestrator's job is only to (1) build the
+    shared evidence bundle once, (2) work out which panel seats are actually
+    runnable right now, (3) park on an unmet quorum instead of burning cooled
+    backends, (4) dispatch the runnable seats, and (5) hand the aggregate off
+    to the SAME post-verdict tail (``_dispatch_verdict_outcome``) the ordinary
+    self-review path uses — one merge/fix-ladder implementation, not two.
+
+    ``usage_store`` is injectable (mirroring ``_select_review_backend``) so
+    tests can pre-load specific cooldowns; production callers omit it and get
+    the real on-disk store.
+    """
+    pr_number = int(state["pr_number"])
+    repo_key = state["repo_key"]
+    state_key = state["state_key"]
+    council = settings.reviewer.council
+    # Defensive — _phase1 already sets these before forking here, but
+    # _run_council must not assume a particular caller ordering.
+    state.setdefault("fix_attempts", 0)
+    state.setdefault("no_verdict_passes", 0)
+    state.setdefault("env_unclean_passes", 0)
+    state.setdefault("backend_error_passes", 0)
+    state.setdefault("no_verdict_escalation_count", 0)
+
+    if usage_store is None:
+        from operations_center.execution.usage_store import UsageStore
+
+        usage_store = UsageStore()
+    now = datetime.now(UTC)
+
+    available = [
+        member for member in _COUNCIL_PANEL if not _member_on_cooldown(usage_store, *member[:2], now=now)
+    ]
+    min_members = getattr(council, "min_council_members", 3)
+
+    if len(available) < min_members:
+        cooled = sorted(f"{b}/{m}" for (b, m, _lens) in _COUNCIL_PANEL if (b, m, _lens) not in available)
+        detail = (
+            f"Guardrail-surface PR requires a {min_members}-member cross-family council "
+            f"(COUNCIL_VERDICT.md C1); only {len(available)}/{len(_COUNCIL_PANEL)} panel seats "
+            f"are runnable right now (cooled: {', '.join(cooled) or 'n/a'}). Parked — not merged "
+            "(unresolved) and not closed (work preserved); automated review resumes once enough "
+            "panel members recover, the PR head changes, or a human intervenes."
+        )
+        state["council_park"] = True
+        state.setdefault("council_park_started_at", now.isoformat())
+        state["council_available_members"] = len(available)
+        logger.warning(
+            "pr_review_watcher: PR #%d council quorum unmet (%d/%d available) — parking",
+            pr_number,
+            len(available),
+            min_members,
+        )
+        _escalate_needs_human(
+            state,
+            state_path,
+            gh_client,
+            owner,
+            repo,
+            settings,
+            reason="reviewer_backend_unavailable",
+            detail=detail,
+            current_head_sha=current_head_sha,
+        )
+        return
+
+    # Quorum met — clear any prior park bookkeeping (F14 park-cap timer resets
+    # only once the council actually runs again, not on every poll).
+    state.pop("council_park", None)
+    state.pop("council_park_started_at", None)
+    degraded_quorum = len(available) < len(_COUNCIL_PANEL)
+
+    base_goal_text = (
+        "## TASK TYPE: Read-only code review (cross-family council seat)\n"
+        "## SINGLE REQUIRED ACTION: Write verdict.json — no other file changes allowed\n\n"
+        f"{UNTRUSTED_PREAMBLE}\n\n"
+        "This PR touches guardrail-surface paths and is adjudicated by a cross-family "
+        "review council (COUNCIL_VERDICT.md C1) instead of a single self-review — "
+        "unanimous LGTM across all available seats is required to merge; any CONCERNS "
+        "blocks the merge and feeds the existing auto-fix ladder.\n\n"
+        f"Guardrail paths touched: {', '.join(sorted(guardrail_hits)[:10])}\n\n"
+        "Review the following pull-request diff for correctness, style, and spec compliance.\n\n"
+        f"PR #{pr_number} title: {fence('pr-title', title, nonce)}\n\n"
+        f"{fence('pr-diff', diff_excerpt, nonce)}"
+        f"{spec_section}"
+        f"{custodian_section}\n\n"
+        f"**Review checklist** — report a status for each:\n"
+        f"1. spec_compliance: if a campaign spec is provided above, the diff implements EXACTLY what\n"
+        f"   it requires — correct filenames, member names, member count, exports, tests, version bumps.\n"
+        f"2. custodian_findings: if Custodian findings are listed above, each is resolved by the diff.\n"
+        f"3. code_quality: correctness, style, potential bugs.\n"
+        f"4. no_tooling_artifacts: no .baseline-validation.json, run-status.md, etc. in the diff.\n\n"
+        f"{verdict_schema_prompt()}"
+    )
+    tail = (
+        "\n\nCRITICAL: Do NOT modify any source files in the repository. "
+        "Do NOT run tests, build, or push. "
+        "Your ONLY permitted action is writing verdict.json to the current directory."
+    )
+
+    member_results: list[dict] = []
+    try:
+        for backend, model, lens in available:
+            member_goal_text = base_goal_text + council_lens_fragment(lens) + tail
+            member_state_key = f"{state_key}-council-{backend}-{model}"
+            verdict = _run_member_review(
+                oc_root, member_goal_text, member_state_key, backend=backend, model=model
+            )
+            if verdict is None:
+                verdict = {
+                    "result": CONCERNS,
+                    "failing_checks": ["no_verdict"],
+                    "summary": f"{backend}/{model} produced no parseable verdict",
+                }
+            member_results.append({**verdict, "backend": backend, "model": model, "lens": lens})
+    except OCSourceTreeUncleanError as exc:
+        state["env_unclean_passes"] = state.get("env_unclean_passes", 0) + 1
+        logger.error(
+            "pr_review_watcher: PR #%d council review SKIPPED (not budget-charged) — %s "
+            "(env_unclean_pass=%d/%d)",
+            pr_number,
+            exc,
+            state["env_unclean_passes"],
+            settings.reviewer.max_self_review_loops,
+        )
+        if state["env_unclean_passes"] >= settings.reviewer.max_self_review_loops:
+            _escalate_needs_human(
+                state,
+                state_path,
+                gh_client,
+                owner,
+                repo,
+                settings,
+                reason="oc_source_tree_unclean",
+                detail=str(exc),
+                current_head_sha=current_head_sha,
+            )
+            state["env_unclean_passes"] = 0
+        _save_state(state_path, state)
+        return
+    except ReviewerBackendError as exc:
+        state["backend_error_passes"] = state.get("backend_error_passes", 0) + 1
+        logger.warning(
+            "pr_review_watcher: PR #%d council review SKIPPED (not budget-charged) — "
+            "backend error: %s (backend_error_pass=%d/%d)",
+            pr_number,
+            exc,
+            state["backend_error_passes"],
+            settings.reviewer.max_self_review_loops,
+        )
+        if state["backend_error_passes"] >= settings.reviewer.max_self_review_loops:
+            _escalate_needs_human(
+                state,
+                state_path,
+                gh_client,
+                owner,
+                repo,
+                settings,
+                reason="reviewer_backend_unavailable",
+                detail=str(exc),
+                current_head_sha=current_head_sha,
+            )
+            state["backend_error_passes"] = 0
+        _save_state(state_path, state)
+        return
+
+    state["env_unclean_passes"] = 0
+    state["backend_error_passes"] = 0
+    aggregate = aggregate_council(member_results)
+
+    # F14 — record the audit trail: per-member backend/model/lens/verdict, the
+    # aggregate, and the degraded-quorum flag. A pure audit artifact, separate
+    # from the review state machine's own bookkeeping (_STATE_SUBDIR).
+    _save_state(
+        _council_state_path(oc_root, repo_key, pr_number),
+        {
+            "pr_number": pr_number,
+            "repo_key": repo_key,
+            "head_sha": current_head_sha,
+            "panel_size": len(_COUNCIL_PANEL),
+            "available_members": len(available),
+            "degraded_quorum": degraded_quorum,
+            "guardrail_hits": sorted(guardrail_hits),
+            "result": aggregate["result"],
+            "per_member": aggregate["per_member"],
+            "summary": aggregate["summary"],
+        },
+    )
+
+    # One PR comment summarizing every seat, attributed by backend/model/lens.
+    member_lines = [
+        f"- `{m['backend']}/{m['model']}` ({m['lens']}): **{m['result']}**"
+        + (f" — {', '.join(m['failing_checks'])}" if m.get("failing_checks") else "")
+        for m in aggregate["per_member"]
+    ]
+    degraded_note = (
+        f"\n\n_Degraded quorum: {len(available)}/{len(_COUNCIL_PANEL)} seats available._"
+        if degraded_quorum
+        else ""
+    )
+    comment_body = (
+        f"{settings.reviewer.bot_comment_marker}\n"
+        f"**Council review: {aggregate['result']}** (cross-family panel, "
+        f"guardrail paths: {', '.join(sorted(guardrail_hits)[:10])})\n\n"
+        + "\n".join(member_lines)
+        + degraded_note
+        + f"\n\n{sanitize_for_comment(aggregate['summary'])}"
+    )
+    try:
+        gh_client.post_comment(owner, repo, pr_number, comment_body)
+    except Exception as exc:  # noqa: BLE001 — a comment failure must not block the merge decision
+        logger.warning(
+            "pr_review_watcher: failed to post council verdict comment PR #%d — %s", pr_number, exc
+        )
+
+    _dispatch_verdict_outcome(
+        state,
+        state_path,
+        pr_data,
+        gh_client,
+        owner,
+        repo,
+        oc_root,
+        config_path,
+        settings,
+        result=aggregate["result"],
+        failing_checks=aggregate["failing_checks"],
+        summary=aggregate["summary"],
+        current_head_sha=current_head_sha,
+        diff=diff,
+    )
 
 
 # ── Plane task lookup ─────────────────────────────────────────────────────────

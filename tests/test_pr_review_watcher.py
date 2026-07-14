@@ -3531,3 +3531,469 @@ def test_select_review_backend_respects_dynamic_disabled(monkeypatch, tmp_path):
     sel = watcher._select_review_backend(_ladder_settings(dynamic=False), usage_store=store, now=now)
     # operator opted out of the ladder globally → always the preferred backend
     assert sel is not None and sel.selected_backend == "claude_code"
+
+
+# ── C1: reviewer council mode (cross-family panel) ────────────────────────────
+
+_GUARDRAIL_FILE = "src/operations_center/entrypoints/pr_review_watcher/main.py"
+_GUARDRAIL_DIFF = f"diff --git a/{_GUARDRAIL_FILE} b/{_GUARDRAIL_FILE}\n+print('x')"
+
+
+def _council_settings(
+    *,
+    guardrail_paths=(_GUARDRAIL_FILE,),
+    max_council_park_hours: int = 24,
+    min_council_members: int = 3,
+) -> MagicMock:
+    from operations_center.config.settings import CouncilSettings
+
+    reviewer = MagicMock(
+        bot_logins=[],
+        allowed_reviewer_logins=[],
+        max_self_review_loops=2,
+        max_fix_attempts=2,
+        max_fix_strategy_level=2,
+        bot_comment_marker="<!-- operations-center:bot -->",
+        require_branch_protection=False,
+        council=CouncilSettings(
+            guardrail_paths=list(guardrail_paths),
+            max_council_park_hours=max_council_park_hours,
+            min_council_members=min_council_members,
+        ),
+    )
+    return MagicMock(
+        reviewer=reviewer,
+        repos={},
+        plane=MagicMock(base_url="http://plane.local", project_id="proj", workspace_slug="ws"),
+    )
+
+
+def _contributor_pr_data(*, head_ref: str = "contributor-branch", head_sha: str = "cc1") -> dict:
+    return {
+        "number": PR_NUMBER,
+        "title": "touches guardrail code",
+        "draft": False,
+        "head": {"ref": head_ref, "sha": head_sha},
+    }
+
+
+def _guardrail_gh(**overrides) -> MagicMock:
+    gh = _make_gh(**overrides)
+    gh.get_pr_diff.return_value = _GUARDRAIL_DIFF
+    return gh
+
+
+def _member_result(result: str, failing=None, summary: str = "ok") -> dict:
+    return {"result": result, "failing_checks": failing or [], "summary": summary}
+
+
+def test_phase1_guardrail_paths_empty_uses_single_review_no_fork(tmp_path: Path) -> None:
+    """Default (empty) guardrail_paths ⇒ feature OFF ⇒ today's single review,
+    even on a diff that touches what would otherwise be a guardrail path."""
+    state, sp = _make_state(tmp_path, phase="self_review")
+    gh = _guardrail_gh()
+
+    with (
+        patch.object(watcher, "_run_council") as mock_council,
+        patch.object(
+            watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}
+        ) as mock_direct,
+    ):
+        watcher._phase1(
+            state, sp, _contributor_pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+
+    mock_council.assert_not_called()
+    mock_direct.assert_called_once()
+
+
+def test_phase1_guardrail_hit_forks_to_council(tmp_path: Path) -> None:
+    state, sp = _make_state(tmp_path, phase="self_review")
+    gh = _guardrail_gh()
+    settings = _council_settings()
+
+    with (
+        patch.object(watcher, "_run_council") as mock_council,
+        patch.object(watcher, "_run_direct_review") as mock_direct,
+    ):
+        watcher._phase1(
+            state, sp, _contributor_pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", settings
+        )
+
+    mock_council.assert_called_once()
+    mock_direct.assert_not_called()
+    # guardrail_hits propagated to the council call
+    assert watcher._files_from_diff(_GUARDRAIL_DIFF) == [_GUARDRAIL_FILE]
+
+
+def test_council_exempt_self_fix_uses_single_review(tmp_path: Path) -> None:
+    """F14 bootstrap-deadlock guard: the reviewer's OWN fix-pass branch
+    (``review/…``) touching guardrail paths falls back to single review so the
+    reviewer's self-heal is never gated by the council it may be fixing."""
+    state, sp = _make_state(tmp_path, phase="self_review")
+    gh = _guardrail_gh()
+    settings = _council_settings()
+
+    with (
+        patch.object(watcher, "_run_council") as mock_council,
+        patch.object(
+            watcher, "_run_direct_review", return_value={"result": "LGTM", "summary": "ok"}
+        ) as mock_direct,
+    ):
+        watcher._phase1(
+            state,
+            sp,
+            _contributor_pr_data(head_ref=f"review/{PR_NUMBER}"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            settings,
+        )
+
+    mock_council.assert_not_called()
+    mock_direct.assert_called_once()
+
+
+def test_council_reviews_fleet_goal_branch_guardrail_pr(tmp_path: Path) -> None:
+    """The council's PRIMARY threat: a fleet-authored goal/ PR that touches a
+    guardrail surface MUST get the council, NOT a single-reviewer LGTM (that is
+    exactly the "fleet quietly merges a guardrail change" row of the threat
+    table). Only review/ fix-pass branches are exempt — goal/ is not."""
+    state, sp = _make_state(tmp_path, phase="self_review")
+    gh = _guardrail_gh()
+    settings = _council_settings()
+
+    with (
+        patch.object(watcher, "_run_council") as mock_council,
+        patch.object(watcher, "_run_direct_review") as mock_direct,
+    ):
+        watcher._phase1(
+            state,
+            sp,
+            _contributor_pr_data(head_ref=f"goal/{PR_NUMBER}"),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            settings,
+        )
+
+    mock_council.assert_called_once()
+    mock_direct.assert_not_called()
+
+
+class TestCouncilExemptSelfFix:
+    def test_reviewer_review_branch_is_exempt(self):
+        pr = _contributor_pr_data(head_ref="review/42")
+        assert watcher._council_exempt_self_fix({}, pr) is True
+
+    def test_fleet_feature_branches_are_NOT_exempt(self):
+        # These reach the council — the whole point of the control.
+        for prefix in ("goal/", "test/", "improve/", "spec-author/"):
+            pr = _contributor_pr_data(head_ref=f"{prefix}42")
+            assert watcher._council_exempt_self_fix({}, pr) is False
+
+    def test_contributor_branch_is_not_exempt(self):
+        pr = _contributor_pr_data(head_ref="fix-typo")
+        assert watcher._council_exempt_self_fix({}, pr) is False
+
+    def test_missing_head_ref_is_not_exempt(self):
+        assert watcher._council_exempt_self_fix({}, {"head": {}}) is False
+
+
+def _run_council_args(
+    tmp_path: Path,
+    state: dict,
+    sp: Path,
+    pr_data: dict,
+    gh: MagicMock,
+    settings: MagicMock,
+    *,
+    guardrail_hits=(_GUARDRAIL_FILE,),
+) -> dict:
+    return dict(
+        state=state,
+        state_path=sp,
+        pr_data=pr_data,
+        gh_client=gh,
+        owner="owner",
+        repo="repo",
+        oc_root=tmp_path,
+        config_path=tmp_path / "cfg.yaml",
+        settings=settings,
+        current_head_sha="cc1",
+        diff=_GUARDRAIL_DIFF,
+        diff_excerpt=_GUARDRAIL_DIFF,
+        title="touches guardrail code",
+        spec_section="",
+        custodian_section="",
+        guardrail_hits=list(guardrail_hits),
+        nonce="test-nonce",
+    )
+
+
+def test_run_council_unanimous_lgtm_merges(tmp_path: Path) -> None:
+    state, sp = _make_state(tmp_path, phase="self_review")
+    gh = _guardrail_gh()
+    settings = _council_settings()
+
+    with (
+        patch.object(watcher, "_member_on_cooldown", return_value=False),
+        patch.object(
+            watcher, "_run_member_review", return_value=_member_result("LGTM")
+        ) as mock_member,
+        patch.object(watcher, "_merge_and_done") as mock_merge,
+    ):
+        watcher._run_council(**_run_council_args(tmp_path, state, sp, _contributor_pr_data(), gh, settings))
+
+    assert mock_member.call_count == 3
+    mock_merge.assert_called_once()
+    assert mock_merge.call_args.kwargs["reason"] == "self_review_lgtm"
+    # status published exactly once, on the aggregate — not per member
+    gh.set_commit_status.assert_called_once()
+    assert gh.set_commit_status.call_args.kwargs["state"] == "success"
+
+
+def test_run_council_any_concern_feeds_fix_ladder(tmp_path: Path) -> None:
+    state, sp = _make_state(tmp_path, phase="self_review")
+    gh = _guardrail_gh()
+    settings = _council_settings()
+
+    def _member_side_effect(oc_root, goal_text, state_key, *, backend, model):
+        if backend == "claude_code" and model == "opus":
+            return _member_result("CONCERNS", failing=["code_quality"], summary="bug found")
+        return _member_result("LGTM")
+
+    with (
+        patch.object(watcher, "_member_on_cooldown", return_value=False),
+        patch.object(watcher, "_run_member_review", side_effect=_member_side_effect),
+        patch.object(watcher, "_merge_and_done") as mock_merge,
+        patch.object(watcher, "_run_fix_pass", return_value=True) as mock_fix,
+    ):
+        watcher._run_council(**_run_council_args(tmp_path, state, sp, _contributor_pr_data(), gh, settings))
+
+    mock_merge.assert_not_called()
+    mock_fix.assert_called_once()
+    gh.set_commit_status.assert_called_once()
+    assert gh.set_commit_status.call_args.kwargs["state"] == "failure"
+
+
+def test_run_council_records_state_and_posts_one_comment(tmp_path: Path) -> None:
+    state, sp = _make_state(tmp_path, phase="self_review")
+    gh = _guardrail_gh()
+    settings = _council_settings()
+
+    with (
+        patch.object(watcher, "_member_on_cooldown", return_value=False),
+        patch.object(watcher, "_run_member_review", return_value=_member_result("LGTM")),
+        patch.object(watcher, "_merge_and_done"),
+    ):
+        watcher._run_council(**_run_council_args(tmp_path, state, sp, _contributor_pr_data(), gh, settings))
+
+    gh.post_comment.assert_called_once()
+    body = gh.post_comment.call_args[0][3]
+    assert "<!-- operations-center:bot -->" in body
+    assert "claude_code/sonnet" in body
+    assert "claude_code/opus" in body
+    assert "codex_cli/codex" in body
+
+    council_path = watcher._council_state_path(tmp_path, REPO_KEY, PR_NUMBER)
+    assert council_path.exists()
+    recorded = json.loads(council_path.read_text(encoding="utf-8"))
+    assert recorded["result"] == "LGTM"
+    assert len(recorded["per_member"]) == 3
+    assert recorded["degraded_quorum"] is False
+
+
+def test_run_council_each_member_dispatched_on_its_own_family(tmp_path: Path, monkeypatch) -> None:
+    state, sp = _make_state(tmp_path, phase="self_review")
+    gh = _guardrail_gh()
+    settings = _council_settings()
+    argvs: list[list[str]] = []
+
+    def _fake_run(cmd, cwd, capture_output, text, timeout):
+        import subprocess as _sp
+
+        argvs.append(cmd)
+        (Path(cwd) / "verdict.json").write_text(
+            json.dumps(
+                {
+                    "checks": [
+                        {"check_id": "code_quality", "status": "pass", "evidence_span": "x"},
+                        {"check_id": "no_tooling_artifacts", "status": "pass", "evidence_span": "x"},
+                    ],
+                    "summary": "ok",
+                }
+            ),
+            encoding="utf-8",
+        )
+        return _sp.CompletedProcess(cmd, returncode=0, stdout="", stderr="")
+
+    with (
+        patch.object(watcher, "_member_on_cooldown", return_value=False),
+        patch.object(watcher, "_oc_source_conflict_markers", return_value=[]),
+        patch(
+            "operations_center.entrypoints.pr_review_watcher.main.subprocess.run",
+            side_effect=_fake_run,
+        ),
+        patch.object(watcher, "_merge_and_done"),
+    ):
+        watcher._run_council(**_run_council_args(tmp_path, state, sp, _contributor_pr_data(), gh, settings))
+
+    assert len(argvs) == 3
+    sonnet_calls = [a for a in argvs if "--model" in a and a[a.index("--model") + 1] == "sonnet"]
+    opus_calls = [a for a in argvs if "--model" in a and a[a.index("--model") + 1] == "opus"]
+    codex_calls = [a for a in argvs if a[:2] == ["codex", "exec"]]
+    assert len(sonnet_calls) == 1
+    assert len(opus_calls) == 1
+    assert len(codex_calls) == 1
+
+
+def test_run_council_quorum_unmet_parks(tmp_path: Path, monkeypatch) -> None:
+    """Both claude_code seats cooled (session_5h, account-wide) leaves only
+    codex — 1 < min_council_members(3) — parks instead of burning cooled
+    backends or silently downgrading to a lesser quorum."""
+    from datetime import datetime, timezone
+
+    from operations_center.execution.usage_store import UsageStore
+
+    monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "u.json"))
+    now = datetime.now(timezone.utc)
+    store = UsageStore()
+    _cool_claude(store, now)
+
+    state, sp = _make_state(tmp_path, phase="self_review")
+    gh = _guardrail_gh()
+    settings = _council_settings()
+
+    with patch.object(watcher, "_run_member_review") as mock_member:
+        watcher._run_council(
+            **_run_council_args(tmp_path, state, sp, _contributor_pr_data(), gh, settings),
+            usage_store=store,
+        )
+
+    mock_member.assert_not_called()
+    assert state["escalated_needs_human"] is True
+    assert state["escalated_reason"] == "reviewer_backend_unavailable"
+    assert state["council_park"] is True
+    assert state["council_available_members"] == 1
+
+
+def test_phase1_council_park_within_cap_still_auto_resumes(tmp_path: Path) -> None:
+    """A council park that has NOT yet exceeded max_council_park_hours behaves
+    like any other backend-unavailable park: the generic 1h resume window
+    still applies (F14 only changes behavior once the cap is exceeded)."""
+    from datetime import timedelta
+
+    from datetime import datetime as dt
+    from datetime import UTC as _UTC
+
+    settings = _council_settings(max_council_park_hours=24)
+    now = dt.now(_UTC)
+    state, sp = _make_state(
+        tmp_path,
+        phase="self_review",
+        escalated_needs_human=True,
+        escalated_reason="reviewer_backend_unavailable",
+        escalated_at_utc=(now - timedelta(hours=2)).isoformat(),  # past the 1h resume window
+        escalated_head_sha="cc1",
+        council_park=True,
+        council_park_started_at=(now - timedelta(hours=2)).isoformat(),  # well within the 24h cap
+    )
+    # A non-guardrail diff — council is configured, but this PR's diff doesn't
+    # hit it, so once resumed it falls through to the ordinary single-review
+    # path (mocked below) rather than a real council dispatch. The resume
+    # mechanism under test lives entirely in the #446-style block, before the
+    # guardrail fork is even reached.
+    gh = _make_gh()
+
+    with patch.object(watcher, "_run_direct_review", return_value=None) as mock_direct:
+        watcher._phase1(
+            state, sp, _contributor_pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", settings
+        )
+
+    assert state["escalated_needs_human"] is False
+    assert "council_park" not in state
+    mock_direct.assert_called_once()  # resumed all the way to a real review pass
+
+
+def test_phase1_council_park_cap_escalates_distinctly(tmp_path: Path) -> None:
+    """F14 park-cap: once a council park outlasts max_council_park_hours, stop
+    silently auto-resuming/re-parking and surface a distinct reason instead."""
+    from datetime import timedelta
+
+    from datetime import datetime as dt
+    from datetime import UTC as _UTC
+
+    settings = _council_settings(max_council_park_hours=24)
+    now = dt.now(_UTC)
+    state, sp = _make_state(
+        tmp_path,
+        phase="self_review",
+        escalated_needs_human=True,
+        escalated_reason="reviewer_backend_unavailable",
+        escalated_at_utc=(now - timedelta(hours=2)).isoformat(),
+        escalated_head_sha="cc1",
+        council_park=True,
+        council_park_started_at=(now - timedelta(hours=25)).isoformat(),  # past the 24h cap
+    )
+    gh = _guardrail_gh()
+
+    with patch.object(watcher, "_run_council") as mock_council:
+        watcher._phase1(
+            state, sp, _contributor_pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", settings
+        )
+
+    mock_council.assert_not_called()  # capped hold — never even reaches the fork this poll
+    assert state["escalated_reason"] == "council_unavailable_capped"
+    assert state["escalated_needs_human"] is True
+    gh.post_comment.assert_called_once()
+    assert "council_unavailable_capped" in gh.post_comment.call_args[0][3]
+
+
+def test_run_council_degraded_quorum_two_of_three_merges_on_unanimity(tmp_path: Path, monkeypatch) -> None:
+    """F14 degraded quorum: with min_council_members=2, one cooled seat still
+    allows the other two to proceed — unanimity among the AVAILABLE members
+    merges, and the state/comment record the degraded flag."""
+    from datetime import datetime, timezone
+
+    from operations_center.execution.usage_store import UsageStore
+
+    monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "u.json"))
+    now = datetime.now(timezone.utc)
+    store = UsageStore()
+    from datetime import timedelta
+
+    store.record_worker_backend_cooldown(
+        worker_backend="codex_cli",
+        reset_at=now + timedelta(hours=2),
+        now=now,
+        limit_kind="session_5h",
+        model=None,
+    )
+
+    state, sp = _make_state(tmp_path, phase="self_review")
+    gh = _guardrail_gh()
+    settings = _council_settings(min_council_members=2)
+
+    with (
+        patch.object(
+            watcher, "_run_member_review", return_value=_member_result("LGTM")
+        ) as mock_member,
+        patch.object(watcher, "_merge_and_done") as mock_merge,
+    ):
+        watcher._run_council(
+            **_run_council_args(tmp_path, state, sp, _contributor_pr_data(), gh, settings),
+            usage_store=store,
+        )
+
+    assert mock_member.call_count == 2  # codex skipped — cooled
+    mock_merge.assert_called_once()
+
+    council_path = watcher._council_state_path(tmp_path, REPO_KEY, PR_NUMBER)
+    recorded = json.loads(council_path.read_text(encoding="utf-8"))
+    assert recorded["degraded_quorum"] is True
+    assert recorded["available_members"] == 2
