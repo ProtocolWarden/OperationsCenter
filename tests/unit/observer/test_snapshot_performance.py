@@ -7,6 +7,7 @@ data size, and concurrent access patterns.
 """
 
 import random
+import statistics
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1050,15 +1051,22 @@ class TestSnapshotSerializationLargeMetrics:
 
     def test_serialization_scales_linearly(self, tmp_path: Path) -> None:
         """Test that serialization time scales linearly with metric count."""
-        repository = LocalSnapshotRepository(root=tmp_path / "perf")
-
-        # Measure serialization times for different tiers
-        times = {}
-        for tier in ["small", "medium", "large"]:
-            snapshot = create_large_snapshot(tier, index=8)
-            with Timing() as timer:
-                repository.store(snapshot, SnapshotFormat.JSON)
-            times[tier] = timer.elapsed()
+        # Use the median across fresh repositories to reduce runner-noise from
+        # one-off filesystem jitter while still catching real non-linear growth.
+        times: dict[str, float] = {}
+        samples_by_tier: dict[str, list[float]] = {}
+        for tier_index, tier in enumerate(["small", "medium", "large"]):
+            samples: list[float] = []
+            for sample_index in range(5):
+                repository = LocalSnapshotRepository(
+                    root=tmp_path / "perf" / tier / str(sample_index)
+                )
+                snapshot = create_large_snapshot(tier, index=(tier_index * 10) + sample_index)
+                with Timing() as timer:
+                    repository.store(snapshot, SnapshotFormat.JSON)
+                samples.append(timer.elapsed())
+            samples_by_tier[tier] = samples
+            times[tier] = statistics.median(samples)
 
         # Verify scaling is roughly linear (not exponential)
         # medium should be ~50x larger than small (5K vs 100 test count)
@@ -1069,11 +1077,15 @@ class TestSnapshotSerializationLargeMetrics:
 
         # Allow generous margin for non-linear overhead (up to 100x for 50x growth)
         assert ratio_medium_to_small < 100, (
-            f"Medium/small ratio {ratio_medium_to_small:.1f}x indicates non-linear degradation"
+            "Medium/small ratio "
+            f"{ratio_medium_to_small:.1f}x indicates non-linear degradation; "
+            f"samples={samples_by_tier}"
         )
 
         assert ratio_large_to_medium < 20, (
-            f"Large/medium ratio {ratio_large_to_medium:.1f}x indicates non-linear degradation"
+            "Large/medium ratio "
+            f"{ratio_large_to_medium:.1f}x indicates non-linear degradation; "
+            f"samples={samples_by_tier}"
         )
 
     def test_memory_efficiency_large_snapshot(self, tmp_path: Path) -> None:
