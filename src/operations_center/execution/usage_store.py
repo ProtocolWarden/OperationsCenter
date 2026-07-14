@@ -487,6 +487,58 @@ class UsageStore:
                 event["model"] = model
             self._append_event(data, event, now=now)
 
+    def record_budget_cap_sample(
+        self,
+        *,
+        weighted: float,
+        now: datetime,
+        min_gap: timedelta = timedelta(hours=1),
+        keep: int = 8,
+    ) -> None:
+        """Record an observed budget-cap sample (self-calibrating cap, audit D4/F17).
+
+        ``weighted`` is the budget estimator's trailing-window usage at the
+        moment an account-wide claude limit tripped — an observed sample of the
+        real cap, measured in the SAME weighted-token units the estimator uses,
+        so systematic estimator bias cancels out. At most one sample per limit
+        episode (``min_gap`` recency guard, since the engine re-records the
+        cooldown every iteration); the most recent ``keep`` samples are retained.
+        """
+        if weighted <= 0:
+            return
+        with self._exclusive():
+            data = self.load()
+            samples = list(data.get("budget_cap_samples", []))
+            if samples:
+                last_at = samples[-1].get("at")
+                try:
+                    if last_at and now - datetime.fromisoformat(str(last_at)) < min_gap:
+                        return  # same limit episode — one sample per episode
+                except (ValueError, TypeError):
+                    pass
+            samples.append({"weighted": float(weighted), "at": now.isoformat()})
+            data["budget_cap_samples"] = samples[-keep:]
+            self.save(data, now=now)
+
+    def learned_budget_cap(self, *, min_samples: int = 2) -> float | None:
+        """Median of recent observed cap samples, or None if too few to trust.
+
+        The median is robust to a single anomalous limit event; the budget
+        guard's 25% reserve absorbs the remaining error. Returns None until at
+        least ``min_samples`` observations exist (caller falls back to default).
+        """
+        data = self.load()
+        weights = sorted(
+            float(s["weighted"])
+            for s in data.get("budget_cap_samples", [])
+            if isinstance(s, dict) and s.get("weighted")
+        )
+        if len(weights) < min_samples:
+            return None
+        n = len(weights)
+        mid = n // 2
+        return weights[mid] if n % 2 else (weights[mid - 1] + weights[mid]) / 2.0
+
     def worker_backend_cooldown_until(
         self,
         worker_backend: str,

@@ -19,6 +19,7 @@ from operations_center.execution.usage_budget import (
     DEFAULT_CAP_WEIGHTED,
     budget_status,
 )
+from operations_center.execution.usage_store import UsageStore
 
 NOW = datetime(2026, 7, 13, 19, 0, tzinfo=timezone.utc)
 
@@ -187,6 +188,52 @@ def test_naive_timestamp_is_counted_not_crashed(monkeypatch, tmp_path: Path):
     )
     s = budget_status(now=NOW)  # must not raise on the aware/naive compare
     assert round(s.used_weighted) == 100
+
+
+def _store(monkeypatch, tmp_path: Path) -> UsageStore:
+    monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
+    return UsageStore()
+
+
+def test_learned_cap_needs_two_samples_then_median(monkeypatch, tmp_path: Path):
+    # audit D4: cap is learned from observed account-wide limit events.
+    s = _store(monkeypatch, tmp_path)
+    assert s.learned_budget_cap() is None  # no observations
+    s.record_budget_cap_sample(weighted=40_000_000, now=NOW)
+    assert s.learned_budget_cap() is None  # one is not enough to trust
+    s.record_budget_cap_sample(weighted=44_000_000, now=NOW + timedelta(hours=2))
+    assert s.learned_budget_cap() == 42_000_000  # median of two
+    s.record_budget_cap_sample(weighted=30_000_000, now=NOW + timedelta(hours=4))
+    assert s.learned_budget_cap() == 40_000_000  # median of three, robust to the low outlier
+
+
+def test_cap_sample_recency_guard_keeps_one_per_episode(monkeypatch, tmp_path: Path):
+    s = _store(monkeypatch, tmp_path)
+    s.record_budget_cap_sample(weighted=40_000_000, now=NOW)
+    # the engine re-records the same cooldown every iteration — within min_gap, dropped
+    s.record_budget_cap_sample(weighted=99_000_000, now=NOW + timedelta(minutes=20))
+    s.record_budget_cap_sample(weighted=44_000_000, now=NOW + timedelta(hours=2))  # new episode
+    assert s.learned_budget_cap() == 42_000_000  # median of [40M, 44M]; the 99M re-record dropped
+
+
+def test_budget_status_uses_learned_cap_when_no_env_override(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))  # no transcripts → used 0
+    monkeypatch.delenv("OC_CLAUDE_BUDGET_CAP_WEIGHTED", raising=False)
+    monkeypatch.delenv("OC_CLAUDE_BUDGET_RESERVE", raising=False)
+    s = _store(monkeypatch, tmp_path)
+    s.record_budget_cap_sample(weighted=1000.0, now=NOW - timedelta(hours=3))
+    s.record_budget_cap_sample(weighted=1000.0, now=NOW - timedelta(hours=1))
+    status = budget_status(now=NOW)
+    assert status.cap_weighted == 1000.0  # learned, not the 42M seed
+
+
+def test_env_cap_override_beats_learned(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("OC_CLAUDE_BUDGET_CAP_WEIGHTED", "500")  # explicit override
+    s = _store(monkeypatch, tmp_path)
+    s.record_budget_cap_sample(weighted=1000.0, now=NOW - timedelta(hours=3))
+    s.record_budget_cap_sample(weighted=1000.0, now=NOW - timedelta(hours=1))
+    assert budget_status(now=NOW).cap_weighted == 500.0  # env wins over the learned 1000
 
 
 def test_disabled_env_reports_not_exhausted(monkeypatch, tmp_path: Path):

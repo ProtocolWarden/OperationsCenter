@@ -114,6 +114,7 @@ def on_cooldown(payload_json: str) -> int:
     The engine's ``model`` is the full model id; the usage store wants the
     short name from the backend mapping.
     """
+    from operations_center.backends.limit_classifier import GLOBAL_WEEKLY, SESSION_5H
     from operations_center.execution.usage_store import UsageStore
 
     payload = json.loads(payload_json)
@@ -127,13 +128,26 @@ def on_cooldown(payload_json: str) -> int:
     )
     limit_kind = str(payload.get("limit_kind") or "unknown")
     model = short_model if payload.get("model") else None
-    UsageStore().record_worker_backend_cooldown(
+    now = datetime.now(timezone.utc)
+    store = UsageStore()
+    store.record_worker_backend_cooldown(
         worker_backend=worker_backend,
         reset_at=reset_at,
-        now=datetime.now(timezone.utc),
+        now=now,
         limit_kind=limit_kind,
         model=model,
     )
+    # Self-calibrating budget cap (audit D4): an account-wide claude limit means
+    # the estimator's current weighted usage is an observed sample of the real
+    # cap. Record it (best-effort, one sample per episode) so the budget guard
+    # learns the cap instead of trusting the 42M cold-start constant.
+    if worker_backend == "claude_code" and limit_kind in (SESSION_5H, GLOBAL_WEEKLY):
+        try:
+            from operations_center.execution.usage_budget import budget_status
+
+            store.record_budget_cap_sample(weighted=budget_status(now=now).used_weighted, now=now)
+        except Exception as exc:  # noqa: BLE001 — calibration must not block cooldown recording
+            logger.warning("loop_bridge: budget cap sample not recorded: %s", exc)
     return 0
 
 
