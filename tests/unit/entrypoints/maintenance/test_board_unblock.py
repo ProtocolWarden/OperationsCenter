@@ -222,6 +222,28 @@ def test_open_pr_gate_backlog_goal_stays_parked_while_repo_still_blocked():
     assert requeued == []
 
 
+def test_goal_backlog_promote_skips_repo_still_blocked_by_open_pr_gate():
+    parent = _issue("p_gate_goal", state="Done", labels=["task-kind: improve"])
+    child = _issue(
+        "t_gate_goal",
+        state="Backlog",
+        labels=[
+            "task-kind: goal",
+            "repo: OperationsCenter",
+            "source: autonomy",
+            "source: improve-suggestion",
+            "original-task-id: p_gate_goal",
+        ],
+    )
+    actions = _apply_rules(
+        [parent, child],
+        **_RULES_KWARGS,
+        open_pr_gate_blocked_repos={"OperationsCenter"},
+    )
+    promote = [a for a in actions if a["rule"] == "GOAL_BACKLOG_PROMOTE"]
+    assert promote == []
+
+
 # --- Worker-backend cooldown gate (Rules 4, 6, 7, 9 defer R4AI promotion) ---
 
 _COOLDOWN_REASON = (

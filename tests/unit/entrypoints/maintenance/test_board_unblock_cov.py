@@ -653,6 +653,21 @@ def test_rule7_no_matching_source_pattern():
     assert not _by_rule(actions, "GOAL_BACKLOG_PROMOTE")
 
 
+def test_rule7_open_pr_gate_blocked_repo_skips():
+    actions = _run(
+        _goal_backlog(
+            [
+                "task-kind: goal",
+                "repo: OperationsCenter",
+                "source: autonomy",
+                "source: improve-suggestion",
+            ]
+        ),
+        open_pr_gate_blocked_repos={"OperationsCenter"},
+    )
+    assert not _by_rule(actions, "GOAL_BACKLOG_PROMOTE")
+
+
 # ---------------------------------------------------------------------------
 # Rule 8 — CLEAN_BLOCKED_RETRY
 # ---------------------------------------------------------------------------
