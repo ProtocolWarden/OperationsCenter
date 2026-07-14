@@ -223,6 +223,8 @@ def _emit(
     title = f"[{sweep.repo_key}] custodian sweep: {sweep.total} findings"
     body = _render_body(sweep, deltas)
     existing = existing_tasks.get(sweep.repo_key)
+    if sweep.error is None and sweep.total == 0:
+        return "skipped-zero-findings" if not dry_run else "would-skip-zero-findings"
     if dry_run:
         return "would-comment" if existing else "would-create"
     if existing:

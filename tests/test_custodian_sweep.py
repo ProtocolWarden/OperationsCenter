@@ -18,6 +18,7 @@ from operations_center.entrypoints.custodian_sweep.main import (
     _DEDUP_LABEL_PREFIX,
     _delta,
     _discover_targets,
+    _emit,
     _find_open_sweep_task,
     _index_open_sweep_tasks,
     _render_body,
@@ -119,6 +120,43 @@ def test_index_open_sweep_tasks_maps_repo_key_to_issue() -> None:
             "labels": [{"name": f"{_DEDUP_LABEL_PREFIX}Demo"}],
         }
     }
+
+
+def test_emit_skips_zero_finding_repo_without_plane_calls() -> None:
+    calls: list[tuple[str, object]] = []
+
+    plane = SimpleNamespace(
+        comment_issue=lambda issue_id, body: calls.append(("comment", issue_id, body)),
+        create_issue=lambda **kwargs: calls.append(("create", kwargs)),
+    )
+
+    action = _emit(
+        _RepoSweep(repo_key="Demo", envelope=_envelope()),
+        {},
+        plane,
+        existing_tasks={},
+        dry_run=False,
+    )
+
+    assert action == "skipped-zero-findings"
+    assert calls == []
+
+
+def test_emit_dry_run_reports_zero_finding_skip() -> None:
+    plane = SimpleNamespace(
+        comment_issue=lambda issue_id, body: None,
+        create_issue=lambda **kwargs: None,
+    )
+
+    action = _emit(
+        _RepoSweep(repo_key="Demo", envelope=_envelope()),
+        {},
+        plane,
+        existing_tasks={},
+        dry_run=True,
+    )
+
+    assert action == "would-skip-zero-findings"
 
 
 def test_discover_targets_filters_to_repos_with_custodian_yaml(tmp_path: Path) -> None:
