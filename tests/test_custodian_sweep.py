@@ -23,6 +23,7 @@ from operations_center.entrypoints.custodian_sweep.main import (
     _render_body,
     _RepoSweep,
     _RepoTarget,
+    _resolve_custodian_audit,
     _run_custodian_audits,
 )
 
@@ -224,3 +225,33 @@ def test_main_uses_safer_default_timeout(monkeypatch, tmp_path: Path, capsys) ->
     assert sweep_module.main() == 0
     assert seen == {"timeout_seconds": _DEFAULT_TIMEOUT_SECONDS}
     assert '"repos_swept": 0' in capsys.readouterr().out
+
+
+def test_resolve_custodian_audit_prefers_current_python_bin(monkeypatch, tmp_path: Path) -> None:
+    venv_bin = tmp_path / "venv-bin"
+    venv_bin.mkdir()
+    local = venv_bin / "custodian-audit"
+    local.write_text("#!/bin/sh\n", encoding="utf-8")
+    local.chmod(0o755)
+
+    shadow = tmp_path / "shadow-custodian-audit"
+    shadow.write_text("#!/bin/sh\n", encoding="utf-8")
+    shadow.chmod(0o755)
+
+    monkeypatch.setattr(sweep_module.sys, "executable", str(venv_bin / "python"))
+    monkeypatch.setattr(sweep_module.shutil, "which", lambda name: str(shadow))
+
+    assert _resolve_custodian_audit() == str(local)
+
+
+def test_resolve_custodian_audit_falls_back_to_path(monkeypatch, tmp_path: Path) -> None:
+    venv_bin = tmp_path / "venv-bin"
+    venv_bin.mkdir()
+    shadow = tmp_path / "shadow-custodian-audit"
+    shadow.write_text("#!/bin/sh\n", encoding="utf-8")
+    shadow.chmod(0o755)
+
+    monkeypatch.setattr(sweep_module.sys, "executable", str(venv_bin / "python"))
+    monkeypatch.setattr(sweep_module.shutil, "which", lambda name: str(shadow))
+
+    assert _resolve_custodian_audit() == str(shadow)
