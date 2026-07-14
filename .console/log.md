@@ -1,3 +1,31 @@
+## 2026-07-14 — feat(reviewer): C1 cross-family council for guardrail PRs (COUNCIL_VERDICT.md)
+
+Council spec Phase 2 (C1) — keyless change control for guardrail surfaces. A PR
+whose diff touches any `reviewer.council.guardrail_paths` glob is adjudicated by
+a K=3 cross-family panel (claude/sonnet + claude/opus + codex/gpt-5, distinct
+lenses: correctness / security-capability / convergence-operational) instead of
+the single self-review; UNANIMOUS LGTM merges, any CONCERN feeds the existing
+self-heal fix ladder unchanged, and an unmet quorum PARKS (fail-closed, reusing
+the #446 auto-resume) rather than merging under-reviewed. `guardrail_paths`
+ships EMPTY (feature OFF, fail-open) so this rollout PR can't deadlock on the
+gate it introduces; populating the set is a deliberate follow-up.
+
+Structure: pure logic in `verdict.py` (`aggregate_council`, lens fragments,
+`_COUNCIL_PANEL`, `last_json_object` codex-stdout fallback) so it's covered by
+the tests/unit gate; `_run_council` in main.py stays thin. `_run_direct_review`
+generalized to `_run_member_review(*, backend, model)` (kept as a byte-identical
+alias for the single path — SAME `claude --model haiku -p --effort low` argv,
+only the model varies per seat). Per-member cooldown via `_member_on_cooldown`
+(model-aware, since sonnet vs opus are both claude_code). Both paths share a new
+`_dispatch_verdict_outcome` tail. Verdict still CODE-COMPUTED per member (INJ
+boundary intact). F14 baked in: park-cap → operator escalation
+(`council_unavailable_capped`), degraded quorum (`min_council_members`), and a
+NARROW self-fix exemption — only the reviewer's own `review/` fix branches are
+exempt; fleet `goal/` PRs touching guardrails DO get the council (that is the
+control's primary threat — fleet merging a guardrail change on a single LGTM).
+Doc truth-up: HARNESS_TRUST_HARDENING §0.1 no longer overclaims the council as
+live. 166 reviewer tests + 29 verdict unit tests; tests/unit 85.95% (gate 85%).
+
 ## 2026-07-14 — feat(reviewer): budget/cooldown-aware review — defer, don't burn (audit D1 pt1)
 
 The reviewer is part of the fleet but was claude-ONLY and consulted NO budget:

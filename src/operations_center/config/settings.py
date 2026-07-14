@@ -285,6 +285,31 @@ class MaintenanceWindow(BaseModel):
     days: list[int] = Field(default_factory=list)  # empty = all days
 
 
+class CouncilSettings(BaseModel):
+    """C1 — cross-family reviewer council for guardrail-surface PRs.
+
+    See docs/design/COUNCIL_VERDICT.md (G1/C1). A PR whose diff touches any
+    ``guardrail_paths`` glob is adjudicated by a K=3 cross-family panel (claude
+    sonnet, claude opus, codex) instead of the single self-review; unanimous
+    LGTM merges, any CONCERN feeds the existing fix ladder, and a family on
+    cooldown parks the PR (fail-closed) until it recovers.
+
+    ``guardrail_paths`` defaults EMPTY ⇒ the feature is OFF (fail-open to today's
+    single review). Populating the set is a deliberate follow-up PR — the rollout
+    PR that introduces the council must not deadlock on the gate it introduces.
+    """
+
+    # Repo-relative globs; empty ⇒ feature OFF (no PR is a guardrail PR).
+    guardrail_paths: list[str] = Field(default_factory=list)
+    # F14 mitigation — park cap: a council park that outlasts this many hours is
+    # surfaced to the operator with a distinct reason instead of re-parking forever.
+    max_council_park_hours: int = 24
+    # F14 mitigation — degraded quorum floor: the minimum number of runnable panel
+    # families required to proceed. 3 = strict unanimity of all families; 2 =
+    # allow a degraded quorum (unanimity among the two available families).
+    min_council_members: int = 3
+
+
 class ReviewerSettings(BaseModel):
     # GitHub logins whose comments are always ignored (bots, CI accounts)
     bot_logins: list[str] = Field(default_factory=list)
@@ -330,6 +355,9 @@ class ReviewerSettings(BaseModel):
     # extra scrutiny on high-blast-radius diffs without putting a human in the
     # per-correction loop. False (default) preserves prior behavior.
     require_sensitive_path_ack: bool = False
+    # C1 — cross-family council for guardrail-surface PRs (COUNCIL_VERDICT.md).
+    # Empty council.guardrail_paths (default) ⇒ feature OFF ⇒ today's single review.
+    council: CouncilSettings = Field(default_factory=CouncilSettings)
 
 
 class RepoSettings(BaseModel):

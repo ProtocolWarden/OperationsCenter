@@ -18,6 +18,7 @@ missing, unknown, or malformed computes to CONCERNS — never an auto-LGTM.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -187,14 +188,168 @@ def verdict_schema_prompt() -> str:
     return "\n".join(lines)
 
 
+# ── C1 council mode (COUNCIL_VERDICT.md G1/C1) ────────────────────────────────
+#
+# A guardrail-path PR is adjudicated by a K=3 cross-family panel instead of the
+# single self-review. Each member runs a different backend/model with a distinct
+# review LENS so the panel's diversity comes from independent training + focus,
+# not just sampling noise (per COUNCIL_VERDICT.md "Why cross-family, not seeds").
+# The heavy logic lives here (pure, unit-tested) rather than in main.py.
+
+# Review lens prompt fragments — appended after ``verdict_schema_prompt()`` so
+# each member weights the SAME typed checklist through a different focus. They
+# steer emphasis only; the merge decision is still code-computed per member.
+LENS_CORRECTNESS = (
+    "\n\n## Your review lens: CORRECTNESS\n"
+    "You are the correctness reviewer on a cross-family council. Weigh logic errors, "
+    "broken invariants, off-by-one/edge-case bugs, and whether the change does what it "
+    "claims. Report the shared typed checks above through this lens."
+)
+LENS_SECURITY_CAPABILITY = (
+    "\n\n## Your review lens: SECURITY / CAPABILITY-CHANGE\n"
+    "You are the security & capability-change reviewer on a cross-family council. Weigh "
+    "whether this diff widens a trust boundary, weakens a guardrail/gate, grants or "
+    "un-sandboxes a capability, or could be an injected change to control-plane code. "
+    "Report the shared typed checks above through this lens."
+)
+LENS_CONVERGENCE_OPERATIONAL = (
+    "\n\n## Your review lens: CONVERGENCE / OPERATIONAL\n"
+    "You are the convergence & operational reviewer on a cross-family council. Weigh "
+    "whether this change keeps the fleet able to judge/fix/merge itself (no bootstrap "
+    "deadlock, no hard halt), and its operational blast radius. Report the shared typed "
+    "checks above through this lens."
+)
+
+_LENS_FRAGMENTS: dict[str, str] = {
+    "correctness": LENS_CORRECTNESS,
+    "security-capability": LENS_SECURITY_CAPABILITY,
+    "convergence-operational": LENS_CONVERGENCE_OPERATIONAL,
+}
+
+# The panel: one member per backend-family rung, each with a distinct lens. Each
+# entry is (worker_backend, model, lens). ``model`` is the CLI --model alias
+# (claude) / the codex model tag — main.py maps these to argv.
+_COUNCIL_PANEL: tuple[tuple[str, str, str], ...] = (
+    ("claude_code", "sonnet", "correctness"),
+    ("claude_code", "opus", "security-capability"),
+    ("codex_cli", "codex", "convergence-operational"),
+)
+
+
+def council_lens_fragment(lens: str) -> str:
+    """Return the prompt fragment for a council member's review lens (or '')."""
+    return _LENS_FRAGMENTS.get(lens, "")
+
+
+def _member_label(member: dict) -> str:
+    """A short, attributable label for a council member, e.g.
+    ``claude_code/opus (security-capability)``."""
+    backend = member.get("backend") or "?"
+    model = member.get("model") or "?"
+    lens = member.get("lens") or "?"
+    return f"{backend}/{model} ({lens})"
+
+
+def aggregate_council(member_results: list[dict]) -> dict:
+    """Aggregate per-member verdicts into a single council verdict.
+
+    Each ``member_results`` entry is one member's ``compute_verdict`` output
+    (``{"result", "failing_checks", "summary"}``) plus ``{backend, model, lens}``
+    metadata. UNANIMOUS LGTM ⇒ ``{"result": "LGTM", ...}``. Any member CONCERNS ⇒
+    ``{"result": "CONCERNS", "failing_checks": <union>, "summary": <merged +
+    attributed>, ...}``. Both cases include ``per_member`` for the audit record.
+
+    Fail-safe: an empty panel is CONCERNS (a council never merges on zero members;
+    the caller enforces the quorum floor, this is defense in depth).
+    """
+    per_member: list[dict] = []
+    union_failing: list[str] = []
+    concern_lines: list[str] = []
+    all_lgtm = bool(member_results)  # empty ⇒ not-LGTM (fail-safe)
+
+    for m in member_results:
+        result = str(m.get("result") or CONCERNS).upper()
+        failing = [str(f) for f in (m.get("failing_checks") or [])]
+        summary = str(m.get("summary") or "")
+        per_member.append(
+            {
+                "backend": m.get("backend"),
+                "model": m.get("model"),
+                "lens": m.get("lens"),
+                "result": result,
+                "failing_checks": failing,
+                "summary": summary,
+            }
+        )
+        if result != LGTM:
+            all_lgtm = False
+            for f in failing:
+                if f not in union_failing:
+                    union_failing.append(f)
+            detail = ", ".join(failing) if failing else (summary or "CONCERNS")
+            concern_lines.append(f"- {_member_label(m)}: {detail}")
+
+    if all_lgtm:
+        approvers = ", ".join(_member_label(m) for m in member_results)
+        return {
+            "result": LGTM,
+            "failing_checks": [],
+            "summary": f"Council unanimous LGTM ({approvers}).",
+            "per_member": per_member,
+        }
+    merged = "Council concerns (attributed by member):\n" + "\n".join(concern_lines)
+    return {
+        "result": CONCERNS,
+        "failing_checks": union_failing,
+        "summary": merged,
+        "per_member": per_member,
+    }
+
+
+def last_json_object(text: object) -> dict | None:
+    """Return the last top-level JSON object decodable from ``text``, else None.
+
+    Robustness for the codex member's verdict: codex may not honor the
+    ``verdict.json`` file-write contract, but it prints its answer to stdout. We
+    scan for the last balanced ``{...}`` that parses as a JSON object so a
+    verdict on stdout is still usable without a live spike to pin codex's exact
+    file behavior. Non-string / no-object input ⇒ None (fail-safe → CONCERNS).
+    """
+    if not isinstance(text, str) or "{" not in text:
+        return None
+    decoder = json.JSONDecoder()
+    best: dict | None = None
+    idx = 0
+    while True:
+        start = text.find("{", idx)
+        if start == -1:
+            break
+        try:
+            obj, end = decoder.raw_decode(text, start)
+        except ValueError:
+            idx = start + 1
+            continue
+        if isinstance(obj, dict):
+            best = obj
+        idx = end
+    return best
+
+
 __all__ = [
     "CONCERNS",
+    "LENS_CONVERGENCE_OPERATIONAL",
+    "LENS_CORRECTNESS",
+    "LENS_SECURITY_CAPABILITY",
     "LGTM",
     "REVIEW_CHECKS",
     "ReviewCheck",
     "VALID_STATUS",
+    "_COUNCIL_PANEL",
+    "aggregate_council",
     "compute_verdict",
+    "council_lens_fragment",
     "failing_summary",
+    "last_json_object",
     "sensitive_paths_in_diff",
     "verdict_schema_prompt",
 ]
