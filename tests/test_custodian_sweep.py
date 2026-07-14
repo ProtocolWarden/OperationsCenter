@@ -18,6 +18,7 @@ from operations_center.entrypoints.custodian_sweep.main import (
     _DEDUP_LABEL_PREFIX,
     _delta,
     _discover_targets,
+    _emit,
     _find_open_sweep_task,
     _index_open_sweep_tasks,
     _render_body,
@@ -119,6 +120,46 @@ def test_index_open_sweep_tasks_maps_repo_key_to_issue() -> None:
             "labels": [{"name": f"{_DEDUP_LABEL_PREFIX}Demo"}],
         }
     }
+
+
+def test_emit_skips_plane_mutation_for_zero_findings() -> None:
+    calls: list[tuple[str, object]] = []
+
+    plane = SimpleNamespace(
+        comment_issue=lambda *args, **kwargs: calls.append(("comment", args)),
+        create_issue=lambda **kwargs: calls.append(("create", kwargs)),
+    )
+
+    action = _emit(
+        _RepoSweep(repo_key="Demo", envelope=_envelope()),
+        {},
+        plane,
+        existing_tasks={"Demo": {"id": "123"}},
+        dry_run=False,
+    )
+
+    assert action == "skipped-zero-findings"
+    assert calls == []
+
+
+def test_emit_skips_plane_mutation_for_zero_findings_in_dry_run() -> None:
+    calls: list[tuple[str, object]] = []
+
+    plane = SimpleNamespace(
+        comment_issue=lambda *args, **kwargs: calls.append(("comment", args)),
+        create_issue=lambda **kwargs: calls.append(("create", kwargs)),
+    )
+
+    action = _emit(
+        _RepoSweep(repo_key="Demo", envelope=_envelope()),
+        {},
+        plane,
+        existing_tasks={},
+        dry_run=True,
+    )
+
+    assert action == "skipped-zero-findings"
+    assert calls == []
 
 
 def test_discover_targets_filters_to_repos_with_custodian_yaml(tmp_path: Path) -> None:
