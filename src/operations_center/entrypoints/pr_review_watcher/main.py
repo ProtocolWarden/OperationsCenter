@@ -522,6 +522,33 @@ def _record_close_receipt(
 # ── pr review pipeline ────────────────────────────────────────────────────────
 
 
+def _select_review_backend(settings, *, usage_store=None, now=None):
+    """Pick the review backend via the shared fleet ladder (audit D1).
+
+    The reviewer is part of the fleet, so it must respect the same claude→codex
+    cooldown/budget ladder the controller uses instead of burning claude
+    unconditionally. Returns the ``WorkerBackendSelection`` (``selected_backend``
+    is ``claude_code`` when claude is runnable, another backend / ``None`` when
+    claude is cooled or over the 25% budget reserve), or ``None`` if selection
+    couldn't run — in which case the caller proceeds on claude (today's
+    behavior). The merge-gatekeeper must never crash here.
+    """
+    try:
+        from operations_center.backends.worker_backend_selector import select_worker_backend
+        from operations_center.execution.usage_store import UsageStore
+
+        team = getattr(settings, "team_executor", None)
+        return select_worker_backend(
+            preferred_backend="claude_code",
+            usage_store=usage_store or UsageStore(),
+            dynamic_enabled=bool(getattr(team, "dynamic_worker_backend_selection", True)),
+            now=now,
+        )
+    except Exception as exc:  # noqa: BLE001 — never block the gate on a store read
+        logger.warning("pr_review_watcher: backend selection failed, proceeding on claude: %s", exc)
+        return None
+
+
 def _run_direct_review(
     oc_root: Path,
     goal_text: str,
@@ -3220,6 +3247,26 @@ def _phase1(
     state.setdefault("env_unclean_passes", 0)
     state.setdefault("backend_error_passes", 0)
     state.setdefault("no_verdict_escalation_count", 0)
+
+    # D1: consult the shared fleet ladder BEFORE spawning a claude review. If
+    # claude is on cooldown or over the 25% budget reserve, don't burn it —
+    # defer this sweep and retry when it returns (degrade-never-halt applied to
+    # review; the budget window drains within ~5h). No claude spawn, no budget
+    # charge, no needs-human escalation for a transient wait. (Codex-fallback
+    # for the review itself is a validated follow-up; until then any non-claude
+    # selection means claude — the only review backend — is unavailable.)
+    _selection = _select_review_backend(settings)
+    if _selection is not None and _selection.selected_backend != "claude_code":
+        _resets = [r for r in _selection.cooldowns.values() if r is not None]
+        _reset_at = max(_resets) if _resets else None
+        logger.info(
+            "pr_review_watcher: PR #%d review DEFERRED — claude unavailable "
+            "(selected=%s, reset≈%s); not burning budget, will retry when it returns.",
+            pr_number,
+            _selection.selected_backend,
+            _reset_at.isoformat() if _reset_at else "unknown",
+        )
+        return
 
     try:
         verdict = _run_direct_review(oc_root, goal_text, state_key)
