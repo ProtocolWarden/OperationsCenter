@@ -95,13 +95,14 @@ def _resolve_custodian_audit() -> str | None:
 
     `python -m operations_center...` doesn't put the venv's bin on PATH unless
     the venv was activated, so a plain shutil.which fails for the common case
-    of invoking via the venv python directly. Check sys.executable's dir too.
+    of invoking via the venv python directly. Prefer the running interpreter's
+    bin dir first so sibling repo venvs earlier on PATH cannot shadow the
+    matching Custodian install for this OC process.
     """
-    found = shutil.which("custodian-audit")
-    if found:
-        return found
     candidate = Path(sys.executable).parent / "custodian-audit"
-    return str(candidate) if os.access(candidate, os.X_OK) else None
+    if os.access(candidate, os.X_OK):
+        return str(candidate)
+    return shutil.which("custodian-audit")
 
 
 def _run_custodian_audit(target: _RepoTarget, *, timeout_seconds: int) -> _RepoSweep:
