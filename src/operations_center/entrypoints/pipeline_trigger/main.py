@@ -157,8 +157,8 @@ def _run_pipeline(config_path: str, *, execute: bool, status_dir: Path | None = 
     stop_event = threading.Event()
     heartbeat_thread: threading.Thread | None = None
     try:
-        touch_liveness(status_dir, "propose", status="executing")
         if status_dir is not None:
+            touch_liveness(status_dir, "propose", status="executing")
             heartbeat_thread = threading.Thread(
                 target=_heartbeat_loop, args=(status_dir, stop_event), daemon=True
             )
