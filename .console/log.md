@@ -9130,3 +9130,15 @@ Deploy: OC venv already on v0.4.3; loop restart (also activates #449 session_end
 after this + #452 merge. With this live, over-budget claude usage diverts the loop
 ladder to codex until the 5h bucket rolls — the operator's 25% reserve is enforced
 mechanically across loop + board workers (usage-store synthetic cooldown).
+
+## 2026-07-14 — gaps/edge_cases CLI exposure: already shipped (task.md was stale)
+
+Verified the active task.md work order (expose sample `gaps`/`edge_cases` lists in the
+extraction-health CLI) was already fully implemented and merged in PR #374
+(a675c1f7, "Expose sample gaps and edge_cases lists in CLI for operator inspection"),
+with follow-on work (#387 dashboard, #417 message_quality_rate) layered on top since.
+`ExtractionHealth.gaps`/`.edge_cases` fields, `get_extraction_health()` sample
+collection, and the table-format CLI sections all exist; 111/111 tests pass in
+`tests/unit/observer/test_extraction_health_queries.py` +
+`tests/unit/observer/test_cli_extraction_health.py`. task.md just hadn't been marked
+done. No code change needed this cycle.

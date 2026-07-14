@@ -3,9 +3,14 @@
 _The active assignment. One objective at a time._
 _Replace contents when the objective changes. History belongs in log.md._
 
-## Objective
+## Objective — ✅ COMPLETE (verified 2026-07-14)
 
 Expose the sample `gaps` and `edge_cases` lists in the extraction-health CLI so an operator can inspect them directly. Definition of done: the CLI surfaces both lists; tests cover the new output.
+
+Shipped in PR #374 (a675c1f7). Verified 2026-07-14: `ExtractionHealth.gaps`/`.edge_cases`
+fields, sample collection in `get_extraction_health()`, and table-format CLI sections all
+present; 111/111 tests pass. No operator directive is currently active — proceeding to
+standard watchdog steps. Awaiting a new objective from the operator.
 
 ## Overall Plan
 
