@@ -729,7 +729,7 @@ shift || true
 cd "${ROOT_DIR}"
 # Skip janitor for read-only / stop commands — they're fast and don't need it.
 case "${cmd}" in
-  watch-all-status|dev-status|watch-all-stop|watch-stop|watchdog-stop|plane-status|providers-status|doctor|status|worker-backend-status|worker-backend-probe|loop-start|loop-stop|loop-status|loop-log) ;;
+  watch-all-status|dev-status|watch-all-stop|watch-stop|watchdog-stop|plane-status|providers-status|doctor|status|worker-backend-status|worker-backend-probe|loop-start|loop-stop|loop-status|loop-log|budget) ;;
   *) run_janitor ;;
 esac
 
@@ -1068,6 +1068,12 @@ PYEOF
     ;;
   loop-status)
     loop_status
+    ;;
+  budget)
+    # Operator budget signal (audit D1): voluntary readout of how much claude
+    # subscription room is left before the fleet throttles / the hard 5h limit.
+    load_env_file
+    "${VENV_DIR}/bin/python" -m operations_center.execution.usage_budget
     ;;
   loop-log)
     loop_log

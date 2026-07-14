@@ -17,7 +17,9 @@ import pytest
 from operations_center.execution.usage_budget import (
     BUCKET_SPAN,
     DEFAULT_CAP_WEIGHTED,
+    BudgetStatus,
     budget_status,
+    format_status_line,
 )
 from operations_center.execution.usage_store import UsageStore
 
@@ -188,6 +190,28 @@ def test_naive_timestamp_is_counted_not_crashed(monkeypatch, tmp_path: Path):
     )
     s = budget_status(now=NOW)  # must not raise on the aware/naive compare
     assert round(s.used_weighted) == 100
+
+
+def _status(**kw) -> BudgetStatus:
+    base = dict(
+        bucket_start=NOW,
+        bucket_end=NOW + BUCKET_SPAN,
+        used_weighted=1000.0,
+        cap_weighted=10000.0,
+        reserve_fraction=0.25,
+        exhausted=False,
+        disabled=False,
+    )
+    base.update(kw)
+    return BudgetStatus(**base)
+
+
+def test_format_status_line_reflects_state(monkeypatch):
+    ok = format_status_line(_status())
+    assert "ok" in ok
+    assert "before the fleet throttles" in ok and "before the hard 5h limit" in ok
+    assert "THROTTLING" in format_status_line(_status(used_weighted=9000.0, exhausted=True))
+    assert "DISABLED" in format_status_line(_status(disabled=True))
 
 
 def _store(monkeypatch, tmp_path: Path) -> UsageStore:
