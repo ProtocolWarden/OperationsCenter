@@ -3468,3 +3468,66 @@ def test_branch_protection_gate_refuses_on_api_error() -> None:
     assert not watcher._branch_protection_ok(
         gh, "o", "r", "main", _settings_require_protection(True)
     )
+
+
+# ── D1: reviewer respects the fleet backend ladder (budget/cooldown aware) ─────
+
+
+def _ladder_settings(dynamic: bool = True):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        team_executor=SimpleNamespace(dynamic_worker_backend_selection=dynamic)
+    )
+
+
+def _cool_claude(store, now):
+    from datetime import timedelta
+
+    store.record_worker_backend_cooldown(
+        worker_backend="claude_code",
+        reset_at=now + timedelta(hours=2),
+        now=now,
+        limit_kind="session_5h",  # account-wide → claude fully cooled
+        model=None,
+    )
+
+
+def test_select_review_backend_available_when_no_cooldown(monkeypatch, tmp_path):
+    from datetime import datetime, timezone
+
+    from operations_center.execution.usage_store import UsageStore
+
+    monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "u.json"))
+    sel = watcher._select_review_backend(
+        _ladder_settings(), usage_store=UsageStore(), now=datetime.now(timezone.utc)
+    )
+    assert sel is not None and sel.selected_backend == "claude_code"
+
+
+def test_select_review_backend_defers_when_claude_over_budget(monkeypatch, tmp_path):
+    from datetime import datetime, timezone
+
+    from operations_center.execution.usage_store import UsageStore
+
+    monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "u.json"))
+    now = datetime.now(timezone.utc)
+    store = UsageStore()
+    _cool_claude(store, now)
+    sel = watcher._select_review_backend(_ladder_settings(), usage_store=store, now=now)
+    # claude cooled/over-budget → not selected → the reviewer will DEFER instead of burning it
+    assert sel is not None and sel.selected_backend != "claude_code"
+
+
+def test_select_review_backend_respects_dynamic_disabled(monkeypatch, tmp_path):
+    from datetime import datetime, timezone
+
+    from operations_center.execution.usage_store import UsageStore
+
+    monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "u.json"))
+    now = datetime.now(timezone.utc)
+    store = UsageStore()
+    _cool_claude(store, now)
+    sel = watcher._select_review_backend(_ladder_settings(dynamic=False), usage_store=store, now=now)
+    # operator opted out of the ladder globally → always the preferred backend
+    assert sel is not None and sel.selected_backend == "claude_code"

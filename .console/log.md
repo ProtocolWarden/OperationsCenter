@@ -1,3 +1,24 @@
+## 2026-07-14 — feat(reviewer): budget/cooldown-aware review — defer, don't burn (audit D1 pt1)
+
+The reviewer is part of the fleet but was claude-ONLY and consulted NO budget:
+it burned claude reviewing PRs even when over the 25% reserve (observed live
+2026-07-14 — reviewing my own PRs during a budget crunch pushed the account to
+the hard cap). Now `_process_self_review` calls `_select_review_backend`
+(reuses the controller's `select_worker_backend` ladder) BEFORE the direct
+`claude -p` verdict call: if claude is cooled or over the budget_reserve
+(`selected_backend != "claude_code"`), it DEFERS the sweep — no claude spawn, no
+budget charge, no needs-human escalation — and retries when the window drains
+(~5h). Fail-open: any selection/store error → proceed on claude (today's
+behavior); `dynamic_worker_backend_selection=False` → operator opt-out honored.
+Verdict parsing untouched (already backend-agnostic, file-based verdict.json).
+3 new tests + 150 existing reviewer tests green; ruff+ty clean.
+
+This is D1 PART 1 (stop the over-budget burn, park smart). PART 2 = actually
+review on CODEX when claude is cooled (needs live validation that codex writes a
+schema-conformant verdict.json in the empty-dir/`-p` contract — the one unknown
+from the scoping pass; until then non-claude selection = defer). See
+audit-remediation-plan memory. Next: D2 council.
+
 ## 2026-07-14 — feat(budget): operator budget signal `operations-center.sh budget` (audit D1)
 
 Voluntary operator readout (D1 part 3). A human session can't be hard-gated, so
