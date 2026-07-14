@@ -18,6 +18,7 @@ from operations_center.entrypoints.custodian_sweep.main import (
     _DEDUP_LABEL_PREFIX,
     _delta,
     _discover_targets,
+    _emit,
     _find_open_sweep_task,
     _index_open_sweep_tasks,
     _render_body,
@@ -94,6 +95,30 @@ def test_find_open_sweep_task_matches_dedup_label() -> None:
 def test_find_open_sweep_task_returns_none_when_absent() -> None:
     plane = SimpleNamespace(list_issues=lambda: [])
     assert _find_open_sweep_task(plane, "Demo") is None
+
+
+def test_emit_skips_plane_mutation_for_zero_findings() -> None:
+    plane = SimpleNamespace(
+        comment_issue=lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("unexpected")),
+        create_issue=lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("unexpected")),
+    )
+    sweep = _RepoSweep(repo_key="Demo", envelope=_envelope())
+
+    action = _emit(sweep, {}, plane, existing_tasks={}, dry_run=False)
+
+    assert action == "skipped-zero-findings"
+
+
+def test_emit_still_reports_zero_findings_skip_in_dry_run() -> None:
+    plane = SimpleNamespace(
+        comment_issue=lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("unexpected")),
+        create_issue=lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("unexpected")),
+    )
+    sweep = _RepoSweep(repo_key="Demo", envelope=_envelope())
+
+    action = _emit(sweep, {}, plane, existing_tasks={}, dry_run=True)
+
+    assert action == "skipped-zero-findings"
 
 
 def test_index_open_sweep_tasks_maps_repo_key_to_issue() -> None:

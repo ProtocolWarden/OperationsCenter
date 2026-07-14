@@ -220,6 +220,8 @@ def _emit(
     dry_run: bool,
 ) -> str:
     """Create-or-comment one Plane task per repo. Returns action label."""
+    if not sweep.error and sweep.total == 0:
+        return "skipped-zero-findings"
     title = f"[{sweep.repo_key}] custodian sweep: {sweep.total} findings"
     body = _render_body(sweep, deltas)
     existing = existing_tasks.get(sweep.repo_key)
