@@ -45,6 +45,7 @@ from .board_unblock import (
     _has_label,
     _labels,
     _mem_available_gb,
+    _open_pr_gate_blocked_repos,
 )
 
 logger = logging.getLogger(__name__)
@@ -152,7 +153,7 @@ def apply_board_actions(client: PlaneClient, actions: list[dict], *, apply: bool
     standalone CLI's apply loop so behaviour is identical in both call paths."""
     results: list[dict] = []
     for action in actions:
-        entry = dict(action)
+        entry = {k: v for k, v in action.items() if not k.startswith("_")}
         if action.get("skipped"):
             results.append(entry)
             continue
@@ -161,6 +162,17 @@ def apply_board_actions(client: PlaneClient, actions: list[dict], *, apply: bool
         else:
             try:
                 client.transition_issue(action["task_id"], action["to_state"])
+                existing = list(action.get("_issue_labels", []))
+                if existing and (
+                    action.get("labels_to_add") or action.get("labels_to_remove")
+                ):
+                    removed = {lab.lower() for lab in action.get("labels_to_remove", [])}
+                    updated = [lab for lab in existing if lab.lower() not in removed]
+                    for new_label in action.get("labels_to_add", []):
+                        if not any(lab.lower() == new_label.lower() for lab in updated):
+                            updated.append(new_label)
+                    if updated != existing:
+                        client.update_issue_labels(action["task_id"], updated)
                 client.comment_issue(
                     action["task_id"],
                     f"Board unblock (autonomous): {action['rule']} — "
@@ -321,6 +333,9 @@ class BoardUnblockTask:
                     mem_available_gb=mem_gb,
                     code_failure_retry_cap=int(
                         getattr(self._settings, "code_failure_retry_cap", 0) or 0
+                    ),
+                    open_pr_gate_blocked_repos=_open_pr_gate_blocked_repos(
+                        issues, self._settings, now=now, gh_client=gh
                     ),
                 )
                 if a.get("task_id") not in reconciled_ids
