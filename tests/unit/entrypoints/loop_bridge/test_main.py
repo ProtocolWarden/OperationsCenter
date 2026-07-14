@@ -79,6 +79,50 @@ def test_on_cooldown_records_into_usage_store(monkeypatch, tmp_path: Path) -> No
     )
 
 
+def test_on_cooldown_session5h_records_budget_cap_sample(monkeypatch, tmp_path: Path) -> None:
+    # audit D4: an account-wide claude limit calibrates the budget cap.
+    monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
+    cfg = tmp_path / "cfg"
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(cfg))
+    monkeypatch.delenv("OC_CLAUDE_BUDGET_CAP_WEIGHTED", raising=False)
+    proj = cfg / "projects" / "p1"
+    proj.mkdir(parents=True)
+    now = datetime.now(timezone.utc)
+    proj.joinpath("s.jsonl").write_text(
+        json.dumps(
+            {"timestamp": now.isoformat(), "message": {"model": "claude-sonnet-5", "usage": {"output_tokens": 100}}}
+        )
+        + "\n"
+    )
+    reset_at = now + timedelta(hours=2)
+    payload = json.dumps(
+        {
+            "backend": "claude",
+            "reset_at": reset_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "limit_kind": "session_5h",
+            "model": None,
+        }
+    )
+    assert bridge.on_cooldown(payload) == 0
+    # the estimator's 500 weighted (5*100 output) is captured as a cap observation
+    assert UsageStore().learned_budget_cap(min_samples=1) == 500.0
+
+
+def test_on_cooldown_model_weekly_records_no_cap_sample(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
+    reset_at = datetime.now(timezone.utc) + timedelta(hours=2)
+    payload = json.dumps(
+        {
+            "backend": "claude",
+            "reset_at": reset_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "limit_kind": "model_weekly",  # per-model, NOT account-wide → no calibration
+            "model": "claude-sonnet-5",
+        }
+    )
+    assert bridge.on_cooldown(payload) == 0
+    assert UsageStore().learned_budget_cap(min_samples=1) is None
+
+
 def test_on_cooldown_unknown_backend_is_noop(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "usage.json"))
     payload = json.dumps(

@@ -1,3 +1,21 @@
+## 2026-07-14 — feat(budget): self-calibrating cap — learn from observed limits (audit D4/F17)
+
+Retires the 42M magic constant. The budget guard's cap was a single-sample
+constant (fragile: plan-tier or weight changes silently invalidate it). Now:
+when an ACCOUNT-WIDE claude limit trips (session_5h / global_weekly), the
+on_cooldown hook snapshots the estimator's current trailing-window weighted
+usage — an observed sample of the real cap, measured in the SAME units the
+estimator uses, so systematic estimator bias cancels out — and records it in
+the usage store (best-effort, one sample per episode via a 1h recency guard;
+last 8 kept). `budget_status` cap precedence is now: explicit
+`OC_CLAUDE_BUDGET_CAP_WEIGHTED` env override > learned median (>=2 samples,
+robust to a single anomalous event) > 42M cold-start seed. `usage_store` gains
+`record_budget_cap_sample` + `learned_budget_cap`; `usage_budget` gains
+`_resolve_cap`/`_learned_cap` (lazy store import, best-effort). 9 new tests
+(median/min-samples, recency guard, learned-vs-env precedence, on_cooldown
+records for session_5h but not model_weekly). 38 pass; ruff+ty clean. Next
+audit items: D1 reviewer backend ladder, D2 council, D3 attribution.
+
 ## 2026-07-13 — feat(budget): claude 25% reserve guard + audit fixes (F1/F2/F16)
 
 Lands the operator's 2026-07-13 directive (leave ~25% of every 5h claude bucket

@@ -37,7 +37,9 @@ model ids are counted toward the *expensive* side so the guard fires early
 rather than late.
 
 Env overrides (documented in .env.operations-center.example):
-  OC_CLAUDE_BUDGET_CAP_WEIGHTED  — window capacity in weighted tokens (default 42_000_000)
+  OC_CLAUDE_BUDGET_CAP_WEIGHTED  — window capacity in weighted tokens; overrides the
+                                   learned cap (default: learned from observed limits,
+                                   else the 42_000_000 cold-start seed)
   OC_CLAUDE_BUDGET_RESERVE       — fraction to leave unspent (default 0.25, clamped [0, 0.95])
   OC_CLAUDE_BUDGET_DISABLED      — truthy (1/true/yes/on) → guard reports never-exhausted
 """
@@ -106,6 +108,38 @@ def _env_float(name: str, default: float) -> float:
 
 def _truthy(value: str | None) -> bool:
     return str(value or "").strip().lower() in _TRUTHY
+
+
+def _learned_cap() -> float | None:
+    """Best-effort cap learned from observed account-wide limit events (audit D4).
+
+    Lazy import so this module stays dependency-light and importable without the
+    usage store; any failure falls back to the default cap.
+    """
+    try:
+        from operations_center.execution.usage_store import UsageStore
+
+        return UsageStore().learned_budget_cap()
+    except Exception:  # noqa: BLE001 — calibration is best-effort
+        return None
+
+
+def _resolve_cap() -> float:
+    """Cap precedence: explicit env override > learned-from-observed-limits > default.
+
+    The 42M default is only a cold-start seed; once the fleet has observed a
+    couple of real account-wide limits, the learned median replaces it and the
+    magic constant retires (audit F17).
+    """
+    raw = os.environ.get("OC_CLAUDE_BUDGET_CAP_WEIGHTED")
+    if raw is not None and raw.strip() != "":
+        cap = _env_float("OC_CLAUDE_BUDGET_CAP_WEIGHTED", DEFAULT_CAP_WEIGHTED)
+    else:
+        cap = _learned_cap() or DEFAULT_CAP_WEIGHTED
+    if cap <= 0:
+        logger.warning("usage_budget: resolved cap %s <= 0; using default %s", cap, DEFAULT_CAP_WEIGHTED)
+        cap = DEFAULT_CAP_WEIGHTED
+    return cap
 
 
 def _claude_projects_dir() -> Path:
@@ -205,10 +239,7 @@ def _reset_horizon(
 
 def budget_status(now: datetime | None = None) -> BudgetStatus:
     now = now or datetime.now(timezone.utc)
-    cap = _env_float("OC_CLAUDE_BUDGET_CAP_WEIGHTED", DEFAULT_CAP_WEIGHTED)
-    if cap <= 0:  # a non-positive cap would make the threshold meaningless
-        logger.warning("usage_budget: cap %s <= 0; using default %s", cap, DEFAULT_CAP_WEIGHTED)
-        cap = DEFAULT_CAP_WEIGHTED
+    cap = _resolve_cap()
     reserve = min(max(_env_float("OC_CLAUDE_BUDGET_RESERVE", DEFAULT_RESERVE), 0.0), _MAX_RESERVE)
     disabled = _truthy(os.environ.get("OC_CLAUDE_BUDGET_DISABLED"))
 
