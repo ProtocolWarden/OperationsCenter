@@ -266,10 +266,41 @@ def budget_status(now: datetime | None = None) -> BudgetStatus:
     )
 
 
+def _mtok(x: float) -> str:
+    return f"{x / 1e6:.1f}M"
+
+
+def format_status_line(s: BudgetStatus) -> str:
+    """One-line, human-readable budget readout for the operator (audit D1).
+
+    Voluntary signal only — a human session can't be hard-gated. It answers the
+    operator's real question: how much room is left before the FLEET throttles,
+    and before the HARD 5h limit stops everything.
+    """
+    pct = 100.0 * s.used_weighted / max(s.threshold_weighted, 1.0)
+    if s.disabled:
+        state = "DISABLED (guard off)"
+    elif s.exhausted:
+        state = "THROTTLING — fleet diverts to codex / parks reviews"
+    else:
+        state = "ok"
+    return (
+        f"claude budget: {state} — {pct:.0f}% of reserve threshold used | "
+        f"{_mtok(s.threshold_weighted - s.used_weighted)} weighted before the fleet throttles | "
+        f"{_mtok(s.cap_weighted - s.used_weighted)} before the hard 5h limit | "
+        f"window {s.bucket_start:%H:%MZ}->{s.bucket_end:%H:%MZ} | cap {_mtok(s.cap_weighted)}"
+    )
+
+
 __all__ = [
     "BudgetStatus",
     "budget_status",
+    "format_status_line",
     "BUCKET_SPAN",
     "DEFAULT_CAP_WEIGHTED",
     "DEFAULT_RESERVE",
 ]
+
+
+if __name__ == "__main__":  # `python -m operations_center.execution.usage_budget`
+    print(format_status_line(budget_status()))  # noqa: T201 — CLI readout is the point

@@ -1,3 +1,20 @@
+## 2026-07-14 — feat(budget): operator budget signal `operations-center.sh budget` (audit D1)
+
+Voluntary operator readout (D1 part 3). A human session can't be hard-gated, so
+per the operator's decision the fleet is throttled and the operator gets a
+SIGNAL instead. `operations-center.sh budget` (read-only, skips janitor) prints
+one line via `python -m operations_center.execution.usage_budget`:
+`claude budget: <ok|THROTTLING|DISABLED> — N% of reserve threshold used | XM
+weighted before the fleet throttles | YM before the hard 5h limit | window
+…→… | cap …`. New testable `format_status_line(BudgetStatus)` +
+`__main__`. Answers the real question: how much room before the fleet throttles
+vs before the hard 5h limit stops everything. 1 test; ruff+ty clean.
+Remaining D1: reviewer backend ladder + codex fallback (backend-agnostic
+harness — the big one, designed next), standalone budget writer (F3, decouple
+from the loop). NOTE: audit F9 was partly wrong — WATCH_INTERVAL_* ARE read by
+operations-center.sh watch-role dispatch (lines ~354-358), just not by the
+Python side; re-triage F9 before acting.
+
 ## 2026-07-14 — feat(budget): self-calibrating cap — learn from observed limits (audit D4/F17)
 
 Retires the 42M magic constant. The budget guard's cap was a single-sample
