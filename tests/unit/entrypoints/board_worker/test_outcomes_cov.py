@@ -175,6 +175,14 @@ def test_handle_success_goal_plain_done():
     assert any("Implementation complete" in c.args[1] for c in client.comment_issue.mock_calls)
 
 
+def test_handle_success_clears_stale_blocked_reason_labels():
+    client = _make_client()
+    issue = {"id": "g4b", "labels": ["repo: web", "blocked-reason: policy"]}
+    settings = _make_settings({"web": _make_repo_cfg(await_review=False)})
+    outcomes.handle_success(client, issue, "goal", "goal", False, settings)
+    assert ["repo: web"] in [list(call.args[1]) for call in client.update_issue_labels.mock_calls]
+
+
 def test_handle_success_goal_comment_names_pushed_branch():
     client = _make_client()
     issue = {"id": "g5", "labels": [{"name": "repo: web"}]}

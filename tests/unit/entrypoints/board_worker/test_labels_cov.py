@@ -155,6 +155,14 @@ def test_remove_labels_updates_issue_copy():
     assert issue["labels"] == ["keep"]
 
 
+def test_clear_blocked_reason_labels_uses_shared_constant():
+    client = MagicMock()
+    issue = {"id": 18, "labels": ["keep", "blocked-reason: policy", "blocked-reason: backend-capacity"]}
+    mod.clear_blocked_reason_labels(client, issue)
+    client.update_issue_labels.assert_called_once_with("18", ["keep"])
+    assert issue["labels"] == ["keep"]
+
+
 # ── increment_retry_count ────────────────────────────────────────────────────
 
 

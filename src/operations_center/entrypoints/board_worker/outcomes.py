@@ -14,12 +14,14 @@ from pathlib import Path
 
 from ._subprocess import run_executor
 from .labels import (
+    BLOCKED_REASON_LABELS,
     LIFECYCLE_EXPANDED,
     STATE_BLOCKED,
     STATE_DONE,
     STATE_READY,
     STATE_REVIEW,
     add_label,
+    clear_blocked_reason_labels,
     increment_code_failure_count,
     increment_retry_count,
     label_value,
@@ -137,6 +139,7 @@ def handle_success(
     )
 
     try:
+        clear_blocked_reason_labels(client, issue)
         if role == "goal":
             # Claims-vs-reality: say what was actually delivered. A goal task
             # can succeed with nothing pushed (no new commits — already done /
@@ -515,7 +518,7 @@ def handle_failure(
             )
         if executor_exit_code is not None:
             add_label(client, issue, f"executor-exit-code: {executor_exit_code}")
-        remove_labels(client, issue, [_BLOCKED_REASON_POLICY_LABEL, _BACKEND_CAPACITY_REASON_LABEL])
+        remove_labels(client, issue, BLOCKED_REASON_LABELS)
         if category == "policy_blocked":
             # Deterministic policy gate (e.g. review.required) — the executor never
             # ran, so this has no executor-signal/exit-code label and would otherwise
