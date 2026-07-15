@@ -19,7 +19,10 @@ def _usage_store() -> SimpleNamespace:
     )
 
 
-def test_select_worker_backend_prefers_alternate_when_preferred_cooling_down() -> None:
+def test_select_worker_backend_prefers_alternate_when_preferred_cooling_down(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("OPERATIONS_CENTER_ALLOWED_PROVIDERS", "claude,codex")
     now = datetime(2026, 5, 25, 16, 0, tzinfo=UTC)
 
     def _cooldown(worker_backend: str, *, now):
@@ -38,6 +41,31 @@ def test_select_worker_backend_prefers_alternate_when_preferred_cooling_down() -
     )
 
     assert selection.selected_backend == "codex_cli"
+
+
+def test_select_worker_backend_respects_allowed_provider_env(monkeypatch) -> None:
+    now = datetime(2026, 5, 25, 16, 0, tzinfo=UTC)
+    monkeypatch.setenv("OPERATIONS_CENTER_ALLOWED_PROVIDERS", "claude")
+
+    def _cooldown(worker_backend: str, *, now):
+        if worker_backend == "claude_code":
+            return datetime(2026, 5, 25, 17, 0, tzinfo=UTC)
+        return None
+
+    usage_store = _usage_store()
+    usage_store.worker_backend_cooldown_until = _cooldown
+
+    selection = select_worker_backend(
+        preferred_backend="claude_code",
+        usage_store=usage_store,
+        dynamic_enabled=True,
+        now=now,
+    )
+
+    assert selection.selected_backend is None
+    assert selection.reason is not None
+    assert "claude_code until" in selection.reason
+    assert "codex_cli" not in selection.reason
 
 
 def test_select_worker_backend_not_blocked_by_lone_model_weekly(monkeypatch, tmp_path) -> None:
@@ -79,7 +107,10 @@ def test_parse_worker_backend_reset_handles_relative_message() -> None:
     assert reset_at == datetime(2026, 5, 25, 21, 0, tzinfo=UTC)
 
 
-def test_execute_with_worker_backend_round_robin_retries_on_capacity_limit() -> None:
+def test_execute_with_worker_backend_round_robin_retries_on_capacity_limit(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("OPERATIONS_CENTER_ALLOWED_PROVIDERS", "claude,codex")
     cooldowns: dict[str, datetime | None] = {"claude_code": None, "codex_cli": None}
     calls: list[str] = []
 
@@ -114,3 +145,43 @@ def test_execute_with_worker_backend_round_robin_retries_on_capacity_limit() -> 
     assert executed.selected_backend == "codex_cli"
     assert executed.fallback_used is True
     assert calls == ["claude_code", "codex_cli"]
+
+
+def test_round_robin_does_not_fallback_to_disallowed_backend(monkeypatch) -> None:
+    monkeypatch.setenv("OPERATIONS_CENTER_ALLOWED_PROVIDERS", "claude")
+    cooldowns: dict[str, datetime | None] = {"claude_code": None, "codex_cli": None}
+    calls: list[str] = []
+
+    def _cooldown_until(worker_backend: str, *, now):
+        return cooldowns.get(worker_backend)
+
+    def _record(worker_backend: str, reset_at, now) -> None:
+        cooldowns[worker_backend] = reset_at
+
+    usage_store = _usage_store()
+    usage_store.worker_backend_cooldown_until = _cooldown_until
+    usage_store.record_worker_backend_cooldown = _record
+
+    def _run_once(worker_backend: str):
+        calls.append(worker_backend)
+        return {
+            "status": "failed",
+            "error_summary": "usage limit hit, please try again in 5h 0m",
+        }
+
+    executed = execute_with_worker_backend_round_robin(
+        preferred_backend="claude_code",
+        usage_store=usage_store,
+        dynamic_enabled=True,
+        execute_once=_run_once,
+        failed=lambda payload: payload["status"] != "succeeded",
+        failure_text=lambda payload: payload.get("error_summary"),
+    )
+
+    assert executed.selected_backend == "claude_code"
+    assert executed.fallback_used is False
+    assert executed.selection.selected_backend is None
+    assert executed.selection.reason is not None
+    assert "claude_code until" in executed.selection.reason
+    assert "codex_cli" not in executed.selection.reason
+    assert calls == ["claude_code"]
