@@ -19,6 +19,8 @@ missing family ⇒ `skipped` with a loud reason, NEVER a same-family collapse
 (that would re-open the finding). Still inert in prod until an extraction-kind
 corpus exists (seed corpus is verdict-kind) — wired + fully unit-tested with
 injected fakes. tests/unit 86.03% (gate 85%); reviewer suite 166 green.
+ty: narrowed `self._extractor` at the single-extractor call with `cast` (the
+elif-guard already proves it non-None; ruff bans `assert`) — CI type-check green.
 
 ## 2026-07-15 — Stage 4: Refactor existing code to use the new shared helper (objective DONE)
 

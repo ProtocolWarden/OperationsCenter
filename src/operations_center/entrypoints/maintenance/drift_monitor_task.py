@@ -34,7 +34,7 @@ from __future__ import annotations
 import os
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Mapping
+from typing import TYPE_CHECKING, Any, Literal, Mapping, cast
 
 from operations_center.eval.corpus import load_ledger
 from operations_center.eval.critic import (
@@ -166,7 +166,12 @@ class DriftMonitorTask:
                 panel = {f: self._family_extractors[f] for f in self._panel_families}
                 results = run_panel_drift_monitor(cases, panel, votes=self._votes)
             else:
-                results = run_drift_monitor(cases, self._extractor, votes=self._votes)
+                # Not use_panel ⇒ the `elif self._extractor is None: return` guard
+                # above already handled the None case, so the single extractor is
+                # present here (cast narrows it for the type checker).
+                results = run_drift_monitor(
+                    cases, cast("CheckExtractor", self._extractor), votes=self._votes
+                )
         except Exception as exc:  # noqa: BLE001 — a flaky backend must not halt the loop
             return self._result("failed", started, {}, error=f"drift_run_failed: {exc}")
 
