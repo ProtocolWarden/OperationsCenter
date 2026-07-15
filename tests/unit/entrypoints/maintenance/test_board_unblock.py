@@ -333,6 +333,41 @@ def test_rule8_park_still_fires_during_cooldown():
     assert not retry[0].get("skipped")
 
 
+def test_rule85_backend_capacity_goal_park_fires_during_cooldown():
+    parent = _issue("p_cd85", state="Done", labels=["task-kind: improve"])
+    issue = _issue(
+        "t_cd85",
+        state="Blocked",
+        labels=[
+            "task-kind: goal",
+            "source: autonomy",
+            "source: improve-suggestion",
+            "original-task-id: p_cd85",
+            "blocked-reason: backend-capacity",
+        ],
+        updated_at="2026-05-28T10:00:00+00:00",
+    )
+    actions = _apply_rules(
+        [parent, issue], **_RULES_KWARGS, cooldown_skip_reason=_COOLDOWN_REASON
+    )
+    parked = [a for a in actions if a["rule"] == "BACKEND_CAPACITY_PARK"]
+    assert len(parked) == 1
+    assert parked[0]["to_state"] == "Backlog"
+    assert not parked[0].get("skipped")
+
+
+def test_rule85_backend_capacity_goal_without_repromotion_path_stays_blocked():
+    issue = _issue(
+        "t_cd85_nopath",
+        state="Blocked",
+        labels=["task-kind: goal", "blocked-reason: backend-capacity"],
+        updated_at="2026-05-28T10:00:00+00:00",
+    )
+    actions = _apply_rules([issue], **_RULES_KWARGS, cooldown_skip_reason=_COOLDOWN_REASON)
+    parked = [a for a in actions if a["rule"] == "BACKEND_CAPACITY_PARK"]
+    assert parked == []
+
+
 def test_open_pr_gate_requeue_deferred_during_cooldown():
     issue = _issue(
         "t_cd_gate",

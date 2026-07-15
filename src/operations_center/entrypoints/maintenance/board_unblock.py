@@ -6,7 +6,7 @@ The loop is the operator for all conditions handled here.  Do not add "operator 
 required" notes for patterns this tool covers.  When a new stuck pattern emerges, add a
 rule here rather than logging it and waiting.
 
-Applies twelve rules on every run:
+Applies thirteen rules on every run:
 
   Rule 1 — DEAD_REMEDIATION_CANCEL
     Tasks with label "dead-remediation" OR (executor-signal: sigkill + retry-count ≥ 3)
@@ -88,6 +88,15 @@ Applies twelve rules on every run:
     sandbox branch, transient infra config issues) where no executor ran and the
     failure is safe to retry once the underlying infrastructure is fixed.
     The minimum age avoids re-queuing before the board_worker finishes writing labels.
+
+  Rule 8.5 — BACKEND_CAPACITY_PARK
+    goal/spec-author tasks in Blocked with ``blocked-reason: backend-capacity`` and
+    a known automatic promotion path → move to Backlog after the same minimum age as
+    Rule 8. These failures happen when the planner/backend hits a session-limit or
+    quota condition and returns no structured output; leaving them in Blocked strands
+    work even after the cooldown clears because the recovery path only promotes from
+    Backlog. Parking them preserves the retry blocker label until Rule 7 / Rule 9
+    re-promotes them once dispatch is legal again.
 
   Rule 9 — SPEC_AUTHOR_BACKLOG_PROMOTE
     spec-author tasks in Backlog state with no active retry blocker → move to Ready for AI.
@@ -838,6 +847,55 @@ def _apply_rules(
                         ),
                         "labels_to_remove": _BLOCKED_REASON_LABELS,
                         "_issue_labels": labels,
+                    }
+                )
+
+        # Rule 8.5 — backend-capacity Blocked tasks that already have an automatic
+        # Backlog→R4AI recovery path. Park them in Backlog (not Ready) so the
+        # cooldown-aware promoter can restore them once dispatch is legal again.
+        is_backend_capacity_blocked = (
+            state_lower == "blocked"
+            and (
+                _has_label(labels, _GOAL_LABEL) or _has_label(labels, _SPEC_AUTHOR_LABEL)
+            )
+            and not _has_label(labels, _SELF_MODIFY_APPROVED_LABEL)
+            and not _has_label(labels, _THIN_GOAL_LABEL)
+            and not _has_label_prefix(labels, _SIGKILL_SIGNAL_PREFIX)
+            and not _has_label_prefix(labels, "executor-exit-code:")
+            and not _has_label_prefix(labels, _BLOCKED_BY_PREFIX)
+            and _has_label(labels, _BLOCKED_REASON_BACKEND_CAPACITY_LABEL)
+        )
+        if is_backend_capacity_blocked:
+            updated_at = _parse_updated_at(issue)
+            has_repromotion_path = _has_label(labels, _SPEC_AUTHOR_LABEL) or (
+                _has_label(labels, _GOAL_LABEL)
+                and (
+                    (_has_label(labels, _SOURCE_AUTONOMY_LABEL) and _has_label(
+                        labels, _SOURCE_IMPROVE_SUGGESTION_LABEL
+                    ))
+                    or (
+                        _has_label(labels, _SOURCE_BOARD_WORKER_LABEL)
+                        and _has_label(labels, _HANDOFF_IMPROVEMENT_LABEL)
+                    )
+                )
+                and bool(_label_value(labels, _ORIGINAL_TASK_PREFIX))
+            )
+            if (
+                has_repromotion_path
+                and updated_at
+                and (now - updated_at) >= timedelta(minutes=clean_blocked_min_minutes)
+            ):
+                actions.append(
+                    {
+                        "task_id": task_id,
+                        "title": title,
+                        "rule": "BACKEND_CAPACITY_PARK",
+                        "from_state": state,
+                        "to_state": "Backlog",
+                        "reason": (
+                            "backend-capacity/session-limit failure; park in Backlog so "
+                            "cooldown-aware promotion can retry after the backend resets"
+                        ),
                     }
                 )
 
