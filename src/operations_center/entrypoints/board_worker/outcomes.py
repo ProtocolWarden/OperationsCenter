@@ -23,6 +23,7 @@ from .labels import (
     increment_code_failure_count,
     increment_retry_count,
     label_value,
+    remove_labels,
     retry_count_from_labels,
 )
 from .work_ceiling import ceiling_reached, root_descendant_cap_reached
@@ -41,6 +42,7 @@ _MAX_FOLLOW_UP_RETRIES = 3
 _CODE_FAILURE_CATEGORIES = frozenset({"validation_failed", "no_changes"})
 _TERMINAL_STATE_NAMES = {"cancelled", "done"}
 _BACKEND_CAPACITY_REASON_LABEL = "blocked-reason: backend-capacity"
+_BLOCKED_REASON_POLICY_LABEL = "blocked-reason: policy"
 _BACKEND_CAPACITY_REASON_SNIPPETS = (
     "stage planner received non-json from agent",
     "session limit or error",
@@ -513,6 +515,7 @@ def handle_failure(
             )
         if executor_exit_code is not None:
             add_label(client, issue, f"executor-exit-code: {executor_exit_code}")
+        remove_labels(client, issue, [_BLOCKED_REASON_POLICY_LABEL, _BACKEND_CAPACITY_REASON_LABEL])
         if category == "policy_blocked":
             # Deterministic policy gate (e.g. review.required) — the executor never
             # ran, so this has no executor-signal/exit-code label and would otherwise
@@ -521,7 +524,7 @@ def handle_failure(
             # hitting the same policy gate each time (confirmed via ghost-audit G5:
             # 26 policy-blocked re-dispatches in one hour). This label marks the block
             # as policy-driven so Rule 8 can exclude it.
-            add_label(client, issue, "blocked-reason: policy")
+            add_label(client, issue, _BLOCKED_REASON_POLICY_LABEL)
         elif _is_backend_capacity_failure(category, reason):
             # Fallback dispatch hit a backend-capacity/error signature and returned
             # no structured planner output; immediate clean-retry recycling just

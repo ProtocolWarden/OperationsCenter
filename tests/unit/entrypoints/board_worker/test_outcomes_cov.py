@@ -677,6 +677,10 @@ def _all_update_labels(client) -> list[str]:
     return [lbl for c in client.update_issue_labels.mock_calls for lbl in c.args[1]]
 
 
+def _last_update_labels(client) -> list[str]:
+    return list(client.update_issue_labels.call_args.args[1])
+
+
 def test_handle_failure_clean_code_failure_increments_code_fail_count():
     # CODE_FAILURE_RETRY_CAP: a clean validation_failed (no kill signal) bumps the
     # dedicated counter so board_unblock can later cancel the loop.
@@ -726,6 +730,25 @@ def test_handle_failure_backend_capacity_adds_structured_label():
         _make_settings(),
     )
     assert "blocked-reason: backend-capacity" in _all_update_labels(client)
+
+
+def test_handle_failure_clears_stale_blocked_reason_before_new_policy_failure():
+    client = _make_client()
+    issue = {"id": "b2", "labels": ["blocked-reason: backend-capacity", "keep"]}
+    outcomes.handle_failure(
+        client, issue, "goal", "goal", {"failure_category": "policy_blocked"}, _make_settings()
+    )
+    assert _last_update_labels(client) == ["keep", "blocked-reason: policy"]
+
+
+def test_handle_failure_clears_stale_blocked_reason_when_failure_is_retryable():
+    client = _make_client()
+    issue = {"id": "b3", "labels": ["blocked-reason: policy", "keep"]}
+    outcomes.handle_failure(
+        client, issue, "goal", "goal", {"failure_category": "validation_failed"}, _make_settings()
+    )
+    assert "blocked-reason: policy" not in _last_update_labels(client)
+    assert "blocked-reason: backend-capacity" not in _last_update_labels(client)
 
 
 def test_handle_failure_transient_category_does_not_count():

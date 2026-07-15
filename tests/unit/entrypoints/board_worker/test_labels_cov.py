@@ -128,6 +128,7 @@ def test_add_label_string_labels():
     issue = {"id": 5, "labels": ["a", "b"]}
     mod.add_label(client, issue, "c")
     client.update_issue_labels.assert_called_once_with("5", ["a", "b", "c"])
+    assert issue["labels"] == ["a", "b", "c"]
 
 
 def test_add_label_no_labels_key():
@@ -146,6 +147,14 @@ def test_add_label_swallows_exception(caplog):
     assert "failed to add label" in caplog.text
 
 
+def test_remove_labels_updates_issue_copy():
+    client = MagicMock()
+    issue = {"id": 17, "labels": ["keep", "blocked-reason: policy", "blocked-reason: backend-capacity"]}
+    mod.remove_labels(client, issue, ["blocked-reason: policy", "blocked-reason: backend-capacity"])
+    client.update_issue_labels.assert_called_once_with("17", ["keep"])
+    assert issue["labels"] == ["keep"]
+
+
 # ── increment_retry_count ────────────────────────────────────────────────────
 
 
@@ -154,6 +163,7 @@ def test_increment_from_existing_count():
     issue = {"id": 11, "labels": [{"name": "keep"}, {"name": "retry-count: 2"}]}
     mod.increment_retry_count(client, issue)
     client.update_issue_labels.assert_called_once_with("11", ["keep", "retry-count: 3"])
+    assert issue["labels"] == ["keep", "retry-count: 3"]
 
 
 def test_increment_when_absent_adds_one():

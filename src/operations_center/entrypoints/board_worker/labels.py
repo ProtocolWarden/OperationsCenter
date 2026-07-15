@@ -17,6 +17,7 @@ __all__ = [
     "has_label",
     "retry_count_from_labels",
     "add_label",
+    "remove_labels",
     "increment_retry_count",
     "issue_author_identities",
     "build_forwarded_labels",
@@ -47,6 +48,18 @@ GITHUB_DIR = Path.home() / "Documents" / "GitHub"
 
 
 # ── Label helpers ─────────────────────────────────────────────────────────────
+
+
+def _label_names(issue: dict) -> list[str]:
+    return [
+        (lab.get("name", "") if isinstance(lab, dict) else str(lab)).strip()
+        for lab in issue.get("labels", [])
+        if (lab.get("name", "") if isinstance(lab, dict) else str(lab)).strip()
+    ]
+
+
+def _store_label_names(issue: dict, names: list[str]) -> None:
+    issue["labels"] = list(names)
 
 
 def label_value(labels: list, prefix: str) -> str:
@@ -93,19 +106,36 @@ def add_label(client, issue: dict, new_label: str) -> None:
     Plane's update_issue_labels replaces the set, so we read existing labels
     first. Failures are non-fatal — the next cycle can re-apply.
     """
-    existing = [
-        (lab.get("name", "") if isinstance(lab, dict) else str(lab)).strip()
-        for lab in issue.get("labels", [])
-    ]
-    existing = [name for name in existing if name]
+    existing = _label_names(issue)
     if new_label in existing:
         return
+    updated = existing + [new_label]
     try:
-        client.update_issue_labels(str(issue["id"]), existing + [new_label])
+        client.update_issue_labels(str(issue["id"]), updated)
+        _store_label_names(issue, updated)
     except Exception as exc:
         logger.warning(
             "board_worker: failed to add label %r to task_id=%s — %s",
             new_label,
+            issue.get("id"),
+            exc,
+        )
+
+
+def remove_labels(client, issue: dict, labels_to_remove: list[str]) -> None:
+    """Remove matching labels from an issue, updating the local copy on success."""
+    existing = _label_names(issue)
+    removal = {label.lower() for label in labels_to_remove}
+    filtered = [label for label in existing if label.lower() not in removal]
+    if filtered == existing:
+        return
+    try:
+        client.update_issue_labels(str(issue["id"]), filtered)
+        _store_label_names(issue, filtered)
+    except Exception as exc:
+        logger.warning(
+            "board_worker: failed to remove labels %r from task_id=%s — %s",
+            labels_to_remove,
             issue.get("id"),
             exc,
         )
@@ -118,11 +148,7 @@ def increment_count_label(client, issue: dict, prefix: str) -> None:
     Rule 1 can cancel tasks that exhaust a count cap.
     """
     label_prefix = prefix.rstrip()  # e.g. "retry-count:"
-    existing = [
-        (lab.get("name", "") if isinstance(lab, dict) else str(lab)).strip()
-        for lab in issue.get("labels", [])
-    ]
-    existing = [name for name in existing if name]
+    existing = _label_names(issue)
     current = 0
     filtered = []
     for label in existing:
@@ -136,6 +162,7 @@ def increment_count_label(client, issue: dict, prefix: str) -> None:
     filtered.append(f"{label_prefix} {current + 1}")
     try:
         client.update_issue_labels(str(issue["id"]), filtered)
+        _store_label_names(issue, filtered)
     except Exception as exc:
         logger.warning(
             "board_worker: failed to increment %s for task_id=%s — %s",
