@@ -2,6 +2,7 @@
 # Copyright (C) 2026 ProtocolWarden
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -36,6 +37,12 @@ _T = TypeVar("_T")
 _SUPPORTED_WORKER_BACKENDS = ("claude_code", "codex_cli", "aider_local", "direct_local")
 _REMOTE_WORKER_BACKENDS = ("claude_code", "codex_cli")
 _LOCAL_WORKER_BACKENDS = ("aider_local", "direct_local")
+_PROVIDER_TO_WORKER_BACKEND = {
+    "claude": "claude_code",
+    "anthropic": "claude_code",
+    "codex": "codex_cli",
+    "openai": "codex_cli",
+}
 _TIMEZONE_RESET_RE = re.compile(r"resets\s+(\d{1,2}:\d{2}(?:am|pm))\s+\(([^)]+)\)", re.IGNORECASE)
 _ISO_RESET_RE = re.compile(
     r"resets?(?:\s+at)?\s+(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?Z)",
@@ -86,6 +93,18 @@ def worker_backend_observed_runtime(
     }
 
 
+def _allowed_remote_worker_backends() -> tuple[str, ...]:
+    raw = os.environ.get("OPERATIONS_CENTER_ALLOWED_PROVIDERS", "").strip()
+    if not raw:
+        return _REMOTE_WORKER_BACKENDS
+    allowed = {
+        _PROVIDER_TO_WORKER_BACKEND[provider.strip().lower()]
+        for provider in raw.split(",")
+        if provider.strip().lower() in _PROVIDER_TO_WORKER_BACKEND
+    }
+    return tuple(backend for backend in _REMOTE_WORKER_BACKENDS if backend in allowed)
+
+
 def worker_backend_candidates(preferred_backend: str) -> tuple[str, ...]:
     if preferred_backend not in _SUPPORTED_WORKER_BACKENDS:
         return (preferred_backend,)
@@ -94,9 +113,13 @@ def worker_backend_candidates(preferred_backend: str) -> tuple[str, ...]:
     # themselves (currently a set of one, so no fallback until executor services
     # support them natively).
     if preferred_backend in _REMOTE_WORKER_BACKENDS:
-        pool = _REMOTE_WORKER_BACKENDS
+        pool = _allowed_remote_worker_backends()
     else:
         pool = _LOCAL_WORKER_BACKENDS
+    if not pool:
+        return ()
+    if preferred_backend not in pool:
+        return pool
     alternates = tuple(backend for backend in pool if backend != preferred_backend)
     return (preferred_backend, *alternates)
 
@@ -143,6 +166,13 @@ def select_worker_backend(
 ) -> WorkerBackendSelection:
     current = now or datetime.now(UTC)
     candidates = worker_backend_candidates(preferred_backend)
+    if not candidates:
+        return WorkerBackendSelection(
+            preferred_backend=preferred_backend,
+            selected_backend=None,
+            cooldowns={},
+            reason=f"no allowed worker backends for preferred backend {preferred_backend}",
+        )
     cooldowns = {
         backend: _read_worker_backend_cooldown(usage_store, backend, now=current)
         for backend in candidates

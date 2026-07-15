@@ -23,6 +23,11 @@ from operations_center.backends.worker_backend_selector import (
 NOW = datetime(2026, 6, 2, 12, 0, 0, tzinfo=UTC)
 
 
+@pytest.fixture(autouse=True)
+def _allow_all_remote_worker_backends(monkeypatch) -> None:
+    monkeypatch.setenv("OPERATIONS_CENTER_ALLOWED_PROVIDERS", "claude,codex")
+
+
 # --------------------------------------------------------------------------
 # worker_backend_candidates
 # --------------------------------------------------------------------------
