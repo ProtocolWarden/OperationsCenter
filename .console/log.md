@@ -1,3 +1,24 @@
+## 2026-07-15 — feat(reviewer): ACTIVATE the council — populate guardrail_paths (§G1)
+
+The council's go-live. C1/C2/C3 all merged; `reviewer.council.guardrail_paths`
+shipped EMPTY (OFF) so the rollout couldn't deadlock on its own gate. This is
+the deliberate follow-up that populates it with the COUNCIL_VERDICT.md §G1 set,
+so guardrail-surface PRs (OC control plane: pr_review_watcher/**, loop_bridge/**,
+.hooks/**, scripts/operations-center.sh, .console/workers.yaml+guidelines.md,
+eval/**, oc_session_prompt.txt, operations_center.local.yaml, COUNCIL_VERDICT.md)
+are now adjudicated by the K=3 cross-family panel instead of single self-review.
+Set as the `CouncilSettings.guardrail_paths` DEFAULT (not the untracked live
+local.yaml) so the activation is tracked+reviewable and the running fleet picks
+it up on its next self-update/restart (local.yaml has no council block ⇒ falls
+back to the default). This PR touches only settings.py + example.yaml — neither
+is in §G1 — so it is NOT itself a guardrail PR: it merges via ordinary single
+review, THEN the council is live (chicken-and-egg resolved). Residual (accepted,
+matches §G1): settings.py itself isn't guarded, so emptying the list is single-
+reviewed — guarding it would fire the panel on every unrelated settings edit.
+Both prior operator decisions hold: narrow `review/`-only exemption; codex
+validated live. Pinned by a new default-is-populated test. 166 reviewer + 38
+settings tests green.
+
 ## 2026-07-15 — feat(eval): C3 cross-family EVAL panel — close same-family generator↔evaluator (COUNCIL_VERDICT.md)
 
 Council spec Phase 3 (C3), the last council phase. The guide-gap audit's HIGH
