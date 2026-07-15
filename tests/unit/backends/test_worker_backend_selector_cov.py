@@ -193,6 +193,15 @@ def test_parse_timezone_reset_later_today() -> None:
     assert (local.hour, local.minute) == (14, 30)
 
 
+def test_parse_timezone_reset_without_minutes_later_today() -> None:
+    out = "You've hit your weekly limit · resets 9am (America/New_York)"
+    result = parse_worker_backend_reset(out, "claude_code", now=NOW)
+    assert result is not None
+    assert result.tzinfo == UTC
+    local = result.astimezone(__import__("zoneinfo").ZoneInfo("America/New_York"))
+    assert (local.hour, local.minute) == (9, 0)
+
+
 def test_parse_timezone_reset_rolls_to_next_day() -> None:
     # 8:00am EDT when it is already ~08:00 EDT -> should roll forward a day.
     out = "resets 8:00am (America/New_York)"

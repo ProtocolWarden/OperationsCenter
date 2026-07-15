@@ -43,7 +43,10 @@ _PROVIDER_TO_WORKER_BACKEND = {
     "codex": "codex_cli",
     "openai": "codex_cli",
 }
-_TIMEZONE_RESET_RE = re.compile(r"resets\s+(\d{1,2}:\d{2}(?:am|pm))\s+\(([^)]+)\)", re.IGNORECASE)
+_TIMEZONE_RESET_RE = re.compile(
+    r"resets\s+(\d{1,2}(?::\d{2})?(?:am|pm))\s+\(([^)]+)\)",
+    re.IGNORECASE,
+)
 _ISO_RESET_RE = re.compile(
     r"resets?(?:\s+at)?\s+(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?Z)",
     re.IGNORECASE,
@@ -219,7 +222,8 @@ def parse_worker_backend_reset(
         except ZoneInfoNotFoundError:
             return None
         now_local = current.astimezone(tz)
-        parsed = datetime.strptime(time_str, "%I:%M%p")  # noqa: DTZ007
+        time_fmt = "%I:%M%p" if ":" in time_str else "%I%p"
+        parsed = datetime.strptime(time_str, time_fmt)  # noqa: DTZ007
         reset_local = now_local.replace(
             hour=parsed.hour,
             minute=parsed.minute,
