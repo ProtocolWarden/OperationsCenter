@@ -217,23 +217,22 @@ repos:
 #   # K=3 cross-family panel (claude/sonnet, claude/opus, codex) instead of the
 #   # single self-review; unanimous LGTM merges, any CONCERN feeds the existing
 #   # fix ladder, and an unmet quorum parks (fail-closed) rather than merging
-#   # under-reviewed. council.guardrail_paths defaults EMPTY ⇒ feature OFF — the
-#   # rollout PR that introduces the council must not deadlock on the gate it
-#   # introduces. Populating this list is a DELIBERATE FOLLOW-UP PR, not part of
-#   # this one; the commented set below is the COUNCIL_VERDICT.md §G1 candidate
-#   # list, left inactive here on purpose.
+#   # under-reviewed. council.guardrail_paths now DEFAULTS to the §G1 set below
+#   # (the council is LIVE) — you only need this block to OVERRIDE it (e.g. set
+#   # guardrail_paths: [] to disable, or a different set per deployment). The
+#   # default set is shown here for reference:
 #   council:
-#     guardrail_paths: []
-#       # - .console/workers.yaml
-#       # - .console/guidelines.md
-#       # - tools/loop/oc_session_prompt.txt
-#       # - .hooks/**
-#       # - scripts/operations-center.sh
-#       # - eval/**
-#       # - src/operations_center/entrypoints/pr_review_watcher/**  # council guards its own code
-#       # - src/operations_center/entrypoints/loop_bridge/**
-#       # - config/operations_center.local.yaml                     # untracked, but pin anyway
-#       # - docs/design/COUNCIL_VERDICT.md                          # this spec
+#     guardrail_paths:
+#       - .console/workers.yaml
+#       - .console/guidelines.md
+#       - tools/loop/oc_session_prompt.txt
+#       - .hooks/**
+#       - scripts/operations-center.sh
+#       - eval/**
+#       - src/operations_center/entrypoints/pr_review_watcher/**  # council guards its own code
+#       - src/operations_center/entrypoints/loop_bridge/**
+#       - config/operations_center.local.yaml                     # untracked, but pin anyway
+#       - docs/design/COUNCIL_VERDICT.md                          # this spec
 #     # A park that outlasts this many hours is surfaced to the operator with a
 #     # distinct reason (council_unavailable_capped) instead of re-parking forever.
 #     max_council_park_hours: 24

@@ -294,13 +294,35 @@ class CouncilSettings(BaseModel):
     LGTM merges, any CONCERN feeds the existing fix ladder, and a family on
     cooldown parks the PR (fail-closed) until it recovers.
 
-    ``guardrail_paths`` defaults EMPTY ⇒ the feature is OFF (fail-open to today's
-    single review). Populating the set is a deliberate follow-up PR — the rollout
-    PR that introduces the council must not deadlock on the gate it introduces.
+    ``guardrail_paths`` shipped EMPTY at rollout (feature OFF, fail-open) so the
+    PR that introduced the council could not deadlock on the gate it introduces.
+    It is now POPULATED with the COUNCIL_VERDICT.md §G1 set — the council is LIVE
+    for OC's control-plane surfaces. A deployment can still disable it by setting
+    ``reviewer.council.guardrail_paths: []`` in its config. NOTE: this list's own
+    home (settings.py) is not itself in the set, matching §G1; a change that
+    empties the list is therefore single-reviewed, not council-gated — an
+    accepted residual (guarding settings.py would fire the panel on every
+    unrelated settings edit).
     """
 
-    # Repo-relative globs; empty ⇒ feature OFF (no PR is a guardrail PR).
-    guardrail_paths: list[str] = Field(default_factory=list)
+    # Repo-relative globs; empty ⇒ feature OFF. Populated with COUNCIL_VERDICT.md
+    # §G1 — OC's control-plane guardrail surfaces. Generic entries (.hooks/**,
+    # scripts, .console/*) legitimately match other repos the reviewer sees too;
+    # OC-specific entries simply never match a non-OC diff (fail-open).
+    guardrail_paths: list[str] = Field(
+        default_factory=lambda: [
+            ".console/workers.yaml",
+            ".console/guidelines.md",
+            "tools/loop/oc_session_prompt.txt",
+            ".hooks/**",
+            "scripts/operations-center.sh",
+            "eval/**",
+            "src/operations_center/entrypoints/pr_review_watcher/**",
+            "src/operations_center/entrypoints/loop_bridge/**",
+            "config/operations_center.local.yaml",
+            "docs/design/COUNCIL_VERDICT.md",
+        ]
+    )
     # F14 mitigation — park cap: a council park that outlasts this many hours is
     # surfaced to the operator with a distinct reason instead of re-parking forever.
     max_council_park_hours: int = 24
@@ -384,7 +406,8 @@ class ReviewerSettings(BaseModel):
     # per-correction loop. False (default) preserves prior behavior.
     require_sensitive_path_ack: bool = False
     # C1 — cross-family council for guardrail-surface PRs (COUNCIL_VERDICT.md).
-    # Empty council.guardrail_paths (default) ⇒ feature OFF ⇒ today's single review.
+    # guardrail_paths now defaults to the §G1 set ⇒ the council is LIVE for OC's
+    # control-plane surfaces (set it to [] in config to disable).
     council: CouncilSettings = Field(default_factory=CouncilSettings)
 
 
