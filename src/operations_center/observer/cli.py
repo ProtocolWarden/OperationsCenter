@@ -1050,6 +1050,7 @@ def cmd_extraction_health(
                 no_extraction=health.no_extraction,
                 total_flaky_tests=total_flaky,
                 edge_case_summary=dict(health.edge_case_summary),
+                edge_cases=list(health.edge_cases),
                 message_quality_rate=health.message_quality_rate,
             )
             # Two complementary views over the same storage: the mixin on
