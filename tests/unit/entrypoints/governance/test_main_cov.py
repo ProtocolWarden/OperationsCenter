@@ -296,6 +296,8 @@ def test_approve_success_stdout(tmp_path, monkeypatch):
     approval.model_dump_json.return_value = '{"approval_id": "AID"}'
     approval.approval_id = "AID"
     monkeypatch.setattr(mod, "make_manual_approval", MagicMock(return_value=approval))
+    ps = MagicMock()
+    monkeypatch.setattr(mod, "print_structured", ps)
     result = runner.invoke(
         mod.app,
         [
@@ -311,7 +313,7 @@ def test_approve_success_stdout(tmp_path, monkeypatch):
         ],
     )
     assert result.exit_code == 0
-    assert "AID" in result.stdout
+    ps.assert_called_once_with(mod.console, approval)
 
 
 def test_approve_success_to_file(tmp_path, monkeypatch):

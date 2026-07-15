@@ -4,6 +4,115 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## Done
 
+### 2026-07-15: Stage 4 — Refactor existing code to use the new shared helper (✅ COMPLETE)
+- **Objective**: Independently re-verify Stage 2's migration against the "refactor existing
+  code" acceptance bar (identified/updated all relevant callsites, replaced redundant
+  console output code, behavior identical, consistent patterns) rather than take that
+  stage's own summary at face value. This closes the `print_structured()` objective.
+- **Status**: ✅ COMPLETE — no source changes needed; migration re-confirmed correct.
+- **Verification performed**:
+  - Swept the full source tree for remaining `typer.echo(json.dumps(...))` /
+    `console.print(json.dumps(...))` bypass patterns — none found outside `cli_output.py`'s
+    own docstring.
+  - Walked every remaining `json.dumps`/`console.print` occurrence in the 9 migrated files
+    and confirmed each is legitimately out of `print_structured`'s scope (inline debug
+    markup, disk writes, the `--pretty`/non-`--pretty` dual mode in `observer/cli.py show`,
+    the `ExtractionReportFormatter`-routed combined-output branch in `query-flaky-tests`, a
+    discarded serializability guard).
+  - Confirmed `artifact_index/cli.py`'s `default=str` (new) vs. `default=_path_default`
+    (old) swap is behavior-neutral — both migrated sites' payloads already pre-stringify
+    every `Path` before assembly, so the `default=` fallback was dead code pre-migration.
+  - Re-ran `ruff check`/`ruff format --check` (clean, 15 touched files) and the full suite:
+    10298 passed, 6 failed (same pre-existing sandbox/timing failures as Stages 2-3), 21
+    skipped, 2 xfailed — zero new failures.
+- **Acceptance Criteria — ALL MET** ✅ (all relevant callsites identified/updated; redundant
+  console output code replaced with `print_structured` calls; behavior identical to
+  original; all refactored calls use consistent patterns).
+
+### 2026-07-15: Stage 3 — Write comprehensive tests for the helper function (✅ COMPLETE)
+- **Objective**: Ensure `print_structured()` has comprehensive, 100%-coverage unit tests
+  proving normal-case and edge-case correctness (this was flagged as the closing stage in
+  Stage 2's "Next Stage" note).
+- **Status**: ✅ COMPLETE — Stage 2 had already added 15 tests at 100% line/branch coverage;
+  extended to 22 tests by adding cases the docstring documents but didn't yet exercise:
+  `str` input (proves it's rendered as a JSON string scalar, not parsed — the documented
+  "callers must pass data, not `model_dump_json()`" contract), `bool`/`int`/`float`
+  primitives, a `dict` subclass (`OrderedDict`, pinning that it takes the passthrough
+  branch rather than the non-dict-`Mapping` branch), non-ASCII/unicode preservation
+  (`ensure_ascii=False`), and pretty-print indentation on nested payloads.
+- **Changes**: `tests/unit/test_cli_output.py` — added
+  `TestMappingInput.test_dict_subclass_passthrough_not_routed_through_mapping_branch`, 4
+  new tests in `TestOtherJsonNativeInputs` (bool/int/float/str), and a new
+  `TestUnicodeAndFormatting` class (2 tests). No production code changed.
+- **Verification**: `ruff check`/`ruff format --check` clean on the test file. Coverage:
+  `src/operations_center/cli_output.py` 100.00% line, 100.00% branch (15/15 stmts, 6/6
+  branches). Full suite: 10298 passed, 6 failed (same 6 pre-existing sandbox/timing
+  failures as Stage 2's run — `test_race_condition_guards.py` ×2,
+  `test_check_signal_collector.py`, `test_custodian_sweep.py`,
+  `test_dependency_drift_collector.py`, `test_snapshot_edge_cases.py` — zero new
+  failures), 21 skipped, 2 xfailed.
+- **Acceptance Criteria — ALL MET** ✅
+  1. ✅ Unit tests cover normal cases and edge cases (22 tests: dict/BaseModel/dataclass/
+     Mapping/dict-subclass/list/None/empty/bool/int/float/str/sort_keys/default=str
+     fallback/soft-wrap/no-ANSI/unicode/indent formatting)
+  2. ✅ Tests verify output format and structure (JSON parse-back assertions throughout;
+     explicit indent/multi-line and no-escape-sequence checks)
+  3. ✅ Tests pass with 100% coverage of helper code (verified via `--cov`)
+  4. ✅ Test file placed in appropriate test directory (`tests/unit/test_cli_output.py`,
+     matching the module's own `tests/unit/` convention)
+
+### 2026-07-15: Stage 2 — Implement `print_structured()` and migrate call sites (✅ COMPLETE)
+- **Objective**: Replace 4 inconsistent JSON-output mechanisms across CLI files with one
+  shared helper that always renders structured payloads via `console.print_json(...)`.
+- **Status**: ✅ COMPLETE — helper implemented, 9 target files migrated (15 call sites),
+  tests added, 0 lint violations, 0 new test failures.
+- **Changes**:
+  - `src/operations_center/cli_output.py` (NEW) — `print_structured(console, output, *,
+    sort_keys=False)` per Stage 1 design.
+  - Migrated: `entrypoints/audit/main.py` (3 sites, incl. 1 not in Stage 1's table —
+    `list-active --json`), `entrypoints/calibration/main.py` (3), `entrypoints/run_show/main.py`,
+    `entrypoints/worker_backend_status/main.py`, `entrypoints/worker_backend_probe/main.py`,
+    `run_memory/cli.py`, `artifact_index/cli.py` (2 of 3 sites — see below),
+    `entrypoints/governance/main.py` (2), `observer/cli.py` (4, incl. `show --pretty` which
+    previously used the "already-correct" `print_json(json_string)` pattern).
+  - Deleted the stale `observer/cli.py` soft-wrap comment that justified a since-removed
+    `typer.echo` call.
+  - **Corrected scope from Stage 1's design doc**: `artifact_index/cli.py`'s
+    `get-artifact --print-content` call site was mischaracterized in the design doc as a
+    "read-json command"; it's actually a raw content dump (JSON or text, per
+    `content_type`) with `--max-bytes` truncation — left unmigrated since `print_structured`
+    has no truncation equivalent. `observer/cli.py`'s `query-flaky-tests` combined-JSON
+    branch routes through `ExtractionReportFormatter` (a different existing abstraction),
+    not a naked `json.dumps` bypass — also left alone, consistent with not being in Stage 1's
+    scoped table.
+  - `tests/unit/test_cli_output.py` (NEW, 15 tests) — dict/BaseModel/dataclass(nested)/
+    Mapping/list/None/empty-collection inputs, `sort_keys` both ways, `default=str`
+    fallback, soft-wrap regression, no-ANSI-on-non-tty.
+  - Updated 7 existing tests across `test_main_cov.py` in `audit`/`calibration`/`governance`
+    entrypoints — they mocked the *old* `model_dump_json()`/`typer.echo` mechanism using
+    `SimpleNamespace`/bare `MagicMock` fakes that don't satisfy `print_structured`'s
+    `isinstance(BaseModel)`/`is_dataclass` checks; rewrote to assert the CLI calls
+    `print_structured(console, <obj>)` with the right object (serialization itself is
+    covered by `test_cli_output.py`).
+- **Verification**: `ruff check .` 0 violations; `ruff format --check` clean on all touched
+  files (68 unrelated pre-existing drifted files elsewhere, confirmed unrelated). Full suite:
+  10291 passed, 6 failed — all 6 reproduce identically on the pre-change branch tip (sandbox
+  race conditions + 1 unrelated `test_custodian_sweep.py` assertion), zero new failures.
+- **Acceptance Criteria — ALL MET** ✅ (helper implemented w/ full type hints+docstrings;
+  handles dict/BaseModel/dataclass/Mapping/list scenarios; integrates via `console.print_json`;
+  follows project style — flat module placement, SPDX header, ruff-clean).
+
+### Add shared `print_structured(console, output)` helper for Rich console output — Stages 0-1
+- **Stage 0** (Analyze codebase for Rich console usage patterns and identify requirements) —
+  ✅ COMPLETE 2026-07-15. See `.console/STAGE0_RICH_CONSOLE_HELPER_ANALYSIS.md` and
+  `.console/task.md`.
+- **Stage 1** (Design the helper's signature, module location, and migration plan) —
+  ✅ COMPLETE 2026-07-15. See `.console/STAGE1_PRINT_STRUCTURED_DESIGN.md`. Signature:
+  `print_structured(console: Console, output: Any, *, sort_keys: bool = False) -> None`
+  in new module `src/operations_center/cli_output.py`; concrete per-file migration table
+  for 13 call sites across 9 files; verified `console.print_json` never soft-wraps
+  (resolves the `observer/cli.py:1075` typer.echo comment's stated concern).
+
 ### 2026-06-26: Stage 5 — Verify complete implementation and test suite (✅ COMPLETE)
 - **Objective**: Full test-suite, linting, and verification that the `message_quality_rate` implementation is complete and mergeable
 - **Status**: ✅ COMPLETE — All acceptance criteria met; branch green and PR-ready

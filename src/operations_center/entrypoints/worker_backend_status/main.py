@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -12,6 +11,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from operations_center.cli_output import print_structured
 from operations_center.execution.usage_store import UsageStore
 
 app = typer.Typer(
@@ -44,7 +44,7 @@ def _command(
         "usage_path": str(store.path),
     }
     if as_json:
-        typer.echo(json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False))
+        print_structured(_console, payload, sort_keys=True)
         return
 
     _console.print("[bold]Worker backend cooldowns[/bold]")

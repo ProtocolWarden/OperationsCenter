@@ -178,12 +178,12 @@ def test_cmd_run_failure_exit_code_1(monkeypatch):
 def test_cmd_run_json_output(monkeypatch):
     result = _make_result(succeeded=True)
     monkeypatch.setattr(main, "dispatch_managed_audit", mock.Mock(return_value=result))
-    echo = mock.Mock()
-    monkeypatch.setattr(main.typer, "echo", echo)
+    ps = mock.Mock()
+    monkeypatch.setattr(main, "print_structured", ps)
     with pytest.raises(typer.Exit) as ei:
         _run(monkeypatch, json_output=True)
     assert _exit_code(ei) == 0
-    echo.assert_called_once_with('{"ok": true}')
+    ps.assert_called_once_with(main.console, result)
 
 
 def test_cmd_run_log_dir_passed(monkeypatch):
@@ -237,10 +237,10 @@ def test_cmd_status_table(monkeypatch):
 def test_cmd_status_json(monkeypatch):
     rs = _make_run_status()
     monkeypatch.setattr(main, "load_run_status_entrypoint", mock.Mock(return_value=rs))
-    echo = mock.Mock()
-    monkeypatch.setattr(main.typer, "echo", echo)
+    ps = mock.Mock()
+    monkeypatch.setattr(main, "print_structured", ps)
     main.cmd_status(run_status_path="/tmp/rs.json", json_output=True)
-    echo.assert_called_once_with('{"run": "status"}')
+    ps.assert_called_once_with(main.console, rs)
 
 
 def test_cmd_status_not_found_exit_1(monkeypatch):
@@ -389,13 +389,13 @@ def _patch_store(monkeypatch, active):
 def test_list_active_json(monkeypatch):
     payload = _make_payload(oc_pid_alive=True, audit_pid_alive=False)
     _patch_store(monkeypatch, [payload])
-    echo = mock.Mock()
-    monkeypatch.setattr(main.typer, "echo", echo)
+    ps = mock.Mock()
+    monkeypatch.setattr(main, "print_structured", ps)
     main.cmd_list_active(json_output=True)
-    echo.assert_called_once()
-    out = echo.call_args.args[0]
-    assert "run-1" in out
-    assert "oc_pid_alive" in out
+    ps.assert_called_once()
+    out = ps.call_args.args[1]
+    assert out == [{**payload.to_json(), **payload.liveness_summary()}]
+    assert "oc_pid_alive" in out[0]
 
 
 def test_list_active_empty_text(monkeypatch):

@@ -167,11 +167,12 @@ def test_analyze_has_errors_exit1(patched):
     assert result.exit_code == 1
 
 
-def test_analyze_json_output(patched):
+def test_analyze_json_output(patched, monkeypatch):
+    ps = MagicMock()
+    monkeypatch.setattr(mod, "print_structured", ps)
     result = runner.invoke(mod.app, ["analyze", "-m", "/m.json", "--json"])
     assert result.exit_code == 0
-    assert '{"json": true}' in result.output
-    patched.report.model_dump_json.assert_called_once_with(indent=2)
+    ps.assert_called_once_with(mod.console, patched.report)
 
 
 def test_analyze_include_content_flag(patched):
@@ -212,10 +213,12 @@ def test_tune_autonomy_uses_recommendation_profile(patched):
     assert ci.analysis_profile is AnalysisProfile.RECOMMENDATION
 
 
-def test_tune_autonomy_json(patched):
+def test_tune_autonomy_json(patched, monkeypatch):
+    ps = MagicMock()
+    monkeypatch.setattr(mod, "print_structured", ps)
     result = runner.invoke(mod.app, ["tune-autonomy", "-m", "/m.json", "--json"])
     assert result.exit_code == 0
-    assert '{"json": true}' in result.output
+    ps.assert_called_once_with(mod.console, patched.report)
 
 
 def test_tune_autonomy_with_recommendations_table(patched):
@@ -253,10 +256,12 @@ def test_report_happy(patched):
     assert "Calibration Report" in result.output
 
 
-def test_report_json(patched):
+def test_report_json(patched, monkeypatch):
+    ps = MagicMock()
+    monkeypatch.setattr(mod, "print_structured", ps)
     result = runner.invoke(mod.app, ["report", "/some/report.json", "--json"])
     assert result.exit_code == 0
-    assert '{"json": true}' in result.output
+    ps.assert_called_once_with(mod.console, patched.report)
 
 
 def test_report_not_found(patched):

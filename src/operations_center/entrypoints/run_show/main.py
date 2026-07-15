@@ -28,6 +28,8 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from operations_center.cli_output import print_structured
+
 app = typer.Typer(
     help="Print one run's provenance chain from execution_trace.json alone.",
     no_args_is_help=True,
@@ -218,7 +220,7 @@ def show(
     payload = json.loads(trace_path.read_text(encoding="utf-8"))
 
     if as_json:
-        typer.echo(json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False))
+        print_structured(_console, payload, sort_keys=True)
         return
     _console.print(f"[dim]source: {trace_path}[/dim]\n")
     _print_trace(payload)

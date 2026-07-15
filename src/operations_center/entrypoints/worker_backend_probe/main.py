@@ -11,7 +11,6 @@ clear a cooldown, never record one.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-import json
 from pathlib import Path
 
 import typer
@@ -21,6 +20,7 @@ from operations_center.backends.worker_backend_probe import (
     DEFAULT_PROBE_TIMEOUT_SECONDS,
     refresh_cooldowns,
 )
+from operations_center.cli_output import print_structured
 from operations_center.execution.usage_store import UsageStore
 
 app = typer.Typer(
@@ -58,13 +58,10 @@ def _command(
         logger=None if as_json else (lambda msg: _console.print(f"  {msg}")),
     )
     if as_json:
-        typer.echo(
-            json.dumps(
-                {"observed_at": now.isoformat(), "report": report, "usage_path": str(store.path)},
-                indent=2,
-                sort_keys=True,
-                ensure_ascii=False,
-            )
+        print_structured(
+            _console,
+            {"observed_at": now.isoformat(), "report": report, "usage_path": str(store.path)},
+            sort_keys=True,
         )
         return
     if not report:

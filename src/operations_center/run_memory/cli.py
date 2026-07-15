@@ -4,12 +4,13 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import typer
 from rich.console import Console
 from rich.table import Table
+
+from operations_center.cli_output import print_structured
 
 from .index import (
     RunMemoryQueryService,
@@ -48,11 +49,7 @@ def query_cmd(
     )
     records = svc.query(q)
     if json_out:
-        typer.echo(
-            json.dumps(
-                [r.to_jsonl() for r in records], sort_keys=True, indent=2, ensure_ascii=False
-            )
-        )
+        print_structured(_console, [r.to_jsonl() for r in records], sort_keys=True)
         return
     table = Table(title=f"Run Memory ({len(records)} matches)")
     table.add_column("created_at")
