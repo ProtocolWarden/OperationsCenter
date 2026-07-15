@@ -740,6 +740,20 @@ def test_rule8_policy_blocked_excluded():
     assert not _by_rule(actions, "CLEAN_BLOCKED_RETRY")
 
 
+def test_rule8_backend_capacity_blocked_excluded():
+    actions = _run(
+        [
+            _issue(
+                "1",
+                state="Blocked",
+                labels=["task-kind: goal", "blocked-reason: backend-capacity"],
+                updated_at=_STALE,
+            )
+        ]
+    )
+    assert not _by_rule(actions, "CLEAN_BLOCKED_RETRY")
+
+
 # ---------------------------------------------------------------------------
 # Rule 9 — SPEC_AUTHOR_BACKLOG_PROMOTE
 # ---------------------------------------------------------------------------

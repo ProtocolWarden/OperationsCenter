@@ -711,6 +711,23 @@ def test_handle_failure_non_policy_category_no_policy_label():
     assert "blocked-reason: policy" not in _all_update_labels(client)
 
 
+def test_handle_failure_backend_capacity_adds_structured_label():
+    client = _make_client()
+    issue = {"id": "b1", "labels": []}
+    outcomes.handle_failure(
+        client,
+        issue,
+        "goal",
+        "goal",
+        {
+            "failure_category": "backend_error",
+            "failure_reason": "Stage planner received non-JSON from agent (session limit or error): ",
+        },
+        _make_settings(),
+    )
+    assert "blocked-reason: backend-capacity" in _all_update_labels(client)
+
+
 def test_handle_failure_transient_category_does_not_count():
     # Env/transient categories are NOT code failures — must not bump the counter.
     for cat in ("backend_error", "timeout", "unknown", "scope_too_wide"):

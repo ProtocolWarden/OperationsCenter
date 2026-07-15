@@ -40,6 +40,11 @@ _MAX_FOLLOW_UP_RETRIES = 3
 # fault, so we never terminate on unknown). See CODE_FAILURE_RETRY_CAP.md.
 _CODE_FAILURE_CATEGORIES = frozenset({"validation_failed", "no_changes"})
 _TERMINAL_STATE_NAMES = {"cancelled", "done"}
+_BACKEND_CAPACITY_REASON_LABEL = "blocked-reason: backend-capacity"
+_BACKEND_CAPACITY_REASON_SNIPPETS = (
+    "stage planner received non-json from agent",
+    "session limit or error",
+)
 
 
 # ── Atomic failure transition ─────────────────────────────────────────────────
@@ -95,6 +100,13 @@ def read_improve_output(workspace: Path) -> list[dict]:
     if not isinstance(raw, list):
         return []
     return [item for item in raw[:5] if isinstance(item, dict) and item.get("title")]
+
+
+def _is_backend_capacity_failure(category: str, reason: str) -> bool:
+    if category != "backend_error":
+        return False
+    lowered = reason.lower()
+    return all(snippet in lowered for snippet in _BACKEND_CAPACITY_REASON_SNIPPETS)
 
 
 # ── Success handler ───────────────────────────────────────────────────────────
@@ -510,6 +522,11 @@ def handle_failure(
             # 26 policy-blocked re-dispatches in one hour). This label marks the block
             # as policy-driven so Rule 8 can exclude it.
             add_label(client, issue, "blocked-reason: policy")
+        elif _is_backend_capacity_failure(category, reason):
+            # Fallback dispatch hit a backend-capacity/error signature and returned
+            # no structured planner output; immediate clean-retry recycling just
+            # burns the next backend slot with the same non-JSON failure.
+            add_label(client, issue, _BACKEND_CAPACITY_REASON_LABEL)
         if executor_signal:
             add_label(client, issue, f"executor-signal: {executor_signal}")
             if "sigkill" in executor_signal.lower():
