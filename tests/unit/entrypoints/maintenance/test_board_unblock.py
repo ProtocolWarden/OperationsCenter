@@ -80,6 +80,19 @@ def test_rule8_skip_spec_author_too_young():
     assert len(retry_actions) == 0
 
 
+def test_rule8_skip_backend_capacity_blocked():
+    """Rule 8 must NOT re-queue backend-capacity failures as clean retries."""
+    issue = _issue(
+        "t3b",
+        state="Blocked",
+        labels=["task-kind: spec-author", "blocked-reason: backend-capacity"],
+        updated_at="2026-05-28T10:00:00+00:00",
+    )
+    actions = _apply_rules([issue], **_RULES_KWARGS)
+    retry_actions = [a for a in actions if a["rule"] == "CLEAN_BLOCKED_RETRY"]
+    assert len(retry_actions) == 0
+
+
 # --- Rule 9: SPEC_AUTHOR_BACKLOG_PROMOTE ---
 
 
