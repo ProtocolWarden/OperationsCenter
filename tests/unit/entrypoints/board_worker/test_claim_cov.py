@@ -110,6 +110,22 @@ def test_claim_next_happy_path_claims_issue():
     c.transition_issue.assert_called_once_with("abc123", claim.STATE_RUNNING)
 
 
+def test_claim_next_clears_stale_blocked_reason_labels():
+    issue = _make_issue(
+        labels=[
+            _label("task-kind: goal"),
+            _label("repo: repoA"),
+            _label("blocked-reason: policy"),
+        ],
+        description=_GOOD_DESC,
+    )
+    c = _client([issue])
+    settings = _make_settings(token=None)
+    result = claim.claim_next(c, "goal", settings)
+    assert result is issue
+    c.update_issue_labels.assert_called_once_with("abc123", ["task-kind: goal", "repo: repoA"])
+
+
 def test_claim_next_transition_raises_returns_none():
     issue = _make_issue(
         labels=[_label("task-kind: goal"), _label("repo: repoA")],

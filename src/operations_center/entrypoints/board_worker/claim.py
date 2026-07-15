@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 from ._text import desc_text, extract_goal
 from .labels import (
     issue_author_identities as _issue_author_identities,
+    clear_blocked_reason_labels,
     ROLE_KINDS,
     STATE_BLOCKED,
     STATE_READY,
@@ -85,6 +86,7 @@ def claim_next(client, role: str, settings) -> dict | None:
 
     try:
         client.transition_issue(task_id, STATE_RUNNING)
+        clear_blocked_reason_labels(client, issue)
         logger.info(
             "board_worker[%s]: claimed task_id=%s title=%r",
             role,

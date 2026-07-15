@@ -101,12 +101,20 @@ def test_rule9_spec_author_backlog_promote():
     issue = _issue(
         "t4",
         state="Backlog",
-        labels=["task-kind: spec-author", "source: spec-director"],
+        labels=[
+            "task-kind: spec-author",
+            "source: spec-director",
+            "blocked-reason: backend-capacity",
+        ],
     )
     actions = _apply_rules([issue], **_RULES_KWARGS)
     promote_actions = [a for a in actions if a["rule"] == "SPEC_AUTHOR_BACKLOG_PROMOTE"]
     assert len(promote_actions) == 1
     assert promote_actions[0]["to_state"] == "Ready for AI"
+    assert promote_actions[0]["labels_to_remove"] == [
+        "blocked-reason: policy",
+        "blocked-reason: backend-capacity",
+    ]
 
 
 def test_rule9_skip_non_spec_author():

@@ -13,11 +13,13 @@ from operations_center.policy.engine import TRUSTED_SOURCE_LABELS
 # Public API of this module — declared explicitly (consumed library; some
 # functions are tested as the boundary but not all internally wired).
 __all__ = [
+    "BLOCKED_REASON_LABELS",
     "label_value",
     "has_label",
     "retry_count_from_labels",
     "add_label",
     "remove_labels",
+    "clear_blocked_reason_labels",
     "increment_retry_count",
     "issue_author_identities",
     "build_forwarded_labels",
@@ -45,6 +47,10 @@ ROLE_KINDS: dict[str, list[str]] = {
 }
 
 GITHUB_DIR = Path.home() / "Documents" / "GitHub"
+BLOCKED_REASON_LABELS = [
+    "blocked-reason: policy",
+    "blocked-reason: backend-capacity",
+]
 
 
 # ── Label helpers ─────────────────────────────────────────────────────────────
@@ -139,6 +145,11 @@ def remove_labels(client, issue: dict, labels_to_remove: list[str]) -> None:
             issue.get("id"),
             exc,
         )
+
+
+def clear_blocked_reason_labels(client, issue: dict) -> None:
+    """Drop stale blocked-reason labels when a task becomes runnable again."""
+    remove_labels(client, issue, BLOCKED_REASON_LABELS)
 
 
 def increment_count_label(client, issue: dict, prefix: str) -> None:

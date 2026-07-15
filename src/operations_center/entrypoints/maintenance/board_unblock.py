@@ -272,6 +272,10 @@ _HANDOFF_IMPROVEMENT_LABEL = "handoff-reason: improvement_applied"
 _PR_URL_PREFIX = "pr-url:"
 _BLOCKED_REASON_POLICY_LABEL = "blocked-reason: policy"
 _BLOCKED_REASON_BACKEND_CAPACITY_LABEL = "blocked-reason: backend-capacity"
+_BLOCKED_REASON_LABELS = [
+    _BLOCKED_REASON_POLICY_LABEL,
+    _BLOCKED_REASON_BACKEND_CAPACITY_LABEL,
+]
 _OPEN_PR_GATE_LABEL = "OPEN_PR_GATE"
 
 
@@ -538,6 +542,8 @@ def _apply_rules(
                         "from_state": state,
                         "to_state": "Backlog",
                         "reason": f"blocker {blocker_id} is now {id_state[blocker_id]}",
+                        "labels_to_remove": _BLOCKED_REASON_LABELS,
+                        "_issue_labels": labels,
                     }
                 )
                 continue
@@ -551,6 +557,8 @@ def _apply_rules(
                         "from_state": state,
                         "to_state": "Backlog",
                         "reason": f"stale in Blocked >{stale_blocked_hours}h with no executor progress",
+                        "labels_to_remove": _BLOCKED_REASON_LABELS,
+                        "_issue_labels": labels,
                     }
                 )
                 continue
@@ -651,6 +659,8 @@ def _apply_rules(
                             "from_state": state,
                             "to_state": "Ready for AI",
                             "reason": reason,
+                            "labels_to_remove": _BLOCKED_REASON_LABELS,
+                            "_issue_labels": labels,
                         }
                     )
 
@@ -786,6 +796,8 @@ def _apply_rules(
                                 f"parent improve task {parent_id} is {parent_state}; "
                                 "promote for goal board_worker dispatch"
                             ),
+                            "labels_to_remove": _BLOCKED_REASON_LABELS,
+                            "_issue_labels": labels,
                         }
                     )
 
@@ -824,6 +836,8 @@ def _apply_rules(
                             f"(workspace prep or infra config); safe to retry after "
                             f"{clean_blocked_min_minutes}m min age"
                         ),
+                        "labels_to_remove": _BLOCKED_REASON_LABELS,
+                        "_issue_labels": labels,
                     }
                 )
 
@@ -856,6 +870,8 @@ def _apply_rules(
                         "from_state": state,
                         "to_state": "Ready for AI",
                         "reason": "spec-author task in Backlog; promoting for board_worker dispatch",
+                        "labels_to_remove": _BLOCKED_REASON_LABELS,
+                        "_issue_labels": labels,
                     }
                 )
 

@@ -416,6 +416,10 @@ def test_rule4_requeue_no_blocker():
     assert a and a[0]["to_state"] == "Ready for AI"
     assert "no blocking dependency" in a[0]["reason"]
     assert "skipped" not in a[0]
+    assert a[0]["labels_to_remove"] == [
+        "blocked-reason: policy",
+        "blocked-reason: backend-capacity",
+    ]
 
 
 def test_rule4_requeue_blocker_terminal():
@@ -679,6 +683,10 @@ def test_rule8_clean_blocked_retry():
     )
     a = _by_rule(actions, "CLEAN_BLOCKED_RETRY")
     assert a and a[0]["to_state"] == "Backlog"
+    assert a[0]["labels_to_remove"] == [
+        "blocked-reason: policy",
+        "blocked-reason: backend-capacity",
+    ]
 
 
 def test_rule8_too_young_no_action():
