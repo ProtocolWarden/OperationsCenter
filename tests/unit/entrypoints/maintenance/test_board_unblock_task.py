@@ -316,3 +316,110 @@ class TestLiveLoopRegistration:
         # And they are disabled-by-default (fail-safe).
         assert by_name["queue_healing"].enabled is False
         assert by_name["parked_unpark"].enabled is False
+
+    def test_eval_panel_wired_from_settings_eval_panel(self):
+        """C3 (COUNCIL_VERDICT.md C3): a configured+enabled eval_panel is
+        translated into panel_families/family_extractors on the REAL
+        DriftMonitorTask — pins the spec_hygiene wiring shape end to end."""
+        from operations_center.entrypoints.spec_hygiene import main as sh
+
+        registry = mock.Mock()
+        registered_objs: list[object] = []
+        registry.register.side_effect = lambda t: registered_objs.append(t)
+
+        settings = SimpleNamespace(
+            **{
+                **vars(_settings()),
+                "eval_panel": SimpleNamespace(
+                    panel=["claude_code", "codex_cli"], enabled=True, votes=5
+                ),
+            }
+        )
+        fake_extractors = {"claude_code": object(), "codex_cli": object()}
+
+        with (
+            mock.patch.object(
+                sh, "SpecHygieneTask", lambda *a, **k: SimpleNamespace(name="spec_hygiene")
+            ),
+            mock.patch.object(
+                sh, "LedgerMaintainTask", lambda *a, **k: SimpleNamespace(name="ledger_maintain")
+            ),
+            mock.patch.object(
+                sh, "BoardUnblockTask", lambda *a, **k: SimpleNamespace(name="board_unblock")
+            ),
+            mock.patch.object(
+                sh, "EgressProbeTask", lambda *a, **k: SimpleNamespace(name="egress_probe")
+            ),
+            mock.patch.object(
+                sh, "HeartbeatStallTask", lambda *a, **k: SimpleNamespace(name="heartbeat_stall")
+            ),
+            mock.patch.object(
+                sh, "OutcomeFlaggerTask", lambda *a, **k: SimpleNamespace(name="outcome_flagger")
+            ),
+            mock.patch.object(
+                sh, "resolve_available_families", lambda families: list(families)
+            ),
+            mock.patch.object(
+                sh, "build_panel_extractors", lambda families: dict(fake_extractors)
+            ),
+        ):
+            sh.register_maintenance_tasks(registry, settings, mock.Mock())
+
+        by_name = {t.name: t for t in registered_objs}
+        drift_task = by_name["drift_monitor"]
+        assert drift_task._panel_families == ["claude_code", "codex_cli"]
+        assert drift_task._family_extractors == fake_extractors
+        assert drift_task._panel_enabled is True
+        assert drift_task._votes == 5
+
+    def test_eval_panel_build_failure_degrades_to_empty_never_crashes(self):
+        """A misconfigured family (build_panel_extractors raising) must not
+        crash maintenance-task registration — it degrades to an empty
+        family_extractors map, which makes DriftMonitorTask see every
+        configured family as missing and skip loudly (never a same-family
+        collapse, and never a hard registration failure either)."""
+        from operations_center.entrypoints.spec_hygiene import main as sh
+
+        registry = mock.Mock()
+        registered_objs: list[object] = []
+        registry.register.side_effect = lambda t: registered_objs.append(t)
+
+        settings = SimpleNamespace(
+            **{
+                **vars(_settings()),
+                "eval_panel": SimpleNamespace(panel=["unknown_family"], enabled=True, votes=3),
+            }
+        )
+
+        def _boom(families):
+            raise ValueError("no default model for family 'unknown_family'")
+
+        with (
+            mock.patch.object(
+                sh, "SpecHygieneTask", lambda *a, **k: SimpleNamespace(name="spec_hygiene")
+            ),
+            mock.patch.object(
+                sh, "LedgerMaintainTask", lambda *a, **k: SimpleNamespace(name="ledger_maintain")
+            ),
+            mock.patch.object(
+                sh, "BoardUnblockTask", lambda *a, **k: SimpleNamespace(name="board_unblock")
+            ),
+            mock.patch.object(
+                sh, "EgressProbeTask", lambda *a, **k: SimpleNamespace(name="egress_probe")
+            ),
+            mock.patch.object(
+                sh, "HeartbeatStallTask", lambda *a, **k: SimpleNamespace(name="heartbeat_stall")
+            ),
+            mock.patch.object(
+                sh, "OutcomeFlaggerTask", lambda *a, **k: SimpleNamespace(name="outcome_flagger")
+            ),
+            mock.patch.object(sh, "resolve_available_families", lambda families: list(families)),
+            mock.patch.object(sh, "build_panel_extractors", _boom),
+        ):
+            # Must not raise.
+            sh.register_maintenance_tasks(registry, settings, mock.Mock())
+
+        by_name = {t.name: t for t in registered_objs}
+        drift_task = by_name["drift_monitor"]
+        assert drift_task._panel_families == ["unknown_family"]
+        assert drift_task._family_extractors == {}

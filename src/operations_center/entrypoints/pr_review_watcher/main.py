@@ -87,6 +87,9 @@ from operations_center.entrypoints.pr_review_watcher.inj import (
     make_nonce,
     sanitize_for_comment,
 )
+from operations_center.entrypoints.pr_review_watcher.member_runner import (
+    build_member_argv as _build_member_argv,
+)
 from operations_center.entrypoints.pr_review_watcher.verdict import (
     _COUNCIL_PANEL,
     CONCERNS,
@@ -559,38 +562,6 @@ def _select_review_backend(settings, *, usage_store=None, now=None):
     except Exception as exc:  # noqa: BLE001 — never block the gate on a store read
         logger.warning("pr_review_watcher: backend selection failed, proceeding on claude: %s", exc)
         return None
-
-
-def _build_member_argv(backend: str, model: str, prompt: str) -> list[str] | None:
-    """Build the CLI argv for one review-panel member.
-
-    Mirrors :func:`worker_backend_probe._probe_command` — the same binary/flag
-    shape the controller and the cooldown-probe already use — so the reviewer's
-    own invocation matches the rest of the fleet instead of a bespoke one-off.
-    Returns ``None`` for an unsupported ``(backend, model)`` pair.
-    """
-    if backend == "claude_code":
-        # Preserve the live single-review invocation exactly (only the model
-        # varies per council seat): `--effort low` keeps reviews cheap+fast, and
-        # NOT passing --dangerously-skip-permissions matches the path that has
-        # run in production — a reviewer in an empty tmpdir needs neither.
-        return [
-            "claude",
-            "--model",
-            model,
-            "-p",
-            "--effort",
-            "low",
-            prompt,
-        ]
-    if backend == "codex_cli":
-        return [
-            "codex",
-            "exec",
-            "--dangerously-bypass-approvals-and-sandbox",
-            prompt,
-        ]
-    return None
 
 
 def _run_member_review(

@@ -114,12 +114,50 @@ Unsigned mode gains a keyless analogue of restore-by-consumption. At
 
 Signed reference present ⇒ Track C behavior wins unchanged.
 
-### C3 — EVAL cross-family panel (separate work item)
+### C3 — EVAL cross-family panel (SHIPPED)
 
-The guide-gap audit flagged same-family generator↔evaluator as HIGH. Grading
-panels get the same cross-family treatment as C1 (claude-generated work is
-judged with codex on the panel and vice versa). Specced separately once C1's
-panel plumbing exists to reuse.
+The guide-gap audit flagged same-family generator↔evaluator as HIGH. C1 closes
+that for the MERGE decision (a guardrail PR); C3 closes the matching gap for
+the EVAL drift monitor's GRADING decision — the non-blocking lane that checks
+whether a model still reproduces the corpus's signed check-extraction answers
+(`entrypoints/maintenance/drift_monitor_task.py`, `eval/critic.py`). Before C3
+that lane's "different-family critic" requirement was only a code comment; the
+extractor was wired `None` (inert) at every call site. C3 makes it a control:
+
+1. **Panel, not a single extractor**: `settings.eval_panel.panel` names family
+   tags (e.g. `claude_code`, `codex_cli`); `eval.panel_invoker` builds one live
+   `CheckExtractor` per family, reusing C1's own argv builder
+   (`entrypoints/pr_review_watcher/member_runner.build_member_argv`, extracted
+   from `main.py` for exactly this reuse) so grading spawns the same CLI shape
+   the council already runs in production.
+2. **Aggregation is PER-FAMILY, never pooled**: `eval.panel_critic.
+   run_panel_drift_monitor` votes each family independently (`votes` per
+   family) and takes THAT family's own majority. A case is `drifted` if **any
+   single family's** majority disagrees with the signed answer — a dominant or
+   larger family can never mask a different family's disagreement by
+   outvoting it, because votes are never pooled across families for the drift
+   decision (only within one family, to get that family's own majority).
+   `verdict.aggregate_council`'s unanimous-LGTM/merge shape is the wrong fit
+   here (grading is never a merge decision and must never gate) — C3 uses its
+   own aggregator instead.
+3. **Degraded panel fails LOUD, never SMALL**: the drift monitor is handed both
+   the full *configured* panel and only the *runnable* subset for this host
+   (`eval.panel_invoker.resolve_available_families`, a PATH probe at wiring
+   time). Any gap between the two — one family's CLI unavailable — skips the
+   whole run with a loud reason. It never silently grades with the remaining
+   families, because a remaining-families grade can degenerate to a
+   single-family (same-family) grade, which is the exact HIGH finding this
+   spec closes.
+4. **Off by default**: `eval_panel.panel` defaults empty and `eval_panel.
+   enabled` defaults `false` — populating the panel is a deliberate follow-up,
+   same rollout shape as C1's `guardrail_paths`. Even with a panel configured,
+   nothing runs without the existing `OC_EVAL_DRIFT_MONITOR=1` opt-in.
+5. **Still inert pending a corpus**: the drift monitor only grades
+   `extraction`-kind corpus cases (real diff/context for a model to review);
+   the seed corpus today is `verdict`-kind (pre-filled checks) only. C3 is
+   fully wired and unit-tested end to end with injected fake extractors, but
+   has nothing to grade live until an extraction-kind corpus exists — same
+   caveat `check_extractors.BackendCheckExtractor` already carried before C3.
 
 ## Rollout
 
@@ -128,7 +166,10 @@ panel plumbing exists to reuse.
 2. **Phase 2 (OC)**: C1 council mode behind `council.guardrail_paths`
    (empty default), then a follow-up PR populating the path set — that PR is
    the council's first live case.
-3. **Phase 3 (OC)**: C3 EVAL panel.
+3. **Phase 3 (OC)**: C3 EVAL panel — shipped behind `eval_panel.panel`/
+   `eval_panel.enabled` (both default off); populating the panel + wiring a
+   live non-implementer backend is a deliberate follow-up, same shape as
+   Phase 2's guardrail-path population.
 
 Each phase ships through the normal PR flow. Phase 2's reviewer changes are
 themselves guardrail paths, so after the path set is populated, changes to

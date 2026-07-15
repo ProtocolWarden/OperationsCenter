@@ -1,3 +1,27 @@
+## 2026-07-15 — feat(eval): C3 cross-family EVAL panel — close same-family generator↔evaluator (COUNCIL_VERDICT.md)
+
+Council spec Phase 3 (C3), the last council phase. The guide-gap audit's HIGH
+finding was same-family generator↔evaluator: the EVAL drift monitor is meant to
+grade the claude reviewer with a DIFFERENT family, but that was only a code
+comment (`critic.py`/`check_extractors.py`) and the task was wired
+`extractor=None` (inert). C3 makes cross-family a CONTROL. New
+`eval/panel_critic.run_panel_drift_monitor` grades each configured family
+INDEPENDENTLY (per-family majority vote, never pooled for the drift decision)
+and flags `drifted = any family's own majority != signed answer` — so a
+dominant/larger family can't mask its own drift by outvoting a smaller one.
+`eval/panel_invoker.LiveFamilyExtractor` runs each family via the shared
+`build_member_argv` (extracted verbatim from pr_review_watcher/main.py into a
+new `member_runner.py` — a pure move so the EVAL invoker never imports the
+merge-critical reviewer module; C1's 166 reviewer tests stay green) + codex
+stdout fallback. New `EvalPanelSettings` (panel=[] / enabled=False ⇒ OFF by
+default, mirroring C1). DriftMonitorTask refuses to run a degraded panel —
+missing family ⇒ `skipped` with a loud reason, NEVER a same-family collapse
+(that would re-open the finding). Still inert in prod until an extraction-kind
+corpus exists (seed corpus is verdict-kind) — wired + fully unit-tested with
+injected fakes. tests/unit 86.03% (gate 85%); reviewer suite 166 green.
+ty: narrowed `self._extractor` at the single-extractor call with `cast` (the
+elif-guard already proves it non-None; ruff bans `assert`) — CI type-check green.
+
 ## 2026-07-15 — Stage 4: Refactor existing code to use the new shared helper (objective DONE)
 
 Stage 2 already performed the actual migration (15 call sites across 9
