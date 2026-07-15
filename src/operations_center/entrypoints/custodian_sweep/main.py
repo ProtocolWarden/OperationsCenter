@@ -29,10 +29,10 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -135,10 +135,28 @@ def _run_custodian_audit(target: _RepoTarget, *, timeout_seconds: int) -> _RepoS
 def _run_custodian_audits(
     targets: list[_RepoTarget], *, jobs: int, timeout_seconds: int
 ) -> list[_RepoSweep]:
-    """Run repo audits with bounded parallelism while preserving target order."""
+    """Run repo audits with bounded parallelism while preserving target order.
+
+    Prints one flushed progress line per completed repo to stderr — the sweep
+    can legitimately take minutes across many repos, and without interim
+    output a bounded probe (e.g. a `timeout 90` health check) is
+    indistinguishable from a genuine hang.
+    """
     if not targets:
         return []
-    runner = partial(_run_custodian_audit, timeout_seconds=timeout_seconds)
+    total = len(targets)
+    done_count = 0
+    lock = threading.Lock()
+
+    def runner(target: _RepoTarget) -> _RepoSweep:
+        nonlocal done_count
+        result = _run_custodian_audit(target, timeout_seconds=timeout_seconds)
+        with lock:
+            done_count += 1
+            n = done_count
+        print(f"[custodian-sweep] {n}/{total} {target.repo_key} done", file=sys.stderr, flush=True)
+        return result
+
     max_workers = max(1, min(jobs, len(targets)))
     if max_workers == 1:
         return [runner(target) for target in targets]

@@ -258,6 +258,23 @@ def test_run_custodian_audits_falls_back_to_serial_when_jobs_is_one(monkeypatch)
     assert [sweep.repo_key for sweep in sweeps] == ["A", "B"]
 
 
+def test_run_custodian_audits_prints_progress_per_repo(monkeypatch, capsys) -> None:
+    targets = [_RepoTarget("A", Path("/tmp/a")), _RepoTarget("B", Path("/tmp/b"))]
+
+    monkeypatch.setattr(
+        sweep_module,
+        "_run_custodian_audit",
+        lambda target, *, timeout_seconds: _RepoSweep(repo_key=target.repo_key),
+    )
+
+    sweeps = _run_custodian_audits(targets, jobs=1, timeout_seconds=20)
+
+    assert [sweep.repo_key for sweep in sweeps] == ["A", "B"]
+    err = capsys.readouterr().err
+    assert "1/2 A done" in err
+    assert "2/2 B done" in err
+
+
 def test_main_uses_safer_default_timeout(monkeypatch, tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.yaml"
     config_path.write_text("ignored: true\n", encoding="utf-8")
