@@ -26,6 +26,8 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from operations_center.cli_output import print_structured
+
 from .errors import (
     ArtifactNotFoundError,
     ArtifactPathUnresolvableError,
@@ -94,17 +96,13 @@ def cmd_index(
     )
 
     if json_output:
-        typer.echo(
-            json.dumps(
-                {
-                    "search_root": str(idx.search_root),
-                    "runs": [_run_summary(r) for r in idx.runs],
-                    "skipped": [(str(p), reason) for p, reason in idx.skipped_paths],
-                },
-                indent=2,
-                default=_path_default,
-                ensure_ascii=False,
-            )
+        print_structured(
+            console,
+            {
+                "search_root": str(idx.search_root),
+                "runs": [_run_summary(r) for r in idx.runs],
+                "skipped": [(str(p), reason) for p, reason in idx.skipped_paths],
+            },
         )
         if not idx.runs:
             raise typer.Exit(code=2)
@@ -184,31 +182,27 @@ def cmd_index_show(
         artifacts = [a for a in artifacts if a.status.value == "missing"]
 
     if json_output:
-        typer.echo(
-            json.dumps(
-                {
-                    "run": _run_summary(run),
-                    "artifacts": [
-                        {
-                            "artifact_id": a.artifact_id,
-                            "artifact_kind": a.artifact_kind,
-                            "location": a.location.value,
-                            "path_role": a.path_role.value,
-                            "source_stage": a.source_stage,
-                            "status": a.status.value,
-                            "path": a.path,
-                            "resolved_path": str(a.resolved_path) if a.resolved_path else None,
-                            "exists_on_disk": a.exists_on_disk,
-                            "is_repo_singleton": a.is_repo_singleton,
-                            "size_bytes": a.size_bytes,
-                        }
-                        for a in artifacts
-                    ],
-                },
-                indent=2,
-                default=_path_default,
-                ensure_ascii=False,
-            )
+        print_structured(
+            console,
+            {
+                "run": _run_summary(run),
+                "artifacts": [
+                    {
+                        "artifact_id": a.artifact_id,
+                        "artifact_kind": a.artifact_kind,
+                        "location": a.location.value,
+                        "path_role": a.path_role.value,
+                        "source_stage": a.source_stage,
+                        "status": a.status.value,
+                        "path": a.path,
+                        "resolved_path": str(a.resolved_path) if a.resolved_path else None,
+                        "exists_on_disk": a.exists_on_disk,
+                        "is_repo_singleton": a.is_repo_singleton,
+                        "size_bytes": a.size_bytes,
+                    }
+                    for a in artifacts
+                ],
+            },
         )
         return
 

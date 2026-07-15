@@ -1,3 +1,209 @@
+## 2026-07-15 — Stage 4: Refactor existing code to use the new shared helper (objective DONE)
+
+Stage 2 already performed the actual migration (15 call sites across 9
+files routed through `print_structured`). This stage's job was to
+independently re-verify that migration against the "refactor existing
+code" acceptance bar rather than take Stage 2's own summary at face value.
+
+Checks performed:
+- Swept the full source tree for any remaining `typer.echo(json.dumps(...))`
+  / `console.print(json.dumps(...))` bypass patterns outside
+  `cli_output.py`'s own docstring — none found.
+- Walked every remaining `json.dumps`/`console.print` occurrence in the 9
+  migrated files (`observer/cli.py` has the most) and confirmed each is
+  legitimately out of scope: inline `[dim]` debug context inside a markup
+  string, disk writes with no console involved, the deliberate `--pretty`
+  vs. non-`--pretty` raw-string dual mode in `show`, the
+  `ExtractionReportFormatter`-routed combined-output branch in
+  `query-flaky-tests` (shares one `output` variable across json/markdown/
+  table branches, so migrating just the json arm would break the shared
+  path), and a serializability guard whose `json.dumps` result is
+  discarded, never printed.
+- Checked a real behavioral difference in the diff: `artifact_index/cli.py`
+  previously used `default=_path_default` (raises `TypeError` on anything
+  but a `Path`) while `print_structured` uses `default=str` (stringifies
+  anything unrecognized). Confirmed both migrated call sites' payloads
+  already pre-stringify every `Path` before assembly, so `default=` was
+  dead code at both sites pre-migration — no behavior change from the
+  swap.
+- Re-ran `ruff check`/`ruff format --check` (clean on all 15 touched
+  files) and the full suite: 10298 passed, 6 failed, 21 skipped, 2
+  xfailed — the same 6 pre-existing sandbox/timing failures as Stage 2/3's
+  baseline, zero new failures.
+
+No source changes were needed this stage; it's a verification pass, not a
+fix. This closes the `print_structured()` objective: helper implemented,
+all in-scope call sites migrated, tests comprehensive (22, 100% coverage),
+full-suite/lint clean across three independent verification passes
+(Stages 2, 3, 4).
+
+## 2026-07-15 — Stage 3: Write comprehensive tests for the helper function
+
+Stage 2 already shipped `tests/unit/test_cli_output.py` with 15 tests at
+100% line/branch coverage on `print_structured()`. This stage's job was to
+audit that suite against the helper's own documented contract (docstring +
+Stage 1 design doc §4/§6) rather than just its coverage number, since
+line/branch coverage can hit 100% while still missing documented-but-untested
+behaviors.
+
+Found and closed 5 such gaps, adding 7 tests (22 total):
+- The docstring explicitly states callers "must pass data, not
+  `model.model_dump_json()`" because a bare `str` is rendered as a JSON
+  string scalar, not parsed — this contract had no test. Added one that
+  renders a JSON-looking string and asserts it comes back as a quoted
+  scalar, not the object it encodes.
+- `bool`/`int`/`float` primitive passthrough (the "any other
+  JSON-serializable value" branch) had no direct test.
+- The `dict`-subclass dispatch path was untested: `OrderedDict` IS a
+  `dict`, so it must hit the `else` passthrough branch, not the
+  non-`dict`-`Mapping` branch — both produce correct output, but only one
+  is the intended code path, so this pins the dispatch logic itself, not
+  just its output.
+- `ensure_ascii=False` (unicode preserved, not escaped to `\uXXXX`) and the
+  `indent=2` pretty-print formatting were both baked into the
+  `console.print_json` call but never asserted.
+
+No production code changed — `cli_output.py` was already correct.
+Verification: `ruff check`/`ruff format --check` clean; `pytest --cov`
+confirms 100.00% line + 100.00% branch coverage (unchanged, since the new
+tests exercise already-covered lines through previously-untested inputs,
+not new lines). Full suite: 10298 passed, 6 failed, 21 skipped, 2 xfailed —
+the same 6 pre-existing sandbox/timing failures as Stage 2's baseline run
+(`test_race_condition_guards.py` ×2, `test_check_signal_collector.py`,
+`test_custodian_sweep.py`, `test_dependency_drift_collector.py`,
+`test_snapshot_edge_cases.py`), zero new failures.
+
+Per the Overall Plan, Stage 4 (final full-suite/lint verification) remains
+technically next, but this stage's own verification run already satisfies
+it in substance — flagged in task.md as likely a quick confirmation rather
+than new work.
+
+## 2026-07-15 — Stage 2: Implement `print_structured()` and migrate call sites
+
+Created `src/operations_center/cli_output.py` per the Stage 1 design exactly
+(`print_structured(console: Console, output: Any, *, sort_keys: bool = False)
+-> None`), then migrated all 9 target files (15 call sites total — 13 from
+the design doc's table plus 2 found while implementing).
+
+Two corrections to Stage 1's design doc, found by re-reading the actual code
+during migration rather than trusting the earlier table:
+- `entrypoints/audit/main.py`'s `list-active --json` command bypasses
+  `Console` via `typer.echo(_json.dumps(...))` too — not caught by either
+  Stage 0 or Stage 1's analysis. Migrated for consistency with the rest of
+  the file.
+- `artifact_index/cli.py`'s `get-artifact --print-content` call site —
+  labeled "read-json command" in the design doc — is actually a raw
+  content dump (JSON or text, chosen by `content_type`) with `--max-bytes`
+  truncation logic applied uniformly to both. `print_structured` has no
+  truncation equivalent, so migrating it would silently drop a real CLI
+  feature. Left unmigrated; `_path_default` and the `json` import both stay
+  since this is their only remaining caller. Also left alone:
+  `observer/cli.py`'s `query-flaky-tests` combined-JSON branch, which
+  routes through `ExtractionReportFormatter` (a distinct pre-existing
+  formatting abstraction with its own json/markdown/table methods), not a
+  naked `json.dumps` bypass — never in Stage 1's scoped table to begin
+  with.
+
+Migrating `observer/cli.py`'s `show --pretty` command required extra care:
+its `pretty` flag isn't gated by `--quiet` today (pre-existing asymmetry,
+not something to fix here), and the same code path serves both `--format
+json` and `--format yaml`. Preserved both quirks exactly — `print_structured`
+now handles only the json+pretty combination; yaml+pretty keeps calling
+`console.print_json(output)` on the pre-serialized YAML string as before
+(a latent oddity, unrelated to this change).
+
+Migrating broke 7 existing tests in `test_main_cov.py` (audit ×3,
+calibration ×3, governance ×1) — they mocked the *old*
+`model_dump_json()`/`typer.echo` mechanism with `SimpleNamespace`/bare
+`MagicMock` fakes. `print_structured` type-dispatches via
+`isinstance(BaseModel)`/`dataclasses.is_dataclass`, which those fakes don't
+satisfy, so they fell through to the `default=str` catch-all and printed a
+stringified mock repr instead of the payload. Rewrote each to assert the
+CLI calls `print_structured(console, <the real object>)` with the right
+argument, rather than re-testing `print_structured`'s own serialization
+(that's `tests/unit/test_cli_output.py`'s job, 15 tests, new).
+
+Verification: `ruff check .` 0 violations repo-wide; `ruff format --check`
+clean on every touched file (68 unrelated files elsewhere have pre-existing
+formatting drift, confirmed by name and by reproducing on the unmodified
+branch tip). Full suite: 10291 passed, 6 failed, 21 skipped, 2 xfailed — all
+6 failures reproduce identically before this stage's changes (sandbox
+race-condition tests in observer/collectors + one unrelated
+`test_custodian_sweep.py` assertion), so zero new failures. Updated
+`.console/task.md`/`backlog.md` with Stage 2 completion; this objective has
+no further stage queued (see task.md's "Next Stage" note on optional
+Stage 3 full-suite re-verification if the operator wants it as a distinct
+closing step).
+
+## 2026-07-15 — Stage 1: Design `print_structured()` signature, module location, migration plan
+
+Design (no code change) complete — see `.console/STAGE1_PRINT_STRUCTURED_DESIGN.md`.
+
+Signature: `print_structured(console: Console, output: Any, *, sort_keys: bool = False) -> None`.
+The `sort_keys` kwarg wasn't in Stage 0's requirements summary — added after
+reading all 9 target files' actual `json.dumps` calls and finding 4 of them
+(`run_show`, `worker_backend_status`, `worker_backend_probe`, `run_memory/cli.py`)
+pass `sort_keys=True` today for deterministic, automation-consumed output; a
+signature without it would silently reorder those files' keys on migration.
+
+Module location: new flat top-level module `src/operations_center/cli_output.py`
+(sibling to `capability_ownership.py`/`close_invariants.py`/etc.), not nested
+under `entrypoints/` — 3 of the 9 target files (`observer/cli.py`,
+`artifact_index/cli.py`, `run_memory/cli.py`) are themselves top-level packages,
+not `entrypoints/` submodules, and there's no existing convention for them to
+import shared utilities from `entrypoints/`. `contracts/common.py` was considered
+and rejected — domain-model package, no existing `rich` dependency.
+
+Key empirical finding (verified against installed `rich==15.0.0`, not assumed):
+`console.print_json()` never soft-wraps output regardless of `Console.width`
+(hardcoded `soft_wrap=True` inside Rich's own implementation), and produces no
+ANSI codes on non-tty output. This directly resolves the concern behind the
+comment at `observer/cli.py:1075-1076` ("typer.echo ... so piped/redirected
+JSON is not soft-wrapped — the watchdog collector parses this from a file") —
+that comment is correct about `console.print(json.dumps(...))` wrapping, but
+`print_json` doesn't have that problem, so that call site (and the other 5
+`typer.echo` sites) can safely migrate. Also corrected Stage 0's file-level
+categorization: `artifact_index/cli.py` has 2 of 3 JSON call sites bypassing
+`Console` via `typer.echo`, not just the one "unhighlighted plain text" pattern
+Stage 0's medium-priority label implied — flagged in the design doc so Stage 2
+doesn't under-scope that file's changeset.
+
+Produced a concrete per-file before/after migration table (13 call sites across
+9 files) so Stage 2 is a mechanical implementation pass, not another discovery
+pass. Updated `.console/task.md` (Stage 1 acceptance criteria, Stage 2 starting
+point) and `.console/backlog.md`. No source files changed this stage.
+
+## 2026-07-15 — Stage 0: Analyze Rich console usage, scope `print_structured()` helper
+
+New objective from operator/issue tracker: add a shared helper (e.g.
+`print_structured(console, output)`) so CLI commands stop hand-rolling the
+JSON/table print path independently. Stage 0 (analysis only, no code change)
+complete — see `.console/STAGE0_RICH_CONSOLE_HELPER_ANALYSIS.md`.
+
+Findings: 16 production files construct their own `rich.console.Console` and
+implement a `--json`/`--format json` vs. table/text branch. The structured
+(JSON) branch alone is done 4 inconsistent ways — only
+`observer/cli.py:589` uses `console.print_json()` (the correct pattern); 7
+files bypass `Console` entirely via `typer.echo(json.dumps(...))`
+(`entrypoints/audit`, `calibration`, `run_show`, `worker_backend_status`,
+`worker_backend_probe`, `run_memory/cli.py`); 3 more route through `Console`
+but print a pre-serialized string so it loses syntax highlighting
+(`artifact_index/cli.py`, `entrypoints/governance/main.py`, plus one other
+command in `observer/cli.py` itself). Also found: `status_color` ternary
+duplicated 4× across `entrypoints/regression/main.py` and
+`entrypoints/replay/main.py` — a candidate for a companion helper, not this
+one. `entrypoints/setup/main.py` (interactive wizard) and
+`observer/extraction_health_dashboard.py` (Panel/Table dashboard) are
+confirmed out of scope for `print_structured` — too heterogeneous to
+generalize profitably.
+
+Decision: scope `print_structured(console, output)` narrowly to the
+structured/JSON path only (normalize dict/BaseModel/dataclass →
+`console.print_json`); leave table, panel, and interactive-prompt rendering
+untouched. Updated `.console/task.md` with the new objective, Stage 0
+completion, and Stage 1 starting point (design signature + migration plan for
+the 9 high/medium-priority files). No source files changed this stage.
+
 ## 2026-07-14 — feat(reviewer): C1 cross-family council for guardrail PRs (COUNCIL_VERDICT.md)
 
 Council spec Phase 2 (C1) — keyless change control for guardrail surfaces. A PR

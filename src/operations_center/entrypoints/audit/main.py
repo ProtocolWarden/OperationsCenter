@@ -48,6 +48,7 @@ from operations_center.audit_toolset import (
     load_run_status_entrypoint,
     resolve_artifact_manifest_path,
 )
+from operations_center.cli_output import print_structured
 
 app = typer.Typer(
     help="Managed repo audit dispatch commands.",
@@ -126,7 +127,7 @@ def cmd_run(
         raise typer.Exit(code=3) from exc
 
     if json_output:
-        typer.echo(result.model_dump_json(indent=2))
+        print_structured(console, result)
     else:
         _print_dispatch_result(result)
 
@@ -150,7 +151,7 @@ def cmd_status(
         raise typer.Exit(code=2) from exc
 
     if json_output:
-        typer.echo(run_status.model_dump_json(indent=2))
+        print_structured(console, run_status)
     else:
         t = Table(title="Run Status")
         t.add_column("Field")
@@ -220,24 +221,15 @@ def cmd_list_active(
     json_output: bool = typer.Option(False, "--json", help="Output as JSON."),
 ) -> None:
     """List currently-held audit dispatch locks across all OpsCenter processes."""
-    import json as _json
     from datetime import UTC, datetime
 
     store = get_global_registry().store
     active = store.list_active()
 
     if json_output:
-        typer.echo(
-            _json.dumps(
-                [
-                    {
-                        **p.to_json(),
-                        **p.liveness_summary(),
-                    }
-                    for p in active
-                ],
-                indent=2,
-            )
+        print_structured(
+            console,
+            [{**p.to_json(), **p.liveness_summary()} for p in active],
         )
         return
 

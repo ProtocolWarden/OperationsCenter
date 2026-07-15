@@ -21,6 +21,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from operations_center.cli_output import print_structured
 from operations_center.observer.alert_channels import AlertChannelFactory
 from operations_center.observer.collectors.extraction_history_collector import (
     ExtractionHistoryCollector,
@@ -516,7 +517,7 @@ def cmd_list(
         elif format_str == "json":
             snapshots = [{"run_id": d.name} for d in snapshot_dirs]
             if not quiet:
-                console.print(json.dumps(snapshots, indent=2, ensure_ascii=False))
+                print_structured(console, snapshots)
 
     except Exception as e:
         if not quiet:
@@ -586,7 +587,10 @@ def cmd_show(
             raise typer.Exit(EXIT_CONFIG_ERROR)
 
         if pretty:
-            console.print_json(output)
+            if format_str == "json":
+                print_structured(console, obj)
+            else:
+                console.print_json(output)
         else:
             if not quiet:
                 console.print(output)
@@ -1072,9 +1076,7 @@ def cmd_extraction_health(
             logger.debug("extraction history augmentation skipped: %s", e)
 
         if format_str == "json":
-            # typer.echo (not the rich console) so piped/redirected JSON is not
-            # soft-wrapped — the watchdog collector parses this from a file.
-            typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+            print_structured(console, payload)
         else:  # table
             console.print(
                 f"extraction success_rate={payload['success_rate']:.1f}%  "
@@ -1182,7 +1184,7 @@ def cmd_extraction_health_dashboard(
         )
 
         if format_str == "json":
-            typer.echo(json.dumps(data.to_dict(), indent=2, ensure_ascii=False))
+            print_structured(console, data.to_dict())
         else:
             renderer = ExtractionHealthDashboardRenderer()
             renderer.render(data, console)

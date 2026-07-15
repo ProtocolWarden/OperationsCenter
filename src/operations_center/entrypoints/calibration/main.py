@@ -40,6 +40,7 @@ from operations_center.behavior_calibration import (
     load_calibration_report,
     write_calibration_report,
 )
+from operations_center.cli_output import print_structured
 
 app = typer.Typer(
     help="Managed repo audit behavior calibration commands.",
@@ -114,7 +115,7 @@ def cmd_analyze(
     report = analyze_artifacts(calibration_input)
 
     if json_output:
-        typer.echo(report.model_dump_json(indent=2))
+        print_structured(console, report)
     else:
         _print_report_summary(report)
 
@@ -152,7 +153,7 @@ def cmd_tune_autonomy(
     report = analyze_artifacts(calibration_input)
 
     if json_output:
-        typer.echo(report.model_dump_json(indent=2))
+        print_structured(console, report)
     else:
         _print_report_summary(report)
         if report.recommendations:
@@ -188,7 +189,7 @@ def cmd_report(
         raise typer.Exit(code=2) from exc
 
     if json_output:
-        typer.echo(report.model_dump_json(indent=2))
+        print_structured(console, report)
     else:
         _print_report_summary(report)
 

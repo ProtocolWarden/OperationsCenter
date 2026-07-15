@@ -40,6 +40,7 @@ from operations_center.audit_governance import (
     run_governed_audit,
 )
 from operations_center.audit_governance.models import AuditUrgency
+from operations_center.cli_output import print_structured
 
 app = typer.Typer(
     help="Full audit governance — approve, deny, and dispatch managed repo audits.",
@@ -89,12 +90,11 @@ def cmd_request(
         console.print(f"[red]Invalid request:[/red] {exc}")
         raise typer.Exit(code=2) from exc
 
-    payload = req.model_dump_json(indent=2)
     if output:
-        Path(output).write_text(payload, encoding="utf-8")
+        Path(output).write_text(req.model_dump_json(indent=2), encoding="utf-8")
         console.print(f"Request written to [bold]{output}[/bold]  (request_id={req.request_id})")
     else:
-        console.print(payload)
+        print_structured(console, req)
 
 
 @app.command("evaluate")
@@ -179,14 +179,13 @@ def cmd_approve(
         console.print(f"[red]Approval validation failed:[/red] {exc}")
         raise typer.Exit(code=3)
 
-    payload = approval.model_dump_json(indent=2)
     if output:
-        Path(output).write_text(payload, encoding="utf-8")
+        Path(output).write_text(approval.model_dump_json(indent=2), encoding="utf-8")
         console.print(
             f"Approval written to [bold]{output}[/bold]  (approval_id={approval.approval_id})"
         )
     else:
-        console.print(payload)
+        print_structured(console, approval)
 
 
 @app.command("run")
