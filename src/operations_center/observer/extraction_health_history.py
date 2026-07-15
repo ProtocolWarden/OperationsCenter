@@ -53,6 +53,9 @@ class ExtractionHealthSnapshot:
         total_flaky_tests: Total count of flaky tests analyzed (for context).
         extracted_count: Count of tests with any extraction data (= complete + partial).
         edge_case_summary: Dict of edge case counts (truncated_messages, special_chars, etc.).
+        edge_cases: Sample list (up to 10) of dicts with keys ``test_id`` and
+            ``issue``, mirroring ``ExtractionHealth.edge_cases`` — full counts
+            are in ``edge_case_summary``.
         snapshot_id: Reference to source FlakyTestSignal (optional, for debugging).
         collection_run_id: Unique identifier for this collection cycle (optional).
     """
@@ -65,6 +68,7 @@ class ExtractionHealthSnapshot:
     total_flaky_tests: int
     extracted_count: int = 0  # Default to complete + partial
     edge_case_summary: dict[str, int] = field(default_factory=dict)
+    edge_cases: list[dict[str, str]] = field(default_factory=list)
     snapshot_id: str | None = None
     collection_run_id: str | None = None
     message_quality_rate: float | None = None
@@ -94,6 +98,7 @@ class ExtractionHealthSnapshot:
             "total_flaky_tests": self.total_flaky_tests,
             "extracted_count": self.extracted_count,
             "edge_case_summary": self.edge_case_summary,
+            "edge_cases": self.edge_cases,
             "snapshot_id": self.snapshot_id,
             "collection_run_id": self.collection_run_id,
             "message_quality_rate": self.message_quality_rate,
@@ -111,6 +116,7 @@ class ExtractionHealthSnapshot:
             total_flaky_tests=data["total_flaky_tests"],
             extracted_count=data.get("extracted_count", 0),
             edge_case_summary=data.get("edge_case_summary", {}),
+            edge_cases=data.get("edge_cases", []),
             snapshot_id=data.get("snapshot_id"),
             collection_run_id=data.get("collection_run_id"),
             message_quality_rate=data.get("message_quality_rate"),

@@ -674,6 +674,101 @@ class TestMessageQualityRateStorageAndAlerts:
             f"Expected collect_snapshot to receive message_quality_rate=None, got {passed_quality}"
         )
 
+
+class TestCollectSnapshotReceivesEdgeCasesSampleList:
+    """Regression: collect_snapshot() must forward the edge_cases sample list,
+    not just the edge_case_summary count dict (the bug this ticket fixes)."""
+
+    @patch("operations_center.observer.cli.ExtractionHistoryCollector")
+    @patch("operations_center.observer.cli.TestSignalQuery")
+    def test_collect_snapshot_receives_edge_cases_sample_list(
+        self, mock_cls: MagicMock, mock_collector_cls: MagicMock
+    ) -> None:
+        """collect_snapshot() is called with the health's edge_cases sample list."""
+        edge_cases = [
+            {"test_id": "tests/test_a.py::test_one", "issue": "truncated_message"},
+            {"test_id": "tests/test_b.py::test_two", "issue": "special_chars"},
+        ]
+        mock_cls.return_value = _query_returning(
+            ExtractionHealth(
+                success_rate=80.0,
+                complete_extraction=4,
+                partial_extraction=0,
+                no_extraction=1,
+                edge_case_summary={"truncated_messages": 1, "special_chars": 1},
+                edge_cases=edge_cases,
+            )
+        )
+        mock_collector_instance = MagicMock()
+        mock_collector_cls.return_value = mock_collector_instance
+
+        with patch("pathlib.Path.exists", return_value=True):
+            result = runner.invoke(app, ["extraction-health", "--format", "json"])
+        assert result.exit_code == 0
+
+        call_kwargs = mock_collector_instance.collect_snapshot.call_args
+        kwargs = call_kwargs.kwargs if call_kwargs.kwargs else {}
+        passed_edge_cases = kwargs.get("edge_cases", "SENTINEL")
+        assert passed_edge_cases == edge_cases, (
+            f"Expected collect_snapshot to receive edge_cases={edge_cases}, got {passed_edge_cases}"
+        )
+
+    @patch("operations_center.observer.cli.ExtractionHistoryCollector")
+    @patch("operations_center.observer.cli.TestSignalQuery")
+    def test_collect_snapshot_receives_empty_edge_cases_list(
+        self, mock_cls: MagicMock, mock_collector_cls: MagicMock
+    ) -> None:
+        """collect_snapshot() is called with edge_cases=[] when there are none."""
+        mock_cls.return_value = _query_returning(
+            ExtractionHealth(success_rate=100.0, complete_extraction=4)
+        )
+        mock_collector_instance = MagicMock()
+        mock_collector_cls.return_value = mock_collector_instance
+
+        with patch("pathlib.Path.exists", return_value=True):
+            result = runner.invoke(app, ["extraction-health", "--format", "json"])
+        assert result.exit_code == 0
+
+        call_kwargs = mock_collector_instance.collect_snapshot.call_args
+        kwargs = call_kwargs.kwargs if call_kwargs.kwargs else {}
+        passed_edge_cases = kwargs.get("edge_cases", "SENTINEL")
+        assert passed_edge_cases == [], (
+            f"Expected collect_snapshot to receive edge_cases=[], got {passed_edge_cases}"
+        )
+
+    def test_edge_cases_stored_in_jsonl(self, tmp_path: any) -> None:
+        """End-to-end: the edge_cases sample list is written into the JSONL history file,
+        not just the edge_case_summary count dict."""
+        from operations_center.observer.extraction_health_history import ExtractionHistoryStorage
+
+        edge_cases = [{"test_id": "tests/test_a.py::test_one", "issue": "truncated_message"}]
+        root = tmp_path / "obs"
+        root.mkdir()
+        mock_query = _query_returning(
+            ExtractionHealth(
+                success_rate=80.0,
+                complete_extraction=4,
+                partial_extraction=0,
+                no_extraction=1,
+                edge_case_summary={"truncated_messages": 1},
+                edge_cases=edge_cases,
+            )
+        )
+        with (
+            patch("operations_center.observer.cli.TestSignalQuery", return_value=mock_query),
+            patch("pathlib.Path.exists", return_value=True),
+        ):
+            result = runner.invoke(
+                app,
+                ["extraction-health", "--storage-root", str(root), "--format", "json"],
+            )
+        assert result.exit_code == 0
+
+        storage = ExtractionHistoryStorage.create_local(str(root / "extraction_history"))
+        snapshots = storage.load_all_snapshots()
+        assert len(snapshots) == 1
+        assert snapshots[0].edge_cases == edge_cases
+
     def test_quality_rate_stored_in_jsonl(self, tmp_path: any) -> None:
         """End-to-end: quality rate written into the JSONL history file."""
         root = tmp_path / "obs"

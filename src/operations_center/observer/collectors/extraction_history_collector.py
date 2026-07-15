@@ -47,6 +47,7 @@ class ExtractionHistoryCollector:
         no_extraction: int,
         total_flaky_tests: int,
         edge_case_summary: dict[str, int] | None = None,
+        edge_cases: list[dict[str, str]] | None = None,
         snapshot_id: str | None = None,
         collection_run_id: str | None = None,
         message_quality_rate: float | None = None,
@@ -60,6 +61,9 @@ class ExtractionHistoryCollector:
             no_extraction: Count of tests with neither field.
             total_flaky_tests: Total count of flaky tests analyzed.
             edge_case_summary: Dict of edge case counts (optional).
+            edge_cases: Sample list (up to 10) of dicts with keys ``test_id`` and
+                ``issue`` — the per-test detail behind edge_case_summary's aggregate
+                counts (optional).
             snapshot_id: Reference to source signal (optional).
             collection_run_id: Unique identifier for collection cycle (optional).
             message_quality_rate: Percentage of assertion messages that are informative
@@ -70,6 +74,8 @@ class ExtractionHistoryCollector:
         """
         if edge_case_summary is None:
             edge_case_summary = {}
+        if edge_cases is None:
+            edge_cases = []
 
         snapshot = ExtractionHealthSnapshot(
             observed_at=datetime.now(UTC),
@@ -80,6 +86,7 @@ class ExtractionHistoryCollector:
             total_flaky_tests=total_flaky_tests,
             extracted_count=complete_extraction + partial_extraction,
             edge_case_summary=edge_case_summary,
+            edge_cases=edge_cases,
             snapshot_id=snapshot_id,
             collection_run_id=collection_run_id,
             message_quality_rate=message_quality_rate,

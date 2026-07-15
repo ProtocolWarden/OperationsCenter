@@ -4,6 +4,74 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## Done
 
+### 2026-07-15: Stages 3-4 — Docs + final verification for `edge_cases` forwarding fix (✅ COMPLETE — objective DONE)
+- **Objective**: Finish the `edge_cases` sample-list forwarding fix: update the JSONL
+  schema doc and re-verify the full suite/lint with zero new failures.
+- **Status**: ✅ COMPLETE. All 4 plan stages done (0 investigate, 1 implement, 2 tests
+  folded into 1, 3 docs, 4 verify) — objective can be marked DONE.
+- **Changes**:
+  - `docs/reference/EXTRACTION_FIDELITY_METRIC.md` — added `edge_cases` to the
+    "Storage and Time-Series" JSONL schema example, extended the backwards-compat
+    note (previously only covered `message_quality_rate`) to cover `edge_cases=[]`
+    for pre-existing rows.
+- **Verification**: `ruff check .` clean, `ruff format --check` clean on all 6 touched
+  files. Full suite `pytest -q`: 10315 passed, 21 skipped, 2 xfailed, 6 failed — all 6
+  failures confirmed pre-existing via `git stash` + re-run on the unmodified branch tip
+  (sandbox race conditions in `test_race_condition_guards.py` ×2,
+  `test_check_signal_collector.py`, `test_dependency_drift_collector.py`,
+  `test_snapshot_edge_cases.py::test_store_with_read_only_directory` — root-in-sandbox
+  ignores `chmod 0o444` — plus one unrelated `test_custodian_sweep.py` assertion).
+  Zero new failures introduced.
+
+### 2026-07-15: Stage 1 — Add `edge_cases` field to `ExtractionHealthSnapshot` and related models (✅ COMPLETE)
+- **Objective**: Fix `edge_cases` so the extraction-history layer forwards the per-test
+  sample list, not just the `edge_case_summary` count dict (the bug Stage 0 pinpointed).
+- **Status**: ✅ COMPLETE.
+- **Changes**:
+  - `ExtractionHealthSnapshot` — new `edge_cases: list[dict[str, str]] = field(default_factory=list)`
+    field, wired into `to_dict()`/`from_dict()` (missing key defaults to `[]` for old rows).
+  - `ExtractionHistoryCollector.collect_snapshot()` — new `edge_cases` parameter, threaded
+    into the snapshot constructor.
+  - `observer/cli.py` — the one real call site now passes `edge_cases=list(health.edge_cases)`.
+  - Tests added at both the snapshot/collector level (`test_extraction_history.py`) and an
+    end-to-end CLI regression (`test_cli_extraction_health.py::TestCollectSnapshotReceivesEdgeCasesSampleList`)
+    proving the sample list reaches the on-disk JSONL.
+- **Verification**: `ruff check`/`ruff format --check` clean; `pytest tests/unit/observer/`
+  1725 passed, 1 pre-existing unrelated failure, zero new failures.
+- **Acceptance Criteria — ALL MET** ✅ (field + to_dict/from_dict; collect_snapshot signature;
+  cli.py call site fixed).
+- **Next Stage**: Stage 3 (docs) — update the JSONL schema example in
+  `docs/reference/EXTRACTION_FIDELITY_METRIC.md` with `edge_cases` + a backwards-compat note.
+
+### 2026-07-15: Stage 0 — Investigate `edge_cases` forwarding issue in `ExtractionHealthSnapshot` (✅ COMPLETE)
+- **Objective**: Confirm whether the extraction-history layer forwards the `edge_cases`
+  per-test sample list (vs. only the `edge_case_summary` count dict), and pin down exactly
+  where the fix belongs.
+- **Status**: ✅ COMPLETE — full write-up in `.console/STAGE0_EDGE_CASES_SNAPSHOT_ANALYSIS.md`.
+- **Key findings**:
+  - `ExtractionHealth.edge_cases` (`query_flaky.py:142`) — the sample list
+    (`list[dict]` of `{test_id, issue}`, capped at 10) — already exists and is fully
+    wired through the CLI since PR #374.
+  - `ExtractionHealthSnapshot` (`extraction_health_history.py:42-70`) has no `edge_cases`
+    field at all — only `edge_case_summary: dict[str, int]` (counts). Confirmed via grep
+    and by checking every existing snapshot test: none reference a sample-list attribute.
+  - `ExtractionHistoryCollector.collect_snapshot()`
+    (`collectors/extraction_history_collector.py:42-53`) has no `edge_cases` parameter to
+    accept the sample list even if the field existed.
+  - Root cause of the issue, pinpointed: the one call site
+    (`observer/cli.py:1046-1054`) already has `health.edge_cases` (the real sample list)
+    in scope, but only forwards `edge_case_summary=dict(health.edge_case_summary)` — the
+    sample list is silently dropped the moment a reading rolls into history.
+- **Acceptance Criteria — ALL MET** ✅
+  1. ✅ Identified where `edge_cases` sample list should be stored in
+     `ExtractionHealthSnapshot` (new field, `to_dict`/`from_dict` wiring)
+  2. ✅ Determined the `edge_cases` field is missing from `ExtractionHealthSnapshot`
+     (confirmed absent)
+  3. ✅ Verified where `collect_snapshot` should accept an `edge_cases` parameter
+     (new optional param, threaded into the constructor call, closes the `cli.py` gap)
+- **Next Stage**: Implement — add the field/parameter, fix the `cli.py` call site, update
+  docs and tests. See `.console/task.md` for the full plan.
+
 ### 2026-07-15: Stage 4 — Refactor existing code to use the new shared helper (✅ COMPLETE)
 - **Objective**: Independently re-verify Stage 2's migration against the "refactor existing
   code" acceptance bar (identified/updated all relevant callsites, replaced redundant
