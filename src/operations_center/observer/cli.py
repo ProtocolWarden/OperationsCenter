@@ -877,6 +877,11 @@ def cmd_query_flaky_tests(
         if include_assertions:
             assertions = query.get_failing_assertion_messages(timerange)
 
+        if limit > 0:
+            test_names = dict(list(test_names.items())[:limit])
+            if assertions:
+                assertions = dict(list(assertions.items())[:limit])
+
         if not test_names:
             if not quiet:
                 console.print(f"[yellow]No failing tests found in the last {hours} hours[/yellow]")

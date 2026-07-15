@@ -258,6 +258,93 @@ class TestQueryFlakyTestsCommand:
             assert "assertion_messages" in parsed["assertion_failures"]
 
     @patch("operations_center.observer.cli.TestSignalQuery")
+    def test_query_limit_caps_test_names(self, mock_query_class: MagicMock) -> None:
+        """--limit caps the number of test names returned."""
+        mock_query = MagicMock()
+        mock_query.get_failing_test_names.return_value = {
+            f"test_{i}": 15 - i for i in range(15)
+        }
+        mock_query_class.return_value = mock_query
+
+        with patch("pathlib.Path.exists", return_value=True):
+            result = runner.invoke(
+                app, ["query-flaky-tests", "--format", "json", "--limit", "3"]
+            )
+
+            assert result.exit_code == 0
+            parsed = json.loads(result.stdout)
+            assert parsed["unique_tests"] == 3
+            assert [t["name"] for t in parsed["test_names"]] == [
+                "test_0",
+                "test_1",
+                "test_2",
+            ]
+
+    @patch("operations_center.observer.cli.TestSignalQuery")
+    def test_query_default_limit_is_ten(self, mock_query_class: MagicMock) -> None:
+        """Default --limit is 10 when not specified."""
+        mock_query = MagicMock()
+        mock_query.get_failing_test_names.return_value = {
+            f"test_{i}": 15 - i for i in range(15)
+        }
+        mock_query_class.return_value = mock_query
+
+        with patch("pathlib.Path.exists", return_value=True):
+            result = runner.invoke(app, ["query-flaky-tests", "--format", "json"])
+
+            assert result.exit_code == 0
+            parsed = json.loads(result.stdout)
+            assert parsed["unique_tests"] == 10
+
+    @patch("operations_center.observer.cli.TestSignalQuery")
+    def test_query_limit_zero_shows_all(self, mock_query_class: MagicMock) -> None:
+        """--limit 0 disables capping and shows every test."""
+        mock_query = MagicMock()
+        mock_query.get_failing_test_names.return_value = {
+            f"test_{i}": 15 - i for i in range(15)
+        }
+        mock_query_class.return_value = mock_query
+
+        with patch("pathlib.Path.exists", return_value=True):
+            result = runner.invoke(
+                app, ["query-flaky-tests", "--format", "json", "--limit", "0"]
+            )
+
+            assert result.exit_code == 0
+            parsed = json.loads(result.stdout)
+            assert parsed["unique_tests"] == 15
+
+    @patch("operations_center.observer.cli.TestSignalQuery")
+    def test_query_limit_caps_assertions_too(self, mock_query_class: MagicMock) -> None:
+        """--limit also caps the assertion-messages listing."""
+        mock_query = MagicMock()
+        mock_query.get_failing_test_names.return_value = {
+            f"test_{i}": 5 - i for i in range(5)
+        }
+        mock_query.get_failing_assertion_messages.return_value = {
+            f"assert_{i}": 5 - i for i in range(5)
+        }
+        mock_query_class.return_value = mock_query
+
+        with patch("pathlib.Path.exists", return_value=True):
+            result = runner.invoke(
+                app,
+                [
+                    "query-flaky-tests",
+                    "--include-assertions",
+                    "--format",
+                    "json",
+                    "--limit",
+                    "2",
+                ],
+            )
+
+            assert result.exit_code == 0
+            parsed = json.loads(result.stdout)
+            assert parsed["test_failures"]["unique_tests"] == 2
+            assert parsed["assertion_failures"]["unique_assertions"] == 2
+
+    @patch("operations_center.observer.cli.TestSignalQuery")
     def test_query_assertions_combined_markdown(self, mock_query_class: MagicMock) -> None:
         """Assertions are properly combined in markdown output."""
         mock_query = MagicMock()

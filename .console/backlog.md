@@ -4,6 +4,120 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## Done
 
+### 2026-07-14: Stage 5 — Test all documented CLI commands and validate outputs match documentation (✅ COMPLETE, 4 doc fixes applied)
+- **Objective**: Execute all 8 documented commands against real (non-mocked) fixture data and
+  compare actual output structure to the doc's JSON/table examples
+- **Status**: ✅ COMPLETE — all 4 acceptance criteria met; 4 discrepancies found and fixed
+- **Key Results**:
+  - ✅ All 8 commands executed without errors against hand-built `RepoStateSnapshot` fixtures
+    matching the doc's own example numbers (91.3% rate, 63/21/8 split, 11 query-flaky-tests
+    occurrences)
+  - ❌→✅ Command 6 (`tail -5 ... | python3 -m json.tool`) fails with `Extra data` on >1 line —
+    fixed with a working `python3 -c` snippet
+  - ❌→✅ Command 8 / Step 7 (`extraction_success_rate` from latest snapshot) always reads `0.0`
+    in production — `FlakyTestCollector.collect()` never sets it (corroborated by
+    `snapshot_validator.py`'s own "missing extraction visibility" check); doc's "re-run
+    observe-repo" remediation was wrong — added caveat, fixed example, rewrote Step 7
+  - ❌→✅ Commands 4/5 example tables showed qualified pytest node IDs; real output only ever
+    has the bare `test_name` — fixed both examples
+  - ❌→✅ Command 3's `trend`/`weekly_trend` example and key-reference table were missing real
+    fields (`success_rate_std_dev`, `*_mean` fields, `edge_case_trends`, nested `trend.anomalies`)
+    — added
+  - ✅ Confirmed Stage 2's `--limit` fix (already uncommitted in the working tree) works
+    correctly under live execution
+  - ✅ Verified accurate with no changes: command 1/2 shapes, alert log line format
+    (byte-for-byte), command 8's `IndexError` caveat, anomaly dict shape
+- **Environment note**: reused Stage 2's `env -u PYTHONPATH` workaround, plus reinstalled this
+  workspace's editable package (`pip install -e . --no-build-isolation --no-deps`) so the CLI
+  under test is this checkout's code, not the stray `/home/dev/Documents/GitHub/OperationsCenter`
+  install
+- **Test run**: `pytest tests/unit/observer/ -q` → 1540 passed, 3 pre-existing/environmental
+  failures unrelated to this change (root-execution permission bypass ×2, one date-hardcoded test
+  that aged out of its own 30-day window). `ruff check` clean.
+- **Deliverable**: `docs/operator/diagnostics.md` (4 fixes); `.console/task.md`/`backlog.md`/`log.md`
+  updated
+
+### 2026-07-14: Stage 2 — Verify CLI commands and their options against actual implementation (✅ COMPLETE, 1 fix applied)
+- **Objective**: Independently verify all 8 documented CLI commands and their options
+  (`--hours`, `--format`, `--trend-days`, `--include-assertions`, `--limit`) in
+  `docs/operator/diagnostics.md` § "Extraction Health Diagnosis" against the actual
+  `cli.py` implementation
+- **Status**: ✅ COMPLETE — routing and options verified by live execution against
+  fixture data (not just static read); 1 discrepancy found and fixed
+- **Key Results**:
+  - ✅ All 8 commands confirmed: 1-5 route through `operations-center.sh observer` →
+    `cli.py`'s `extraction-health`/`query-flaky-tests`; 6-8 are standalone shell
+    one-liners the doc never claims route through the CLI
+  - ✅ `--hours`, `--format` (json/table), `--trend-days`, `--include-assertions`
+    confirmed correct by live run: table/JSON structure and `history` section keys
+    match the doc's reference table exactly; alert log line format matches byte-for-byte
+  - ❌→✅ **Found and fixed**: `query-flaky-tests --limit N` was declared (default 10,
+    help text "Max tests to display (0 = all)") but never applied — confirmed
+    empirically that all rows printed regardless of `--limit`. Fixed with a 4-line
+    slice in `cmd_query_flaky_tests` (`cli.py:880-883`)
+  - ✅ Added 4 new tests to `test_cli_query_flaky_tests.py` covering the fix
+  - **Environment note**: this workspace's `.venv` resolves `operations-center` to a
+    *different* checkout (`/home/dev/Documents/GitHub/OperationsCenter/src`) — all
+    live verification used `PYTHONPATH=<workspace>/src` to exercise the correct code
+- **Test run**: `pytest tests/unit/observer/ -q` → 1540 passed, 3 pre-existing
+  unrelated failures (confirmed via `git stash` to fail identically before this
+  change). `ruff check` clean.
+- **Deliverable**: `.console/task.md` Stage 2 record; fix in
+  `src/operations_center/observer/cli.py`; new tests in
+  `tests/unit/observer/test_cli_query_flaky_tests.py`
+- **Finding**: 1 confirmed discrepancy (dead `--limit` option) — fixed in source with
+  test coverage. No doc changes needed.
+
+### 2026-07-14: Stage 1 — Verify formula accuracy and metric definitions against source code (✅ COMPLETE)
+- **Objective**: Independently re-verify the "Extraction Metrics Reference" formula and metric-definition
+  claims in `docs/operator/diagnostics.md` § "Extraction Health Diagnosis" (a focused re-check of Stage 0's item 1)
+- **Status**: ✅ COMPLETE — all 4 acceptance criteria confirmed against current source, 0 discrepancies
+- **Key Results**:
+  - ✅ Formula confirmed exact at `query_flaky.py:387`: `success_rate = ((complete + partial) / total * 100.0) if total > 0 else 0.0`
+  - ✅ `FlakyTestSignal.extraction_success_rate` field confirmed at `models.py:460`
+  - ✅ Metric definitions confirmed: `complete_extraction` (both fields present), `partial_extraction` (one field), `no_extraction` (neither); `malformed_exceptions` confirmed always 0 (reserved, unimplemented)
+  - ✅ Thresholds confirmed exact at `flaky_test_alert_config.py:122-128`: warning=80.0, critical=50.0, emergency=10.0, strict `<` comparisons matching the doc's `≥80%` healthy boundary
+  - ✅ Ran existing test suites that lock in these values: `test_flaky_test_alert_config.py`, `test_extraction_health_queries.py`, `test_models_test_signal.py`, `test_flaky_test_alerts.py` — 90 passed, 0 failures
+- **Deliverable**: `.console/task.md` Stage 1 record (source-line citations for each criterion)
+- **Finding**: 0 discrepancies — no documentation or source changes required.
+
+### 2026-07-14: Stage 3 — Verify alert system configuration against FlakyTestAlertConfig (✅ COMPLETE)
+- **Objective**: Independently re-verify the "Alert System" claims in `docs/operator/diagnostics.md`
+  § "Extraction Health Diagnosis" (a focused re-check of Stage 0's item 3)
+- **Status**: ✅ COMPLETE — all 4 acceptance criteria confirmed against current source, 0 discrepancies
+- **Key Results**:
+  - ✅ `FlakyTestAlertConfig` thresholds (`flaky_test_alert_config.py:122-128`) confirmed: warning=80.0, critical=50.0, emergency=10.0
+  - ✅ Severity levels and inverted (lower-is-worse) rate thresholds confirmed via `should_alert_on_extraction_success_rate()`
+  - ✅ Channel routing confirmed exact: WARNING→[operator_log, slack], CRITICAL→[+email], EMERGENCY→[+pagerduty]
+  - ✅ `FlakyTestAlertManager.check_extraction_success_rate()` confirmed to exist and behave as documented, plus its end-to-end dispatch wiring in `cli.py`
+  - ✅ Existing test coverage confirmed comprehensive (37 tests across config/manager, 1 for log format) — no new tests needed
+- **Deliverable**: `.console/task.md` Stage 3 record (source-line citations for each criterion)
+- **Finding**: 0 discrepancies — no documentation changes required. Test run: 71 passed, 1 pre-existing unrelated failure (anomaly-detection test, out of scope).
+
+### 2026-07-14: Stage 4 — Verify data storage paths and retention policies (✅ COMPLETE)
+- **Objective**: Independently re-verify the "Data Storage" claims in `docs/operator/diagnostics.md`
+  § "Extraction Health Diagnosis" (a focused re-check of Stage 0's item 4)
+- **Status**: ✅ COMPLETE — all 4 acceptance criteria confirmed against current source, 0 discrepancies
+- **Key Results**:
+  - ✅ Extraction history JSONL path confirmed: `tools/report/operations_center/observer/extraction_history/extraction_health_history.jsonl`
+  - ✅ Observer snapshot path pattern confirmed: `tools/report/operations_center/observer/<run_id>/repo_state_snapshot.json`
+  - ✅ 365-day retention confirmed implemented and enforced every `extraction-health` run
+  - ✅ All path references across diagnostic commands validated as consistent with the source-verified paths
+- **Deliverable**: `.console/task.md` Stage 4 record (source-line citations for each criterion)
+- **Finding**: 0 discrepancies — no documentation changes required.
+
+### 2026-07-14: Stage 0 — Audit Extraction Health Diagnosis documentation (✅ COMPLETE)
+- **Objective**: Extract and verify every verifiable claim in `docs/operator/diagnostics.md` § "Extraction Health Diagnosis" against source code
+- **Status**: ✅ COMPLETE — All 5 acceptance criteria met, 0 discrepancies found
+- **Key Results**:
+  - ✅ Extracted all source code references (file paths, line numbers, functions) — 10 references, all confirmed against current source
+  - ✅ Listed all 8 CLI commands with routing and flag verification against `cli.py` and `scripts/operations-center.sh`
+  - ✅ Documented all numeric thresholds and alert severity mappings (WARNING<80%, CRITICAL<50%, EMERGENCY<10%; channel routing per severity; 200-char truncation cutoff; >5% anomaly delta; 365-day retention)
+  - ✅ Documented all data storage paths (extraction-history JSONL, `<run_id>/repo_state_snapshot.json` pattern) and retention policy
+  - ✅ Created a full claim-verification checklist (18 items, all ✅)
+- **Deliverable**: `.console/STAGE0_EXTRACTION_HEALTH_AUDIT.md`
+- **Finding**: 0 discrepancies — confirms the prior fix in commit `9590e1a` fully corrected the section; no further doc changes required this pass.
+
 ### 2026-06-21: Stage 6 — Commit changes and prepare for merge (✅ COMPLETE)
 - **Objective**: Stage all documentation changes, commit with descriptive message, push to feature branch, verify synchronized
 - **Status**: ✅ COMPLETE — All 6 acceptance criteria met
@@ -1714,3 +1828,22 @@ DAGExecutor #11, SourceRegistry #14, TeamExecutor #12, CoreRunner #20).
 ContextLifecycle = KEEP. Each observer wire pruned its names from d12_baseline
 (D12 gate confirms 0). B2 root cause = content-less secret artifact (infra, not a
 code bug). Full record: docs/design/INCOMPLETE_INTEGRATION_REMEDIATION.md.
+
+**Extraction Health Diagnosis doc audit (`docs/operator/diagnostics.md`) — COMPLETE (2026-07-14)**:
+Done: 8-stage audit (Stages 0–8) of the "Extraction Health Diagnosis" section.
+6 discrepancies found and fixed total — 1 source bug (dead `query-flaky-tests
+--limit` option, fixed in `cli.py:880-883` + 4 new tests) and 5 doc-only fixes
+(command 6 `json.tool` multi-line pipe failure; command 8/Step 7's
+`extraction_success_rate` always-0.0 example + wrong remediation advice;
+commands 4/5 unreachable qualified-test-name examples; command 3's incomplete
+`trend`/`weekly_trend` field list; Stage 8's "Related Sections" row wrongly
+implying `observe-repo` refreshes the always-0.0 snapshot field). Stages
+0/1/3/4 each independently confirmed 0 discrepancies in file paths,
+formulas/thresholds, alert channels, and storage/retention respectively.
+Stage 7 independently re-verified the first 5 fixes against source once more
+and found 0 additional discrepancies. Stage 8 re-validated everything end to
+end (live CLI execution + full test/lint run), found and fixed the
+"Related Sections" coherence gap, then committed and pushed the branch.
+Compiled report: `.console/STAGE6_COMPILED_FINDINGS.md`. Test suite: 1540
+passed, 3 pre-existing/environmental failures unrelated (out of scope,
+reproduced identically on the base commit via `git stash`).

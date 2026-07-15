@@ -314,15 +314,19 @@ Extends the history look-back window to 14 days (default is 7). Use this when a 
 | `window_days` | int | The `--trend-days` value used (14 here) |
 | `trend` | object | Daily-granularity `ExtractionHealthTrend`; `null` if fewer than 2 snapshots |
 | `trend.success_rate_trend` | float | Slope (% per day); negative means degrading |
-| `weekly_trend` | object | Weekly-granularity `ExtractionHealthTrend` |
+| `trend.success_rate_std_dev` | float | Standard deviation of `success_rate` over the window |
+| `trend.complete_extraction_mean` / `.partial_extraction_mean` / `.no_extraction_mean` | float | Mean counts per snapshot over the window |
+| `trend.edge_case_trends` | object | Per-edge-case `{mean, min, max}` over the window, keyed by `truncated_messages`/`special_chars`/`malformed_exceptions` |
+| `trend.anomalies` | list | Same shape as top-level `anomalies` below, but scoped to the daily-granularity window only — distinct list, not a duplicate reference |
+| `weekly_trend` | object | Weekly-granularity `ExtractionHealthTrend`; same shape as `trend` |
 | `slope` | object | Linear regression `{"slope", "r_squared", "confidence"}` |
 | `slope.confidence` | string | `"improving"`, `"stable"`, `"degrading"`, or `"uncertain"` |
 | `anomalies` | list | Observations where rate fell or rose >5% from the 5-point moving average; empty if fewer than 10 snapshots |
 | `observations` | int | Number of snapshots collected in the window |
-| `recent` | list | Up to five most-recent snapshot readings |
+| `recent` | list | Up to five most-recent snapshot readings (full `ExtractionHealthSnapshot` fields — `observed_at`, `success_rate`, `complete_extraction`, `partial_extraction`, `no_extraction`, `total_flaky_tests`, `extracted_count`, `edge_case_summary`, `snapshot_id`, `collection_run_id`) |
 | `snapshots_pruned` | int | Entries removed by the 365-day retention pruner this run |
 
-Example `history` section (with 14 days of data):
+Example `history` section (with 14 days of data; `recent` entries abbreviated with `...` for space):
 
 ```json
 {
@@ -336,9 +340,29 @@ Example `history` section (with 14 days of data):
       "success_rate_mean": 87.5,
       "success_rate_min": 64.0,
       "success_rate_max": 93.2,
+      "success_rate_std_dev": 8.1,
       "success_rate_trend": -1.2,
-      "observation_count": 14
+      "complete_extraction_mean": 58.0,
+      "partial_extraction_mean": 20.0,
+      "no_extraction_mean": 8.0,
+      "observation_count": 14,
+      "edge_case_trends": {
+        "truncated_messages": {"mean": 3.5, "min": 2.0, "max": 5.0},
+        "special_chars": {"mean": 1.8, "min": 0.0, "max": 3.0},
+        "malformed_exceptions": {"mean": 0.0, "min": 0.0, "max": 0.0}
+      },
+      "anomalies": [
+        {
+          "type": "spike_down",
+          "timestamp": "2026-06-18T08:00:00Z",
+          "metric": "success_rate",
+          "delta_pct": -27.3,
+          "previous_avg": 91.3,
+          "current_value": 64.0
+        }
+      ]
     },
+    "weekly_trend": { "granularity": "weekly", "...": "same shape as trend" },
     "slope": {
       "slope": -0.09,
       "r_squared": 0.72,
@@ -356,8 +380,8 @@ Example `history` section (with 14 days of data):
     ],
     "observations": 14,
     "recent": [
-      {"observed_at": "2026-06-21T14:03:12Z", "success_rate": 91.3},
-      {"observed_at": "2026-06-20T14:01:55Z", "success_rate": 89.7}
+      {"observed_at": "2026-06-21T14:03:12Z", "success_rate": 91.3, "...": "..."},
+      {"observed_at": "2026-06-20T14:01:55Z", "success_rate": 89.7, "...": "..."}
     ],
     "snapshots_pruned": 0
   }
@@ -375,13 +399,18 @@ Lists each failing test with its occurrence count and percentage of total failur
 Example output:
 
 ```
-Test Name                                    │ Count │ Percentage
-─────────────────────────────────────────────────────────────────
-tests/test_auth.py::test_token_refresh       │     5 │     45.5%
-tests/test_cache.py::test_invalidation       │     3 │     27.3%
-tests/test_webhook.py::test_timeout          │     2 │     18.2%
-tests/test_payment.py::test_retry            │     1 │      9.1%
+Test Name           │ Count │ Percentage
+─────────────────────────────────────────
+test_token_refresh  │     5 │     45.5%
+test_invalidation   │     3 │     27.3%
+test_timeout        │     2 │     18.2%
+test_retry          │     1 │      9.1%
 ```
+
+Note: the "Test Name" column holds the bare extracted function name only (e.g.
+`test_token_refresh`) — not the full pytest node ID with file path and `::`.
+`get_failing_test_names()` reads `TestSignal.test_name`, which never carries a
+module path.
 
 **5. Per-test records with assertion messages**
 
@@ -394,12 +423,12 @@ Adds a second table with unique assertion messages and their occurrence counts. 
 Example output:
 
 ```
-Test Name                                    │ Count │ Percentage
-─────────────────────────────────────────────────────────────────
-tests/test_auth.py::test_token_refresh       │     5 │     45.5%
-tests/test_cache.py::test_invalidation       │     3 │     27.3%
-tests/test_webhook.py::test_timeout          │     2 │     18.2%
-tests/test_payment.py::test_retry            │     1 │      9.1%
+Test Name           │ Count │ Percentage
+─────────────────────────────────────────
+test_token_refresh  │     5 │     45.5%
+test_invalidation   │     3 │     27.3%
+test_timeout        │     2 │     18.2%
+test_retry          │     1 │      9.1%
 
 Assertion Message                              │ Count │ Percentage
 ───────────────────────────────────────────────────────────────────
@@ -413,10 +442,17 @@ Tests with no extracted assertion message do not appear in the assertion table. 
 
 ```bash
 tail -5 tools/report/operations_center/observer/extraction_history/extraction_health_history.jsonl \
-  | python3 -m json.tool
+  | python3 -c "import json, sys
+for line in sys.stdin:
+    print(json.dumps(json.loads(line), indent=2))"
 ```
 
 Inspects the last five entries in the time-series file directly. Useful when the CLI is unavailable or you need raw `observed_at` timestamps.
+
+Note: `python3 -m json.tool` only parses a single JSON value, so it fails with
+`Extra data` as soon as more than one line is piped in — the normal case for
+`tail -5`. Use the snippet above (or `jq .` if available) to pretty-print each
+line independently.
 
 Example output (one entry):
 
@@ -462,12 +498,14 @@ print('rate:', d['signals']['flaky_test_signal'].get('extraction_success_rate', 
 
 Reads `FlakyTestSignal.extraction_success_rate` from the latest observer snapshot. The field is nested under `signals.flaky_test_signal` in the snapshot JSON. Use this to confirm what rate the observer pipeline saw during the last `observe-repo` run, independent of the extraction-health collector.
 
+**Caveat**: In current snapshots, this field reads `0.0` even when flaky tests are present — `FlakyTestCollector.collect()` (the collector that populates `flaky_test_signal` during `observe-repo`) never sets `extraction_success_rate`, `extracted_count`, or `extraction_gaps`; only the `extraction-health` CLI command computes those from `most_problematic_tests` at query time. `snapshot_validator.py` flags this exact state as a structural validation error ("missing extraction visibility") rather than treating `0.0` as normal. Re-running `observe-repo` does not populate the field — treat command 8 as currently non-functional for cross-checking the rate, and rely on command 1 (`extraction-health`) as the source of truth instead.
+
 **Caveat**: The glob fails with `IndexError` when no `observe-repo` runs have been recorded yet. Run `./scripts/operations-center.sh observe-repo` at least once to create a snapshot before using this one-liner.
 
-Example output:
+Example output (current reality — see caveat above):
 
 ```
-rate: 91.3
+rate: 0.0
 ```
 
 ### Alert System
@@ -563,7 +601,7 @@ print('rate:', d['signals']['flaky_test_signal'].get('extraction_success_rate', 
 "
 ```
 
-If the snapshot rate differs significantly from the `extraction-health` output, the snapshot is stale — re-run `observe-repo` to refresh.
+This step currently always reads `0.0` — see the command 8 caveat above; `observe-repo`'s `FlakyTestCollector` never populates `extraction_success_rate` on the snapshot, so a `0.0` reading here does not indicate staleness and re-running `observe-repo` will not change it. Treat command 1 (`extraction-health`) as authoritative and skip this cross-check until the collector is fixed.
 
 **Step 8 — Remediate**
 
@@ -591,7 +629,7 @@ If the snapshot rate differs significantly from the `extraction-health` output, 
 
 | Section | Relationship |
 |---------|-------------|
-| [Observer Snapshot Staleness](#observer-snapshot-staleness) | A stale observer snapshot means the `extraction_success_rate` embedded in it is also stale — re-run `observe-repo` before diagnosing a low rate |
+| [Observer Snapshot Staleness](#observer-snapshot-staleness) | General snapshot staleness still applies to the rest of the observer signal — but note `extraction_success_rate` specifically is never populated by `observe-repo` (see command 8 caveat above), so staleness/freshness of the snapshot does not affect that one field |
 | [Suggested Debugging Order](#suggested-debugging-order) | Step 35 in the unified debug sequence; run after confirming the observer snapshot is fresh (see [Observer Snapshot Staleness](#observer-snapshot-staleness) above) |
 | [Quality Trend Warnings](#quality-trend-warnings) | Companion observability signal — lint/type trends and extraction health are both emitted by the observer pipeline and checked via `generate-insights` |
 | [Confidence Calibration](#confidence-calibration) | Low extraction health reduces the signal quality that calibration relies on; an improving extraction rate can shift calibration ratios |
