@@ -242,6 +242,27 @@ repos:
 #     min_council_members: 3
 
 # ---------------------------------------------------------------------------
+# C3 — cross-family EVAL panel (drift monitor grading; COUNCIL_VERDICT.md C3).
+# The non-blocking drift monitor (entrypoints/maintenance/drift_monitor_task.py)
+# replays extraction-kind corpus cases through a model to check whether it still
+# reproduces the signed answer. Grading with the SAME family as the implementer
+# is the same same-family-generator/evaluator gap C1 closes for merging — a
+# dominant family can mask its own drift. eval_panel.panel wires a cross-family
+# panel (family tags, e.g. claude_code + codex_cli) and the monitor aggregates
+# PER-FAMILY (a family's own majority drifting is enough to flag), so no single
+# family can outvote its own regression. Defaults EMPTY ⇒ feature OFF — the
+# drift monitor stays on its existing inert/single-extractor path. Populating
+# this is a deliberate follow-up once a non-implementer backend is wired AND an
+# extraction-kind corpus exists (the seed corpus today is verdict-kind only).
+# eval_panel:
+#   panel: []
+#     # - claude_code
+#     # - codex_cli
+#   enabled: false
+#   # N-of-M votes per family per case (majority-voted per family).
+#   votes: 3
+
+# ---------------------------------------------------------------------------
 # Scheduled tasks — periodic Plane work-item seeders
 # ---------------------------------------------------------------------------
 # Each entry creates one Ready-for-AI task at the configured cadence.

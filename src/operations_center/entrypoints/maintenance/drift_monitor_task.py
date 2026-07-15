@@ -17,14 +17,24 @@ Two design rules from the spec, enforced here:
   invoker is a deliberate seam: with none configured the task ``skipped`` (no model,
   no false drift). Opt-in via ``OC_EVAL_DRIFT_MONITOR=1`` once an extractor is wired.
 * **Non-blocking** — drift becomes a deduplicated operator ticket, never a build
-  failure (voting smooths onset-of-regression variance; it must not gate)."""
+  failure (voting smooths onset-of-regression variance; it must not gate).
+
+C3 (COUNCIL_VERDICT.md C3) turns "different family" from a comment into a CONTROL:
+when a cross-family ``panel_families`` list is configured (``settings.eval_panel``)
+and enabled, cases are graded with ``panel_critic.run_panel_drift_monitor`` instead
+of the single-extractor path — every configured family votes and is aggregated
+PER-FAMILY, so no one family can outvote another family's dissent. A gap between
+the configured panel and the families this process could actually build/probe as
+runnable (``family_extractors``) is a DEGRADED panel: this task skips loudly rather
+than silently falling back to whatever subset is left (that fallback is exactly the
+same-family collapse the control exists to prevent)."""
 
 from __future__ import annotations
 
 import os
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Mapping
 
 from operations_center.eval.corpus import load_ledger
 from operations_center.eval.critic import (
@@ -33,6 +43,7 @@ from operations_center.eval.critic import (
     DriftResult,
     run_drift_monitor,
 )
+from operations_center.eval.panel_critic import run_panel_drift_monitor
 from operations_center.maintenance.contracts import MaintenanceResult
 
 if TYPE_CHECKING:
@@ -62,6 +73,9 @@ class DriftMonitorTask:
         extractor: CheckExtractor | None = None,
         votes: int = 3,
         plane_client: PlaneClient | None = None,
+        panel_families: list[str] | None = None,
+        family_extractors: Mapping[str, CheckExtractor] | None = None,
+        panel_enabled: bool | None = None,
     ) -> None:
         self._settings = settings
         self.interval_seconds = interval_seconds
@@ -70,6 +84,26 @@ class DriftMonitorTask:
         self._extractor = extractor
         self._votes = votes
         self._plane_client = plane_client
+        # C3 — cross-family panel (COUNCIL_VERDICT.md C3). ``panel_families`` is
+        # the FULL configured panel (from settings.eval_panel.panel when not
+        # given explicitly); ``family_extractors`` is whichever of those
+        # families this process actually has a runnable extractor for. A gap
+        # between the two is a degraded panel — see run_once. Both default to
+        # settings-derived values so a bare ``DriftMonitorTask(settings)`` (the
+        # spec_hygiene wiring) picks up config with no extra plumbing, while
+        # tests can inject either directly (``settings=None`` is fine).
+        eval_panel = getattr(settings, "eval_panel", None)
+        self._panel_families: list[str] = (
+            list(panel_families) if panel_families is not None
+            else list(getattr(eval_panel, "panel", []) or [])
+        )
+        self._family_extractors: dict[str, CheckExtractor] = (
+            dict(family_extractors) if family_extractors is not None else {}
+        )
+        self._panel_enabled: bool = (
+            panel_enabled if panel_enabled is not None
+            else bool(getattr(eval_panel, "enabled", False))
+        )
 
     def _make_plane_client(self) -> PlaneClient:
         if self._plane_client is not None:
@@ -86,12 +120,40 @@ class DriftMonitorTask:
 
     def run_once(self, ctx: MaintenanceContext) -> MaintenanceResult:
         started = time.monotonic()
-        # Opt-in + injected-extractor required. No extractor (no wired model) →
-        # skipped: no model means no false drift (§0.1 fail-safe).
-        if self._extractor is None or os.environ.get(_ENABLE_ENV) != "1":
+        # Opt-in required either way — no model means no false drift (§0.1
+        # fail-safe), whether that's the legacy single-extractor path or the
+        # C3 cross-family panel.
+        if os.environ.get(_ENABLE_ENV) != "1":
             return self._result(
                 "skipped", started, {"reason": "drift monitor not enabled / no extractor"}
             )
+
+        use_panel = bool(self._panel_families) and self._panel_enabled
+        if use_panel:
+            missing = sorted(f for f in self._panel_families if f not in self._family_extractors)
+            if missing:
+                # Degraded panel (a configured family has no runnable extractor
+                # here — e.g. its CLI wasn't resolvable at wiring time). NEVER
+                # silently grade with the smaller/remaining subset — that is
+                # exactly the same-family collapse C3 exists to prevent.
+                return self._result(
+                    "skipped",
+                    started,
+                    {
+                        "reason": (
+                            f"degraded eval panel: family extractor(s) {missing} "
+                            "unavailable — refusing to collapse to a smaller panel"
+                        ),
+                        "panel": sorted(self._panel_families),
+                        "missing": missing,
+                    },
+                )
+        elif self._extractor is None:
+            # No panel configured/enabled and no single extractor wired either.
+            return self._result(
+                "skipped", started, {"reason": "drift monitor not enabled / no extractor"}
+            )
+
         try:
             cases = [c for c in load_ledger(self._corpus_path).cases() if c.kind == EXTRACTION_KIND]
         except Exception as exc:  # noqa: BLE001 — a corpus read error must not halt the loop
@@ -100,12 +162,18 @@ class DriftMonitorTask:
             return self._result("skipped", started, {"reason": "no extraction-kind cases"})
 
         try:
-            results = run_drift_monitor(cases, self._extractor, votes=self._votes)
+            if use_panel:
+                panel = {f: self._family_extractors[f] for f in self._panel_families}
+                results = run_panel_drift_monitor(cases, panel, votes=self._votes)
+            else:
+                results = run_drift_monitor(cases, self._extractor, votes=self._votes)
         except Exception as exc:  # noqa: BLE001 — a flaky backend must not halt the loop
             return self._result("failed", started, {}, error=f"drift_run_failed: {exc}")
 
         drifted = [r for r in results if r.drifted]
         details: dict[str, object] = {"cases": len(cases), "drifted": len(drifted)}
+        if use_panel:
+            details["panel"] = sorted(self._panel_families)
         if drifted:
             details["tickets"] = self._emit_tickets(ctx, drifted)
         return self._result("ok", started, details)

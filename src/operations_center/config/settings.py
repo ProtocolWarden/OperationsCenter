@@ -310,6 +310,34 @@ class CouncilSettings(BaseModel):
     min_council_members: int = 3
 
 
+class EvalPanelSettings(BaseModel):
+    """C3 — cross-family EVAL panel for the drift monitor (COUNCIL_VERDICT.md C3).
+
+    Modeled directly on ``CouncilSettings`` (C1): the guide-gap audit's
+    same-family-generator/evaluator HIGH finding applies to *grading* too — a
+    drift monitor graded entirely by the implementer's own family (N copies of
+    one family is N=1, shared blindspots) can't see its own regressions. This
+    makes cross-family a CONTROL for the grading lane: the drift monitor is
+    driven by a panel of family tags (e.g. ``claude_code``, ``codex_cli``) and
+    aggregated PER-FAMILY (see ``eval.panel_critic.run_panel_drift_monitor``)
+    so a dominant family can't mask its own drift by outvoting the other.
+
+    ``panel`` defaults EMPTY ⇒ the feature is OFF (the drift monitor stays on
+    its existing single-extractor/inert path — see ``DriftMonitorTask``).
+    Populating it is a deliberate follow-up once a non-implementer backend is
+    wired and an extraction corpus exists; this rollout must not itself force
+    a live model call.
+    """
+
+    # Family tags (worker-backend names, e.g. "claude_code"/"codex_cli") that
+    # make up the panel; empty ⇒ feature OFF (no cross-family grading).
+    panel: list[str] = Field(default_factory=list)
+    enabled: bool = False
+    # N-of-M votes per family per case (majority-voted per family; see
+    # panel_critic.run_panel_drift_monitor).
+    votes: int = 3
+
+
 class ReviewerSettings(BaseModel):
     # GitHub logins whose comments are always ignored (bots, CI accounts)
     bot_logins: list[str] = Field(default_factory=list)
@@ -636,6 +664,9 @@ class Settings(BaseModel):
     resource_gate: ResourceGateSettings = Field(default_factory=ResourceGateSettings)
     repos: dict[str, RepoSettings] = Field(default_factory=dict)
     reviewer: ReviewerSettings = Field(default_factory=ReviewerSettings)
+    # C3 — cross-family EVAL panel for the drift monitor. Empty ``panel`` (the
+    # default) ⇒ OFF; see EvalPanelSettings.
+    eval_panel: EvalPanelSettings = Field(default_factory=EvalPanelSettings)
     report_root: Path = Path("tools/report/runs")
     # The repo key that identifies this OperationsCenter installation itself.
     # Tasks targeting this repo require a "self-modify: approved" label before

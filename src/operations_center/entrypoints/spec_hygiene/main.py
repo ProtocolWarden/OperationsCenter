@@ -45,6 +45,7 @@ from operations_center.entrypoints.maintenance.outcome_flagger_task import (
 )
 from operations_center.entrypoints.maintenance.parked_unpark_task import ParkedUnparkTask
 from operations_center.entrypoints.maintenance.queue_healing_task import QueueHealingTask
+from operations_center.eval.panel_invoker import build_panel_extractors, resolve_available_families
 from operations_center.maintenance.ledger_maintain import LedgerMaintainTask
 from operations_center.spec_author.campaign_builder import CampaignBuilder
 from operations_center.spec_author.models import (
@@ -695,7 +696,45 @@ def register_maintenance_tasks(
     # blocking) when the model's verdict drifts from the signed answer — the
     # semantic reviewer miss the deterministic gate is blind to. Skipped until
     # OC_EVAL_DRIFT_MONITOR=1 + a model extractor is wired (no model, no false drift).
-    registry.register(DriftMonitorTask(settings, plane_client=client))
+    #
+    # C3 (COUNCIL_VERDICT.md C3): when settings.eval_panel.panel is non-empty AND
+    # eval_panel.enabled, build a cross-family extractor per configured family and
+    # pass BOTH the full configured panel (panel_families) and only the subset
+    # this host can actually run (family_extractors, gated on
+    # resolve_available_families — a CLI probe). DriftMonitorTask compares the
+    # two and skips loudly on any gap rather than silently grading a smaller
+    # (possibly same-family) panel. eval_panel.panel defaults EMPTY, so by
+    # default this is a no-op and the task keeps its existing inert/skipped
+    # behavior — no CLI is ever spawned unless an operator opts in. Read
+    # defensively (getattr) so a settings stand-in without eval_panel (older
+    # config / test fakes) also defaults to OFF rather than raising.
+    _eval_panel = getattr(settings, "eval_panel", None)
+    _eval_panel_families = list(getattr(_eval_panel, "panel", None) or [])
+    _eval_panel_extractors: dict[str, Any] = {}
+    if _eval_panel_families and getattr(_eval_panel, "enabled", False):
+        try:
+            _eval_panel_extractors = build_panel_extractors(
+                resolve_available_families(_eval_panel_families)
+            )
+        except Exception:  # noqa: BLE001 — a misconfigured family (e.g. an
+            # unrecognized tag) must not crash maintenance-task registration;
+            # leaving extractors empty makes DriftMonitorTask see every
+            # configured family as "missing" and skip loudly (never a
+            # same-family collapse), the same fail-safe as an unavailable CLI.
+            logger.warning(
+                "spec_hygiene: failed to build EVAL panel extractors for %s — "
+                "drift monitor will skip (degraded panel)",
+                _eval_panel_families,
+            )
+    registry.register(
+        DriftMonitorTask(
+            settings,
+            plane_client=client,
+            panel_families=_eval_panel_families,
+            family_extractors=_eval_panel_extractors,
+            votes=getattr(_eval_panel, "votes", 3),
+        )
+    )
     # Deterministic blocked-queue healer (inventory #4). Recycles retry-safe
     # Blocked tasks back to Ready-for-AI/Backlog and escalates budget-exhausted
     # lineages — non-destructively (never deletes). FAIL-SAFE: registered but
