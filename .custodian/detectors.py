@@ -39,94 +39,14 @@ from pathlib import Path
 
 from custodian.audit_kit.detector import LOW, MEDIUM, AuditContext, Detector, DetectorResult
 
-# ── OC1: .console/ directory presence ─────────────────────────────────────────
-
+# Shared .console detector constants. The live implementations appear once
+# below; keeping duplicate pre-OC-prefixed copies here reintroduced detector-id
+# collisions (`R1`/`R2`) at import time and broke the pre-push custodian guard.
 _CONSOLE_REQUIRED_FILES = ["task.md", "guidelines.md", "backlog.md", "log.md", "workers.yaml"]
-
-
-def _detect_r1_console_presence(ctx: AuditContext) -> DetectorResult:
-    """Verify .console/ directory exists and contains all required files."""
-    console = ctx.repo_root / ".console"
-
-    if not console.exists():
-        return DetectorResult(count=1, samples=[".console/ directory does not exist"])
-
-    if not console.is_dir():
-        return DetectorResult(count=1, samples=[".console exists but is not a directory"])
-
-    samples: list[str] = []
-    for filename in _CONSOLE_REQUIRED_FILES:
-        path = console / filename
-        if not path.exists():
-            samples.append(f".console/{filename} is missing")
-        elif not path.is_file():
-            samples.append(f".console/{filename} is not a file")
-
-    return DetectorResult(count=len(samples), samples=samples)
-
-
-# ── OC2: .console/ file budget and structure ───────────────────────────────────
-
 _TASK_SIZE_LIMIT = 100 * 1024  # 100 KB (task.md should remain concise)
 _CONSOLE_SIZE_LIMIT = 500 * 1024  # 500 KB (log.md grows through legitimate operational history)
 _TASK_REQUIRED_SECTIONS = ["## Objective", "## Overall Plan", "## Current Stage"]
 _BACKLOG_STANDARD_SECTIONS = ["## In Progress", "## Up Next", "## Done"]
-
-
-def _detect_r2_console_budget(ctx: AuditContext) -> DetectorResult:
-    """Verify .console/ files respect size/encoding budgets and structural invariants.
-
-    Silently passes when .console/ is absent — R1 owns presence enforcement.
-    """
-    import yaml as _yaml  # optional dep — only in dev venv
-
-    console = ctx.repo_root / ".console"
-    if not console.exists() or not console.is_dir():
-        return DetectorResult(count=0, samples=[])
-
-    samples: list[str] = []
-    file_texts: dict[str, str | None] = {}
-
-    for filename in _CONSOLE_REQUIRED_FILES:
-        path = console / filename
-        if not path.exists() or not path.is_file():
-            file_texts[filename] = None
-            continue
-
-        size_limit = _TASK_SIZE_LIMIT if filename == "task.md" else _CONSOLE_SIZE_LIMIT
-        if path.stat().st_size > size_limit:
-            limit_kb = size_limit // 1024
-            samples.append(
-                f".console/{filename} exceeds {limit_kb}KB budget ({path.stat().st_size} bytes)"
-            )
-
-        try:
-            file_texts[filename] = path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            samples.append(f".console/{filename} cannot be read as UTF-8 (corrupted)")
-            file_texts[filename] = None
-
-    task_text = file_texts.get("task.md")
-    if task_text is not None:
-        for section in _TASK_REQUIRED_SECTIONS:
-            if section not in task_text:
-                samples.append(f".console/task.md is missing required section '{section}'")
-
-    workers_text = file_texts.get("workers.yaml")
-    if workers_text is not None:
-        try:
-            _yaml.safe_load(workers_text)
-        except Exception as exc:
-            samples.append(f".console/workers.yaml has invalid YAML syntax: {exc}")
-
-    backlog_text = file_texts.get("backlog.md")
-    if backlog_text is not None:
-        if not any(s in backlog_text for s in _BACKLOG_STANDARD_SECTIONS):
-            samples.append(
-                ".console/backlog.md is missing standard sections (In Progress/Up Next/Done)"
-            )
-
-    return DetectorResult(count=len(samples), samples=samples)
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
