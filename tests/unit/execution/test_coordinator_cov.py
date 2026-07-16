@@ -77,6 +77,17 @@ class _RecordingAdapter:
         return self.result
 
 
+class _CaptureAdapter(_RecordingAdapter):
+    def __init__(self, result: ExecutionResult, capture) -> None:
+        super().__init__(result)
+        self.capture = capture
+
+    def execute_and_capture(self, request):
+        self.calls += 1
+        self.last_request = request
+        return self.result, self.capture
+
+
 class _CrashAdapter:
     def __init__(self) -> None:
         self.calls = 0
@@ -419,6 +430,7 @@ class _FakeUsageStore:
         self.events: list[str] = []
         self.quota_events = 0
         self.outcomes: list[bool] = []
+        self.cooldowns: list[dict[str, object]] = []
         self._global_conc = global_conc
         self._global_rate = global_rate
         self._global_mem = global_mem
@@ -440,6 +452,9 @@ class _FakeUsageStore:
 
     def record_execution_outcome(self, *, succeeded, **_k):
         self.outcomes.append(succeeded)
+
+    def record_worker_backend_cooldown(self, **kwargs):
+        self.cooldowns.append(kwargs)
 
     def global_concurrency_decision(self, **_k):
         return self._global_conc
@@ -662,6 +677,39 @@ def test_capacity_exhaustion_records_quota_event() -> None:
     assert out.executed is True
     assert store.quota_events == 1
     assert store.outcomes == []
+
+
+def test_weekly_limit_records_worker_backend_cooldown_from_observed_runtime() -> None:
+    bundle = _bundle()
+    adapter = _CaptureAdapter(
+        _backend_failure(bundle, "You've hit your weekly limit · resets 9am (America/New_York)"),
+        capture=type(
+            "Capture",
+            (),
+            {
+                "observed_runtime": {
+                    "preferred_worker_backend": "claude_code",
+                    "selected_worker_backend": "claude_code",
+                    "fallback_used": False,
+                }
+            },
+        )(),
+    )
+    store = _FakeUsageStore()
+    coord = ExecutionCoordinator(
+        adapter_registry=_Registry(adapter),
+        policy_engine=_AllowPolicy(),
+        usage_store=store,
+    )
+
+    out = coord.execute(bundle, _runtime())
+
+    assert out.executed is True
+    assert store.quota_events == 1
+    assert store.outcomes == []
+    assert len(store.cooldowns) == 1
+    assert store.cooldowns[0]["worker_backend"] == "claude_code"
+    assert store.cooldowns[0]["limit_kind"] == "global_weekly"
 
 
 def test_non_capacity_failure_records_outcome() -> None:
