@@ -25,6 +25,11 @@ if TYPE_CHECKING:
 
 from datetime import UTC, datetime
 
+from operations_center.backends._capacity_classifier import classify_capacity_exhaustion
+from operations_center.backends.limit_classifier import classify_limit
+from operations_center.backends.worker_backend_selector import (
+    maybe_record_worker_backend_cooldown,
+)
 from operations_center.backends.factory import CanonicalBackendRegistry
 from operations_center.contracts.common import ValidationSummary
 from operations_center.contracts.enums import (
@@ -63,6 +68,20 @@ if TYPE_CHECKING:
     from operations_center.execution.models import BudgetDecision
 
 logger = logging.getLogger(__name__)
+
+
+def _is_capacity_limit_failure(result: ExecutionResult) -> bool:
+    """True when ``result`` reflects quota/session exhaustion, not a code failure."""
+    if (
+        result.success
+        or result.failure_category != FailureReasonCategory.BACKEND_ERROR
+        or not result.failure_reason
+    ):
+        return False
+    if classify_capacity_exhaustion(result.failure_reason) is not None:
+        return True
+    limit_kind, _model = classify_limit(result.failure_reason)
+    return limit_kind is not None
 
 
 @runtime_checkable
@@ -335,27 +354,16 @@ class ExecutionCoordinator:
                 repo_key=request.repo_key,
                 backend=backend_name,
             )
+            self._record_worker_backend_cooldown_from_result(
+                result=result,
+                runtime_metadata=runtime_metadata,
+                now=now,
+            )
             # Capacity exhaustion is an external infrastructure event (rate-limited
             # API key, billing cap). Record it as a quota_event so it does NOT feed
             # the circuit breaker — the CB is a code/task-quality signal, not an
             # API-quota signal. See usage_store.record_quota_event docstring.
-            _is_capacity_exhaustion = (
-                not result.success
-                and result.failure_category == FailureReasonCategory.BACKEND_ERROR
-                and result.failure_reason is not None
-                and any(
-                    kw in result.failure_reason.lower()
-                    for kw in (
-                        "capacity exhaustion",
-                        "you've hit your limit",
-                        "hit your limit",
-                        "quota exceeded",
-                        "rate limit",
-                        "billing",
-                    )
-                )
-            )
-            if _is_capacity_exhaustion:
+            if _is_capacity_limit_failure(result):
                 self._usage_store.record_quota_event(
                     task_id=request.run_id,
                     role=role,
@@ -413,6 +421,30 @@ class ExecutionCoordinator:
             record=record,
             trace=trace,
             executed=True,
+        )
+
+    def _record_worker_backend_cooldown_from_result(
+        self,
+        *,
+        result: ExecutionResult,
+        runtime_metadata: dict[str, Any],
+        now: datetime,
+    ) -> None:
+        """Persist a worker-backend cooldown inferred from the final failure result."""
+        if self._usage_store is None or not _is_capacity_limit_failure(result):
+            return
+        observed_runtime = runtime_metadata.get("observed_runtime")
+        if not isinstance(observed_runtime, dict):
+            return
+        worker_backend = observed_runtime.get("selected_worker_backend")
+        if not isinstance(worker_backend, str) or not worker_backend:
+            return
+        maybe_record_worker_backend_cooldown(
+            usage_store=self._usage_store,
+            worker_backend=worker_backend,
+            combined_output=result.failure_reason,
+            now=now,
+            logger=logger.info,
         )
 
     def _apply_runtime_binding_policy(
