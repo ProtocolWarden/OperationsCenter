@@ -347,6 +347,97 @@ watch_status_file() {
   echo "${WATCH_DIR}/${role}.status.json"
 }
 
+find_watch_supervisor_pid() {
+  local role="$1"
+  python3 - "${role}" "${WATCH_DIR}" <<'PY'
+import subprocess
+import sys
+
+role, watch_dir = sys.argv[1:]
+patterns = {
+    "goal": [
+        "/bin/bash -lc",
+        "operations_center.entrypoints.board_worker.main",
+        "--role 'goal'",
+    ],
+    "test": [
+        "/bin/bash -lc",
+        "operations_center.entrypoints.board_worker.main",
+        "--role 'test'",
+    ],
+    "improve": [
+        "/bin/bash -lc",
+        "operations_center.entrypoints.board_worker.main",
+        "--role 'improve'",
+    ],
+    "propose": [
+        "/bin/bash -lc",
+        "operations_center.entrypoints.pipeline_trigger.main",
+        "--execute",
+    ],
+    "review": [
+        "/bin/bash -lc",
+        "operations_center.entrypoints.reviewer.main",
+        "--watch",
+    ],
+    "spec": [
+        "/bin/bash -lc",
+        "operations_center.entrypoints.spec_hygiene.main",
+        "--role 'spec-author'",
+    ],
+    "intake": [
+        "/bin/bash -lc",
+        "operations_center.entrypoints.intake.main",
+        f"--status-dir '{watch_dir}'",
+    ],
+    "watchdog": [
+        "/bin/bash -lc",
+        "worker-backend-probe",
+        "detect-convergence-stall",
+        "heartbeat_watchdog.json",
+    ],
+}
+needles = patterns.get(role)
+if needles is None:
+    sys.exit(4)
+
+out = subprocess.check_output(["ps", "-eo", "pid=,args="], text=True)
+matches: list[str] = []
+for line in out.splitlines():
+    line = line.rstrip()
+    if not line:
+        continue
+    pid, _, args = line.lstrip().partition(" ")
+    if all(needle in args for needle in needles):
+        matches.append(pid)
+
+if len(matches) == 1:
+    print(matches[0])
+    sys.exit(0)
+if len(matches) > 1:
+    print(" ".join(matches), file=sys.stderr)
+    sys.exit(3)
+sys.exit(1)
+PY
+}
+
+reconcile_watch_pid_file() {
+  local role="$1"
+  local pid_file
+  pid_file="$(watch_pid_file "${role}")"
+  if [[ -f "${pid_file}" ]] && kill -0 "$(cat "${pid_file}")" >/dev/null 2>&1; then
+    cat "${pid_file}"
+    return 0
+  fi
+  local discovered_pid
+  if discovered_pid="$(find_watch_supervisor_pid "${role}" 2>/dev/null)"; then
+    printf '%s\n' "${discovered_pid}" > "${pid_file}"
+    echo "${discovered_pid}"
+    return 0
+  fi
+  return 1
+}
+
 start_watch_role() {
   local role="$1"
   local poll_interval=20
@@ -365,8 +456,9 @@ start_watch_role() {
   esac
   local pid_file
   pid_file="$(watch_pid_file "${role}")"
-  if [[ -f "${pid_file}" ]] && kill -0 "$(cat "${pid_file}")" >/dev/null 2>&1; then
-    echo "watch-${role} already running with PID $(cat "${pid_file}")"
+  local live_pid
+  if live_pid="$(reconcile_watch_pid_file "${role}")"; then
+    echo "watch-${role} already running with PID ${live_pid}"
     return 0
   fi
   rm -f "${pid_file}"
@@ -532,6 +624,10 @@ stop_watch_role() {
   local role="$1"
   local pid_file
   pid_file="$(watch_pid_file "${role}")"
+  local live_pid=""
+  if live_pid="$(reconcile_watch_pid_file "${role}")"; then
+    :
+  fi
 
   # Signal the tracked supervisor directly. start_watch_role launches every
   # role via `setsid /bin/bash -lc "..." &`, so the recorded pid is both the
@@ -574,8 +670,9 @@ stop_watch_role() {
 
 start_watchdog() {
   local pid_file="${WATCH_DIR}/watchdog.pid"
-  if [[ -f "${pid_file}" ]] && kill -0 "$(cat "${pid_file}")" >/dev/null 2>&1; then
-    echo "watchdog already running with PID $(cat "${pid_file}")"
+  local live_pid
+  if live_pid="$(reconcile_watch_pid_file watchdog)"; then
+    echo "watchdog already running with PID ${live_pid}"
     return 0
   fi
   rm -f "${pid_file}"
@@ -644,6 +741,10 @@ start_watchdog() {
 
 stop_watchdog() {
   local pid_file="${WATCH_DIR}/watchdog.pid"
+  local live_pid=""
+  if live_pid="$(reconcile_watch_pid_file watchdog)"; then
+    :
+  fi
   if [[ ! -f "${pid_file}" ]]; then
     echo "watchdog is not running"
     return 0
@@ -661,8 +762,9 @@ stop_watchdog() {
 
 status_watchdog() {
   local pid_file="${WATCH_DIR}/watchdog.pid"
-  if [[ -f "${pid_file}" ]] && kill -0 "$(cat "${pid_file}")" >/dev/null 2>&1; then
-    echo "watchdog: running (pid $(cat "${pid_file}"))"
+  local live_pid
+  if live_pid="$(reconcile_watch_pid_file watchdog)"; then
+    echo "watchdog: running (pid ${live_pid})"
   else
     echo "watchdog: stopped"
   fi
@@ -674,12 +776,12 @@ status_watch_role() {
   local status_file
   pid_file="$(watch_pid_file "${role}")"
   status_file="$(watch_status_file "${role}")"
-  if [[ -f "${pid_file}" ]] && kill -0 "$(cat "${pid_file}")" >/dev/null 2>&1; then
+  local live_pid
+  if live_pid="$(reconcile_watch_pid_file "${role}")"; then
     if [[ -f "${status_file}" ]]; then
-      python3 - "${role}" "${pid_file}" "${status_file}" <<'PY'
+      python3 - "${role}" "${live_pid}" "${status_file}" <<'PY'
 import json, sys
-role, pid_file, status_file = sys.argv[1:]
-pid = open(pid_file).read().strip()
+role, pid, status_file = sys.argv[1:]
 data = json.load(open(status_file))
 counters = data.get("counters", {})
 print(
@@ -691,7 +793,7 @@ print(
 )
 PY
     else
-      echo "watch-${role}: running (pid $(cat "${pid_file}"))"
+      echo "watch-${role}: running (pid ${live_pid})"
     fi
   else
     if [[ -f "${status_file}" ]]; then
