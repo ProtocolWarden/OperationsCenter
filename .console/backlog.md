@@ -504,6 +504,129 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## In Progress
 
+### 2026-07-16: Stage 3 — Finalize and prepare for merge (✅ COMPLETE, reworked after rejection)
+- **Objective**: Final merge-readiness pass for the STEP 3 snippet regression suite — confirm
+  docs/style/checks all hold from a clean tree, without re-litigating Stage 2's verification.
+- **Status**: ✅ COMPLETE — first pass's "how to run" documentation claim was rejected as
+  incomplete; reworked to add an explicit run command to the module docstring.
+- **First pass (rejected)**: claimed "how to run" was adequately covered by standard `pytest`
+  discovery and that no per-file "how to run" convention exists in the repo. That claim was
+  incorrect.
+- **Rework**: found actual repo precedent —
+  `tests/integration/test_execution_boundary.py`'s module docstring includes a `Run from the
+  OperationsCenter repo:\n\n    pytest tests/integration/test_execution_boundary.py -v` block.
+  Added the matching pattern to `test_step3_snippet_regression.py`'s module docstring: an
+  explicit `pytest tests/unit/observer/test_step3_snippet_regression.py -v` command plus a
+  one-line description of what `TestStep3SnippetExtraction` and
+  `TestStep3SnippetAgainstRealOutput` each cover. No test logic changed.
+- **Verification performed** (both passes):
+  - New suite re-run in isolation: 12/12 passed (both before and after the docstring edit).
+  - `ruff check .`: 0 violations. `ruff format --check` clean on both touched files.
+  - Branch state: clean, 2 commits ahead of `main`, no upstream configured, no PR open —
+    left unpushed pending explicit operator request per `.console/guidelines.md`.
+- **Acceptance Criteria — ALL MET** ✅
+  1. ✅ Test suite documented (purpose, how to run, what it validates) — module docstring now
+     states purpose, an explicit `pytest ... -v` run command, and what each test class
+     validates
+  2. ✅ Code follows project style and conventions — ruff clean, matches existing test-file
+     patterns (extraction helper + `CliRunner` fixtures, consistent with
+     `test_cli_extraction_health.py`, and the docstring "how to run" pattern from
+     `test_execution_boundary.py`)
+  3. ✅ All required checks pass and branch is merge-ready — 12/12 new tests, 0 lint
+     violations, zero new failures across full suite (per Stage 2), clean working tree
+
+### 2026-07-16: Stage 2 — Verify tests pass and check for regressions (✅ COMPLETE)
+- **Objective**: Independently re-verify Stage 1's implementation of the STEP 3 snippet
+  regression suite — confirm tests pass and no regressions were introduced, rather than
+  taking Stage 1's own summary at face value.
+- **Status**: ✅ COMPLETE — all claims re-confirmed from a clean tree; no code changes needed.
+- **Verification performed**:
+  - `tests/unit/observer/test_step3_snippet_regression.py` run in isolation: 12/12 passed.
+  - Full suite: 10348 passed, 6 failed, 21 skipped, 2 xfailed — the 6 failures match the
+    identical pre-existing sandbox/timing baseline from every prior stage
+    (`test_race_condition_guards.py` ×2, `test_check_signal_collector.py`,
+    `test_custodian_sweep.py`, `test_dependency_drift_collector.py`,
+    `test_snapshot_edge_cases.py`). Zero new failures.
+  - `ruff check .`: 0 violations.
+  - `ruff format --check .`: 73 pre-existing drifted files repo-wide; confirmed via
+    `git diff a8bfe75 HEAD --stat` that this branch only touched `.console/*` docs and the
+    new test file — none of the 73 are in that diff, and the new test file itself is clean.
+- **Acceptance Criteria — ALL MET** ✅
+  1. ✅ All new regression tests pass (12/12)
+  2. ✅ No new test failures in existing suite (same 6 pre-existing failures, zero new)
+  3. ✅ Test execution integrates with project's CI/test pipeline (runs via standard `pytest`
+     discovery, no special invocation needed)
+
+### 2026-07-16: Stage 1 — Implement regression test suite for STEP 3 snippet execution (✅ COMPLETE)
+- **Objective**: Add a regression test suite that execs the *live* STEP 3 snippet from
+  `.console/haiku_collector_prompt.md` against real `extraction-health` CLI OUTPUT, per
+  Stage 0's design requirements.
+- **Status**: ✅ COMPLETE — 12 new tests, one latent drift bug found and fixed, full suite
+  and lint green (zero new failures).
+- **Changes**:
+  - `tests/unit/observer/test_step3_snippet_regression.py` (NEW, 12 tests) —
+    `extract_step3_python_source()` locates STEP 3's second fenced bash block and pulls the
+    literal `python3 -c "..."` source (no retyping); `run_step3_snippet()` re-extracts and
+    runs it via `subprocess.run([sys.executable, "-c", source])` against a per-test
+    `tmp_path`-substituted copy of the hardcoded `/tmp/oc_extraction_health.json` path;
+    `_cli_json_for()` builds real CLI JSON via the same `CliRunner`/mocked-`TestSignalQuery`
+    pattern as `test_cli_extraction_health.py`. Covers: typical/all-defaults/multi-key
+    `edge_case_summary`/rounding fixtures, malformed-JSON and missing-file `parse_error`
+    fallback cases, and an explicit assertion that the mapped output's keys/types match the
+    `## OUTPUT SCHEMA` `extraction` sub-object. 4 extraction-mechanism tests confirm the
+    helper fails loudly (not silently) if the heading/fence-count/`python3 -c` shape drifts.
+  - `.console/haiku_collector_prompt.md` — **fixed a real bug the new suite surfaced**: STEP
+    3's python mapper never emitted a `gaps` key, and its `edge_cases` key held the raw
+    `edge_case_summary` counts dict instead of `ExtractionHealth.edge_cases`' sample list —
+    even though the real CLI JSON has carried both `gaps: list[str]` and `edge_cases:
+    list[dict]` sample fields since the 2026-06-21 CLI work (see `.console/log.md`
+    2026-07-07/2026-07-14 entries). Now passes through `h.get('gaps', [])` /
+    `h.get('edge_cases', [])`; the `parse_error` except-branch also gained empty
+    `gaps`/`edge_cases` keys so its shape matches the success branch. Also corrected `##
+    OUTPUT SCHEMA`'s `extraction.gaps` type annotation from `[{"test_id": "<id>"}]` to
+    `["<test_id>"]` to match the actual `list[str]` shape (already correct in
+    `docs/reference/EXTRACTION_FIDELITY_METRIC.md`).
+  - **Confirmed the suite catches the class of bug it's meant to catch**: `git stash`'d the
+    markdown fix and reran — 6 of 12 new tests failed against the pre-fix snippet (missing
+    `gaps` key, wrong `edge_cases` shape, wrong `edge_case_count` sum, schema-contract
+    mismatch); all 12 pass after the fix.
+- **Verification**: `ruff check`/`ruff format --check` clean on the new test file. Full
+  suite: 10348 passed, 6 failed — same 6 pre-existing sandbox/timing failures as every prior
+  stage (`test_race_condition_guards.py` ×2, `test_check_signal_collector.py`,
+  `test_custodian_sweep.py`, `test_dependency_drift_collector.py`,
+  `test_snapshot_edge_cases.py`), 21 skipped, 2 xfailed — zero new failures.
+- **Acceptance Criteria — ALL MET** ✅ (test file created following project conventions;
+  tests execute the real STEP 3 snippet against real OUTPUT; normal + edge cases covered;
+  assertions validate correctness against the OUTPUT SCHEMA contract).
+
+### 2026-07-16: Stage 0 — Investigate STEP 3 snippet and OUTPUT context (✅ COMPLETE)
+- **Objective**: Add a regression test suite that execs the live STEP 3 snippet
+  (`.console/haiku_collector_prompt.md`) against the OUTPUT of the `extraction-health`
+  CLI it targets. Stage 0 = investigate/document before writing any test code.
+- **Status**: ✅ COMPLETE — see `.console/STAGE0_STEP3_SNIPPET_REGRESSION_ANALYSIS.md`
+  for full detail; summary also in `.console/task.md`.
+- **Key findings**:
+  - STEP 3 = `.console/haiku_collector_prompt.md` lines 161-216: a bash block invoking
+    `operations-center observer extraction-health --format json --hours 24`
+    (`cmd_extraction_health`, `src/operations_center/observer/cli.py:927`) plus a
+    `python3 -c "..."` block mapping the resulting `ExtractionHealth` JSON into the
+    collector's flattened metric schema.
+  - "OUTPUT" is two things: the live CLI JSON STEP 3 parses, and the `## OUTPUT SCHEMA`
+    block's `extraction` sub-object the mapped result must conform to.
+  - No markdown-snippet-extraction/exec test infrastructure exists in the repo today —
+    confirmed via repo-wide grep. `tests/unit/observer/test_cli_extraction_health.py`'s
+    `test_step3_parser_maps_the_output` hand-reimplements STEP 3's logic inline instead
+    of executing the real snippet — the exact drift risk that caused PR #313's original
+    "end-to-end" claim to ship with a broken collector (STEP 3 parsed the wrong CLI
+    command's output).
+  - Documented 7 requirements for the implementation stage (extract-don't-retype, real
+    CLI OUTPUT via `CliRunner`, execution mechanism options, OUTPUT SCHEMA-contract
+    assertions, fail-loud-on-drift, file placement, out-of-scope list).
+- **Acceptance Criteria — ALL MET** ✅ (location/purpose identified; OUTPUT understood;
+  existing test patterns reviewed; requirements/scope documented).
+- **Next**: Stage 1 — design the extraction/execution mechanism (subprocess vs.
+  in-process `exec()`, temp-path handling, fixture set), then Stage 2 implement.
+
 ### 2026-06-19: Stage 4 — Run full test suite and linters, fix any failures (✅ COMPLETE)
 - **Objective**: Execute full test suite and linters, fix any failures before finishing
 - **Status**: ✅ COMPLETE — All tests passing, all linting clean, formatting fixed
