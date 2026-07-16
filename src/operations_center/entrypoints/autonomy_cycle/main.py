@@ -8,6 +8,7 @@ import logging
 import os
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from operations_center.adapters.plane import PlaneClient
 from operations_center.config import load_settings
@@ -184,11 +185,11 @@ def _write_quiet_diagnosis(
     escalation_webhook: str = "",
     escalation_cooldown_seconds: int = 3600,
 ) -> None:
-    """If the last *quiet_window* cycle reports all had 0 candidates emitted,
+    """If the last *quiet_window* cycle reports created no new tasks,
     write ``quiet_diagnosis.json`` aggregating suppression reasons.
 
     This gives the operator a structured answer to "why has the proposer
-    produced nothing for N cycles?" without requiring manual log archaeology.
+    produced nothing new for N cycles?" without requiring manual log archaeology.
     """
     from collections import Counter
 
@@ -201,52 +202,90 @@ def _write_quiet_diagnosis(
     if len(cycle_reports) < quiet_window:
         return  # Not enough history yet
 
-    all_zero = all(
-        json.loads(p.read_text(encoding="utf-8"))
-        .get("stages", {})
-        .get("decide", {})
-        .get("candidates_emitted", -1)
-        == 0
-        for p in cycle_reports
-    )
-    if not all_zero:
+    reports: list[dict[str, Any]] = []
+    for path in cycle_reports:
+        try:
+            reports.append(json.loads(path.read_text(encoding="utf-8")))
+        except Exception:
+            reports.append({})
+
+    def _propose_created_count(report: dict[str, Any]) -> int:
+        propose = report.get("stages", {}).get("propose", {})
+        created = propose.get("created")
+        if created is not None:
+            return int(created)
+        decide = report.get("stages", {}).get("decide", {})
+        emitted = decide.get("candidates_emitted")
+        if emitted is not None and int(emitted) == 0:
+            return 0
+        return -1
+
+    all_zero_created = all(_propose_created_count(report) == 0 for report in reports)
+    if not all_zero_created:
         # Remove stale diagnosis if conditions improved
         diag_path = report_dir / "quiet_diagnosis.json"
         diag_path.unlink(missing_ok=True)
         return
 
+    all_zero_emitted = all(
+        int(
+            report.get("stages", {}).get("decide", {}).get("candidates_emitted", -1)
+            if report.get("stages", {}).get("decide", {}).get("candidates_emitted", -1) is not None
+            else -1
+        )
+        == 0
+        for report in reports
+    )
+
     # Aggregate suppression reasons across all quiet cycles
     reason_totals: Counter = Counter()
+    skip_reason_totals: Counter = Counter()
     families_seen: set[str] = set()
-    for report_path in cycle_reports:
+    proposer_root = Path("tools/report/operations_center/proposer")
+    for report in reports:
         try:
-            report = json.loads(report_path.read_text(encoding="utf-8"))
             decide = report.get("stages", {}).get("decide", {})
             for reason, count in decide.get("suppression_reasons", {}).items():
                 reason_totals[reason] += int(count)
             for family in decide.get("emitted_families", []):
                 families_seen.add(family)
+            run_id = str(report.get("stages", {}).get("propose", {}).get("run_id") or "").strip()
+            if run_id:
+                results_path = proposer_root / run_id / "proposal_results.json"
+                if results_path.is_file():
+                    proposer_results = json.loads(results_path.read_text(encoding="utf-8"))
+                    for item in proposer_results.get("skipped", []):
+                        if not isinstance(item, dict):
+                            continue
+                        reason = str(item.get("reason") or "").strip()
+                        if reason:
+                            skip_reason_totals[reason] += 1
         except Exception:
             continue
 
+    diagnosis_kind = "proposer_quiet" if all_zero_emitted else "proposer_no_create"
     diag = {
         "generated_at": datetime.now(UTC).isoformat(),
         "quiet_window_cycles": quiet_window,
-        "all_cycles_had_zero_candidates": True,
+        "all_cycles_had_zero_created": True,
+        "all_cycles_had_zero_candidates": all_zero_emitted,
+        "diagnosis_kind": diagnosis_kind,
         "aggregated_suppression_reasons": dict(reason_totals.most_common()),
+        "aggregated_skip_reasons": dict(skip_reason_totals.most_common()),
         "families_active_in_window": sorted(families_seen),
         "advice": (
-            "The proposer has emitted no candidates for the last "
-            f"{quiet_window} consecutive cycles.  Common causes: "
+            "The proposer has created no new tasks for the last "
+            f"{quiet_window} consecutive cycles. Common causes: "
             "cooldown_active (run more cycles or reduce --cooldown-minutes), "
-            "proposal_budget_too_low (executions are consuming capacity), "
-            "existing_open_equivalent_task (similar tasks already on board), "
+            "recently_completed_equivalent_task / existing_open_equivalent_task "
+            "(the same work is being suppressed instead of recreated), "
+            "proposal_budget_too_low (executions are consuming capacity), or "
             "no emitted_families (all signal thresholds below decision rules)."
         ),
     }
     diag_path = report_dir / "quiet_diagnosis.json"
     diag_path.write_text(json.dumps(diag, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"\n  [warn] Proposer quiet for {quiet_window} cycles — diagnosis → {diag_path}")
+    print(f"\n  [warn] Proposer created 0 tasks for {quiet_window} cycles — diagnosis → {diag_path}")
     # S7-7: Fire escalation webhook when proposer goes silent.
     if escalation_webhook:
         try:
@@ -676,9 +715,9 @@ def _write_cycle_report(
     report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"\n  Cycle report  → {report_path}")
 
-    # Quiet diagnosis: if the last _QUIET_WINDOW cycle reports all had 0
-    # candidates emitted, aggregate suppression reasons and write a diagnosis
-    # file so the operator knows why the proposer went silent.
+    # Quiet diagnosis: if the last _QUIET_WINDOW cycle reports all created 0
+    # tasks, aggregate suppression / skip reasons and write a diagnosis file so
+    # the operator knows why the proposer produced no queue movement.
     _QUIET_WINDOW = 5
     _write_quiet_diagnosis(
         report_dir,
