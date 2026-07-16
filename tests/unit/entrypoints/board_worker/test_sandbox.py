@@ -98,6 +98,25 @@ class TestArgvContract:
         rw = [argv[i + 1] for i, a in enumerate(argv) if a == "--bind"]
         assert rw == [str(ws)]
 
+    def test_cl_anchor_context_tree_is_rebound_writable(self, tmp_path: Path):
+        anchor_repo = tmp_path / "PlatformManifest"
+        anchor_repo.mkdir()
+        (anchor_repo / "platform-manifest.yaml").write_text("version: 1\n", encoding="utf-8")
+        (anchor_repo / ".context" / "sessions").mkdir(parents=True)
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        env = {
+            **_env(tmp_path),
+            "CL_ANCHOR": str(anchor_repo / "platform-manifest.yaml"),
+        }
+        argv = build_sandbox_argv(["x"], oc_root=tmp_path, rw_root=ws, env=env)
+        joined = " ".join(argv)
+        context_dir = anchor_repo / ".context"
+        # The anchor manifest stays ro-bound, but the session-state subtree is
+        # rebound writable so in-sandbox cl.capture() can persist lineage data.
+        assert f"--ro-bind {env['CL_ANCHOR']} {env['CL_ANCHOR']}" in joined
+        assert f"--bind {context_dir} {context_dir}" in joined
+
     def test_secret_home_dir_bind_is_filtered(self, tmp_path: Path):
         # A toolchain path that resolves under a credential dir is dropped.
         home = tmp_path / "home"

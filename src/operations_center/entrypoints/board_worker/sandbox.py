@@ -278,6 +278,25 @@ def _toolchain_ro_binds(oc_root: Path, env: dict) -> list[str]:
     return binds
 
 
+def _cl_context_rw_bind(env: dict) -> str | None:
+    """Writable ContextLifecycle state dir, if the anchor repo exposes one.
+
+    The anchor itself stays read-only via ``_toolchain_ro_binds``. Only the
+    adjacent ``.context`` subtree needs write access so in-sandbox hydrate/capture
+    can persist session state without making the whole anchor repo writable.
+    """
+
+    anchor = env.get("CL_ANCHOR")
+    if not anchor:
+        return None
+    anchor_path = Path(anchor)
+    anchor_root = anchor_path if anchor_path.is_dir() else anchor_path.parent
+    context_dir = anchor_root / ".context"
+    if not context_dir.exists():
+        return None
+    return str(context_dir)
+
+
 def build_sandbox_argv(
     inner_cmd: Sequence[str],
     *,
@@ -319,6 +338,9 @@ def build_sandbox_argv(
         if any(src == s or src.startswith(s + os.sep) for s in secret_paths):
             continue
         argv += ["--ro-bind", src, src]
+    cl_context_dir = _cl_context_rw_bind(env)
+    if cl_context_dir:
+        argv += ["--bind", cl_context_dir, cl_context_dir]
     # Re-seed Claude state into the tmpfs home as a WRITABLE ~/.claude. The agent
     # writes session state there during a task (projects/, todos/, file-history/,
     # history.jsonl, …); ro-binding the whole dir made every such write fail
