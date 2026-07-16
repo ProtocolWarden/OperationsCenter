@@ -399,13 +399,19 @@ Lists each failing test with its occurrence count and percentage of total failur
 Example output:
 
 ```
-Test Name           │ Count │ Percentage
-─────────────────────────────────────────
-test_token_refresh  │     5 │     45.5%
-test_invalidation   │     3 │     27.3%
-test_timeout        │     2 │     18.2%
-test_retry          │     1 │      9.1%
+Test Name          │ Count │ Percentage
+────────────────────────────────
+test_token_refresh │  5 │  45.5%
+test_invalidation  │  3 │  27.3%
+test_timeout       │  2 │  18.2%
+test_retry         │  1 │   9.1%
 ```
+
+Note: column widths are computed from the actual data (`name_width` from the
+longest test name, `count_width` from `len(str(total))`) by
+`ExtractionReportFormatter.format_test_names_as_table()` — they are not fixed,
+so the exact spacing above will differ once the real total occurrence count
+has a different number of digits.
 
 Note: the "Test Name" column holds the bare extracted function name only (e.g.
 `test_token_refresh`) — not the full pytest node ID with file path and `::`.
@@ -423,18 +429,23 @@ Adds a second table with unique assertion messages and their occurrence counts. 
 Example output:
 
 ```
-Test Name           │ Count │ Percentage
-─────────────────────────────────────────
-test_token_refresh  │     5 │     45.5%
-test_invalidation   │     3 │     27.3%
-test_timeout        │     2 │     18.2%
-test_retry          │     1 │      9.1%
+Test Name          │ Count │ Percentage
+────────────────────────────────
+test_token_refresh │  5 │  45.5%
+test_invalidation  │  3 │  27.3%
+test_timeout       │  2 │  18.2%
+test_retry         │  1 │   9.1%
 
-Assertion Message                              │ Count │ Percentage
-───────────────────────────────────────────────────────────────────
-Expected status 200, got 503 after 3 retries   │     3 │     60.0%
-assert elapsed <= 30, got 47.2                 │     2 │     40.0%
+Assertion Message                            │ Count │ Percentage
+─────────────────────────────────────────────────────────
+Expected status 200, got 503 after 3 retries │ 3 │  60.0%
+assert elapsed <= 30, got 47.2               │ 2 │  40.0%
 ```
+
+Note: as with command 4's table, column widths are data-driven (`msg_width`,
+`count_width`) via `ExtractionReportFormatter.format_assertion_messages_as_table()`
+— the Percentage column's field width is a fixed `len("100.0%")`, so its padding
+never exceeds one leading space beyond the ` │ ` separator regardless of the data.
 
 Tests with no extracted assertion message do not appear in the assertion table. Compare the test count (top table) against the assertion count (bottom table) to measure extraction coverage.
 

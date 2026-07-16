@@ -4,6 +4,91 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## Done
 
+### 2026-07-16: Stage 7 (re-run) — Apply fixes to source code and documentation (✅ COMPLETE, 0 new fixes needed)
+- **Objective**: Ensure every discrepancy Stage 6 compiled is actually applied to source and
+  docs, add/verify test coverage, and confirm no TODO/FIXME/placeholder text remains.
+- **Method**: Independently re-checked (not by trusting Stage 5/6's summaries) that the
+  working-tree diff in `docs/operator/diagnostics.md` (43 lines) and
+  `tests/unit/observer/test_extraction_report_formatter.py` (41 lines) contains exactly
+  finding #6's fix (unreachable column padding in commands 4/5's table examples) with two
+  passing regression tests, and that all 5 prior-cycle fixes (`--limit` in `cli.py:880-883`,
+  command 6's `json.tool` snippet, command 8/Step 7's remediation rewrite, bare test names,
+  command 3's missing trend fields) remain present and internally consistent, including the
+  "Related Sections" cross-reference to the command 8 caveat.
+- **Result**: 0 new fixes required — everything Stage 6 compiled was already correctly
+  applied. `grep` for TODO/FIXME/XXX/placeholder across touched files: 0 matches.
+- **Test run**: `pytest tests/unit/observer/ -q` → 1542 passed, 1 skipped, 2 xfailed, 3
+  pre-existing unrelated failures (same baseline as every stage this cycle). `ruff check`
+  on `src/operations_center/observer/`, `docs/`, `tests/unit/observer/`: clean.
+- **Left uncommitted** (working tree only) — commit/push is Stage 8's job.
+
+### 2026-07-16: Stage 6 (re-run) — Compile findings and identify discrepancies (✅ COMPLETE)
+- **Objective**: Aggregate today's Stage 0-5 re-verification findings into a unified report,
+  categorize discrepancies (source bug vs. doc error), prioritize by impact, and produce a
+  summary table with fix locations.
+- **Method**: Independently re-derived every row from source (not copied from the
+  2026-07-14 write-up) — re-read `cli.py:880-883`, `flaky_test_collector.py`,
+  `query.py`'s `get_failing_test_names()`, `extraction_health_history.py`'s
+  `ExtractionHealthTrend` dataclass, and `ExtractionReportFormatter`'s table-formatting
+  methods to confirm each fix is still present and correct.
+- **Result**: Wrote `.console/STAGE6_COMPILED_FINDINGS.md` (gitignored scratch, per the
+  `STAGE[0-9]*.md` pattern in `.gitignore`). Compiled total across both audit cycles:
+  **6 discrepancies found, 6 fixed, 0 open** —
+  1 source code bug (dead `--limit` option, `cli.py:880-883`) and 5 documentation errors
+  (broken command-6 example, wrong command-8 remediation advice, unreachable qualified
+  test names in commands 4/5, missing `trend`/`weekly_trend` fields in command 3, and
+  today's new finding — unreachable column padding in commands 4/5's tables). Priority
+  ranking: live-execution failures (`--limit`, command 6 crash, command 8 wrong advice) >
+  example mismatches (bare vs. qualified names, column padding) > missing fields
+  (command 3 trend fields). Zero discrepancies in source-reference accuracy (Stage 0),
+  formulas/thresholds (Stage 1), alert channels (Stage 3), storage/retention (Stage 4) —
+  all reconfirmed unchanged since `6e61d05`.
+- **Test run**: `pytest tests/unit/observer/ -q` → 1542 passed (2 new), 3 pre-existing
+  unrelated failures — same baseline as every stage this cycle. `ruff check` clean.
+- **Deliverable**: `.console/STAGE6_COMPILED_FINDINGS.md` (full compiled report);
+  `.console/task.md` Current Stage pointer updated.
+- **Left uncommitted** (working tree only) per this task's stage-by-stage pattern.
+
+### 2026-07-16: Stage 5 (re-run) — Execute all 8 CLI commands and validate outputs (✅ COMPLETE, 1 new doc fix + regression test)
+- **Objective**: Re-issued work order for the same live-execution verification as the
+  2026-07-14 Stage 5 entry below — run all 8 documented commands end-to-end against real
+  fixture data and confirm no drift since commit `6e61d05`.
+- **Method**: Built fresh `RepoStateSnapshot` fixtures (11 snapshots, real current timestamps
+  so both `--hours 6` and the 24h default pick them up) reproducing the doc's own example
+  numbers — 91.3% success rate, 63/21/8 complete/partial/no-extraction split, edge cases
+  4 truncated + 2 special-char, and 11 query-flaky-tests occurrences across 4 test names
+  (5/3/2/1) with 5 carrying assertion messages (3/2 split). Ran all 8 commands with
+  `PYTHONPATH=src` (workspace `.venv` still resolves to the unrelated
+  `/home/dev/Documents/GitHub/OperationsCenter` checkout — same environment quirk noted in
+  the 2026-07-14 Stage 2 entry). Diffed actual output byte-for-byte against the doc's example
+  blocks (not just field presence, unlike prior passes).
+- **Result — 1 new discrepancy found and fixed**: commands 4/5's example tables
+  (`query-flaky-tests` table output) used hand-typed padding that doesn't match
+  `ExtractionReportFormatter`'s actual data-driven column widths (`count_width = len(str(total))`,
+  a fixed `pct_width = len("100.0%")`). For the doc's own 11-occurrence dataset, real
+  `count_width` is 2 (not the doc's apparent 4), and the Percentage field can never exceed
+  1 leading space beyond the ` │ ` separator (a data-independent fact, since `pct_width` is a
+  constant) — so the doc's wider percentage padding could never be produced by any input.
+  This survived every prior stage (0, 2, 5, 6, 7, 8) because those checked field/value
+  *presence*, not exact whitespace. Fixed both example blocks in
+  `docs/operator/diagnostics.md` to the real byte-exact formatter output, and added 2
+  regression tests (`test_format_test_names_as_table_matches_diagnostics_doc_example`,
+  `test_format_assertion_messages_as_table_matches_diagnostics_doc_example`) to
+  `tests/unit/observer/test_extraction_report_formatter.py` pinning this exact layout.
+- **Everything else verified with 0 discrepancies**: commands 1/2/3 JSON/table shape and
+  `history` section (all documented keys present, `--trend-days` extends the window
+  correctly); command 6 JSONL field names/shape; command 8's `0.0` caveat still holds;
+  command 7 has no `logs/local/watch-all/*.log` in this sandbox (expected — no watchdog has
+  run here — not a doc bug).
+- **Test run**: `pytest tests/unit/observer/ -q` → 1542 passed (2 new), 1 skipped, 2 xfailed,
+  3 pre-existing failures (`test_anomaly_structure_uses_timestamp_not_recorded_at`,
+  `test_store_with_read_only_directory`, `test_cleanup_with_zero_retention`) — identical to
+  every prior stage's baseline, confirmed unrelated. `ruff check` on the doc and test file:
+  clean. Fixture snapshot/history directories deleted afterward (gitignored, not part of the
+  deliverable).
+- **Left uncommitted** (working tree only) per this task's stage-by-stage pattern — commit/push
+  is Stage 8's job, not this stage's.
+
 ### 2026-07-14: Stage 5 — Test all documented CLI commands and validate outputs match documentation (✅ COMPLETE, 4 doc fixes applied)
 - **Objective**: Execute all 8 documented commands against real (non-mocked) fixture data and
   compare actual output structure to the doc's JSON/table examples

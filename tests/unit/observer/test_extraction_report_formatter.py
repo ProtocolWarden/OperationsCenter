@@ -164,6 +164,47 @@ class TestTableFormatting:
         assert "assert a > b" in result
         assert "assert c == d" in result
 
+    def test_format_test_names_as_table_matches_diagnostics_doc_example(self) -> None:
+        """Locks in the exact byte layout of docs/operator/diagnostics.md command 4's
+        example — column widths are data-driven (name_width, count_width=len(str(total))),
+        so this pins the specific 5/3/2/1 dataset the doc uses."""
+        formatter = ExtractionReportFormatter()
+        test_names = {
+            "test_token_refresh": 5,
+            "test_invalidation": 3,
+            "test_timeout": 2,
+            "test_retry": 1,
+        }
+        result = formatter.format_test_names_as_table(test_names)
+
+        assert result == (
+            "Test Name          │ Count │ Percentage\n"
+            "────────────────────────────────\n"
+            "test_token_refresh │  5 │  45.5%\n"
+            "test_invalidation  │  3 │  27.3%\n"
+            "test_timeout       │  2 │  18.2%\n"
+            "test_retry         │  1 │   9.1%"
+        )
+
+    def test_format_assertion_messages_as_table_matches_diagnostics_doc_example(self) -> None:
+        """Locks in the exact byte layout of docs/operator/diagnostics.md command 5's
+        assertion-message example — the Percentage field width is fixed
+        (len("100.0%")), so its padding never exceeds one leading space regardless
+        of the data, unlike the Count column."""
+        formatter = ExtractionReportFormatter()
+        assertions = {
+            "Expected status 200, got 503 after 3 retries": 3,
+            "assert elapsed <= 30, got 47.2": 2,
+        }
+        result = formatter.format_assertion_messages_as_table(assertions)
+
+        assert result == (
+            "Assertion Message                            │ Count │ Percentage\n"
+            "─────────────────────────────────────────────────────────\n"
+            "Expected status 200, got 503 after 3 retries │ 3 │  60.0%\n"
+            "assert elapsed <= 30, got 47.2               │ 2 │  40.0%"
+        )
+
 
 class TestMarkdownFormatting:
     """Test markdown output formatting for extracted data."""

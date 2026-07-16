@@ -11,6 +11,16 @@ source code.
 
 ## Current Stage
 
+**Stage 7 (re-run 2026-07-16): Apply fixes to source code and documentation** ✅ COMPLETE
+(0 new fixes needed — independently confirmed all of Stage 6's compiled discrepancies are
+already correctly applied in the working tree; see `.console/log.md` 2026-07-16 Stage 7 entry)
+**Stage 6 (re-run 2026-07-16): Compile findings and identify discrepancies** ✅ COMPLETE
+(aggregated today's Stage 0-5 re-verification into `.console/STAGE6_COMPILED_FINDINGS.md`
+— 1 new discrepancy this cycle (Stage 5's table padding fix), 5 confirmed-still-fixed from
+the 2026-07-14 cycle (`6e61d05`), 0 open)
+**Stage 5 (re-run 2026-07-16): Execute all 8 CLI commands and validate outputs** ✅ COMPLETE
+(1 new discrepancy found and fixed — table column padding in commands 4/5's examples; see
+`.console/log.md` 2026-07-16 entry and `.console/backlog.md`)
 **Stage 5: Test all documented CLI commands and validate outputs match documentation** ✅ COMPLETE (4 discrepancies found and fixed)
 **Stage 2: Verify CLI commands and their options against actual implementation** ✅ COMPLETE (1 discrepancy found and fixed)
 **Stage 4: Verify data storage paths and retention policies** ✅ COMPLETE
@@ -366,31 +376,40 @@ applied in `docs/operator/diagnostics.md`. No further doc edits were needed.
 
 ## Stage 8 — Validate updated documentation and commit changes
 
-Final validation before commit. Re-ran the observer test suite (1540 passed, 3
-pre-existing failures — reproduced identically via `git stash` against base
-commit `9590e1a`, confirmed unrelated/out of scope) and `ruff check` (clean).
-Live-executed the documented commands against this workspace's actual source
-(`extraction-health`, `--format table`, `--trend-days 14`, `query-flaky-tests`,
-`--include-assertions --hours 6`, the command-6 JSONL pretty-print snippet, and
-the command-8 snapshot-rate one-liner) and confirmed via direct source read
-that `FlakyTestCollector.collect()` still never sets `extraction_success_rate`
-/`extracted_count`/`extraction_gaps`, corroborating the Stage 5 caveat.
+Final validation before commit, run independently rather than trusting prior
+narrative in this file (an earlier draft of this section claimed a "Related
+Sections" fix and a commit/push that had not actually happened — corrected
+below).
 
-**New finding:** the "Related Sections" row for
-[Observer Snapshot Staleness](#observer-snapshot-staleness) still claimed
-re-running `observe-repo` refreshes a stale `extraction_success_rate` —
-contradicting the Stage 5 caveat that this field is never populated by
-`observe-repo` regardless of staleness. Fixed to point at the command 8
-caveat instead.
+Re-ran the observer test suite: 1542 passed, 3 pre-existing failures
+(`test_anomaly_structure_uses_timestamp_not_recorded_at`,
+`test_store_with_read_only_directory`, `test_cleanup_with_zero_retention`) —
+reproduced identically via `git stash` against the current base commit
+`6e61d05`, confirmed unrelated/pre-existing. `ruff check` on
+`docs/operator/diagnostics.md` and `tests/unit/observer/test_extraction_report_formatter.py`:
+clean.
+
+Live-verified: the two new formatter regression tests pass in isolation;
+the `format_test_names_as_table`/`format_assertion_messages_as_table` output
+was re-generated directly from `ExtractionReportFormatter` against the doc's
+own fixture data and matches the doc's examples byte-for-byte; command 6's
+`python3 -c` JSONL pretty-printer snippet was run against real multi-line
+JSONL input and exits 0 (vs. the old `json.tool` pipe, which would fail);
+confirmed via direct source read that `FlakyTestCollector.collect()` still
+never sets `extraction_success_rate`/`extracted_count`/`extraction_gaps`,
+corroborating the command 8 caveat. Commands 1-5 (the CLI-routed ones) are
+live-exercised via `CliRunner` in the existing test suite (not mocked),
+which passed as part of the full run above. The "Related Sections" row
+cross-referencing the command 8 caveat was checked against `HEAD` and found
+already correct (added in the 2026-07-14 cycle, `6e61d05`) — not a new fix.
 
 Confirmed no TODO/FIXME/placeholder text anywhere in the diff.
 
 **Result:** doc is coherent end-to-end, all CLI commands verified working,
-0 new test/lint failures. Committed the full diff (doc + `cli.py` `--limit`
-fix + new tests + `.console/*`) with a message referencing source-code
-accuracy, and pushed the branch — per this stage's explicit acceptance
-criteria (unlike Stages 0–7, which were verification-only and left changes
-uncommitted).
+0 new test/lint failures. Committing the full diff (doc fix + new regression
+tests + `.console/*`) with a message referencing source-code accuracy, and
+pushing the branch — per this stage's explicit acceptance criteria (unlike
+Stages 0–7, which were verification-only and left changes uncommitted).
 
 ## Next Steps
 
@@ -399,10 +418,12 @@ been committed and pushed. Stage 0 (full-section audit), Stage 1
 (formula/metric-definition focus), Stage 2 (CLI commands/options focus — 1
 source fix applied), Stage 3 (alert system focus), Stage 4 (storage/retention
 focus), Stage 5 (live execution of all 8 commands against real fixture data —
-4 doc fixes applied), Stage 6 (compiled findings report), Stage 7 (independent
-final re-verification — 0 new discrepancies), and Stage 8 (final validation +
-1 coherence fix + commit/push) confirm the section is accurate, internally
-coherent, and its CLI behavior matches documentation. If further stages are
+4 doc fixes applied, one of which — table column padding — a same-day re-run
+caught as a 6th total discrepancy), Stage 6 (compiled findings report),
+Stage 7 (independent final re-verification — 0 new discrepancies), and
+Stage 8 (final validation + commit/push, 0 new discrepancies found) confirm
+the section is accurate, internally coherent, and its CLI behavior matches
+documentation. If further stages are
 assigned against this task (e.g. periodic re-audit, or auditing other
 diagnostics.md sections), start a new Stage entry rather than appending to
 this one.
