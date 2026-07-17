@@ -11,6 +11,7 @@ Coverage:
 from __future__ import annotations
 
 import json
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
@@ -246,3 +247,67 @@ def test_quiet_diagnosis_no_escalation_when_no_webhook(tmp_path: Path) -> None:
         _write_quiet_diagnosis(report_dir, quiet_window=5, escalation_webhook="")
 
     assert escalation_calls == []
+
+
+def test_quiet_diagnosis_fires_when_candidates_emit_but_none_create(tmp_path: Path) -> None:
+    report_dir = tmp_path / "reports"
+    report_dir.mkdir()
+    proposer_root = tmp_path / "tools" / "report" / "operations_center" / "proposer"
+    proposer_root.mkdir(parents=True)
+
+    for i in range(5):
+        run_id = f"prop_2024010{i + 1}T000000Z"
+        (report_dir / f"cycle_2024010{i + 1}T000000Z.json").write_text(
+            json.dumps(
+                {
+                    "stages": {
+                        "decide": {
+                            "candidates_emitted": 1,
+                            "suppression_reasons": {"cooldown_active": 1},
+                            "emitted_families": ["observation_coverage"],
+                        },
+                        "propose": {
+                            "run_id": run_id,
+                            "created": 0,
+                        },
+                    },
+                }
+            )
+        )
+        run_dir = proposer_root / run_id
+        run_dir.mkdir()
+        (run_dir / "proposal_results.json").write_text(
+            json.dumps(
+                {
+                    "skipped": [
+                        {
+                            "reason": "recently_completed_equivalent_task",
+                        }
+                    ]
+                }
+            )
+        )
+
+    old_cwd = Path.cwd()
+    os.chdir(tmp_path)
+    try:
+        with patch("operations_center.adapters.escalation.post_escalation") as fake_post:
+            with patch(
+                "operations_center.execution.usage_store.UsageStore.should_escalate",
+                return_value=(True, []),
+            ):
+                with patch("operations_center.execution.usage_store.UsageStore.record_escalation"):
+                    _write_quiet_diagnosis(
+                        report_dir,
+                        quiet_window=5,
+                        escalation_webhook="http://hooks.test/alert",
+                    )
+    finally:
+        os.chdir(old_cwd)
+
+    diag = json.loads((report_dir / "quiet_diagnosis.json").read_text())
+    assert diag["all_cycles_had_zero_created"] is True
+    assert diag["all_cycles_had_zero_candidates"] is False
+    assert diag["diagnosis_kind"] == "proposer_no_create"
+    assert diag["aggregated_skip_reasons"] == {"recently_completed_equivalent_task": 5}
+    fake_post.assert_called_once()
