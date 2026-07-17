@@ -96,7 +96,7 @@ Applies thirteen rules on every run:
     quota condition and returns no structured output; leaving them in Blocked strands
     work even after the cooldown clears because the recovery path only promotes from
     Backlog. Parking them preserves the retry blocker label until Rule 7 / Rule 9
-    re-promotes them once dispatch is legal again.
+    / Rule 9.5 re-promote them once dispatch is legal again.
 
   Rule 9 — SPEC_AUTHOR_BACKLOG_PROMOTE
     spec-author tasks in Backlog state with no active retry blocker → move to Ready for AI.
@@ -104,6 +104,13 @@ Applies thirteen rules on every run:
     but no watcher re-promotes them to R4AI once the gate clears.  This rule closes that gap.
     Skipped when memory is below the executor dispatch threshold or when any active retry
     blocker is present (budget_exhausted, session_limit, global_rate_exceeded, etc.).
+
+  Rule 9.5 — SPEC_CAMPAIGN_BACKLOG_PROMOTE
+    spec-campaign implement-phase goal tasks in Backlog state with no active retry blocker
+    → move to Ready for AI. Backend-capacity failures on implement-phase campaign tasks
+    otherwise strand the campaign forever: they start life in Ready for AI, but unlike
+    autonomy/improvement tasks they have no separate watcher that re-promotes them after
+    a Blocked → Backlog recovery.
 
   Rule 10 — OPEN_PR_GATE_REQUEUE
     Goal tasks in Backlog carrying OPEN_PR_GATE whose repo no longer has blocking
@@ -277,6 +284,7 @@ _ORIGINAL_TASK_PREFIX = "original-task-id:"
 _SOURCE_AUTONOMY_LABEL = "source: autonomy"
 _SOURCE_IMPROVE_SUGGESTION_LABEL = "source: improve-suggestion"
 _SOURCE_BOARD_WORKER_LABEL = "source: board_worker"
+_SOURCE_SPEC_CAMPAIGN_LABEL = "source: spec-campaign"
 _HANDOFF_IMPROVEMENT_LABEL = "handoff-reason: improvement_applied"
 _PR_URL_PREFIX = "pr-url:"
 _BLOCKED_REASON_POLICY_LABEL = "blocked-reason: policy"
@@ -295,6 +303,23 @@ def _labels(issue: dict[str, Any]) -> list[str]:
         if name:
             names.append(str(name).strip())
     return names
+
+
+def _description_blob(issue: dict[str, Any]) -> str:
+    parts = [
+        str(issue.get("description") or ""),
+        str(issue.get("description_stripped") or ""),
+        str(issue.get("description_html") or ""),
+    ]
+    return "\n".join(part for part in parts if part).lower()
+
+
+def _is_spec_campaign_implement_goal(issue: dict[str, Any], labels: list[str]) -> bool:
+    return (
+        _has_label(labels, _GOAL_LABEL)
+        and _has_label(labels, _SOURCE_SPEC_CAMPAIGN_LABEL)
+        and "task_phase: implement" in _description_blob(issue)
+    )
 
 
 def _label_value(labels: list[str], prefix: str) -> str | None:
@@ -879,7 +904,7 @@ def _apply_rules(
                     )
                 )
                 and bool(_label_value(labels, _ORIGINAL_TASK_PREFIX))
-            )
+            ) or _is_spec_campaign_implement_goal(issue, labels)
             if (
                 has_repromotion_path
                 and updated_at
@@ -928,6 +953,41 @@ def _apply_rules(
                         "from_state": state,
                         "to_state": "Ready for AI",
                         "reason": "spec-author task in Backlog; promoting for board_worker dispatch",
+                        "labels_to_remove": _BLOCKED_REASON_LABELS,
+                        "_issue_labels": labels,
+                    }
+                )
+
+        # Rule 9.5 — spec-campaign implement backlog promotion.
+        if (
+            state_lower == "backlog"
+            and _is_spec_campaign_implement_goal(issue, labels)
+            and mem_available_gb >= _MEM_R4AI_THRESHOLD_GB
+        ):
+            if cooldown_skip_reason:
+                actions.append(
+                    {
+                        "task_id": task_id,
+                        "title": title,
+                        "rule": "SPEC_CAMPAIGN_BACKLOG_PROMOTE",
+                        "from_state": state,
+                        "to_state": "Ready for AI",
+                        "reason": f"SKIPPED — {cooldown_skip_reason}",
+                        "skipped": True,
+                    }
+                )
+            else:
+                actions.append(
+                    {
+                        "task_id": task_id,
+                        "title": title,
+                        "rule": "SPEC_CAMPAIGN_BACKLOG_PROMOTE",
+                        "from_state": state,
+                        "to_state": "Ready for AI",
+                        "reason": (
+                            "spec-campaign implement task parked in Backlog after "
+                            "backend-capacity failure; restoring to Ready for AI"
+                        ),
                         "labels_to_remove": _BLOCKED_REASON_LABELS,
                         "_issue_labels": labels,
                     }

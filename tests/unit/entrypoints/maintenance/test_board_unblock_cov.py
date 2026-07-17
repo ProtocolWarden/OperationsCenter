@@ -23,6 +23,7 @@ def _issue(
     labels: list[str] | None = None,
     name: str | None = None,
     updated_at: str | None = _STALE,
+    description_html: str | None = None,
 ) -> dict:
     issue: dict = {
         "id": task_id,
@@ -32,6 +33,8 @@ def _issue(
     }
     if updated_at is not None:
         issue["updated_at"] = updated_at
+    if description_html is not None:
+        issue["description_html"] = description_html
     return issue
 
 
@@ -762,6 +765,22 @@ def test_rule8_backend_capacity_blocked_excluded():
     assert not _by_rule(actions, "CLEAN_BLOCKED_RETRY")
 
 
+def test_rule8_5_spec_campaign_backend_capacity_park():
+    actions = _run(
+        [
+            _issue(
+                "1",
+                state="Blocked",
+                labels=["task-kind: goal", "source: spec-campaign", "blocked-reason: backend-capacity"],
+                updated_at="2026-05-28T11:50:00+00:00",
+                description_html="<div>task_phase: implement</div>",
+            )
+        ]
+    )
+    a = _by_rule(actions, "BACKEND_CAPACITY_PARK")
+    assert a and a[0]["to_state"] == "Backlog"
+
+
 # ---------------------------------------------------------------------------
 # Rule 9 — SPEC_AUTHOR_BACKLOG_PROMOTE
 # ---------------------------------------------------------------------------
@@ -789,6 +808,38 @@ def test_rule9_low_mem_skipped():
         mem_available_gb=1.0,
     )
     assert not _by_rule(actions, "SPEC_AUTHOR_BACKLOG_PROMOTE")
+
+
+def test_rule9_5_spec_campaign_promote():
+    actions = _run(
+        [
+            _issue(
+                "1",
+                state="Backlog",
+                labels=["task-kind: goal", "source: spec-campaign"],
+                description_html="<div>task_phase: implement</div>",
+            )
+        ]
+    )
+    a = _by_rule(actions, "SPEC_CAMPAIGN_BACKLOG_PROMOTE")
+    assert a and a[0]["to_state"] == "Ready for AI"
+    assert "skipped" not in a[0]
+
+
+def test_rule9_5_spec_campaign_cooldown_skipped():
+    actions = _run(
+        [
+            _issue(
+                "1",
+                state="Backlog",
+                labels=["task-kind: goal", "source: spec-campaign"],
+                description_html="<div>task_phase: implement</div>",
+            )
+        ],
+        cooldown_skip_reason="cooling",
+    )
+    a = _by_rule(actions, "SPEC_CAMPAIGN_BACKLOG_PROMOTE")
+    assert a and a[0]["skipped"] is True
 
 
 def test_no_actions_for_unrelated_issue():
