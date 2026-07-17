@@ -1,3 +1,27 @@
+## 2026-07-17 — feat(reviewer): D1 — run ordinary reviews on codex when claude is cooled
+
+Built the validated follow-up the code itself flagged (self-review sweep defer
+branch): give the ORDINARY single-reviewer the controller's full claude→codex
+LADDER instead of parking whenever claude is unavailable. At the sweep's
+backend-selection gate: claude runnable → review on claude/haiku (unchanged);
+claude cooled but codex runnable → DIVERT this review to codex_cli/codex (charges
+codex's budget, not claude's) and feed its verdict into the SAME downstream
+pipeline (verdict parse → self-heal ladder → LGTM-only green-CI merge); whole
+ladder exhausted (no runnable backend) → PARK (defer+return, no burn) preserving
+#446 auto-resume. backend→model reuses the validated council seat pairing
+(`verdict._COUNCIL_PANEL`, codex_cli→codex) via a tiny `_review_model_for_backend`
+helper — no new registry. The claude path still routes through `_run_direct_review`
+(the name the suite patches, back-compat intact); the codex path branches to the
+already-backend-agnostic `_run_member_review`. GUARDRAIL PRs are untouched — they
+fork to the K=3 council BEFORE this gate, so they still genuinely PARK when a
+family is cooled (F14), never single-reviewed on codex (pinned by a new test).
+Downstream `_dispatch_verdict_outcome` was already backend-agnostic (plain
+{result, failing_checks, summary} shared with the council) — no claude-specific
+assumption found on the ordinary path. Tests: 3 root integration (codex-runs /
+ladder-exhausted-parks / guardrail-not-single-reviewed) + 3 unit
+(tests/unit/reviewer/test_d1_codex_fallback.py: model pairing, unknown→None,
+back-compat alias). Full: 169 reviewer + 8536 unit green; ruff clean.
+
 ## 2026-07-15 — feat(reviewer): ACTIVATE the council — populate guardrail_paths (§G1)
 
 The council's go-live. C1/C2/C3 all merged; `reviewer.council.guardrail_paths`
