@@ -1,0 +1,1 @@
+{"delay_s": 600, "state": "STALLED", "reason": "Friday, July 17, 2026 began with a reproduced stalled queue (Blocked=5, Ready for AI=0) caused by a missing spec-campaign backend-capacity recovery path; the fix improved the board to Blocked=1 and Ready for AI=2, but the worst observed state this cycle remained STALLED."}
