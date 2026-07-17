@@ -191,11 +191,12 @@ try:
         'total_count': total,
         'gap_count': missing,
         'edge_case_count': sum(int(v) for v in edge.values()),
-        'edge_cases': edge,  # {'truncated_messages': N, 'special_chars': N, ...}
+        'gaps': h.get('gaps', []),  # ['test_module::test_foo', ...] sample test IDs
+        'edge_cases': h.get('edge_cases', []),  # [{'test_id': ..., 'issue': ...}, ...]
     }
     print(json.dumps(result))
 except Exception as e:
-    print(json.dumps({'success_rate': None, 'extracted_count': 0, 'total_count': 0, 'gap_count': 0, 'edge_case_count': 0, 'parse_error': str(e)}))
+    print(json.dumps({'success_rate': None, 'extracted_count': 0, 'total_count': 0, 'gap_count': 0, 'edge_case_count': 0, 'gaps': [], 'edge_cases': [], 'parse_error': str(e)}))
 "
 ```
 
@@ -315,7 +316,7 @@ Emit exactly this JSON (no fences, no extra text):
     "total_count": <int>,
     "gap_count": <int>,
     "edge_case_count": <int>,
-    "gaps": [{"test_id": "<id>"}],
+    "gaps": ["<test_id>"],
     "edge_cases": [{"test_id": "<id>", "issue": "<issue_type>"}]
   },
   "watchers": [
