@@ -1,3 +1,303 @@
+## 2026-07-18 — Stage 6 (final validation, tests, and commit): zero new failures confirmed, committed and pushed
+
+Final gate before closing out this audit cycle. All 5 acceptance criteria
+verified directly in this stage:
+
+1. **Full observer suite**: `pytest tests/unit/observer/ -q` → 1542 passed,
+   1 skipped, 2 xfailed, 3 failed. The 3 failures
+   (`test_anomaly_structure_uses_timestamp_not_recorded_at`,
+   `test_store_with_read_only_directory`, `test_cleanup_with_zero_retention`)
+   are the same ones documented in every prior cycle this task. Confirmed
+   they are pre-existing (not introduced by this cycle's doc fix) by
+   `git stash`-ing all working-tree changes and re-running the same 3 tests
+   against clean `HEAD` (commit `8c4b65f`) — identical 3/3 failures with none
+   of this task's changes applied. Popped the stash afterward. Zero new
+   failures.
+2. **Ruff**: `ruff check docs/operator/diagnostics.md` → "No Python files
+   found" / "All checks passed" (the only source-tree change this cycle is a
+   one-line Markdown JSON example fix from Stage 4/5; no Python files were
+   touched, so there is nothing else to lint).
+3. **Fix re-verification**: re-read `docs/operator/diagnostics.md` lines
+   256-267 and 476-481 — both the schema-reference `edge_case_summary` block
+   and the raw-JSONL example now carry all 3 keys
+   (`truncated_messages`, `special_chars`, `malformed_exceptions`) and agree
+   with each other and with all other occurrences in the section (11 total,
+   confirmed via grep).
+4. **No TODOs/placeholders**: grepped the file for
+   `TODO|FIXME|XXX|placeholder|TBD` — the only hit is the doc's own
+   intentional table row documenting that `malformed_exceptions` is a
+   "Reserved counter ... not yet implemented" in the *product*, which is
+   accurate documented behavior, not an unfinished edit in this doc pass.
+5. **Commit and push**: staged `.console/backlog.md`, `.console/log.md`,
+   `.console/task.md`, `docs/operator/diagnostics.md` and pushed to
+   `origin/goal/8d173ffe`.
+
+Net result across this entire 2026-07-18 audit cycle (Stages 0-6): 1
+discrepancy found and fixed (command 6's JSONL example missing
+`malformed_exceptions`), 0 source-code bugs, 0 open items, 0 new test
+failures.
+
+## 2026-07-18 — Stage 4 (execute all 8 CLI commands end-to-end against real fixture data): live execution performed directly (not deferred to Stage 2), 1 new discrepancy found and fixed
+
+The prior attempt at this stage was rejected for referencing Stage 2's earlier
+findings instead of actually executing the acceptance criteria itself. This
+pass built entirely fresh fixtures under a new `/tmp` root and ran every
+command directly in this turn.
+
+**Fixture build** (`build_fixtures.py`, scratch script, not committed):
+- 1 `RepoStateSnapshot` with a `flaky_test_signal.most_problematic_tests` list
+  of 92 entries (63 complete / 21 partial / 8 no-extraction, 4 truncated
+  messages ≥200 chars, 2 special-char messages) reproducing the doc's own
+  91.3% example exactly.
+- 11 `RepoStateSnapshot`s each with a single `test_signal` entry, reproducing
+  the doc's 5/3/2/1 test-name split (`test_token_refresh`/`test_invalidation`/
+  `test_timeout`/`test_retry`) with a 3/2 assertion-message split.
+- 14 hand-written `extraction_health_history.jsonl` lines spanning 14 days
+  (one artificial rate dip to 64.0 to produce a real anomaly).
+- All timestamps stamped with live `datetime.now(timezone.utc)` at build time
+  (an initial hardcoded-2026-07-18T09:00Z draft caused a false `--hours 6`
+  exclusion because real wall-clock time was 16:54 UTC — caught and fixed
+  before drawing any conclusions).
+- A second low-rate fixture (74/100 = 74.0%) built separately to force a
+  WARNING-severity alert dispatch for command 7 verification.
+
+**All 8 commands executed and diffed against the doc's examples:**
+
+1. `extraction-health` (JSON) — output matched the doc's example fields/values
+   exactly: `91.30434782608695` ≈ doc's `91.3`, `63`/`21`/`8`,
+   `edge_case_summary` `4`/`2`/`0`, full `history` block with all documented
+   keys (`window_days`, `trend`, `weekly_trend`, `slope.confidence`,
+   `anomalies`, `observations`, `recent`, `snapshots_pruned`).
+2. `extraction-health --format table` — output byte-for-byte identical to the
+   doc's example block.
+3. `extraction-health --trend-days 14` — `window_days: 14`; `trend`/
+   `weekly_trend` both carry every key in the doc's key-reference table
+   (`success_rate_std_dev`, the three `*_mean` fields, `edge_case_trends`,
+   nested `trend.anomalies` distinct from top-level `anomalies`); anomaly
+   detection fired on the seeded 64.0 dip as expected.
+4. `query-flaky-tests` — table output byte-for-byte identical to the doc's
+   example (same column padding, `│` separators, percentages).
+5. `query-flaky-tests --include-assertions --hours 6` — both tables matched
+   the doc's examples exactly once the fixture timestamp bug (above) was
+   fixed; before the fix this legitimately printed "No failing tests found in
+   the last 6 hours" due to the fixture being stamped outside the window, not
+   a CLI defect — re-verified after the fix.
+6. Raw JSONL — the doc's `python3 -c` snippet parsed real multi-line JSONL
+   correctly; the old `python3 -m json.tool` pipe was independently
+   reconfirmed to fail with `Extra data` on the same input, matching the
+   doc's note. **Found 1 new discrepancy**: the doc's one-entry JSON example
+   shows `"edge_case_summary": {"truncated_messages": 4, "special_chars": 2}` —
+   omitting `malformed_exceptions`. Live output always includes it
+   (`malformed_exceptions: 0`), because `get_extraction_health()`
+   (`query_flaky.py:361-365`) initializes the `edge_cases` dict with all 3
+   keys unconditionally, and `cli.py:1025` passes
+   `edge_case_summary=dict(health.edge_case_summary)` verbatim to
+   `ExtractionHistoryCollector.collect_snapshot()` — so every real JSONL line
+   written by the pipeline carries all 3 keys, making the doc's 2-key example
+   unreachable. **Fixed** in `docs/operator/diagnostics.md` (added
+   `, "malformed_exceptions": 0` to the example dict).
+7. Alert log line — confirmed no `logs/local/watch-all/*.log` exists in this
+   sandbox (expected — no watchdog has run here, not a doc bug, consistent
+   with every prior cycle). Separately forced a WARNING-severity alert via the
+   74/100 low-rate fixture and captured the live log line: `WARNING:operations_center.alerts:ALERT [EXTRACTION_SUCCESS_RATE_LOW] — 74/80.0
+   errors in 1440min (collector=extraction-health, severity=WARNING)` — an
+   exact match to the doc's example (module/message format identical; the
+   doc's `watch-all/goal.log:` prefix is `grep`'s filename annotation, not
+   part of the logged line itself).
+8. Observer snapshot one-liner — copied the extraction-health fixture into a
+   relative `tools/report/operations_center/observer/` path (the one-liner is
+   not parameterized) and ran it: `rate: 0.0`, exactly matching the doc's
+   documented "current reality" caveat, since the fixture's
+   `flaky_test_signal.extraction_success_rate` was left unset (mirroring
+   `FlakyTestCollector.collect()`'s real behavior).
+
+**Option behavior independently re-verified this stage**: `--hours 0` excludes
+everything; `--limit 2` caps rows and recomputes percentages against the
+truncated set (5/8=62.5%, 3/8=37.5%); `--limit 0` returns all rows;
+`--format json` on `query-flaky-tests` produces the documented
+`test_names`/`total_count`/`unique_tests` structure.
+
+**Test run**: `pytest tests/unit/observer/ -q` → 1542 passed, 3 pre-existing
+failures (`test_anomaly_structure_uses_timestamp_not_recorded_at`,
+`test_store_with_read_only_directory`, `test_cleanup_with_zero_retention`) —
+identical baseline to every prior cycle, zero new failures. `ruff check` on
+`docs/operator/diagnostics.md`: N/A (not a Python file; markdown isn't linted
+by ruff) — confirmed via direct run, not assumed.
+
+**Fixture cleanup**: all `/tmp` scratch directories (fixtures, low-rate
+fixture, command-7/8 relative-path copies) deleted after verification — not
+part of the deliverable, no `tools/`/`src/` diff from this stage.
+
+**Result**: 1 new confirmed documentation discrepancy (command 6's incomplete
+`edge_case_summary` example), fixed in `docs/operator/diagnostics.md`. This
+survived 8+ prior verification cycles because none of them diffed command 6's
+JSON example against a real generated JSONL line key-for-key — they checked
+field *names* and pipe-vs-snippet behavior, not the complete key set. Left the
+fix uncommitted alongside the `.console/*` updates per this task's established
+stage-by-stage pattern.
+
+## 2026-07-18 — Stage 2 re-dispatch (verify CLI commands and options against implementation): independent live-execution re-verification, 0 discrepancies
+
+Re-dispatched with the same acceptance criteria as the 2026-07-14 Stage 2 cycle
+(which found and fixed the dead `--limit` option). This pass verified by
+*live execution* rather than a static `cli.py` read: built fresh
+`RepoStateSnapshot` fixture JSON under a temp
+`tools/report/operations_center/observer/` root (11 snapshots for
+`query-flaky-tests`, reproducing the doc's 5/3/2/1 test-name split with a
+3/2 assertion-message split; 1 snapshot for `extraction-health` reproducing
+the doc's 63/21/8 complete/partial/no-extraction split with 4 truncated + 2
+special-char edge cases), then ran the actual `operations-center-observer-snapshot`
+binstub against them with `PYTHONPATH=src` (the same workaround documented in
+the 2026-07-14 entry, still needed — this workspace's `.venv` still resolves
+`operations_center` to a separate `/home/dev/Documents/GitHub/OperationsCenter`
+checkout).
+
+**Confirmed by live execution:**
+
+1. ✅ Routing — `scripts/operations-center.sh:909-913` (`observer)` case) →
+   `operations-center-observer-snapshot` binstub → `from operations_center.observer.cli
+   import app` → typer commands `extraction-health` (`cli.py:928`) /
+   `query-flaky-tests` (`cli.py:814`). Commands 6-8 remain standalone shell
+   one-liners, as documented — never claimed to route through the CLI.
+2. ✅ `--hours`, `--format`, `--trend-days`, `--include-assertions` all exist
+   and work: command 2 (`--format table`) output matched the doc's example
+   **verbatim**; `--format json --trend-days 14` produced `window_days: 14`
+   and all 8 documented `history` keys; `--hours 0` correctly excluded
+   just-created fixtures, proving the window filter actually filters (not a
+   no-op default).
+3. ✅ `--limit` (0 = all, N = cap to N) — the 2026-07-14 fix (`cli.py:880-883`)
+   is still present with **no source diff this cycle** (`git status` clean on
+   `src/`). Live-tested against the 11-occurrence/4-test-name fixture:
+   `--limit 2` → 2 rows (percentages recomputed against the truncated set),
+   `--limit 0` → all 4 rows, `--limit 1 --include-assertions` → both the
+   test-name and assertion tables capped together.
+4. ✅ Example table output matches `ExtractionReportFormatter` exactly —
+   commands 4 and 5's live output against the doc's own fixture numbers is a
+   **character-for-character match** to the doc's example blocks (columns,
+   `│` separators, percentage formatting all identical).
+5. ✅ Command 1 JSON output matched the doc's example fields/values: `success_rate`
+   91.30434782608695 ≈ doc's `91.3`, `complete_extraction` 63, `partial_extraction`
+   21, `no_extraction` 8, `edge_case_summary` `{4, 2, 0}` — all exact. Command 6's
+   documented `python3 -c` JSONL pretty-printer was re-run against real
+   multi-line JSONL output and exits 0; the old `json.tool` pipe was
+   independently reconfirmed to fail with `Extra data` on the same input,
+   corroborating the doc's explanatory note.
+
+**Test run:** `pytest tests/unit/observer/ -q` → 1542 passed, 3 pre-existing
+failures (`test_anomaly_structure_uses_timestamp_not_recorded_at`,
+`test_store_with_read_only_directory`, `test_cleanup_with_zero_retention`) —
+identical baseline to every prior cycle, confirmed unrelated. All fixture
+snapshot directories were deleted after verification (gitignored scratch, not
+part of the deliverable) — `git status` shows no `tools/` or `src/` changes.
+
+**Result:** 0 discrepancies. All 5 acceptance criteria independently
+reconfirmed via live execution against real fixture data. No documentation or
+source changes were needed — the section and the 2026-07-14 `--limit` fix
+remain accurate and correctly applied.
+
+## 2026-07-18 — Stage 1 re-dispatch (verify core technical claims: formulas, metrics, thresholds, storage): independent re-verification, 0 discrepancies
+
+Re-dispatched with a narrower scope than today's earlier Stage 0 full re-audit
+(same day, same session) — this pass targets exactly the acceptance criteria
+listed for it: extraction success rate formula, complete/partial/no-extraction
+metric definitions, alert thresholds, and storage/retention. Verified directly
+against source rather than reusing the Stage 0 write-up.
+
+**Confirmed against current source (`git log 8c4b65f..HEAD` on every file
+checked is empty — no drift since the last doc-fix commit):**
+
+1. ✅ Formula — `query_flaky.py:387`: `success_rate = ((complete + partial) /
+   total * 100.0) if total > 0 else 0.0`, matching the doc's
+   `(complete_extraction + partial_extraction) / total_flaky_tests × 100`
+   (`diagnostics.md:223`).
+2. ✅ Metric definitions — `get_extraction_health()` (`query_flaky.py:341-386`):
+   `complete_extraction` = both `test_name` and `assertion_message` present;
+   `partial_extraction` = exactly one present; `no_extraction` = neither —
+   matches `diagnostics.md:226,231-233`.
+3. ✅ Alert thresholds — `flaky_test_alert_config.py:122-128`:
+   `warning_threshold=80.0, critical_threshold=50.0, emergency_threshold=10.0`
+   on the `extraction_success_rate` `AlertThreshold` — matches
+   `diagnostics.md:230,532-535`.
+4. ✅ Storage/retention — `extraction_health_history.py:219`
+   (`self.snapshots_file = self.base_path / "extraction_health_history.jsonl"`)
+   and `:210/285` (`retention_days: int = 365` default, enforced via
+   `cutoff = now - timedelta(days=self.retention_days)`) — matches
+   `diagnostics.md:544,546`.
+
+**Test run:** `tests/unit/observer/test_flaky_test_alert_config.py
+test_extraction_health_queries.py test_models_test_signal.py
+test_flaky_test_alerts.py` → 90 passed, 0 failures. Narrower
+extraction-history/retention suite (`test_extraction_history.py`,
+`test_extraction_history_trends.py`, `test_extraction_history_query.py`) →
+107 passed, 0 failures. Broader `-k "retention or extraction_history"` sweep
+surfaced 1 failure (`test_cleanup_with_zero_retention`,
+`test_snapshot_edge_cases.py`) — this is the same pre-existing/environmental
+failure documented in every prior cycle (unrelated `LocalSnapshotRepository`
+class, root-execution permission bypass), not a regression and not part of
+the `ExtractionHistoryStorage` retention path this stage covers.
+
+**Result:** 0 discrepancies. All four Stage 1 acceptance criteria confirmed
+directly against current source and doc text. No documentation or source
+changes required — consistent with every prior cycle since commit `9590e1a`.
+
+## 2026-07-18 — Stage 3 re-dispatch (verify alert system configuration and channels): independent re-verification, 0 discrepancies
+
+Re-dispatched with the same scope as the Stage 3 pass completed on 2026-07-14
+(`6e61d05`) and re-confirmed on 2026-07-16. Re-verified all five acceptance
+criteria independently against current source, without relying on the prior
+cycle summaries:
+
+1. ✅ **Threshold mappings** — `FlakyTestAlertConfig.thresholds["extraction_success_rate"]`
+   (`flaky_test_alert_config.py:122-128`): `warning_threshold=80.0,
+   critical_threshold=50.0, emergency_threshold=10.0`. `get_channels_for_alert()`
+   and `should_alert_on_extraction_success_rate()` (lines 213-230) apply strict
+   `<` comparisons with inverted (lower-is-worse) semantics — matches the doc's
+   table exactly (`< 10%` EMERGENCY, `< 50%` CRITICAL, `< 80%` WARNING, `≥ 80%`
+   no alert).
+2. ✅ **Channel routing** — `channel_routes["EXTRACTION_SUCCESS_RATE_LOW"]`
+   (`flaky_test_alert_config.py:89-95`): warning=[operator_log, slack],
+   critical=[operator_log, slack, email], emergency=[operator_log, slack,
+   email, pagerduty] — identical to the doc's Thresholds table
+   (`docs/operator/diagnostics.md:528-535`).
+3. ✅ **`check_extraction_success_rate()` exists and behaves as documented** —
+   `flaky_test_alerts.py:287-332`, a `@staticmethod` on `FlakyTestAlertManager`
+   taking a `FlakyTestSignal` and optional `FlakyTestAlertConfig`, returns 0 or
+   1 `FlakyTestAlert`, short-circuits when `signal.status == "unavailable"`.
+   Confirmed the CLI dispatch path end-to-end at `cli.py:975-1006`: builds the
+   `FlakyTestSignal` from `health.success_rate`, calls the check, resolves
+   channels via `get_channels_for_alert()`, dispatches via
+   `AlertChannelFactory.create_channels_from_config()`, all wrapped in a
+   `try/except Exception` that only logs at `debug` — confirms the doc's
+   "best-effort — a channel failure never prevents the command from emitting
+   its JSON payload" claim (`diagnostics.md:537-538`).
+4. ✅ **Alert log message format** — `OperatorLogChannel.notify()`
+   (`alert_channels.py:73-114`) builds
+   `f"ALERT [{condition}] — {error_count}/{threshold} errors in
+   {time_window_minutes}min (collector={collector}, severity={severity})"`,
+   logger name `operations_center.alerts`. Traced the exact values passed by
+   `cli.py:991-999`: `error_count` is `round(current_rate)` (an int, e.g.
+   `74`), `threshold` is the raw float threshold (e.g. `80.0`),
+   `time_window_minutes = hours * 60` (e.g. `1440` for the default 24h) —
+   this precisely explains the doc's `74/80.0 errors in 1440min` example
+   (`diagnostics.md:496`); byte-for-byte match confirmed.
+5. ✅ **Channel instantiability** — `AlertChannelFactory.create_channel()`
+   (`alert_channels.py:658-702`) confirmed `email` (`EmailChannel`), `github`
+   (`GitHubChannel`), and `pagerduty` (`PagerDutyChannel`) are all real,
+   instantiable classes (not stubs or config-only names), each returned by
+   name from the factory used in the live dispatch path.
+
+**Test run**: `pytest tests/unit/observer/test_flaky_test_alert_config.py
+tests/unit/observer/test_flaky_test_alerts.py tests/unit/observer/test_alert_channels.py
+tests/unit/observer/test_cli_extraction_health.py` → 130 passed, 1 pre-existing
+failure (`test_anomaly_structure_uses_timestamp_not_recorded_at`) — reproduced
+identically via `git stash` against the current base commit `8c4b65f`,
+confirming it predates and is unrelated to this verification pass (same
+date-window flake noted in every prior cycle).
+
+**Result**: 0 discrepancies. All five Stage 3 acceptance criteria re-confirmed
+directly against current source. No documentation or source changes were
+required this cycle.
+
 ## 2026-07-16 — Stage 2 re-dispatch (verify CLI commands and options against implementation): independent re-verification, 0 discrepancies
 
 Re-dispatched with the same scope as the Stage 2 pass completed and committed
@@ -8670,3 +8970,79 @@ identically without this change — zero new failures.
 commands verified working, 0 new test/lint failures. Committing the full
 diff (`docs/operator/diagnostics.md` fix + 2 new regression tests +
 `.console/*`) and pushing the branch.
+
+## 2026-07-18 — Stage 0 (re-run): Audit section for verifiable claims
+
+**Task**: New periodic re-audit cycle of `docs/operator/diagnostics.md` §
+"Extraction Health Diagnosis" (same acceptance criteria as the original
+2026-07-14 Stage 0 and the 2026-07-16 re-run).
+
+**Method**: Did not trust the 2026-07-16 summary in `task.md` — dispatched an
+independent read-only exploration pass over `query_flaky.py`, `models.py`,
+`flaky_test_alert_config.py`, `flaky_test_alerts.py`, `observer/cli.py`,
+`extraction_health_history.py`, `flaky_test_collector.py`, and `query.py`,
+and ran `git log 8c4b65f..HEAD -- <file>` on each to check for drift since the
+last doc-fix commit.
+
+**Findings**:
+1. All 15 source references (line numbers/functions) confirmed exact against
+   current source — no drift.
+2. All 8 CLI commands confirmed present and correctly routed through
+   `operations-center.sh` → `observer/cli.py`.
+3. Numeric thresholds/severity mappings unchanged: 80/50/10 percent
+   boundaries, 200-char truncation cutoff, >5% anomaly delta over a 5-point
+   moving average, 365-day retention.
+4. Data storage paths and retention unchanged.
+5. Produced a fresh 18-item verification checklist — all items pass.
+
+`git log 8c4b65f..HEAD` returned empty for every referenced file, confirming
+zero source changes have landed since the 2026-07-16 doc-fix commit.
+
+**Deliverable**: `.console/STAGE0_EXTRACTION_HEALTH_AUDIT.md` (regenerated —
+gitignored scratch space per the `STAGE[0-9]*.md` pattern).
+
+**Result**: 0 discrepancies. The section continues to match source exactly.
+No documentation or source changes were needed this cycle. Working tree
+otherwise unchanged (only `.console/*` tracking files touched).
+
+## 2026-07-18 — Stage 5: Compile findings and apply fixes (2026-07-18 cycle)
+
+Synthesis stage for this cycle's Stages 0-4 (each an independent re-verification
+of the "Extraction Health Diagnosis" section against current source). Compiled
+into `.console/STAGE5_COMPILED_FINDINGS_20260718.md`, organized by the task's
+5 acceptance criteria.
+
+**Result: 1 discrepancy found and fixed, 0 open, 0 contradictions.**
+
+The only discrepancy this cycle was the one Stage 4 already found and fixed:
+command 6's raw JSONL example (`docs/operator/diagnostics.md:479`) omitted the
+`malformed_exceptions` key from `edge_case_summary`, even though
+`get_extraction_health()` (`query_flaky.py:361-365`) always initializes all 3
+keys and `cli.py:1025` passes the dict verbatim to the history collector — so
+every real JSONL line carries all 3 keys. Fixed to
+`{"truncated_messages": 4, "special_chars": 2, "malformed_exceptions": 0}`,
+matching every other `edge_case_summary` occurrence in the section (field
+table at lines 234-236, examples at 262-265/297-299/350-352, prose at
+590-594, remediation table at 623/633-635 — 11 occurrences total, all now
+consistent with each other and with source).
+
+No source-code bugs were found this cycle (unlike the 2026-07-14 cycle's dead
+`--limit` option). Stages 0/1/3 (general audit, formulas/thresholds, alert
+system) each independently reconfirmed 0 discrepancies against current
+source; Stage 2/4 (CLI commands) found and fixed the one doc-example gap via
+live execution.
+
+**Verification**: `pytest tests/unit/observer/ -q` (via `PYTHONPATH=src`,
+bypassing the stray `.venv` install per the Stage 2 environment note) →
+1542 passed, 1 skipped, 2 xfailed, 3 failed — the same 3 pre-existing/
+environmental failures as every prior cycle
+(`test_anomaly_structure_uses_timestamp_not_recorded_at`,
+`test_store_with_read_only_directory`, `test_cleanup_with_zero_retention`),
+zero new failures. `ruff check` on `docs/operator/diagnostics.md`,
+`observer/cli.py`, and `observer/query_flaky.py`: clean.
+
+**Conclusion**: the "Extraction Health Diagnosis" section is fully accurate
+and internally consistent against current source as of this cycle. Updated
+`.console/task.md` and `.console/backlog.md` to record this stage. Changes
+(doc fix + `.console/*`) remain uncommitted per this task's established
+stage-by-stage pattern — commit/push, if needed, is a separate future stage.

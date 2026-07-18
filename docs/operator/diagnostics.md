@@ -476,7 +476,7 @@ Example output (one entry):
   "no_extraction": 8,
   "total_flaky_tests": 92,
   "extracted_count": 84,
-  "edge_case_summary": {"truncated_messages": 4, "special_chars": 2},
+  "edge_case_summary": {"truncated_messages": 4, "special_chars": 2, "malformed_exceptions": 0},
   "snapshot_id": null,
   "collection_run_id": null
 }
