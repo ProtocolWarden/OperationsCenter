@@ -54,6 +54,29 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 - Replace the PATH/CLI probe with an importability check of the three backends OC loads,
   mirroring `ensure_executor_backends()` in `scripts/operations-center.sh`.
 - Remove the "Known stale step" note in `docs/operator/setup.md` once fixed.
+### Triage the 10 vulture findings the gate now reports (BLOCKS the pre-push gate)
+- Turning the vulture detector back on (2026-08-03) leaves 10 genuine findings.
+  Until they are resolved `custodian-multi --fail-on-findings` is RED, so pushes
+  need `--no-verify`. This is the intended consequence of closing a fail-open, but
+  it should not sit unresolved.
+- **`src/operations_center/observer/cli.py` ×8** — `--format` (`format_snapshot`),
+  `--skip-validation`, `--output` (`output_report`), `--filter-status`,
+  `--signals-only`, `--input` (`input_path`), `--validate-after`, `--keep`
+  (`keep_count`) are declared as `typer.Option(...)` and never read in the body.
+  `layers` and `full` in the same command ARE read, so this is not a vulture blind
+  spot. User-visible: `--format yaml` silently produces JSON. Each flag needs a
+  decision — wire it up or delete it. Do not whitelist.
+- **`src/operations_center/entrypoints/pr_review_watcher/main.py:2508,2543`** —
+  `pending_checks` parameter passed and never used; remove it and update callers.
+
+### Push Custodian 5ef3f0f, or the Windows find_tool fix stays unpinnable
+- `5ef3f0f fix(adapters): make find_tool's venv-first preference work on Windows`
+  exists only in the local Custodian checkout (branch `claude/reconcile-june-2026-08-03`,
+  upstream gone). `origin/main` is at `7a780b7`, which OC now pins.
+- Until it is pushed, a Windows Custodian run resolves linters off PATH rather than
+  a venv. That produced 1222 phantom ruff findings on 2026-08-03 (ruff 0.16 default
+  rule set vs OC's pinned 0.15.13) before the local checkout picked the commit up.
+
 
 ## Done
 

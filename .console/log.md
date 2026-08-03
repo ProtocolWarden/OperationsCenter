@@ -665,6 +665,69 @@ string (`scope == 'SECURITY: th...from an exter'`); restored, all pass. 44 tests
 across `test_injection.py` + `test_cxrp_mapper.py`; no pre-existing test asserts
 on CxRP `title`/`scope`, so blast radius is limited to the new pins. ruff check
 and ruff format clean.
+## 2026-08-03 — fix(custodian): close the vulture fail-open in the pre-push gate
+
+The pre-push Custodian gate reported "0 findings, clean" on this repo while a
+Windows box running a newer Custodian reported hundreds. Windows was the correct
+side; the green gate was a FALSE CLEAN, and had been for as long as the pin has
+been in place.
+
+Three things had to line up to hide it:
+
+1. `.custodian/config.yaml` sets `tools.vulture: true` — the detector is meant
+   to run.
+2. `pyproject.toml` never declared `vulture` in the dev extra, so
+   `uv pip install -e .[dev]` never installed it. The fleet venv has no vulture
+   and none is on PATH.
+3. The custodian pin `d6ba8ab` PREDATES Custodian 261bbb5, "fix(vulture): put
+   paths before options, and stop reading a failed run as clean". On that pin
+   the adapter built `vulture <src> --min-confidence=N <tests>`, which vulture's
+   argparse rejects — exit 2, empty stdout — and the empty output was read as
+   "no dead code".
+
+So even had vulture been installed, the pinned adapter could not have produced a
+finding: the invocation itself was malformed and the failure was swallowed. The
+detector has never once run. Fixed by bumping the pin to 7a780b7 (origin/main,
+contains 261bbb5) and declaring `vulture==2.16` alongside the existing ruff/ty
+pins. The two must land together — after 261bbb5 a missing vulture fails LOUDLY,
+so bumping the pin alone would red the gate on "vulture not found".
+
+Threshold set explicitly to `tools.vulture_min_confidence: 80`. Custodian's
+adapter registry falls back to 60 while its own config loader documents 80 as
+the intended default; relying on whichever wins is how this stays surprising. On
+this repo the difference is stark: 60 yields 621 findings (essentially all
+UNUSED_METHOD/attribute heuristics), 80 yields 32, every one at 100% confidence.
+
+Of those 32, 22 are names an external contract forces us to accept — the
+`__exit__` protocol, pytest's `pytest_sessionfinish` hookspec, fixtures
+requested purely for a side effect, lambda stubs that must mirror the callee
+they replace — plus two compat shims the source already documents as deliberate
+(`max_rewrite_attempts` carries `# noqa: ARG002 — kept for signature compat`,
+`queue_threshold` carries `# kept for config compat, not used in logic`). Those
+are listed in a new `.vulture_whitelist.py`, which Custodian's adapter picks up
+automatically when present. The whitelist matches on bare NAME, not location, so
+it is kept minimal and each entry carries its justification.
+
+The remaining 10 are real and are deliberately NOT whitelisted:
+
+* `observer/cli.py` ×8 — `--format`, `--skip-validation`, `--output`,
+  `--filter-status`, `--signals-only`, `--input`, `--validate-after`, `--keep`
+  are declared as typer options and never read. `layers` and `full` in the same
+  command ARE read, which is what makes these stand out rather than look like a
+  vulture blind spot. Passing `--format yaml` today silently yields JSON.
+* `pr_review_watcher/main.py:2508,2543` — `pending_checks` parameter threaded
+  through two call sites and never used.
+
+CONSEQUENCE, stated plainly: merging this turns the gate red on those 10 until
+they are triaged. That is the intended effect — the gate was previously green by
+accident. Deciding whether each observer flag should be wired up or deleted is
+product work and is not guessed at here.
+
+Also found, not fixable from this repo: the Custodian commit that makes
+`find_tool` prefer a venv on Windows (5ef3f0f) exists only in the local checkout
+and was never pushed, so it cannot be pinned. Without it a Windows run resolves
+linters off PATH; that cost 1222 phantom ruff findings earlier today until the
+local checkout picked the commit up mid-session.
 
 ## 2026-07-15 — feat(reviewer): ACTIVATE the council — populate guardrail_paths (§G1)
 
