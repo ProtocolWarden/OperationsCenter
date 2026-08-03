@@ -73,6 +73,12 @@ source .env.operations-center.local
 TeamExecutor is the multi-agent coding engine OperationsCenter uses for task execution.
 See `src/operations_center/backends/team_executor/` for the adapter implementation.
 
+Task execution runs through the **library** API: the adapter imports
+`TeamExecutorRunner` in-process from the editable sibling install performed by
+`ensure_executor_backends` in `scripts/operations-center.sh`. The `team-executor`
+CLI below is only the install-verification surface — `--help` here, and
+`--version` in `dependency-check`. No task execution goes through it.
+
 - install/verify `team-executor` CLI
 - configure orchestrator defaults
 - persist local execution settings

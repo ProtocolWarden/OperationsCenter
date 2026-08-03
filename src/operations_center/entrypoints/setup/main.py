@@ -203,7 +203,10 @@ def ensure_executor_installed(binary: str, install_ref: str | None = None) -> No
     # Use the ProtocolWarden TeamExecutor repo.
     # install_ref overrides the default branch for pinned installs.
     fork_url = "git+https://github.com/ProtocolWarden/TeamExecutor.git"
-    ref = install_ref or "dev"
+    # TeamExecutor has no `dev` branch — the previous default resolved to nothing
+    # and `uv tool install` failed on the ref, surfacing as the generic
+    # "installation failed" below with no hint that the ref was the cause.
+    ref = install_ref or "main"
     target = f"{fork_url}@{ref}"
     proc = subprocess.run(
         ["uv", "tool", "install", target, "--force"],

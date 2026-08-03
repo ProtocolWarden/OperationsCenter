@@ -106,6 +106,36 @@ than a red one.
 Related, same root cause one layer up: Custodian's `find_tool()` preferred its own
 venv over the audited repo's, so a globally-installed `custodian-multi` reproduced
 this identically off-CI. Fixed in ProtocolWarden/Custodian#72.
+## 2026-08-03 — fix(setup): executor install ref pointed at a non-existent branch
+
+`ensure_executor_installed` defaulted to `ref = install_ref or "dev"`, but
+TeamExecutor has no `dev` branch — `git ls-remote` returns nothing for it, so
+`uv tool install git+…TeamExecutor.git@dev` failed on ref resolution and the
+operator saw only the generic "[executor] ERROR: installation failed", with no
+indication the ref was the cause. Default is now `main` (resolves to 45f54ab3).
+
+This was one half of a two-repo defect. The other half: TeamExecutor declared no
+`[project.scripts]`, so even a successful install produced no `team-executor`
+binary — `check_command_installed` (a `shutil.which`) would still fail, and
+`verify_executor`'s `team-executor --help` would raise "executor not
+functioning". Fixed upstream by shipping the console script (TeamExecutor
+`feat/team-executor-console-script`); this ref fix is the OC-side counterpart
+and the two are only useful together.
+
+Worth stating plainly because it was initially mis-diagnosed as a stale doc:
+`docs/operator/setup.md`'s install/verify steps were ACCURATE all along — they
+faithfully described a code path that could not succeed, and with both halves
+landed that flow ("checks whether `team-executor` is on PATH", "verifies the
+install with `team-executor --help`") is true for the first time. The one REAL
+doc defect was a different line: the section implied the CLI is how OC executes
+tasks. It is not — execution runs through the library API in-process, and the
+CLI is only the verification surface. Now said explicitly. Verified by
+calling OC's own consumers against a real install: `check_command_installed` →
+True, `verify_executor` → passes, and `dependency_check`'s probe normalizes
+`team-executor 0.1.0` → `0.1.0` with `executor_installed: True`. Note the
+library path (`ensure_executor_backends` editable sibling install) was never
+affected — it is what actually runs tasks, which is why this stayed invisible.
+13 setup CLI tests green.
 
 ## 2026-07-15 — feat(reviewer): ACTIVATE the council — populate guardrail_paths (§G1)
 
