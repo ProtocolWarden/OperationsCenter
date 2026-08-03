@@ -1,3 +1,28 @@
+## 2026-08-03 — fix(OperationsCenter): ensure_executor_backends must guard EVERY backend src/ imports
+
+The self-heal in `scripts/operations-center.sh` covered only two of the three
+execute backends. Its guard was `import team_executor, dag_executor` and its
+install loop `for _sib in TeamExecutor DAGExecutor` — but `src/` also imports
+`critique_executor` (`.executor`, `.models`, plus a full adapter at
+`backends/critique_executor/`). A dropped CritiqueExecutor therefore left the
+guard PASSING, so the self-heal never fired and the critique lane stalled with
+exactly the "no obvious cause" symptom the function's own comment warns about
+for its other two backends — the failure mode it exists to prevent, reproduced
+in the one case it didn't cover. Root cause is structural, not a typo: the guard
+enumerates backends independently of what `src/` actually imports, so the two
+drift silently. Fixed by adding `critique_executor` to the guard and
+`CritiqueExecutor` to the loop, and by stating the invariant in the comment
+(the guard must import every backend `src/` imports) so the next backend added
+doesn't repeat it. Verified end-to-end against a live venv: with all three
+present the guard short-circuits (no needless reinstall); after uninstalling
+critique-executor the OLD guard still passes — the bug, reproduced — while the
+new guard fires and restores all three; capabilities plane intact afterward
+(the sibling installs bypass the `[tool.uv]` override pin, so that was checked
+explicitly, not assumed). Also noted, NOT fixed here: `docs/operator/setup.md`
+says setup verifies via `team-executor --help`, but TeamExecutor declares no
+`[project.scripts]` — no such console script exists and OC consumes it purely
+as a library. That doc line is stale.
+
 ## 2026-07-15 — feat(reviewer): ACTIVATE the council — populate guardrail_paths (§G1)
 
 The council's go-live. C1/C2/C3 all merged; `reviewer.council.guardrail_paths`
