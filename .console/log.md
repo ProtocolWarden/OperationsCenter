@@ -1,3 +1,45 @@
+## 2026-08-03 — fix(launcher): widen executor-backend self-heal to critique_executor
+
+`ensure_executor_backends()` in `scripts/operations-center.sh` self-heals dropped
+executor sibling checkouts at every fleet launch, but covered only two of the three
+OC actually imports: it probed `import team_executor, dag_executor` and looped over
+`TeamExecutor DAGExecutor`. `critique_executor` (sibling `../CritiqueExecutor`,
+imported by `backends/critique_executor/adapter.py`) was in neither, so a `uv sync`
+or venv-recreate that dropped it left every critique-topology task failing at
+execute with `No module named 'critique_executor'` — the exact failure the self-heal
+exists to prevent for the other two — until a human noticed.
+
+Root cause of the drift was structural: the probe and the install loop were TWO
+hardcoded lists inside one function, so widening one without the other was easy and
+silent. Collapsed to a single `EXECUTOR_BACKENDS` array of
+`<import name>:<sibling checkout dir>` pairs; the probe's import statement and the
+install loop are both derived from it. Behavior is otherwise unchanged (still
+all-or-nothing: any missing module reinstalls all siblings).
+
+Did NOT source the list from Python. The task note assumed
+`entrypoints/setup/main.py` already held an authoritative `EXECUTOR_BACKENDS`
+tuple — it does not, and no such constant exists anywhere in the repo (verified at
+bb65da3b in both the Windows and WSL2 checkouts). The nearest real Python lists are
+`BackendName` / `EXECUTOR_LANE_NAMES` (`contracts/enums.py`) and the
+`backends/factory.py` registry, but neither carries the checkout-dir half of each
+pair, and it is not derivable (`dag_executor` → `DAGExecutor`, not `DagExecutor`).
+Sourcing is also wrong in principle here: this self-heal must run precisely when the
+venv is too broken to import `operations_center`. Took the stated fallback instead —
+cross-reference comments in both `scripts/operations-center.sh` and
+`backends/factory.py`, each naming the other and stating that adding a backend means
+updating both.
+
+Verified against the live WSL2 stack (~/GitHub, siblings at
+{TeamExecutor,DAGExecutor,CritiqueExecutor}): `bash -n` clean (after CRLF
+normalization — the Windows checkout is CRLF, pre-existing); probe builds exactly
+`import team_executor, dag_executor, critique_executor`; no-op + rc=0 against the
+real fleet venv where all three already import; against a throwaway empty venv the
+real `uv` path installed all three (`+ critique-executor==0.1.0 from
+file:///home/diane/GitHub/CritiqueExecutor`) and a second call was a silent no-op.
+Missing-`uv` and missing-checkout paths still degrade to a WARNING rather than
+aborting launch. Fleet venv untouched. `tests/unit/backends/test_factory.py` +
+`test_critique_executor_adapter.py` 5 passed.
+
 ## 2026-07-15 — feat(reviewer): ACTIVATE the council — populate guardrail_paths (§G1)
 
 The council's go-live. C1/C2/C3 all merged; `reviewer.council.guardrail_paths`
