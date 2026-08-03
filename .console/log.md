@@ -1,3 +1,36 @@
+## 2026-08-03 — fix(hooks): pre-push resolved the wrong workspace root inside a git worktree
+
+`.hooks/pre-push` locates the boundary disclosure artifact by globbing sibling
+checkouts: `workspace_root="$(cd "$repo_root/.." && pwd)"`, then
+`$workspace_root/*/dist/boundary_disclosure_artifact.json`. That assumes
+`$repo_root` is the main clone. Inside a **git worktree** it is not — repo_root is
+`.../OperationsCenter/.claude/worktrees/<name>`, so workspace_root resolved to
+`.../.claude/worktrees`, a directory with no siblings at all. The glob matched
+nothing, and every push from a worktree died on
+`missing REPOGRAPH_BOUNDARY_ARTIFACT_FILE; failing closed` — a file it had no way
+to find and that the operator had already generated one directory over.
+
+Fixed by deriving the main clone root from `git rev-parse --git-common-dir`, which
+the main clone and all of its worktrees share. Its parent is always the main clone,
+whose parent is the real workspace root. Verified from both: the worktree now
+auto-discovers `PrivateManifest/dist/boundary_disclosure_artifact.json`, and the
+main clone resolves to exactly the same path it did before (no behaviour change
+where the old code already worked).
+
+Found while triaging why this branch could not be pushed. Two further faults sat on
+top of it, neither in this repo, both since fixed:
+- The WSL2 fleet clone had no boundary artifact anywhere under `~/GitHub`, so its
+  own pre-push failed at B2 before Custodian even ran. PrivateManifest was not
+  checked out there at all; it now is, and the artifact is generated from it. The
+  real hook now passes unaided in the fleet clone: 0 findings, exit 0.
+- Custodian's `find_tool()` preferred *its own* venv over the audited repo's, so a
+  globally-installed `custodian-multi` audited OC (pinned `ruff==0.15.13`) with a
+  system-wide ruff 0.16.1 and produced 1222 phantom findings against a tree that is
+  clean. Fixed upstream in ProtocolWarden/Custodian#72.
+
+The OC baseline itself was never dirty: with the right toolchain and the artifact
+configured, the gate returns 0 findings / 0 HIGH / 0 MED / clean.
+
 ## 2026-08-03 — fix(launcher): widen executor-backend self-heal to critique_executor
 
 `ensure_executor_backends()` in `scripts/operations-center.sh` self-heals dropped

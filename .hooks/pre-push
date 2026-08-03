@@ -3,7 +3,20 @@
 set -e
 
 repo_root="$(git rev-parse --show-toplevel)"
-workspace_root="$(cd "$repo_root/.." && pwd)"
+
+# Sibling checkouts (the private manifest holding the boundary artifact, Custodian)
+# live next to the MAIN clone, so workspace_root must be the main clone's parent.
+# `$repo_root/..` gets that wrong inside a git worktree: repo_root is then
+# .../OperationsCenter/.claude/worktrees/<name>, so workspace_root resolved to
+# .../.claude/worktrees — a directory with no siblings, the artifact glob below
+# matched nothing, and every push from a worktree failed closed on a missing
+# REPOGRAPH_BOUNDARY_ARTIFACT_FILE it could not have found. `--git-common-dir` is
+# shared by the main clone and all its worktrees, so its parent is always the main
+# clone root (in a worktree it is an absolute .../OperationsCenter/.git; in the main
+# clone a bare ".git", hence the -C "$repo_root" and the realpath via cd).
+git_common_dir="$(cd "$repo_root" && cd "$(git rev-parse --git-common-dir)" && pwd)"
+main_clone_root="$(cd "$git_common_dir/.." && pwd)"
+workspace_root="$(cd "$main_clone_root/.." && pwd)"
 
 if [ -z "${REPOGRAPH_BOUNDARY_ARTIFACT_FILE:-}" ]; then
     shopt -s nullglob
