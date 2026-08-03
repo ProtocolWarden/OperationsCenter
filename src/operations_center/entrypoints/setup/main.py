@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 import webbrowser
 from dataclasses import dataclass
 from pathlib import Path
@@ -37,6 +38,22 @@ SSH_KEY_CANDIDATES = [
     Path.home() / ".ssh" / "id_ed25519",
     Path.home() / ".ssh" / "id_rsa",
 ]
+
+# The execute backends OC loads, as (import name, sibling checkout dir).
+# OC consumes all three as LIBRARIES — backends/<name>/adapter.py does a plain
+# `import <module>` — so importability in OC's interpreter is the only readiness
+# signal that means anything. PATH is not: TeamExecutor and CritiqueExecutor
+# declare no `[project.scripts]` at all, and the one console script that does
+# exist (DAGExecutor's `dag-executor`) is never invoked by OC.
+# They are sibling CHECKOUTS, not declared OC dependencies, so `uv pip install
+# -e .[dev]` never installs them and a `uv sync` / venv-recreate actively drops
+# them. Mirrors ensure_executor_backends() in scripts/operations-center.sh,
+# which self-heals the same drop at every fleet launch.
+EXECUTOR_BACKENDS: tuple[tuple[str, str], ...] = (
+    ("team_executor", "TeamExecutor"),
+    ("dag_executor", "DAGExecutor"),
+    ("critique_executor", "CritiqueExecutor"),
+)
 
 
 @dataclass
@@ -78,7 +95,9 @@ class SetupAnswers:
     git_author_email: str
     git_sign_commits: bool
     git_signing_key: str | None
-    executor_binary: str
+    # Version pin recorded for drift reporting only (dependency-check compares it
+    # against the installed backend and the upstream latest release). Nothing
+    # installs from it — the backends come from sibling checkouts.
     executor_install_ref: str | None
     executor_team: str
     executor_cycles: int
@@ -189,41 +208,70 @@ def ensure_uv_installed() -> None:
         raise typer.BadParameter("[executor] ERROR: uv installation failed")
 
 
-def ensure_executor_installed(binary: str, install_ref: str | None = None) -> None:
-    typer.echo("[executor] Checking installation...")
-    if check_command_installed(binary):
-        typer.echo("[executor] already installed")
-        return
-    if binary != "team-executor":
-        raise typer.BadParameter(
-            f"[executor] ERROR: custom executor binary '{binary}' is not on PATH and automatic install only supports 'team-executor'"
+def missing_executor_backends(python_binary: str | None = None) -> list[str]:
+    """Return the import names of EXECUTOR_BACKENDS ``python_binary`` cannot import.
+
+    Probed in a subprocess rather than via importlib in this process: an install
+    that lands partway through setup must be visible to the re-check, and the
+    parent's import caches (and any already-bound ``sys.modules`` entry) would
+    still answer for the pre-install state.
+    """
+    interpreter = python_binary or sys.executable
+    missing: list[str] = []
+    for module, _checkout in EXECUTOR_BACKENDS:
+        proc = subprocess.run(
+            [interpreter, "-c", f"import {module}"],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=os.environ.copy(),
         )
+        if proc.returncode != 0:
+            missing.append(module)
+    return missing
+
+
+def ensure_executor_backends_installed(repo_root: Path, python_binary: str | None = None) -> None:
+    """Make every execute backend importable, installing sibling checkouts if not.
+
+    Idempotent: the import probe is ~free and the editable install only fires for
+    backends that are actually missing.
+    """
+    interpreter = python_binary or sys.executable
+    typer.echo("[executor] Checking backend imports...")
+    missing = missing_executor_backends(interpreter)
+    if not missing:
+        typer.echo("[executor] all backends importable")
+        return
+
+    checkout_dirs = dict(EXECUTOR_BACKENDS)
     ensure_uv_installed()
-    typer.echo("[executor] Installing via uv (ProtocolWarden TeamExecutor)...")
-    # Use the ProtocolWarden TeamExecutor repo.
-    # install_ref overrides the default branch for pinned installs.
-    fork_url = "git+https://github.com/ProtocolWarden/TeamExecutor.git"
-    ref = install_ref or "dev"
-    target = f"{fork_url}@{ref}"
-    proc = subprocess.run(
-        ["uv", "tool", "install", target, "--force"],
-        check=False,
-        env=os.environ.copy(),
-    )
-    prepend_local_bin_to_path()
-    if proc.returncode != 0 or not check_command_installed(binary):
-        raise typer.BadParameter("[executor] ERROR: installation failed")
-    typer.echo("[executor] installed successfully")
+    for module in missing:
+        checkout_name = checkout_dirs[module]
+        checkout = (repo_root.parent / checkout_name).resolve()
+        if not (checkout / "pyproject.toml").is_file():
+            raise typer.BadParameter(
+                f"[executor] ERROR: {module} is not importable and no sibling checkout was "
+                f"found at {checkout}. Clone {checkout_name} next to this repo and rerun setup."
+            )
+        typer.echo(f"[executor] {module} missing -> installing {checkout} (editable)")
+        proc = subprocess.run(
+            ["uv", "pip", "install", "--python", interpreter, "-e", str(checkout)],
+            check=False,
+            env=os.environ.copy(),
+        )
+        if proc.returncode != 0:
+            raise typer.BadParameter(
+                f"[executor] ERROR: editable install of {checkout_name} failed"
+            )
 
-
-def verify_executor(binary: str) -> None:
-    typer.echo("[executor] Verifying...")
-    proc = subprocess.run(
-        [binary, "--help"], check=False, capture_output=True, text=True, env=os.environ.copy()
-    )
-    if proc.returncode != 0:
-        raise typer.BadParameter("[executor] ERROR: executor not functioning")
-    typer.echo("[executor] OK")
+    still_missing = missing_executor_backends(interpreter)
+    if still_missing:
+        raise typer.BadParameter(
+            "[executor] ERROR: backends still not importable after install: "
+            + ", ".join(still_missing)
+        )
+    typer.echo("[executor] backends installed successfully")
 
 
 def verify_plane_configuration(
@@ -1108,23 +1156,11 @@ def main(
         )
     ensure_github_ssh_setup(git_author_email, Path.cwd())
 
-    existing_executor_binary = (
-        existing_config_value(existing_config, "team_executor", "binary") or "team-executor"
-    )
     executor_install_ref = existing_env.get("OPERATIONS_CENTER_EXECUTOR_INSTALL_REF") or None
-    print_section("Executor Install", "Ensure the executor CLI is available before writing config.")
-    executor_binary = prompt_with_default(
-        "Executor binary",
-        existing_executor_binary,
-        note="Using saved value."
-        if existing_executor_binary != "team-executor"
-        or existing_config_value(existing_config, "team_executor", "binary")
-        else None,
-    )
     if advanced_mode:
         executor_install_ref = (
             typer.prompt(
-                "Executor git ref/tag/SHA for install (optional)",
+                "TeamExecutor version pin for drift reporting (optional)",
                 default=executor_install_ref or "",
             ).strip()
             or None
@@ -1207,8 +1243,11 @@ def main(
     typer.echo("[provider] Final provider summary:")
     typer.echo(summarize_provider_statuses(statuses))
 
-    ensure_executor_installed(executor_binary, install_ref=executor_install_ref)
-    verify_executor(executor_binary)
+    print_section(
+        "Executor Backends",
+        "Ensure the execute backends OperationsCenter imports are available before writing config.",
+    )
+    ensure_executor_backends_installed(Path.cwd())
 
     usable_providers = [status.key for status in statuses if status.interactive_ready]
     if not usable_providers:
@@ -1320,7 +1359,6 @@ def main(
         git_author_email=git_author_email,
         git_sign_commits=git_sign_commits,
         git_signing_key=git_signing_key,
-        executor_binary=executor_binary,
         executor_install_ref=executor_install_ref,
         executor_team=executor_team,
         executor_cycles=executor_cycles,

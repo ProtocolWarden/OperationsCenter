@@ -3,13 +3,20 @@
 import os
 from pathlib import Path
 
+import pytest
+import typer
+
+from operations_center.entrypoints.setup import main as setup_main
 from operations_center.entrypoints.setup.main import (
+    EXECUTOR_BACKENDS,
     RepoSetupAnswers,
     SetupAnswers,
     check_command_installed,
     default_orchestrator_for_statuses,
+    ensure_executor_backends_installed,
     github_https_to_ssh,
     infer_repo_key_from_clone_url,
+    missing_executor_backends,
     parse_remote_branches,
     prepend_local_bin_to_path,
     provider_default_orchestrator,
@@ -41,7 +48,6 @@ def test_render_settings_yaml_contains_local_repo_bootstrap_defaults() -> None:
         git_author_email="bot@example.com",
         git_sign_commits=True,
         git_signing_key="ABC12345",
-        executor_binary="team-executor",
         executor_install_ref=None,
         executor_team="budget",
         executor_cycles=3,
@@ -144,7 +150,6 @@ def test_render_env_file_for_subscription_mode_skips_provider_secret_export() ->
         git_author_email="bot@example.com",
         git_sign_commits=False,
         git_signing_key=None,
-        executor_binary="team-executor",
         executor_install_ref="v0.4.272",
         executor_team="full",
         executor_cycles=3,
@@ -208,7 +213,6 @@ def test_render_settings_yaml_supports_multiple_repos() -> None:
         git_author_email="bot@example.com",
         git_sign_commits=False,
         git_signing_key=None,
-        executor_binary="team-executor",
         executor_install_ref=None,
         executor_team="budget",
         executor_cycles=3,
@@ -273,7 +277,6 @@ def test_render_task_template_uses_default_repo() -> None:
         git_author_email="bot@example.com",
         git_sign_commits=False,
         git_signing_key=None,
-        executor_binary="team-executor",
         executor_install_ref=None,
         executor_team="budget",
         executor_cycles=3,
@@ -396,3 +399,153 @@ def test_summarize_provider_statuses_distinguishes_states() -> None:
     assert "Claude Code: installed + logged in (1.0.0)" in summary
     assert "OpenAI Codex CLI: installed + headless ready (1.0.0)" in summary
     assert "Gemini CLI: not installed" in summary
+
+
+class _FakeProc:
+    def __init__(self, returncode: int = 0) -> None:
+        self.returncode = returncode
+        self.stdout = ""
+        self.stderr = ""
+
+
+class _FakeRunner:
+    """Stands in for ``subprocess.run`` during executor-backend checks.
+
+    Import probes fail for every module in ``missing``; a successful editable
+    install of a sibling checkout removes the matching module from that set, so
+    the post-install re-probe sees the repaired state.
+    """
+
+    def __init__(self, missing: set[str], *, install_rc: int = 0, install_fixes: bool = True):
+        self.missing = set(missing)
+        self.install_rc = install_rc
+        self.install_fixes = install_fixes
+        self.calls: list[list[str]] = []
+
+    def __call__(self, cmd, **kwargs):  # type: ignore[no-untyped-def]
+        args = list(cmd)
+        self.calls.append(args)
+        if len(args) >= 3 and args[1] == "-c" and args[2].startswith("import "):
+            module = args[2].removeprefix("import ")
+            return _FakeProc(1 if module in self.missing else 0)
+        if args[:3] == ["uv", "pip", "install"]:
+            if self.install_rc == 0 and self.install_fixes:
+                checkout = Path(args[-1]).name
+                for module, checkout_name in EXECUTOR_BACKENDS:
+                    if checkout_name == checkout:
+                        self.missing.discard(module)
+            return _FakeProc(self.install_rc)
+        return _FakeProc(0)
+
+    @property
+    def install_targets(self) -> list[str]:
+        return [Path(call[-1]).name for call in self.calls if call[:3] == ["uv", "pip", "install"]]
+
+
+def _make_checkouts(tmp_path: Path, *names: str) -> Path:
+    repo_root = tmp_path / "OperationsCenter"
+    repo_root.mkdir()
+    for name in names:
+        checkout = tmp_path / name
+        checkout.mkdir()
+        (checkout / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+    return repo_root
+
+
+def _patch_runner(monkeypatch: pytest.MonkeyPatch, runner: _FakeRunner) -> None:
+    monkeypatch.setattr(setup_main.subprocess, "run", runner)
+    # uv is a prerequisite of the install path, not of the probe — assume present.
+    monkeypatch.setattr(setup_main, "check_command_installed", lambda command: True)
+
+
+def test_missing_executor_backends_reports_unimportable_modules(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _FakeRunner({"dag_executor"})
+    _patch_runner(monkeypatch, runner)
+
+    assert missing_executor_backends("/usr/bin/python3") == ["dag_executor"]
+    assert runner.calls == [
+        ["/usr/bin/python3", "-c", "import team_executor"],
+        ["/usr/bin/python3", "-c", "import dag_executor"],
+        ["/usr/bin/python3", "-c", "import critique_executor"],
+    ]
+
+
+def test_executor_backends_cover_the_three_adapters_oc_loads() -> None:
+    assert [module for module, _ in EXECUTOR_BACKENDS] == [
+        "team_executor",
+        "dag_executor",
+        "critique_executor",
+    ]
+
+
+def test_ensure_executor_backends_installed_is_a_noop_when_all_importable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repo_root = _make_checkouts(tmp_path)
+    runner = _FakeRunner(set())
+    _patch_runner(monkeypatch, runner)
+
+    ensure_executor_backends_installed(repo_root, python_binary="/usr/bin/python3")
+
+    assert runner.install_targets == []
+
+
+def test_ensure_executor_backends_installed_installs_missing_siblings_editable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repo_root = _make_checkouts(tmp_path, "TeamExecutor", "CritiqueExecutor")
+    runner = _FakeRunner({"team_executor", "critique_executor"})
+    _patch_runner(monkeypatch, runner)
+
+    ensure_executor_backends_installed(repo_root, python_binary="/usr/bin/python3")
+
+    assert runner.install_targets == ["TeamExecutor", "CritiqueExecutor"]
+    install_calls = [call for call in runner.calls if call[:3] == ["uv", "pip", "install"]]
+    assert install_calls[0][:6] == [
+        "uv",
+        "pip",
+        "install",
+        "--python",
+        "/usr/bin/python3",
+        "-e",
+    ]
+    assert Path(install_calls[0][-1]) == (tmp_path / "TeamExecutor").resolve()
+
+
+def test_ensure_executor_backends_installed_errors_without_a_sibling_checkout(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repo_root = _make_checkouts(tmp_path)
+    _patch_runner(monkeypatch, _FakeRunner({"dag_executor"}))
+
+    with pytest.raises(typer.BadParameter) as excinfo:
+        ensure_executor_backends_installed(repo_root, python_binary="/usr/bin/python3")
+
+    assert "dag_executor" in str(excinfo.value)
+    assert "DAGExecutor" in str(excinfo.value)
+
+
+def test_ensure_executor_backends_installed_errors_when_install_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repo_root = _make_checkouts(tmp_path, "TeamExecutor")
+    _patch_runner(monkeypatch, _FakeRunner({"team_executor"}, install_rc=1))
+
+    with pytest.raises(typer.BadParameter) as excinfo:
+        ensure_executor_backends_installed(repo_root, python_binary="/usr/bin/python3")
+
+    assert "editable install of TeamExecutor failed" in str(excinfo.value)
+
+
+def test_ensure_executor_backends_installed_errors_when_still_unimportable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repo_root = _make_checkouts(tmp_path, "TeamExecutor")
+    _patch_runner(monkeypatch, _FakeRunner({"team_executor"}, install_fixes=False))
+
+    with pytest.raises(typer.BadParameter) as excinfo:
+        ensure_executor_backends_installed(repo_root, python_binary="/usr/bin/python3")
+
+    assert "still not importable after install: team_executor" in str(excinfo.value)

@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
+import importlib.metadata
 from types import SimpleNamespace
 
 from operations_center.entrypoints.maintenance.dependency_check import (
     DependencyStatus,
     actionable_statuses,
     dependency_task_description,
+    executor_backend_status,
     normalize_version,
 )
 
@@ -15,10 +17,27 @@ def test_normalize_version_extracts_semver() -> None:
     assert normalize_version("v1.2.3") == "v1.2.3"
 
 
+def test_executor_backend_status_reports_unimportable_module() -> None:
+    assert executor_backend_status("definitely_not_an_installed_backend") == (False, None)
+
+
+def test_executor_backend_status_reports_importable_module_without_distribution() -> None:
+    # Importable but not backed by a distribution — the shape an editable sibling
+    # checkout takes when its metadata does not map the top-level module back.
+    assert executor_backend_status("json") == (True, None)
+
+
+def test_executor_backend_status_reports_installed_distribution_version() -> None:
+    importable, version = executor_backend_status("pydantic")
+
+    assert importable is True
+    assert version == normalize_version(importlib.metadata.version("pydantic"))
+
+
 def test_actionable_statuses_filters_to_items_with_notes() -> None:
     statuses = [
         DependencyStatus(
-            "team-executor", "TeamExecutor", "cli", "1.0.0", "1.0.0", "1.1.0", True, []
+            "team_executor", "TeamExecutor", "library", "1.0.0", "1.0.0", "1.1.0", True, []
         ),
         DependencyStatus(
             "codex",

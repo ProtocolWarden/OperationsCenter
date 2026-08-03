@@ -73,7 +73,7 @@ source .env.operations-center.local
 TeamExecutor is the multi-agent coding engine OperationsCenter uses for task execution.
 See `src/operations_center/backends/team_executor/` for the adapter implementation.
 
-- install/verify `team-executor` CLI
+- verify the execute backends are importable, installing missing sibling checkouts editable
 - configure orchestrator defaults
 - persist local execution settings
 
@@ -111,24 +111,39 @@ so they work regardless of which venv was activated during bootstrap.
 
 ## Executor Install Behavior
 
+OperationsCenter loads its execute backends as **libraries**, not CLIs — the adapters in
+`src/operations_center/backends/<name>/` do a plain `import team_executor` / `import dag_executor` /
+`import critique_executor`. So readiness means "importable in the OC venv", not "on `PATH`".
+None of the three ships a console script OC invokes.
+
+The backends are sibling *checkouts*, not declared OC dependencies: `uv pip install -e .[dev]`
+never installs them, and a `uv sync` or venv recreate actively drops them.
+
 Setup:
 
-- checks whether `team-executor` is on `PATH`
-- installs `uv` if needed
-- installs TeamExecutor if missing
-- verifies the install with `team-executor --help`
+- probes each backend with `<oc-venv-python> -c "import <module>"`
+- installs `uv` if needed, and only if a backend is actually missing
+- installs the missing backend editable from its sibling checkout
+  (`../TeamExecutor`, `../DAGExecutor`, `../CritiqueExecutor`)
+- fails with the expected checkout path if a sibling is not cloned next to this repo
+- re-probes after installing and fails if a backend is still not importable
 
-Setup is intended to be idempotent: it does not reinstall the executor when the current install already works.
+Setup is idempotent: the import probe is cheap and the install only fires for backends that
+are actually missing. `scripts/operations-center.sh` runs the same self-heal
+(`ensure_executor_backends`) at every fleet launch, so a mid-life drop recovers on the next start.
 
 ## Advanced Mode
 
 Advanced mode also exposes optional version pins for:
 
 - Plane
-- TeamExecutor
+- TeamExecutor (`OPERATIONS_CENTER_EXECUTOR_INSTALL_REF`)
 - supported provider CLIs
 
-Pins are for reproducible local installs. They do not automatically trigger update checks during normal runs.
+Pins record the version this machine is expected to run. They do not automatically trigger update
+checks during normal runs, and the TeamExecutor pin does not drive an install — the backend comes
+from the sibling checkout. `dependency-check` compares each pin against what is installed and
+against the upstream latest release, and reports the drift.
 
 ## Per-Repo Reviewer Settings
 

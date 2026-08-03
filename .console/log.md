@@ -1,3 +1,66 @@
+## 2026-08-03 — fix(setup): replace the dead executor PATH probe with an importability check
+
+`entrypoints/setup/main.py` gated the whole wizard on a step that could never
+pass: `ensure_executor_installed("team-executor")` shelled out to `uv tool
+install git+.../TeamExecutor@dev --force`, then re-checked PATH and raised
+`[executor] ERROR: installation failed` if the binary still wasn't there —
+followed by `verify_executor` running `team-executor --help`. TeamExecutor
+declares no `[project.scripts]`, so no `team-executor` console script is ever
+produced. Verified against the live WSL2 stack: `shutil.which("team-executor")`
+is `None`. Every interactive setup run therefore hard-failed at that gate, after
+the uv install had already burned a network fetch.
+
+The probe was measuring the wrong thing. OC consumes all three execute backends
+as LIBRARIES — `backends/{team_executor,dag_executor,critique_executor}/adapter.py`
+each do a plain `import <module>` — so importability in OC's venv is the only
+readiness signal that means anything. PATH is not: TeamExecutor and
+CritiqueExecutor ship no console script at all, and the one that exists
+(DAGExecutor's `dag-executor`) is never invoked by OC.
+
+Replaced with `missing_executor_backends()` + `ensure_executor_backends_installed()`,
+mirroring the `ensure_executor_backends()` self-heal in `scripts/operations-center.sh`:
+probe each backend with `<venv-python> -c "import <module>"`, and for anything
+missing install the sibling checkout editable (`../TeamExecutor`, `../DAGExecutor`,
+`../CritiqueExecutor`), then re-probe. Setup now covers all THREE backends; the
+shell self-heal still only covers two (`team_executor`, `dag_executor`) — a
+CritiqueExecutor drop mid-life is not yet auto-repaired at fleet launch. Left
+alone deliberately (fleet-startup behavior, out of this change's blast radius);
+flagged for follow-up. The probe runs in a subprocess, not via importlib in-process,
+so an install that lands partway through setup is visible to the re-check.
+
+Config-key decisions:
+
+* `team_executor.binary` — REMOVED. It had no consumer in either direction:
+  `TeamExecutorSettings` has no `binary` field, `render_settings_yaml` never
+  wrote the key, and the only reader was setup's own prompt default. Dropped the
+  prompt and the `SetupAnswers.executor_binary` field.
+* `OPERATIONS_CENTER_EXECUTOR_INSTALL_REF` — KEPT, repurposed. It does have a
+  live consumer (`entrypoints/maintenance/dependency_check.py`), but its old
+  meaning ("git ref to install from") died with `ensure_executor_installed`.
+  Relabeled as a version pin for drift reporting, which is what dependency-check
+  actually does with it and how the docs already grouped it (alongside the Plane
+  and provider CLI pins).
+
+Same stale-CLI bug had a second instance: `collect_dependency_statuses` probed
+`team-executor --version`, so the TeamExecutor row reported
+`healthy=False` / "not installed or not on PATH" on every single run, forever.
+Replaced with `executor_backend_status()` (importability + best-effort
+distribution version via `packages_distributions()`); `kind` corrected
+`"cli"` → `"library"`. Verified against the live WSL2 venv: all three backends
+report `(True, '0.1.0')` — the editable-install version lookup resolves.
+
+Tests: 7 new in `test_setup_cli.py` (probe call shape, no-op when all
+importable, editable install of missing siblings, missing-checkout error,
+install-failure error, still-unimportable-after-install error, backend-list pin)
+and 3 in `test_dependency_check.py`. 26 pass in the two touched files; full suite
+10354 passed with the same 6 pre-existing sandbox/timing failures as prior
+stages (reproduced on an unmodified checkout — none related).
+
+Docs: rewrote `docs/operator/setup.md` "Executor Install Behavior" to describe
+the import-based flow, fixed the "install/verify `team-executor` CLI" bullet and
+the Advanced Mode pin description, and corrected the `docs/demo.md` prerequisite
+that told operators to put `team-executor` on PATH.
+
 ## 2026-07-15 — feat(reviewer): ACTIVATE the council — populate guardrail_paths (§G1)
 
 The council's go-live. C1/C2/C3 all merged; `reviewer.council.guardrail_paths`
