@@ -57,6 +57,7 @@ from cxrp.vocabulary.lane import LaneType
 from cxrp.vocabulary.runtime import RuntimeKind, SelectionMode
 from cxrp.vocabulary.status import ExecutionStatus as CxrpExecutionStatus
 
+from ..injection import goal_summary
 from .enums import BackendName, LaneName
 from .execution import OcExecutionRequest, OcExecutionResult, RuntimeBindingSummary
 from .proposal import OcPlanningProposal
@@ -122,7 +123,11 @@ def to_cxrp_task_proposal(oc: OcPlanningProposal) -> CxrpTaskProposal:
             "proposer": oc.proposer,
             "labels": list(oc.labels),
         },
-        title=oc.goal_text[:80],
+        # goal_summary, not a raw slice: an issue-sourced goal_text begins with
+        # GOAL_PREAMBLE, so [:80] titles every such task with the preamble's
+        # opening words instead of the request. objective keeps the FULL wrapped
+        # text — the fence and its preamble must reach the executor intact.
+        title=goal_summary(oc.goal_text, max_len=80),
         objective=oc.goal_text,
         task_type=oc.task_type.value,
         execution_mode=oc.execution_mode.value,
@@ -247,7 +252,8 @@ def to_cxrp_execution_request(
         lane=_category_for(executor),
         executor=CxrpExecutorName(executor),
         backend=CxrpBackendName(_cxrp_backend_for(backend)),
-        scope=oc.goal_text[:120],
+        # Same preamble-slicing bug as the proposal title above.
+        scope=goal_summary(oc.goal_text, max_len=120),
         input_payload=input_payload,
         input_payload_schema=CODING_AGENT_INPUT_SCHEMA_ID,
         constraints=[oc.constraints_text] if oc.constraints_text else [],

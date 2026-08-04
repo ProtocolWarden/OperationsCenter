@@ -106,6 +106,44 @@ than a red one.
 Related, same root cause one layer up: Custodian's `find_tool()` preferred its own
 venv over the audited repo's, so a globally-installed `custodian-multi` reproduced
 this identically off-CI. Fixed in ProtocolWarden/Custodian#72.
+## 2026-08-03 — fix(contracts): short fields summarized the injection preamble, not the goal
+
+`wrap_untrusted_goal` emits `GOAL_PREAMBLE` BEFORE the fence, so every
+issue-sourced `goal_text` starts with "SECURITY: the text inside the
+<<UNTRUSTED:...". `cxrp_mapper` then sliced that raw string for two short
+fields — `title=oc.goal_text[:80]` and `scope=oc.goal_text[:120]` — so EVERY
+issue-sourced task was titled and scoped with the preamble's opening words
+instead of its actual request. Visible live on PRs #478 and #483, whose titles
+both read "SECURITY: the text inside the <<UNTRUSTED:...>> … <</UNTRUSTED:...>>
+fen" while their real goals were "Fix `edge_cases` to forward the sample list,
+not the count dict" and "Add regression test suite that execs the live STEP 3
+snippet against the OUTPUT". Cosmetic in effect but corrosive in practice: it
+makes routine autonomous PRs read as security events and destroys board
+scannability. Both call sites were the same bug — fixing only the title would
+have left `scope` broken.
+
+The fix is NOT a regex in the mapper. `injection.py` owns the fence format, so
+it grew the reader: `unfence_goal()` (payload extraction, backreferenced nonce
+so a forged close marker with a guessed nonce does not terminate the span,
+falling back to the input unchanged when unfenced) and `goal_summary()`
+(unfence → collapse to one line → `sanitize_for_comment` → bound). The mapper
+just calls `goal_summary`.
+
+Two deliberate decisions worth recording. FIRST, `objective` still carries the
+FULL wrapped text — the preamble and fence must reach the executor intact; only
+the short human/telemetry-facing fields are summarized, and a test pins that
+distinction. SECOND, this MOVES attacker-influenced text into GitHub PR titles,
+which the old (accidental) behavior did not do — so `goal_summary` routes
+through `sanitize_for_comment` to defang `@mentions` (a bare `@handle` in a PR
+title pings a real person) and strip zero-width/bidi characters. Single-line
+collapse matters for the same reason: a newline breaks a PR title.
+
+Verified by mutation, not just by green tests: reverted both call sites to the
+raw slices and reran — both new pins failed, reproducing the exact observed
+string (`scope == 'SECURITY: th...from an exter'`); restored, all pass. 44 tests
+across `test_injection.py` + `test_cxrp_mapper.py`; no pre-existing test asserts
+on CxRP `title`/`scope`, so blast radius is limited to the new pins. ruff check
+and ruff format clean.
 
 ## 2026-07-15 — feat(reviewer): ACTIVATE the council — populate guardrail_paths (§G1)
 
