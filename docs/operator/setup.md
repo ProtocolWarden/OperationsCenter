@@ -71,7 +71,8 @@ source .env.operations-center.local
 ### Executor (TeamExecutor)
 
 TeamExecutor is the multi-agent coding engine OperationsCenter uses for task execution.
-See `src/operations_center/backends/team_executor/` for the adapter implementation.
+OperationsCenter consumes it as a Python library (`import team_executor`) — see
+`src/operations_center/backends/team_executor/` for the adapter implementation.
 
 - verify the execute backends are importable, installing missing sibling checkouts editable
 - configure orchestrator defaults

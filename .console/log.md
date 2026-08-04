@@ -196,6 +196,44 @@ pr_review_watcher/` — 209 passed. Full suite 10347 passed, 5 failed; the same 
 reproduce with the change stashed (sandbox file-deletion race guards +
 `test_custodian_sweep`), so zero new failures. `ruff check` / `ruff format
 --check` clean on all touched files.
+## 2026-08-04 — fix(observer): stop the CLI lying about flags it ignores
+
+Acting on a vulture triage that filed "8 observer CLI flags do nothing". The
+premise did not survive contact: 4 of the 5 implicated commands
+(`observe-and-validate`, `compare`, `import`, `cleanup`) are stubs that print
+"not yet implemented" and exit, so 6 of the 8 are ONE fact — unimplemented
+commands — not six defects. Wiring them is impossible without building the
+commands, so that became backlog rather than being faked.
+
+What the investigation DID surface is worse than the original filing, because it
+sits on commands that work. `cleanup` exited **0** while doing nothing: a
+scheduled `cleanup --no-dry-run` reported success and no caller could tell
+retention had never run. A test asserted `EXIT_SUCCESS`, so the bug was pinned by
+its own coverage. `show` and `export` accepted `--backend` and ignored it,
+serving LOCAL data as though it came from the requested backend — silently wrong
+data, not a missing feature, and `list` already had the guard they lacked.
+`list --format csv` was advertised in `--help` with no branch, and a typo'd
+`--format` fell through every arm; both exited 0 printing nothing, which reads as
+"no snapshots" rather than "I did not understand you". `--filter` was removed
+rather than stubbed: nothing caches per-snapshot validation status, and an
+unknown-option error is honest where a quietly unfiltered list is not.
+
+The through-line is one failure mode — a CLI that successfully answers a question
+the user did not ask. Exit codes and explicit rejection are the fix; each change
+carries a test, and the `cleanup` test now documents why it inverted.
+
+Also corrects `docs/operator/setup.md`, which claimed setup "verifies the install
+with `team-executor --help`". TeamExecutor declares no `[project.scripts]`, so no
+such binary is ever produced and OC consumes it purely as a library. Setup STILL
+runs that probe (`entrypoints/setup/main.py:1210-1211`), so the doc described a
+step that can never pass; the section now describes the real import-based
+mechanism and flags the dead probe as a known-stale step (backlog).
+
+This branch originally also carried self-heal and CI-pin fixes. Both landed
+independently on main as #491 and #492 with better implementations — a
+data-driven `EXECUTOR_BACKENDS` list, and `pip install -e ".[dev]"` taking the
+pin from pyproject instead of a second version literal. Dropped rather than
+merged: duplicating them would have re-introduced the drift #492 removed.
 
 ## 2026-08-03 — fix(hooks): pre-push resolved the wrong workspace root inside a git worktree
 

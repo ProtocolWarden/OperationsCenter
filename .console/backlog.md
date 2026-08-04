@@ -17,7 +17,67 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 - Deferred from the 2026-08-03 setup fix to keep fleet-startup behavior out of that
   change's blast radius.
 
+### Implement the 4 stub observer commands
+- `observe-and-validate`, `compare`, `import` and `cleanup` in
+  `src/operations_center/observer/cli.py` are stubs: they print "not yet implemented"
+  and exit. Their options (`--skip-validation`, `--signals`, `--validate-after`,
+  `--keep-count`, …) are therefore declared and never read. Wiring the flags is not
+  possible without building the commands.
+- `observe-and-validate` needs RepoObserver integration (its own stub message says so);
+  `cleanup` needs retention logic honouring `--days`/`--keep-count`/`--dry-run`;
+  `compare` and `import` need snapshot diffing and ingest respectively.
+- All four now exit non-zero, so nothing can mistake a stub for a result.
+- Vulture will keep reporting these params. That is correct — do not whitelist them; the
+  finding disappears when the commands are implemented.
+
+### Vulture gate is false-green — ~620 real findings land on the next Custodian pin bump
+- OC's pinned Custodian (`d6ba8ab`) has a vulture adapter that appends tests/whitelist
+  paths AFTER `--min-confidence=`; vulture's argparse rejects that, exits 2 with empty
+  stdout, and the adapter reports clean. **Vulture has never actually run in CI.**
+- Fixed upstream in Custodian (paths before flags + returncode check). Once OC bumps the
+  pin, ~620 findings appear at once.
+- Triaged: 426 in `src/`, 195 in `tests/`; 32 at 100% confidence, 589 at 60%. By kind:
+  302 variable, 127 attribute, 99 method, 86 function, 4 class, 3 property. The
+  100%-confidence set splits into framework-signature false positives (`exc_val` in
+  `__exit__`, `exitstatus` in pytest hooks), dead test locals, and the real CLI defects
+  fixed on 2026-08-04.
+- **Blanket-whitelisting would bury real defects.** Triage by confidence, not wholesale.
+- Options when the pin moves: burn down, add a `.vulture_whitelist.py` (the adapter
+  already looks for one at repo root), or raise `vulture_min_confidence` in
+  `.custodian/config.yaml`. Do NOT raise the threshold merely to unblock a push.
+
+### `oc setup` probes a `team-executor` CLI that cannot exist
+- `ensure_executor_installed`/`verify_executor` (`entrypoints/setup/main.py:192,219`,
+  called at `:1210-1211`) probe PATH for a `team-executor` console script and verify it
+  with `--help`. TeamExecutor declares no `[project.scripts]`, so that binary does not
+  exist and the check can never pass. OC consumes it as a library.
+- Replace the PATH/CLI probe with an importability check of the three backends OC loads,
+  mirroring `ensure_executor_backends()` in `scripts/operations-center.sh`.
+- Remove the "Known stale step" note in `docs/operator/setup.md` once fixed.
+
 ## Done
+
+### 2026-08-04: Observer CLI flags that lied (✅ COMPLETE)
+- **Objective**: fix the flags the vulture triage exposed as declared-but-never-read.
+- **Finding that reframed it**: 4 of the 5 implicated commands are unimplemented stubs, so
+  6 of the 8 "dead flags" are a symptom of that, not separate bugs (moved to Up Next).
+  Investigating them surfaced worse defects on the commands that DO work.
+- **Fixed**:
+  - `cleanup` exited **0** while doing nothing, so `cleanup --no-dry-run` reported success
+    and a scheduled job could not tell retention had never run. Now exits non-zero, like
+    every sibling stub. A test asserted the old behaviour and was pinning the bug.
+  - `show`/`export` accepted `--backend` and ignored it, serving LOCAL data as though it
+    came from the requested backend. Now rejected, matching `list`'s existing guard.
+  - `list --filter` parsed and was ignored, returning an unfiltered list. Removed: nothing
+    caches per-snapshot validation status to filter on, so an unknown-option error is
+    honest where a quietly unfiltered result is not.
+  - `list --format csv` was advertised in `--help` with no branch — exited 0 printing
+    nothing, indistinguishable from an empty store. Implemented.
+  - `list --format <typo>` fell through every arm and exited 0 silently. Now rejected.
+- **Verification**: 70 tests in `test_snapshot_cli.py` green (6 new); `ruff check .` clean;
+  all five behaviours smoke-tested through the real CLI. The 18 remaining failures in
+  `tests/unit/observer/` reproduce with these changes stashed — pre-existing Windows
+  `PermissionError: [WinError 32]` in tempfile handling, unrelated.
 
 ### 2026-08-03: Replace setup's dead executor PATH probe with an importability check (✅ COMPLETE)
 - **Objective**: `ensure_executor_installed`/`verify_executor` in
@@ -48,6 +108,7 @@ _Durable work inventory. Update after each meaningful chunk of progress._
   the two touched test files; `ruff check`/`ruff format --check` clean. Full suite:
   10354 passed, 6 failed — the same pre-existing sandbox/timing failures as prior
   stages, all reproduced on an unmodified checkout.
+
 
 ### 2026-07-15: Stage 4 — Refactor existing code to use the new shared helper (✅ COMPLETE)
 - **Objective**: Independently re-verify Stage 2's migration against the "refactor existing
