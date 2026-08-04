@@ -5,6 +5,13 @@ backends/factory.py — canonical backend adapter registry.
 
 The registry resolves a routed backend name to a canonical adapter that accepts
 ExecutionRequest and returns ExecutionResult.
+
+CROSS-REFERENCE: the executor-lane adapters (team_executor, dag_executor,
+critique_executor) import sibling CHECKOUTS that are not declared OC dependencies.
+`ensure_executor_backends()` in ``scripts/operations-center.sh`` keeps them installed
+in the fleet venv and hardcodes its own ``<import name>:<sibling checkout dir>`` list
+(bash cannot source this module — the self-heal must run when the venv is too broken
+to import operations_center). ADDING AN EXECUTOR BACKEND MEANS UPDATING BOTH.
 """
 
 from __future__ import annotations

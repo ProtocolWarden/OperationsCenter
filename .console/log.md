@@ -1,3 +1,112 @@
+## 2026-08-03 — fix(hooks): pre-push resolved the wrong workspace root inside a git worktree
+
+`.hooks/pre-push` locates the boundary disclosure artifact by globbing sibling
+checkouts: `workspace_root="$(cd "$repo_root/.." && pwd)"`, then
+`$workspace_root/*/dist/boundary_disclosure_artifact.json`. That assumes
+`$repo_root` is the main clone. Inside a **git worktree** it is not — repo_root is
+`.../OperationsCenter/.claude/worktrees/<name>`, so workspace_root resolved to
+`.../.claude/worktrees`, a directory with no siblings at all. The glob matched
+nothing, and every push from a worktree died on
+`missing REPOGRAPH_BOUNDARY_ARTIFACT_FILE; failing closed` — a file it had no way
+to find and that the operator had already generated one directory over.
+
+Fixed by deriving the main clone root from `git rev-parse --git-common-dir`, which
+the main clone and all of its worktrees share. Its parent is always the main clone,
+whose parent is the real workspace root. Verified from both: the worktree now
+auto-discovers `PrivateManifest/dist/boundary_disclosure_artifact.json`, and the
+main clone resolves to exactly the same path it did before (no behaviour change
+where the old code already worked).
+
+Found while triaging why this branch could not be pushed. Two further faults sat on
+top of it, neither in this repo, both since fixed:
+- The WSL2 fleet clone had no boundary artifact anywhere under `~/GitHub`, so its
+  own pre-push failed at B2 before Custodian even ran. PrivateManifest was not
+  checked out there at all; it now is, and the artifact is generated from it. The
+  real hook now passes unaided in the fleet clone: 0 findings, exit 0.
+- Custodian's `find_tool()` preferred *its own* venv over the audited repo's, so a
+  globally-installed `custodian-multi` audited OC (pinned `ruff==0.15.13`) with a
+  system-wide ruff 0.16.1 and produced 1222 phantom findings against a tree that is
+  clean. Fixed upstream in ProtocolWarden/Custodian#72.
+
+The OC baseline itself was never dirty: with the right toolchain and the artifact
+configured, the gate returns 0 findings / 0 HIGH / 0 MED / clean.
+
+## 2026-08-03 — fix(launcher): widen executor-backend self-heal to critique_executor
+
+`ensure_executor_backends()` in `scripts/operations-center.sh` self-heals dropped
+executor sibling checkouts at every fleet launch, but covered only two of the three
+OC actually imports: it probed `import team_executor, dag_executor` and looped over
+`TeamExecutor DAGExecutor`. `critique_executor` (sibling `../CritiqueExecutor`,
+imported by `backends/critique_executor/adapter.py`) was in neither, so a `uv sync`
+or venv-recreate that dropped it left every critique-topology task failing at
+execute with `No module named 'critique_executor'` — the exact failure the self-heal
+exists to prevent for the other two — until a human noticed.
+
+Root cause of the drift was structural: the probe and the install loop were TWO
+hardcoded lists inside one function, so widening one without the other was easy and
+silent. Collapsed to a single `EXECUTOR_BACKENDS` array of
+`<import name>:<sibling checkout dir>` pairs; the probe's import statement and the
+install loop are both derived from it. Behavior is otherwise unchanged (still
+all-or-nothing: any missing module reinstalls all siblings).
+
+Did NOT source the list from Python. The task note assumed
+`entrypoints/setup/main.py` already held an authoritative `EXECUTOR_BACKENDS`
+tuple — it does not, and no such constant exists anywhere in the repo (verified at
+bb65da3b in both the Windows and WSL2 checkouts). The nearest real Python lists are
+`BackendName` / `EXECUTOR_LANE_NAMES` (`contracts/enums.py`) and the
+`backends/factory.py` registry, but neither carries the checkout-dir half of each
+pair, and it is not derivable (`dag_executor` → `DAGExecutor`, not `DagExecutor`).
+Sourcing is also wrong in principle here: this self-heal must run precisely when the
+venv is too broken to import `operations_center`. Took the stated fallback instead —
+cross-reference comments in both `scripts/operations-center.sh` and
+`backends/factory.py`, each naming the other and stating that adding a backend means
+updating both.
+
+Verified against the live WSL2 stack (~/GitHub, siblings at
+{TeamExecutor,DAGExecutor,CritiqueExecutor}): `bash -n` clean (after CRLF
+normalization — the Windows checkout is CRLF, pre-existing); probe builds exactly
+`import team_executor, dag_executor, critique_executor`; no-op + rc=0 against the
+real fleet venv where all three already import; against a throwaway empty venv the
+real `uv` path installed all three (`+ critique-executor==0.1.0 from
+file:///home/diane/GitHub/CritiqueExecutor`) and a second call was a silent no-op.
+Missing-`uv` and missing-checkout paths still degrade to a WARNING rather than
+aborting launch. Fleet venv untouched. `tests/unit/backends/test_factory.py` +
+`test_critique_executor_adapter.py` 5 passed.
+## 2026-08-03 — fix(ci): pin the lint toolchain, ending a week of red CI on main
+
+CI has failed on `main` every day since at least 2026-07-29. Cause: both lint gates
+installed ruff **unpinned** while the repo pins `ruff==0.15.13`.
+
+- `ci.yml` — `pip install "ruff>=0.5"` floated to 0.16.1. `ruff check .` went from
+  clean to **1996 errors**.
+- `custodian-audit.yml` — `pip install ruff vulture ty`, same drift. The audit
+  reported **1222 findings** (the ruff group alone; vulture was clean in CI).
+
+None of them were real. `[tool.ruff.lint]` selects a deliberate rule set and its own
+comment records BLE001 and S110 as DROPPED — "too noisy across codebase, real
+legitimate uses". A newer ruff re-enables exactly those: of the 1222, BLE001 was 316
+and UP045 290. Verified locally on the same tree: ruff 0.16.1 → 1222, ruff 0.15.13 →
+`All checks passed!` on the full `ruff check .`, root files included.
+
+Both now install `-e ".[dev]"`, taking the version from
+`[project.optional-dependencies].dev` so there is one source of truth and no version
+literal in the workflows to drift again.
+
+The irony worth recording: `custodian-audit.yml` already carried a paragraph
+explaining that Custodian itself must be SHA-pinned because tracking `@main` once let
+an upstream change emit "a phantom finding fleet-wide". The very next line then
+installed that pinned auditor's *tools* unpinned, reproducing the same failure one
+level down. Pinning the auditor while floating what the auditor runs pins nothing.
+
+Also made the repo install non-best-effort. It was `pip install -e . || true`; on
+failure the adapters find no ruff, Custodian reports "not installed" and SKIPS it,
+and the gate passes vacuously — a green check that audited nothing, which is worse
+than a red one.
+
+Related, same root cause one layer up: Custodian's `find_tool()` preferred its own
+venv over the audited repo's, so a globally-installed `custodian-multi` reproduced
+this identically off-CI. Fixed in ProtocolWarden/Custodian#72.
+
 ## 2026-07-15 — feat(reviewer): ACTIVATE the council — populate guardrail_paths (§G1)
 
 The council's go-live. C1/C2/C3 all merged; `reviewer.council.guardrail_paths`
