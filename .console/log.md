@@ -72,6 +72,40 @@ file:///home/diane/GitHub/CritiqueExecutor`) and a second call was a silent no-o
 Missing-`uv` and missing-checkout paths still degrade to a WARNING rather than
 aborting launch. Fleet venv untouched. `tests/unit/backends/test_factory.py` +
 `test_critique_executor_adapter.py` 5 passed.
+## 2026-08-03 — fix(ci): pin the lint toolchain, ending a week of red CI on main
+
+CI has failed on `main` every day since at least 2026-07-29. Cause: both lint gates
+installed ruff **unpinned** while the repo pins `ruff==0.15.13`.
+
+- `ci.yml` — `pip install "ruff>=0.5"` floated to 0.16.1. `ruff check .` went from
+  clean to **1996 errors**.
+- `custodian-audit.yml` — `pip install ruff vulture ty`, same drift. The audit
+  reported **1222 findings** (the ruff group alone; vulture was clean in CI).
+
+None of them were real. `[tool.ruff.lint]` selects a deliberate rule set and its own
+comment records BLE001 and S110 as DROPPED — "too noisy across codebase, real
+legitimate uses". A newer ruff re-enables exactly those: of the 1222, BLE001 was 316
+and UP045 290. Verified locally on the same tree: ruff 0.16.1 → 1222, ruff 0.15.13 →
+`All checks passed!` on the full `ruff check .`, root files included.
+
+Both now install `-e ".[dev]"`, taking the version from
+`[project.optional-dependencies].dev` so there is one source of truth and no version
+literal in the workflows to drift again.
+
+The irony worth recording: `custodian-audit.yml` already carried a paragraph
+explaining that Custodian itself must be SHA-pinned because tracking `@main` once let
+an upstream change emit "a phantom finding fleet-wide". The very next line then
+installed that pinned auditor's *tools* unpinned, reproducing the same failure one
+level down. Pinning the auditor while floating what the auditor runs pins nothing.
+
+Also made the repo install non-best-effort. It was `pip install -e . || true`; on
+failure the adapters find no ruff, Custodian reports "not installed" and SKIPS it,
+and the gate passes vacuously — a green check that audited nothing, which is worse
+than a red one.
+
+Related, same root cause one layer up: Custodian's `find_tool()` preferred its own
+venv over the audited repo's, so a globally-installed `custodian-multi` reproduced
+this identically off-CI. Fixed in ProtocolWarden/Custodian#72.
 
 ## 2026-07-15 — feat(reviewer): ACTIVATE the council — populate guardrail_paths (§G1)
 

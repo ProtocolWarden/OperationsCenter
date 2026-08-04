@@ -26,13 +26,20 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install "custodian[tools] @ git+https://github.com/ProtocolWarden/Custodian.git@d6ba8ab245c6f4e79e9f8fffd4e4221bfaf266e8"
-          pip install ruff vulture ty
+          pip install vulture
 
-      - name: Install repo (best-effort, for adapter passes)
-        run: |
-          if [ -f pyproject.toml ]; then
-            pip install -e . || true
-          fi
+      - name: Install repo and its pinned lint toolchain
+        # `.[dev]` (not plain `.`) so the adapters run OC's OWN pinned ruff/ty.
+        # The reproducibility argument in the step above applies one level down:
+        # pinning Custodian while installing `ruff` unpinned just moves the moving
+        # part. It floated to 0.16.1 and this gate reported 1222 findings against a
+        # tree the pinned ruff (0.15.13) calls clean — the same phantom-finding
+        # failure the Custodian pin was added to prevent.
+        #
+        # NOT best-effort (`|| true`) any more: a failed install left the adapters
+        # with no ruff at all, which Custodian reports as "not installed" and skips.
+        # The gate then passes vacuously — worse than failing, because it looks green.
+        run: pip install -e ".[dev]"
 
       - name: Materialize boundary artifact file
         # Decode the boundary disclosure artifact from the base64 CONTENT secret
