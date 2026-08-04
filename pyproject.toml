@@ -137,6 +137,11 @@ dev = [
   "pytest-cov>=6.0",
   "ruff==0.15.13",
   "ty==0.0.40",
+  # Pinned for the same reason as ruff/ty: `.custodian/config.yaml` sets
+  # `vulture: true`, so the audit gate runs it, and an unpinned lint tool is how
+  # main stayed red for a week (see #492 — `ruff>=0.5` floated to 0.16.1 and
+  # produced 1222 phantom findings). Custodian resolves it from this venv.
+  "vulture==2.16",
   "custodian @ git+https://github.com/ProtocolWarden/Custodian.git@d6ba8ab245c6f4e79e9f8fffd4e4221bfaf266e8",
 ]
 
