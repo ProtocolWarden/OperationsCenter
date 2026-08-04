@@ -69,22 +69,45 @@ ensure_venv() {
   ensure_executor_backends
 }
 
-# The execute backends (team_executor, dag_executor) are sibling CHECKOUTS, not
-# declared OC dependencies — `uv pip install -e .[dev]` never installs them and a
-# `uv sync` / venv-recreate actively DROPS them. When that happens the executor
-# can't load its backend ("team_executor not installed: No module named
-# 'team_executor'") and EVERY goal task fails at execute → the whole lane stalls
-# with no obvious cause. Self-heal: whenever the backends aren't importable, (re)install
-# them editable. Runs every launch but the import check is ~free and the install only
-# fires when actually missing, so a mid-life drop recovers on the next fleet start
-# rather than blocking autonomy until a human notices.
+# The execute backends (team_executor, dag_executor, critique_executor) are sibling
+# CHECKOUTS, not declared OC dependencies — `uv pip install -e .[dev]` never installs
+# them and a `uv sync` / venv-recreate actively DROPS them. When that happens the
+# executor can't load its backend ("team_executor not installed: No module named
+# 'team_executor'") and EVERY task routed to that lane fails at execute → the lane
+# stalls with no obvious cause. Self-heal: whenever the backends aren't importable,
+# (re)install them editable. Runs every launch but the import check is ~free and the
+# install only fires when actually missing, so a mid-life drop recovers on the next
+# fleet start rather than blocking autonomy until a human notices.
+#
+# ONE list, `<import name>:<sibling checkout dir>` — the probe and the install loop
+# below are both derived from it. They used to be two hardcoded lists and drifted:
+# critique_executor was in neither, so critique-topology tasks failed at execute with
+# `No module named 'critique_executor'` until a human noticed.
+#
+# CROSS-REFERENCE: the authoritative backend registry is the Python side —
+# `src/operations_center/backends/factory.py` (adapter registry) and `BackendName` /
+# `EXECUTOR_LANE_NAMES` in `src/operations_center/contracts/enums.py`. Bash cannot
+# source those: the checkout-dir half of each pair exists nowhere in Python (and is
+# not derivable — `dag_executor` → `DAGExecutor`, not `DagExecutor`), and this
+# self-heal has to run when the venv is too broken to import operations_center at
+# all. ADDING AN EXECUTOR BACKEND MEANS UPDATING BOTH SIDES.
+EXECUTOR_BACKENDS=(
+  team_executor:TeamExecutor
+  dag_executor:DAGExecutor
+  critique_executor:CritiqueExecutor
+)
+
 ensure_executor_backends() {
-  if "${VENV_DIR}/bin/python" -c "import team_executor, dag_executor" 2>/dev/null; then
+  local _spec _sib _imports=""
+  for _spec in "${EXECUTOR_BACKENDS[@]}"; do
+    _imports="${_imports:+${_imports}, }${_spec%%:*}"
+  done
+  if "${VENV_DIR}/bin/python" -c "import ${_imports}" 2>/dev/null; then
     return 0
   fi
   echo "operations-center.sh: executor backends missing — (re)installing siblings" >&2
-  local _sib
-  for _sib in TeamExecutor DAGExecutor; do
+  for _spec in "${EXECUTOR_BACKENDS[@]}"; do
+    _sib="${_spec##*:}"
     if [[ -f "${ROOT_DIR}/../${_sib}/pyproject.toml" ]]; then
       uv pip install --python "${VENV_DIR}/bin/python" -e "${ROOT_DIR}/../${_sib}" \
         || echo "operations-center.sh: WARNING failed to install ${_sib} — execute backend unavailable" >&2
