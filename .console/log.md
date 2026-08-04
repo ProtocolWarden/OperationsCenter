@@ -665,6 +665,61 @@ string (`scope == 'SECURITY: th...from an exter'`); restored, all pass. 44 tests
 across `test_injection.py` + `test_cxrp_mapper.py`; no pre-existing test asserts
 on CxRP `title`/`scope`, so blast radius is limited to the new pins. ruff check
 and ruff format clean.
+## 2026-08-03 — fix(observer): retire the CLI flags the gate's vulture pass exposed
+
+Follow-up to closing the vulture fail-open earlier today. That left 10 genuine
+findings holding the pre-push gate red; this clears them. Gate is now clean at
+0 findings under a custodian that actually runs vulture (it reported 621 before).
+
+Correction to the earlier write-up, which claimed "`layers` and `full` in the
+same command ARE read, so parameter-usage detection is working". That was wrong.
+`cmd_observe_and_validate`'s body reads ONLY `quiet` — `layers` and `full` are
+equally unread there. They escaped the report because vulture matches on bare
+NAME and those names are used by other commands in the tree. The real finding
+was bigger than 8 stray flags: FOUR commands (`observe-and-validate`, `compare`,
+`import`, `cleanup`) are stubs whose entire option lists are ignored, and
+`--help` plus two user guides advertised them as though they worked.
+
+Decision per flag, per the "implement or delete" bar:
+
+* The four stubs are documented as PLANNED (`docs/design/STAGE0_CLI_SPECIFICATION.md`
+  §"Secondary Commands (Planned Future)"; both user guides carry "not yet
+  implemented" notes). So deleting the commands was wrong — but so was keeping
+  parameters they discard. Stripped each stub to `--quiet` only. The planned
+  interface stays in the spec, which is where a design belongs; a half-declared
+  signature that typer advertises in `--help` is not a spec, it is a promise the
+  command breaks. Deleting `import`'s required input path is deliberate: taking
+  a file and dropping it is indistinguishable from importing it and failing.
+* `list --filter valid|invalid` — deleted. It could never have worked: the
+  listing walks snapshot directories and never loads or caches a validation
+  status to filter on (its observed_at column is a literal "—"). Implementing it
+  needs the caching layer the help text presumed, not a flag.
+
+Also fixed while in `cmd_cleanup`, and NOT one of the vulture findings: it
+exited EXIT_SUCCESS while deleting nothing. A scheduled `cleanup --days 30`
+therefore reported success and silently retained every snapshot forever, with no
+way for the caller to tell a working cleanup from a stub. Now exits non-zero.
+Same fail-open shape as the vulture bug itself — a green signal that means
+nothing — which is why it was worth fixing rather than leaving for later. The
+guide's two runnable `cleanup` examples were removed; the option tables in both
+guides are relabelled "Planned Options (not accepted today)".
+
+`pending_checks` removed from `_update_check_history` and `_should_escalate_ci_wait`
+in pr_review_watcher, plus 16 call sites. Neither body ever read it. Note the
+tests passed `pending_checks=["audit"]` in two places, implying behaviour that
+could not exist — those assertions were passing for the wrong reason.
+
+New test pins the intent: `test_unimplemented_stubs_reject_planned_flags` asserts
+each stub REJECTS the planned flags rather than swallowing them, so nobody
+re-adds an ignored option without a failing test.
+
+Verification: `vulture src tests .vulture_whitelist.py --min-confidence=80`
+reports nothing; `custodian-multi --fail-on-findings` exits 0 (clean); ruff
+check/format clean; full suite 10345 passed with the same 6 pre-existing
+sandbox/timing failures, each reproduced on an unmodified checkout. Nothing was
+added to .vulture_whitelist.py — every finding was resolved by removing the dead
+code, not by suppressing the report.
+
 ## 2026-08-03 — fix(custodian): close the vulture fail-open in the pre-push gate
 
 The pre-push Custodian gate reported "0 findings, clean" on this repo while a

@@ -168,6 +168,31 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 - **Verified**: against the live stack — probe builds exactly
   `import team_executor, dag_executor, critique_executor`; a throwaway empty venv
   had all three installed by the real `uv` path and a second call was a silent no-op.
+### 2026-08-03: Clear the 10 vulture findings blocking the pre-push gate (✅ COMPLETE)
+- **Objective**: Re-enabling vulture left 10 genuine findings holding
+  `custodian-multi --fail-on-findings` RED. Resolve them by removing dead code, not
+  by whitelisting.
+- **Status**: ✅ COMPLETE — gate clean at 0 findings, exit 0.
+- **Correction**: the earlier claim that "`layers` and `full` in the same command ARE
+  read" was wrong — `cmd_observe_and_validate` reads only `quiet`. Those names escaped
+  the report because vulture matches on bare NAME and they are used by other commands.
+  The real scope was four stub commands whose entire option lists were ignored while
+  `--help` and two user guides advertised them.
+- **Changes**:
+  - `observer/cli.py` — stripped `observe-and-validate`, `compare`, `import`, `cleanup`
+    to `--quiet` only; the planned interface stays in `docs/design/STAGE0_CLI_SPECIFICATION.md`.
+    Deleted `list --filter` (could never work — nothing caches a validation status).
+    Fixed `cleanup` exiting EXIT_SUCCESS while deleting nothing (not a vulture finding;
+    same fail-open shape, found while editing).
+  - `pr_review_watcher/main.py` — removed `pending_checks` from two functions + 16 call
+    sites; neither body read it.
+  - Docs — both user guides relabelled to "Planned Options (not accepted today)";
+    removed the runnable `cleanup` examples; corrected the spec's `list` line.
+  - New test `test_unimplemented_stubs_reject_planned_flags` pins that stubs REJECT
+    planned flags rather than swallowing them.
+- **Verification**: vulture reports nothing; `custodian-multi --fail-on-findings` exits 0;
+  ruff clean; full suite 10345 passed with the same 6 pre-existing sandbox/timing
+  failures, each reproduced on an unmodified checkout. `.vulture_whitelist.py` unchanged.
 
 ### 2026-08-03: Replace setup's dead executor PATH probe with an importability check (✅ COMPLETE)
 - **Objective**: `ensure_executor_installed`/`verify_executor` in

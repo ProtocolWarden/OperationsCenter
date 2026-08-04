@@ -89,7 +89,6 @@ class TestFlakyRequiredCheck:
             state,
             missing_required=["tests"],
             failed_checks=["tests"],
-            pending_checks=[],
             ci_wait_cycles_first_registration=60,
             ci_wait_cycles_already_seen=40,
             ci_flakiness_threshold_pct=30,
@@ -119,7 +118,6 @@ class TestFlakyRequiredCheck:
             state,
             missing_required=["tests"],
             failed_checks=["tests"],
-            pending_checks=[],
             ci_wait_cycles_first_registration=60,
             ci_wait_cycles_already_seen=40,
             ci_flakiness_threshold_pct=30,
@@ -134,17 +132,17 @@ class TestFlakyRequiredCheck:
         state = _new_state(REPO_KEY, PR_NUMBER)
 
         # Cycle 1: check passes
-        _update_check_history(state, [], ["tests"], [], "sha1")
+        _update_check_history(state, [], ["tests"], "sha1")
         assert state["ci_check_history"]["tests"]["times_passed"] == 1
         assert state["ci_check_history"]["tests"]["times_failed"] == 0
 
         # Cycle 2: check fails
-        _update_check_history(state, ["tests"], ["tests"], [], "sha2")
+        _update_check_history(state, ["tests"], ["tests"], "sha2")
         assert state["ci_check_history"]["tests"]["times_passed"] == 1
         assert state["ci_check_history"]["tests"]["times_failed"] == 1
 
         # Cycle 3: check passes
-        _update_check_history(state, [], ["tests"], [], "sha3")
+        _update_check_history(state, [], ["tests"], "sha3")
         assert state["ci_check_history"]["tests"]["times_passed"] == 2
         assert state["ci_check_history"]["tests"]["times_failed"] == 1
 
@@ -167,7 +165,6 @@ class TestLateRegisteringWorkflow:
             state,
             missing_required=["audit"],
             failed_checks=[],
-            pending_checks=["audit"],
             ci_wait_cycles_first_registration=60,
             ci_wait_cycles_already_seen=40,
             ci_flakiness_threshold_pct=30,
@@ -189,7 +186,6 @@ class TestLateRegisteringWorkflow:
             state,
             missing_required=["audit"],
             failed_checks=[],
-            pending_checks=["audit"],
             ci_wait_cycles_first_registration=60,
             ci_wait_cycles_already_seen=40,
             ci_flakiness_threshold_pct=30,
@@ -350,7 +346,6 @@ class TestRegressionFastPath:
             state,
             missing_required=[],
             failed_checks=[],
-            pending_checks=[],
             ci_wait_cycles_first_registration=60,
             ci_wait_cycles_already_seen=40,
             ci_flakiness_threshold_pct=30,
@@ -382,7 +377,6 @@ class TestRegressionHardEscalations:
             state,
             missing_required=["build"],
             failed_checks=["build"],
-            pending_checks=[],
             ci_wait_cycles_first_registration=60,
             ci_wait_cycles_already_seen=40,
             ci_flakiness_threshold_pct=30,
@@ -434,7 +428,6 @@ class TestPerformanceAndMemory:
                 state,
                 failed_checks=[] if i % 3 else [f"check_{i}"],
                 completed_checks=[f"check_{i}"],
-                pending_checks=[],
                 current_head_sha=f"sha{i}",
             )
 
@@ -461,14 +454,13 @@ class TestIntegrationFlakyCheckFlow:
             state["ci_wait_cycles"] = cycle
             # Flaky pattern: fails every 10th cycle
             failed = ["tests"] if cycle % 10 == 0 else []
-            _update_check_history(state, failed, ["tests"], [], f"sha{cycle}")
+            _update_check_history(state, failed, ["tests"], f"sha{cycle}")
 
         # After 30 cycles: should NOT escalate (below 40 threshold)
         should_escalate, _ = _should_escalate_ci_wait(
             state,
             missing_required=["tests"],
             failed_checks=["tests"],
-            pending_checks=[],
             ci_wait_cycles_first_registration=60,
             ci_wait_cycles_already_seen=40,
             ci_flakiness_threshold_pct=30,
@@ -483,14 +475,13 @@ class TestIntegrationFlakyCheckFlow:
         for cycle in range(1, 41):
             state["ci_wait_cycles"] = cycle
             failed = ["tests"] if cycle % 10 == 0 else []
-            _update_check_history(state, failed, ["tests"], [], f"sha{cycle}")
+            _update_check_history(state, failed, ["tests"], f"sha{cycle}")
 
         # At 40 cycles: should escalate if still failing
         should_escalate, reason = _should_escalate_ci_wait(
             state,
             missing_required=["tests"],
             failed_checks=["tests"],
-            pending_checks=[],
             ci_wait_cycles_first_registration=60,
             ci_wait_cycles_already_seen=40,
             ci_flakiness_threshold_pct=30,
