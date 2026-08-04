@@ -665,6 +665,28 @@ string (`scope == 'SECURITY: th...from an exter'`); restored, all pass. 44 tests
 across `test_injection.py` + `test_cxrp_mapper.py`; no pre-existing test asserts
 on CxRP `title`/`scope`, so blast radius is limited to the new pins. ruff check
 and ruff format clean.
+## 2026-08-04 — fix(ci): bump the audit workflow's Custodian pin in lockstep with pyproject
+
+`.github/workflows/custodian-audit.yml` hardcodes its OWN Custodian SHA, separate
+from pyproject's, and its comment explicitly requires the two move together. The
+vulture fail-open fix bumped pyproject d6ba8ab -> 7a780b7 but missed the
+workflow, so CI would have kept installing the old adapter — leaving the
+fail-open alive in the one place it matters most, the required `audit` gate.
+
+This also explains an observation in #492, which landed on main today: it noted
+"the Custodian audit reported 1222 findings (the ruff group alone — vulture was
+clean in CI)". Vulture WAS installed in CI. It was not clean: on d6ba8ab the
+adapter builds `vulture <src> --min-confidence=N <tests>`, an argument order
+vulture's argparse rejects (exit 2, empty stdout), and the empty output was read
+as "no dead code". This repo had 621 findings at vulture's default confidence
+the whole time. Independent corroboration of the fail-open from a different
+author on a different day.
+
+Also dropped the workflow's unpinned `pip install vulture`. vulture is a dev
+dependency now, so `.[dev]` pins it (2.16) beside ruff and ty — removing the
+moving part rather than relocating it, which is exactly the argument #492's own
+comment makes one level down about ruff.
+
 ## 2026-08-03 — fix(observer): retire the CLI flags the gate's vulture pass exposed
 
 Follow-up to closing the vulture fail-open earlier today. That left 10 genuine
