@@ -83,6 +83,48 @@ Docs: rewrote `docs/operator/setup.md` "Executor Install Behavior" to describe
 the import-based flow, fixed the "install/verify `team-executor` CLI" bullet and
 the Advanced Mode pin description, and corrected the `docs/demo.md` prerequisite
 that told operators to put `team-executor` on PATH.
+## 2026-08-13 — fix(reviewer): members could not write verdict.json — every review scored CONCERNS
+
+Found by running the review watcher for real on this host, not by a test. Every
+council member returned `rc=0` with prose like "Wrote verdict.json with all four
+checks", and the reviewer logged `no verdict from member review`. The fail-safe
+turned that into CONCERNS, published a **failing** `reviewer-verdict` status, and
+consumed a fix-ladder attempt — on a PR nothing had actually reviewed. Left
+running it would have walked the whole backlog to `max_fix_attempts` and started
+CLOSING PRs.
+
+Cause: `build_member_argv` ran `claude --model M -p --effort low <prompt>` with
+no permission mode. Probed directly in an empty tmpdir:
+
+    (default mode)              -> "Write permission was denied,
+                                    so `verdict.json` was not created."   rc=0
+    --permission-mode acceptEdits -> "Written."  verdict.json present
+    --dangerously-skip-permissions -> "Written."  verdict.json present
+
+The old comment asserted the flagless form "matches the path that has run in
+production", so the previous host must have carried a permissive user-level
+Claude settings file that masked this. A fresh CLI install does not.
+
+Fixed with `--permission-mode acceptEdits`, deliberately NOT
+`--dangerously-skip-permissions`. A member reads attacker-influenceable text
+(the PR diff), so COUNCIL_VERDICT.md's injection threat is live and
+bypassPermissions would hand an injected instruction full Bash. Verified on this
+host that under acceptEdits a Bash escape is refused ("blocked by the sandbox")
+and writes stay confined to the member's temp cwd — the narrowing is real, not
+assumed. One fix covers both paths, since the ordinary single reviewer builds
+its argv through the same function.
+
+Blast radius of the bad run: nothing merged, nothing closed. `reviewer-verdict`
+failures landed only on #481 and #486, which already carried that identical
+status beforehand; each also got a review comment from the empty review. The six
+merge-ready PRs (#496 #495 #494 #490 #488 #487) were still queued at
+`self_review` when the watcher was stopped and carry no verdict.
+
+Separately visible in that run, not fixed here: red-audit PRs (#478/#483/#485)
+and every CONCERNS fix pass need SwitchBoard on `localhost:20401`, which is not
+deployed — the reviewer logs `planning failed … Connection refused` and records
+"pushed no changes". Reviews and merges do not depend on it; auto-fix does.
+
 ## 2026-08-13 — feat(reviewer): all-Opus council (operator decision) — codex seat removed
 
 Operator directive: there is no codex subscription on this host, so the C1
