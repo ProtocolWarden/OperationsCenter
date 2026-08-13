@@ -579,7 +579,9 @@ def test_phase1_backend_unavailable_park_autoexpires(tmp_path: Path) -> None:
     must resume autonomous review without a human or a new push."""
     from datetime import UTC, datetime, timedelta
 
-    stale = (datetime.now(UTC) - timedelta(seconds=watcher._BACKEND_UNAVAILABLE_RESUME_S + 60)).isoformat()
+    stale = (
+        datetime.now(UTC) - timedelta(seconds=watcher._BACKEND_UNAVAILABLE_RESUME_S + 60)
+    ).isoformat()
     state, sp = _make_state(
         tmp_path,
         phase="self_review",
@@ -3476,9 +3478,7 @@ def test_branch_protection_gate_refuses_on_api_error() -> None:
 def _ladder_settings(dynamic: bool = True):
     from types import SimpleNamespace
 
-    return SimpleNamespace(
-        team_executor=SimpleNamespace(dynamic_worker_backend_selection=dynamic)
-    )
+    return SimpleNamespace(team_executor=SimpleNamespace(dynamic_worker_backend_selection=dynamic))
 
 
 def _cool_claude(store, now):
@@ -3491,6 +3491,38 @@ def _cool_claude(store, now):
         limit_kind="session_5h",  # account-wide → claude fully cooled
         model=None,
     )
+
+
+def test_member_on_cooldown_matches_pinned_version_against_family_token(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A ``model_weekly`` cooldown is recorded under the limit classifier's
+    family token ("opus"), never a pinned version ID — that vocabulary is all
+    ``detect_model`` can parse out of a CLI limit message. The council's seats
+    ARE pinned versions, so a raw string comparison would match none of them and
+    report a rate-limited council as fully available, burning the quorum on
+    three doomed reviews. Both sides normalize to the family instead."""
+    from datetime import datetime, timedelta, timezone
+
+    from operations_center.execution.usage_store import UsageStore
+
+    monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "u.json"))
+    now = datetime.now(timezone.utc)
+    store = UsageStore()
+    store.record_worker_backend_cooldown(
+        worker_backend="claude_code",
+        reset_at=now + timedelta(hours=2),
+        now=now,
+        limit_kind="model_weekly",
+        model="opus",
+    )
+
+    for seat in ("claude-opus-5", "claude-opus-4-8", "claude-opus-4-7", "opus"):
+        assert watcher._member_on_cooldown(store, "claude_code", seat, now=now) is True, seat
+    # A different family under the same backend stays runnable — the cooldown is
+    # model-scoped, not account-wide, so this must not over-block.
+    for seat in ("sonnet", "haiku"):
+        assert watcher._member_on_cooldown(store, "claude_code", seat, now=now) is False, seat
 
 
 def test_select_review_backend_available_when_no_cooldown(monkeypatch, tmp_path):
@@ -3528,7 +3560,9 @@ def test_select_review_backend_respects_dynamic_disabled(monkeypatch, tmp_path):
     now = datetime.now(timezone.utc)
     store = UsageStore()
     _cool_claude(store, now)
-    sel = watcher._select_review_backend(_ladder_settings(dynamic=False), usage_store=store, now=now)
+    sel = watcher._select_review_backend(
+        _ladder_settings(dynamic=False), usage_store=store, now=now
+    )
     # operator opted out of the ladder globally → always the preferred backend
     assert sel is not None and sel.selected_backend == "claude_code"
 
@@ -3704,7 +3738,15 @@ def test_phase1_guardrail_paths_empty_uses_single_review_no_fork(tmp_path: Path)
         ) as mock_direct,
     ):
         watcher._phase1(
-            state, sp, _contributor_pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+            state,
+            sp,
+            _contributor_pr_data(),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            SETTINGS,
         )
 
     mock_council.assert_not_called()
@@ -3721,7 +3763,15 @@ def test_phase1_guardrail_hit_forks_to_council(tmp_path: Path) -> None:
         patch.object(watcher, "_run_direct_review") as mock_direct,
     ):
         watcher._phase1(
-            state, sp, _contributor_pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", settings
+            state,
+            sp,
+            _contributor_pr_data(),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            settings,
         )
 
     mock_council.assert_called_once()
@@ -3851,7 +3901,9 @@ def test_run_council_unanimous_lgtm_merges(tmp_path: Path) -> None:
         ) as mock_member,
         patch.object(watcher, "_merge_and_done") as mock_merge,
     ):
-        watcher._run_council(**_run_council_args(tmp_path, state, sp, _contributor_pr_data(), gh, settings))
+        watcher._run_council(
+            **_run_council_args(tmp_path, state, sp, _contributor_pr_data(), gh, settings)
+        )
 
     assert mock_member.call_count == 3
     mock_merge.assert_called_once()
@@ -3867,7 +3919,7 @@ def test_run_council_any_concern_feeds_fix_ladder(tmp_path: Path) -> None:
     settings = _council_settings()
 
     def _member_side_effect(oc_root, goal_text, state_key, *, backend, model):
-        if backend == "claude_code" and model == "opus":
+        if backend == "claude_code" and model == "claude-opus-4-8":
             return _member_result("CONCERNS", failing=["code_quality"], summary="bug found")
         return _member_result("LGTM")
 
@@ -3877,7 +3929,9 @@ def test_run_council_any_concern_feeds_fix_ladder(tmp_path: Path) -> None:
         patch.object(watcher, "_merge_and_done") as mock_merge,
         patch.object(watcher, "_run_fix_pass", return_value=True) as mock_fix,
     ):
-        watcher._run_council(**_run_council_args(tmp_path, state, sp, _contributor_pr_data(), gh, settings))
+        watcher._run_council(
+            **_run_council_args(tmp_path, state, sp, _contributor_pr_data(), gh, settings)
+        )
 
     mock_merge.assert_not_called()
     mock_fix.assert_called_once()
@@ -3895,14 +3949,16 @@ def test_run_council_records_state_and_posts_one_comment(tmp_path: Path) -> None
         patch.object(watcher, "_run_member_review", return_value=_member_result("LGTM")),
         patch.object(watcher, "_merge_and_done"),
     ):
-        watcher._run_council(**_run_council_args(tmp_path, state, sp, _contributor_pr_data(), gh, settings))
+        watcher._run_council(
+            **_run_council_args(tmp_path, state, sp, _contributor_pr_data(), gh, settings)
+        )
 
     gh.post_comment.assert_called_once()
     body = gh.post_comment.call_args[0][3]
     assert "<!-- operations-center:bot -->" in body
-    assert "claude_code/sonnet" in body
-    assert "claude_code/opus" in body
-    assert "codex_cli/codex" in body
+    assert "claude_code/claude-opus-5" in body
+    assert "claude_code/claude-opus-4-8" in body
+    assert "claude_code/claude-opus-4-7" in body
 
     council_path = watcher._council_state_path(tmp_path, REPO_KEY, PR_NUMBER)
     assert council_path.exists()
@@ -3927,7 +3983,11 @@ def test_run_council_each_member_dispatched_on_its_own_family(tmp_path: Path, mo
                 {
                     "checks": [
                         {"check_id": "code_quality", "status": "pass", "evidence_span": "x"},
-                        {"check_id": "no_tooling_artifacts", "status": "pass", "evidence_span": "x"},
+                        {
+                            "check_id": "no_tooling_artifacts",
+                            "status": "pass",
+                            "evidence_span": "x",
+                        },
                     ],
                     "summary": "ok",
                 }
@@ -3945,21 +4005,25 @@ def test_run_council_each_member_dispatched_on_its_own_family(tmp_path: Path, mo
         ),
         patch.object(watcher, "_merge_and_done"),
     ):
-        watcher._run_council(**_run_council_args(tmp_path, state, sp, _contributor_pr_data(), gh, settings))
+        watcher._run_council(
+            **_run_council_args(tmp_path, state, sp, _contributor_pr_data(), gh, settings)
+        )
 
     assert len(argvs) == 3
-    sonnet_calls = [a for a in argvs if "--model" in a and a[a.index("--model") + 1] == "sonnet"]
-    opus_calls = [a for a in argvs if "--model" in a and a[a.index("--model") + 1] == "opus"]
-    codex_calls = [a for a in argvs if a[:2] == ["codex", "exec"]]
-    assert len(sonnet_calls) == 1
-    assert len(opus_calls) == 1
-    assert len(codex_calls) == 1
+    models = [a[a.index("--model") + 1] for a in argvs if "--model" in a]
+    # One dispatch per pinned Opus version — no seat collapsed onto another,
+    # which is the failure mode an alias-based panel would produce silently.
+    assert sorted(models) == ["claude-opus-4-7", "claude-opus-4-8", "claude-opus-5"]
+    assert all(a[0] == "claude" for a in argvs)
 
 
 def test_run_council_quorum_unmet_parks(tmp_path: Path, monkeypatch) -> None:
-    """Both claude_code seats cooled (session_5h, account-wide) leaves only
-    codex — 1 < min_council_members(3) — parks instead of burning cooled
-    backends or silently downgrading to a lesser quorum."""
+    """An account-wide claude cooldown (session_5h) now cools EVERY seat, since
+    the panel is three Opus versions on one family — 0 < min_council_members(3)
+    — so it parks instead of burning cooled backends or silently downgrading to
+    a lesser quorum. Before the 2026-08-13 all-Opus panel this left the codex
+    seat runnable (1 available); the whole-council park is the accepted cost of
+    dropping the cross-family seat."""
     from datetime import datetime, timezone
 
     from operations_center.execution.usage_store import UsageStore
@@ -3983,7 +4047,7 @@ def test_run_council_quorum_unmet_parks(tmp_path: Path, monkeypatch) -> None:
     assert state["escalated_needs_human"] is True
     assert state["escalated_reason"] == "reviewer_backend_unavailable"
     assert state["council_park"] is True
-    assert state["council_available_members"] == 1
+    assert state["council_available_members"] == 0
 
 
 def test_phase1_council_park_within_cap_still_auto_resumes(tmp_path: Path) -> None:
@@ -4016,7 +4080,15 @@ def test_phase1_council_park_within_cap_still_auto_resumes(tmp_path: Path) -> No
 
     with patch.object(watcher, "_run_direct_review", return_value=None) as mock_direct:
         watcher._phase1(
-            state, sp, _contributor_pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", settings
+            state,
+            sp,
+            _contributor_pr_data(),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            settings,
         )
 
     assert state["escalated_needs_human"] is False
@@ -4048,7 +4120,15 @@ def test_phase1_council_park_cap_escalates_distinctly(tmp_path: Path) -> None:
 
     with patch.object(watcher, "_run_council") as mock_council:
         watcher._phase1(
-            state, sp, _contributor_pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", settings
+            state,
+            sp,
+            _contributor_pr_data(),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            settings,
         )
 
     mock_council.assert_not_called()  # capped hold — never even reaches the fork this poll
@@ -4058,32 +4138,34 @@ def test_phase1_council_park_cap_escalates_distinctly(tmp_path: Path) -> None:
     assert "council_unavailable_capped" in gh.post_comment.call_args[0][3]
 
 
-def test_run_council_degraded_quorum_two_of_three_merges_on_unanimity(tmp_path: Path, monkeypatch) -> None:
-    """F14 degraded quorum: with min_council_members=2, one cooled seat still
-    allows the other two to proceed — unanimity among the AVAILABLE members
-    merges, and the state/comment record the degraded flag."""
-    from datetime import datetime, timezone
+def test_run_council_degraded_quorum_two_of_three_merges_on_unanimity(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """F14 degraded quorum: with min_council_members=2, one unavailable seat
+    still allows the other two to proceed — unanimity among the AVAILABLE
+    members merges, and the state/comment record the degraded flag.
 
+    NOTE: since the 2026-08-13 all-Opus panel, a single seat can no longer be
+    made unavailable through the usage store. Every seat normalizes to the same
+    ``opus`` family token, so a model_weekly cooldown cools all three and an
+    account-wide one cools all three — availability is 3 or 0, never 2. This
+    test therefore drives the seat-level predicate directly to keep the
+    degraded-quorum BRANCH covered; it no longer describes a state the cooldown
+    store can actually produce."""
     from operations_center.execution.usage_store import UsageStore
 
     monkeypatch.setenv("OPERATIONS_CENTER_EXECUTION_USAGE_PATH", str(tmp_path / "u.json"))
-    now = datetime.now(timezone.utc)
     store = UsageStore()
-    from datetime import timedelta
-
-    store.record_worker_backend_cooldown(
-        worker_backend="codex_cli",
-        reset_at=now + timedelta(hours=2),
-        now=now,
-        limit_kind="session_5h",
-        model=None,
-    )
 
     state, sp = _make_state(tmp_path, phase="self_review")
     gh = _guardrail_gh()
     settings = _council_settings(min_council_members=2)
 
+    def _one_seat_cooled(_store, _backend, model, *, now):
+        return model == "claude-opus-4-7"
+
     with (
+        patch.object(watcher, "_member_on_cooldown", side_effect=_one_seat_cooled),
         patch.object(
             watcher, "_run_member_review", return_value=_member_result("LGTM")
         ) as mock_member,
@@ -4094,7 +4176,7 @@ def test_run_council_degraded_quorum_two_of_three_merges_on_unanimity(tmp_path: 
             usage_store=store,
         )
 
-    assert mock_member.call_count == 2  # codex skipped — cooled
+    assert mock_member.call_count == 2  # claude-opus-4-7 seat skipped
     mock_merge.assert_called_once()
 
     council_path = watcher._council_state_path(tmp_path, REPO_KEY, PR_NUMBER)

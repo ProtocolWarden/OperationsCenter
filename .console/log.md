@@ -83,6 +83,50 @@ Docs: rewrote `docs/operator/setup.md` "Executor Install Behavior" to describe
 the import-based flow, fixed the "install/verify `team-executor` CLI" bullet and
 the Advanced Mode pin description, and corrected the `docs/demo.md` prerequisite
 that told operators to put `team-executor` on PATH.
+## 2026-08-13 — feat(reviewer): all-Opus council (operator decision) — codex seat removed
+
+Operator directive: there is no codex subscription on this host, so the C1
+cross-family panel could never reach quorum — and an unrunnable seat parks every
+guardrail PR fail-closed (`min_council_members: 3`). The council was not weaker
+than designed, it was inert. `_COUNCIL_PANEL` is now three pinned Opus versions
+on `claude_code`: `claude-opus-5` (correctness), `claude-opus-4-8`
+(security/capability), `claude-opus-4-7` (convergence/operational). All four
+current Opus IDs were probed against the live CLI before pinning; all respond.
+
+Versions are pinned, not aliased. `opus` resolves to whatever the CLI calls
+latest, which would silently collapse two seats onto one model and reduce the
+panel to a duplicate vote — a rubber stamp that still reports 3/3.
+
+The seating change alone would have introduced a silent quota bug.
+`_member_on_cooldown` compared the seat's model string to the cooldown record's
+by equality, but the store only ever speaks the limit classifier's four-token
+vocabulary (sonnet/opus/haiku/codex — it is all `detect_model` can parse from a
+CLI limit message). A seat named `claude-opus-5` would therefore match no `opus`
+cooldown: a rate-limited council would report itself fully available and burn
+the quorum dispatching three doomed reviews. Both sides now normalize through
+`detect_model`, which is the identity for bare tokens, so alias-style seats keep
+their existing behavior. Regression test added.
+
+Two consequences are accepted, not fixed, and are recorded in
+`COUNCIL_VERDICT.md` rather than left to be rediscovered:
+
+1. Diversity is now version + lens, NOT family. The same-family
+   generator/evaluator gap C1 exists to close is no longer closed by panel
+   composition — three Opus versions share training lineage and can share a
+   blind spot. Restoring a real second family is the standing fix.
+2. Availability is all-or-nothing. Every seat draws on one subscription and
+   normalizes to one family token, so any claude cooldown — model-scoped,
+   account-wide, or the budget guard's synthetic `budget_reserve` — cools the
+   whole council. The `min_council_members: 2` degraded quorum is now
+   unreachable via the cooldown store; expect whole-council parks where the
+   codex seat used to carry the panel through a claude bucket exhaustion.
+
+Verification: `tests/test_pr_review_watcher.py` + `tests/unit/entrypoints/
+pr_review_watcher/` — 209 passed. Full suite 10347 passed, 5 failed; the same 5
+reproduce with the change stashed (sandbox file-deletion race guards +
+`test_custodian_sweep`), so zero new failures. `ruff check` / `ruff format
+--check` clean on all touched files.
+
 ## 2026-08-03 — fix(hooks): pre-push resolved the wrong workspace root inside a git worktree
 
 `.hooks/pre-push` locates the boundary disclosure artifact by globbing sibling

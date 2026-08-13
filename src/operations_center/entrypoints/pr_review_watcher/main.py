@@ -714,6 +714,16 @@ def _member_on_cooldown(usage_store, backend: str, model: str, *, now: datetime)
     (``session_5h`` / ``global_weekly`` / unattributed) cools every model of
     the backend, including this one.
 
+    Compared at FAMILY grain. A panel seat may name a pinned version
+    (``claude-opus-5``), but the usage store only ever records the limit
+    classifier's four-token vocabulary (sonnet/opus/haiku/codex — see
+    ``WORKER_BACKEND_MODELS``), because that is all ``detect_model`` can parse
+    out of a CLI limit message. Comparing raw strings would make an ``opus``
+    cooldown match NO Opus-version seat, so a rate-limited council would look
+    fully available and burn its quota dispatching three doomed reviews. Both
+    sides are normalized through ``detect_model`` instead; it is the identity
+    for bare tokens, so alias-style seats keep their existing behavior.
+
     Fails OPEN (not cooled) on a store-read error: a broken usage store must
     never itself deadlock the council quorum check (degrade-never-halt).
     """
@@ -728,11 +738,18 @@ def _member_on_cooldown(usage_store, backend: str, model: str, *, now: datetime)
             exc,
         )
         return False
-    from operations_center.backends.limit_classifier import MODEL_WEEKLY
+    from operations_center.backends.limit_classifier import MODEL_WEEKLY, detect_model
 
+    seat_family = detect_model(model, default=model)
     for entry in details:
         if entry.get("limit_kind") == MODEL_WEEKLY:
-            if entry.get("model") == model:
+            entry_model = entry.get("model")
+            entry_family = (
+                detect_model(entry_model, default=entry_model)
+                if isinstance(entry_model, str)
+                else entry_model
+            )
+            if entry_family == seat_family:
                 return True
             continue
         return True  # account-wide / unattributed — blocks every model of the backend
@@ -4115,12 +4132,16 @@ def _run_council(
     now = datetime.now(UTC)
 
     available = [
-        member for member in _COUNCIL_PANEL if not _member_on_cooldown(usage_store, *member[:2], now=now)
+        member
+        for member in _COUNCIL_PANEL
+        if not _member_on_cooldown(usage_store, *member[:2], now=now)
     ]
     min_members = getattr(council, "min_council_members", 3)
 
     if len(available) < min_members:
-        cooled = sorted(f"{b}/{m}" for (b, m, _lens) in _COUNCIL_PANEL if (b, m, _lens) not in available)
+        cooled = sorted(
+            f"{b}/{m}" for (b, m, _lens) in _COUNCIL_PANEL if (b, m, _lens) not in available
+        )
         detail = (
             f"Guardrail-surface PR requires a {min_members}-member cross-family council "
             f"(COUNCIL_VERDICT.md C1); only {len(available)}/{len(_COUNCIL_PANEL)} panel seats "
@@ -4531,7 +4552,7 @@ def main() -> int:
     # Containment self-check (audit Track A3): surface a broken posture at boot.
     for problem in verify_containment():
         logger.error(
-            'pr_review_watcher: containment self-check FAILED — %s '
+            "pr_review_watcher: containment self-check FAILED — %s "
             '{"event": "containment_selfcheck_failed", "problem": "%s"}',
             problem,
             problem,
