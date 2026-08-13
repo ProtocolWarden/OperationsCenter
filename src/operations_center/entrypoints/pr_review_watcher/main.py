@@ -687,6 +687,23 @@ def _run_direct_review(
     return _run_member_review(oc_root, goal_text, state_key, backend="claude_code", model="haiku")
 
 
+def _review_model_for_backend(backend: str) -> str | None:
+    """Model to pair with a fallback review backend for the ordinary review (D1).
+
+    Sourced from the validated council panel (``verdict._COUNCIL_PANEL``) so the
+    ordinary-review claude→codex fallback reuses the SAME ``(backend, model)``
+    pairing already proven safe as a live council seat (``codex_cli`` → ``codex``)
+    — no new, unvalidated pairing is introduced. Returns ``None`` when the
+    backend has no known review pairing (caller then parks rather than guess a
+    model). Not consulted for ``claude_code`` (that path keeps its own
+    ``_run_direct_review`` haiku default).
+    """
+    for member_backend, model, _lens in _COUNCIL_PANEL:
+        if member_backend == backend:
+            return model
+    return None
+
+
 def _member_on_cooldown(usage_store, backend: str, model: str, *, now: datetime) -> bool:
     """True when this council member's ``(backend, model)`` is currently cooled.
 
@@ -3455,28 +3472,70 @@ def _phase1(
         state["self_review_loops"],
     )
 
-    # D1: consult the shared fleet ladder BEFORE spawning a claude review. If
-    # claude is on cooldown or over the 25% budget reserve, don't burn it —
-    # defer this sweep and retry when it returns (degrade-never-halt applied to
-    # review; the budget window drains within ~5h). No claude spawn, no budget
-    # charge, no needs-human escalation for a transient wait. (Codex-fallback
-    # for the review itself is a validated follow-up; until then any non-claude
-    # selection means claude — the only review backend — is unavailable.)
+    # D1: consult the shared fleet ladder BEFORE spawning the review. The
+    # reviewer is part of the fleet, so it runs the controller's claude→codex
+    # LADDER instead of burning claude unconditionally:
+    #   * claude runnable          → review on claude/haiku (today's path);
+    #   * claude cooled, fallback  → DIVERT this ordinary review to the fallback
+    #     backend (e.g. codex_cli/codex) so review keeps flowing — charges the
+    #     fallback's budget, not claude's (the codex reviewer was validated safe
+    #     as the ordinary single reviewer by the 2026-07-15 spike, and runs live
+    #     as council seat C3);
+    #   * whole ladder exhausted   → PARK (defer+return, no burn); the #446
+    #     1h auto-resume retries when a backend returns.
+    # Selection failure (``None``) proceeds on claude — today's fail-open behavior.
+    # This is the ORDINARY single-reviewer path only; guardrail PRs already
+    # forked to _run_council above and never reach here.
+    _review_backend = "claude_code"
+    _review_model = "haiku"
     _selection = _select_review_backend(settings)
     if _selection is not None and _selection.selected_backend != "claude_code":
         _resets = [r for r in _selection.cooldowns.values() if r is not None]
         _reset_at = max(_resets) if _resets else None
-        logger.info(
-            "pr_review_watcher: PR #%d review DEFERRED — claude unavailable "
-            "(selected=%s, reset≈%s); not burning budget, will retry when it returns.",
-            pr_number,
-            _selection.selected_backend,
-            _reset_at.isoformat() if _reset_at else "unknown",
+        _fallback_model = (
+            _review_model_for_backend(_selection.selected_backend)
+            if _selection.selected_backend is not None
+            else None
         )
-        return
+        if _fallback_model is None:
+            # Whole ladder exhausted (no runnable backend), or the runnable
+            # fallback has no known review pairing — PARK rather than burn or
+            # guess a model. Not budget-charged; retries via #446 auto-resume.
+            logger.info(
+                "pr_review_watcher: PR #%d review DEFERRED — no runnable review "
+                "backend (selected=%s, reset≈%s); not burning budget, will retry "
+                "when a backend returns.",
+                pr_number,
+                _selection.selected_backend,
+                _reset_at.isoformat() if _reset_at else "unknown",
+            )
+            return
+        # claude cooled but a validated fallback is runnable — divert the review.
+        _review_backend = _selection.selected_backend
+        _review_model = _fallback_model
+        logger.info(
+            "pr_review_watcher: PR #%d claude cooled/over-reserve — running the "
+            "ordinary review on fallback backend %s/%s (D1 ladder; charges %s "
+            "budget, not claude).",
+            pr_number,
+            _review_backend,
+            _review_model,
+            _review_backend,
+        )
 
     try:
-        verdict = _run_direct_review(oc_root, goal_text, state_key)
+        if _review_backend == "claude_code":
+            # Claude path stays on _run_direct_review (the name the test suite
+            # patches) so its back-compat contract is untouched.
+            verdict = _run_direct_review(oc_root, goal_text, state_key)
+        else:
+            verdict = _run_member_review(
+                oc_root,
+                goal_text,
+                state_key,
+                backend=_review_backend,
+                model=_review_model,
+            )
     except OCSourceTreeUncleanError as exc:
         # The reviewer's own source tree is broken — this would crash for EVERY
         # PR, so it is not charged against this PR's review budget. Skip the
@@ -3624,8 +3683,10 @@ def _phase1(
 
     state["no_verdict_passes"] = 0  # a verdict was produced
     state["no_verdict_backoff_level"] = 0  # Reset backoff when verdict is produced
-    # INJ Phase 1 (D-INJ-1): `result` was COMPUTED BY CODE in _run_direct_review
-    # from the model's typed per-check statuses — it is not a model-authored field.
+    # INJ Phase 1 (D-INJ-1): `result` was COMPUTED BY CODE in the review member
+    # (_run_member_review, on whichever backend ran — claude or the D1 codex
+    # fallback) from the model's typed per-check statuses — not a model-authored
+    # field. The trust boundary is identical regardless of which backend reviewed.
     # Fail-safe: a missing/malformed verdict computed to CONCERNS upstream.
     result = (verdict.get("result") or CONCERNS).upper()
     failing_checks = verdict.get("failing_checks") or []

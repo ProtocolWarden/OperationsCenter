@@ -3533,6 +3533,110 @@ def test_select_review_backend_respects_dynamic_disabled(monkeypatch, tmp_path):
     assert sel is not None and sel.selected_backend == "claude_code"
 
 
+# ── D1: ordinary-review claude→codex fallback ─────────────────────────────────
+
+
+def _fake_selection(selected_backend):
+    """A WorkerBackendSelection with a chosen backend, for forcing the D1 branch
+    deterministically without manipulating a real usage store."""
+    from operations_center.backends.worker_backend_selector import WorkerBackendSelection
+
+    return WorkerBackendSelection(
+        preferred_backend="claude_code",
+        selected_backend=selected_backend,
+        cooldowns={"claude_code": None},
+    )
+
+
+def test_phase1_cooled_claude_runs_ordinary_review_on_codex(tmp_path: Path) -> None:
+    """D1: claude cooled but codex runnable → the ORDINARY review RUNS on
+    codex_cli/codex (not deferred), and its verdict flows into the same
+    downstream pipeline (LGTM → merge)."""
+    state, sp = _make_state(tmp_path, phase="self_review")
+    gh = _make_gh()
+
+    with (
+        patch.object(
+            watcher, "_select_review_backend", return_value=_fake_selection("codex_cli")
+        ),
+        patch.object(
+            watcher, "_run_member_review", return_value={"result": "LGTM", "summary": "ok"}
+        ) as mock_member,
+        patch.object(watcher, "_run_direct_review") as mock_direct,
+        patch.object(watcher, "_plane_client") as mock_pc,
+    ):
+        mock_pc.return_value = MagicMock()
+        mock_pc.return_value.close = MagicMock()
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+
+    # Ran on the codex fallback, NOT the claude alias, and did NOT defer.
+    mock_direct.assert_not_called()
+    mock_member.assert_called_once()
+    assert mock_member.call_args.kwargs["backend"] == "codex_cli"
+    assert mock_member.call_args.kwargs["model"] == "codex"
+    # The codex verdict flowed into the SAME pipeline → merged.
+    gh.merge_pr.assert_called_once()
+
+
+def test_phase1_ladder_exhausted_parks_no_burn(tmp_path: Path) -> None:
+    """D1: whole ladder exhausted (no runnable backend) → PARK (defer+return).
+    No review runner is invoked, nothing merges, and no budget is charged
+    (self_review_loops unchanged) — today's #446 auto-resume behavior."""
+    state, sp = _make_state(tmp_path, phase="self_review")
+    gh = _make_gh()
+
+    with (
+        patch.object(watcher, "_select_review_backend", return_value=_fake_selection(None)),
+        patch.object(watcher, "_run_member_review") as mock_member,
+        patch.object(watcher, "_run_direct_review") as mock_direct,
+    ):
+        watcher._phase1(
+            state, sp, _pr_data(), gh, "owner", "repo", tmp_path, tmp_path / "cfg.yaml", SETTINGS
+        )
+
+    mock_member.assert_not_called()
+    mock_direct.assert_not_called()
+    gh.merge_pr.assert_not_called()
+    assert watcher._load_state(sp).get("self_review_loops", 0) == 0
+
+
+def test_phase1_guardrail_pr_cooled_claude_does_not_single_review_on_codex(
+    tmp_path: Path,
+) -> None:
+    """D1 boundary: a guardrail PR with claude cooled still forks to the K=3
+    council — it must NOT be silently single-reviewed on codex. The codex
+    fallback is for the ORDINARY single-reviewer path ONLY."""
+    state, sp = _make_state(tmp_path, phase="self_review")
+    gh = _guardrail_gh()
+    settings = _council_settings()
+
+    with (
+        patch.object(
+            watcher, "_select_review_backend", return_value=_fake_selection("codex_cli")
+        ),
+        patch.object(watcher, "_run_council") as mock_council,
+        patch.object(watcher, "_run_member_review") as mock_member,
+        patch.object(watcher, "_run_direct_review") as mock_direct,
+    ):
+        watcher._phase1(
+            state,
+            sp,
+            _contributor_pr_data(),
+            gh,
+            "owner",
+            "repo",
+            tmp_path,
+            tmp_path / "cfg.yaml",
+            settings,
+        )
+
+    mock_council.assert_called_once()
+    mock_member.assert_not_called()  # NOT single-reviewed on codex
+    mock_direct.assert_not_called()
+
+
 # ── C1: reviewer council mode (cross-family panel) ────────────────────────────
 
 _GUARDRAIL_FILE = "src/operations_center/entrypoints/pr_review_watcher/main.py"
