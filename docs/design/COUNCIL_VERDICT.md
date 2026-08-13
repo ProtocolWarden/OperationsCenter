@@ -40,6 +40,17 @@ would share training, failure modes, and any poisoned evidence identically.
 Cross-family members (Claude sonnet, Claude opus, Codex gpt-5) plus distinct
 review lenses give strictly stronger diversity than seeds would.
 
+> **SUPERSEDED IN PRACTICE — operator decision 2026-08-13.** The live panel is
+> three pinned Opus *versions* on one family (see C1 below). The reasoning above
+> still describes the strongest available design; it is not what runs. The
+> operator holds no codex subscription, and because an unrunnable seat parks
+> every guardrail PR fail-closed, the cross-family panel was inert rather than
+> merely weaker. Version diversity decorrelates more than seeds would but
+> strictly less than families: three Opus versions share training lineage, so
+> the same-family generator/evaluator gap this section argues against is
+> **accepted, not closed**. Restoring a genuine second family (codex, or any
+> non-Anthropic CLI on the ladder) is the standing fix.
+
 A council member is still an agent running on this infrastructure reading
 attacker-influenceable text (the diff). Mitigations: members receive the diff
 as data with injection-hardened prompts (INJ conventions), never execute PR
@@ -75,12 +86,19 @@ a follow-up PR that then rides through the council).
 
 For a guardrail PR:
 
-1. **Panel**: K=3 members, one per backend family rung — claude/sonnet,
-   claude/opus, codex/gpt-5 — reusing the existing worker-backend ladder and
+1. **Panel**: K=3 members reusing the existing worker-backend ladder and
    cooldown machinery. Each member gets an identical evidence bundle (diff,
    PR body, the guardrail file's role, last loop-cycle summary, heartbeats)
    and a distinct lens prompt: *correctness*, *security/capability-change*,
    *convergence/operational*.
+   - *Designed* seating: one member per backend family rung — claude/sonnet,
+     claude/opus, codex/gpt-5.
+   - *Live* seating (operator decision 2026-08-13): three pinned Opus versions
+     on the claude_code family — `claude-opus-5` (correctness),
+     `claude-opus-4-8` (security/capability), `claude-opus-4-7`
+     (convergence/operational). Versions are pinned, never aliased: `opus`
+     would drift onto whatever the CLI calls latest and silently collapse two
+     seats onto one model. See the superseded note under *Why cross-family*.
 2. **Verdict**: each member returns structured JSON
    `{"verdict": "LGTM"|"CONCERN", "reasons": [...]}` (same schema as the
    self-heal ladder's structured concerns).
@@ -94,6 +112,14 @@ For a guardrail PR:
    expiry path (#446). The gate fails CLOSED for guardrail changes; ordinary
    PRs are unaffected. Degrade-never-halt applies to the fleet's work, not to
    its own guardrail approvals.
+   Under the live all-Opus seating, availability is **all-or-nothing**: seats
+   are compared at family grain (`limit_classifier.detect_model`), so any
+   claude cooldown — model-scoped `opus`, account-wide `session_5h`, or the
+   budget guard's synthetic `budget_reserve` — cools all three at once. The
+   `min_council_members: 2` degraded quorum is therefore unreachable via the
+   cooldown store today; it survives only for a seat made unavailable some
+   other way. Expect whole-council parks where the codex seat used to carry
+   the panel through a claude bucket exhaustion.
 5. **Record**: verdicts land in `state/council/<repo>-<pr>.json` and a PR
    comment summarizing all three members' reasons; the `reviewer-verdict`
    status context is set only on quorum.

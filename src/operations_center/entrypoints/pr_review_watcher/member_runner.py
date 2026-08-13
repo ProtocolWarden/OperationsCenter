@@ -23,10 +23,25 @@ def build_member_argv(backend: str, model: str, prompt: str) -> list[str] | None
     Returns ``None`` for an unsupported ``(backend, model)`` pair.
     """
     if backend == "claude_code":
-        # Preserve the live single-review invocation exactly (only the model
-        # varies per council seat): `--effort low` keeps reviews cheap+fast, and
-        # NOT passing --dangerously-skip-permissions matches the path that has
-        # run in production — a reviewer in an empty tmpdir needs neither.
+        # `--effort low` keeps reviews cheap+fast.
+        #
+        # `--permission-mode acceptEdits` is REQUIRED, not a convenience. The
+        # member's one required action is writing verdict.json to its cwd, and
+        # under the default permission mode a non-interactive `-p` run cannot
+        # write at all: the CLI denies the write, the model reports success in
+        # prose, and the process still exits rc=0. The reviewer then finds no
+        # verdict.json, records "no verdict", and the fail-safe scores the PR
+        # CONCERNS — publishing a FAILING reviewer-verdict status and burning a
+        # fix-ladder attempt on a PR nobody actually reviewed. Diagnosed live
+        # 2026-08-13 after a fresh CLI install; the previous host evidently
+        # carried a permissive user-level settings file that masked this.
+        #
+        # Deliberately NOT --dangerously-skip-permissions. A council member
+        # reads attacker-influenceable text (the PR diff), so the injection
+        # threat in COUNCIL_VERDICT.md is live: bypassPermissions would hand an
+        # injected instruction full Bash. acceptEdits grants file writes only —
+        # verified on this host that a Bash escape attempt under acceptEdits is
+        # refused and writes stay confined to the member's temp cwd.
         return [
             "claude",
             "--model",
@@ -34,6 +49,8 @@ def build_member_argv(backend: str, model: str, prompt: str) -> list[str] | None
             "-p",
             "--effort",
             "low",
+            "--permission-mode",
+            "acceptEdits",
             prompt,
         ]
     if backend == "codex_cli":

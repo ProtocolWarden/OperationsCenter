@@ -687,21 +687,29 @@ def _run_direct_review(
     return _run_member_review(oc_root, goal_text, state_key, backend="claude_code", model="haiku")
 
 
+# Ordinary-review fallback pairings (D1), keyed by worker backend.
+#
+# Deliberately INDEPENDENT of ``verdict._COUNCIL_PANEL``. D1 originally derived
+# this by scanning the panel, to reuse a pairing already proven safe as a live
+# council seat. That coupling is subtly wrong: the panel answers "who adjudicates
+# guardrail PRs" (a review-policy choice), while this answers "which model
+# reviews when claude is cooled" (a capacity fallback). Deriving one from the
+# other means reseating the council SILENTLY disables the fallback — exactly what
+# the 2026-08-13 all-Opus panel did, since it carries no codex seat, turning
+# every claude-cooled ordinary review into a park on hosts that do have codex.
+# The ``codex_cli`` → ``codex`` pairing below is the same one D1 validated; it is
+# now stated directly instead of inferred, so the two can vary independently.
+_REVIEW_FALLBACK_MODELS: dict[str, str] = {"codex_cli": "codex"}
+
+
 def _review_model_for_backend(backend: str) -> str | None:
     """Model to pair with a fallback review backend for the ordinary review (D1).
 
-    Sourced from the validated council panel (``verdict._COUNCIL_PANEL``) so the
-    ordinary-review claude→codex fallback reuses the SAME ``(backend, model)``
-    pairing already proven safe as a live council seat (``codex_cli`` → ``codex``)
-    — no new, unvalidated pairing is introduced. Returns ``None`` when the
-    backend has no known review pairing (caller then parks rather than guess a
-    model). Not consulted for ``claude_code`` (that path keeps its own
-    ``_run_direct_review`` haiku default).
+    Returns ``None`` when the backend has no known review pairing (caller then
+    parks rather than guess a model). Not consulted for ``claude_code`` (that
+    path keeps its own ``_run_direct_review`` haiku default).
     """
-    for member_backend, model, _lens in _COUNCIL_PANEL:
-        if member_backend == backend:
-            return model
-    return None
+    return _REVIEW_FALLBACK_MODELS.get(backend)
 
 
 def _member_on_cooldown(usage_store, backend: str, model: str, *, now: datetime) -> bool:
@@ -713,6 +721,16 @@ def _member_on_cooldown(usage_store, backend: str, model: str, *, now: datetime)
     the backend's other models remain runnable. An account-wide cooldown
     (``session_5h`` / ``global_weekly`` / unattributed) cools every model of
     the backend, including this one.
+
+    Compared at FAMILY grain. A panel seat may name a pinned version
+    (``claude-opus-5``), but the usage store only ever records the limit
+    classifier's four-token vocabulary (sonnet/opus/haiku/codex — see
+    ``WORKER_BACKEND_MODELS``), because that is all ``detect_model`` can parse
+    out of a CLI limit message. Comparing raw strings would make an ``opus``
+    cooldown match NO Opus-version seat, so a rate-limited council would look
+    fully available and burn its quota dispatching three doomed reviews. Both
+    sides are normalized through ``detect_model`` instead; it is the identity
+    for bare tokens, so alias-style seats keep their existing behavior.
 
     Fails OPEN (not cooled) on a store-read error: a broken usage store must
     never itself deadlock the council quorum check (degrade-never-halt).
@@ -728,11 +746,18 @@ def _member_on_cooldown(usage_store, backend: str, model: str, *, now: datetime)
             exc,
         )
         return False
-    from operations_center.backends.limit_classifier import MODEL_WEEKLY
+    from operations_center.backends.limit_classifier import MODEL_WEEKLY, detect_model
 
+    seat_family = detect_model(model, default=model)
     for entry in details:
         if entry.get("limit_kind") == MODEL_WEEKLY:
-            if entry.get("model") == model:
+            entry_model = entry.get("model")
+            entry_family = (
+                detect_model(entry_model, default=entry_model)
+                if isinstance(entry_model, str)
+                else entry_model
+            )
+            if entry_family == seat_family:
                 return True
             continue
         return True  # account-wide / unattributed — blocks every model of the backend
@@ -4115,12 +4140,16 @@ def _run_council(
     now = datetime.now(UTC)
 
     available = [
-        member for member in _COUNCIL_PANEL if not _member_on_cooldown(usage_store, *member[:2], now=now)
+        member
+        for member in _COUNCIL_PANEL
+        if not _member_on_cooldown(usage_store, *member[:2], now=now)
     ]
     min_members = getattr(council, "min_council_members", 3)
 
     if len(available) < min_members:
-        cooled = sorted(f"{b}/{m}" for (b, m, _lens) in _COUNCIL_PANEL if (b, m, _lens) not in available)
+        cooled = sorted(
+            f"{b}/{m}" for (b, m, _lens) in _COUNCIL_PANEL if (b, m, _lens) not in available
+        )
         detail = (
             f"Guardrail-surface PR requires a {min_members}-member cross-family council "
             f"(COUNCIL_VERDICT.md C1); only {len(available)}/{len(_COUNCIL_PANEL)} panel seats "
@@ -4531,7 +4560,7 @@ def main() -> int:
     # Containment self-check (audit Track A3): surface a broken posture at boot.
     for problem in verify_containment():
         logger.error(
-            'pr_review_watcher: containment self-check FAILED — %s '
+            "pr_review_watcher: containment self-check FAILED — %s "
             '{"event": "containment_selfcheck_failed", "problem": "%s"}',
             problem,
             problem,

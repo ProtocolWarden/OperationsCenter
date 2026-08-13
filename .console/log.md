@@ -1,3 +1,31 @@
+## 2026-08-13 — fix(reviewer): decouple the D1 fallback pairing from council seating
+
+Caught by rebasing the all-Opus council branch onto main after #486 landed, not
+by CI on the branch — the branch predated #486, so nothing had ever run the two
+together. #486's `_review_model_for_backend` derives the ordinary-review fallback
+model by scanning `_COUNCIL_PANEL` for a matching backend. The all-Opus panel has
+no codex seat, so that lookup returns `None`, and #486's own unit test
+(`assert _review_model_for_backend("codex_cli") == "codex"`, in `tests/unit/`,
+which CI DOES run) fails: `assert None == 'codex'`.
+
+The coupling is the actual defect, not the panel. The panel answers "who
+adjudicates guardrail PRs" — a review-policy choice the operator changes freely.
+`_review_model_for_backend` answers "which model reviews when claude is cooled" —
+a capacity fallback. Deriving the second from the first means reseating the
+council silently disables the fallback: on a host that DOES have codex, every
+claude-cooled ordinary review would park instead of diverting, with no error and
+no failing test to say so. This host has no codex, so the behavior change here is
+nil; the latent trap is what mattered.
+
+Fixed with an explicit `_REVIEW_FALLBACK_MODELS = {"codex_cli": "codex"}` — the
+same pairing D1 validated, now stated directly instead of inferred, so seating
+and fallback vary independently. Added a regression test that asserts the lookup
+still yields codex WHILE the live panel has no codex seat, which is precisely the
+combination that was broken.
+
+Full suite on the rebased branch: 10382 passed, 5 failed — the same 5
+pre-existing sandbox/custodian failures, zero new.
+
 ## 2026-07-17 — feat(reviewer): D1 — run ordinary reviews on codex when claude is cooled
 
 Built the validated follow-up the code itself flagged (self-review sweep defer
@@ -83,6 +111,92 @@ Docs: rewrote `docs/operator/setup.md` "Executor Install Behavior" to describe
 the import-based flow, fixed the "install/verify `team-executor` CLI" bullet and
 the Advanced Mode pin description, and corrected the `docs/demo.md` prerequisite
 that told operators to put `team-executor` on PATH.
+## 2026-08-13 — fix(reviewer): members could not write verdict.json — every review scored CONCERNS
+
+Found by running the review watcher for real on this host, not by a test. Every
+council member returned `rc=0` with prose like "Wrote verdict.json with all four
+checks", and the reviewer logged `no verdict from member review`. The fail-safe
+turned that into CONCERNS, published a **failing** `reviewer-verdict` status, and
+consumed a fix-ladder attempt — on a PR nothing had actually reviewed. Left
+running it would have walked the whole backlog to `max_fix_attempts` and started
+CLOSING PRs.
+
+Cause: `build_member_argv` ran `claude --model M -p --effort low <prompt>` with
+no permission mode. Probed directly in an empty tmpdir:
+
+    (default mode)              -> "Write permission was denied,
+                                    so `verdict.json` was not created."   rc=0
+    --permission-mode acceptEdits -> "Written."  verdict.json present
+    --dangerously-skip-permissions -> "Written."  verdict.json present
+
+The old comment asserted the flagless form "matches the path that has run in
+production", so the previous host must have carried a permissive user-level
+Claude settings file that masked this. A fresh CLI install does not.
+
+Fixed with `--permission-mode acceptEdits`, deliberately NOT
+`--dangerously-skip-permissions`. A member reads attacker-influenceable text
+(the PR diff), so COUNCIL_VERDICT.md's injection threat is live and
+bypassPermissions would hand an injected instruction full Bash. Verified on this
+host that under acceptEdits a Bash escape is refused ("blocked by the sandbox")
+and writes stay confined to the member's temp cwd — the narrowing is real, not
+assumed. One fix covers both paths, since the ordinary single reviewer builds
+its argv through the same function.
+
+Blast radius of the bad run: nothing merged, nothing closed. `reviewer-verdict`
+failures landed only on #481 and #486, which already carried that identical
+status beforehand; each also got a review comment from the empty review. The six
+merge-ready PRs (#496 #495 #494 #490 #488 #487) were still queued at
+`self_review` when the watcher was stopped and carry no verdict.
+
+Separately visible in that run, not fixed here: red-audit PRs (#478/#483/#485)
+and every CONCERNS fix pass need SwitchBoard on `localhost:20401`, which is not
+deployed — the reviewer logs `planning failed … Connection refused` and records
+"pushed no changes". Reviews and merges do not depend on it; auto-fix does.
+
+## 2026-08-13 — feat(reviewer): all-Opus council (operator decision) — codex seat removed
+
+Operator directive: there is no codex subscription on this host, so the C1
+cross-family panel could never reach quorum — and an unrunnable seat parks every
+guardrail PR fail-closed (`min_council_members: 3`). The council was not weaker
+than designed, it was inert. `_COUNCIL_PANEL` is now three pinned Opus versions
+on `claude_code`: `claude-opus-5` (correctness), `claude-opus-4-8`
+(security/capability), `claude-opus-4-7` (convergence/operational). All four
+current Opus IDs were probed against the live CLI before pinning; all respond.
+
+Versions are pinned, not aliased. `opus` resolves to whatever the CLI calls
+latest, which would silently collapse two seats onto one model and reduce the
+panel to a duplicate vote — a rubber stamp that still reports 3/3.
+
+The seating change alone would have introduced a silent quota bug.
+`_member_on_cooldown` compared the seat's model string to the cooldown record's
+by equality, but the store only ever speaks the limit classifier's four-token
+vocabulary (sonnet/opus/haiku/codex — it is all `detect_model` can parse from a
+CLI limit message). A seat named `claude-opus-5` would therefore match no `opus`
+cooldown: a rate-limited council would report itself fully available and burn
+the quorum dispatching three doomed reviews. Both sides now normalize through
+`detect_model`, which is the identity for bare tokens, so alias-style seats keep
+their existing behavior. Regression test added.
+
+Two consequences are accepted, not fixed, and are recorded in
+`COUNCIL_VERDICT.md` rather than left to be rediscovered:
+
+1. Diversity is now version + lens, NOT family. The same-family
+   generator/evaluator gap C1 exists to close is no longer closed by panel
+   composition — three Opus versions share training lineage and can share a
+   blind spot. Restoring a real second family is the standing fix.
+2. Availability is all-or-nothing. Every seat draws on one subscription and
+   normalizes to one family token, so any claude cooldown — model-scoped,
+   account-wide, or the budget guard's synthetic `budget_reserve` — cools the
+   whole council. The `min_council_members: 2` degraded quorum is now
+   unreachable via the cooldown store; expect whole-council parks where the
+   codex seat used to carry the panel through a claude bucket exhaustion.
+
+Verification: `tests/test_pr_review_watcher.py` + `tests/unit/entrypoints/
+pr_review_watcher/` — 209 passed. Full suite 10347 passed, 5 failed; the same 5
+reproduce with the change stashed (sandbox file-deletion race guards +
+`test_custodian_sweep`), so zero new failures. `ruff check` / `ruff format
+--check` clean on all touched files.
+
 ## 2026-08-03 — fix(hooks): pre-push resolved the wrong workspace root inside a git worktree
 
 `.hooks/pre-push` locates the boundary disclosure artifact by globbing sibling

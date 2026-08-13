@@ -226,13 +226,33 @@ _LENS_FRAGMENTS: dict[str, str] = {
     "convergence-operational": LENS_CONVERGENCE_OPERATIONAL,
 }
 
-# The panel: one member per backend-family rung, each with a distinct lens. Each
-# entry is (worker_backend, model, lens). ``model`` is the CLI --model alias
-# (claude) / the codex model tag — main.py maps these to argv.
+# The panel: three seats, each with a distinct lens. Each entry is
+# (worker_backend, model, lens). ``model`` is passed straight to the CLI's
+# --model flag (member_runner.build_member_argv), so it may be an alias
+# ("opus") or a pinned version ID ("claude-opus-5").
+#
+# OPERATOR DECISION 2026-08-13: the panel is now three pinned Opus VERSIONS on
+# one family, replacing the cross-family (claude/sonnet, claude/opus, codex)
+# panel C1 originally specified. The operator runs no codex subscription, and
+# an unrunnable seat parks every guardrail PR fail-closed (min_council_members
+# defaults to 3), so the cross-family panel was not merely weaker here — it was
+# inert. Two consequences are accepted deliberately and must not be "fixed"
+# silently:
+#   1. Diversity is now version + lens, NOT family. The same-family
+#      generator/evaluator gap COUNCIL_VERDICT.md C1 was written to close is
+#      no longer closed by the panel composition; three Opus versions share
+#      training lineage and can share a blind spot.
+#   2. Every seat draws on ONE subscription. An account-wide claude cooldown
+#      (session_5h / global_weekly / the budget guard's synthetic
+#      budget_reserve) now cools the WHOLE council at once, where the codex
+#      seat used to survive it. Guardrail PRs park until the bucket resets.
+# Versions are pinned rather than aliased on purpose: "opus" would drift onto
+# whatever the CLI calls latest, silently collapsing two seats onto one model
+# and reducing the panel to a duplicate-vote rubber stamp.
 _COUNCIL_PANEL: tuple[tuple[str, str, str], ...] = (
-    ("claude_code", "sonnet", "correctness"),
-    ("claude_code", "opus", "security-capability"),
-    ("codex_cli", "codex", "convergence-operational"),
+    ("claude_code", "claude-opus-5", "correctness"),
+    ("claude_code", "claude-opus-4-8", "security-capability"),
+    ("claude_code", "claude-opus-4-7", "convergence-operational"),
 )
 
 
