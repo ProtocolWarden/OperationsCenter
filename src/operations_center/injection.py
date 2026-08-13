@@ -91,6 +91,62 @@ def wrap_untrusted_goal(goal: str, *, label: str = "issue_goal") -> str:
     return f"{GOAL_PREAMBLE}\n\n{fence(label, goal, nonce)}"
 
 
+# Matches a span produced by `fence`. The closing marker must carry the SAME
+# nonce and label as the opening one — a backreference, mirroring `fence`'s
+# guarantee that an attacker's copy of the close token does not terminate the
+# span. `search` finds the real (first) open marker, since `wrap_untrusted_goal`
+# emits the preamble before the fence and any forged marker lands inside it.
+_GOAL_FENCE_RE = re.compile(
+    r"<<UNTRUSTED:(?P<nonce>[0-9a-fA-F]+):(?P<label>[A-Za-z0-9_.-]+)>>\n"
+    r"(?P<payload>.*?)"
+    r"\n<</UNTRUSTED:(?P=nonce):(?P=label)>>",
+    re.DOTALL,
+)
+
+
+def unfence_goal(text: str) -> str:
+    """Return the payload inside a ``wrap_untrusted_goal`` fence.
+
+    Falls back to ``text`` unchanged when no well-formed fence is present, so
+    callers work on both wrapped and raw goals.
+
+    IMPORTANT: the returned text is STILL UNTRUSTED. Unfencing is a *display*
+    operation — it strips the scaffolding so a human sees the actual request,
+    and confers no authority on the content. Anything reflected outward should
+    go through :func:`goal_summary` (or :func:`sanitize_for_comment`) rather
+    than using this return value raw.
+    """
+    if not text:
+        return ""
+    match = _GOAL_FENCE_RE.search(str(text))
+    return match.group("payload") if match else str(text)
+
+
+def goal_summary(text: str, *, max_len: int = 80) -> str:
+    """A short, single-line, defanged summary of a (possibly fenced) goal.
+
+    For the human- and telemetry-facing short fields — a CxRP proposal title, an
+    execution scope, a log line. Slicing a RAW wrapped goal is wrong there:
+    ``wrap_untrusted_goal`` puts :data:`GOAL_PREAMBLE` *before* the fence, so
+    ``goal_text[:80]`` yields the preamble's opening words for EVERY
+    issue-sourced task instead of the actual request.
+
+    Unfence, collapse to a single line (short fields must not carry newlines),
+    defang via :func:`sanitize_for_comment` — the payload is attacker-influenced
+    and these fields flow into GitHub PR titles, where a bare ``@handle`` would
+    ping a real person — then bound to ``max_len``.
+
+    A blank fenced payload falls back to the sanitized full text, so a field
+    with a non-empty requirement still receives a value.
+    """
+    if not text:
+        return ""
+    collapsed = " ".join(unfence_goal(text).split())
+    if not collapsed:
+        collapsed = " ".join(str(text).split())
+    return sanitize_for_comment(collapsed, max_len=max_len)
+
+
 def sanitize_for_comment(text: str, *, max_len: int = 4000) -> str:
     """Defang model/untrusted text before posting it to GitHub.
 
@@ -115,7 +171,9 @@ __all__ = [
     "GOAL_PREAMBLE",
     "UNTRUSTED_PREAMBLE",
     "fence",
+    "goal_summary",
     "make_nonce",
     "sanitize_for_comment",
+    "unfence_goal",
     "wrap_untrusted_goal",
 ]
