@@ -16,9 +16,21 @@ from unittest.mock import patch
 from operations_center.entrypoints.pr_review_watcher import main as watcher
 
 
-def test_review_model_for_backend_codex_matches_council_pairing() -> None:
-    # The fallback reuses the validated council seat pairing (codex_cli→codex),
-    # not a fresh, unvalidated model choice.
+def test_review_model_for_backend_codex_pairing() -> None:
+    # The D1-validated pairing (codex_cli→codex), not a fresh unvalidated choice.
+    assert watcher._review_model_for_backend("codex_cli") == "codex"
+
+
+def test_review_model_for_backend_is_independent_of_council_seating() -> None:
+    # Regression: D1 originally derived this pairing by scanning _COUNCIL_PANEL,
+    # so reseating the council SILENTLY killed the ordinary-review fallback — the
+    # 2026-08-13 all-Opus panel (no codex seat) turned every claude-cooled review
+    # into a park. The lookup must not consult the panel at all.
+    from operations_center.entrypoints.pr_review_watcher import verdict
+
+    assert not any(backend == "codex_cli" for backend, _m, _l in verdict._COUNCIL_PANEL), (
+        "precondition: the live panel has no codex seat"
+    )
     assert watcher._review_model_for_backend("codex_cli") == "codex"
 
 

@@ -1,3 +1,31 @@
+## 2026-08-13 — fix(reviewer): decouple the D1 fallback pairing from council seating
+
+Caught by rebasing the all-Opus council branch onto main after #486 landed, not
+by CI on the branch — the branch predated #486, so nothing had ever run the two
+together. #486's `_review_model_for_backend` derives the ordinary-review fallback
+model by scanning `_COUNCIL_PANEL` for a matching backend. The all-Opus panel has
+no codex seat, so that lookup returns `None`, and #486's own unit test
+(`assert _review_model_for_backend("codex_cli") == "codex"`, in `tests/unit/`,
+which CI DOES run) fails: `assert None == 'codex'`.
+
+The coupling is the actual defect, not the panel. The panel answers "who
+adjudicates guardrail PRs" — a review-policy choice the operator changes freely.
+`_review_model_for_backend` answers "which model reviews when claude is cooled" —
+a capacity fallback. Deriving the second from the first means reseating the
+council silently disables the fallback: on a host that DOES have codex, every
+claude-cooled ordinary review would park instead of diverting, with no error and
+no failing test to say so. This host has no codex, so the behavior change here is
+nil; the latent trap is what mattered.
+
+Fixed with an explicit `_REVIEW_FALLBACK_MODELS = {"codex_cli": "codex"}` — the
+same pairing D1 validated, now stated directly instead of inferred, so seating
+and fallback vary independently. Added a regression test that asserts the lookup
+still yields codex WHILE the live panel has no codex seat, which is precisely the
+combination that was broken.
+
+Full suite on the rebased branch: 10382 passed, 5 failed — the same 5
+pre-existing sandbox/custodian failures, zero new.
+
 ## 2026-07-17 — feat(reviewer): D1 — run ordinary reviews on codex when claude is cooled
 
 Built the validated follow-up the code itself flagged (self-review sweep defer

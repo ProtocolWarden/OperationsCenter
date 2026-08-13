@@ -687,21 +687,29 @@ def _run_direct_review(
     return _run_member_review(oc_root, goal_text, state_key, backend="claude_code", model="haiku")
 
 
+# Ordinary-review fallback pairings (D1), keyed by worker backend.
+#
+# Deliberately INDEPENDENT of ``verdict._COUNCIL_PANEL``. D1 originally derived
+# this by scanning the panel, to reuse a pairing already proven safe as a live
+# council seat. That coupling is subtly wrong: the panel answers "who adjudicates
+# guardrail PRs" (a review-policy choice), while this answers "which model
+# reviews when claude is cooled" (a capacity fallback). Deriving one from the
+# other means reseating the council SILENTLY disables the fallback — exactly what
+# the 2026-08-13 all-Opus panel did, since it carries no codex seat, turning
+# every claude-cooled ordinary review into a park on hosts that do have codex.
+# The ``codex_cli`` → ``codex`` pairing below is the same one D1 validated; it is
+# now stated directly instead of inferred, so the two can vary independently.
+_REVIEW_FALLBACK_MODELS: dict[str, str] = {"codex_cli": "codex"}
+
+
 def _review_model_for_backend(backend: str) -> str | None:
     """Model to pair with a fallback review backend for the ordinary review (D1).
 
-    Sourced from the validated council panel (``verdict._COUNCIL_PANEL``) so the
-    ordinary-review claude→codex fallback reuses the SAME ``(backend, model)``
-    pairing already proven safe as a live council seat (``codex_cli`` → ``codex``)
-    — no new, unvalidated pairing is introduced. Returns ``None`` when the
-    backend has no known review pairing (caller then parks rather than guess a
-    model). Not consulted for ``claude_code`` (that path keeps its own
-    ``_run_direct_review`` haiku default).
+    Returns ``None`` when the backend has no known review pairing (caller then
+    parks rather than guess a model). Not consulted for ``claude_code`` (that
+    path keeps its own ``_run_direct_review`` haiku default).
     """
-    for member_backend, model, _lens in _COUNCIL_PANEL:
-        if member_backend == backend:
-            return model
-    return None
+    return _REVIEW_FALLBACK_MODELS.get(backend)
 
 
 def _member_on_cooldown(usage_store, backend: str, model: str, *, now: datetime) -> bool:
