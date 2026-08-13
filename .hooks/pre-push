@@ -3,7 +3,20 @@
 set -e
 
 repo_root="$(git rev-parse --show-toplevel)"
-workspace_root="$(cd "$repo_root/.." && pwd)"
+
+# Sibling checkouts (the private manifest holding the boundary artifact, Custodian)
+# live next to the MAIN clone, so workspace_root must be the main clone's parent.
+# `$repo_root/..` gets that wrong inside a git worktree: repo_root is then
+# .../OperationsCenter/.claude/worktrees/<name>, so workspace_root resolved to
+# .../.claude/worktrees — a directory with no siblings, the artifact glob below
+# matched nothing, and every push from a worktree failed closed on a missing
+# REPOGRAPH_BOUNDARY_ARTIFACT_FILE it could not have found. `--git-common-dir` is
+# shared by the main clone and all its worktrees, so its parent is always the main
+# clone root (in a worktree it is an absolute .../OperationsCenter/.git; in the main
+# clone a bare ".git", hence the -C "$repo_root" and the realpath via cd).
+git_common_dir="$(cd "$repo_root" && cd "$(git rev-parse --git-common-dir)" && pwd)"
+main_clone_root="$(cd "$git_common_dir/.." && pwd)"
+workspace_root="$(cd "$main_clone_root/.." && pwd)"
 
 if [ -z "${REPOGRAPH_BOUNDARY_ARTIFACT_FILE:-}" ]; then
     shopt -s nullglob
@@ -30,10 +43,18 @@ custodian_multi=""
 if command -v custodian-multi >/dev/null 2>&1; then
     custodian_multi="$(command -v custodian-multi)"
 fi
+# A worktree has no venv of its own — the interpreter lives in the main clone, so
+# the main_clone_root candidates are the ones that actually resolve there. Without
+# them a worktree push on a box whose only custodian-multi is <clone>/.venv/bin
+# (no PATH entry, no sibling Custodian checkout — the fleet's layout) dies on
+# "custodian-multi not found". For a plain checkout main_clone_root == repo_root,
+# so these are harmless duplicates of the two above.
 for candidate in \
     "$custodian_multi" \
     "$repo_root/.venv/bin/custodian-multi" \
     "$repo_root/.warehouse-venv/bin/custodian-multi" \
+    "$main_clone_root/.venv/bin/custodian-multi" \
+    "$main_clone_root/.warehouse-venv/bin/custodian-multi" \
     "$workspace_root/Custodian/.venv/bin/custodian-multi"
 do
     if [ -x "$candidate" ]; then

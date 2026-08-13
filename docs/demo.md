@@ -218,7 +218,8 @@ Full end-to-end walkthrough from local startup to a completed task with retained
 - Python 3.11+
 - A GitHub account with a repo and a personal access token (repo scope)
 - `gh` CLI authenticated (`gh auth login`) or a `GITHUB_TOKEN` PAT
-- TeamExecutor (`team-executor`) installed and accessible via PATH
+- TeamExecutor, DAGExecutor, and CritiqueExecutor cloned as siblings of this repo
+  (setup installs them editable into the OC venv — they are imported, not run from PATH)
 
 ### Step 1 — First-time setup
 

@@ -2,7 +2,52 @@
 
 _Durable work inventory. Update after each meaningful chunk of progress._
 
+## Up Next
+
+### CritiqueExecutor is not covered by the fleet-launch self-heal
+- `ensure_executor_backends()` in `scripts/operations-center.sh` probes only
+  `import team_executor, dag_executor` and reinstalls only `../TeamExecutor` and
+  `../DAGExecutor`. `critique_executor` is a third backend OC loads
+  (`backends/critique_executor/adapter.py`), so a `uv sync` / venv-recreate that
+  drops it is NOT auto-repaired at fleet launch — every critique-topology task
+  fails at execute with `No module named 'critique_executor'` until a human notices.
+- Setup (`entrypoints/setup/main.py`) now covers all three via `EXECUTOR_BACKENDS`;
+  the shell script is the remaining gap. Fix is to widen the probe and the sibling
+  loop to match, ideally sourcing the same list.
+- Deferred from the 2026-08-03 setup fix to keep fleet-startup behavior out of that
+  change's blast radius.
+
 ## Done
+
+### 2026-08-03: Replace setup's dead executor PATH probe with an importability check (✅ COMPLETE)
+- **Objective**: `ensure_executor_installed`/`verify_executor` in
+  `entrypoints/setup/main.py` gated interactive setup on a `team-executor` console
+  script that TeamExecutor never produces (no `[project.scripts]`), so the wizard
+  hard-failed at that step on every run. Replace with a check of what OC actually
+  needs: importability of the three backends it loads as libraries.
+- **Status**: ✅ COMPLETE.
+- **Changes**:
+  - `setup/main.py` — new `EXECUTOR_BACKENDS` table, `missing_executor_backends()`
+    (subprocess import probe) and `ensure_executor_backends_installed()` (editable
+    install of `../TeamExecutor`, `../DAGExecutor`, `../CritiqueExecutor` + re-probe),
+    mirroring `ensure_executor_backends()` in `scripts/operations-center.sh`.
+    Removed `ensure_executor_installed`, `verify_executor`, the "Executor binary"
+    prompt, and `SetupAnswers.executor_binary`.
+  - `maintenance/dependency_check.py` — same stale-CLI bug: `team-executor --version`
+    replaced with `executor_backend_status()` (importability + distribution version);
+    `kind` `"cli"` → `"library"`.
+  - Docs — `docs/operator/setup.md` "Executor Install Behavior" + Executor/Advanced Mode
+    bullets rewritten; `docs/demo.md` PATH prerequisite corrected.
+- **Config-key decisions**: `team_executor.binary` removed (no writer, no settings
+  field, no reader outside setup's own prompt default). `OPERATIONS_CENTER_EXECUTOR_INSTALL_REF`
+  kept but repurposed as a drift-reporting version pin — it still has a live consumer
+  in `dependency_check.py`, but nothing installs from it anymore.
+- **Verification**: probed the live WSL2 venv — `missing_executor_backends()` returns
+  `[]`, all three backends report `(True, '0.1.0')`, `shutil.which("team-executor")`
+  is `None` (confirming the old gate could never pass). 10 new tests; 26 pass across
+  the two touched test files; `ruff check`/`ruff format --check` clean. Full suite:
+  10354 passed, 6 failed — the same pre-existing sandbox/timing failures as prior
+  stages, all reproduced on an unmodified checkout.
 
 ### 2026-07-15: Stage 4 — Refactor existing code to use the new shared helper (✅ COMPLETE)
 - **Objective**: Independently re-verify Stage 2's migration against the "refactor existing

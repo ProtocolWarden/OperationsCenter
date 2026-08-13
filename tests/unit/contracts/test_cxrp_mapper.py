@@ -337,3 +337,51 @@ def test_ecp_status_round_trip_for_terminal_states(status_value):
     )
     cxrp = to_cxrp_execution_result(oc)
     assert cxrp.status.value == status_value
+
+
+# --- Issue-sourced goals: short fields must summarize the REQUEST -------------
+# Regression pins. `wrap_untrusted_goal` prepends GOAL_PREAMBLE before the fence,
+# so the previous `goal_text[:80]` / `[:120]` slices titled and scoped EVERY
+# issue-sourced task with the preamble's opening words instead of the request.
+# Observed live on OperationsCenter PRs #478 and #483.
+
+
+def _wrapped_goal(goal: str) -> str:
+    from operations_center.injection import wrap_untrusted_goal
+
+    return wrap_untrusted_goal(goal)
+
+
+def test_task_proposal_title_summarizes_request_not_preamble():
+    proposal = _make_proposal().model_copy(
+        update={"goal_text": _wrapped_goal("Fix edge_cases to forward the sample list")}
+    )
+    cxrp = to_cxrp_task_proposal(proposal)
+    assert cxrp.title == "Fix edge_cases to forward the sample list"
+    assert not cxrp.title.startswith("SECURITY:")
+    assert "UNTRUSTED" not in cxrp.title
+
+
+def test_task_proposal_objective_keeps_the_full_fenced_goal():
+    """The executor must still receive the preamble and fence intact."""
+    wrapped = _wrapped_goal("Fix edge_cases to forward the sample list")
+    proposal = _make_proposal().model_copy(update={"goal_text": wrapped})
+    cxrp = to_cxrp_task_proposal(proposal)
+    assert cxrp.objective == wrapped
+    assert cxrp.objective.startswith("SECURITY:")
+    assert "<<UNTRUSTED:" in cxrp.objective
+
+
+def test_task_proposal_title_unchanged_for_plain_goal():
+    """Non-issue-sourced goals are unfenced and must summarize as before."""
+    cxrp = to_cxrp_task_proposal(_make_proposal())
+    assert cxrp.title.startswith("Guard User.email access in UserSerializer")
+
+
+def test_execution_request_scope_summarizes_request_not_preamble():
+    req = _make_request("p-1", "d-1").model_copy(
+        update={"goal_text": _wrapped_goal("Add a regression test for the STEP 3 snippet")}
+    )
+    cxrp = to_cxrp_execution_request(req, executor="claude_cli", backend="team_executor")
+    assert cxrp.scope == "Add a regression test for the STEP 3 snippet"
+    assert not cxrp.scope.startswith("SECURITY:")

@@ -20,7 +20,16 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install ruff
-        run: pip install "ruff>=0.5"
+        # Install the repo's own pinned toolchain rather than `ruff>=0.5`. A lint
+        # gate has to run the version the config was written against: `[tool.ruff]`
+        # here selects a deliberate rule set (BLE001 and S110 are explicitly
+        # DROPPED as too noisy, per the comment in pyproject), and a newer ruff
+        # re-enables rules that config never opted into. `ruff>=0.5` floated up to
+        # 0.16.1 and this job went from clean to 1996 errors — every one of them
+        # phantom — red-failing CI on main daily from ~2026-07-29. Taking the pin
+        # from [project.optional-dependencies].dev keeps one source of truth; do
+        # not reintroduce a version literal here.
+        run: pip install -e ".[dev]"
       - name: Run ruff
         run: ruff check .
 

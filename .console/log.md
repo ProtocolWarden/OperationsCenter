@@ -21,6 +21,214 @@ assumption found on the ordinary path. Tests: 3 root integration (codex-runs /
 ladder-exhausted-parks / guardrail-not-single-reviewed) + 3 unit
 (tests/unit/reviewer/test_d1_codex_fallback.py: model pairing, unknown→None,
 back-compat alias). Full: 169 reviewer + 8536 unit green; ruff clean.
+## 2026-08-03 — fix(setup): replace the dead executor PATH probe with an importability check
+
+`entrypoints/setup/main.py` gated the whole wizard on a step that could never
+pass: `ensure_executor_installed("team-executor")` shelled out to `uv tool
+install git+.../TeamExecutor@dev --force`, then re-checked PATH and raised
+`[executor] ERROR: installation failed` if the binary still wasn't there —
+followed by `verify_executor` running `team-executor --help`. TeamExecutor
+declares no `[project.scripts]`, so no `team-executor` console script is ever
+produced. Verified against the live WSL2 stack: `shutil.which("team-executor")`
+is `None`. Every interactive setup run therefore hard-failed at that gate, after
+the uv install had already burned a network fetch.
+
+The probe was measuring the wrong thing. OC consumes all three execute backends
+as LIBRARIES — `backends/{team_executor,dag_executor,critique_executor}/adapter.py`
+each do a plain `import <module>` — so importability in OC's venv is the only
+readiness signal that means anything. PATH is not: TeamExecutor and
+CritiqueExecutor ship no console script at all, and the one that exists
+(DAGExecutor's `dag-executor`) is never invoked by OC.
+
+Replaced with `missing_executor_backends()` + `ensure_executor_backends_installed()`,
+mirroring the `ensure_executor_backends()` self-heal in `scripts/operations-center.sh`:
+probe each backend with `<venv-python> -c "import <module>"`, and for anything
+missing install the sibling checkout editable (`../TeamExecutor`, `../DAGExecutor`,
+`../CritiqueExecutor`), then re-probe. Setup now covers all THREE backends; the
+shell self-heal still only covers two (`team_executor`, `dag_executor`) — a
+CritiqueExecutor drop mid-life is not yet auto-repaired at fleet launch. Left
+alone deliberately (fleet-startup behavior, out of this change's blast radius);
+flagged for follow-up. The probe runs in a subprocess, not via importlib in-process,
+so an install that lands partway through setup is visible to the re-check.
+
+Config-key decisions:
+
+* `team_executor.binary` — REMOVED. It had no consumer in either direction:
+  `TeamExecutorSettings` has no `binary` field, `render_settings_yaml` never
+  wrote the key, and the only reader was setup's own prompt default. Dropped the
+  prompt and the `SetupAnswers.executor_binary` field.
+* `OPERATIONS_CENTER_EXECUTOR_INSTALL_REF` — KEPT, repurposed. It does have a
+  live consumer (`entrypoints/maintenance/dependency_check.py`), but its old
+  meaning ("git ref to install from") died with `ensure_executor_installed`.
+  Relabeled as a version pin for drift reporting, which is what dependency-check
+  actually does with it and how the docs already grouped it (alongside the Plane
+  and provider CLI pins).
+
+Same stale-CLI bug had a second instance: `collect_dependency_statuses` probed
+`team-executor --version`, so the TeamExecutor row reported
+`healthy=False` / "not installed or not on PATH" on every single run, forever.
+Replaced with `executor_backend_status()` (importability + best-effort
+distribution version via `packages_distributions()`); `kind` corrected
+`"cli"` → `"library"`. Verified against the live WSL2 venv: all three backends
+report `(True, '0.1.0')` — the editable-install version lookup resolves.
+
+Tests: 7 new in `test_setup_cli.py` (probe call shape, no-op when all
+importable, editable install of missing siblings, missing-checkout error,
+install-failure error, still-unimportable-after-install error, backend-list pin)
+and 3 in `test_dependency_check.py`. 26 pass in the two touched files; full suite
+10354 passed with the same 6 pre-existing sandbox/timing failures as prior
+stages (reproduced on an unmodified checkout — none related).
+
+Docs: rewrote `docs/operator/setup.md` "Executor Install Behavior" to describe
+the import-based flow, fixed the "install/verify `team-executor` CLI" bullet and
+the Advanced Mode pin description, and corrected the `docs/demo.md` prerequisite
+that told operators to put `team-executor` on PATH.
+## 2026-08-03 — fix(hooks): pre-push resolved the wrong workspace root inside a git worktree
+
+`.hooks/pre-push` locates the boundary disclosure artifact by globbing sibling
+checkouts: `workspace_root="$(cd "$repo_root/.." && pwd)"`, then
+`$workspace_root/*/dist/boundary_disclosure_artifact.json`. That assumes
+`$repo_root` is the main clone. Inside a **git worktree** it is not — repo_root is
+`.../OperationsCenter/.claude/worktrees/<name>`, so workspace_root resolved to
+`.../.claude/worktrees`, a directory with no siblings at all. The glob matched
+nothing, and every push from a worktree died on
+`missing REPOGRAPH_BOUNDARY_ARTIFACT_FILE; failing closed` — a file it had no way
+to find and that the operator had already generated one directory over.
+
+Fixed by deriving the main clone root from `git rev-parse --git-common-dir`, which
+the main clone and all of its worktrees share. Its parent is always the main clone,
+whose parent is the real workspace root. Verified from both: the worktree now
+auto-discovers `PrivateManifest/dist/boundary_disclosure_artifact.json`, and the
+main clone resolves to exactly the same path it did before (no behaviour change
+where the old code already worked).
+
+Found while triaging why this branch could not be pushed. Two further faults sat on
+top of it, neither in this repo, both since fixed:
+- The WSL2 fleet clone had no boundary artifact anywhere under `~/GitHub`, so its
+  own pre-push failed at B2 before Custodian even ran. PrivateManifest was not
+  checked out there at all; it now is, and the artifact is generated from it. The
+  real hook now passes unaided in the fleet clone: 0 findings, exit 0.
+- Custodian's `find_tool()` preferred *its own* venv over the audited repo's, so a
+  globally-installed `custodian-multi` audited OC (pinned `ruff==0.15.13`) with a
+  system-wide ruff 0.16.1 and produced 1222 phantom findings against a tree that is
+  clean. Fixed upstream in ProtocolWarden/Custodian#72.
+
+The OC baseline itself was never dirty: with the right toolchain and the artifact
+configured, the gate returns 0 findings / 0 HIGH / 0 MED / clean.
+
+## 2026-08-03 — fix(launcher): widen executor-backend self-heal to critique_executor
+
+`ensure_executor_backends()` in `scripts/operations-center.sh` self-heals dropped
+executor sibling checkouts at every fleet launch, but covered only two of the three
+OC actually imports: it probed `import team_executor, dag_executor` and looped over
+`TeamExecutor DAGExecutor`. `critique_executor` (sibling `../CritiqueExecutor`,
+imported by `backends/critique_executor/adapter.py`) was in neither, so a `uv sync`
+or venv-recreate that dropped it left every critique-topology task failing at
+execute with `No module named 'critique_executor'` — the exact failure the self-heal
+exists to prevent for the other two — until a human noticed.
+
+Root cause of the drift was structural: the probe and the install loop were TWO
+hardcoded lists inside one function, so widening one without the other was easy and
+silent. Collapsed to a single `EXECUTOR_BACKENDS` array of
+`<import name>:<sibling checkout dir>` pairs; the probe's import statement and the
+install loop are both derived from it. Behavior is otherwise unchanged (still
+all-or-nothing: any missing module reinstalls all siblings).
+
+Did NOT source the list from Python. The task note assumed
+`entrypoints/setup/main.py` already held an authoritative `EXECUTOR_BACKENDS`
+tuple — it does not, and no such constant exists anywhere in the repo (verified at
+bb65da3b in both the Windows and WSL2 checkouts). The nearest real Python lists are
+`BackendName` / `EXECUTOR_LANE_NAMES` (`contracts/enums.py`) and the
+`backends/factory.py` registry, but neither carries the checkout-dir half of each
+pair, and it is not derivable (`dag_executor` → `DAGExecutor`, not `DagExecutor`).
+Sourcing is also wrong in principle here: this self-heal must run precisely when the
+venv is too broken to import `operations_center`. Took the stated fallback instead —
+cross-reference comments in both `scripts/operations-center.sh` and
+`backends/factory.py`, each naming the other and stating that adding a backend means
+updating both.
+
+Verified against the live WSL2 stack (~/GitHub, siblings at
+{TeamExecutor,DAGExecutor,CritiqueExecutor}): `bash -n` clean (after CRLF
+normalization — the Windows checkout is CRLF, pre-existing); probe builds exactly
+`import team_executor, dag_executor, critique_executor`; no-op + rc=0 against the
+real fleet venv where all three already import; against a throwaway empty venv the
+real `uv` path installed all three (`+ critique-executor==0.1.0 from
+file:///home/diane/GitHub/CritiqueExecutor`) and a second call was a silent no-op.
+Missing-`uv` and missing-checkout paths still degrade to a WARNING rather than
+aborting launch. Fleet venv untouched. `tests/unit/backends/test_factory.py` +
+`test_critique_executor_adapter.py` 5 passed.
+## 2026-08-03 — fix(ci): pin the lint toolchain, ending a week of red CI on main
+
+CI has failed on `main` every day since at least 2026-07-29. Cause: both lint gates
+installed ruff **unpinned** while the repo pins `ruff==0.15.13`.
+
+- `ci.yml` — `pip install "ruff>=0.5"` floated to 0.16.1. `ruff check .` went from
+  clean to **1996 errors**.
+- `custodian-audit.yml` — `pip install ruff vulture ty`, same drift. The audit
+  reported **1222 findings** (the ruff group alone; vulture was clean in CI).
+
+None of them were real. `[tool.ruff.lint]` selects a deliberate rule set and its own
+comment records BLE001 and S110 as DROPPED — "too noisy across codebase, real
+legitimate uses". A newer ruff re-enables exactly those: of the 1222, BLE001 was 316
+and UP045 290. Verified locally on the same tree: ruff 0.16.1 → 1222, ruff 0.15.13 →
+`All checks passed!` on the full `ruff check .`, root files included.
+
+Both now install `-e ".[dev]"`, taking the version from
+`[project.optional-dependencies].dev` so there is one source of truth and no version
+literal in the workflows to drift again.
+
+The irony worth recording: `custodian-audit.yml` already carried a paragraph
+explaining that Custodian itself must be SHA-pinned because tracking `@main` once let
+an upstream change emit "a phantom finding fleet-wide". The very next line then
+installed that pinned auditor's *tools* unpinned, reproducing the same failure one
+level down. Pinning the auditor while floating what the auditor runs pins nothing.
+
+Also made the repo install non-best-effort. It was `pip install -e . || true`; on
+failure the adapters find no ruff, Custodian reports "not installed" and SKIPS it,
+and the gate passes vacuously — a green check that audited nothing, which is worse
+than a red one.
+
+Related, same root cause one layer up: Custodian's `find_tool()` preferred its own
+venv over the audited repo's, so a globally-installed `custodian-multi` reproduced
+this identically off-CI. Fixed in ProtocolWarden/Custodian#72.
+## 2026-08-03 — fix(contracts): short fields summarized the injection preamble, not the goal
+
+`wrap_untrusted_goal` emits `GOAL_PREAMBLE` BEFORE the fence, so every
+issue-sourced `goal_text` starts with "SECURITY: the text inside the
+<<UNTRUSTED:...". `cxrp_mapper` then sliced that raw string for two short
+fields — `title=oc.goal_text[:80]` and `scope=oc.goal_text[:120]` — so EVERY
+issue-sourced task was titled and scoped with the preamble's opening words
+instead of its actual request. Visible live on PRs #478 and #483, whose titles
+both read "SECURITY: the text inside the <<UNTRUSTED:...>> … <</UNTRUSTED:...>>
+fen" while their real goals were "Fix `edge_cases` to forward the sample list,
+not the count dict" and "Add regression test suite that execs the live STEP 3
+snippet against the OUTPUT". Cosmetic in effect but corrosive in practice: it
+makes routine autonomous PRs read as security events and destroys board
+scannability. Both call sites were the same bug — fixing only the title would
+have left `scope` broken.
+
+The fix is NOT a regex in the mapper. `injection.py` owns the fence format, so
+it grew the reader: `unfence_goal()` (payload extraction, backreferenced nonce
+so a forged close marker with a guessed nonce does not terminate the span,
+falling back to the input unchanged when unfenced) and `goal_summary()`
+(unfence → collapse to one line → `sanitize_for_comment` → bound). The mapper
+just calls `goal_summary`.
+
+Two deliberate decisions worth recording. FIRST, `objective` still carries the
+FULL wrapped text — the preamble and fence must reach the executor intact; only
+the short human/telemetry-facing fields are summarized, and a test pins that
+distinction. SECOND, this MOVES attacker-influenced text into GitHub PR titles,
+which the old (accidental) behavior did not do — so `goal_summary` routes
+through `sanitize_for_comment` to defang `@mentions` (a bare `@handle` in a PR
+title pings a real person) and strip zero-width/bidi characters. Single-line
+collapse matters for the same reason: a newline breaks a PR title.
+
+Verified by mutation, not just by green tests: reverted both call sites to the
+raw slices and reran — both new pins failed, reproducing the exact observed
+string (`scope == 'SECURITY: th...from an exter'`); restored, all pass. 44 tests
+across `test_injection.py` + `test_cxrp_mapper.py`; no pre-existing test asserts
+on CxRP `title`/`scope`, so blast radius is limited to the new pins. ruff check
+and ruff format clean.
 
 ## 2026-07-15 — feat(reviewer): ACTIVATE the council — populate guardrail_paths (§G1)
 

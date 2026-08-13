@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
+import importlib.util
 import json
 import os
 import re
-import subprocess
 import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -80,6 +81,31 @@ def plane_latest_from_env(env: dict[str, str]) -> tuple[str | None, str | None]:
     return pinned, setup_url
 
 
+def executor_backend_status(module: str) -> tuple[bool, str | None]:
+    """Return ``(importable, distribution version)`` for an execute backend module.
+
+    OC loads TeamExecutor as a LIBRARY (``backends/team_executor/adapter.py``
+    imports it directly), and TeamExecutor declares no ``[project.scripts]`` — so
+    importability, not PATH, is what "installed" means here. The version is
+    best-effort: an editable sibling checkout whose metadata does not map the
+    top-level module back to a distribution reports importable with no version.
+    """
+    try:
+        importable = importlib.util.find_spec(module) is not None
+    except (ImportError, ValueError):
+        importable = False
+    if not importable:
+        return False, None
+    candidates = list(importlib.metadata.packages_distributions().get(module, ()))
+    candidates.append(module.replace("_", "-"))
+    for distribution in candidates:
+        try:
+            return True, normalize_version(importlib.metadata.version(distribution))
+        except importlib.metadata.PackageNotFoundError:
+            continue
+    return True, None
+
+
 def current_plane_health(settings: Settings) -> bool:
     try:
         response = httpx.get(settings.plane.base_url, timeout=10.0)
@@ -114,20 +140,15 @@ def collect_dependency_statuses(settings: Settings, env: dict[str, str]) -> list
         )
     )
 
-    try:
-        proc = subprocess.run(
-            ["team-executor", "--version"], check=False, capture_output=True, text=True, timeout=10
-        )
-        executor_version_raw = (proc.stdout or proc.stderr).strip() if proc.returncode == 0 else ""
-    except Exception:
-        executor_version_raw = ""
-    executor_installed = bool(executor_version_raw)
-    executor_installed_version = normalize_version(executor_version_raw)
+    executor_installed, executor_installed_version = executor_backend_status("team_executor")
     executor_pinned = normalize_version(env.get("OPERATIONS_CENTER_EXECUTOR_INSTALL_REF"))
     executor_latest = fetch_github_latest_release("ProtocolWarden", "TeamExecutor")
     executor_notes: list[str] = []
     if not executor_installed:
-        executor_notes.append("team-executor is not installed or not on PATH.")
+        executor_notes.append(
+            "team_executor is not importable. Run `./scripts/operations-center.sh setup` or "
+            "install the sibling TeamExecutor checkout editable into the OC venv."
+        )
     if (
         executor_pinned
         and executor_installed_version
@@ -144,7 +165,7 @@ def collect_dependency_statuses(settings: Settings, env: dict[str, str]) -> list
         DependencyStatus(
             key="team_executor",
             label="TeamExecutor",
-            kind="cli",
+            kind="library",
             installed_version=executor_installed_version,
             pinned_version=executor_pinned,
             upstream_latest=executor_latest,
