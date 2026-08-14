@@ -209,6 +209,62 @@ class TestListCommand:
         result = runner.invoke(app, ["list", "--backend", "s3"])
         assert result.exit_code == EXIT_CONFIG_ERROR
 
+    def test_list_format_csv_emits_rows(self) -> None:
+        """csv has always been advertised in --help but had no branch.
+
+        It fell through every format arm and exited 0 having printed nothing,
+        which is indistinguishable from an empty snapshot store.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            snapshot_dir = Path(tmpdir) / "obs_test_123_abc"
+            snapshot_dir.mkdir()
+            (snapshot_dir / "repo_state_snapshot.json").write_text("{}", encoding="utf-8")
+
+            result = runner.invoke(app, ["list", "--storage-root", tmpdir, "--format", "csv"])
+            assert result.exit_code == EXIT_SUCCESS
+            lines = [ln for ln in result.stdout.splitlines() if ln.strip()]
+            assert lines[0] == "run_id,observed_at,size"
+            assert any(ln.startswith("obs_test_123_abc,") for ln in lines[1:])
+
+    def test_list_unknown_format_is_rejected_not_silently_empty(self) -> None:
+        """A typo'd --format used to exit 0 with no output, reading as 'no snapshots'."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            snapshot_dir = Path(tmpdir) / "obs_test_123_abc"
+            snapshot_dir.mkdir()
+            (snapshot_dir / "repo_state_snapshot.json").write_text("{}", encoding="utf-8")
+
+            result = runner.invoke(app, ["list", "--storage-root", tmpdir, "--format", "tabel"])
+            assert result.exit_code == EXIT_CONFIG_ERROR
+            assert "unknown --format" in result.stdout
+
+    def test_show_rejects_non_local_backend(self) -> None:
+        """`--backend` was ignored, so `show --backend s3` served LOCAL data as if remote."""
+        result = runner.invoke(app, ["show", "some-run-id", "--backend", "s3"])
+        assert result.exit_code == EXIT_CONFIG_ERROR
+        assert "Non-local backends not yet supported" in result.stdout
+
+    def test_export_rejects_non_local_backend(self) -> None:
+        """Same ignored-`--backend` bug on export: it exported from local regardless."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out = Path(tmpdir) / "out.json"
+            result = runner.invoke(
+                app, ["export", "some-run-id", str(out), "--backend", "s3"]
+            )
+            assert result.exit_code == EXIT_CONFIG_ERROR
+
+    def test_list_no_longer_accepts_dead_filter_flag(self) -> None:
+        """`--filter` parsed and was then ignored, so it always returned unfiltered rows.
+
+        Nothing caches per-snapshot validation status for it to filter on, so the
+        option is removed rather than left silently inert: an unknown-option error
+        is honest, a quietly unfiltered list is not.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = runner.invoke(
+                app, ["list", "--storage-root", tmpdir, "--filter", "valid"]
+            )
+            assert result.exit_code != EXIT_SUCCESS
+
 
 class TestShowCommand:
     """Tests for show command."""
@@ -286,10 +342,20 @@ class TestUnimplementedCommands:
             assert "not yet implemented" in result.stdout
 
     def test_cleanup_not_implemented(self) -> None:
-        """Test cleanup command."""
+        """An unimplemented cleanup must NOT report success.
+
+        This previously asserted EXIT_SUCCESS, pinning a bug: the stub exited 0,
+        so `cleanup --no-dry-run` looked like retention had run when nothing was
+        deleted. Every sibling stub already exits non-zero.
+        """
         result = runner.invoke(app, ["cleanup"])
-        assert result.exit_code == EXIT_SUCCESS
+        assert result.exit_code == EXIT_CONFIG_ERROR
         assert "not yet implemented" in result.stdout
+
+    def test_cleanup_no_dry_run_still_does_not_report_success(self) -> None:
+        """The dangerous invocation specifically must not exit 0."""
+        result = runner.invoke(app, ["cleanup", "--no-dry-run"])
+        assert result.exit_code != EXIT_SUCCESS
 
 
 class TestGlobalOptions:

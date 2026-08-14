@@ -12,9 +12,11 @@ Command-line interface for validating repository state snapshots with:
 
 from __future__ import annotations
 
+import csv
 import json
 import logging
 import os
+import sys
 from pathlib import Path
 
 import typer
@@ -420,6 +422,19 @@ def cmd_observe_and_validate(
     raise typer.Exit(EXIT_CONFIG_ERROR)
 
 
+def _snapshot_size(snapshot_dir: Path) -> str:
+    """Human-readable size of a snapshot's payload, or "" when it is absent."""
+    json_file = snapshot_dir / "repo_state_snapshot.json"
+    if not json_file.exists():
+        return ""
+    size_bytes = json_file.stat().st_size
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    if size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    return f"{size_bytes / (1024 * 1024):.1f} MB"
+
+
 @app.command("list")
 def cmd_list(
     limit: int = typer.Option(
@@ -431,11 +446,6 @@ def cmd_list(
         "recent",
         "--order",
         help="Sort order: recent|oldest|name",
-    ),
-    filter_status: str | None = typer.Option(
-        None,
-        "--filter",
-        help="Filter: valid|invalid (if validation cached)",
     ),
     format_str: str = typer.Option(
         "table",
@@ -498,18 +508,7 @@ def cmd_list(
             table.add_column("size", style="yellow")
 
             for snapshot_dir in snapshot_dirs:
-                json_file = snapshot_dir / "repo_state_snapshot.json"
-                size = ""
-                if json_file.exists():
-                    size_bytes = json_file.stat().st_size
-                    if size_bytes < 1024:
-                        size = f"{size_bytes} B"
-                    elif size_bytes < 1024 * 1024:
-                        size = f"{size_bytes / 1024:.1f} KB"
-                    else:
-                        size = f"{size_bytes / (1024 * 1024):.1f} MB"
-
-                table.add_row(snapshot_dir.name, "—", size)
+                table.add_row(snapshot_dir.name, "—", _snapshot_size(snapshot_dir))
 
             if not quiet:
                 console.print(table)
@@ -519,6 +518,30 @@ def cmd_list(
             if not quiet:
                 print_structured(console, snapshots)
 
+        elif format_str == "csv":
+            # `--help` has always advertised csv, but there was no branch for it:
+            # the command exited 0 having printed nothing, which reads as "no
+            # snapshots" rather than "format not handled".
+            if not quiet:
+                writer = csv.writer(sys.stdout, lineterminator="\n")
+                writer.writerow(["run_id", "observed_at", "size"])
+                for snapshot_dir in snapshot_dirs:
+                    writer.writerow([snapshot_dir.name, "", _snapshot_size(snapshot_dir)])
+
+        else:
+            # Previously an unknown --format fell through every branch and exited
+            # 0 with no output, so a typo looked like an empty snapshot store.
+            if not quiet:
+                console.print(
+                    f"[red]Error: unknown --format '{format_str}' (expected table|json|csv)[/red]"
+                )
+            raise typer.Exit(EXIT_CONFIG_ERROR)
+
+    # `typer.Exit` subclasses RuntimeError, so the broad handler below would
+    # otherwise swallow the deliberate exit above and relabel it as an
+    # unexpected listing failure. Matches the pattern in cmd_validate.
+    except typer.Exit:
+        raise
     except Exception as e:
         if not quiet:
             console.print(f"[red]Error listing snapshots: {e}[/red]")
@@ -560,6 +583,15 @@ def cmd_show(
     ),
 ) -> None:
     """Display snapshot contents."""
+    # `--backend` was accepted and ignored, so `--backend s3` silently read the
+    # LOCAL store and presented it as the requested one. `list` already rejects
+    # non-local backends; refusing here keeps the whole CLI honest rather than
+    # answering a question the user did not ask.
+    if backend != "local":
+        if not quiet:
+            console.print("[red]Error: Non-local backends not yet supported[/red]")
+        raise typer.Exit(EXIT_CONFIG_ERROR)
+
     try:
         loader = SnapshotLoader()
         snapshot = loader.load(snapshot_path)
@@ -678,6 +710,13 @@ def cmd_export(
     ),
 ) -> None:
     """Export snapshot to file."""
+    # See cmd_show: an ignored `--backend` silently exported from the local
+    # store regardless of what was requested.
+    if backend != "local":
+        if not quiet:
+            console.print("[red]Error: Non-local backends not yet supported[/red]")
+        raise typer.Exit(EXIT_CONFIG_ERROR)
+
     try:
         loader = SnapshotLoader()
         snapshot = loader.load(snapshot_id)
@@ -812,7 +851,11 @@ def cmd_cleanup(
     """Remove old snapshots."""
     if not quiet:
         console.print("[cyan]cleanup[/cyan] command not yet implemented")
-    raise typer.Exit(EXIT_SUCCESS)
+    # EXIT_CONFIG_ERROR, not EXIT_SUCCESS. This stub used to exit 0, so
+    # `cleanup --no-dry-run` reported success while deleting nothing — a caller
+    # or scheduled job could not tell retention had silently never run. Every
+    # other unimplemented command in this CLI already exits non-zero.
+    raise typer.Exit(EXIT_CONFIG_ERROR)
 
 
 @app.command("query-flaky-tests")
