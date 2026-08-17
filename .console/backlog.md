@@ -78,6 +78,73 @@ _Durable work inventory. Update after each meaningful chunk of progress._
   all five behaviours smoke-tested through the real CLI. The 18 remaining failures in
   `tests/unit/observer/` reproduce with these changes stashed — pre-existing Windows
   `PermissionError: [WinError 32]` in tempfile handling, unrelated.
+### Vulture has never actually run in the audit gate (⚠️ OPEN — needs a decision)
+- **Discovered**: 2026-08-04, while pinning vulture (below).
+- **Symptom**: the `audit` gate reports `VULTURE: status=pass count=0`. Run the same
+  tool by hand and it emits **621 findings** and exits 3.
+- **Cause**: the SHA-pinned Custodian (`d6ba8ab`) builds
+  `vulture <src> --min-confidence=60 <tests>` — the `tests` positional lands *after*
+  the flag, vulture's argparse rejects it (`unrecognized arguments: tests`), and it
+  exits 2 with empty stdout. That pinned adapter has no returncode guard, so empty
+  stdout is read as "no dead code" → `status: pass`. The gate has been green for a
+  tool that never analysed anything.
+- **Already fixed upstream**: current Custodian main puts every path before the
+  options *and* emits TOOL_ERROR when the returncode is not 0/3 with empty stdout.
+- **The decision**: bumping the Custodian SHA (worth doing anyway — main now carries
+  the `find_tool` fix from Custodian#72) makes those 621 findings real and reds the
+  audit. They are LOW/advisory and look heavily false-positive (test `side_effect`
+  attributes, pydantic `model_config`, public-API methods), so the likely resolutions
+  are a `.vulture_whitelist.py`, a higher `vulture_min_confidence`, or turning
+  `vulture: false` in `.custodian/config.yaml`. Needs an operator call, not a
+  unilateral one.
+
+## Done
+
+### 2026-08-04: Pin vulture — the last unpinned lint tool (✅ COMPLETE)
+- **Objective**: close the drift class that red-failed main for a week.
+- **What changed**: `vulture==2.16` added to `[project.optional-dependencies].dev`;
+  the separate `pip install vulture` dropped from `custodian-audit.yml` so it now
+  arrives via `pip install -e ".[dev]"` alongside ruff and ty.
+- **Verification**: `ruff check .` clean under the pinned 0.15.13; audit clean;
+  vulture 2.16 resolves from the OC venv.
+- **Note**: this makes vulture's behaviour deterministic but does NOT make it run —
+  see the open item above.
+
+### 2026-08-04: CI lint toolchain pinned (#492) (✅ COMPLETE)
+- **Problem**: CI failed on `main` every day from ~2026-07-29. Both lint gates
+  installed ruff unpinned (`ci.yml` had `pip install "ruff>=0.5"`,
+  `custodian-audit.yml` had `pip install ruff vulture ty`) while the repo pins
+  `ruff==0.15.13`. Ruff floated to 0.16.1: `ruff check .` went from clean to **1996
+  errors** and the audit to **1222 findings**, none of them real —
+  `[tool.ruff.lint]` records BLE001 and S110 as deliberately dropped, and a newer
+  ruff re-enables exactly those (BLE001 ×316, UP045 ×290).
+- **Fix**: both jobs install `-e ".[dev]"`, so the version comes from pyproject —
+  one source of truth, no version literal left in the workflows. Also dropped
+  `|| true` from the repo install: on failure the adapters found no ruff, Custodian
+  reported it "not installed" and skipped it, and the gate passed vacuously.
+- **Verified**: main green on `f349d0e8` (CI + custodian-audit both success), the
+  first green main since before 2026-07-29.
+
+### 2026-08-04: Executor-backend self-heal widened to critique_executor (#491) (✅ COMPLETE)
+- **Problem**: `ensure_executor_backends()` in `scripts/operations-center.sh` covered
+  only two of the three backends OC imports — it probed
+  `import team_executor, dag_executor` and looped over `TeamExecutor DAGExecutor`.
+  `critique_executor` (sibling `../CritiqueExecutor`, imported by
+  `backends/critique_executor/adapter.py`) was in neither, so a `uv sync` or
+  venv-recreate that dropped it was never auto-repaired and every critique-topology
+  task failed at execute with `No module named 'critique_executor'`.
+- **Root cause**: the probe and the install loop were two hardcoded lists inside one
+  function, so widening one without the other was silent. Collapsed to a single
+  `EXECUTOR_BACKENDS` array of `<import name>:<sibling checkout dir>` pairs that both
+  derive from; cross-reference comments added in `scripts/operations-center.sh` and
+  `backends/factory.py`.
+- **Also fixed**: `.hooks/pre-push` computed `workspace_root` as `$repo_root/..`,
+  which inside a git worktree resolves to `.claude/worktrees` — no siblings, so the
+  boundary-artifact glob matched nothing and every push from a worktree failed
+  closed. Now derived from `git rev-parse --git-common-dir`.
+- **Verified**: against the live stack — probe builds exactly
+  `import team_executor, dag_executor, critique_executor`; a throwaway empty venv
+  had all three installed by the real `uv` path and a second call was a silent no-op.
 
 ### 2026-08-03: Replace setup's dead executor PATH probe with an importability check (✅ COMPLETE)
 - **Objective**: `ensure_executor_installed`/`verify_executor` in
