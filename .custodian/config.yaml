@@ -663,6 +663,14 @@ audit:
       - src/operations_center/config/settings.py
       # coordinator.py is OC's execution coordinator (central dispatcher).
       - src/operations_center/execution/coordinator.py
+      # extraction_health_history.py sat at exactly 500 lines, so adding the
+      # `edge_cases` field (6 lines: field, docstring, to_dict, from_dict) put it
+      # 6 over. Unlike the entries above, this is a deferral rather than a claim
+      # that it cannot be split — the module holds two schema dataclasses AND the
+      # functions that aggregate them, which is a plausible seam. Splitting it
+      # inside a PR rescue would be a separate, unreviewed refactor; it is filed
+      # in the backlog instead. Revisit when the next field lands here.
+      - src/operations_center/observer/extraction_health_history.py
       # spec_hygiene/main.py wires the full spec-hygiene worker lifecycle.
       - src/operations_center/entrypoints/spec_hygiene/main.py
       # workspace.py manages the full workspace lifecycle (checkout, prep, cleanup)

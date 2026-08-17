@@ -79,6 +79,37 @@ class TestExtractionHealthSnapshot:
 
         assert snapshot.edge_case_summary == edge_cases
 
+    def test_snapshot_with_edge_cases_sample_list(self) -> None:
+        """Test snapshot stores the per-test edge_cases sample list."""
+        edge_cases = [
+            {"test_id": "tests/test_a.py::test_one", "issue": "truncated_message"},
+            {"test_id": "tests/test_b.py::test_two", "issue": "special_chars"},
+        ]
+        snapshot = ExtractionHealthSnapshot(
+            observed_at=datetime.now(UTC),
+            success_rate=80.0,
+            complete_extraction=8,
+            partial_extraction=2,
+            no_extraction=0,
+            total_flaky_tests=10,
+            edge_cases=edge_cases,
+        )
+
+        assert snapshot.edge_cases == edge_cases
+
+    def test_snapshot_edge_cases_defaults_to_empty_list(self) -> None:
+        """Test that edge_cases defaults to an empty list when not provided."""
+        snapshot = ExtractionHealthSnapshot(
+            observed_at=datetime.now(UTC),
+            success_rate=80.0,
+            complete_extraction=8,
+            partial_extraction=2,
+            no_extraction=0,
+            total_flaky_tests=10,
+        )
+
+        assert snapshot.edge_cases == []
+
     def test_snapshot_success_rate_validation(self) -> None:
         """Test that success_rate must be 0-100."""
         with pytest.raises(ValueError):
@@ -123,6 +154,7 @@ class TestExtractionHealthSnapshot:
             partial_extraction=2,
             no_extraction=0,
             total_flaky_tests=16,
+            edge_cases=[{"test_id": "tests/test_a.py::test_one", "issue": "special_chars"}],
             snapshot_id="snap-123",
             collection_run_id="run-001",
         )
@@ -135,6 +167,9 @@ class TestExtractionHealthSnapshot:
         assert data["no_extraction"] == 0
         assert data["total_flaky_tests"] == 16
         assert data["extracted_count"] == 16
+        assert data["edge_cases"] == [
+            {"test_id": "tests/test_a.py::test_one", "issue": "special_chars"}
+        ]
         assert data["snapshot_id"] == "snap-123"
         assert data["collection_run_id"] == "run-001"
 
@@ -150,6 +185,7 @@ class TestExtractionHealthSnapshot:
             "total_flaky_tests": 16,
             "extracted_count": 16,
             "edge_case_summary": {},
+            "edge_cases": [{"test_id": "tests/test_a.py::test_one", "issue": "truncated_message"}],
             "snapshot_id": "snap-123",
             "collection_run_id": "run-001",
         }
@@ -158,7 +194,29 @@ class TestExtractionHealthSnapshot:
         assert snapshot.success_rate == 87.5
         assert snapshot.complete_extraction == 14
         assert snapshot.partial_extraction == 2
+        assert snapshot.edge_cases == [
+            {"test_id": "tests/test_a.py::test_one", "issue": "truncated_message"}
+        ]
         assert snapshot.snapshot_id == "snap-123"
+
+    def test_snapshot_from_dict_missing_edge_cases_defaults_to_empty_list(self) -> None:
+        """Test that rows written before edge_cases existed load with edge_cases=[]."""
+        now = datetime.now(UTC)
+        data = {
+            "observed_at": now.isoformat(),
+            "success_rate": 87.5,
+            "complete_extraction": 14,
+            "partial_extraction": 2,
+            "no_extraction": 0,
+            "total_flaky_tests": 16,
+            "extracted_count": 16,
+            "edge_case_summary": {},
+            "snapshot_id": "snap-123",
+            "collection_run_id": "run-001",
+        }
+
+        snapshot = ExtractionHealthSnapshot.from_dict(data)
+        assert snapshot.edge_cases == []
 
     def test_snapshot_roundtrip_serialization(self) -> None:
         """Test that snapshot survives JSON serialization roundtrip."""
@@ -170,6 +228,7 @@ class TestExtractionHealthSnapshot:
             no_extraction=0,
             total_flaky_tests=20,
             edge_case_summary={"truncated": 1},
+            edge_cases=[{"test_id": "tests/test_c.py::test_three", "issue": "malformed_exception"}],
             snapshot_id="snap-456",
         )
 
@@ -184,6 +243,7 @@ class TestExtractionHealthSnapshot:
         assert restored.no_extraction == original.no_extraction
         assert restored.total_flaky_tests == original.total_flaky_tests
         assert restored.edge_case_summary == original.edge_case_summary
+        assert restored.edge_cases == original.edge_cases
         assert restored.snapshot_id == original.snapshot_id
 
 
@@ -507,6 +567,46 @@ class TestExtractionHistoryCollector:
             assert snapshot.snapshot_id == "snap-789"
             assert snapshot.collection_run_id == "run-456"
             assert snapshot.edge_case_summary["truncated"] == 2
+
+    def test_collector_collect_snapshot_with_edge_cases_sample_list(self) -> None:
+        """collect_snapshot() forwards the edge_cases sample list, not just the count dict."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            collector = ExtractionHistoryCollector(tmpdir)
+            edge_cases = [
+                {"test_id": "tests/test_a.py::test_one", "issue": "truncated_message"},
+                {"test_id": "tests/test_b.py::test_two", "issue": "special_chars"},
+            ]
+
+            snapshot = collector.collect_snapshot(
+                success_rate=85.0,
+                complete_extraction=12,
+                partial_extraction=3,
+                no_extraction=1,
+                total_flaky_tests=16,
+                edge_case_summary={"truncated_messages": 1, "special_chars": 1},
+                edge_cases=edge_cases,
+            )
+
+            assert snapshot.edge_cases == edge_cases
+
+            # Verify it survives the storage round-trip too.
+            reloaded = collector.storage.load_all_snapshots()
+            assert reloaded[0].edge_cases == edge_cases
+
+    def test_collector_collect_snapshot_edge_cases_defaults_to_empty_list(self) -> None:
+        """collect_snapshot() defaults edge_cases to [] when not provided."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            collector = ExtractionHistoryCollector(tmpdir)
+
+            snapshot = collector.collect_snapshot(
+                success_rate=87.5,
+                complete_extraction=14,
+                partial_extraction=2,
+                no_extraction=0,
+                total_flaky_tests=16,
+            )
+
+            assert snapshot.edge_cases == []
 
     def test_collector_persists_snapshots(self) -> None:
         """Test that collected snapshots are persisted."""

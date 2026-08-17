@@ -220,6 +220,12 @@ Every run of `extraction-health` appends a snapshot to the extraction-history JS
     "special_chars": 0,
     "malformed_exceptions": 0
   },
+  "edge_cases": [
+    {
+      "test_id": "tests/unit/queue/test_drain.py::test_drain_under_load",
+      "issue": "truncated_message"
+    }
+  ],
   "message_quality_rate": 92.3,
   "snapshot_id": null,
   "collection_run_id": null
@@ -227,7 +233,8 @@ Every run of `extraction-health` appends a snapshot to the extraction-history JS
 ```
 
 **Backwards compatibility:** records written before `message_quality_rate` was added load with
-`message_quality_rate=None` — no migration required.
+`message_quality_rate=None`, and records written before `edge_cases` was added load with
+`edge_cases=[]` — no migration required.
 
 **Accessing history programmatically:**
 
