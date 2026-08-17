@@ -1,3 +1,39 @@
+## 2026-08-17 — fix(adapters): repair the board seam, and the gap that let it merge red
+
+#503 merged with CI red. Worth being precise about how, because two separate
+things went wrong.
+
+**Why CI was red.** The seam test used `__protocol_attrs__`, a CPython internal
+added in 3.12. My venv is 3.12.3; CI runs 3.11. It passed locally and raised
+`AttributeError` there. Replaced with `dir()`, which is stable on both.
+
+**Why it merged anyway.** `Test (pytest)` and `Type check (ty)` are not *required*
+contexts — only `audit` and `reviewer-verdict` are — so GitHub reported
+`UNSTABLE` and allowed the merge. The fleet's own reviewer had already refused it
+at 15:57 ("NOT merged — CI not green"), and my merge queue merged it three
+minutes later because it treated `UNSTABLE` as mergeable. The fleet applies a
+stricter policy than branch protection; my automation did not. That is the real
+defect, and it is in how I automate, not in the code.
+
+**What the seam earned in the meantime.** `ty` flagged four new errors in
+`triage_scan`, all of the same kind: it reached through the adapter's *private*
+httpx client to PATCH a Plane URL, using `client.workspace_slug` and
+`client.project_id` directly. Its own comment admitted why — "the existing client
+doesn't expose a typed set_priority". That coupling was invisible before; the
+protocol made the type checker say it aloud. Fixed by adding the missing
+operation rather than widening the type or suppressing the error, which also
+closes a Plane-specific escape hatch. `priority_scans` now takes the protocol
+too, so the allowlist drops 25 → 24.
+
+ty on `src/` is back to main's baseline of 13 diagnostics — I added none. Full
+suite 8614, three consecutive clean runs.
+
+**A recurring trap worth writing down:** editing files through the
+`\\wsl.localhost` UNC path leaves mtimes that confuse pytest's assertion-rewrite
+cache, producing failures that appear only at full-suite scope and vanish after
+any git operation touches the files. It cost two investigations today. Purge
+`__pycache__` and `touch` the tree before believing a full-suite failure.
+
 ## 2026-08-17 — refactor(adapters): put a seam under the board, so Plane can leave
 
 Operator pushback, fairly made: the point of this work is for the ecosystem to

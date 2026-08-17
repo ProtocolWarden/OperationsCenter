@@ -178,6 +178,21 @@ class PlaneClient:
         response.raise_for_status()
         return response.json()
 
+    def set_priority(self, task_id: str, priority: str) -> None:
+        """Set a work item's priority.
+
+        Added because callers were reaching through `_client` to PATCH this URL
+        themselves — the board surface was missing an operation the fleet
+        genuinely performs, and the gap leaked Plane's private internals and URL
+        shape into an entrypoint.
+        """
+        url = (
+            f"/api/v1/workspaces/{self.workspace_slug}/projects/{self.project_id}"
+            f"/work-items/{task_id}/"
+        )
+        response = self._request("PATCH", url, json={"priority": priority})
+        response.raise_for_status()
+
     def update_issue_description(self, task_id: str, description: str) -> None:
         """Replace the description of an existing work item."""
         url = f"/api/v1/workspaces/{self.workspace_slug}/projects/{self.project_id}/work-items/{task_id}/"

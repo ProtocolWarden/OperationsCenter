@@ -50,7 +50,6 @@ STILL_IMPORTING_PLANE = {
     "entrypoints/smoke/plane.py",
     "entrypoints/spec_hygiene/main.py",
     "entrypoints/spec_trigger/main.py",
-    "priority_scans.py",
     "propagation/plane_adapter.py",
     "proposer/candidate_integration.py",
     "proposer/guardrail_adapter.py",
@@ -79,38 +78,51 @@ def _importers() -> set[str]:
 # ── the seam ─────────────────────────────────────────────────────────────────
 
 
+#: The board operations, named once. Derived from real call sites, not taste.
+BOARD_OPERATIONS = frozenset({
+    "fetch_issue", "fetch_project", "list_issues", "list_states",
+    "list_labels", "list_comments", "to_board_task", "transition_issue",
+    "create_issue", "update_issue_description", "update_issue_labels",
+    "comment_issue", "set_priority", "close",
+})
+
+
+def _declared_operations(proto: type) -> set[str]:
+    """Public members a Protocol declares.
+
+    Deliberately not `__protocol_attrs__`: that is a CPython internal added in
+    3.12. Using it made these tests pass on a 3.12 developer machine and fail on
+    CI's 3.11 with `AttributeError`, which is how #503 went in with red CI.
+    `dir()` is stable across both.
+    """
+    return {n for n in dir(proto) if not n.startswith("_")}
+
+
 def test_the_concrete_client_satisfies_the_protocol():
     """PlaneClient must remain usable as a BoardClient.
 
     If it stops, callers type-hinting the protocol are lying about what they
     accept, and the seam is decorative.
     """
-    from operations_center.adapters.board import BoardClient
     from operations_center.adapters.plane import PlaneClient
 
-    missing = [
-        name
-        for name in BoardClient.__protocol_attrs__
-        if not hasattr(PlaneClient, name)
-    ]
+    missing = sorted(op for op in BOARD_OPERATIONS if not hasattr(PlaneClient, op))
     assert not missing, f"PlaneClient no longer provides: {missing}"
 
 
-def test_protocol_covers_every_operation_the_fleet_calls():
-    """The protocol is derived from real call sites, not from taste.
+def test_protocol_declares_every_operation_the_fleet_calls():
+    """The protocol must not be narrower than actual usage.
 
-    A protocol narrower than actual usage pushes callers back to the concrete
-    class, which is how the old boundary eroded.
+    A protocol missing an operation pushes callers back to the concrete class —
+    which is exactly what happened with `set_priority`: it was absent, so
+    triage_scan reached through the adapter's private httpx client to PATCH
+    Plane's URL directly.
     """
     from operations_center.adapters.board import BoardClient
 
-    required = {
-        "fetch_issue", "fetch_project", "list_issues", "list_states",
-        "list_labels", "list_comments", "to_board_task", "transition_issue",
-        "create_issue", "update_issue_description", "update_issue_labels",
-        "comment_issue", "close",
-    }
-    assert required <= set(BoardClient.__protocol_attrs__)
+    declared = _declared_operations(BoardClient)
+    missing = sorted(BOARD_OPERATIONS - declared)
+    assert not missing, f"BoardClient does not declare: {missing}"
 
 
 def test_factory_builds_from_settings_without_naming_a_backend(monkeypatch):

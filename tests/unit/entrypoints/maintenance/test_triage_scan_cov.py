@@ -324,11 +324,11 @@ def test_main_apply_rescore_success_and_error(patched, capsys, monkeypatch):
     )
     monkeypatch.setattr(mod, "handle_priority_rescore_scan", lambda items, now: [ok, bad])
 
-    def patch_side(path, json):
-        if "bad" in path:
+    def set_priority_side(task_id, priority):
+        if "bad" in task_id:
             raise RuntimeError("patch failed")
 
-    patched.client._client.patch.side_effect = patch_side
+    patched.client.set_priority.side_effect = set_priority_side
 
     rc = _run_main(["--config", "c.yaml", "--apply"])
     assert rc == 0
