@@ -1,6 +1,6 @@
 # Spec — Forgejo board adapter
 
-**Status:** draft, not started
+**Status:** decided — adapter in progress
 **Author:** written adversarially — the goal is to find where this breaks before
 building it, not to argue it will work.
 
@@ -189,10 +189,30 @@ is step one of seven.
    `audit` status; moving to Forgejo Actions changes that constraint, so this
    belongs after cutover, not before.
 
-## Open questions for the operator
+## Decided (operator, 2026-08-17)
 
-- Drain-to-zero, or migrate in-flight tasks with `plane-id` labels?
-- One repo per project (matching today's repos), or a single board repo? Forgejo
-  issue ids are per-repo, which makes the second option meaningfully simpler.
-- Does the council review flow move to Forgejo PRs at cutover, or stay on GitHub
-  until local CI exists? Splitting them means two review surfaces at once.
+**Single board repo.** All fleet tasks become issues in one Forgejo repo, so the
+per-repo issue counter is effectively a global task-id sequence. The `repo_key`
+that identifies which code repo a task targets stays where it already lives — in
+the task body, parsed by `TaskParser` — rather than being implied by which repo
+the issue sits in.
+
+**Drain to zero before cutover.** No in-flight task migration, no `plane-id`
+labels. This dissolves most of A3: nothing persisted refers to an id that will
+not exist, because there will be no live tasks at the moment of the switch. The
+cost is a quiet period, which is cheap compared to rewriting ids embedded in
+branch names and PR bodies.
+
+**Council review moves to Forgejo PRs at cutover.** One review surface, not two.
+This means the reviewer's PR-side adapter (`adapters/github_pr`) needs a Forgejo
+equivalent before cutover — it is *not* covered by this spec, which is board-side
+only. Tracked as a separate piece of work.
+
+### What these answers change
+
+- A3 (task ids) drops from a blocking design problem to a non-issue.
+- A1 (state exclusivity) is unaffected — still the central hazard.
+- A4 (pagination) is unaffected, and with a single board repo holding every task,
+  the board will be *larger* than any single Plane project was. Pagination
+  correctness matters more, not less.
+- Completion grows one item: a Forgejo PR adapter for the reviewer.
