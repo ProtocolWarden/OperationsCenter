@@ -41,21 +41,43 @@ Runbooks and recovery. The densest and most load-bearing area.
   [`managed_repo_troubleshooting.md`](operator/managed_repo_troubleshooting.md)
 - **Audits & tests**: [`weekly_audits.md`](operator/weekly_audits.md),
   [`slow_test_reporting.md`](operator/slow_test_reporting.md)
+- **Propagation**: [`propagation/post-merge-hook.md`](operator/propagation/post-merge-hook.md)
 
 ## Architecture — `architecture/` (39)
 
-- **Decision records**: [`adr/`](architecture/adr/README.md) — ADRs 0001–0010, plus work orders
-- **Cross-repo interfaces**: [`contracts/`](architecture/contracts/contract-map.md) —
-  contract map, execution handoff, `ExecutionTarget`, lifecycle labels, PlatformManifest consumption
+Every document is listed individually rather than by directory: Custodian's DC7
+detector flags any doc under `docs/` that no tracked document links to, and a
+directory-level mention leaves its contents orphaned.
+
+- **Decision records**: [`adr/README.md`](architecture/adr/README.md) — ADRs 0001–0010, plus work orders
 - **Subsystems**: [`pr_review_watcher.md`](architecture/pr_review_watcher.md),
   [`verdict_consolidation.md`](architecture/verdict_consolidation.md),
   [`maintenance_pattern.md`](architecture/maintenance_pattern.md)
-- **Audit**: [`audit/`](architecture/audit/audit_architecture.md) — architecture, triage plan, code health, backend control
-- **Policy**: [`policy/`](architecture/policy/anti_collapse_invariant.md) — anti-collapse invariant, pre-execution gate
-- **Recovery**: [`recovery/`](architecture/recovery/recovery_loop_design.md)
-- **Routing**: [`routing/`](architecture/routing/routing-contract-fidelity.md)
-- **CI**: [`ci/`](architecture/ci/ci_integration_guide.md) — integration guide, coverage gating
-- **Managed repos**: [`managed-repos/`](architecture/managed-repos/managed_repo_contract.md)
+- **Cross-repo interfaces** — `contracts/`:
+  [contract map](architecture/contracts/contract-map.md),
+  [execution-handoff cutover](architecture/contracts/execution-handoff-cutover.md),
+  [`ExecutionTarget`](architecture/contracts/execution_target.md),
+  [lifecycle labels](architecture/contracts/lifecycle_labels.md),
+  [PlatformManifest consumption](architecture/contracts/platform_manifest_consumption.md),
+  and two redirect stubs now sourced from PlatformDeployment
+  ([upstream-patch evaluation](architecture/contracts/upstream-patch-evaluation.md),
+  [examples](architecture/contracts/upstream-patch-evaluation-examples.md))
+- **Audit** — `audit/`: [audit architecture](architecture/audit/audit_architecture.md),
+  [triage plan](architecture/audit/audit_triage_plan.md),
+  [backend control audit](architecture/audit/backend_control_audit.md),
+  [code-health audit](architecture/audit/code_health_audit.md)
+- **Policy** — `policy/`: [anti-collapse invariant](architecture/policy/anti_collapse_invariant.md),
+  [pre-execution gate](architecture/policy/policy-pre-execution-gate.md)
+- **Recovery** — `recovery/`: [recovery loop design](architecture/recovery/recovery_loop_design.md),
+  [phantom-helper waves](architecture/recovery/phantom_helper_waves.md)
+- **Routing** — `routing/`: [contract fidelity](architecture/routing/routing-contract-fidelity.md),
+  plus redirect stubs ([routing tuning](architecture/routing/routing-tuning.md),
+  [examples](architecture/routing/routing-tuning-examples.md))
+- **CI** — `ci/`: [integration guide](architecture/ci/ci_integration_guide.md),
+  [coverage gating](architecture/ci/coverage-gating.md)
+- **Managed repos** — `managed-repos/`: [managed-repo contract](architecture/managed-repos/managed_repo_contract.md),
+  [audit artifact contract](architecture/managed-repos/audit_artifact_contract.md),
+  [audit ground truth](architecture/managed-repos/audit_ground_truth.md)
 
 ## Design — `design/` (47)
 
@@ -73,7 +95,8 @@ Live design documents. Selected entries:
   [`INCOMPLETE_INTEGRATION_REMEDIATION.md`](design/INCOMPLETE_INTEGRATION_REMEDIATION.md),
   [`roadmap.md`](design/roadmap.md), [`lifecycle.md`](design/lifecycle.md)
 - **Testing**: [`flaky-test-reporter.md`](design/flaky-test-reporter.md),
-  [`observer-race-condition-guard.md`](design/observer-race-condition-guard.md)
+  [`observer-race-condition-guard.md`](design/observer-race-condition-guard.md),
+  [`test-failure-extraction.md`](design/test-failure-extraction.md)
 - **Sub-areas**: `design/autonomy/` (7), `design/continuous-improvement/`
 
 ## Coverage alerting — read in this order
@@ -96,16 +119,35 @@ Nothing else links these together, so start here:
 
 Scoped work definitions, usually authored for the fleet to execute.
 
+Named specs:
+[proposer consumes custodian sweep](specs/proposer-consumes-custodian-sweep.md) ·
+[reviewer PR state machine](specs/reviewer-pr-state-machine.md) ·
+[executor adapter unit tests](specs/executor-adapter-unit-tests.md) ·
+[P5 adapter + board-unblock tests](specs/p5-adapter-and-board-unblock-tests.md) ·
+[platform CLI test coverage](specs/platform-cli-test-coverage.md) ·
+[watcher entrypoint test coverage](specs/watcher-entrypoint-test-coverage.md) ·
+[admin API test coverage](specs/admin-api-test-coverage.md) ·
+[decision-rules test coverage](specs/decision-rules-test-coverage.md) ·
+[operational-health test coverage](specs/operational-health-test-coverage.md) ·
+[recovery-subsystem test coverage](specs/recovery-subsystem-test-coverage.md) ·
+[adaptive-loop integration tests](specs/adaptive-loop-integration-tests.md) ·
+[CI coordinator decision tests](specs/ci-coordinator-decision-tests.md) ·
+[CxRP backend-card vocabulary](specs/cxrp-backend-card-vocabulary.md) ·
+[scene-timing audit test hardening](specs/scene-timing-audit-test-hardening.md)
+
+The remaining `queue-drain-<timestamp>.md` files are per-run drain records
+rather than authored specs.
+
 ## Guides and reference
 
 | Area | Contents |
 |---|---|
-| [`guides/`](guides/) (4) | Coverage alerting: configuration, integration, usage, troubleshooting |
-| [`user-guides/`](user-guides/) (2) | Snapshot-validation CLI guide and quick reference |
-| [`reference/`](reference/) (2) | Coverage alerting API, extraction-fidelity metric |
-| [`troubleshooting/`](troubleshooting/) (1) | Review-backend troubleshooting |
-| [`custodian/`](custodian/) (2) | `.console/` reconciliation detectors and test strategy |
-| [`backends/`](backends/) (1) | `aider_local` |
+| `guides/` (4) | Coverage alerting — see the reading order above |
+| `user-guides/` (2) | [Snapshot-validation CLI guide](user-guides/SNAPSHOT_VALIDATION_CLI_GUIDE.md), [quick reference](user-guides/CLI_QUICK_REFERENCE.md) |
+| `reference/` (2) | [Coverage alerting API](reference/COVERAGE_ALERTING_API_REFERENCE.md), [extraction-fidelity metric](reference/EXTRACTION_FIDELITY_METRIC.md) |
+| `troubleshooting/` (1) | [Review-backend troubleshooting](troubleshooting/review_backend.md) |
+| `custodian/` (2) | [`.console/` reconciliation detectors](custodian/console-reconciliation-detectors.md), [test strategy](custodian/console-reconciliation-test-strategy.md) |
+| `backends/` (1) | [`aider_local`](backends/aider_local.md) |
 
 ## Developing — `dev/` (3)
 
@@ -123,7 +165,10 @@ Working on OC itself, as opposed to operating it.
 |---|---|
 | [`history/stages/`](history/stages/README.md) (18) | Per-stage work artifacts, moved out of the repo root 2026-08-17 |
 | `history/stages/deriver-coverage/` (7) | Deriver reverse-transition coverage episode: investigation, test inventory, completion reports |
+| [`history/README.md`](history/README.md) | Overview of what the archive holds |
 | `history/audits/` (6) | Completed audit reports |
 | `history/development-log/` (14) | Narrative development records |
 | `history/managed-repo/` (10) | Managed-repo history |
 | `history/migration/` (1) | Migration records |
+| `history/console-log/` (1) | Rotated `.console/log.md` entries — the file is budgeted at 500KB by Custodian's OC2 detector |
+| [`history/runtime-truth-remediation-summary.md`](history/runtime-truth-remediation-summary.md) | Runtime-truth remediation |
