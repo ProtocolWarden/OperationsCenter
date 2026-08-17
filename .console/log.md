@@ -1,3 +1,43 @@
+## 2026-08-17 — spec(forgejo): adversarial spec for the board adapter
+
+Operator chose Forgejo, and asked for the spec to be adversarial about
+correctness, completion and self-drive rather than a plan that assumes success.
+
+The finding that shapes everything: **Plane states are exclusive and Forgejo has
+no states at all.** Six state names carry the fleet's dispatch logic
+(`Ready for AI` alone appears at 42 call sites), and Plane enforced one-state-per-
+issue structurally. On Forgejo they become labels — an unordered set — so nothing
+prevents an issue holding `Blocked` and `Ready for AI` at once, and every
+board_unblock rule assumes exactly one. Worse, the adapter creates the hazard
+itself: `transition_issue` becomes remove-then-add, two calls, non-atomic. Die in
+between and the issue has zero or two states. The spec says so plainly rather than
+claiming parity.
+
+The most dangerous item is pagination (A4). `list_issues()` means "the whole
+board"; Forgejo paginates at 20 and a naive port returns page one **and looks
+successful**. The fleet reasons about absence — board_unblock promotes when a
+queue looks empty, convergence-stall fires when nothing progresses — so a
+truncated board yields confident wrong decisions rather than an error. The test
+suite must use a multi-page fixture; a single-page one would pass while the bug
+ships.
+
+Self-drive, assessed honestly: the fleet can write the adapter, test it against
+fakes, and finish the 24-file ratchet. It cannot stand up Forgejo, mint the API
+token, choose cutover timing, or verify against a live instance. A spec claiming
+full autonomy would send it to burn its self-heal ladder discovering that.
+
+Also recorded: task ids change from UUIDs to per-repo integers, and those ids are
+already persisted in branch names, PR bodies and labels — so a big-bang cutover
+breaks every in-flight reference. Drain-to-zero or carry `plane-id:` labels; that
+is an operator decision, not a detail to settle in code.
+
+Fixed seven broken `_toc.md` links in the same change. They point at specs the
+fleet moved to `docs/specs/archive/`, and they broke because #501's `git add -A`
+swept those file moves into a PR about the backlog — merging the moves without
+the index update that belonged with them. My own link checker has been reporting
+all seven since. Second time that `git add -A` in a live shared checkout has
+mixed the fleet's work into mine; staging explicitly is not optional here.
+
 ## 2026-08-17 — feat(detectors): warn at 80% of the .console/ budget
 
 The budget is a cliff. Fine at 99%, and at 101% every open PR fails the gate at
