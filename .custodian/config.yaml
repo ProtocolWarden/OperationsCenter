@@ -509,6 +509,11 @@ audit:
       # Architecture-guard + lock-store-concurrency tests don't import the
       # code under audit — they probe via subprocess + filesystem.
       - tests/test_architecture_cleanup_guards.py
+      # Same category: the watch-supervisor tag tests audit
+      # scripts/operations-center.sh as text and exercise its bash helpers via
+      # subprocess. There is no src package to import — the subject is a shell
+      # script.
+      - tests/unit/scripts/test_watch_supervisor_tag.py
       - tests/unit/audit_dispatch/test_lock_store_concurrency.py
       # Slow-test tracker tests exercise conftest.py hooks via subprocess — no src imports.
       - tests/test_slow_test_hooks_integration.py

@@ -4,6 +4,15 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## Up Next
 
+### Migrate running watchers onto supervisor tags
+- Supervisors launched before `oc-watch-supervisor=<role>` existed carry no tag.
+  `reconcile_watch_pid_file` returns 3 for them and `start_watch_role` refuses, so
+  nothing double-runs — but those roles cannot be reconciled until restarted.
+- One-time migration: `scripts/operations-center.sh watch-all-stop` then
+  `watch-all`. Until then a stale pid file for an untagged role needs the manual
+  stop the error message prints.
+- No deadline; the guard is safe indefinitely. This is bookkeeping, not risk.
+
 ### Split extraction_health_history.py, or the C29 exclusion becomes permanent
 - The module was at exactly 500 lines; #478's `edge_cases` field pushed it to 506 and
   it is now on the C29 exclusion list as an explicit deferral, not an exemption.
