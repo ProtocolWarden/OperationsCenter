@@ -226,6 +226,13 @@ extend-select = [
     "G004",
     "T201",
 ]
+# The vulture whitelist is, by construction, a list of bare NAMES that do not
+# resolve in that file — vulture matches on the bare identifier, so naming it is
+# the whole mechanism. F821 (undefined name) is therefore categorically wrong
+# here for every line, not a case-by-case judgement, and the alternative is
+# appending `,F821` to a `# noqa` on each entry forever. Scoped to this one file
+# so a genuine undefined name anywhere else still fails the gate.
+".vulture_whitelist.py" = ["F821"]
 # CLI scripts and entrypoints are allowed to print() and broad-except.
 "scripts/**/*.py" = ["T201", "BLE001", "S110"]
 "src/operations_center/entrypoints/**/*.py" = ["T201"]

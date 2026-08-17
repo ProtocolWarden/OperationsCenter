@@ -240,6 +240,25 @@ are untouched.
 Neither path is in `.gitignore`, which is why they were committed at all. That
 gap is left for its own change rather than bundled into a board-unblock fix —
 but it will keep re-tripping this gate until someone closes it.
+## 2026-08-14 — fix(lint): exempt the vulture whitelist from F821
+
+`.vulture_whitelist.py` (added by this branch) made `Lint (ruff)` red with 10
+F821 "undefined name" errors — one per entry. The failure long predates the
+rebase onto the all-Opus council work; it was already recorded against this PR
+during the 2026-08-06 backlog survey, and the guess that a rebase would clear it
+was wrong. The errors are inherent to the file's content.
+
+They are also categorically wrong. Vulture matches on the bare IDENTIFIER, so a
+whitelist entry *is* a bare name that deliberately does not resolve in that file
+— that is the entire mechanism, not an oversight. Every line will always trip
+F821, and every future entry would need `,F821` appended to its `# noqa` in
+perpetuity.
+
+Fixed with a per-file ignore in the existing `[tool.ruff.lint.per-file-ignores]`
+block rather than ten inline suppressions: one statement of intent, no upkeep on
+new entries. Scoped to the single file, and verified scoped — injecting a real
+undefined name into `src/operations_center/injection.py` still reports F821, so
+the gate has not been widened. `ruff check .` is now clean repo-wide.
 
 ## 2026-08-13 — fix(reviewer): decouple the D1 fallback pairing from council seating
 
