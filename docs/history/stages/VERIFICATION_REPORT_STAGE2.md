@@ -230,7 +230,7 @@ Pre-existing Failure (not related to flaky test reporter):
 - All modules have unit, integration, and edge case tests
 
 ### Documentation (3,468+ lines)
-- STAGE0_FLAKY_TEST_REPORTER_ARCHITECTURE.md
+- flaky-test-reporter-architecture.md
 - flaky-test-reporter.md
 - Additional CI integration and runbook documentation
 

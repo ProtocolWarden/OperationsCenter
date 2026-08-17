@@ -367,47 +367,6 @@ def cmd_validate(
 
 @app.command("observe-and-validate")
 def cmd_observe_and_validate(
-    repo_path: Path | None = typer.Option(
-        None,
-        "--repo-path",
-        help="Repository path (default: current directory)",
-    ),
-    output_dir: Path = typer.Option(
-        Path("tools/report/operations_center/observer"),
-        "--output-dir",
-        help="Where to save snapshot",
-    ),
-    format_snapshot: str = typer.Option(
-        "json",
-        "--format",
-        help="Snapshot format: json|yaml",
-    ),
-    layers: str | None = typer.Option(
-        None,
-        "--layers",
-        help="Validation layers to run (default: 1,2,3)",
-    ),
-    full: bool = typer.Option(
-        False,
-        "--full",
-        help="Include slow layers (4,5) — takes 60-120s",
-    ),
-    skip_validation: bool = typer.Option(
-        False,
-        "--skip-validation",
-        help="Collect snapshot but skip validation",
-    ),
-    output_report: Path | None = typer.Option(
-        None,
-        "--output",
-        help="Save validation report to file",
-    ),
-    verbose: bool = typer.Option(
-        False,
-        "--verbose",
-        "-v",
-        help="Detailed output",
-    ),
     quiet: bool = typer.Option(
         False,
         "--quiet",
@@ -415,7 +374,13 @@ def cmd_observe_and_validate(
         help="Minimal output",
     ),
 ) -> None:
-    """Generate snapshot and validate it."""
+    """Generate snapshot and validate it (not yet implemented).
+
+    The planned option set lives in docs/design/STAGE0_CLI_SPECIFICATION.md
+    under "Secondary Commands (Planned Future)". It is deliberately NOT declared
+    here: typer would advertise the flags in --help and accept values this stub
+    then discards, which reads to the caller as though the option took effect.
+    """
     if not quiet:
         console.print("[cyan]observe-and-validate[/cyan] command not yet implemented")
         console.print("This command requires RepoObserver integration.")
@@ -447,6 +412,12 @@ def cmd_list(
         "--order",
         help="Sort order: recent|oldest|name",
     ),
+    # `--filter valid|invalid` was declared here and never read. It could not
+    # have worked: the listing is built by walking snapshot directories and
+    # never loads or caches a validation status to filter on (the table's
+    # observed_at column is likewise a literal "—"). Removed rather than
+    # stubbed — filtering on data the command does not have needs the caching
+    # layer the help text presumed, not a flag.
     format_str: str = typer.Option(
         "table",
         "--format",
@@ -642,33 +613,6 @@ def cmd_show(
 
 @app.command("compare")
 def cmd_compare(
-    snapshot1: str = typer.Argument(..., help="First snapshot path/ID"),
-    snapshot2: str = typer.Argument(..., help="Second snapshot path/ID"),
-    format_str: str = typer.Option(
-        "diff",
-        "--format",
-        help="Output format: diff|json|table",
-    ),
-    signals_only: str | None = typer.Option(
-        None,
-        "--signals",
-        help="Compare specific signals (comma-separated)",
-    ),
-    stats: bool = typer.Option(
-        False,
-        "--stats",
-        help="Show change statistics",
-    ),
-    output: Path | None = typer.Option(
-        None,
-        "--output",
-        help="Save comparison to file",
-    ),
-    backend: str = typer.Option(
-        "local",
-        "--backend",
-        help="Storage backend",
-    ),
     quiet: bool = typer.Option(
         False,
         "--quiet",
@@ -676,7 +620,11 @@ def cmd_compare(
         help="Minimal output",
     ),
 ) -> None:
-    """Compare two snapshots."""
+    """Compare two snapshots (not yet implemented).
+
+    Planned arguments and options: see docs/design/STAGE0_CLI_SPECIFICATION.md.
+    Not declared here — see the note on observe-and-validate.
+    """
     if not quiet:
         console.print("[cyan]compare[/cyan] command not yet implemented")
     raise typer.Exit(EXIT_CONFIG_ERROR)
@@ -777,30 +725,6 @@ def cmd_export(
 
 @app.command("import")
 def cmd_import(
-    input_path: Path = typer.Argument(
-        ...,
-        help="Input file path (JSON/YAML/JSONL)",
-    ),
-    format_str: str | None = typer.Option(
-        None,
-        "--format",
-        help="Format: json|yaml (auto-detect if not set)",
-    ),
-    backend: str = typer.Option(
-        "local",
-        "--backend",
-        help="Storage backend",
-    ),
-    output_dir: Path | None = typer.Option(
-        None,
-        "--output-dir",
-        help="Where to store (local backend)",
-    ),
-    validate_after: bool = typer.Option(
-        True,
-        "--validate-after/--no-validate-after",
-        help="Run validation after import",
-    ),
     quiet: bool = typer.Option(
         False,
         "--quiet",
@@ -808,7 +732,12 @@ def cmd_import(
         help="Minimal output",
     ),
 ) -> None:
-    """Import snapshot from file."""
+    """Import snapshot from file (not yet implemented).
+
+    Planned arguments and options: see docs/design/STAGE0_CLI_SPECIFICATION.md.
+    The input path is deliberately not accepted while this is a stub — taking a
+    file and discarding it is indistinguishable from importing it and failing.
+    """
     if not quiet:
         console.print("[cyan]import[/cyan] command not yet implemented")
     raise typer.Exit(EXIT_CONFIG_ERROR)
@@ -816,31 +745,6 @@ def cmd_import(
 
 @app.command("cleanup")
 def cmd_cleanup(
-    days: int = typer.Option(
-        30,
-        "--days",
-        help="Delete snapshots older than N days",
-    ),
-    keep_count: int = typer.Option(
-        50,
-        "--keep-count",
-        help="Keep at least N most recent snapshots",
-    ),
-    dry_run: bool = typer.Option(
-        True,
-        "--dry-run/--no-dry-run",
-        help="Actually delete (default: dry-run preview)",
-    ),
-    backend: str = typer.Option(
-        "local",
-        "--backend",
-        help="Storage backend",
-    ),
-    storage_root: Path | None = typer.Option(
-        None,
-        "--storage-root",
-        help="Storage root directory (local backend)",
-    ),
     quiet: bool = typer.Option(
         False,
         "--quiet",
@@ -848,7 +752,15 @@ def cmd_cleanup(
         help="Minimal output",
     ),
 ) -> None:
-    """Remove old snapshots."""
+    """Remove old snapshots (not yet implemented).
+
+    Planned options: see docs/design/STAGE0_CLI_SPECIFICATION.md.
+
+    Exits non-zero. This previously returned EXIT_SUCCESS while deleting
+    nothing, so a scheduled `cleanup --days 30` reported success and silently
+    retained every snapshot forever — the caller had no way to tell a working
+    cleanup from a stub. An unimplemented command must not claim success.
+    """
     if not quiet:
         console.print("[cyan]cleanup[/cyan] command not yet implemented")
     # EXIT_CONFIG_ERROR, not EXIT_SUCCESS. This stub used to exit 0, so

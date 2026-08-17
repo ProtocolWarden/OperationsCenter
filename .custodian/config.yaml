@@ -9,7 +9,7 @@ audit:
   dc10_baseline:
     - .console/backlog.md
     - .console/log.md
-    - docs/design/STAGE2_CI_INTEGRATION_TEST_RUNNER_IMPLEMENTATION.md
+    - docs/design/ci-integration-test-runner-implementation.md
   # D12 baseline ratchet (Custodian audit.d12_baseline). The accepted
   # pre-existing set of public symbols that are tested but not yet wired into
   # production (145 as of 2026-06-17). D12 runs as a dedicated CI gate
@@ -1037,7 +1037,7 @@ doc_conventions:
     # Coverage alerting documentation suite (PR #275) — supplementary reference
     # and design docs, not nav-linked from the main docs index by design
     - docs/design/COVERAGE_THRESHOLD_ALERTING_USER_GUIDE.md
-    - docs/design/STAGE0_COVERAGE_THRESHOLD_ALERTING_SYSTEM.md
+    - docs/design/coverage-threshold-alerting-design.md
     - docs/guides/COVERAGE_ALERTING_CONFIGURATION.md
     - docs/guides/COVERAGE_ALERTING_INTEGRATION.md
     - docs/guides/COVERAGE_ALERTING_TROUBLESHOOTING.md
@@ -1149,6 +1149,12 @@ maintenance:
 tools:
   ruff: true
   vulture: true
+  # Custodian's adapter registry falls back to 60 when this is unset, but its
+  # own config loader documents 80 as the intended default — so set it here
+  # rather than inherit whichever wins. On this repo 60 yields 621 findings,
+  # essentially all UNUSED_METHOD/attribute heuristics; 80 yields 32, all at
+  # 100% confidence. Raise deliberately, not by accident.
+  vulture_min_confidence: 80
   # AI3 is now expressed as a Semgrep rule (no Python AST walker).
   # See .custodian/rules/semgrep/ai3_no_directory_scanning.yaml.
   semgrep:

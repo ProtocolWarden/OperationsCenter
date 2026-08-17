@@ -64,6 +64,29 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 - Replace the PATH/CLI probe with an importability check of the three backends OC loads,
   mirroring `ensure_executor_backends()` in `scripts/operations-center.sh`.
 - Remove the "Known stale step" note in `docs/operator/setup.md` once fixed.
+### Triage the 10 vulture findings the gate now reports (BLOCKS the pre-push gate)
+- Turning the vulture detector back on (2026-08-03) leaves 10 genuine findings.
+  Until they are resolved `custodian-multi --fail-on-findings` is RED, so pushes
+  need `--no-verify`. This is the intended consequence of closing a fail-open, but
+  it should not sit unresolved.
+- **`src/operations_center/observer/cli.py` ×8** — `--format` (`format_snapshot`),
+  `--skip-validation`, `--output` (`output_report`), `--filter-status`,
+  `--signals-only`, `--input` (`input_path`), `--validate-after`, `--keep`
+  (`keep_count`) are declared as `typer.Option(...)` and never read in the body.
+  `layers` and `full` in the same command ARE read, so this is not a vulture blind
+  spot. User-visible: `--format yaml` silently produces JSON. Each flag needs a
+  decision — wire it up or delete it. Do not whitelist.
+- **`src/operations_center/entrypoints/pr_review_watcher/main.py:2508,2543`** —
+  `pending_checks` parameter passed and never used; remove it and update callers.
+
+### Push Custodian 5ef3f0f, or the Windows find_tool fix stays unpinnable
+- `5ef3f0f fix(adapters): make find_tool's venv-first preference work on Windows`
+  exists only in the local Custodian checkout (branch `claude/reconcile-june-2026-08-03`,
+  upstream gone). `origin/main` is at `7a780b7`, which OC now pins.
+- Until it is pushed, a Windows Custodian run resolves linters off PATH rather than
+  a venv. That produced 1222 phantom ruff findings on 2026-08-03 (ruff 0.16 default
+  rule set vs OC's pinned 0.15.13) before the local checkout picked the commit up.
+
 
 ## Done
 
@@ -155,6 +178,31 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 - **Verified**: against the live stack — probe builds exactly
   `import team_executor, dag_executor, critique_executor`; a throwaway empty venv
   had all three installed by the real `uv` path and a second call was a silent no-op.
+### 2026-08-03: Clear the 10 vulture findings blocking the pre-push gate (✅ COMPLETE)
+- **Objective**: Re-enabling vulture left 10 genuine findings holding
+  `custodian-multi --fail-on-findings` RED. Resolve them by removing dead code, not
+  by whitelisting.
+- **Status**: ✅ COMPLETE — gate clean at 0 findings, exit 0.
+- **Correction**: the earlier claim that "`layers` and `full` in the same command ARE
+  read" was wrong — `cmd_observe_and_validate` reads only `quiet`. Those names escaped
+  the report because vulture matches on bare NAME and they are used by other commands.
+  The real scope was four stub commands whose entire option lists were ignored while
+  `--help` and two user guides advertised them.
+- **Changes**:
+  - `observer/cli.py` — stripped `observe-and-validate`, `compare`, `import`, `cleanup`
+    to `--quiet` only; the planned interface stays in `docs/design/STAGE0_CLI_SPECIFICATION.md`.
+    Deleted `list --filter` (could never work — nothing caches a validation status).
+    Fixed `cleanup` exiting EXIT_SUCCESS while deleting nothing (not a vulture finding;
+    same fail-open shape, found while editing).
+  - `pr_review_watcher/main.py` — removed `pending_checks` from two functions + 16 call
+    sites; neither body read it.
+  - Docs — both user guides relabelled to "Planned Options (not accepted today)";
+    removed the runnable `cleanup` examples; corrected the spec's `list` line.
+  - New test `test_unimplemented_stubs_reject_planned_flags` pins that stubs REJECT
+    planned flags rather than swallowing them.
+- **Verification**: vulture reports nothing; `custodian-multi --fail-on-findings` exits 0;
+  ruff clean; full suite 10345 passed with the same 6 pre-existing sandbox/timing
+  failures, each reproduced on an unmodified checkout. `.vulture_whitelist.py` unchanged.
 
 ### 2026-08-03: Replace setup's dead executor PATH probe with an importability check (✅ COMPLETE)
 - **Objective**: `ensure_executor_installed`/`verify_executor` in
@@ -1894,10 +1942,10 @@ _Durable work inventory. Update after each meaningful chunk of progress._
   - ✅ Analyzed 5-layer validation pipeline (schema, completeness, consistency, accuracy, regression)
   - ✅ Identified all validation modules (snapshot_validator.py, snapshot_validation_engine.py, snapshot_loader.py, cli.py)
   - ✅ Designed CLI command interface with 8 commands and 20+ options
-  - ✅ Created comprehensive specification: STAGE0_CLI_SPECIFICATION.md (600+ lines)
+  - ✅ Created comprehensive specification: snapshot-validation-cli-specification.md (600+ lines)
   - ✅ Defined performance targets (135ms fast path, 20s full validation)
   - ✅ Defined UX requirements (4 personas, error handling, output formats)
-- **Document**: `docs/design/STAGE0_CLI_SPECIFICATION.md`
+- **Document**: `docs/design/snapshot-validation-cli-specification.md`
 - **Status**: Ready for Stage 1 (implementation and testing)
 
 ### 2026-06-14: Add Performance Test for Snapshot Serialization with Large Metric Sets (✅ COMPLETE)
@@ -1994,7 +2042,7 @@ _Durable work inventory. Update after each meaningful chunk of progress._
   - New fields: `test_name` and `assertion_message` in failure models
   - New utilities module: `assertion_extractor.py` with robust parsing
   - Enhanced pytest plugin and artifact writer integration
-  - Complete design documentation: `docs/design/STAGE0_TEST_FAILURE_EXTRACTION.md`
+  - Complete design documentation: `docs/design/test-failure-extraction.md`
 - **Test Results**: 8,731 total tests passing (11 skipped, 2 xfailed)
 - **Quality Metrics**: 0 linting violations, 100% type compliance, zero regressions
 - **Branch**: goal/3a044753 with 8 commits (Stages 0-7)

@@ -52,7 +52,7 @@ This audit resolves all self-review concerns about implementation completeness r
 - `src/operations_center/observer/models.py` ✅ VERIFIED (FlakyTestSignal at line 388)
 
 **Design Documents**:
-- `docs/design/STAGE0_FLAKY_TEST_REPORTER_ARCHITECTURE.md` ✅ Present (1,125 lines)
+- `docs/design/flaky-test-reporter-architecture.md` ✅ Present (1,125 lines)
 - `docs/design/flaky-test-reporter.md` ✅ Present (1,732 lines)
 
 ---
@@ -155,7 +155,7 @@ This section documents the complete implementation roadmap with specific milesto
 **Duration**: Phase 1 (design phase)
 
 **Key Deliverable**:
-- `docs/design/STAGE0_FLAKY_TEST_REPORTER_ARCHITECTURE.md` (1,125 lines, 8 sections)
+- `docs/design/flaky-test-reporter-architecture.md` (1,125 lines, 8 sections)
 
 **Detailed Roadmap**:
 1. **Sec 1**: Executive summary — 4-tier detection architecture overview
@@ -414,10 +414,10 @@ This section documents the complete implementation roadmap with specific milesto
 
 | Document | Lines | Status |
 |----------|-------|--------|
-| `docs/design/STAGE0_FLAKY_TEST_REPORTER_ARCHITECTURE.md` | 40,936 chars | ✅ Present |
+| `docs/design/flaky-test-reporter-architecture.md` | 40,936 chars | ✅ Present |
 | `docs/design/flaky-test-reporter.md` | 54,427 chars | ✅ Present |
 | `docs/design/flaky-test-reporter-ci-integration.md` | 18,644 chars | ✅ Present |
-| `docs/design/STAGE1_CI_INTEGRATION_TEST_RUNNER_DESIGN.md` | 35,365 chars | ✅ Present (referenced in README) |
+| `docs/design/ci-integration-test-runner-design.md` | 35,365 chars | ✅ Present (referenced in README) |
 | **TOTAL** | **~150K chars** | **✅ COMPLETE** |
 
 ---
@@ -446,9 +446,9 @@ This section documents the complete implementation roadmap with specific milesto
 - Git diff shows: `A src/operations_center/observer/collectors/__init__.py` (Added)
 - SPDX header and FlakyTestCollector export present
 
-### Concern 4: "docs/README.md adds link to missing STAGE1_CI_INTEGRATION_TEST_RUNNER_DESIGN.md"
+### Concern 4: "docs/README.md adds link to missing ci-integration-test-runner-design.md"
 **VERDICT**: ❌ INCORRECT
-- File exists at `docs/design/STAGE1_CI_INTEGRATION_TEST_RUNNER_DESIGN.md` (35,365 chars)
+- File exists at `docs/design/ci-integration-test-runner-design.md` (35,365 chars)
 - Link is valid and file is referenced
 
 ### Concern 5: "Diff truncated at 60,000 chars"

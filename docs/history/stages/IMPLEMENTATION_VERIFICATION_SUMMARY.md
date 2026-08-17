@@ -478,17 +478,17 @@ Test Coverage:
 ## Part 7: Design Documents
 
 ### STAGE 1-3: Implementation Design ✅
-- `docs/design/STAGE1_CI_INTEGRATION_TEST_RUNNER_DESIGN.md` (35,360 bytes)
-- `docs/design/STAGE2_CI_INTEGRATION_TEST_RUNNER_IMPLEMENTATION.md` (16,535 bytes)
-- `docs/design/STAGE3_REAL_WORLD_SNAPSHOT_VALIDATION_TESTS.md` (22,220 bytes)
+- `docs/design/ci-integration-test-runner-design.md` (35,360 bytes)
+- `docs/design/ci-integration-test-runner-implementation.md` (16,535 bytes)
+- `docs/design/snapshot-validation-real-world-tests.md` (22,220 bytes)
 
 ### STAGE 4: Local Testing Verification ✅
-- `docs/design/STAGE4_LOCAL_TESTING_AND_VERIFICATION.md` (13,659 bytes)
+- `docs/design/snapshot-validation-local-testing.md` (13,659 bytes)
 - Documents 41 integration tests passing
 - Documents code quality verification (ruff clean, type checks pass)
 
 ### STAGE 5: Documentation and Final Review ✅
-- `docs/design/STAGE5_DOCUMENTATION_AND_FINAL_REVIEW.md` (40,713 bytes)
+- `docs/design/snapshot-validation-testing-procedures.md` (40,713 bytes)
 - 2,500+ lines covering:
   - Test runner usage guide (quick/full modes, markers, fixtures)
   - Snapshot update procedures (collection, baseline, cleanup, migration)

@@ -505,6 +505,54 @@ are untouched.
 Neither path is in `.gitignore`, which is why they were committed at all. That
 gap is left for its own change rather than bundled into a board-unblock fix —
 but it will keep re-tripping this gate until someone closes it.
+## 2026-08-17 — chore(console): rotate log.md ahead of #498, identically
+
+This branch could not be pushed: `.console/log.md` was over OC2's 500KB budget,
+because main's log sits at 98% of it and every PR must add an entry. #498 already
+carries the rotation, but waiting for it to merge serialises the whole queue
+behind a GitHub outage.
+
+Rotated here instead, reproducing #498's split **exactly** — the archive file is
+copied byte-for-byte from that branch, so all three carry an identical
+`docs/history/console-log/log-archive-through-2026-06-14.md` and cannot conflict
+on it. Whichever merges first, the others rebase onto an already-applied change.
+
+Getting there took three attempts, and the two rejected ones are worth recording.
+Splitting by position assumed the archive was a clean suffix of main's log; it is
+not, because log.md is not consistently newest-first. Matching whole entries as
+strings then reported 10 entries "unaccounted", which looked like data loss but
+was an artifact: the last entry of any slice absorbs the trailing content after
+it, so identical entries compare unequal. Both attempts aborted on their own
+safety checks rather than writing a divergent archive. Matching on headings with
+multiplicity (main has 2 duplicate headings, the archive 1) is what actually
+holds, and a heading census confirms #498's rotation loses nothing: 0 of main's
+294 headings are absent from archive+kept.
+
+The archive filename is inherited from #498 and is misleading — it says "through
+2026-06-14" but the archived block spans 2026-06-04 to 2026-07-14 and overlaps
+the retained range, because the split was by size, not date. Left as-is
+deliberately: renaming it here would diverge from #498 and reintroduce the exact
+conflict this was written to avoid.
+
+## 2026-08-14 — fix(lint): exempt the vulture whitelist from F821
+
+`.vulture_whitelist.py` (added by this branch) made `Lint (ruff)` red with 10
+F821 "undefined name" errors — one per entry. The failure long predates the
+rebase onto the all-Opus council work; it was already recorded against this PR
+during the 2026-08-06 backlog survey, and the guess that a rebase would clear it
+was wrong. The errors are inherent to the file's content.
+
+They are also categorically wrong. Vulture matches on the bare IDENTIFIER, so a
+whitelist entry *is* a bare name that deliberately does not resolve in that file
+— that is the entire mechanism, not an oversight. Every line will always trip
+F821, and every future entry would need `,F821` appended to its `# noqa` in
+perpetuity.
+
+Fixed with a per-file ignore in the existing `[tool.ruff.lint.per-file-ignores]`
+block rather than ten inline suppressions: one statement of intent, no upkeep on
+new entries. Scoped to the single file, and verified scoped — injecting a real
+undefined name into `src/operations_center/injection.py` still reports F821, so
+the gate has not been widened. `ruff check .` is now clean repo-wide.
 
 ## 2026-08-13 — fix(reviewer): decouple the D1 fallback pairing from council seating
 
@@ -930,6 +978,146 @@ string (`scope == 'SECURITY: th...from an exter'`); restored, all pass. 44 tests
 across `test_injection.py` + `test_cxrp_mapper.py`; no pre-existing test asserts
 on CxRP `title`/`scope`, so blast radius is limited to the new pins. ruff check
 and ruff format clean.
+## 2026-08-04 — fix(ci): bump the audit workflow's Custodian pin in lockstep with pyproject
+
+`.github/workflows/custodian-audit.yml` hardcodes its OWN Custodian SHA, separate
+from pyproject's, and its comment explicitly requires the two move together. The
+vulture fail-open fix bumped pyproject d6ba8ab -> 7a780b7 but missed the
+workflow, so CI would have kept installing the old adapter — leaving the
+fail-open alive in the one place it matters most, the required `audit` gate.
+
+This also explains an observation in #492, which landed on main today: it noted
+"the Custodian audit reported 1222 findings (the ruff group alone — vulture was
+clean in CI)". Vulture WAS installed in CI. It was not clean: on d6ba8ab the
+adapter builds `vulture <src> --min-confidence=N <tests>`, an argument order
+vulture's argparse rejects (exit 2, empty stdout), and the empty output was read
+as "no dead code". This repo had 621 findings at vulture's default confidence
+the whole time. Independent corroboration of the fail-open from a different
+author on a different day.
+
+Also dropped the workflow's unpinned `pip install vulture`. vulture is a dev
+dependency now, so `.[dev]` pins it (2.16) beside ruff and ty — removing the
+moving part rather than relocating it, which is exactly the argument #492's own
+comment makes one level down about ruff.
+
+## 2026-08-03 — fix(observer): retire the CLI flags the gate's vulture pass exposed
+
+Follow-up to closing the vulture fail-open earlier today. That left 10 genuine
+findings holding the pre-push gate red; this clears them. Gate is now clean at
+0 findings under a custodian that actually runs vulture (it reported 621 before).
+
+Correction to the earlier write-up, which claimed "`layers` and `full` in the
+same command ARE read, so parameter-usage detection is working". That was wrong.
+`cmd_observe_and_validate`'s body reads ONLY `quiet` — `layers` and `full` are
+equally unread there. They escaped the report because vulture matches on bare
+NAME and those names are used by other commands in the tree. The real finding
+was bigger than 8 stray flags: FOUR commands (`observe-and-validate`, `compare`,
+`import`, `cleanup`) are stubs whose entire option lists are ignored, and
+`--help` plus two user guides advertised them as though they worked.
+
+Decision per flag, per the "implement or delete" bar:
+
+* The four stubs are documented as PLANNED (`docs/design/STAGE0_CLI_SPECIFICATION.md`
+  §"Secondary Commands (Planned Future)"; both user guides carry "not yet
+  implemented" notes). So deleting the commands was wrong — but so was keeping
+  parameters they discard. Stripped each stub to `--quiet` only. The planned
+  interface stays in the spec, which is where a design belongs; a half-declared
+  signature that typer advertises in `--help` is not a spec, it is a promise the
+  command breaks. Deleting `import`'s required input path is deliberate: taking
+  a file and dropping it is indistinguishable from importing it and failing.
+* `list --filter valid|invalid` — deleted. It could never have worked: the
+  listing walks snapshot directories and never loads or caches a validation
+  status to filter on (its observed_at column is a literal "—"). Implementing it
+  needs the caching layer the help text presumed, not a flag.
+
+Also fixed while in `cmd_cleanup`, and NOT one of the vulture findings: it
+exited EXIT_SUCCESS while deleting nothing. A scheduled `cleanup --days 30`
+therefore reported success and silently retained every snapshot forever, with no
+way for the caller to tell a working cleanup from a stub. Now exits non-zero.
+Same fail-open shape as the vulture bug itself — a green signal that means
+nothing — which is why it was worth fixing rather than leaving for later. The
+guide's two runnable `cleanup` examples were removed; the option tables in both
+guides are relabelled "Planned Options (not accepted today)".
+
+`pending_checks` removed from `_update_check_history` and `_should_escalate_ci_wait`
+in pr_review_watcher, plus 16 call sites. Neither body ever read it. Note the
+tests passed `pending_checks=["audit"]` in two places, implying behaviour that
+could not exist — those assertions were passing for the wrong reason.
+
+New test pins the intent: `test_unimplemented_stubs_reject_planned_flags` asserts
+each stub REJECTS the planned flags rather than swallowing them, so nobody
+re-adds an ignored option without a failing test.
+
+Verification: `vulture src tests .vulture_whitelist.py --min-confidence=80`
+reports nothing; `custodian-multi --fail-on-findings` exits 0 (clean); ruff
+check/format clean; full suite 10345 passed with the same 6 pre-existing
+sandbox/timing failures, each reproduced on an unmodified checkout. Nothing was
+added to .vulture_whitelist.py — every finding was resolved by removing the dead
+code, not by suppressing the report.
+
+## 2026-08-03 — fix(custodian): close the vulture fail-open in the pre-push gate
+
+The pre-push Custodian gate reported "0 findings, clean" on this repo while a
+Windows box running a newer Custodian reported hundreds. Windows was the correct
+side; the green gate was a FALSE CLEAN, and had been for as long as the pin has
+been in place.
+
+Three things had to line up to hide it:
+
+1. `.custodian/config.yaml` sets `tools.vulture: true` — the detector is meant
+   to run.
+2. `pyproject.toml` never declared `vulture` in the dev extra, so
+   `uv pip install -e .[dev]` never installed it. The fleet venv has no vulture
+   and none is on PATH.
+3. The custodian pin `d6ba8ab` PREDATES Custodian 261bbb5, "fix(vulture): put
+   paths before options, and stop reading a failed run as clean". On that pin
+   the adapter built `vulture <src> --min-confidence=N <tests>`, which vulture's
+   argparse rejects — exit 2, empty stdout — and the empty output was read as
+   "no dead code".
+
+So even had vulture been installed, the pinned adapter could not have produced a
+finding: the invocation itself was malformed and the failure was swallowed. The
+detector has never once run. Fixed by bumping the pin to 7a780b7 (origin/main,
+contains 261bbb5) and declaring `vulture==2.16` alongside the existing ruff/ty
+pins. The two must land together — after 261bbb5 a missing vulture fails LOUDLY,
+so bumping the pin alone would red the gate on "vulture not found".
+
+Threshold set explicitly to `tools.vulture_min_confidence: 80`. Custodian's
+adapter registry falls back to 60 while its own config loader documents 80 as
+the intended default; relying on whichever wins is how this stays surprising. On
+this repo the difference is stark: 60 yields 621 findings (essentially all
+UNUSED_METHOD/attribute heuristics), 80 yields 32, every one at 100% confidence.
+
+Of those 32, 22 are names an external contract forces us to accept — the
+`__exit__` protocol, pytest's `pytest_sessionfinish` hookspec, fixtures
+requested purely for a side effect, lambda stubs that must mirror the callee
+they replace — plus two compat shims the source already documents as deliberate
+(`max_rewrite_attempts` carries `# noqa: ARG002 — kept for signature compat`,
+`queue_threshold` carries `# kept for config compat, not used in logic`). Those
+are listed in a new `.vulture_whitelist.py`, which Custodian's adapter picks up
+automatically when present. The whitelist matches on bare NAME, not location, so
+it is kept minimal and each entry carries its justification.
+
+The remaining 10 are real and are deliberately NOT whitelisted:
+
+* `observer/cli.py` ×8 — `--format`, `--skip-validation`, `--output`,
+  `--filter-status`, `--signals-only`, `--input`, `--validate-after`, `--keep`
+  are declared as typer options and never read. `layers` and `full` in the same
+  command ARE read, which is what makes these stand out rather than look like a
+  vulture blind spot. Passing `--format yaml` today silently yields JSON.
+* `pr_review_watcher/main.py:2508,2543` — `pending_checks` parameter threaded
+  through two call sites and never used.
+
+CONSEQUENCE, stated plainly: merging this turns the gate red on those 10 until
+they are triaged. That is the intended effect — the gate was previously green by
+accident. Deciding whether each observer flag should be wired up or deleted is
+product work and is not guessed at here.
+
+Also found, not fixable from this repo: the Custodian commit that makes
+`find_tool` prefer a venv on Windows (5ef3f0f) exists only in the local checkout
+and was never pushed, so it cannot be pinned. Without it a Windows run resolves
+linters off PATH; that cost 1222 phantom ruff findings earlier today until the
+local checkout picked the commit up mid-session.
 
 ## 2026-07-15 — feat(reviewer): ACTIVATE the council — populate guardrail_paths (§G1)
 
@@ -5008,66 +5196,6 @@ Stage 2 completion confirms that all Pydantic field corrections mentioned in the
 
 ---
 
-## 2026-06-14 — Stage 3: Commit and push changes to the existing branch (✅ COMPLETE)
-
-**Objective**: Ensure all changes from Stages 1-2 are committed with descriptive messages and pushed to the current branch, with the existing PR automatically updated.
-
-**Status**: ✅ Complete - All changes committed and pushed, PR updated with latest changes.
-
-### Execution Results ✅
-
-**Git Status**:
-- ✅ **Current branch**: `goal/3eee2d70`
-- ✅ **Working tree**: Clean (no uncommitted changes)
-- ✅ **Remote status**: Branch up to date with `origin/goal/3eee2d70`
-- ✅ **All changes committed**: Yes (commits 37a027b and 4953bfb visible in git log)
-
-**Commits Made**:
-- ✅ **37a027b**: `docs(.console): document Stage 2 completion — full test suite and linter verification`
-  - Documented Stage 2 verification results
-  - Confirmed all tests passing (1,192/1,192)
-  - Confirmed all linters passing (0 violations)
-  - Marked production-ready status
-
-- ✅ **4953bfb**: `docs(.console): document Stage 1 completion — all review concerns resolved and verified`
-  - Documented all review concerns from PR #289 resolved
-  - Listed all fixes applied (Pydantic fields, ANSI handling, config, docs, etc.)
-  - Confirmed all 1,192 tests passing
-  - Marked ready for code review
-
-**PR Status**:
-- ✅ **PR automatically updated**: Latest commits visible on branch
-- ✅ **Review concerns addressed**: All 5 concerns from self-review resolved
-- ✅ **Tests verified**: All 1,192 tests passing
-- ✅ **Linters verified**: All checks passed (0 violations)
-- ✅ **Documentation updated**: Stage 1 and Stage 2 completion documented
-
-### All Acceptance Criteria Met ✅
-
-1. ✅ **All changes committed with descriptive message**
-   - Commit 37a027b: Stage 2 completion documentation
-   - Commit 4953bfb: Stage 1 completion documentation
-   - Commit messages follow project conventions
-   - Each commit has clear description of what was changed
-
-2. ✅ **Changes pushed to current branch**
-   - Branch: `goal/3eee2d70`
-   - Status: Up to date with `origin/goal/3eee2d70`
-   - All commits visible in git log
-   - Remote contains latest changes
-
-3. ✅ **Existing PR updated in place**
-   - PR #289 automatically reflects latest commits
-   - Review concerns addressed in commits
-   - Tests verified passing in CI
-   - Ready for review and merge
-
-### Summary
-
-Stage 3 verification confirms all changes are properly committed and pushed. The working tree is clean, all commits are visible in git history, and the branch is synchronized with remote. The PR is automatically updated with the latest changes and ready for final review.
-
----
-
 ## 2026-06-14 — Stage 2: Run full test suite and linter checks to verify all changes work (✅ COMPLETE)
 
 **Objective**: Run full test suite and linter checks to verify all fixes from Stage 1 are working correctly.
@@ -5482,6 +5610,36 @@ Stage 2 complete. All 5 validation layers are now fully integrated into the CLI 
 
 ---
 
+## 2026-06-14 — Stage 3: Commit and push changes to the existing branch (✅ COMPLETE)
+
+**Objective**: Ensure all changes from Stages 0-2 are committed and pushed to the existing branch to update the open PR.
+
+**Status**: ✅ COMPLETE — All changes committed and pushed successfully.
+
+**Key Results**:
+- ✅ Working tree: CLEAN (all changes committed)
+- ✅ Current branch: `goal/83fa507a`
+- ✅ Branch status: UP TO DATE with `origin/goal/83fa507a`
+- ✅ Changes pushed successfully: Commit `5b253fb` pushed to remote
+
+**Commits Created** (Stages 1-2):
+1. `c0a6480`: "fix: resolve linting issues and flaky timing test in snapshot performance tests"
+2. `5b253fb`: "docs(.console): document Stage 2 completion — validation tests and linters passing"
+
+**All Acceptance Criteria Met**:
+1. ✅ All code changes staged and committed with descriptive messages
+2. ✅ Changes pushed to current branch (`goal/83fa507a`)
+3. ✅ Existing PR automatically updated with new commits
+4. ✅ No new PR created (pushed to existing branch as required)
+5. ✅ Tests passing: 37 performance tests + 1,281 observer tests
+6. ✅ Linters passing: 0 violations
+
+**Verification**:
+- ✅ `git status` shows: "Your branch is up to date with 'origin/goal/83fa507a'" 
+- ✅ `git log` shows latest commit `5b253fb` (documentation update)
+- ✅ Remote push confirmed successful
+
+**Status**: ✅ COMPLETE — All review concerns resolved, tests passing, code quality verified, changes committed and pushed to existing branch. Ready for final review and merge.
 
 ---
 

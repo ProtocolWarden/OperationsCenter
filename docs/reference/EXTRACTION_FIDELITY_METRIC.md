@@ -4,7 +4,7 @@
 # Extraction Fidelity Metric — Reference
 
 **Implemented**: 2026-06-25  
-**Spec**: [`docs/specs/STAGE1_EXTRACTION_FIDELITY_METRIC.md`](../specs/STAGE1_EXTRACTION_FIDELITY_METRIC.md)
+**Spec**: `docs/specs/STAGE1_EXTRACTION_FIDELITY_METRIC.md` _(planned — not yet written)_
 
 ---
 

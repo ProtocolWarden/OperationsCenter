@@ -164,7 +164,6 @@ operations-center-observer-snapshot list [OPTIONS]
 ```bash
 --limit N                    Max snapshots to list [default: 10]
 --order ORDER                Sort order (recent|oldest|name) [default: recent]
---filter STATUS              Filter (valid|invalid)
 --format FORMAT              Output format (table|json|csv) [default: table]
 --storage-root PATH          Storage directory
 --verbose, -v                Include file size, checksum
@@ -223,22 +222,14 @@ operations-center-observer-snapshot export snapshot-id export.jsonl
 operations-center-observer-snapshot cleanup [OPTIONS]
 ```
 
-### Options
+**Not yet implemented.** This command accepts only `--quiet`; it exits non-zero without doing any work. The planned options below are a design target recorded in `docs/design/STAGE0_CLI_SPECIFICATION.md`, not flags the CLI currently accepts.
+
+### Planned Options (not accepted today)
 ```bash
 --days N                     Delete snapshots older than N days [default: 30]
 --keep-count N               Keep at least N most recent [default: 50]
 --dry-run/--no-dry-run       Preview changes (default: true)
 --storage-root PATH          Storage directory
---quiet, -q                  Minimal output
-```
-
-### Examples
-```bash
-# Preview cleanup
-operations-center-observer-snapshot cleanup --days 30 --keep-count 50
-
-# Actually delete (not dry-run)
-operations-center-observer-snapshot cleanup --days 30 --keep-count 50 --no-dry-run
 ```
 
 ---
@@ -397,7 +388,7 @@ which pytest ruff coverage
 docs/user-guides/SNAPSHOT_VALIDATION_CLI_GUIDE.md
 
 # Design documentation
-docs/design/STAGE0_CLI_SPECIFICATION.md
+docs/design/snapshot-validation-cli-specification.md
 
 # CLI help
 operations-center-observer-snapshot --help

@@ -408,7 +408,7 @@ docs/design/
 │   └── Overview, components, architecture, CI integration details
 ├── snapshot-validation-ci-runner.md             # [Stage 5] User guide (4,500+ lines)
 │   └── API reference, configuration, troubleshooting, examples
-├── STAGE1_CI_INTEGRATION_TEST_RUNNER_DESIGN.md  # [Stage 1] This document
+├── ci-integration-test-runner-design.md  # [Stage 1] This document
 │   └── Architecture, components, integration points, file structure
 ├── flaky-test-reporter.md                       # Flaky test reporter design
 └── flaky-test-reporter-ci-integration.md        # Flaky test CI integration

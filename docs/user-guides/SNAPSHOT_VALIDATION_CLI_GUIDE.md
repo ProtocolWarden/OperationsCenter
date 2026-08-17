@@ -178,7 +178,6 @@ operations-center-observer-snapshot list [OPTIONS]
 |--------|------|---------|-------------|
 | `--limit` | int | `10` | Maximum snapshots to list |
 | `--order` | string | `recent` | Sort order: `recent`, `oldest`, `name` |
-| `--filter` | string | — | Filter by: `valid`, `invalid` |
 | `--format` | string | `table` | Output format: `table`, `json`, `csv` |
 | `--backend` | string | `local` | Storage backend: `local`, `s3`, `http` |
 | `--storage-root` | path | `tools/report/operations_center/observer` | Storage root directory |
@@ -271,7 +270,7 @@ operations-center-observer-snapshot compare SNAPSHOT1 SNAPSHOT2 [OPTIONS]
 
 #### Status
 
-**Note**: `compare` command is not yet implemented. Use `show` command to view snapshots for manual comparison.
+**Note**: `compare` is not yet implemented — it accepts only `--quiet` and exits non-zero. The options below are a planned design, not flags the CLI accepts today. Use `show` command to view snapshots for manual comparison.
 
 ---
 
@@ -343,7 +342,7 @@ operations-center-observer-snapshot import INPUT_PATH [OPTIONS]
 
 #### Status
 
-**Note**: `import` command is not yet implemented.
+**Note**: `import` is not yet implemented — it accepts only `--quiet` (not even the input path) and exits non-zero. The options below are a planned design.
 
 ---
 
@@ -359,6 +358,10 @@ operations-center-observer-snapshot cleanup [OPTIONS]
 
 #### Options
 
+`cleanup` accepts only `--quiet` today.
+
+#### Planned Options (not accepted today)
+
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `--days` | int | `30` | Delete snapshots older than N days |
@@ -366,21 +369,15 @@ operations-center-observer-snapshot cleanup [OPTIONS]
 | `--dry-run` | bool | true | Preview changes without deleting (default) |
 | `--backend` | string | `local` | Storage backend |
 | `--storage-root` | path | `tools/report/operations_center/observer` | Storage root directory |
-| `--quiet` | `-q` | bool | false | Minimal output |
-
-#### Example
-
-```bash
-# Preview: snapshots that would be deleted
-operations-center-observer-snapshot cleanup --days 30 --keep-count 50
-
-# Actually delete (not dry-run)
-operations-center-observer-snapshot cleanup --days 30 --keep-count 50 --no-dry-run
-```
 
 #### Status
 
-**Note**: `cleanup` command is not yet fully implemented.
+**Note**: `cleanup` is not implemented. It deletes nothing and exits non-zero.
+
+It previously exited **0** while doing no work, so a scheduled
+`cleanup --days 30` reported success and silently retained every snapshot.
+Do not wire it into automation until it is implemented — there is deliberately
+no runnable example here.
 
 ---
 
@@ -410,7 +407,7 @@ operations-center-observer-snapshot observe-and-validate [OPTIONS]
 
 #### Status
 
-**Note**: `observe-and-validate` command requires RepoObserver integration (not yet implemented).
+**Note**: `observe-and-validate` requires RepoObserver integration (not yet implemented). It accepts only `--quiet` and exits non-zero. The options below are a planned design.
 
 ---
 
@@ -1480,8 +1477,8 @@ operations-center-observer-snapshot validate --help | less
 
 ## Additional Resources
 
-- **Design Document**: [STAGE0_CLI_SPECIFICATION.md](../design/STAGE0_CLI_SPECIFICATION.md)
-- **API Reference**: [Snapshot Validation Engine](../api/snapshot_validation_engine.md)
+- **Design Document**: [snapshot-validation-cli-specification.md](../design/snapshot-validation-cli-specification.md)
+- **API Reference**: Snapshot Validation Engine _(planned — not yet written)_
 - **Testing Guide**: See `tests/unit/observer/test_snapshot_cli.py`
 
 ---

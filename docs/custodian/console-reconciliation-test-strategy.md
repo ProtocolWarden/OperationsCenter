@@ -383,6 +383,6 @@ Before committing detector or test changes:
 ## Related Documentation
 
 - [.console/ Reconciliation Detectors](./console-reconciliation-detectors.md) — Feature documentation
-- [Test Fixtures Reference](../../tests/fixtures/console_fixtures/README.md) — Fixture documentation
+- [Test Fixtures Reference](../../tests/fixtures/console_malformed/README.md) — Fixture documentation
 - [Unit Test Source](../../tests/unit/detectors/) — Implementation
 - [Integration Test Source](../../tests/integration/detectors/) — Implementation

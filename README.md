@@ -189,7 +189,7 @@ operations-center-observer-snapshot validate snapshot.json --format text
 For comprehensive usage guidance, see:
 - **[User Guide](docs/user-guides/SNAPSHOT_VALIDATION_CLI_GUIDE.md)** — Complete reference for all commands, options, workflows, and troubleshooting
 - **[Quick Reference](docs/user-guides/CLI_QUICK_REFERENCE.md)** — Command cheat sheet for common workflows
-- **[CLI Specification](docs/design/STAGE0_CLI_SPECIFICATION.md)** — Technical design and architecture
+- **[CLI Specification](docs/design/snapshot-validation-cli-specification.md)** — Technical design and architecture
 - **[Integration Guide](docs/user-guides/SNAPSHOT_VALIDATION_CLI_GUIDE.md#cicd-integration)** — GitHub Actions, GitLab CI, Jenkins examples
 
 ## Snapshot Validation Testing
@@ -256,11 +256,11 @@ export SNAPSHOT_TOLERANCE=0.05                   # Variance tolerance (5%)
 ### Documentation
 
 For comprehensive testing and integration guidance, see:
-- **[STAGE1_CI_INTEGRATION_TEST_RUNNER_DESIGN.md](docs/design/STAGE1_CI_INTEGRATION_TEST_RUNNER_DESIGN.md)** — Architecture and design
-- **[STAGE2_CI_INTEGRATION_TEST_RUNNER_IMPLEMENTATION.md](docs/design/STAGE2_CI_INTEGRATION_TEST_RUNNER_IMPLEMENTATION.md)** — Implementation details and component integration
-- **[STAGE3_REAL_WORLD_SNAPSHOT_VALIDATION_TESTS.md](docs/design/STAGE3_REAL_WORLD_SNAPSHOT_VALIDATION_TESTS.md)** — Real-world snapshot validation test suite
-- **[STAGE4_LOCAL_TESTING_AND_VERIFICATION.md](docs/design/STAGE4_LOCAL_TESTING_AND_VERIFICATION.md)** — Test results and verification
-- **[STAGE5_DOCUMENTATION_AND_FINAL_REVIEW.md](docs/design/STAGE5_DOCUMENTATION_AND_FINAL_REVIEW.md)** — Complete usage guide, procedures, and troubleshooting
+- **[ci-integration-test-runner-design.md](docs/design/ci-integration-test-runner-design.md)** — Architecture and design
+- **[ci-integration-test-runner-implementation.md](docs/design/ci-integration-test-runner-implementation.md)** — Implementation details and component integration
+- **[snapshot-validation-real-world-tests.md](docs/design/snapshot-validation-real-world-tests.md)** — Real-world snapshot validation test suite
+- **[snapshot-validation-local-testing.md](docs/design/snapshot-validation-local-testing.md)** — Test results and verification
+- **[snapshot-validation-testing-procedures.md](docs/design/snapshot-validation-testing-procedures.md)** — Complete usage guide, procedures, and troubleshooting
 
 ## Overview
 
@@ -1413,11 +1413,11 @@ The **snapshot validation system** validates repository state through a 5-layer 
 
 For comprehensive testing information, see:
 - **Quick start**: [CONTRIBUTING.md](CONTRIBUTING.md) — setup and basic test commands
-- **Snapshot validation architecture**: [docs/design/STAGE1_CI_INTEGRATION_TEST_RUNNER_DESIGN.md](docs/design/STAGE1_CI_INTEGRATION_TEST_RUNNER_DESIGN.md)
-- **Implementation details**: [docs/design/STAGE2_CI_INTEGRATION_TEST_RUNNER_IMPLEMENTATION.md](docs/design/STAGE2_CI_INTEGRATION_TEST_RUNNER_IMPLEMENTATION.md)
-- **Real-world validation tests**: [docs/design/STAGE3_REAL_WORLD_SNAPSHOT_VALIDATION_TESTS.md](docs/design/STAGE3_REAL_WORLD_SNAPSHOT_VALIDATION_TESTS.md)
-- **Local testing guide**: [docs/design/STAGE4_LOCAL_TESTING_AND_VERIFICATION.md](docs/design/STAGE4_LOCAL_TESTING_AND_VERIFICATION.md)
-- **Complete testing procedures**: [docs/design/STAGE5_DOCUMENTATION_AND_FINAL_REVIEW.md](docs/design/STAGE5_DOCUMENTATION_AND_FINAL_REVIEW.md)
+- **Snapshot validation architecture**: [docs/design/ci-integration-test-runner-design.md](docs/design/ci-integration-test-runner-design.md)
+- **Implementation details**: [docs/design/ci-integration-test-runner-implementation.md](docs/design/ci-integration-test-runner-implementation.md)
+- **Real-world validation tests**: [docs/design/snapshot-validation-real-world-tests.md](docs/design/snapshot-validation-real-world-tests.md)
+- **Local testing guide**: [docs/design/snapshot-validation-local-testing.md](docs/design/snapshot-validation-local-testing.md)
+- **Complete testing procedures**: [docs/design/snapshot-validation-testing-procedures.md](docs/design/snapshot-validation-testing-procedures.md)
 
 ---
 
