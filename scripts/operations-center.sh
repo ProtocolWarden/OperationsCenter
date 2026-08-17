@@ -647,10 +647,12 @@ stop_watch_role() {
   local role="$1"
   local pid_file
   pid_file="$(watch_pid_file "${role}")"
-  local live_pid=""
-  if live_pid="$(reconcile_watch_pid_file "${role}")"; then
-    :
-  fi
+  # Called for its side effect: when the pid file is stale or missing,
+  # reconcile_watch_pid_file rewrites it with the live supervisor's pid, so the
+  # signalling below targets the running process group rather than a dead pid.
+  # The returned pid is deliberately unused here — every path afterwards reads
+  # the (now-corrected) file. A stale pid file is the normal case on this path.
+  reconcile_watch_pid_file "${role}" >/dev/null || true
 
   # Signal the tracked supervisor directly. start_watch_role launches every
   # role via `setsid /bin/bash -lc "..." &`, so the recorded pid is both the
@@ -764,10 +766,9 @@ start_watchdog() {
 
 stop_watchdog() {
   local pid_file="${WATCH_DIR}/watchdog.pid"
-  local live_pid=""
-  if live_pid="$(reconcile_watch_pid_file watchdog)"; then
-    :
-  fi
+  # Side effect only, as in stop_watch_role: refresh a stale pid file so the
+  # kill below reaches the live watchdog. The pid itself is read from the file.
+  reconcile_watch_pid_file watchdog >/dev/null || true
   if [[ ! -f "${pid_file}" ]]; then
     echo "watchdog is not running"
     return 0

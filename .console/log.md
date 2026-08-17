@@ -575,6 +575,29 @@ Two module-level helpers in the new suite (`extract_step3_python_source`,
 is invisible to pytest, so the detector cannot tell a helper from a test that
 silently never runs. Renamed with a leading underscore, which is N2's documented
 exemption and states the intent correctly rather than suppressing the check.
+## 2026-08-17 — fix(watch): address the council's code_quality concern on #481
+
+The council split 2:1 on #481 — `claude-opus-4-8` and `claude-opus-4-7` cleared
+it, `claude-opus-5` (correctness) raised `code_quality` on the guardrail path
+`scripts/operations-center.sh`. The concern was specific and correct.
+
+`stop_watch_role` and `stop_watchdog` both did:
+
+    local live_pid=""
+    if live_pid="$(reconcile_watch_pid_file "${role}")"; then
+      :
+    fi
+
+`live_pid` is assigned and never read, and the branch body is a no-op. It reads
+like dead code, and a later reader would be right to delete it — which would
+break the PR's whole purpose. The call is not dead: reconcile_watch_pid_file
+rewrites a stale pid file as a side effect, and every path afterwards reads that
+file. The stop paths are exactly where drift matters, since a stale pid means
+signalling a process that no longer exists.
+
+Replaced with a direct call plus a comment saying why the return value is
+ignored. Behaviour is unchanged; the reason is now legible. The four remaining
+`live_pid` uses (start/status paths) genuinely consume the value and stay.
 
 ## 2026-08-13 — fix(reviewer): decouple the D1 fallback pairing from council seating
 
