@@ -1,3 +1,36 @@
+## 2026-08-17 — fix(custodian): scope DC10 out of docs/history/
+
+PR #498 went red on `audit` after passing the local pre-push gate. The two run
+different things: CI adds a ratchet (`custodian-multi --only D12,DC10
+--include-deprecated`) that the pre-push hook does not. Worth remembering — a
+clean local gate is not proof CI is clean, and this is the second time in this
+restructure that the gate's *environment* changed what fired (the first was the
+boundary artifact enabling a privacy scrub check only at push time).
+
+**Why the restructure caused it.** DC10 scans `.console/*.md` and `docs/**/*.md`
+— never the repo root. Moving 18 stage artifacts from the root into
+`docs/history/` put them under a detector's eye for the first time. Two fired:
+the console-log archive and `BOUNDARY_B2_SECRET_REFRESH_EVIDENCE.md`. Neither is
+new debt; `origin/main` carried both, just in a location DC10 could not see.
+
+**Excluded rather than baselined.** DC10's remedy is to reconcile a doc's claimed
+status against the work it defers — to edit the doc. `docs/history/` is a
+graveyard whose entries `docs/structure.md` forbids updating, precisely so they
+stay records of what was decided. The remedy is unsatisfiable there by design,
+and applying it would destroy what the archive exists to preserve. The premise
+fails too: a dated archive saying something was complete is not a claim about the
+present, which is the reader harm DC10 was built for (#313).
+
+The mechanism choice matters. `dc10_baseline` matches by exact path;
+`exclude_paths.DC10` matches by glob. Baselining would fix these two files and
+break again on the next log rotation — and rotation recurs, because OC2's 500KB
+budget guarantees it.
+
+Scoped to `history/` only, and verified by negative control: an identical
+over-claim probe is still caught under `docs/design/` and ignored under
+`docs/history/`. `.console/backlog.md`, `.console/log.md` and `docs/design/**`
+stay in scope, so the gate keeps its teeth where over-claiming can still mislead.
+
 ## 2026-08-17 — docs(links): resolve the 7 findings K5 now reports
 
 Custodian's new K5 detector flags these on every audit, so leaving them meant

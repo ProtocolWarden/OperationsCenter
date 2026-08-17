@@ -293,6 +293,20 @@ audit:
       path_fragment: "active.json"
 
   exclude_paths:
+    DC10:
+      # docs/history/ is a graveyard: entries are dated records of what was
+      # decided, and docs/structure.md forbids updating them to stay current.
+      # DC10's remedy is "reconcile the doc's status against its deferred
+      # work" -- i.e. edit the doc -- which is unsatisfiable here by design,
+      # and doing it anyway would destroy the record's value as a record.
+      # The premise also does not hold: a dated archive claiming something was
+      # complete is not asserting that about the present, which is the reader
+      # harm DC10 exists to prevent (OperationsCenter#313).
+      #
+      # Scoped to history/ only. The live truth files -- .console/backlog.md,
+      # .console/log.md, docs/design/** -- stay in scope, so the gate keeps
+      # its teeth exactly where over-claiming can still mislead.
+      - "docs/history/**"
     T1:
       # OC is tested through integration and end-to-end tests, not unit tests
       # on individual domain types. Vocabulary types, error classes, audit
