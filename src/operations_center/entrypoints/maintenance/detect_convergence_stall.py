@@ -37,6 +37,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from operations_center.adapters.board import make_board_client
 from operations_center.config import load_settings
 from operations_center.proposer.rejection_store import ProposalRejectionStore
 
@@ -188,14 +189,8 @@ def apply_breaker(
 
 
 def _plane_client(settings: Any):
-    from operations_center.adapters.plane import PlaneClient
 
-    return PlaneClient(
-        base_url=settings.plane.base_url,
-        api_token=settings.plane_token(),
-        workspace_slug=settings.plane.workspace_slug,
-        project_id=settings.plane.project_id,
-    )
+    return make_board_client(settings)
 
 
 def scan(settings: Any, *, threshold: int = DEFAULT_THRESHOLD) -> list[StalledFamily]:

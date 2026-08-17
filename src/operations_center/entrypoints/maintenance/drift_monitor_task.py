@@ -36,6 +36,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Mapping, cast
 
+from operations_center.adapters.board import BoardClient, make_board_client
 from operations_center.eval.corpus import load_ledger
 from operations_center.eval.critic import (
     EXTRACTION_KIND,
@@ -47,7 +48,6 @@ from operations_center.eval.panel_critic import run_panel_drift_monitor
 from operations_center.maintenance.contracts import MaintenanceResult
 
 if TYPE_CHECKING:
-    from operations_center.adapters.plane.client import PlaneClient
     from operations_center.maintenance.contracts import MaintenanceContext
 
 DEFAULT_INTERVAL_SECONDS = 21600  # 6h — drift is slow; model calls are not free
@@ -72,7 +72,7 @@ class DriftMonitorTask:
         corpus_path: Path = DEFAULT_CORPUS,
         extractor: CheckExtractor | None = None,
         votes: int = 3,
-        plane_client: PlaneClient | None = None,
+        plane_client: BoardClient | None = None,
         panel_families: list[str] | None = None,
         family_extractors: Mapping[str, CheckExtractor] | None = None,
         panel_enabled: bool | None = None,
@@ -105,18 +105,11 @@ class DriftMonitorTask:
             else bool(getattr(eval_panel, "enabled", False))
         )
 
-    def _make_plane_client(self) -> PlaneClient:
+    def _make_plane_client(self) -> BoardClient:
         if self._plane_client is not None:
             return self._plane_client
-        from operations_center.adapters.plane.client import PlaneClient
 
-        p = self._settings.plane
-        return PlaneClient(
-            base_url=p.base_url,
-            api_token=self._settings.plane_token(),
-            workspace_slug=p.workspace_slug,
-            project_id=p.project_id,
-        )
+        return make_board_client(self._settings)
 
     def run_once(self, ctx: MaintenanceContext) -> MaintenanceResult:
         started = time.monotonic()
@@ -214,7 +207,7 @@ class DriftMonitorTask:
         return results
 
     @staticmethod
-    def _open_ticket_titles(client: PlaneClient) -> set[str]:
+    def _open_ticket_titles(client: BoardClient) -> set[str]:
         titles: set[str] = set()
         for issue in client.list_issues():
             name = str(issue.get("name", ""))

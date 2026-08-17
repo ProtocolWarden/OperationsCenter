@@ -258,7 +258,7 @@ def patched(monkeypatch):
     """Patch all main() collaborators; return a control namespace."""
     client = _make_client()
     monkeypatch.setattr(mod, "load_settings", lambda cfg: _settings())
-    monkeypatch.setattr(mod, "PlaneClient", lambda **kw: client)
+    monkeypatch.setattr(mod, "make_board_client", lambda *a, **k: client)
     monkeypatch.setattr(mod, "handle_priority_rescore_scan", lambda items, now: [])
     monkeypatch.setattr(mod, "handle_awaiting_input_scan", lambda items, c, state_name: [])
     monkeypatch.setattr(mod, "_queue_healing_actions", lambda items, now: [])

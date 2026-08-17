@@ -389,14 +389,9 @@ def _github_client(settings):
 
 
 def _plane_client(settings):
-    from operations_center.adapters.plane import PlaneClient
+    from operations_center.adapters.board import make_board_client
 
-    return PlaneClient(
-        base_url=settings.plane.base_url,
-        api_token=settings.plane_token(),
-        workspace_slug=settings.plane.workspace_slug,
-        project_id=settings.plane.project_id,
-    )
+    return make_board_client(settings)
 
 
 def _owner_repo(clone_url: str) -> tuple[str, str]:

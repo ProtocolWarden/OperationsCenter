@@ -30,7 +30,7 @@ import time
 from datetime import UTC, datetime
 
 from operations_center.adapters.github_pr import GitHubPRClient
-from operations_center.adapters.plane import PlaneClient
+from operations_center.adapters.board import BoardClient, make_board_client
 from operations_center.capability_ownership import verify_owner_or_degrade
 from operations_center.config.settings import Settings
 from operations_center.in_flight_reconcile import state_name as _state_name
@@ -148,7 +148,7 @@ def reconcile_merged_pr_tasks(
     return actions
 
 
-def apply_board_actions(client: PlaneClient, actions: list[dict], *, apply: bool) -> list[dict]:
+def apply_board_actions(client: BoardClient, actions: list[dict], *, apply: bool) -> list[dict]:
     """Apply transition actions to Plane (or annotate as dry-run). Mirrors the
     standalone CLI's apply loop so behaviour is identical in both call paths."""
     results: list[dict] = []
@@ -202,7 +202,7 @@ class BoardUnblockTask:
         stale_blocked_hours: int = 4,
         stale_running_hours: int = 2,
         clean_blocked_min_minutes: int = 5,
-        plane_client: PlaneClient | None = None,
+        plane_client: BoardClient | None = None,
         gh_client: GitHubPRClient | None = None,
     ) -> None:
         self._settings = settings
@@ -215,16 +215,10 @@ class BoardUnblockTask:
         self._plane_client = plane_client
         self._gh_client = gh_client
 
-    def _make_plane_client(self) -> PlaneClient:
+    def _make_plane_client(self) -> BoardClient:
         if self._plane_client is not None:
             return self._plane_client
-        p = self._settings.plane
-        return PlaneClient(
-            base_url=p.base_url,
-            api_token=self._settings.plane_token(),
-            workspace_slug=p.workspace_slug,
-            project_id=p.project_id,
-        )
+        return make_board_client(self._settings)
 
     def _make_gh_client(self) -> GitHubPRClient | None:
         if self._gh_client is not None:

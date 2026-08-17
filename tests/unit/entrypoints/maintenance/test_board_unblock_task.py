@@ -6,7 +6,7 @@ These pin both halves of the fix for the unwired board-unblock engine:
   - reconcile_merged_pr_tasks turns a Blocked/In-Review task whose PR MERGED into
     a Done transition (the #267/#341 fixture), and does NOT touch open/no-PR tasks.
   - BoardUnblockTask satisfies the MaintenanceTask contract and applies actions
-    via an injected PlaneClient, so registering it in the live loop makes the
+    via an injected board client, so registering it in the live loop makes the
     controller self-heal the board.
 """
 
@@ -221,7 +221,7 @@ class TestBoardUnblockTask:
         ]
         with (
             mock.patch(
-                "operations_center.entrypoints.maintenance.board_unblock_task.PlaneClient",
+                "operations_center.entrypoints.maintenance.board_unblock_task.make_board_client",
                 return_value=mock_client_instance,
             ),
             mock.patch(

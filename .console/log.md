@@ -1,3 +1,37 @@
+## 2026-08-17 — refactor(adapters): put a seam under the board, so Plane can leave
+
+Operator pushback, fairly made: the point of this work is for the ecosystem to
+stop using Plane, and a day of PR-queue maintenance had not moved that at all.
+
+**What the survey found.** 97 files mention Plane, which is not a work estimate.
+Sorted by actual coupling: 37 import `PlaneClient` directly, 11 already take a
+client as a parameter (correct already), and 47 only mention it in a comment or
+an env-var name. The operation surface is eleven methods. And ten files had
+independently hand-rolled the identical `_make_plane_client()` — the clearest
+possible evidence the missing piece was a shared one.
+
+**The seam.** `adapters/board` holds a `BoardClient` protocol and one
+`make_board_client()` factory. The protocol is the existing surface verbatim, not
+an improved one: a protocol that reshapes the API at the same time cannot be
+adopted mechanically, and a non-mechanical migration is where regressions hide.
+Twelve files now go through it; twelve hand-rolled constructors are gone. The
+remainder is a ratchet list that may only shrink, so the boundary tightens rather
+than erodes.
+
+**Three corrections to my own work, worth recording.** My migration script
+skipped four files whose imports were indented inside `if TYPE_CHECKING:` — it
+reported them rather than half-migrating, which was the right call. Twice I
+guessed from a test's filename which module it covered and broke tests for
+`board_unblock.py`, which is *not* migrated; the fix was to revert every test
+edit, run the suite, and take the files that actually failed. And four failures
+that appeared at full-suite scope but vanished in isolation turned out to be
+stale bytecode from those reverted edits — verified by purging `__pycache__` and
+running twice, rather than accepting "it passes now".
+
+Plane is not running (localhost:8080 → 404) and `spec_hygiene` has been failing
+against it every cycle, so the fleet already depends on something absent. That
+makes the seam overdue rather than premature.
+
 ## 2026-08-17 — chore(console): the watcher tag migration is done
 
 Moved "Migrate running watchers onto supervisor tags" from Up Next to Done. It

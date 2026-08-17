@@ -26,7 +26,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from operations_center.adapters.plane import PlaneClient
+from operations_center.adapters.board import BoardClient, make_board_client
 from operations_center.config import load_settings
 from operations_center.priority_scans import (
     handle_awaiting_input_scan,
@@ -48,12 +48,7 @@ def main() -> int:
     args = parser.parse_args()
 
     settings = load_settings(args.config)
-    client = PlaneClient(
-        base_url=settings.plane.base_url,
-        api_token=settings.plane_token(),
-        workspace_slug=settings.plane.workspace_slug,
-        project_id=settings.plane.project_id,
-    )
+    client = make_board_client(settings)
     try:
         items = client.list_issues()
     except Exception as exc:
@@ -265,7 +260,7 @@ def _queue_healing_actions(
 
 
 def apply_queue_healing_actions(
-    client: PlaneClient,
+    client: BoardClient,
     decisions: list[tuple["QueueHealingTask", "QueueHealingDecision"]],
     *,
     apply: bool,
