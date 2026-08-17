@@ -397,7 +397,7 @@ which pytest ruff coverage
 docs/user-guides/SNAPSHOT_VALIDATION_CLI_GUIDE.md
 
 # Design documentation
-docs/design/STAGE0_CLI_SPECIFICATION.md
+docs/design/snapshot-validation-cli-specification.md
 
 # CLI help
 operations-center-observer-snapshot --help

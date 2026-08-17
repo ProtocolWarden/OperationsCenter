@@ -1674,7 +1674,7 @@ if size_mb > 1000:  # > 1 GB
 
 ### Documentation
 
-- **Design**: `.console/STAGE0_FLAKY_TEST_REPORTER_ARCHITECTURE.md` (4,800+ lines)
+- **Design**: `.console/flaky-test-reporter-architecture.md` (4,800+ lines)
 - **User Guide**: `docs/design/flaky-test-reporter.md` (this file, 1,700+ lines)
 - **CI Integration**: `docs/design/flaky-test-reporter-ci-integration.md`
 

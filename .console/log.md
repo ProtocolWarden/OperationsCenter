@@ -1,3 +1,44 @@
+## 2026-08-17 — docs(design): name design docs for their subject, not their stage
+
+Third slice (continues 03d68bd9). Nine documents in `docs/design/` were named
+after the stage that produced them — `STAGE0_CLI_SPECIFICATION.md`,
+`STAGE5_DOCUMENTATION_AND_FINAL_REVIEW.md` and siblings.
+
+**They were NOT moved to `history/stages/`, unlike the root set.** The root
+files had zero inbound references and were plainly episode records. These are
+the opposite: the root `README.md` presents five of them as the live
+documentation for snapshot validation — "Architecture and design",
+"Implementation details", "Complete usage guide, procedures, and
+troubleshooting" — and `.custodian/config.yaml` names two. They are current
+documentation with a bad filename, so per `docs/structure.md` ("name for the
+subject, not the process") they were renamed in place:
+
+    STAGE0_CLI_SPECIFICATION                  -> snapshot-validation-cli-specification
+    STAGE0_COVERAGE_THRESHOLD_ALERTING_SYSTEM -> coverage-threshold-alerting-design
+    STAGE0_FLAKY_TEST_REPORTER_ARCHITECTURE   -> flaky-test-reporter-architecture
+    STAGE0_TEST_FAILURE_EXTRACTION            -> test-failure-extraction
+    STAGE1_CI_INTEGRATION_TEST_RUNNER_DESIGN  -> ci-integration-test-runner-design
+    STAGE2_..._IMPLEMENTATION                 -> ci-integration-test-runner-implementation
+    STAGE3_REAL_WORLD_SNAPSHOT_VALIDATION_TESTS -> snapshot-validation-real-world-tests
+    STAGE4_LOCAL_TESTING_AND_VERIFICATION     -> snapshot-validation-local-testing
+    STAGE5_DOCUMENTATION_AND_FINAL_REVIEW     -> snapshot-validation-testing-procedures
+
+35 references rewritten across README.md, docs/, `.custodian/config.yaml` and the
+`.console/` files. Path references in `.console/log.md`/`backlog.md` WERE updated
+— a link is a pointer, and pointing it at the renamed file keeps the record
+accurate; that is different from rewriting a claim about what happened.
+Generated `*.egg-info/PKG-INFO` was skipped (it regenerates from README).
+
+Verified with `scripts/check-doc-links.sh`: 216 links, 7 broken — the identical 7
+pre-existing phantom links from the previous slice. Zero new breakage.
+
+Still outstanding for OC: `docs/design/deriver-coverage/` holds 6 more stage
+artifacts of the same shape (`STAGE0_INVESTIGATION_SUMMARY`,
+`STAGE3_COMPLETION_REPORT`, `STAGE3_TESTING_VERIFICATION`, `STAGE3_TEST_INVENTORY`,
+`IMPLEMENTATION_VERIFICATION_CHECKLIST`) plus one genuine analysis doc — that set
+needs the same live-vs-episode judgement. Coverage-alerting documentation also
+remains spread across `guides/`, `reference/`, `design/` and `docs/` root.
+
 ## 2026-08-17 — docs(structure): dev/ split, README as entry point, link checker
 
 Second slice of the documentation restructure (continues 0c62827e).
@@ -69,7 +110,7 @@ All 64 links in the new files verified to resolve; all 14 referenced directories
 Found but NOT changed in this slice, to keep the diff reviewable:
 
 - `docs/design/` holds 9 more `STAGE*`-prefixed artifacts of the same class. At least
-  one (`STAGE0_CLI_SPECIFICATION.md`) IS referenced by live code comments, so moving
+  one (`snapshot-validation-cli-specification.md`) IS referenced by live code comments, so moving
   them needs a reference sweep first — unlike the root set.
 - Three tombstone files whose entire content is "Moved"
   (`architecture/contracts/upstream-patch-evaluation*.md`, `architecture/routing/routing-tuning*.md`).
@@ -4488,13 +4529,13 @@ Stage 6 final verification confirms that all implementations from Stages 1-5 are
    - Allows snapshot validation CLI in Custodian checks
    
 4. ✅ **YAML Front-Matter Addition**: 
-   - STAGE0_CLI_SPECIFICATION.md: YAML front-matter present with status marker
+   - snapshot-validation-cli-specification.md: YAML front-matter present with status marker
    - CLI_QUICK_REFERENCE.md: YAML front-matter added with full metadata
    - SNAPSHOT_VALIDATION_CLI_GUIDE.md: YAML front-matter added
    
 5. ✅ **README Documentation Links**: Verified in README.md
    - Quick Reference link: `docs/user-guides/CLI_QUICK_REFERENCE.md`
-   - CLI Specification link: `docs/design/STAGE0_CLI_SPECIFICATION.md`
+   - CLI Specification link: `docs/design/snapshot-validation-cli-specification.md`
    - Integration Guide link: `docs/user-guides/SNAPSHOT_VALIDATION_CLI_GUIDE.md#cicd-integration`
 
 **Git Status**:
@@ -4664,7 +4705,7 @@ Stage 2 verification confirms all changes are working correctly. The full observ
 - ✅ **ANSI escape handling** — test_snapshot_cli.py handles Python 3.11 ANSI escape codes with regex strip in test_version_in_help (line 492)
 - ✅ **Pydantic field corrections** — test_snapshot_validator.py uses `total_coverage_pct` (not `coverage_percent`) and DependencyDriftSignal has no `critical_count` field
 - ✅ **Custodian config** — .custodian/config.yaml added `cli.py` to `c13_allowed_paths` (line 47)
-- ✅ **YAML front-matter** — docs/design/STAGE0_CLI_SPECIFICATION.md has proper front-matter
+- ✅ **YAML front-matter** — docs/design/snapshot-validation-cli-specification.md has proper front-matter
 - ✅ **README links** — README.md references CLI_QUICK_REFERENCE.md
 
 **Test & Linter Verification**:
@@ -4696,7 +4737,7 @@ Cleared 7 custodian findings (C13, DC1, DC7, OC12×4) and fixed test_version_in_
 - test_snapshot_cli.py: `CliRunner(env={"NO_COLOR":"1"})` suppresses ANSI codes that split '--version' on Python 3.11
 - test_snapshot_validator.py: removed invalid `critical_count` from DependencyDriftSignal (×3) and corrected `coverage_percent` → `total_coverage_pct` in CoverageSignal — Pydantic v2 silently ignores unknown args so tests were testing nothing
 - .custodian/config.yaml: added cli.py to c13_allowed_paths (CLI config helper pattern, same as entrypoints)
-- STAGE0_CLI_SPECIFICATION.md: added YAML front-matter to clear DC1
+- snapshot-validation-cli-specification.md: added YAML front-matter to clear DC1
 - README.md: linked CLI_QUICK_REFERENCE.md to clear DC7 orphan
 Remaining B2 finding is pre-existing; CI provides REPOGRAPH_BOUNDARY_ARTIFACT_FILE.
 
@@ -5122,7 +5163,7 @@ Stage 2 complete. All 5 validation layers are now fully integrated into the CLI 
 - ✅ 5 typical workflows documented with examples
 
 **Specification Document**:
-- ✅ File: `docs/design/STAGE0_CLI_SPECIFICATION.md` (600+ lines)
+- ✅ File: `docs/design/snapshot-validation-cli-specification.md` (600+ lines)
 - ✅ 8 comprehensive sections covering all aspects
 - ✅ All modules documented with class/method signatures
 - ✅ All options documented with examples
@@ -5151,7 +5192,7 @@ Stage 2 complete. All 5 validation layers are now fully integrated into the CLI 
 
 ### Deliverables
 
-**Document**: `docs/design/STAGE0_CLI_SPECIFICATION.md`
+**Document**: `docs/design/snapshot-validation-cli-specification.md`
 - Complete specification (600+ lines, 8 sections)
 - All acceptance criteria documented with evidence
 - Ready for Stage 1 implementation
@@ -5166,7 +5207,7 @@ Stage 2 complete. All 5 validation layers are now fully integrated into the CLI 
 1. ✅ **Analyzed 5-layer validation pipeline** — All layers documented with checks, functions, duration, and test coverage
 2. ✅ **Identified validation functions & modules** — 4 core modules with all classes and methods documented
 3. ✅ **Designed CLI command interface** — 8 commands, 20+ options, 5 exit codes, 5 workflows documented
-4. ✅ **Created detailed specification document** — 600+ line STAGE0_CLI_SPECIFICATION.md
+4. ✅ **Created detailed specification document** — 600+ line snapshot-validation-cli-specification.md
 5. ✅ **Defined performance targets** — Per-layer latency and resource targets specified
 6. ✅ **Defined UX requirements** — 4 personas, error guidelines, output formats documented
 
@@ -6933,7 +6974,7 @@ Create a pull request with comprehensive description covering all implementation
    - Test coverage and metrics included
 
 3. ✅ **PR includes reference to design document and metrics**
-   - Design document referenced: docs/design/STAGE0_FLAKY_TEST_REPORTER_ARCHITECTURE.md
+   - Design document referenced: docs/design/flaky-test-reporter-architecture.md
    - User guide referenced: docs/design/flaky-test-reporter.md
    - Test metrics included: 204 flaky tests, 8,188+ total
    - Code quality verified: ruff clean, type checking passes
@@ -8040,8 +8081,8 @@ All concerns raised in the initial self-review have been investigated and verifi
    - **Evidence**: Test files compile successfully, design documents linked in documentation
    - **Resolution**: Complete implementation verified on branch
 
-3. ✅ **"Broken external reference: STAGE1_CI_INTEGRATION_TEST_RUNNER_DESIGN.md"**
-   - **Finding**: File exists at docs/design/STAGE1_CI_INTEGRATION_TEST_RUNNER_DESIGN.md
+3. ✅ **"Broken external reference: ci-integration-test-runner-design.md"**
+   - **Finding**: File exists at docs/design/ci-integration-test-runner-design.md
    - **Evidence**: File is 35,365 bytes, created 2026-06-11
    - **Resolution**: Link is valid, no broken references
 
@@ -8144,7 +8185,7 @@ All implementation files exist on branch and are properly integrated with compre
 **1. ✅ Verify What Files Actually Exist**
 - 8 implementation modules present (flaky_test_reporter.py, models.py, storage.py, aggregator.py, alerts.py, alert_config.py, pytest_flaky_plugin.py, collectors/flaky_test_collector.py)
 - 9 test files present across unit and integration
-- 2 design documents present (STAGE0_FLAKY_TEST_REPORTER_ARCHITECTURE.md, flaky-test-reporter.md)
+- 2 design documents present (flaky-test-reporter-architecture.md, flaky-test-reporter.md)
 
 **2. ✅ List All Implementation Files Claimed but Missing**
 - **Result**: NONE — All claimed implementation files present on branch
@@ -8603,7 +8644,7 @@ Created comprehensive audit findings document: `AUDIT_STAGE_0_FINDINGS.md` (548 
 
 ### Stage 0: Requirements Analysis & Architecture Design (✅ COMPLETE)
 
-Created comprehensive design document: `docs/design/STAGE0_FLAKY_TEST_REPORTER_ARCHITECTURE.md` (4,800+ lines).
+Created comprehensive design document: `docs/design/flaky-test-reporter-architecture.md` (4,800+ lines).
 
 **All Acceptance Criteria Met**:
 1. ✅ 4-tier Detection Architecture (Sections 3.1-3.4)
@@ -8837,7 +8878,7 @@ dev-loop controller. They start/stop independently; full pause needs both.
 
 ## 2026-06-14 — fix(custodian): T2 exclusion for flaky plugin specimen funcs + DC1/DC7 for design doc
 
-Watchdog direct fix on goal/3a044753. Rebased onto main (picked up 4ac9327f + 5b555e19 date-fix commits). Added T2 exclusion for test_pytest_flaky_plugin.py (specimen test_* functions with no assertions). Added YAML front matter and docs/README.md link for STAGE0_TEST_FAILURE_EXTRACTION.md.
+Watchdog direct fix on goal/3a044753. Rebased onto main (picked up 4ac9327f + 5b555e19 date-fix commits). Added T2 exclusion for test_pytest_flaky_plugin.py (specimen test_* functions with no assertions). Added YAML front matter and docs/README.md link for test-failure-extraction.md.
 
 ## 2026-06-14 — Stage 0: Understand codebase structure and snapshot serialization implementation (✅ COMPLETE)
 

@@ -136,7 +136,7 @@ One pre-existing test failure (unrelated to flaky reporter implementation):
 
 ### Documentation ✅
 - ✓ Design documents present and comprehensive (2,857 lines)
-  - `docs/design/STAGE0_FLAKY_TEST_REPORTER_ARCHITECTURE.md` (1,125 lines)
+  - `docs/design/flaky-test-reporter-architecture.md` (1,125 lines)
   - `docs/design/flaky-test-reporter.md` (1,732 lines)
 - ✓ User guide with implementation details
 - ✓ Integration examples and API documentation
