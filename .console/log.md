@@ -240,6 +240,35 @@ are untouched.
 Neither path is in `.gitignore`, which is why they were committed at all. That
 gap is left for its own change rather than bundled into a board-unblock fix —
 but it will keep re-tripping this gate until someone closes it.
+## 2026-08-17 — chore(console): rotate log.md ahead of #498, identically
+
+This branch could not be pushed: `.console/log.md` was over OC2's 500KB budget,
+because main's log sits at 98% of it and every PR must add an entry. #498 already
+carries the rotation, but waiting for it to merge serialises the whole queue
+behind a GitHub outage.
+
+Rotated here instead, reproducing #498's split **exactly** — the archive file is
+copied byte-for-byte from that branch, so all three carry an identical
+`docs/history/console-log/log-archive-through-2026-06-14.md` and cannot conflict
+on it. Whichever merges first, the others rebase onto an already-applied change.
+
+Getting there took three attempts, and the two rejected ones are worth recording.
+Splitting by position assumed the archive was a clean suffix of main's log; it is
+not, because log.md is not consistently newest-first. Matching whole entries as
+strings then reported 10 entries "unaccounted", which looked like data loss but
+was an artifact: the last entry of any slice absorbs the trailing content after
+it, so identical entries compare unequal. Both attempts aborted on their own
+safety checks rather than writing a divergent archive. Matching on headings with
+multiplicity (main has 2 duplicate headings, the archive 1) is what actually
+holds, and a heading census confirms #498's rotation loses nothing: 0 of main's
+294 headings are absent from archive+kept.
+
+The archive filename is inherited from #498 and is misleading — it says "through
+2026-06-14" but the archived block spans 2026-06-04 to 2026-07-14 and overlaps
+the retained range, because the split was by size, not date. Left as-is
+deliberately: renaming it here would diverge from #498 and reintroduce the exact
+conflict this was written to avoid.
+
 ## 2026-08-14 — fix(lint): exempt the vulture whitelist from F821
 
 `.vulture_whitelist.py` (added by this branch) made `Lint (ruff)` red with 10
@@ -4902,66 +4931,6 @@ Stage 2 completion confirms that all Pydantic field corrections mentioned in the
 
 ---
 
-## 2026-06-14 — Stage 3: Commit and push changes to the existing branch (✅ COMPLETE)
-
-**Objective**: Ensure all changes from Stages 1-2 are committed with descriptive messages and pushed to the current branch, with the existing PR automatically updated.
-
-**Status**: ✅ Complete - All changes committed and pushed, PR updated with latest changes.
-
-### Execution Results ✅
-
-**Git Status**:
-- ✅ **Current branch**: `goal/3eee2d70`
-- ✅ **Working tree**: Clean (no uncommitted changes)
-- ✅ **Remote status**: Branch up to date with `origin/goal/3eee2d70`
-- ✅ **All changes committed**: Yes (commits 37a027b and 4953bfb visible in git log)
-
-**Commits Made**:
-- ✅ **37a027b**: `docs(.console): document Stage 2 completion — full test suite and linter verification`
-  - Documented Stage 2 verification results
-  - Confirmed all tests passing (1,192/1,192)
-  - Confirmed all linters passing (0 violations)
-  - Marked production-ready status
-
-- ✅ **4953bfb**: `docs(.console): document Stage 1 completion — all review concerns resolved and verified`
-  - Documented all review concerns from PR #289 resolved
-  - Listed all fixes applied (Pydantic fields, ANSI handling, config, docs, etc.)
-  - Confirmed all 1,192 tests passing
-  - Marked ready for code review
-
-**PR Status**:
-- ✅ **PR automatically updated**: Latest commits visible on branch
-- ✅ **Review concerns addressed**: All 5 concerns from self-review resolved
-- ✅ **Tests verified**: All 1,192 tests passing
-- ✅ **Linters verified**: All checks passed (0 violations)
-- ✅ **Documentation updated**: Stage 1 and Stage 2 completion documented
-
-### All Acceptance Criteria Met ✅
-
-1. ✅ **All changes committed with descriptive message**
-   - Commit 37a027b: Stage 2 completion documentation
-   - Commit 4953bfb: Stage 1 completion documentation
-   - Commit messages follow project conventions
-   - Each commit has clear description of what was changed
-
-2. ✅ **Changes pushed to current branch**
-   - Branch: `goal/3eee2d70`
-   - Status: Up to date with `origin/goal/3eee2d70`
-   - All commits visible in git log
-   - Remote contains latest changes
-
-3. ✅ **Existing PR updated in place**
-   - PR #289 automatically reflects latest commits
-   - Review concerns addressed in commits
-   - Tests verified passing in CI
-   - Ready for review and merge
-
-### Summary
-
-Stage 3 verification confirms all changes are properly committed and pushed. The working tree is clean, all commits are visible in git history, and the branch is synchronized with remote. The PR is automatically updated with the latest changes and ready for final review.
-
----
-
 ## 2026-06-14 — Stage 2: Run full test suite and linter checks to verify all changes work (✅ COMPLETE)
 
 **Objective**: Run full test suite and linter checks to verify all fixes from Stage 1 are working correctly.
@@ -5376,6 +5345,36 @@ Stage 2 complete. All 5 validation layers are now fully integrated into the CLI 
 
 ---
 
+## 2026-06-14 — Stage 3: Commit and push changes to the existing branch (✅ COMPLETE)
+
+**Objective**: Ensure all changes from Stages 0-2 are committed and pushed to the existing branch to update the open PR.
+
+**Status**: ✅ COMPLETE — All changes committed and pushed successfully.
+
+**Key Results**:
+- ✅ Working tree: CLEAN (all changes committed)
+- ✅ Current branch: `goal/83fa507a`
+- ✅ Branch status: UP TO DATE with `origin/goal/83fa507a`
+- ✅ Changes pushed successfully: Commit `5b253fb` pushed to remote
+
+**Commits Created** (Stages 1-2):
+1. `c0a6480`: "fix: resolve linting issues and flaky timing test in snapshot performance tests"
+2. `5b253fb`: "docs(.console): document Stage 2 completion — validation tests and linters passing"
+
+**All Acceptance Criteria Met**:
+1. ✅ All code changes staged and committed with descriptive messages
+2. ✅ Changes pushed to current branch (`goal/83fa507a`)
+3. ✅ Existing PR automatically updated with new commits
+4. ✅ No new PR created (pushed to existing branch as required)
+5. ✅ Tests passing: 37 performance tests + 1,281 observer tests
+6. ✅ Linters passing: 0 violations
+
+**Verification**:
+- ✅ `git status` shows: "Your branch is up to date with 'origin/goal/83fa507a'" 
+- ✅ `git log` shows latest commit `5b253fb` (documentation update)
+- ✅ Remote push confirmed successful
+
+**Status**: ✅ COMPLETE — All review concerns resolved, tests passing, code quality verified, changes committed and pushed to existing branch. Ready for final review and merge.
 
 ---
 
