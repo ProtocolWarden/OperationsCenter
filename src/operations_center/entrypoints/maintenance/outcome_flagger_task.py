@@ -18,6 +18,7 @@ import os
 import time
 from typing import TYPE_CHECKING, Any, Literal
 
+from operations_center.adapters.board import BoardClient, make_board_client
 from operations_center.eval.outcome_flagger import (
     Disagreement,
     OutcomeSource,
@@ -27,7 +28,6 @@ from operations_center.maintenance.contracts import MaintenanceResult
 
 if TYPE_CHECKING:
     from operations_center.adapters.github_pr import GitHubPRClient
-    from operations_center.adapters.plane.client import PlaneClient
     from operations_center.maintenance.contracts import MaintenanceContext
 
 DEFAULT_INTERVAL_SECONDS = 3600
@@ -51,7 +51,7 @@ class OutcomeFlaggerTask:
         interval_seconds: int = DEFAULT_INTERVAL_SECONDS,
         enabled: bool = True,
         outcome_source: OutcomeSource | None = None,
-        plane_client: PlaneClient | None = None,
+        plane_client: BoardClient | None = None,
     ) -> None:
         self._settings = settings
         self.interval_seconds = interval_seconds
@@ -59,18 +59,11 @@ class OutcomeFlaggerTask:
         self._outcome_source = outcome_source
         self._plane_client = plane_client
 
-    def _make_plane_client(self) -> PlaneClient:
+    def _make_plane_client(self) -> BoardClient:
         if self._plane_client is not None:
             return self._plane_client
-        from operations_center.adapters.plane.client import PlaneClient
 
-        p = self._settings.plane
-        return PlaneClient(
-            base_url=p.base_url,
-            api_token=self._settings.plane_token(),
-            workspace_slug=p.workspace_slug,
-            project_id=p.project_id,
-        )
+        return make_board_client(self._settings)
 
     def _make_gh_client(self) -> GitHubPRClient | None:
         from operations_center.adapters.github_pr import GitHubPRClient
@@ -159,7 +152,7 @@ class OutcomeFlaggerTask:
         return results
 
     @staticmethod
-    def _open_ticket_titles(client: PlaneClient) -> set[str]:
+    def _open_ticket_titles(client: BoardClient) -> set[str]:
         titles: set[str] = set()
         for issue in client.list_issues():
             name = str(issue.get("name", ""))

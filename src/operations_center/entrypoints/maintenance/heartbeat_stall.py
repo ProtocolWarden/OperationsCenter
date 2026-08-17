@@ -26,6 +26,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any, Literal
 
+from operations_center.adapters.board import BoardClient, make_board_client
 from operations_center.entrypoints.heartbeat import (
     is_live,
     read_heartbeat,
@@ -34,7 +35,6 @@ from operations_center.entrypoints.heartbeat import (
 from operations_center.maintenance.contracts import MaintenanceResult
 
 if TYPE_CHECKING:
-    from operations_center.adapters.plane.client import PlaneClient
     from operations_center.maintenance.contracts import MaintenanceContext
 
 DEFAULT_INTERVAL_SECONDS = 300
@@ -70,7 +70,7 @@ class HeartbeatStallTask:
         max_liveness_seconds: float = DEFAULT_MAX_LIVENESS_SECONDS,
         max_success_age_seconds: float = DEFAULT_MAX_SUCCESS_AGE_SECONDS,
         min_consecutive_failures: int = DEFAULT_MIN_CONSECUTIVE_FAILURES,
-        plane_client: PlaneClient | None = None,
+        plane_client: BoardClient | None = None,
     ) -> None:
         self._settings = settings
         self._status_dir = status_dir
@@ -133,18 +133,11 @@ class HeartbeatStallTask:
             "failed", started, details, error=f"watcher(s) live but stalled: {roles_str}"
         )
 
-    def _make_plane_client(self) -> PlaneClient:
+    def _make_plane_client(self) -> BoardClient:
         if self._plane_client is not None:
             return self._plane_client
-        from operations_center.adapters.plane.client import PlaneClient
 
-        p = self._settings.plane
-        return PlaneClient(
-            base_url=p.base_url,
-            api_token=self._settings.plane_token(),
-            workspace_slug=p.workspace_slug,
-            project_id=p.project_id,
-        )
+        return make_board_client(self._settings)
 
     def _open_fix_task(
         self, ctx: MaintenanceContext, stalled: list[dict[str, object]]

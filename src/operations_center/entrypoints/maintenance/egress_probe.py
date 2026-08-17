@@ -33,10 +33,10 @@ import os
 import time
 from typing import TYPE_CHECKING, Any, Literal
 
+from operations_center.adapters.board import BoardClient, make_board_client
 from operations_center.maintenance.contracts import MaintenanceResult
 
 if TYPE_CHECKING:
-    from operations_center.adapters.plane.client import PlaneClient
     from operations_center.maintenance.contracts import MaintenanceContext
 
 DEFAULT_INTERVAL_SECONDS = 300
@@ -92,7 +92,7 @@ class EgressProbeTask:
         allow_host: str = _ALLOW_HOST,
         deny_host: str = _DENY_HOST,
         probe_fn: Any = None,
-        plane_client: PlaneClient | None = None,
+        plane_client: BoardClient | None = None,
     ) -> None:
         self._settings = settings
         self.interval_seconds = interval_seconds
@@ -102,18 +102,11 @@ class EgressProbeTask:
         self._probe = probe_fn or _http_probe
         self._plane_client = plane_client
 
-    def _make_plane_client(self) -> PlaneClient:
+    def _make_plane_client(self) -> BoardClient:
         if self._plane_client is not None:
             return self._plane_client
-        from operations_center.adapters.plane.client import PlaneClient
 
-        p = self._settings.plane
-        return PlaneClient(
-            base_url=p.base_url,
-            api_token=self._settings.plane_token(),
-            workspace_slug=p.workspace_slug,
-            project_id=p.project_id,
-        )
+        return make_board_client(self._settings)
 
     def run_once(self, ctx: MaintenanceContext) -> MaintenanceResult:
         started = time.monotonic()

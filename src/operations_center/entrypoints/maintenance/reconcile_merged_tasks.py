@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from operations_center.adapters.board import make_board_client
 from operations_center.adapters.github_pr import GitHubPRClient
 from operations_center.config import load_settings
 
@@ -158,14 +159,8 @@ def _merged_prs_recent(
 
 
 def _plane_client(settings: Any):
-    from operations_center.adapters.plane import PlaneClient
 
-    return PlaneClient(
-        base_url=settings.plane.base_url,
-        api_token=settings.plane_token(),
-        workspace_slug=settings.plane.workspace_slug,
-        project_id=settings.plane.project_id,
-    )
+    return make_board_client(settings)
 
 
 def scan(
