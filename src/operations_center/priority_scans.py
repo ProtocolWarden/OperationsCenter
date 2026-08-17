@@ -35,7 +35,7 @@ __all__ = [
 ]
 
 if TYPE_CHECKING:
-    from operations_center.adapters.plane import PlaneClient
+    from operations_center.adapters.board import BoardClient
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +149,7 @@ class AwaitingInputResult:
 
 def handle_awaiting_input_scan(
     issues: list[dict],
-    plane_client: PlaneClient,
+    plane_client: BoardClient,
     *,
     state_name: str = "Awaiting Input",
 ) -> list[AwaitingInputResult]:

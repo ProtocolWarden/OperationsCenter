@@ -72,14 +72,7 @@ def main() -> int:
         }
         if args.apply:
             try:
-                # Plane's priority field is set via the same PATCH path as state
-                # transitions; the existing client doesn't expose a typed
-                # set_priority, so we use the raw underlying client call here.
-                client._client.patch(  # type: ignore[attr-defined]
-                    f"/api/v1/workspaces/{client.workspace_slug}"
-                    f"/projects/{client.project_id}/work-items/{c.task_id}/",
-                    json={"priority": c.proposed_priority},
-                )
+                client.set_priority(c.task_id, c.proposed_priority)
                 entry["action"] = "applied"
             except Exception as exc:
                 entry["action"] = "error"
