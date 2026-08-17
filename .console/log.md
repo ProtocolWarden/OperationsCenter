@@ -1,3 +1,40 @@
+## 2026-08-17 — docs(links): resolve the 7 findings K5 now reports
+
+Custodian's new K5 detector flags these on every audit, so leaving them meant
+permanent noise in the gate. Each was triaged against the filesystem and git
+history rather than deleted wholesale.
+
+**Three were resolvable, and two of those were caused by this restructure:**
+
+- `docs/custodian/console-reconciliation-{detectors,test-strategy}.md` pointed at
+  `tests/fixtures/console_fixtures/README.md`. The directory is
+  `tests/fixtures/console_malformed/` and it does have a README — a rename that
+  the docs never followed. One of the two also had the wrong depth
+  (`../fixtures/` from `docs/custodian/` resolves to `docs/fixtures/`).
+- `docs/design/flaky-test-reporter-ci-integration.md` linked "Stage 0 Design" at
+  `flaky-test-reporter-design.md`. That document is
+  `flaky-test-reporter-architecture.md` — the file THIS restructure renamed on
+  2026-08-17 (17521d06). The reference sweep in that commit missed it because the
+  link used a name the file never had.
+
+**Four had no target and never have** — `observer-service.md`,
+`flaky-test-reporter-implementation.md`, `api/snapshot_validation_engine.md`,
+`specs/STAGE1_EXTRACTION_FIDELITY_METRIC.md`. Rather than delete the references
+(which discards what the author meant to write) or leave broken links, each is now
+prose: `Observer Service _(planned — not yet written)_`. The intent survives, the
+rot does not, and K5 goes quiet.
+
+`flaky-test-reporter-implementation.md` was deliberately NOT mapped to the existing
+`flaky-test-reporter.md` — that file is the combined architecture/metrics/user
+guide, not the "Stage 1 core reporter" the link describes. A plausible-looking
+mapping is worse than an honest "not written".
+
+Noted, not fixed: those same custodian docs contain
+`from tests.fixtures.console_fixtures import ...` code samples, which are stale for
+the same rename reason. That is content accuracy, not link rot.
+
+OperationsCenter K5 findings: 7 -> 0.
+
 ## 2026-08-17 — docs(structure): deriver-coverage to history, and a correction to my own rule
 
 Fourth slice (continues 17521d06); completes the OperationsCenter pass.

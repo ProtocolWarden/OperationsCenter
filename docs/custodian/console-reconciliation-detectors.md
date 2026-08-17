@@ -320,7 +320,7 @@ python -m yaml .console/workers.yaml  # Find syntax error
 
 ## Related Documentation
 
-- [.console/ Reconciliation Fixture Repositories](../fixtures/console_fixtures/README.md) — Detailed fixture documentation
+- [.console/ Reconciliation Fixture Repositories](../../tests/fixtures/console_malformed/README.md) — Detailed fixture documentation
 - [Test Strategy](console-reconciliation-test-strategy.md) — Unit and integration test design, fixture strategy, coverage goals
 - [Unit Test Reference](../../tests/unit/detectors/) — Test source code
 - [Integration Test Reference](../../tests/integration/detectors/) — Integration test source code
