@@ -33,6 +33,8 @@ Superseded and removed (native Custodian covers them):
 
 from __future__ import annotations
 
+import sys as _sys
+
 import ast
 import re
 from pathlib import Path
@@ -69,6 +71,10 @@ def _detect_r1_console_presence(ctx: AuditContext) -> DetectorResult:
 
 _TASK_SIZE_LIMIT = 100 * 1024  # 100 KB (task.md should remain concise)
 _CONSOLE_SIZE_LIMIT = 500 * 1024  # 500 KB (log.md grows through legitimate operational history)
+# Warn while there is still room to act. The budget is otherwise a cliff: fine at
+# 99%, and at 101% every open PR fails the gate at once — which is exactly what
+# happened on 2026-08-17, blocking five of them until the log was rotated by hand.
+_CONSOLE_WARN_RATIO = 0.80
 _TASK_REQUIRED_SECTIONS = ["## Objective", "## Overall Plan", "## Current Stage"]
 _BACKLOG_STANDARD_SECTIONS = ["## In Progress", "## Up Next", "## Done"]
 
@@ -241,6 +247,18 @@ def _detect_r2_console_budget(ctx: AuditContext) -> DetectorResult:
             limit_kb = size_limit // 1024
             if size > size_limit:
                 samples.append(f".console/{filename} exceeds {limit_kb}KB budget ({size} bytes)")
+            elif size >= size_limit * _CONSOLE_WARN_RATIO:
+                # Advisory, NOT a finding. Findings fail the audit at every
+                # severity, so reporting this as one would just move the cliff
+                # from 100% to 80%. stderr reaches pre-push and CI output while
+                # the push still succeeds.
+                pct = 100.0 * size / size_limit
+                _sys.stderr.write(
+                    f"[OC2] .console/{filename} is at {pct:.0f}% of its {limit_kb}KB "
+                    f"budget ({size:,} bytes, {size_limit - size:,} to spare) — "
+                    f"rotate older entries to docs/history/ before it blocks every "
+                    f"open PR at once\n"
+                )
         except OSError:
             samples.append(f".console/{filename} cannot be read (permission denied)")
 

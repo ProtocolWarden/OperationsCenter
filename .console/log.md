@@ -1,3 +1,28 @@
+## 2026-08-17 — feat(detectors): warn at 80% of the .console/ budget
+
+The budget is a cliff. Fine at 99%, and at 101% every open PR fails the gate at
+once — which is what happened today, blocking five until the log was rotated by
+hand. Nothing warned beforehand.
+
+OC2 now writes an advisory to stderr between 80% and 100%. Deliberately **not** a
+finding: findings fail the audit at every severity, so raising one at 80% would
+move the cliff earlier rather than remove it. The advisory reaches pre-push and CI
+output while the push still succeeds.
+
+Verified at four sizes — 75% silent, 80% and 95% advise without a finding, 105%
+fails as before. The repo today is at 75%, so nothing fires.
+
+**Correcting an earlier estimate of mine.** I said log.md grows ~15KB per PR and
+had ~9 PRs of headroom. That was measured across a day dominated by seven stale
+PRs each carrying months of accumulated July entries (+60KB, +17KB, +10KB).
+Ordinary PRs add ~1.8KB: the last five were +2127, +1982, +886, +2067, +2106. At
+384,352 of 512,000 the real headroom is ~70 PRs, not 9. The budget did not need
+raising; it needed a warning.
+
+Why the file grows at all: the fleet merged 191 of 200 PRs (95.5%), and the
+pre-commit hook requires a log entry on every one. ~200 PRs x ~1.8KB is roughly
+the whole file. It grows because the fleet ships, not because anything is wrong.
+
 ## 2026-08-17 — fix(adapters): repair the board seam, and the gap that let it merge red
 
 #503 merged with CI red. Worth being precise about how, because two separate
