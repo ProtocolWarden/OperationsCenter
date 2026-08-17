@@ -120,20 +120,21 @@ Nothing else links these together, so start here:
 Scoped work definitions, usually authored for the fleet to execute.
 
 Named specs:
+[Forgejo board adapter](specs/forgejo-board-adapter.md) ·
 [proposer consumes custodian sweep](specs/proposer-consumes-custodian-sweep.md) ·
 [reviewer PR state machine](specs/reviewer-pr-state-machine.md) ·
-[executor adapter unit tests](specs/executor-adapter-unit-tests.md) ·
-[P5 adapter + board-unblock tests](specs/p5-adapter-and-board-unblock-tests.md) ·
+[executor adapter unit tests](specs/archive/executor-adapter-unit-tests.md) ·
+[P5 adapter + board-unblock tests](specs/archive/p5-adapter-and-board-unblock-tests.md) ·
 [platform CLI test coverage](specs/platform-cli-test-coverage.md) ·
-[watcher entrypoint test coverage](specs/watcher-entrypoint-test-coverage.md) ·
+[watcher entrypoint test coverage](specs/archive/watcher-entrypoint-test-coverage.md) ·
 [admin API test coverage](specs/admin-api-test-coverage.md) ·
 [decision-rules test coverage](specs/decision-rules-test-coverage.md) ·
 [operational-health test coverage](specs/operational-health-test-coverage.md) ·
-[recovery-subsystem test coverage](specs/recovery-subsystem-test-coverage.md) ·
-[adaptive-loop integration tests](specs/adaptive-loop-integration-tests.md) ·
+[recovery-subsystem test coverage](specs/archive/recovery-subsystem-test-coverage.md) ·
+[adaptive-loop integration tests](specs/archive/adaptive-loop-integration-tests.md) ·
 [CI coordinator decision tests](specs/ci-coordinator-decision-tests.md) ·
-[CxRP backend-card vocabulary](specs/cxrp-backend-card-vocabulary.md) ·
-[scene-timing audit test hardening](specs/scene-timing-audit-test-hardening.md)
+[CxRP backend-card vocabulary](specs/archive/cxrp-backend-card-vocabulary.md) ·
+[scene-timing audit test hardening](specs/archive/scene-timing-audit-test-hardening.md)
 
 The remaining `queue-drain-<timestamp>.md` files are per-run drain records
 rather than authored specs.
