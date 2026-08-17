@@ -14,6 +14,34 @@ are untouched.
 Neither path is in `.gitignore`, which is why they were committed at all. That
 gap is left for its own change rather than bundled into a board-unblock fix —
 but it will keep re-tripping this gate until someone closes it.
+## 2026-08-17 — fix(observer): land #478's edge_cases fix, drop its per-goal scratch
+
+#478 sat DIRTY since 2026-07-15, 12 commits behind main. Rebased; the only
+conflict was `.console/backlog.md`, resolved by keeping both sides.
+
+**The fix is still needed.** `cli.py` already reads `payload.get("edge_cases")`
+and renders the per-test detail, and `ExtractionHealth.edge_cases` has carried
+that sample list since PR #374 — but `ExtractionHealthSnapshot` never persisted
+it. Every snapshot written to extraction-history JSONL kept only the
+`edge_case_summary` count dict, so the CLI's edge-case view read back empty
+forever. The PR threads `edge_cases` through the snapshot, the collector and the
+call site, with a backwards-compatible `[]` default on load.
+
+**Dropped from the PR:** `.console/task.md` and
+`.console/STAGE4_FINAL_VERIFICATION.md`. Both are single-slot scratch files the
+fleet overwrites per goal — main's STAGE4 copy is a June performance-baseline
+report from a different branch, and task.md's rule is one objective at a time
+with history in log.md. Landing July's scratch would have installed a stale
+"IN PROGRESS" objective for work that is finished. The backlog and log additions
+are kept: those are durable inventory, and they already record this work.
+
+`extraction_health_history.py` then tripped C29: it sat at exactly the 500-line
+threshold, so the six-line field addition put it over. Added to OC's C29 list as
+an explicit **deferral**, not an exemption — every other entry there asserts the
+file cannot cleanly split, and that claim would not be honest here, since the
+module holds two schema dataclasses alongside the functions that aggregate them.
+The split is filed in the backlog so the deferral cannot quietly age into a
+permanent exemption.
 
 ## 2026-08-13 — fix(reviewer): decouple the D1 fallback pairing from council seating
 

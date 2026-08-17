@@ -4,6 +4,16 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## Up Next
 
+### Split extraction_health_history.py, or the C29 exclusion becomes permanent
+- The module was at exactly 500 lines; #478's `edge_cases` field pushed it to 506 and
+  it is now on the C29 exclusion list as an explicit deferral, not an exemption.
+- It holds two schema dataclasses (`ExtractionHealthSnapshot`, `ExtractionHealthTrends`)
+  with their serialization, plus the aggregation functions over them
+  (`aggregate_edge_cases` and friends). Schema vs aggregation is a plausible seam.
+- Do the split, or decide deliberately that the module is cohesive and rewrite the
+  exclusion comment to say so. What must not happen is the deferral quietly ageing
+  into a permanent exemption nobody re-reads.
+
 ### CritiqueExecutor is not covered by the fleet-launch self-heal
 - `ensure_executor_backends()` in `scripts/operations-center.sh` probes only
   `import team_executor, dag_executor` and reinstalls only `../TeamExecutor` and
