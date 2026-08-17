@@ -156,7 +156,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from operations_center.adapters.github_pr import GitHubPRClient
-from operations_center.adapters.plane import PlaneClient
+from operations_center.adapters.board import BoardClient, make_board_client
 from operations_center.config import load_settings
 from operations_center.execution.usage_store import UsageStore
 from operations_center.in_flight_reconcile import (
@@ -997,7 +997,7 @@ def _apply_rules(
 
 
 def _clear_orphaned_in_flight_events(
-    client: PlaneClient,
+    client: BoardClient,
     usage_store: UsageStore,
     *,
     now: datetime,
@@ -1044,12 +1044,7 @@ def main() -> int:
     args = parser.parse_args()
 
     settings = load_settings(args.config)
-    client = PlaneClient(
-        base_url=settings.plane.base_url,
-        api_token=settings.plane_token(),
-        workspace_slug=settings.plane.workspace_slug,
-        project_id=settings.plane.project_id,
-    )
+    client = make_board_client(settings)
 
     mem_gb = _mem_available_gb()
     if mem_gb < _MEM_SKIP_THRESHOLD_GB:

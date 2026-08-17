@@ -20,7 +20,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from operations_center.adapters.github_pr import GitHubPRClient
-from operations_center.adapters.plane import PlaneClient
+from operations_center.adapters.board import BoardClient, make_board_client
 from operations_center.config import load_settings
 from operations_center.config.settings import Settings
 
@@ -118,7 +118,7 @@ def _build_fix_pr_description(
 
 
 def run_ci_monitor_cycle(
-    plane_client: PlaneClient,
+    plane_client: BoardClient,
     settings: Settings,
     logger: logging.Logger,
 ) -> int:
@@ -276,7 +276,7 @@ def run_ci_monitor_cycle(
 
 
 def run_monitor_loop(
-    plane_client: PlaneClient,
+    plane_client: BoardClient,
     settings: Settings,
     *,
     poll_interval_seconds: int,
@@ -353,12 +353,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     settings = load_settings(args.config)
 
-    client = PlaneClient(
-        base_url=settings.plane.base_url,
-        api_token=settings.plane_token(),
-        workspace_slug=settings.plane.workspace_slug,
-        project_id=settings.plane.project_id,
-    )
+    client = make_board_client(settings)
     logger = logging.getLogger(__name__)
 
     try:

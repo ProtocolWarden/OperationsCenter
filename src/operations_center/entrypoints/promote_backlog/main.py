@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import argparse
 
-from operations_center.adapters.plane import PlaneClient
+from operations_center.adapters.board import make_board_client
 from operations_center.autonomy_tiers.config import get_family_tier, load_tiers_config
 from operations_center.config import load_settings
 from operations_center.proposer.backlog_promoter import BacklogPromoterService
@@ -52,12 +52,7 @@ def main() -> None:
     dry_run = not args.execute
 
     settings = load_settings(args.config)
-    client = PlaneClient(
-        base_url=settings.plane.base_url,
-        api_token=settings.plane_token(),
-        workspace_slug=settings.plane.workspace_slug,
-        project_id=settings.plane.project_id,
-    )
+    client = make_board_client(settings)
 
     tiers_config = load_tiers_config()
 

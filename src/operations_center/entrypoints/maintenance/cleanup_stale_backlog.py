@@ -22,7 +22,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from operations_center.adapters.plane import PlaneClient
+from operations_center.adapters.board import make_board_client
 from operations_center.config import load_settings
 
 
@@ -43,12 +43,7 @@ def main() -> int:
 
     settings = load_settings(args.config)
     threshold_days = int(getattr(settings, "stale_autonomy_backlog_days", 30) or 30)
-    client = PlaneClient(
-        base_url=settings.plane.base_url,
-        api_token=settings.plane_token(),
-        workspace_slug=settings.plane.workspace_slug,
-        project_id=settings.plane.project_id,
-    )
+    client = make_board_client(settings)
     try:
         items = client.list_issues()
     except Exception as exc:

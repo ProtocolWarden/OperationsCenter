@@ -28,7 +28,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from operations_center.adapters.plane import PlaneClient
+from operations_center.adapters.board import BoardClient, make_board_client
 from operations_center.config import load_settings
 from operations_center.maintenance import (
     MaintenanceContext,
@@ -204,7 +204,7 @@ def _rebuild_active_projection(
 
 def _bootstrap_orphan_campaigns(
     settings: Any,
-    client: PlaneClient,
+    client: BoardClient,
     all_issues: list[dict],
     state_mgr: CampaignStateManager,
 ) -> None:
@@ -301,7 +301,7 @@ def _bootstrap_orphan_campaigns(
             )
 
 
-def _auto_promote_backlog(client: PlaneClient, issues: list[dict]) -> None:
+def _auto_promote_backlog(client: BoardClient, issues: list[dict]) -> None:
     """Promote tier-≥2 autonomy tasks from Backlog → Ready for AI each cycle.
 
     Filters out tasks carrying any lifecycle label meaning "don't touch":
@@ -372,7 +372,7 @@ def _build_phase_advance_seed(advance: PendingPhaseAdvance) -> str:
 
 def _emit_phase_advance_tasks(
     *,
-    client: PlaneClient,
+    client: BoardClient,
     all_issues: list[dict],
     pending: list[PendingPhaseAdvance],
 ) -> int:
@@ -439,7 +439,7 @@ def _emit_phase_advance_tasks(
     return created
 
 
-def run_once(settings: Any, client: PlaneClient) -> dict[str, Any]:
+def run_once(settings: Any, client: BoardClient) -> dict[str, Any]:
     """Execute one spec-hygiene cycle. Returns a free-form summary dict
     consumed by SpecHygieneTask to populate MaintenanceResult.details.
     An empty dict means the cycle short-circuited (e.g. disabled or fetch
@@ -579,7 +579,7 @@ class SpecHygieneTask:
     def __init__(
         self,
         settings: Any,
-        client: PlaneClient,
+        client: BoardClient,
         *,
         interval_seconds: int | None = None,
         enabled: bool | None = None,
@@ -655,7 +655,7 @@ def _log_maintenance_result(result: MaintenanceResult) -> None:
 
 
 def register_maintenance_tasks(
-    registry: MaintenanceRegistry, settings: Any, client: PlaneClient
+    registry: MaintenanceRegistry, settings: Any, client: BoardClient
 ) -> MaintenanceRegistry:
     """Register every maintenance task the live loop runs.
 
@@ -774,12 +774,7 @@ def main() -> None:
     args = parser.parse_args()
 
     settings = load_settings(args.config)
-    client = PlaneClient(
-        base_url=settings.plane.base_url,
-        api_token=settings.plane_token(),
-        workspace_slug=settings.plane.workspace_slug,
-        project_id=settings.plane.project_id,
-    )
+    client = make_board_client(settings)
     sd = settings.spec_author
 
     # Build a maintenance registry hosting the spec-hygiene task. The

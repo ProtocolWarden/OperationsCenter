@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from operations_center.adapters.plane import PlaneClient
+from operations_center.adapters.board import BoardClient
 
 # Labels that mark in-flight spec-author work. Dedupe key for watchers:
 # if any non-Done issue carries BOTH labels, skip creating a new task.
@@ -83,7 +83,7 @@ context_bundle:
 """
 
 
-def create_spec_author_task(client: PlaneClient, payload: SpecAuthorPayload) -> str:
+def create_spec_author_task(client: BoardClient, payload: SpecAuthorPayload) -> str:
     """Create the Plane task and return its id."""
     title = f"[Spec] {payload.spec_slug}"
     if payload.task_phase:

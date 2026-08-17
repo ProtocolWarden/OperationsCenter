@@ -274,14 +274,9 @@ def _find_existing_orphan_task_id(plane: Any, orphan: OrphanBranch) -> str | Non
 
 
 def _emit_plane_task(settings: Any, orphan: OrphanBranch) -> None:
-    from operations_center.adapters.plane import PlaneClient
+    from operations_center.adapters.board import make_board_client
 
-    plane = PlaneClient(
-        base_url=settings.plane.base_url,
-        api_token=settings.plane_token(),
-        workspace_slug=settings.plane.workspace_slug,
-        project_id=settings.plane.project_id,
-    )
+    plane = make_board_client(settings)
     title = _orphan_task_title(orphan)
     body = _orphan_task_description(orphan)
     existing_issue_id = _find_existing_orphan_task_id(plane, orphan)

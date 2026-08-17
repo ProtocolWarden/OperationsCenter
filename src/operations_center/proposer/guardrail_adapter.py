@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from operations_center.adapters.plane import PlaneClient
+from operations_center.adapters.board import BoardClient
 from operations_center.execution import UsageStore
 from operations_center.proposer.rejection_store import ProposalRejectionStore
 from operations_center.proposer.result_models import ProposalResultsArtifact
@@ -38,7 +38,7 @@ class ProposerGuardrailAdapter:
         self._rejection_store = rejection_store or ProposalRejectionStore()
 
     def evaluate(
-        self, *, client: PlaneClient, dedup_key: str, title: str, now: datetime
+        self, *, client: BoardClient, dedup_key: str, title: str, now: datetime
     ) -> GuardrailResult:
         # Long-lived rejection check comes first — human "no" signals are permanent.
         if self._rejection_store.is_rejected(dedup_key):
@@ -96,7 +96,7 @@ class ProposerGuardrailAdapter:
         return GuardrailResult(allowed=True)
 
     def _find_open_task_match(
-        self, client: PlaneClient, *, dedup_key: str, title: str
+        self, client: BoardClient, *, dedup_key: str, title: str
     ) -> tuple[str, str] | None:
         title_normalized = title.strip().lower()
         key_normalized = dedup_key.strip().lower()
@@ -119,7 +119,7 @@ class ProposerGuardrailAdapter:
         return None
 
     def _find_recently_done_match(
-        self, client: PlaneClient, *, dedup_key: str, title: str, now: datetime
+        self, client: BoardClient, *, dedup_key: str, title: str, now: datetime
     ) -> tuple[str, str] | None:
         """Return (id, title) of any Done/Cancelled task matching by title or dedup_key
         that was updated within recently_done_window_days."""

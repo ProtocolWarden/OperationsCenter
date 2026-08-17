@@ -15,7 +15,7 @@ from typing import Any
 
 import httpx
 
-from operations_center.adapters.plane import PlaneClient
+from operations_center.adapters.board import BoardClient, make_board_client
 from operations_center.adapters.reporting import Reporter
 from operations_center.config import Settings, load_settings
 from operations_center.entrypoints.setup.main import load_env_exports
@@ -240,7 +240,7 @@ def dependency_task_description(settings: Settings, status: DependencyStatus) ->
 
 
 def ensure_follow_up_task(
-    client: PlaneClient, settings: Settings, status: DependencyStatus
+    client: BoardClient, settings: Settings, status: DependencyStatus
 ) -> str | None:
     title = f"Dependency maintenance: {status.label}"
     for issue in client.list_issues():
@@ -314,12 +314,7 @@ def main() -> None:
     created_task_ids: list[str] = []
 
     if args.create_plane_tasks:
-        client = PlaneClient(
-            base_url=settings.plane.base_url,
-            api_token=settings.plane_token(),
-            workspace_slug=settings.plane.workspace_slug,
-            project_id=settings.plane.project_id,
-        )
+        client = make_board_client(settings)
         try:
             for status in actionable_statuses(statuses):
                 task_id = ensure_follow_up_task(client, settings, status)

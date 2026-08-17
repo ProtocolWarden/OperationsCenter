@@ -25,7 +25,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from operations_center.adapters.plane import PlaneClient
+from operations_center.adapters.board import BoardClient, make_board_client
 from operations_center.config import load_settings
 from operations_center.spec_author.models import TriggerSource
 from operations_center.spec_author.spec_author_task import (
@@ -231,7 +231,7 @@ def _build_payload(
     )
 
 
-def run_once(settings: Any, client: PlaneClient) -> None:
+def run_once(settings: Any, client: BoardClient) -> None:
     sd = settings.spec_author
     if not sd.enabled:
         return
@@ -392,12 +392,7 @@ def main() -> None:
     args = parser.parse_args()
 
     settings = load_settings(args.config)
-    client = PlaneClient(
-        base_url=settings.plane.base_url,
-        api_token=settings.plane_token(),
-        workspace_slug=settings.plane.workspace_slug,
-        project_id=settings.plane.project_id,
-    )
+    client = make_board_client(settings)
     sd = settings.spec_author
 
     try:

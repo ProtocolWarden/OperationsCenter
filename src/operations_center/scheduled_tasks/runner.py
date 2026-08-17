@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from operations_center.adapters.plane import PlaneClient
+    from operations_center.adapters.board import BoardClient
     from operations_center.config.settings import ScheduledTask, Settings
 
 logger = logging.getLogger(__name__)
@@ -166,7 +166,7 @@ class ScheduledTaskRunner:
     """
 
     def __init__(
-        self, plane_client: "PlaneClient", settings: "Settings", *, state_file: Path | None = None
+        self, plane_client: "BoardClient", settings: "Settings", *, state_file: Path | None = None
     ) -> None:
         self._client = plane_client
         self._settings = settings

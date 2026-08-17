@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from operations_center.adapters.plane import PlaneClient
+from operations_center.adapters.board import BoardClient, make_board_client
 from operations_center.config import load_settings
 from operations_center.config.settings import Settings
 from operations_center.decision.artifact_writer import DecisionArtifactWriter
@@ -461,12 +461,7 @@ def main() -> None:
         )
         return
 
-    client = PlaneClient(
-        base_url=settings.plane.base_url,
-        api_token=settings.plane_token(),
-        workspace_slug=settings.plane.workspace_slug,
-        project_id=settings.plane.project_id,
-    )
+    client = make_board_client(settings)
     try:
         # Scheduled tasks — periodic Plane work-item seeders. Each entry in
         # settings.scheduled_tasks is checked for due-ness and any that fire
@@ -729,7 +724,7 @@ def _write_cycle_report(
 
 def run_pipeline(
     settings: Settings,
-    client: PlaneClient,
+    client: BoardClient,
     *,
     repo_filter: str | None = None,
     max_candidates: int = 3,
