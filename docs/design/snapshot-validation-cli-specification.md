@@ -479,7 +479,9 @@ operations-center-observer-snapshot observe-and-validate \
 #### `list`
 List available snapshots in storage
 ```bash
-operations-center-observer-snapshot list [--filter recent|all] [--format table|json]
+operations-center-observer-snapshot list [--limit N] [--order recent|oldest|name] [--format table|json]
+# Note: `list` is implemented. A --filter flag was declared but
+# never worked (no validation status is cached to filter on) and was removed.
 ```
 
 #### `compare`

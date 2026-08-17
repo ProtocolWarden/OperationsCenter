@@ -2547,7 +2547,6 @@ def _update_check_history(
     state: dict,
     failed_checks: list[str],
     completed_checks: list[str],
-    pending_checks: list[str],
     current_head_sha: str,
 ) -> None:
     """Track check outcomes to distinguish transient from stuck checks.
@@ -2582,7 +2581,6 @@ def _should_escalate_ci_wait(
     state: dict,
     missing_required: list[str],
     failed_checks: list[str],
-    pending_checks: list[str],
     ci_wait_cycles_first_registration: int = 60,
     ci_wait_cycles_already_seen: int = 40,
     ci_flakiness_threshold_pct: int = 30,
@@ -3069,7 +3067,7 @@ def _phase1(
                         pr_data=pr_data,
                         ignored_checks=ignored,
                     )
-                    _update_check_history(state, failed, completed, [], current_head_sha or "")
+                    _update_check_history(state, failed, completed, current_head_sha or "")
 
                     # Get configured required checks for this repo
                     repo_required = (
@@ -3081,7 +3079,6 @@ def _phase1(
                         state,
                         missing_required=failed,  # Failed checks as missing required
                         failed_checks=failed,
-                        pending_checks=[],
                         ci_wait_cycles_first_registration=60,
                         ci_wait_cycles_already_seen=40,
                         ci_flakiness_threshold_pct=30,
@@ -3171,7 +3168,7 @@ def _phase1(
                     state["ci_wait_cycles"] = state.get("ci_wait_cycles", 0) + 1
 
                     # Track check history for classification
-                    _update_check_history(state, [], completed, pending, current_head_sha or "")
+                    _update_check_history(state, [], completed, current_head_sha or "")
 
                     if pending:
                         _why = f"{len(pending)} still running: {', '.join(pending[:5])}"

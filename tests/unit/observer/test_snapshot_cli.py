@@ -320,7 +320,12 @@ class TestExportCommand:
 
 
 class TestUnimplementedCommands:
-    """Tests for unimplemented commands."""
+    """Tests for unimplemented commands.
+
+    These stubs accept only --quiet. The planned argument/option sets live in
+    docs/design/STAGE0_CLI_SPECIFICATION.md rather than in the signatures, so
+    that --help never advertises a flag the stub would silently discard.
+    """
 
     def test_observe_and_validate_not_implemented(self) -> None:
         """Test observe-and-validate command."""
@@ -330,16 +335,15 @@ class TestUnimplementedCommands:
 
     def test_compare_not_implemented(self) -> None:
         """Test compare command."""
-        result = runner.invoke(app, ["compare", "snap1", "snap2"])
+        result = runner.invoke(app, ["compare"])
         assert result.exit_code == EXIT_CONFIG_ERROR
         assert "not yet implemented" in result.stdout
 
     def test_import_not_implemented(self) -> None:
         """Test import command."""
-        with tempfile.NamedTemporaryFile(suffix=".json") as f:
-            result = runner.invoke(app, ["import", f.name])
-            assert result.exit_code == EXIT_CONFIG_ERROR
-            assert "not yet implemented" in result.stdout
+        result = runner.invoke(app, ["import"])
+        assert result.exit_code == EXIT_CONFIG_ERROR
+        assert "not yet implemented" in result.stdout
 
     def test_cleanup_not_implemented(self) -> None:
         """An unimplemented cleanup must NOT report success.
@@ -349,6 +353,8 @@ class TestUnimplementedCommands:
         deleted. Every sibling stub already exits non-zero.
         """
         result = runner.invoke(app, ["cleanup"])
+        # Non-zero on purpose: this used to exit 0 while deleting nothing, so a
+        # scheduled cleanup reported success and retained every snapshot.
         assert result.exit_code == EXIT_CONFIG_ERROR
         assert "not yet implemented" in result.stdout
 
@@ -356,6 +362,18 @@ class TestUnimplementedCommands:
         """The dangerous invocation specifically must not exit 0."""
         result = runner.invoke(app, ["cleanup", "--no-dry-run"])
         assert result.exit_code != EXIT_SUCCESS
+
+    def test_unimplemented_stubs_reject_planned_flags(self) -> None:
+        """A stub must not silently swallow a flag it cannot honour."""
+        for argv in (
+            ["compare", "snap1", "snap2"],
+            ["import", "snapshot.json"],
+            ["cleanup", "--keep-count", "50"],
+            ["observe-and-validate", "--skip-validation"],
+        ):
+            result = runner.invoke(app, argv)
+            assert result.exit_code != EXIT_SUCCESS, argv
+            assert "not yet implemented" not in result.stdout, argv
 
 
 class TestGlobalOptions:

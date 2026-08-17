@@ -141,8 +141,16 @@ dev = [
   # `vulture: true`, so the audit gate runs it, and an unpinned lint tool is how
   # main stayed red for a week (see #492 — `ruff>=0.5` floated to 0.16.1 and
   # produced 1222 phantom findings). Custodian resolves it from this venv.
+  # Until #496 it was not declared here at all, so nothing was installed for the
+  # adapter to run in the first place.
   "vulture==2.16",
-  "custodian @ git+https://github.com/ProtocolWarden/Custodian.git@d6ba8ab245c6f4e79e9f8fffd4e4221bfaf266e8",
+  # Was pinned to d6ba8ab, which predates 261bbb5 "fix(vulture): put paths
+  # before options, and stop reading a failed run as clean". On that pin the
+  # adapter built `vulture <src> --min-confidence=N <tests>`, which vulture's
+  # argparse rejects (exit 2, empty stdout) — and the failure read as CLEAN.
+  # Between that and the missing dependency above, the vulture detector could
+  # never emit a finding: the pre-push gate was fail-open on it.
+  "custodian @ git+https://github.com/ProtocolWarden/Custodian.git@7a780b7845337810a235111e378e78fb06361dd5",
 ]
 
 [tool.setuptools.packages.find]
@@ -218,6 +226,13 @@ extend-select = [
     "G004",
     "T201",
 ]
+# The vulture whitelist is, by construction, a list of bare NAMES that do not
+# resolve in that file — vulture matches on the bare identifier, so naming it is
+# the whole mechanism. F821 (undefined name) is therefore categorically wrong
+# here for every line, not a case-by-case judgement, and the alternative is
+# appending `,F821` to a `# noqa` on each entry forever. Scoped to this one file
+# so a genuine undefined name anywhere else still fails the gate.
+".vulture_whitelist.py" = ["F821"]
 # CLI scripts and entrypoints are allowed to print() and broad-except.
 "scripts/**/*.py" = ["T201", "BLE001", "S110"]
 "src/operations_center/entrypoints/**/*.py" = ["T201"]

@@ -1141,6 +1141,12 @@ maintenance:
 tools:
   ruff: true
   vulture: true
+  # Custodian's adapter registry falls back to 60 when this is unset, but its
+  # own config loader documents 80 as the intended default — so set it here
+  # rather than inherit whichever wins. On this repo 60 yields 621 findings,
+  # essentially all UNUSED_METHOD/attribute heuristics; 80 yields 32, all at
+  # 100% confidence. Raise deliberately, not by accident.
+  vulture_min_confidence: 80
   # AI3 is now expressed as a Semgrep rule (no Python AST walker).
   # See .custodian/rules/semgrep/ai3_no_directory_scanning.yaml.
   semgrep:
