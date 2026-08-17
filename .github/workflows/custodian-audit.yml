@@ -26,10 +26,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install "custodian[tools] @ git+https://github.com/ProtocolWarden/Custodian.git@d6ba8ab245c6f4e79e9f8fffd4e4221bfaf266e8"
-          pip install vulture
 
       - name: Install repo and its pinned lint toolchain
-        # `.[dev]` (not plain `.`) so the adapters run OC's OWN pinned ruff/ty.
+        # `.[dev]` (not plain `.`) so the adapters run OC's OWN pinned ruff/ty/vulture.
+        # vulture used to be `pip install vulture` in the step above — the last
+        # unpinned lint tool, and the same drift class as the ruff one below. It now
+        # comes from the dev extras with everything else.
         # The reproducibility argument in the step above applies one level down:
         # pinning Custodian while installing `ruff` unpinned just moves the moving
         # part. It floated to 0.16.1 and this gate reported 1222 findings against a

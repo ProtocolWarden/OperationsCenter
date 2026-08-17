@@ -224,6 +224,22 @@ Found but NOT changed in this slice, to keep the diff reviewable:
 - Coverage-alerting documentation is spread across four directories (`guides/`,
   `reference/`, `design/`, and `docs/` root) — one subject, four homes.
 - `docs/backlog.md` and `.console/backlog.md` both exist.
+## 2026-08-17 — fix(watchdog): drop the runtime artifacts #485 committed
+
+The reviewer blocked #485 on `no_tooling_artifacts` and was right. The branch
+carried `logs/local/watchdog_cycles/20260717_cycle.md` (a 490-line transcript of
+the cycle that produced the fix) and `tools/loop/state/schedule.json` (the
+controller's cycle-delay state, which CLAUDE.md already calls controller-local,
+not cognition).
+
+What settled it: neither directory has a single tracked file on `origin/main`.
+Merging would have established the precedent that every watchdog-authored PR
+ships its own cycle transcript. Removed both; the Rule 9.5 change and its test
+are untouched.
+
+Neither path is in `.gitignore`, which is why they were committed at all. That
+gap is left for its own change rather than bundled into a board-unblock fix —
+but it will keep re-tripping this gate until someone closes it.
 
 ## 2026-08-13 — fix(reviewer): decouple the D1 fallback pairing from council seating
 
@@ -461,6 +477,47 @@ independently on main as #491 and #492 with better implementations — a
 data-driven `EXECUTOR_BACKENDS` list, and `pip install -e ".[dev]"` taking the
 pin from pyproject instead of a second version literal. Dropped rather than
 merged: duplicating them would have re-introduced the drift #492 removed.
+## 2026-08-04 — fix(deps): pin vulture — and discover the audit never ran it
+
+Closing the last unpinned lint tool after #492. `.custodian/config.yaml` sets
+`vulture: true`, so the audit gate runs it, but `pyproject.toml` pinned only ruff,
+ty and custodian@SHA; `custodian-audit.yml` installed vulture separately and
+unpinned. That is the identical drift class that red-failed main for a week.
+`vulture==2.16` now lives in the dev extras and the separate install is gone, so it
+arrives via `pip install -e ".[dev]"` with everything else.
+
+Verifying the pin turned up something larger. The audit reports
+`VULTURE: status=pass count=0`. Running the same tool by hand:
+
+    vulture src tests --min-confidence=60   ->  exit 3, 621 findings
+    vulture src --min-confidence=60 tests   ->  exit 2, 0 lines
+                                                "unrecognized arguments: tests"
+
+The second is what OC's gate actually runs. The SHA-pinned Custodian (`d6ba8ab`)
+builds the command as `[vulture, src_root, --min-confidence=N, tests_root]` — the
+`tests` positional lands after the flag, vulture's argparse rejects it, and it exits
+2 with empty stdout. That adapter version has no returncode guard, so empty stdout is
+indistinguishable from a clean repo and the pattern is recorded `status: pass`. The
+gate has been green for a tool that never analysed a line. This is exactly the
+vacuous-green failure #492's commit message described when it removed `|| true` from
+the repo install — the same shape, one layer down, and it was already there.
+
+Current Custodian main fixes both halves (all paths before the options; TOOL_ERROR
+when the returncode is not 0/3 with empty stdout), so bumping the SHA — worth doing
+regardless, since main now carries the `find_tool` fix from Custodian#72 — will make
+those 621 findings real and red the audit. They are LOW/advisory and read as heavily
+false-positive (test `side_effect` attributes, pydantic `model_config`, public-API
+methods vulture cannot see called), so the resolution is a `.vulture_whitelist.py`, a
+higher `vulture_min_confidence`, or `vulture: false`. That is an operator call about
+what the gate should assert, not something to decide inside a pinning change, so it
+is recorded in `.console/backlog.md` under Up Next rather than resolved here.
+
+Pinning does not make vulture run. It makes its behaviour deterministic, so when the
+SHA is bumped the 621 are a stable number to triage rather than a moving one.
+
+Also backfills `.console/backlog.md`, which CLAUDE.md requires updating after
+meaningful progress and which had not been touched since #474 — entries added for
+#491 and #492 alongside this work.
 
 ## 2026-08-03 — fix(hooks): pre-push resolved the wrong workspace root inside a git worktree
 
