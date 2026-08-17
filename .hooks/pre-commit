@@ -27,3 +27,35 @@ if [ "$log_staged" -eq 0 ]; then
     printf '  Skip: git commit --no-verify\n\n'
     exit 1
 fi
+
+# Rotate .console/log.md before it breaches OC2's 500KB cap.
+#
+# This hook and that cap together make the file grow monotonically: every source
+# commit must add an entry, and nothing ever removes one. At roughly 15KB per
+# merged PR the cap arrives on a schedule, and when it does EVERY open PR fails
+# the gate at once — on 2026-08-17 that stalled five of them until someone
+# rotated by hand.
+#
+# Rotating here makes the fix atomic with the commit that would have pushed it
+# over, and the rotation refuses to write if any entry would be lost.
+repo_root=$(git rev-parse --show-toplevel)
+rotate_py="${repo_root}/.venv/bin/python"
+[ -x "$rotate_py" ] || rotate_py=$(command -v python3 || true)
+
+if [ -n "$rotate_py" ]; then
+    rotate_out=$("$rotate_py" -m operations_center.entrypoints.maintenance.console_log_rotate \
+        --repo-root "$repo_root" --apply 2>&1)
+    rotate_rc=$?
+    if [ "$rotate_rc" -eq 2 ]; then
+        # The census refused: rotation would have dropped history. Never commit
+        # past this — a lost log entry leaves no other trace.
+        printf '\n\033[31m  log rotation refused\033[0m\n'
+        printf '%s\n\n' "$rotate_out"
+        exit 1
+    fi
+    if printf '%s' "$rotate_out" | grep -q 'archived'; then
+        printf '\n\033[33m  .console/log.md rotated (OC2 budget)\033[0m\n'
+        printf '%s\n\n' "$rotate_out" | sed 's/^/  /'
+        git add .console/log.md docs/history/console-log/ 2>/dev/null || true
+    fi
+fi

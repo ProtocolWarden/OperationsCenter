@@ -13,6 +13,36 @@ exists to prevent, and a stop/start cycle is exactly when they would appear.
 Moved rather than deleted: Done is how this backlog records what was actually
 carried out, and the migration's outcome is the evidence that #499 and #500 hold
 against the live fleet and not merely in tests.
+## 2026-08-17 — feat(console): rotate log.md automatically, before OC2 bites
+
+`.console/log.md` grows monotonically by construction: the pre-commit hook
+requires every source commit to add an entry, and nothing ever removes one. At
+roughly 15KB per merged PR the 500KB cap arrives on a schedule — and when it
+does, every open PR fails the gate at once. That happened today and stalled five
+of them until the log was rotated by hand.
+
+Rotation now happens in the pre-commit hook at 80% of budget, keeping the newest
+entries down to 55%. Rotating at the cap would be too late: the first commit to
+notice is already the one failing.
+
+**Every write is gated on a census.** A rotation rewrites the whole file, and a
+wholesale rewrite is precisely the operation that destroys log history silently
+— rebase one across another change to the same file and the other side's entries
+vanish with no conflict and no finding, because OC2 measures size and a rotation
+is *meant* to shrink the file. That nearly erased six entries earlier today. So
+`apply()` recomputes every heading afterwards and refuses to write if even one
+would become unreachable; the hook treats that refusal as a hard commit failure,
+because a lost entry leaves no other trace.
+
+Verified against the real log rather than only fixtures: forcing a rotation on a
+copy of the live 241-entry file produced 111 kept + 130 archived = 241, landing
+at 55.1% of budget.
+
+Two details worth keeping: the archive is named for the range of dates it
+actually contains, not a cutoff — log.md is not strictly date-ordered, and #498's
+archive claimed "through 2026-06-14" while holding entries up to 2026-07-14. And
+each archive is linked from a maintained block in log.md, because an unlinked
+file under `docs/` is a DC7 orphan and fails the audit.
 
 ## 2026-08-17 — fix(watch): status must not call a running watcher stopped
 
