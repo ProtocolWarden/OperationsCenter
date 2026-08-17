@@ -12,6 +12,38 @@ hazard. A4 (pagination) gets *worse* — one board repo holding every task is la
 than any single Plane project was, so a short read hides more. Completion grows an
 item: moving review to Forgejo needs a PR-side adapter, which this board-side spec
 does not cover.
+## 2026-08-17 — feat(forgejo): the board adapter, built to the spec's hazards
+
+Built against decisions rather than assumptions: single board repo, drain to zero,
+review moves to Forgejo PRs at cutover. Drain-to-zero dissolves the task-id
+problem — nothing persisted will refer to an id that stops existing, because there
+will be no live tasks at the switch.
+
+The two hazards the spec named are handled explicitly, and neither is *solved*:
+
+**State exclusivity.** OC's six states were one Plane field; here they are
+`state: ` labels, and labels are a set. `transition_issue` is remove-then-add —
+two calls, not atomic. It adds the new state *before* dropping the old, so an
+interrupted transition leaves two states rather than none: two is loud and
+recoverable, zero silently drops the task off every queue the fleet scans.
+`state_of` raises on a multi-state issue instead of picking one, so corruption
+surfaces at the read that would otherwise dispatch on it.
+
+**Pagination.** Every list pages to exhaustion. A page-one read returns a
+plausible, successful, wrong board, and the fleet reasons about absence — it
+promotes when a queue looks empty. The tests use a 120-issue three-page fixture
+for exactly that reason: a single-page fixture would pass while the bug shipped.
+
+Also: state labels are stripped before the parser and rules see them (adapter
+plumbing, not fleet vocabulary), `update_issue_labels` preserves the state label
+its callers know nothing about, unknown states are refused rather than created on
+demand, and auth is `Authorization: token` — Plane's `X-API-Key` would 401 every
+call.
+
+14 tests, no live server. Full suite 8628; ty on src/ still 13, the main baseline.
+
+Not claimed: the factory still returns Plane, no Forgejo settings exist, nothing
+has touched a live instance. Step one of seven.
 
 ## 2026-08-17 — spec(forgejo): adversarial spec for the board adapter
 
