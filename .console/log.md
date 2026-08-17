@@ -1,3 +1,38 @@
+## 2026-08-17 — fix(watch): re-cut pid reconcile on a single supervisor tag
+
+#481 is closed rather than patched. It recovered a drifted watcher pid by
+scanning `ps` against a hand-maintained dict of per-role command-line fragments —
+a second copy of what `start_watch_role` already knows, with nothing keeping them
+in sync. A quoting change in the launcher would make matching return nothing,
+every caller reads "not found" as "not running", and `start_watch_role` launches a
+duplicate supervisor: the pid-drift failure the PR set out to fix. The council
+raised `code_quality` on five successive heads and hardened 2:1 -> 3:3, and the
+self-heal ladder exhausted twice without changing the branch. That is a design
+signal, not a lint signal.
+
+**The re-cut.** Every supervisor is stamped `oc-watch-supervisor=<role>` in its
+command line by the launcher itself; discovery matches that and nothing else.
+There is no per-role launch knowledge left to drift.
+
+Three things fell out of doing it properly:
+
+1. **A pid-reuse hole on main.** The existing check is `kill -0` on the recorded
+   pid. A pid file surviving a reboot can name a pid the kernel has recycled for
+   an unrelated process; `kill -0` succeeds and the role silently never starts.
+   Validation now also requires the tag in `/proc/<pid>/cmdline`.
+2. **Ambiguous must not read as absent.** Reconcile returns 1 for none and 2 for
+   several. Collapsing them is exactly how a discovery miss becomes a duplicate.
+3. **The fix could have caused the bug on upgrade.** Watchers already running
+   carry no tag, so they would have read as absent and been double-started.
+   A live-but-untagged pid is now outcome 3 and the launcher refuses with the
+   stop command. Verified against the live review watcher: it refused, and the
+   process count did not change.
+
+**The drift guard is a test, not a convention.** `test_every_launch_branch_is_stamped`
+fails if any launch omits the stamp — and it earned its place immediately by
+catching two branches this change had missed, one of which (`start_watchdog`)
+was a real supervisor indented differently from the other five.
+
 ## 2026-08-17 — fix(console): restore the #498 entries this branch's rotation dropped
 
 Caught by a heading census, not by a gate. This branch carried its own log

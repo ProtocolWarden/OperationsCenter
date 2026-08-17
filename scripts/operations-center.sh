@@ -360,6 +360,78 @@ watch_pid_file() {
   echo "${WATCH_DIR}/${role}.pid"
 }
 
+# Every supervisor carries this tag verbatim in its command line. It is the ONE
+# string discovery matches on, so there is no per-role launch knowledge that can
+# drift out of sync with start_watch_role. tests/unit/scripts/
+# test_watch_supervisor_tag.py fails if any launch branch omits it.
+watch_supervisor_tag() {
+  printf 'oc-watch-supervisor=%s' "$1"
+}
+
+# True when ${pid} is alive AND its command line carries ${role}'s tag.
+#
+# `kill -0` alone is not sufficient and is a live bug on main: a pid file left
+# behind by a previous boot can name a pid the kernel has since recycled for an
+# unrelated process. `kill -0` then succeeds, the launcher concludes the watcher
+# is already running, and the role silently never starts.
+watch_pid_is_supervisor() {
+  local pid="$1"
+  local role="$2"
+  local cmdline
+  [[ -n "${pid}" ]] || return 1
+  [[ "${pid}" =~ ^[0-9]+$ ]] || return 1
+  kill -0 "${pid}" 2>/dev/null || return 1
+  cmdline="$(tr '\0' ' ' < "/proc/${pid}/cmdline" 2>/dev/null)" || return 1
+  [[ "${cmdline}" == *"$(watch_supervisor_tag "${role}")"* ]]
+}
+
+# Resolve the live supervisor pid for a role, repairing a stale pid file.
+#
+#   0 + pid on stdout : exactly one supervisor found (pid file refreshed if stale)
+#   1                 : none running
+#   2                 : the tag matches MORE than one process
+#   3                 : pid file names a live but UNTAGGED process
+#                       (pre-upgrade supervisor, or a recycled pid)
+#
+# 2 is deliberately distinct from 1. Collapsing them is what makes a discovery
+# miss turn into a duplicate supervisor: callers must be able to tell "nothing is
+# running, start one" from "something is ambiguous, do not touch it".
+reconcile_watch_pid_file() {
+  local role="$1"
+  local pid_file
+  local pid
+  local matches
+  local count
+  pid_file="$(watch_pid_file "${role}")"
+  if [[ -f "${pid_file}" ]]; then
+    pid="$(cat "${pid_file}" 2>/dev/null)"
+    if watch_pid_is_supervisor "${pid}" "${role}"; then
+      printf '%s\n' "${pid}"
+      return 0
+    fi
+    # Alive, but not carrying our tag. Either a supervisor started before this
+    # tagging existed, or an unrelated process on a recycled pid. Both must
+    # refuse: treating it as "not running" is how an upgrade ends up running two
+    # supervisors for the same role.
+    if [[ -n "${pid}" ]] && [[ "${pid}" =~ ^[0-9]+$ ]] && kill -0 "${pid}" 2>/dev/null; then
+      return 3
+    fi
+  fi
+  matches="$(pgrep -f "$(watch_supervisor_tag "${role}")" 2>/dev/null || true)"
+  count="$(printf '%s' "${matches}" | grep -c . || true)"
+  if [[ "${count}" -eq 1 ]]; then
+    mkdir -p "$(dirname "${pid_file}")"
+    printf '%s\n' "${matches}" > "${pid_file}"
+    printf '%s\n' "${matches}"
+    return 0
+  fi
+  if [[ "${count}" -gt 1 ]]; then
+    echo "watch-${role}: ${count} processes carry $(watch_supervisor_tag "${role}") — refusing to guess" >&2
+    return 2
+  fi
+  return 1
+}
+
 watch_log_file() {
   local role="$1"
   echo "${WATCH_DIR}/$(timestamp)_${role}.log"
@@ -388,9 +460,27 @@ start_watch_role() {
   esac
   local pid_file
   pid_file="$(watch_pid_file "${role}")"
-  if [[ -f "${pid_file}" ]] && kill -0 "$(cat "${pid_file}")" >/dev/null 2>&1; then
-    echo "watch-${role} already running with PID $(cat "${pid_file}")"
+  local live_pid=""
+  local rc=0
+  live_pid="$(reconcile_watch_pid_file "${role}")" || rc=$?
+  if [[ "${rc}" -eq 0 ]]; then
+    echo "watch-${role} already running with PID ${live_pid}"
     return 0
+  fi
+  if [[ "${rc}" -eq 2 ]]; then
+    # Ambiguous, not absent. Starting another here is precisely how duplicate
+    # supervisors accumulate, so stop rather than guess.
+    echo "watch-${role}: multiple supervisors already match the tag — not starting another." >&2
+    echo "  resolve with: scripts/operations-center.sh watch-stop --role ${role}" >&2
+    return 1
+  fi
+  if [[ "${rc}" -eq 3 ]]; then
+    # A live process holds this role's pid file but predates supervisor tagging
+    # (or the pid was recycled). Starting another would double-run the role.
+    echo "watch-${role}: pid file names live PID $(cat "${pid_file}" 2>/dev/null) which carries no supervisor tag." >&2
+    echo "  It predates tagging, or the pid was reused. Stop it before starting:" >&2
+    echo "  scripts/operations-center.sh watch-stop --role ${role}" >&2
+    return 1
   fi
   rm -f "${pid_file}"
   mkdir -p "${WATCH_DIR}"
@@ -403,6 +493,7 @@ start_watch_role() {
   # a crash and triggers a restart with a 30-second backoff.
   if [[ "${role}" == "intake" ]]; then
     setsid /bin/bash -lc "
+      # oc-watch-supervisor=${role}
       cd '${ROOT_DIR}'
       set -a
       source '${ENV_PATH}'
@@ -426,6 +517,7 @@ start_watch_role() {
     " >>"${log_file}" 2>&1 < /dev/null &
   elif [[ "${role}" == "review" ]]; then
     setsid /bin/bash -lc "
+      # oc-watch-supervisor=${role}
       cd '${ROOT_DIR}'
       set -a
       source '${ENV_PATH}'
@@ -457,6 +549,7 @@ start_watch_role() {
     # role (executes spec-author tasks through the backend pipeline). See
     # docs/architecture/adr/0007-spec-director-refactor.md.
     setsid /bin/bash -lc "
+      # oc-watch-supervisor=${role}
       cd '${ROOT_DIR}'
       set -a
       source '${ENV_PATH}'
@@ -497,6 +590,7 @@ start_watch_role() {
     " >>"${log_file}" 2>&1 < /dev/null &
   elif [[ "${role}" == "propose" ]]; then
     setsid /bin/bash -lc "
+      # oc-watch-supervisor=${role}
       cd '${ROOT_DIR}'
       set -a
       source '${ENV_PATH}'
@@ -522,6 +616,7 @@ start_watch_role() {
   else
     # goal, test, improve — Plane-polling board workers
     setsid /bin/bash -lc "
+      # oc-watch-supervisor=${role}
       cd '${ROOT_DIR}'
       set -a
       source '${ENV_PATH}'
@@ -607,6 +702,7 @@ start_watchdog() {
   # Runs every hour; revives any watcher whose PID file exists but PID is dead.
   # Exits when its own PID file is removed (by stop_watchdog / dev-down).
   setsid /bin/bash -lc "
+    # oc-watch-supervisor=watchdog
     cd '${ROOT_DIR}'
     set -a
     source '${ENV_PATH}'
@@ -697,12 +793,12 @@ status_watch_role() {
   local status_file
   pid_file="$(watch_pid_file "${role}")"
   status_file="$(watch_status_file "${role}")"
-  if [[ -f "${pid_file}" ]] && kill -0 "$(cat "${pid_file}")" >/dev/null 2>&1; then
+  local live_pid
+  if live_pid="$(reconcile_watch_pid_file "${role}")"; then
     if [[ -f "${status_file}" ]]; then
-      python3 - "${role}" "${pid_file}" "${status_file}" <<'PY'
+      python3 - "${role}" "${live_pid}" "${status_file}" <<'PY'
 import json, sys
-role, pid_file, status_file = sys.argv[1:]
-pid = open(pid_file).read().strip()
+role, pid, status_file = sys.argv[1:]
 data = json.load(open(status_file))
 counters = data.get("counters", {})
 print(
@@ -714,7 +810,7 @@ print(
 )
 PY
     else
-      echo "watch-${role}: running (pid $(cat "${pid_file}"))"
+      echo "watch-${role}: running (pid ${live_pid})"
     fi
   else
     if [[ -f "${status_file}" ]]; then
