@@ -54,11 +54,23 @@ Status: SPEC | DRAFT | SHIPPED | SUPERSEDED by <path>
 90 documents already carry one. Absence means "describes current behaviour" —
 so if it does not, add the header rather than letting a reader trust it.
 
-## One subject, one home
+## One subject, one home — but not one document
 
-If a feature's documentation spans four directories, the reader cannot find it
-and the copies will drift apart. Prefer one document per subject with sections,
-and link to it from elsewhere rather than restating it.
+The rule is **no duplication**, not "everything about X in one file".
+
+A substantial feature legitimately has a walkthrough in `guides/`, a lookup table
+in `reference/`, and a rationale in `design/` — that is the reader-intent split
+above working as intended, not fragmentation. Coverage alerting is the worked
+example: ~6,800 lines across `guides/` (4), `reference/` (1), `design/` (2) and
+`architecture/ci/` (1), each correctly placed.
+
+What that split costs is *discoverability*: nothing tells a reader the other six
+documents exist. The fix is a hub entry in [`_toc.md`](_toc.md) listing the parts
+in reading order — not merging them, and not copying content between them.
+
+Genuine violations look different: the same fact stated in two places, which will
+drift. When you find one, pick the home the reader-intent table dictates and make
+the other a link.
 
 ## Related
 

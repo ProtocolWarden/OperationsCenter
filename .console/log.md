@@ -1,3 +1,39 @@
+## 2026-08-17 — docs(structure): deriver-coverage to history, and a correction to my own rule
+
+Fourth slice (continues 17521d06); completes the OperationsCenter pass.
+
+`docs/design/deriver-coverage/` (7 files, 1,886 lines) moved wholesale to
+`docs/history/stages/deriver-coverage/`. Checked first: **every file had zero
+external references** — the only mentions anywhere were the `_toc.md` entry and
+the log note written in the previous slice. Six are plainly episode records
+(`STAGE0_INVESTIGATION_SUMMARY`, `STAGE3_COMPLETION_REPORT`,
+`STAGE3_TESTING_VERIFICATION`, `STAGE3_TEST_INVENTORY`,
+`IMPLEMENTATION_VERIFICATION_CHECKLIST`, and an `INVESTIGATION_FINDINGS.txt` that
+is not even markdown); the seventh is a coverage analysis from the same episode.
+One work episode, one archive directory.
+
+**Corrected `structure.md`.** The rule I wrote in the first slice — "one subject,
+one home… if a feature's documentation spans four directories, the reader cannot
+find it" — is wrong as stated, and coverage alerting is the case that disproves
+it. Its ~6,800 lines span `guides/` (4 files), `reference/` (1), `design/` (2)
+and `architecture/ci/` (1) — and each is *correctly* placed by the reader-intent
+table on the same page. A walkthrough, a lookup table and a rationale are
+different reader needs; splitting them is the system working.
+
+What the split actually costs is discoverability: nothing told a reader the other
+six existed. So the rule now distinguishes duplication (a real defect — the same
+fact in two places, which drifts) from a legitimate guide/reference/design split
+(fix with a hub, not a merge). Added that hub to `_toc.md`: the nine coverage
+documents in reading order, with the one genuine overlap flagged as a
+consolidation candidate rather than silently merged.
+
+Merging 6,800 lines of prose would have been the obvious "cleanup" and the wrong
+call — high risk of losing content, in service of a rule that did not survive
+contact with the material.
+
+Verified: `scripts/check-doc-links.sh` — 7 broken, the same pre-existing phantoms,
+zero new breakage. `docs/design/` now holds only live design documents.
+
 ## 2026-08-17 — docs(design): name design docs for their subject, not their stage
 
 Third slice (continues 03d68bd9). Nine documents in `docs/design/` were named

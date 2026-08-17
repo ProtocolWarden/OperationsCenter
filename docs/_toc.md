@@ -74,8 +74,23 @@ Live design documents. Selected entries:
   [`roadmap.md`](design/roadmap.md), [`lifecycle.md`](design/lifecycle.md)
 - **Testing**: [`flaky-test-reporter.md`](design/flaky-test-reporter.md),
   [`observer-race-condition-guard.md`](design/observer-race-condition-guard.md)
-- **Sub-areas**: `design/autonomy/` (7), `design/deriver-coverage/` (6),
-  `design/continuous-improvement/`
+- **Sub-areas**: `design/autonomy/` (7), `design/continuous-improvement/`
+
+## Coverage alerting — read in this order
+
+The one feature whose documentation legitimately spans four directories (see
+[`structure.md`](structure.md#one-subject-one-home--but-not-one-document)).
+Nothing else links these together, so start here:
+
+1. [`coverage-threshold-configuration.md`](coverage-threshold-configuration.md) — the short version: thresholds and developer workflow
+2. [`guides/COVERAGE_ALERTING_USAGE.md`](guides/COVERAGE_ALERTING_USAGE.md) — worked examples
+3. [`guides/COVERAGE_ALERTING_CONFIGURATION.md`](guides/COVERAGE_ALERTING_CONFIGURATION.md) — full configuration
+4. [`guides/COVERAGE_ALERTING_INTEGRATION.md`](guides/COVERAGE_ALERTING_INTEGRATION.md) — wiring it in
+5. [`guides/COVERAGE_ALERTING_TROUBLESHOOTING.md`](guides/COVERAGE_ALERTING_TROUBLESHOOTING.md) — when it misfires
+6. [`reference/COVERAGE_ALERTING_API_REFERENCE.md`](reference/COVERAGE_ALERTING_API_REFERENCE.md) — API lookup
+7. [`architecture/ci/coverage-gating.md`](architecture/ci/coverage-gating.md) — how the CI gate itself works
+8. [`design/coverage-threshold-alerting-design.md`](design/coverage-threshold-alerting-design.md) — why it is built this way
+9. [`design/COVERAGE_THRESHOLD_ALERTING_USER_GUIDE.md`](design/COVERAGE_THRESHOLD_ALERTING_USER_GUIDE.md) — long-form guide (overlaps 2–5; consolidation candidate)
 
 ## Specs — `specs/` (29)
 
@@ -107,6 +122,7 @@ Working on OC itself, as opposed to operating it.
 | Area | Contents |
 |---|---|
 | [`history/stages/`](history/stages/README.md) (18) | Per-stage work artifacts, moved out of the repo root 2026-08-17 |
+| `history/stages/deriver-coverage/` (7) | Deriver reverse-transition coverage episode: investigation, test inventory, completion reports |
 | `history/audits/` (6) | Completed audit reports |
 | `history/development-log/` (14) | Narrative development records |
 | `history/managed-repo/` (10) | Managed-repo history |
