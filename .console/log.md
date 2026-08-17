@@ -1,3 +1,24 @@
+## 2026-08-17 — feat(forgejo): settings and backend selection
+
+The factory can now build either board. `board_backend` chooses, defaulting to
+`plane`.
+
+**Explicit, not inferred.** Selecting on "is `forgejo:` configured?" would mean
+that merely writing a config block repoints the fleet's board — a switch nobody
+decided to make, discovered later by a board that looks fine and is the wrong one.
+So configuring Forgejo while `board_backend` stays `plane` deliberately changes
+nothing, and there is a test asserting exactly that.
+
+**No silent fallback.** Asking for Forgejo without configuration raises. Falling
+back to Plane would point the fleet at the board it is migrating off, and the
+symptom would be indistinguishable from working.
+
+Caught while doing this: my working tree's `log.md` was 32 lines shorter than
+main — stale from branch shuffling — and committing it would have deleted #508's
+entry. Exactly the wholesale-overwrite hazard that nearly erased six entries
+earlier today, and it was the census that caught it, not review. Restored from
+HEAD before adding this entry.
+
 ## 2026-08-17 — spec(forgejo): record the operator's three decisions
 
 Single board repo, drain to zero, council review moves to Forgejo PRs at cutover.
