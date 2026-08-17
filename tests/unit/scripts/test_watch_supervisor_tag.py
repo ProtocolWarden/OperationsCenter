@@ -224,6 +224,39 @@ def test_untagged_live_pid_is_not_reported_as_absent(tmp_path):
     )
 
 
+def test_status_does_not_report_a_live_supervisor_as_stopped():
+    """A running-but-untagged supervisor must not be reported as stopped.
+
+    #499 routed status through reconcile but collapsed every non-zero code into
+    "stopped", so `watch-all-status` printed `watch-review: stopped` for a watcher
+    that was running, heartbeating and merging PRs. A monitoring surface that
+    reports a live service as down is worse than the drift it replaced, because
+    an operator acting on it is the actual hazard.
+    """
+    text = _script()
+    for func in ("status_watch_role", "status_watchdog"):
+        body = re.search(rf"^{func}\(\) \{{.*?^\}}", text, re.S | re.M)
+        assert body, f"{func} not found"
+        src = body.group(0)
+        assert 'rc}" -eq 3' in src.replace("${", "{"), (
+            f"{func} does not distinguish the untagged-but-alive case, so it "
+            "will report a running supervisor as stopped"
+        )
+        assert "untagged" in src, f"{func} does not surface the untagged state to the operator"
+
+
+def test_status_watchdog_does_not_trust_bare_kill_0():
+    """The watchdog must validate like the roles do, not with `kill -0` alone."""
+    text = _script()
+    body = re.search(r"^status_watchdog\(\) \{.*?^\}", text, re.S | re.M)
+    assert body
+    src = body.group(0)
+    assert "reconcile_watch_pid_file watchdog" in src, (
+        "status_watchdog still trusts a bare kill -0, which reports 'running' "
+        "for a recycled pid"
+    )
+
+
 def test_start_refuses_on_untagged_live_pid():
     """start_watch_role must handle rc=3, not fall through to launching."""
     text = _script()

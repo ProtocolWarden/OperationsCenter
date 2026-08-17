@@ -780,8 +780,16 @@ stop_watchdog() {
 
 status_watchdog() {
   local pid_file="${WATCH_DIR}/watchdog.pid"
-  if [[ -f "${pid_file}" ]] && kill -0 "$(cat "${pid_file}")" >/dev/null 2>&1; then
-    echo "watchdog: running (pid $(cat "${pid_file}"))"
+  # Was a bare `kill -0`, which #499 left behind: that reports "running" for a
+  # pid the kernel has recycled onto an unrelated process. Same three outcomes
+  # as the watch roles, so the watchdog cannot claim to be up when it is not.
+  local live_pid=""
+  local rc=0
+  live_pid="$(reconcile_watch_pid_file watchdog)" || rc=$?
+  if [[ "${rc}" -eq 0 ]]; then
+    echo "watchdog: running (pid ${live_pid})"
+  elif [[ "${rc}" -eq 3 ]]; then
+    echo "watchdog: running (pid $(cat "${pid_file}" 2>/dev/null), untagged — restart to reconcile)"
   else
     echo "watchdog: stopped"
   fi
@@ -793,8 +801,17 @@ status_watch_role() {
   local status_file
   pid_file="$(watch_pid_file "${role}")"
   status_file="$(watch_status_file "${role}")"
-  local live_pid
-  if live_pid="$(reconcile_watch_pid_file "${role}")"; then
+  local live_pid=""
+  local rc=0
+  live_pid="$(reconcile_watch_pid_file "${role}")" || rc=$?
+  if [[ "${rc}" -eq 3 ]]; then
+    # Alive, but launched before supervisor tagging existed. Printing "stopped"
+    # here would be a lie about a running service — and an operator acting on it
+    # is the actual hazard. Report what is true: running, not yet reconcilable.
+    echo "watch-${role}: running (pid $(cat "${pid_file}" 2>/dev/null), untagged — restart to reconcile)"
+    return 0
+  fi
+  if [[ "${rc}" -eq 0 ]]; then
     if [[ -f "${status_file}" ]]; then
       python3 - "${role}" "${live_pid}" "${status_file}" <<'PY'
 import json, sys

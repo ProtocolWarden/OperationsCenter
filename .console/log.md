@@ -1,3 +1,41 @@
+## 2026-08-17 — fix(watch): status must not call a running watcher stopped
+
+Follow-up to #499, fixing a regression that change introduced and I did not
+catch before merge.
+
+#499 routed `status_watch_role` through `reconcile_watch_pid_file` but its
+else-branch treats every non-zero code as stopped — including 3, which means
+"alive, but launched before supervisor tagging existed". So `watch-all-status`
+printed `watch-review: stopped` for a watcher that was running, heartbeating,
+and had just merged #499 itself.
+
+I had documented the migration as "untagged watchers cannot be reconciled until
+restarted". That was true and insufficient: the observable effect is a
+monitoring surface asserting a live service is down. An operator acting on that
+reading is the real hazard, not the missing reconciliation.
+
+rc=3 now prints `running (pid N, untagged — restart to reconcile)` — the state
+that is actually true, plus the one-line remedy.
+
+`status_watchdog` was also brought onto the same path. #499 left it on a bare
+`kill -0`, which reports "running" for a pid the kernel has recycled — the same
+hole #499 closed everywhere else.
+
+Two tests pin both: status must distinguish the untagged case, and the watchdog
+must not trust `kill -0` alone.
+
+Nearly shipped a worse bug than the one being fixed: editing the script through
+the `\\wsl.localhost` UNC path stripped its executable bit, and git records mode,
+so the commit carried `old mode 100755 / new mode 100644`. A non-executable
+`scripts/operations-center.sh` breaks every fleet operation with Permission
+denied. Caught because a verification step printed nothing where it had printed
+status lines a moment earlier — the empty output was the tell, not an error
+message. Restored with `chmod +x` before pushing.
+
+Worth remembering: edits made through the Windows UNC path lose the mode bit;
+edits made by a script running inside WSL do not. #499 escaped this only because
+its edits went through Python running in WSL.
+
 ## 2026-08-17 — fix(watch): re-cut pid reconcile on a single supervisor tag
 
 #481 is closed rather than patched. It recovered a drifted watcher pid by
