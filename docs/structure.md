@@ -11,6 +11,7 @@ Sort by **what the reader wants**, not by what produced the document.
 |---|---|---|
 | To run or operate the system | `operator/` | Runbooks, setup, diagnostics, recovery, tuning. Answers "how do I run this / it broke, now what". |
 | To use a feature | `guides/`, `user-guides/` | Task-oriented walkthroughs for a specific capability. |
+| To work on OC itself | `dev/` | Contributing to the codebase: test strategy, local workflow. Distinct from `operator/`, which is about running it. |
 | To look something up | `reference/` | Stable, enumerable facts: APIs, metrics, error codes. |
 | To know why it is built this way | `architecture/` | Structure and decisions. `adr/` for decision records, `contracts/` for cross-repo interfaces. |
 | To understand a subsystem's design | `design/` | Live design docs for things that exist or are being built. |

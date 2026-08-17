@@ -1,3 +1,41 @@
+## 2026-08-17 — docs(structure): dev/ split, README as entry point, link checker
+
+Second slice of the documentation restructure (continues 0c62827e).
+
+`docs/TESTING*.md` (3 files) moved to a new `docs/dev/` — working ON OC, as
+opposed to `operator/` which is about running it. VideoFoundry uses the same
+split. Only `docs/README.md` and `docs/_toc.md` linked them, both rewritten here.
+
+`docs/README.md` was a hand-maintained index of ~120 links, 176 lines, that
+duplicated the new `_toc.md` and had already drifted. Replaced with a real entry
+point: where to find the index, where to start, and the execution model. Indexes
+that are maintained by hand in two places are wrong within a month of anyone
+forgetting one of them exists.
+
+**Added `scripts/check-doc-links.sh`** and ran it repo-wide — 216 relative `.md`
+links, **13 broken**. Triaged each against git history rather than assuming:
+
+- 2 were false positives: `<repo_id>_*.md` in the managed-repo contract docs are
+  template placeholders, not links. The checker now skips any target containing `<`.
+- 4 fixed here:
+  * `docs/dev/TESTING.md` referenced `STAGE_4_PARALLEL_EXECUTION_VERIFICATION.md`,
+    which git history shows was added and later deleted. Dangling line removed.
+    (Pre-existing, but this slice moved the file, so it was ours to resolve.)
+  * 3 links in `docs/history/managed-repo/` used the pre-rename path
+    `architecture/managed-private-project/managed-private-project_*`; the directory
+    is now `architecture/managed-repos/`.
+- **7 remain, all pre-existing, all pointing at documents that have NEVER existed
+  in git history** — links written for docs that were planned and never authored:
+  * `design/flaky-test-reporter-ci-integration.md` -> `flaky-test-reporter-design.md`,
+    `flaky-test-reporter-implementation.md`, `observer-service.md`
+  * `user-guides/SNAPSHOT_VALIDATION_CLI_GUIDE.md` -> `../api/snapshot_validation_engine.md`
+  * `reference/EXTRACTION_FIDELITY_METRIC.md` -> `../specs/STAGE1_EXTRACTION_FIDELITY_METRIC.md`
+  * both `custodian/console-reconciliation-*.md` -> `console_fixtures/README.md`
+
+  Left in place deliberately. Removing them is a content decision about what those
+  authors intended to write, not a restructure — and a link to a document that
+  should exist is a different defect from a link to one that moved.
+
 ## 2026-08-17 — docs(structure): clear the repo root, add the missing index layer
 
 First slice of the ecosystem documentation restructure (operator ask 2026-08-17),

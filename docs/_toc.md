@@ -92,9 +92,13 @@ Scoped work definitions, usually authored for the fleet to execute.
 | [`custodian/`](custodian/) (2) | `.console/` reconciliation detectors and test strategy |
 | [`backends/`](backends/) (1) | `aider_local` |
 
-Testing docs currently sit at the top of `docs/`: [`TESTING.md`](TESTING.md),
-[`TESTING_DEVELOPER_GUIDE.md`](TESTING_DEVELOPER_GUIDE.md),
-[`TESTING_TROUBLESHOOTING.md`](TESTING_TROUBLESHOOTING.md).
+## Developing — `dev/` (3)
+
+Working on OC itself, as opposed to operating it.
+
+- [`TESTING.md`](dev/TESTING.md) — parallel execution with pytest-xdist
+- [`TESTING_DEVELOPER_GUIDE.md`](dev/TESTING_DEVELOPER_GUIDE.md) — writing parallel-safe tests
+- [`TESTING_TROUBLESHOOTING.md`](dev/TESTING_TROUBLESHOOTING.md) — diagnosing parallel-test failures
 
 ## History — `history/` (51)
 

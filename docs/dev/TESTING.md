@@ -209,7 +209,6 @@ The test suite is **production-ready for parallel execution**. Use `pytest -n au
 
 - For writing new tests, see [docs/TESTING_DEVELOPER_GUIDE.md](TESTING_DEVELOPER_GUIDE.md)
 - For common issues, see [docs/TESTING_TROUBLESHOOTING.md](TESTING_TROUBLESHOOTING.md)
-- For design details, see [STAGE_4_PARALLEL_EXECUTION_VERIFICATION.md](../STAGE_4_PARALLEL_EXECUTION_VERIFICATION.md)
 
 ## Historical Context
 
