@@ -1239,11 +1239,11 @@ OperationsCenter/
 │   ├── test_snapshot_repository.py    # Repository tests
 │   └── test_remote_snapshot_repositories.py  # S3/HTTP tests
 ├── docs/design/
-│   ├── STAGE1_CI_INTEGRATION_TEST_RUNNER_DESIGN.md        # Architecture
-│   ├── STAGE2_CI_INTEGRATION_TEST_RUNNER_IMPLEMENTATION.md # Implementation
-│   ├── STAGE3_REAL_WORLD_SNAPSHOT_VALIDATION_TESTS.md     # Tests
-│   ├── STAGE4_LOCAL_TESTING_AND_VERIFICATION.md           # Verification
-│   ├── STAGE5_DOCUMENTATION_AND_FINAL_REVIEW.md           # This document
+│   ├── ci-integration-test-runner-design.md        # Architecture
+│   ├── ci-integration-test-runner-implementation.md # Implementation
+│   ├── snapshot-validation-real-world-tests.md     # Tests
+│   ├── snapshot-validation-local-testing.md           # Verification
+│   ├── snapshot-validation-testing-procedures.md           # This document
 │   ├── snapshot-validation-ci-runner.md                   # User guide
 │   └── snapshot-validation-ci-integration.md              # CI guide
 ├── .github/workflows/

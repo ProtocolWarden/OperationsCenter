@@ -1817,10 +1817,10 @@ _Durable work inventory. Update after each meaningful chunk of progress._
   - ✅ Analyzed 5-layer validation pipeline (schema, completeness, consistency, accuracy, regression)
   - ✅ Identified all validation modules (snapshot_validator.py, snapshot_validation_engine.py, snapshot_loader.py, cli.py)
   - ✅ Designed CLI command interface with 8 commands and 20+ options
-  - ✅ Created comprehensive specification: STAGE0_CLI_SPECIFICATION.md (600+ lines)
+  - ✅ Created comprehensive specification: snapshot-validation-cli-specification.md (600+ lines)
   - ✅ Defined performance targets (135ms fast path, 20s full validation)
   - ✅ Defined UX requirements (4 personas, error handling, output formats)
-- **Document**: `docs/design/STAGE0_CLI_SPECIFICATION.md`
+- **Document**: `docs/design/snapshot-validation-cli-specification.md`
 - **Status**: Ready for Stage 1 (implementation and testing)
 
 ### 2026-06-14: Add Performance Test for Snapshot Serialization with Large Metric Sets (✅ COMPLETE)
@@ -1917,7 +1917,7 @@ _Durable work inventory. Update after each meaningful chunk of progress._
   - New fields: `test_name` and `assertion_message` in failure models
   - New utilities module: `assertion_extractor.py` with robust parsing
   - Enhanced pytest plugin and artifact writer integration
-  - Complete design documentation: `docs/design/STAGE0_TEST_FAILURE_EXTRACTION.md`
+  - Complete design documentation: `docs/design/test-failure-extraction.md`
 - **Test Results**: 8,731 total tests passing (11 skipped, 2 xfailed)
 - **Quality Metrics**: 0 linting violations, 100% type compliance, zero regressions
 - **Branch**: goal/3a044753 with 8 commits (Stages 0-7)

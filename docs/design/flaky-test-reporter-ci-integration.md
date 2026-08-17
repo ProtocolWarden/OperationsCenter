@@ -604,8 +604,8 @@ alert.details: dict  # Specific data for this alert
 ---
 
 **Related Documents**:
-- [Stage 0 Design](./flaky-test-reporter-design.md) — Architecture and metrics
-- [Stage 1 Implementation](./flaky-test-reporter-implementation.md) — Core reporter (Tier 1-2)
-- [Observer Service](./observer-service.md) — Integration with OC snapshots
+- [Stage 0 Design](./flaky-test-reporter-architecture.md) — Architecture and metrics
+- Stage 1 Implementation _(planned — not yet written)_ — Core reporter (Tier 1-2)
+- Observer Service _(planned — not yet written)_ — Integration with OC snapshots
 
 **Contact**: DevOps / Testing Infrastructure Team

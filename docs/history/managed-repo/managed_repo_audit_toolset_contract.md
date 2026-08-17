@@ -2,7 +2,7 @@
 
 **Phase:** 3  
 **Module:** `operations_center.audit_toolset`  
-**Related:** [Managed Repo Contract (Phase 1)](../../architecture/managed-private-project/managed-private-project_managed_repo_contract.md) · [Artifact Contract (Phase 2)](../../architecture/managed-private-project/managed-private-project_audit_artifact_contract.md)
+**Related:** [Managed Repo Contract (Phase 1)](../../architecture/managed-repos/managed_repo_contract.md) · [Artifact Contract (Phase 2)](../../architecture/managed-repos/audit_artifact_contract.md)
 
 ---
 

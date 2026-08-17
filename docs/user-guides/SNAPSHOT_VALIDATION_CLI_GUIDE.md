@@ -1480,8 +1480,8 @@ operations-center-observer-snapshot validate --help | less
 
 ## Additional Resources
 
-- **Design Document**: [STAGE0_CLI_SPECIFICATION.md](../design/STAGE0_CLI_SPECIFICATION.md)
-- **API Reference**: [Snapshot Validation Engine](../api/snapshot_validation_engine.md)
+- **Design Document**: [snapshot-validation-cli-specification.md](../design/snapshot-validation-cli-specification.md)
+- **API Reference**: Snapshot Validation Engine _(planned — not yet written)_
 - **Testing Guide**: See `tests/unit/observer/test_snapshot_cli.py`
 
 ---

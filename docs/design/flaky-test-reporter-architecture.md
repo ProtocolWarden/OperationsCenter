@@ -973,7 +973,7 @@ tests/
     └── test_flaky_test_integration.py  # End-to-end tests
 
 docs/design/
-├── STAGE0_FLAKY_TEST_REPORTER_ARCHITECTURE.md  # This document
+├── flaky-test-reporter-architecture.md  # This document
 └── flaky-test-reporter-implementation.md       # Future implementation guide
 ```
 

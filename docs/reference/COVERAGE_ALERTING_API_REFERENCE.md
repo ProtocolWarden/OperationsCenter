@@ -796,4 +796,4 @@ class RepoObserverService:
 ---
 
 **API Reference Version**: 1.0  
-**For comprehensive design documentation, see STAGE0_COVERAGE_THRESHOLD_ALERTING_SYSTEM.md**
+**For comprehensive design documentation, see coverage-threshold-alerting-design.md**
