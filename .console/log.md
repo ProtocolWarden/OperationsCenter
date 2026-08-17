@@ -1,3 +1,19 @@
+## 2026-08-17 — chore(console): the watcher tag migration is done
+
+Moved "Migrate running watchers onto supervisor tags" from Up Next to Done. It
+was filed when #499 landed, because supervisors already running carried no tag
+and could not be reconciled until restarted.
+
+Carried out from `main`: `watch-all-stop` then `watch-all`, restarting all eight
+roles under the tagging launcher. Verified exactly one supervisor per role, all
+eight tagged, no leftover untagged supervisor, ten heartbeats fresh. One-per-role
+is the check that counts — duplicate supervisors are the failure the tagging work
+exists to prevent, and a stop/start cycle is exactly when they would appear.
+
+Moved rather than deleted: Done is how this backlog records what was actually
+carried out, and the migration's outcome is the evidence that #499 and #500 hold
+against the live fleet and not merely in tests.
+
 ## 2026-08-17 — fix(watch): status must not call a running watcher stopped
 
 Follow-up to #499, fixing a regression that change introduced and I did not
