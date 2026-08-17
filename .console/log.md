@@ -288,6 +288,28 @@ block rather than ten inline suppressions: one statement of intent, no upkeep on
 new entries. Scoped to the single file, and verified scoped — injecting a real
 undefined name into `src/operations_center/injection.py` still reports F821, so
 the gate has not been widened. `ruff check .` is now clean repo-wide.
+## 2026-08-17 — test(observer): land #483's STEP 3 snippet regression suite
+
+#483 sat DIRTY since 2026-07-16, 9 commits behind main. Rebased cleanly.
+
+The suite is worth keeping: it execs the *live* STEP 3 snippet out of
+`.console/haiku_collector_prompt.md` against the real output of the
+`extraction-health` CLI it targets, so the prompt's parsing/mapping logic is
+pinned to the command's actual output shape rather than a hand-copied sample.
+That is a doc-to-code contract nothing else covers, and the file is absent from
+main. Its edit to `haiku_collector_prompt.md` is kept — that file is the subject
+under test.
+
+**Dropped:** `.console/task.md`, which the PR rewrote (126 added / 304 removed)
+with its July objective. Same reasoning as #478 — single-slot scratch, one
+objective at a time, history belongs in log.md, and this PR's log entry already
+carries it.
+
+Two module-level helpers in the new suite (`extract_step3_python_source`,
+`run_step3_snippet`) tripped N2 — a function in a test file not prefixed `test_`
+is invisible to pytest, so the detector cannot tell a helper from a test that
+silently never runs. Renamed with a leading underscore, which is N2's documented
+exemption and states the intent correctly rather than suppressing the check.
 
 ## 2026-08-13 — fix(reviewer): decouple the D1 fallback pairing from council seating
 

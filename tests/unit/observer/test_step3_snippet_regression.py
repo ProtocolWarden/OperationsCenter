@@ -64,7 +64,7 @@ def _step3_section(markdown_text: str) -> str:
     return section[: next_heading.start()] if next_heading else section
 
 
-def extract_step3_python_source(markdown_text: str) -> str:
+def _extract_step3_python_source(markdown_text: str) -> str:
     """Pull the literal python3 source out of STEP 3's second ```bash fence.
 
     STEP 3 has two fenced bash blocks: the CLI invocation, then a
@@ -90,7 +90,7 @@ def extract_step3_python_source(markdown_text: str) -> str:
     return match.group(1)
 
 
-def run_step3_snippet(cli_json_path: Path) -> dict:
+def _run_step3_snippet(cli_json_path: Path) -> dict:
     """Execute the live STEP 3 python3 mapper against a real CLI JSON file.
 
     Extracts the snippet fresh from the prompt file on every call (so edits
@@ -98,7 +98,7 @@ def run_step3_snippet(cli_json_path: Path) -> dict:
     substituting only the hardcoded ``/tmp/oc_extraction_health.json`` path
     so parallel test runs don't collide on a shared file.
     """
-    source = extract_step3_python_source(PROMPT_PATH.read_text())
+    source = _extract_step3_python_source(PROMPT_PATH.read_text())
     source = source.replace("/tmp/oc_extraction_health.json", str(cli_json_path))
     result = subprocess.run(
         [sys.executable, "-c", source],
@@ -138,18 +138,18 @@ class TestStep3SnippetExtraction:
     a recognizable shape, rather than silently finding nothing."""
 
     def test_extracts_the_real_snippet_from_the_prompt_file(self) -> None:
-        source = extract_step3_python_source(PROMPT_PATH.read_text())
+        source = _extract_step3_python_source(PROMPT_PATH.read_text())
         assert "json.load" in source
         assert "success_rate" in source
 
     def test_missing_step3_heading_fails_loudly(self) -> None:
         with pytest.raises(AssertionError, match="STEP 3 snippet not found"):
-            extract_step3_python_source("# Some other document\n\nno STEP 3 here.\n")
+            _extract_step3_python_source("# Some other document\n\nno STEP 3 here.\n")
 
     def test_step3_section_with_wrong_fence_count_fails_loudly(self) -> None:
         markdown = "## STEP 3 — EXTRACTION SIGNAL COLLECTION\n\n```bash\necho hi\n```\n"
         with pytest.raises(AssertionError, match="STEP 3 snippet not found"):
-            extract_step3_python_source(markdown)
+            _extract_step3_python_source(markdown)
 
     def test_second_fence_not_python_dash_c_fails_loudly(self) -> None:
         markdown = (
@@ -158,7 +158,7 @@ class TestStep3SnippetExtraction:
             "```bash\necho two\n```\n"
         )
         with pytest.raises(AssertionError, match="STEP 3 snippet not found"):
-            extract_step3_python_source(markdown)
+            _extract_step3_python_source(markdown)
 
 
 class TestStep3SnippetAgainstRealOutput:
@@ -190,7 +190,7 @@ class TestStep3SnippetAgainstRealOutput:
         )
         cli_json_path = _cli_json_for(health, tmp_path)
 
-        mapped = run_step3_snippet(cli_json_path)
+        mapped = _run_step3_snippet(cli_json_path)
 
         assert mapped == {
             "success_rate": 75.0,
@@ -205,7 +205,7 @@ class TestStep3SnippetAgainstRealOutput:
     def test_maps_all_defaults_zero_case(self, tmp_path: Path) -> None:
         cli_json_path = _cli_json_for(ExtractionHealth(), tmp_path)
 
-        mapped = run_step3_snippet(cli_json_path)
+        mapped = _run_step3_snippet(cli_json_path)
 
         assert mapped == {
             "success_rate": 0.0,
@@ -235,7 +235,7 @@ class TestStep3SnippetAgainstRealOutput:
         )
         cli_json_path = _cli_json_for(health, tmp_path)
 
-        mapped = run_step3_snippet(cli_json_path)
+        mapped = _run_step3_snippet(cli_json_path)
 
         assert mapped["edge_case_count"] == 6
         assert mapped["total_count"] == 5
@@ -245,7 +245,7 @@ class TestStep3SnippetAgainstRealOutput:
         health = ExtractionHealth(success_rate=66.666, complete_extraction=2, no_extraction=1)
         cli_json_path = _cli_json_for(health, tmp_path)
 
-        mapped = run_step3_snippet(cli_json_path)
+        mapped = _run_step3_snippet(cli_json_path)
 
         assert mapped["success_rate"] == 66.7
 
@@ -253,7 +253,7 @@ class TestStep3SnippetAgainstRealOutput:
         cli_json_path = tmp_path / "oc_extraction_health.json"
         cli_json_path.write_text("{not valid json")
 
-        mapped = run_step3_snippet(cli_json_path)
+        mapped = _run_step3_snippet(cli_json_path)
 
         assert mapped["success_rate"] is None
         assert mapped["extracted_count"] == 0
@@ -267,7 +267,7 @@ class TestStep3SnippetAgainstRealOutput:
     def test_missing_file_hits_parse_error_fallback(self, tmp_path: Path) -> None:
         missing_path = tmp_path / "does_not_exist.json"
 
-        mapped = run_step3_snippet(missing_path)
+        mapped = _run_step3_snippet(missing_path)
 
         assert mapped["success_rate"] is None
         assert "parse_error" in mapped
@@ -282,7 +282,7 @@ class TestStep3SnippetAgainstRealOutput:
         )
         cli_json_path = _cli_json_for(health, tmp_path)
 
-        mapped = run_step3_snippet(cli_json_path)
+        mapped = _run_step3_snippet(cli_json_path)
 
         assert set(mapped.keys()) == self._OUTPUT_SCHEMA_KEYS
         assert isinstance(mapped["success_rate"], float)
@@ -303,6 +303,6 @@ class TestStep3SnippetAgainstRealOutput:
         )
         cli_json_path = _cli_json_for(health, tmp_path)
 
-        mapped = run_step3_snippet(cli_json_path)
+        mapped = _run_step3_snippet(cli_json_path)
 
         assert mapped["gaps"] == ["test_module::test_a", "test_module::test_b"]
