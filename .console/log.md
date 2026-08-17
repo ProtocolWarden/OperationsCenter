@@ -1,19 +1,19 @@
-## 2026-08-17 — fix(watchdog): drop the runtime artifacts #485 committed
+## 2026-08-17 — fix(console): restore the #498 entries this branch's rotation dropped
 
-The reviewer blocked #485 on `no_tooling_artifacts` and was right. The branch
-carried `logs/local/watchdog_cycles/20260717_cycle.md` (a 490-line transcript of
-the cycle that produced the fix) and `tools/loop/state/schedule.json` (the
-controller's cycle-delay state, which CLAUDE.md already calls controller-local,
-not cognition).
+Caught by a heading census, not by a gate. This branch carried its own log
+rotation, composed while #498 was still open. Once #498 merged, rebasing replayed
+that wholesale rewrite on top of the new main and silently removed the six
+documentation-restructure entries #498 had just added — six headings present on
+main and absent here. Every gate stayed green: OC2 only measures the file's size,
+and a rotation legitimately shrinks it.
 
-What settled it: neither directory has a single tracked file on `origin/main`.
-Merging would have established the precedent that every watchdog-authored PR
-ships its own cycle transcript. Removed both; the Rule 9.5 change and its test
-are untouched.
+Rebuilt as [this branch's own entries] + [main's log.md verbatim], so main's
+history cannot be lost by construction rather than by careful diffing.
 
-Neither path is in `.gitignore`, which is why they were committed at all. That
-gap is left for its own change rather than bundled into a board-unblock fix —
-but it will keep re-tripping this gate until someone closes it.
+The general hazard: a commit that rewrites a whole file, rebased across a change
+to that same file, produces no conflict and no finding — it just wins. Additive
+truth files (log.md, backlog.md) want append-and-merge, never wholesale writes.
+
 ## 2026-08-17 — chore(console): rotate log.md ahead of #498, identically
 
 This branch could not be pushed: `.console/log.md` was over OC2's 500KB budget,
@@ -71,6 +71,440 @@ file cannot cleanly split, and that claim would not be honest here, since the
 module holds two schema dataclasses alongside the functions that aggregate them.
 The split is filed in the backlog so the deferral cannot quietly age into a
 permanent exemption.
+
+## 2026-07-15 — Stage 4 (external numbering): edge_cases forwarding fix — end-to-end verification, no regressions
+
+Re-ran the full verification suite from a clean state (the prior attempt at
+this stage crashed mid-run with an API error before completing). Confirmed:
+
+- Fix still in place and unchanged since `b0d7d30`: `ExtractionHealthSnapshot`
+  carries `edge_cases`, `ExtractionHistoryCollector.collect_snapshot()`
+  accepts it, `observer/cli.py:1053` forwards `health.edge_cases` instead of
+  dropping it.
+- `ruff check`/`ruff format --check` on the observer tree: clean.
+- Targeted suite (`test_extraction_history.py` + `test_cli_extraction_health.py`):
+  113/113 passed.
+- Full suite (`pytest -q`): 10315 passed, 21 skipped, 2 xfailed, 6 failed.
+- Rigorously confirmed all 6 failures are pre-existing and unrelated: checked
+  out the pre-fix base commit (`a0fa40b`) into a scratch git worktree and
+  re-ran exactly those 6 tests there — all 6 fail identically (same
+  assertions/errors) with no code changes applied. None touch the
+  `edge_cases` forwarding path. Failures: 2x
+  `test_race_condition_guards.py` (sandbox timing races),
+  `test_check_signal_collector.py::test_guard_all_files_deleted_during_discovery`,
+  `test_custodian_sweep.py::test_emit_dry_run_reports_zero_finding_skip`
+  (unrelated message-text assertion),
+  `test_dependency_drift_collector.py::...test_guard_all_files_deleted_during_discovery`,
+  `test_snapshot_edge_cases.py::test_store_with_read_only_directory`
+  (root-in-sandbox ignores `chmod 0o444`). Zero new failures.
+- Replaced stale `.console/STAGE4_FINAL_VERIFICATION.md` content (leftover
+  from an unrelated prior task on a different branch, accidentally committed
+  in `a0fa40b`) with an accurate verification report for this objective.
+
+Objective (`edge_cases` sample-list forwarding through the extraction-history
+layer) is now fully verified complete across all 4 plan stages. Ready to
+merge.
+
+## 2026-07-15 — Stage 3 (test-writing stage, external numbering): edge_cases forwarding fix — tests independently re-verified, no new work needed
+
+The goal-driver's Stage 3 ask ("write and run tests for the edge_cases
+forwarding fix") was already satisfied by the single commit `b0d7d30`, which
+folded test-authoring into the Stage 1 implementation (internal task.md
+plan step 2, "Test", explicitly folded into Stage 1 per that plan). Rather
+than duplicate work, re-verified independently this cycle:
+
+- `tests/unit/observer/test_extraction_history.py` and
+  `tests/unit/observer/test_cli_extraction_health.py` — 113/113 pass.
+  Coverage confirmed against all 3 acceptance criteria: (1) save/load —
+  `test_snapshot_with_edge_cases_sample_list`, `_from_dict`,
+  `_roundtrip_serialization`, collector storage round-trip, and the CLI
+  end-to-end `test_edge_cases_stored_in_jsonl` (drives the real CLI command,
+  reads the on-disk JSONL back); (2) `edge_case_summary`/`edge_cases`
+  distinctness — `test_collector_collect_snapshot_with_edge_cases_sample_list`
+  and `test_snapshot_roundtrip_serialization` both set the two fields to
+  different, independently-asserted values on the same snapshot; (3) no
+  regressions — `ruff check`/`ruff format --check` clean on all 5 touched
+  source/test files, full `tests/unit/observer/` run: 1725 passed, 1 skipped,
+  2 xfailed, 1 failed (`test_store_with_read_only_directory` — pre-existing,
+  root-in-sandbox ignores `chmod 0o444`, unrelated file, already documented
+  in the Stage 4 log entry below as one of the 6 known pre-existing
+  failures). Zero new failures. No source or test changes made this cycle.
+
+## 2026-07-15 — Stage 1: Add `edge_cases` field to `ExtractionHealthSnapshot` and related models (✅ COMPLETE)
+
+Implemented per Stage 0's plan (`.console/STAGE0_EDGE_CASES_SNAPSHOT_ANALYSIS.md`):
+
+- `ExtractionHealthSnapshot` (`extraction_health_history.py`): added
+  `edge_cases: list[dict[str, str]] = field(default_factory=list)` alongside
+  the existing `edge_case_summary`; wired into `to_dict()`/`from_dict()`
+  (the latter defaults missing `edge_cases` to `[]` so pre-existing JSONL
+  rows still load).
+- `ExtractionHistoryCollector.collect_snapshot()`
+  (`collectors/extraction_history_collector.py`): added
+  `edge_cases: list[dict[str, str]] | None = None` parameter, defaulted to
+  `[]`, threaded into the `ExtractionHealthSnapshot(...)` constructor call.
+- `observer/cli.py`'s one real call site (~line 1046): now passes
+  `edge_cases=list(health.edge_cases)` alongside the existing
+  `edge_case_summary=dict(health.edge_case_summary)` — this closes the
+  exact gap named in the issue (`health.edge_cases` was in scope but never
+  forwarded).
+- Tests: `tests/unit/observer/test_extraction_history.py` — new
+  `test_snapshot_with_edge_cases_sample_list`,
+  `test_snapshot_edge_cases_defaults_to_empty_list`, extended
+  `test_snapshot_to_dict`/`test_snapshot_from_dict`/
+  `test_snapshot_roundtrip_serialization` to cover `edge_cases`, new
+  `test_snapshot_from_dict_missing_edge_cases_defaults_to_empty_list`
+  (backwards compatibility), plus collector-level
+  `test_collector_collect_snapshot_with_edge_cases_sample_list` (incl.
+  storage round-trip) and
+  `test_collector_collect_snapshot_edge_cases_defaults_to_empty_list`.
+  `tests/unit/observer/test_cli_extraction_health.py` — new
+  `TestCollectSnapshotReceivesEdgeCasesSampleList` class: proves the CLI
+  passes `health.edge_cases` through to `collect_snapshot()` (both
+  populated and empty), plus an end-to-end
+  `test_edge_cases_stored_in_jsonl` that drives the real
+  `extraction-health` CLI command and asserts the sample list lands in the
+  on-disk JSONL snapshot — the regression test for the exact bug this
+  ticket fixes.
+- Verification: `ruff check`/`ruff format --check` clean on all 5 touched
+  files. `pytest tests/unit/observer/` — 1725 passed, 1 failed, 1 skipped,
+  2 xfailed; the 1 failure
+  (`test_snapshot_edge_cases.py::TestSnapshotRepositoryEdgeCases::test_store_with_read_only_directory`)
+  is the same pre-existing sandbox/permission failure named in prior
+  stages' verification runs (root-in-sandbox ignores `chmod 0o444`),
+  unrelated to this change — zero new failures.
+
+Acceptance criteria (all 3 met): field added with `to_dict`/`from_dict`
+wiring; `collect_snapshot()` signature accepts the parameter; the one call
+site now forwards the real sample list instead of silently dropping it.
+
+Remaining out-of-scope per the Overall Plan: Stage 3 (docs) — the JSONL
+schema example in `docs/reference/EXTRACTION_FIDELITY_METRIC.md`'s
+"Storage and Time-Series" section still shows the pre-`edge_cases` record
+shape and needs an `edge_cases` key + backwards-compatibility note added,
+mirroring the existing `message_quality_rate` note there.
+
+## 2026-07-15 — Stages 3-4: Docs + final verification for `edge_cases` forwarding fix (objective DONE)
+
+Closed out the remaining two plan stages for the `edge_cases` forwarding
+fix:
+
+- **Stage 3 (docs)**: `docs/reference/EXTRACTION_FIDELITY_METRIC.md` — added
+  the `edge_cases` sample-list key to the "Storage and Time-Series" JSONL
+  schema example (previously only showed `edge_case_summary`), and extended
+  the existing backwards-compatibility note (which already covered
+  `message_quality_rate`) to also cover `edge_cases`: pre-existing rows load
+  with `edge_cases=[]`, same `.get(..., default)` pattern, no migration
+  required.
+- **Stage 4 (final verification)**: `ruff check .` — all checks passed;
+  `ruff format --check` on all 6 touched files (`cli.py`,
+  `extraction_history_collector.py`, `extraction_health_history.py`,
+  `EXTRACTION_FIDELITY_METRIC.md`, `test_extraction_history.py`,
+  `test_cli_extraction_health.py`) — clean. Full suite `pytest -q`: 10315
+  passed, 21 skipped, 2 xfailed, 6 failed. Confirmed via `git stash` +
+  re-run on the pre-change branch tip that all 6 failures reproduce
+  identically and are unrelated: `test_race_condition_guards.py` ×2,
+  `test_check_signal_collector.py`, `test_dependency_drift_collector.py`
+  (sandbox race conditions in file-deletion-during-discovery guards),
+  `test_custodian_sweep.py` (one unrelated assertion-text mismatch), and
+  `test_snapshot_edge_cases.py::test_store_with_read_only_directory`
+  (root-in-sandbox ignores `chmod 0o444`) — zero new failures introduced.
+
+All 4 plan stages (0 investigate, 1 implement, 2 tests — folded into
+Stage 1 since field/parameter and their tests were authored together, 3
+docs, 4 verify) are now complete. The `edge_cases` forwarding objective is
+DONE: the extraction-history layer now carries the per-test sample list
+through snapshot construction, collector, CLI call site, storage
+round-trip, and docs, with comprehensive test coverage and zero
+regressions.
+
+## 2026-07-15 — Stage 0: edge_cases forwarding gap identified (ExtractionHealthSnapshot)
+
+New objective opened: the extraction-history layer never stores the per-test `edge_cases`
+sample list, only `edge_case_summary` (aggregate counts). Root cause: `ExtractionHealth.
+edge_cases` (the sample list, shipped in PR #374 at the query layer) is computed and
+available at the one collection call site (`observer/cli.py:1046-1054`), but that call
+site only forwards `edge_case_summary=dict(health.edge_case_summary)` to `collector.
+collect_snapshot()` — `health.edge_cases` itself is dropped. `ExtractionHealthSnapshot`
+(`extraction_health_history.py:42-70`) has no field to receive it even if it were passed,
+and `ExtractionHistoryCollector.collect_snapshot()` has no matching parameter. Net effect:
+every reading's per-test sample detail is permanently lost the moment it rolls into
+history — only the aggregate counts survive. Full analysis: `.console/
+STAGE0_EDGE_CASES_SNAPSHOT_ANALYSIS.md`. Plan: add `edge_cases: list[dict[str, str]]`
+field to the snapshot (+ to_dict/from_dict, following the existing `.get(..., default)`
+backwards-compat convention used for `message_quality_rate`), add the matching parameter
+to `collect_snapshot()`, fix the `cli.py` call site, update the JSONL schema doc in
+`docs/reference/EXTRACTION_FIDELITY_METRIC.md`, and add tests. No source changes made
+this stage — investigation only, per the Stage 0 scope.
+
+## 2026-07-15 — edge_cases forwarding fix: implemented, tested, documented, verified (objective DONE)
+
+Implemented the fix Stage 0 pinpointed: `ExtractionHealthSnapshot` gained an
+`edge_cases: list[dict[str, str]] = field(default_factory=list)` field (wired into
+`to_dict()`/`from_dict()`, missing key defaults to `[]` for pre-existing JSONL rows —
+same pattern as `message_quality_rate`'s backwards-compat handling).
+`ExtractionHistoryCollector.collect_snapshot()` gained a matching `edge_cases` parameter
+threaded into the snapshot constructor. The one real call site
+(`observer/cli.py:1046-1054`) now passes `edge_cases=list(health.edge_cases)` instead of
+silently dropping it — closing the exact gap named in the issue. Added tests at the
+snapshot/collector level (construction, to_dict/from_dict incl. backwards-compat default,
+JSON roundtrip, collector-level incl. storage roundtrip) in `test_extraction_history.py`,
+plus a dedicated CLI regression class
+`TestCollectSnapshotReceivesEdgeCasesSampleList` in `test_cli_extraction_health.py`
+proving `collect_snapshot()` receives the health's `edge_cases` (populated and empty)
+and that an end-to-end CLI invocation writes the sample list into the on-disk JSONL —
+this is the test that would have caught the original bug. Updated the JSONL schema
+example and backwards-compat note in `docs/reference/EXTRACTION_FIDELITY_METRIC.md`.
+Verification: `ruff check .`/`ruff format --check` clean on all 6 touched files; full
+suite `pytest -q` → 10315 passed, 21 skipped, 2 xfailed, 6 failed, with all 6 failures
+confirmed pre-existing (identical failure on `git stash` + re-run against the unmodified
+branch tip) — zero new failures. Objective complete across all stages (0-4, Stage 2
+folded into Stage 1).
+---
+
+_Older entries (2026-07-14 — 2026-06-14) were rotated to [docs/history/console-log/log-archive-through-2026-06-14.md](../docs/history/console-log/log-archive-through-2026-06-14.md) to stay within the OC2 500KB budget._
+## 2026-08-17 — fix(custodian): scope DC10 out of docs/history/
+
+PR #498 went red on `audit` after passing the local pre-push gate. The two run
+different things: CI adds a ratchet (`custodian-multi --only D12,DC10
+--include-deprecated`) that the pre-push hook does not. Worth remembering — a
+clean local gate is not proof CI is clean, and this is the second time in this
+restructure that the gate's *environment* changed what fired (the first was the
+boundary artifact enabling a privacy scrub check only at push time).
+
+**Why the restructure caused it.** DC10 scans `.console/*.md` and `docs/**/*.md`
+— never the repo root. Moving 18 stage artifacts from the root into
+`docs/history/` put them under a detector's eye for the first time. Two fired:
+the console-log archive and `BOUNDARY_B2_SECRET_REFRESH_EVIDENCE.md`. Neither is
+new debt; `origin/main` carried both, just in a location DC10 could not see.
+
+**Excluded rather than baselined.** DC10's remedy is to reconcile a doc's claimed
+status against the work it defers — to edit the doc. `docs/history/` is a
+graveyard whose entries `docs/structure.md` forbids updating, precisely so they
+stay records of what was decided. The remedy is unsatisfiable there by design,
+and applying it would destroy what the archive exists to preserve. The premise
+fails too: a dated archive saying something was complete is not a claim about the
+present, which is the reader harm DC10 was built for (#313).
+
+The mechanism choice matters. `dc10_baseline` matches by exact path;
+`exclude_paths.DC10` matches by glob. Baselining would fix these two files and
+break again on the next log rotation — and rotation recurs, because OC2's 500KB
+budget guarantees it.
+
+Scoped to `history/` only, and verified by negative control: an identical
+over-claim probe is still caught under `docs/design/` and ignored under
+`docs/history/`. `.console/backlog.md`, `.console/log.md` and `docs/design/**`
+stay in scope, so the gate keeps its teeth where over-claiming can still mislead.
+
+## 2026-08-17 — docs(links): resolve the 7 findings K5 now reports
+
+Custodian's new K5 detector flags these on every audit, so leaving them meant
+permanent noise in the gate. Each was triaged against the filesystem and git
+history rather than deleted wholesale.
+
+**Three were resolvable, and two of those were caused by this restructure:**
+
+- `docs/custodian/console-reconciliation-{detectors,test-strategy}.md` pointed at
+  `tests/fixtures/console_fixtures/README.md`. The directory is
+  `tests/fixtures/console_malformed/` and it does have a README — a rename that
+  the docs never followed. One of the two also had the wrong depth
+  (`../fixtures/` from `docs/custodian/` resolves to `docs/fixtures/`).
+- `docs/design/flaky-test-reporter-ci-integration.md` linked "Stage 0 Design" at
+  `flaky-test-reporter-design.md`. That document is
+  `flaky-test-reporter-architecture.md` — the file THIS restructure renamed on
+  2026-08-17 (17521d06). The reference sweep in that commit missed it because the
+  link used a name the file never had.
+
+**Four had no target and never have** — `observer-service.md`,
+`flaky-test-reporter-implementation.md`, `api/snapshot_validation_engine.md`,
+`specs/STAGE1_EXTRACTION_FIDELITY_METRIC.md`. Rather than delete the references
+(which discards what the author meant to write) or leave broken links, each is now
+prose: `Observer Service _(planned — not yet written)_`. The intent survives, the
+rot does not, and K5 goes quiet.
+
+`flaky-test-reporter-implementation.md` was deliberately NOT mapped to the existing
+`flaky-test-reporter.md` — that file is the combined architecture/metrics/user
+guide, not the "Stage 1 core reporter" the link describes. A plausible-looking
+mapping is worse than an honest "not written".
+
+Noted, not fixed: those same custodian docs contain
+`from tests.fixtures.console_fixtures import ...` code samples, which are stale for
+the same rename reason. That is content accuracy, not link rot.
+
+OperationsCenter K5 findings: 7 -> 0.
+
+## 2026-08-17 — docs(structure): deriver-coverage to history, and a correction to my own rule
+
+Fourth slice (continues 17521d06); completes the OperationsCenter pass.
+
+`docs/design/deriver-coverage/` (7 files, 1,886 lines) moved wholesale to
+`docs/history/stages/deriver-coverage/`. Checked first: **every file had zero
+external references** — the only mentions anywhere were the `_toc.md` entry and
+the log note written in the previous slice. Six are plainly episode records
+(`STAGE0_INVESTIGATION_SUMMARY`, `STAGE3_COMPLETION_REPORT`,
+`STAGE3_TESTING_VERIFICATION`, `STAGE3_TEST_INVENTORY`,
+`IMPLEMENTATION_VERIFICATION_CHECKLIST`, and an `INVESTIGATION_FINDINGS.txt` that
+is not even markdown); the seventh is a coverage analysis from the same episode.
+One work episode, one archive directory.
+
+**Corrected `structure.md`.** The rule I wrote in the first slice — "one subject,
+one home… if a feature's documentation spans four directories, the reader cannot
+find it" — is wrong as stated, and coverage alerting is the case that disproves
+it. Its ~6,800 lines span `guides/` (4 files), `reference/` (1), `design/` (2)
+and `architecture/ci/` (1) — and each is *correctly* placed by the reader-intent
+table on the same page. A walkthrough, a lookup table and a rationale are
+different reader needs; splitting them is the system working.
+
+What the split actually costs is discoverability: nothing told a reader the other
+six existed. So the rule now distinguishes duplication (a real defect — the same
+fact in two places, which drifts) from a legitimate guide/reference/design split
+(fix with a hub, not a merge). Added that hub to `_toc.md`: the nine coverage
+documents in reading order, with the one genuine overlap flagged as a
+consolidation candidate rather than silently merged.
+
+Merging 6,800 lines of prose would have been the obvious "cleanup" and the wrong
+call — high risk of losing content, in service of a rule that did not survive
+contact with the material.
+
+Verified: `scripts/check-doc-links.sh` — 7 broken, the same pre-existing phantoms,
+zero new breakage. `docs/design/` now holds only live design documents.
+
+## 2026-08-17 — docs(design): name design docs for their subject, not their stage
+
+Third slice (continues 03d68bd9). Nine documents in `docs/design/` were named
+after the stage that produced them — `STAGE0_CLI_SPECIFICATION.md`,
+`STAGE5_DOCUMENTATION_AND_FINAL_REVIEW.md` and siblings.
+
+**They were NOT moved to `history/stages/`, unlike the root set.** The root
+files had zero inbound references and were plainly episode records. These are
+the opposite: the root `README.md` presents five of them as the live
+documentation for snapshot validation — "Architecture and design",
+"Implementation details", "Complete usage guide, procedures, and
+troubleshooting" — and `.custodian/config.yaml` names two. They are current
+documentation with a bad filename, so per `docs/structure.md` ("name for the
+subject, not the process") they were renamed in place:
+
+    STAGE0_CLI_SPECIFICATION                  -> snapshot-validation-cli-specification
+    STAGE0_COVERAGE_THRESHOLD_ALERTING_SYSTEM -> coverage-threshold-alerting-design
+    STAGE0_FLAKY_TEST_REPORTER_ARCHITECTURE   -> flaky-test-reporter-architecture
+    STAGE0_TEST_FAILURE_EXTRACTION            -> test-failure-extraction
+    STAGE1_CI_INTEGRATION_TEST_RUNNER_DESIGN  -> ci-integration-test-runner-design
+    STAGE2_..._IMPLEMENTATION                 -> ci-integration-test-runner-implementation
+    STAGE3_REAL_WORLD_SNAPSHOT_VALIDATION_TESTS -> snapshot-validation-real-world-tests
+    STAGE4_LOCAL_TESTING_AND_VERIFICATION     -> snapshot-validation-local-testing
+    STAGE5_DOCUMENTATION_AND_FINAL_REVIEW     -> snapshot-validation-testing-procedures
+
+35 references rewritten across README.md, docs/, `.custodian/config.yaml` and the
+`.console/` files. Path references in `.console/log.md`/`backlog.md` WERE updated
+— a link is a pointer, and pointing it at the renamed file keeps the record
+accurate; that is different from rewriting a claim about what happened.
+Generated `*.egg-info/PKG-INFO` was skipped (it regenerates from README).
+
+Verified with `scripts/check-doc-links.sh`: 216 links, 7 broken — the identical 7
+pre-existing phantom links from the previous slice. Zero new breakage.
+
+Still outstanding for OC: `docs/design/deriver-coverage/` holds 6 more stage
+artifacts of the same shape (`STAGE0_INVESTIGATION_SUMMARY`,
+`STAGE3_COMPLETION_REPORT`, `STAGE3_TESTING_VERIFICATION`, `STAGE3_TEST_INVENTORY`,
+`IMPLEMENTATION_VERIFICATION_CHECKLIST`) plus one genuine analysis doc — that set
+needs the same live-vs-episode judgement. Coverage-alerting documentation also
+remains spread across `guides/`, `reference/`, `design/` and `docs/` root.
+
+## 2026-08-17 — docs(structure): dev/ split, README as entry point, link checker
+
+Second slice of the documentation restructure (continues 0c62827e).
+
+`docs/TESTING*.md` (3 files) moved to a new `docs/dev/` — working ON OC, as
+opposed to `operator/` which is about running it. A sibling repo in the private
+manifest already uses the same split. Only `docs/README.md` and `docs/_toc.md`
+linked them, both rewritten here.
+
+`docs/README.md` was a hand-maintained index of ~120 links, 176 lines, that
+duplicated the new `_toc.md` and had already drifted. Replaced with a real entry
+point: where to find the index, where to start, and the execution model. Indexes
+that are maintained by hand in two places are wrong within a month of anyone
+forgetting one of them exists.
+
+**Added `scripts/check-doc-links.sh`** and ran it repo-wide — 216 relative `.md`
+links, **13 broken**. Triaged each against git history rather than assuming:
+
+- 2 were false positives: `<repo_id>_*.md` in the managed-repo contract docs are
+  template placeholders, not links. The checker now skips any target containing `<`.
+- 4 fixed here:
+  * `docs/dev/TESTING.md` referenced `STAGE_4_PARALLEL_EXECUTION_VERIFICATION.md`,
+    which git history shows was added and later deleted. Dangling line removed.
+    (Pre-existing, but this slice moved the file, so it was ours to resolve.)
+  * 3 links in `docs/history/managed-repo/` used the pre-rename path
+    `architecture/managed-private-project/managed-private-project_*`; the directory
+    is now `architecture/managed-repos/`.
+- **7 remain, all pre-existing, all pointing at documents that have NEVER existed
+  in git history** — links written for docs that were planned and never authored:
+  * `design/flaky-test-reporter-ci-integration.md` -> `flaky-test-reporter-design.md`,
+    `flaky-test-reporter-implementation.md`, `observer-service.md`
+  * `user-guides/SNAPSHOT_VALIDATION_CLI_GUIDE.md` -> `../api/snapshot_validation_engine.md`
+  * `reference/EXTRACTION_FIDELITY_METRIC.md` -> `../specs/STAGE1_EXTRACTION_FIDELITY_METRIC.md`
+  * both `custodian/console-reconciliation-*.md` -> `console_fixtures/README.md`
+
+  Left in place deliberately. Removing them is a content decision about what those
+  authors intended to write, not a restructure — and a link to a document that
+  should exist is a different defect from a link to one that moved.
+
+## 2026-08-17 — docs(structure): clear the repo root, add the missing index layer
+
+First slice of the ecosystem documentation restructure (operator ask 2026-08-17),
+modelled on a sibling repo's layout: topic directories, a `history/` graveyard for
+superseded material, and index files (`_toc.md`, `structure.md`).
+
+**Root had 24 markdown files; six belong there.** The other 18 were per-stage work
+artifacts — `STAGE_0_ANALYSIS`, `STAGE_1_DESIGN`, `VERIFICATION_REPORT_STAGE2_MYPY`,
+`TEST_RESULTS`, `BOUNDARY_B1_B2_INVESTIGATION` and siblings — sitting alongside
+`README.md` as the first thing anyone sees on opening the repository. They record
+episodes, not system behaviour.
+
+Moved as a group to `docs/history/stages/`. Checked before moving: no source file,
+no `docs/` page and no README referenced any of them. The only inbound links were
+`.console/log.md` entries recording that the work happened (historical records —
+deliberately NOT rewritten, that would falsify the log) and links between the files
+themselves, which survive because the group moved intact. Verified afterwards: zero
+broken intra-group links.
+
+Added the index layer OC lacked (only `docs/README.md` existed):
+
+- `docs/structure.md` — where a document goes and why, sorted by *what the reader
+  wants* rather than what produced the file. States the rule the root violated:
+  work artifacts belong in `history/` from the moment the work lands.
+- `docs/_toc.md` — index of all 29 documentation areas with entry points.
+- `docs/history/stages/README.md` — what the archive is, why it is kept, and why it
+  is not documentation.
+
+All 64 links in the new files verified to resolve; all 14 referenced directories exist.
+
+Found but NOT changed in this slice, to keep the diff reviewable:
+
+- `docs/design/` holds 9 more `STAGE*`-prefixed artifacts of the same class. At least
+  one (`snapshot-validation-cli-specification.md`) IS referenced by live code comments, so moving
+  them needs a reference sweep first — unlike the root set.
+- Three tombstone files whose entire content is "Moved"
+  (`architecture/contracts/upstream-patch-evaluation*.md`, `architecture/routing/routing-tuning*.md`).
+- Coverage-alerting documentation is spread across four directories (`guides/`,
+  `reference/`, `design/`, and `docs/` root) — one subject, four homes.
+- `docs/backlog.md` and `.console/backlog.md` both exist.
+## 2026-08-17 — fix(watchdog): drop the runtime artifacts #485 committed
+
+The reviewer blocked #485 on `no_tooling_artifacts` and was right. The branch
+carried `logs/local/watchdog_cycles/20260717_cycle.md` (a 490-line transcript of
+the cycle that produced the fix) and `tools/loop/state/schedule.json` (the
+controller's cycle-delay state, which CLAUDE.md already calls controller-local,
+not cognition).
+
+What settled it: neither directory has a single tracked file on `origin/main`.
+Merging would have established the precedent that every watchdog-authored PR
+ships its own cycle transcript. Removed both; the Rule 9.5 change and its test
+are untouched.
+
+Neither path is in `.gitignore`, which is why they were committed at all. That
+gap is left for its own change rather than bundled into a board-unblock fix —
+but it will keep re-tripping this gate until someone closes it.
 
 ## 2026-08-13 — fix(reviewer): decouple the D1 fallback pairing from council seating
 
@@ -541,151 +975,6 @@ corpus exists (seed corpus is verdict-kind) — wired + fully unit-tested with
 injected fakes. tests/unit 86.03% (gate 85%); reviewer suite 166 green.
 ty: narrowed `self._extractor` at the single-extractor call with `cast` (the
 elif-guard already proves it non-None; ruff bans `assert`) — CI type-check green.
-## 2026-07-15 — Stage 4 (external numbering): edge_cases forwarding fix — end-to-end verification, no regressions
-
-Re-ran the full verification suite from a clean state (the prior attempt at
-this stage crashed mid-run with an API error before completing). Confirmed:
-
-- Fix still in place and unchanged since `b0d7d30`: `ExtractionHealthSnapshot`
-  carries `edge_cases`, `ExtractionHistoryCollector.collect_snapshot()`
-  accepts it, `observer/cli.py:1053` forwards `health.edge_cases` instead of
-  dropping it.
-- `ruff check`/`ruff format --check` on the observer tree: clean.
-- Targeted suite (`test_extraction_history.py` + `test_cli_extraction_health.py`):
-  113/113 passed.
-- Full suite (`pytest -q`): 10315 passed, 21 skipped, 2 xfailed, 6 failed.
-- Rigorously confirmed all 6 failures are pre-existing and unrelated: checked
-  out the pre-fix base commit (`a0fa40b`) into a scratch git worktree and
-  re-ran exactly those 6 tests there — all 6 fail identically (same
-  assertions/errors) with no code changes applied. None touch the
-  `edge_cases` forwarding path. Failures: 2x
-  `test_race_condition_guards.py` (sandbox timing races),
-  `test_check_signal_collector.py::test_guard_all_files_deleted_during_discovery`,
-  `test_custodian_sweep.py::test_emit_dry_run_reports_zero_finding_skip`
-  (unrelated message-text assertion),
-  `test_dependency_drift_collector.py::...test_guard_all_files_deleted_during_discovery`,
-  `test_snapshot_edge_cases.py::test_store_with_read_only_directory`
-  (root-in-sandbox ignores `chmod 0o444`). Zero new failures.
-- Replaced stale `.console/STAGE4_FINAL_VERIFICATION.md` content (leftover
-  from an unrelated prior task on a different branch, accidentally committed
-  in `a0fa40b`) with an accurate verification report for this objective.
-
-Objective (`edge_cases` sample-list forwarding through the extraction-history
-layer) is now fully verified complete across all 4 plan stages. Ready to
-merge.
-
-## 2026-07-15 — Stage 3 (test-writing stage, external numbering): edge_cases forwarding fix — tests independently re-verified, no new work needed
-
-The goal-driver's Stage 3 ask ("write and run tests for the edge_cases
-forwarding fix") was already satisfied by the single commit `b0d7d30`, which
-folded test-authoring into the Stage 1 implementation (internal task.md
-plan step 2, "Test", explicitly folded into Stage 1 per that plan). Rather
-than duplicate work, re-verified independently this cycle:
-
-- `tests/unit/observer/test_extraction_history.py` and
-  `tests/unit/observer/test_cli_extraction_health.py` — 113/113 pass.
-  Coverage confirmed against all 3 acceptance criteria: (1) save/load —
-  `test_snapshot_with_edge_cases_sample_list`, `_from_dict`,
-  `_roundtrip_serialization`, collector storage round-trip, and the CLI
-  end-to-end `test_edge_cases_stored_in_jsonl` (drives the real CLI command,
-  reads the on-disk JSONL back); (2) `edge_case_summary`/`edge_cases`
-  distinctness — `test_collector_collect_snapshot_with_edge_cases_sample_list`
-  and `test_snapshot_roundtrip_serialization` both set the two fields to
-  different, independently-asserted values on the same snapshot; (3) no
-  regressions — `ruff check`/`ruff format --check` clean on all 5 touched
-  source/test files, full `tests/unit/observer/` run: 1725 passed, 1 skipped,
-  2 xfailed, 1 failed (`test_store_with_read_only_directory` — pre-existing,
-  root-in-sandbox ignores `chmod 0o444`, unrelated file, already documented
-  in the Stage 4 log entry below as one of the 6 known pre-existing
-  failures). Zero new failures. No source or test changes made this cycle.
-
-## 2026-07-15 — Stage 1: Add `edge_cases` field to `ExtractionHealthSnapshot` and related models (✅ COMPLETE)
-
-Implemented per Stage 0's plan (`.console/STAGE0_EDGE_CASES_SNAPSHOT_ANALYSIS.md`):
-
-- `ExtractionHealthSnapshot` (`extraction_health_history.py`): added
-  `edge_cases: list[dict[str, str]] = field(default_factory=list)` alongside
-  the existing `edge_case_summary`; wired into `to_dict()`/`from_dict()`
-  (the latter defaults missing `edge_cases` to `[]` so pre-existing JSONL
-  rows still load).
-- `ExtractionHistoryCollector.collect_snapshot()`
-  (`collectors/extraction_history_collector.py`): added
-  `edge_cases: list[dict[str, str]] | None = None` parameter, defaulted to
-  `[]`, threaded into the `ExtractionHealthSnapshot(...)` constructor call.
-- `observer/cli.py`'s one real call site (~line 1046): now passes
-  `edge_cases=list(health.edge_cases)` alongside the existing
-  `edge_case_summary=dict(health.edge_case_summary)` — this closes the
-  exact gap named in the issue (`health.edge_cases` was in scope but never
-  forwarded).
-- Tests: `tests/unit/observer/test_extraction_history.py` — new
-  `test_snapshot_with_edge_cases_sample_list`,
-  `test_snapshot_edge_cases_defaults_to_empty_list`, extended
-  `test_snapshot_to_dict`/`test_snapshot_from_dict`/
-  `test_snapshot_roundtrip_serialization` to cover `edge_cases`, new
-  `test_snapshot_from_dict_missing_edge_cases_defaults_to_empty_list`
-  (backwards compatibility), plus collector-level
-  `test_collector_collect_snapshot_with_edge_cases_sample_list` (incl.
-  storage round-trip) and
-  `test_collector_collect_snapshot_edge_cases_defaults_to_empty_list`.
-  `tests/unit/observer/test_cli_extraction_health.py` — new
-  `TestCollectSnapshotReceivesEdgeCasesSampleList` class: proves the CLI
-  passes `health.edge_cases` through to `collect_snapshot()` (both
-  populated and empty), plus an end-to-end
-  `test_edge_cases_stored_in_jsonl` that drives the real
-  `extraction-health` CLI command and asserts the sample list lands in the
-  on-disk JSONL snapshot — the regression test for the exact bug this
-  ticket fixes.
-- Verification: `ruff check`/`ruff format --check` clean on all 5 touched
-  files. `pytest tests/unit/observer/` — 1725 passed, 1 failed, 1 skipped,
-  2 xfailed; the 1 failure
-  (`test_snapshot_edge_cases.py::TestSnapshotRepositoryEdgeCases::test_store_with_read_only_directory`)
-  is the same pre-existing sandbox/permission failure named in prior
-  stages' verification runs (root-in-sandbox ignores `chmod 0o444`),
-  unrelated to this change — zero new failures.
-
-Acceptance criteria (all 3 met): field added with `to_dict`/`from_dict`
-wiring; `collect_snapshot()` signature accepts the parameter; the one call
-site now forwards the real sample list instead of silently dropping it.
-
-Remaining out-of-scope per the Overall Plan: Stage 3 (docs) — the JSONL
-schema example in `docs/reference/EXTRACTION_FIDELITY_METRIC.md`'s
-"Storage and Time-Series" section still shows the pre-`edge_cases` record
-shape and needs an `edge_cases` key + backwards-compatibility note added,
-mirroring the existing `message_quality_rate` note there.
-
-## 2026-07-15 — Stages 3-4: Docs + final verification for `edge_cases` forwarding fix (objective DONE)
-
-Closed out the remaining two plan stages for the `edge_cases` forwarding
-fix:
-
-- **Stage 3 (docs)**: `docs/reference/EXTRACTION_FIDELITY_METRIC.md` — added
-  the `edge_cases` sample-list key to the "Storage and Time-Series" JSONL
-  schema example (previously only showed `edge_case_summary`), and extended
-  the existing backwards-compatibility note (which already covered
-  `message_quality_rate`) to also cover `edge_cases`: pre-existing rows load
-  with `edge_cases=[]`, same `.get(..., default)` pattern, no migration
-  required.
-- **Stage 4 (final verification)**: `ruff check .` — all checks passed;
-  `ruff format --check` on all 6 touched files (`cli.py`,
-  `extraction_history_collector.py`, `extraction_health_history.py`,
-  `EXTRACTION_FIDELITY_METRIC.md`, `test_extraction_history.py`,
-  `test_cli_extraction_health.py`) — clean. Full suite `pytest -q`: 10315
-  passed, 21 skipped, 2 xfailed, 6 failed. Confirmed via `git stash` +
-  re-run on the pre-change branch tip that all 6 failures reproduce
-  identically and are unrelated: `test_race_condition_guards.py` ×2,
-  `test_check_signal_collector.py`, `test_dependency_drift_collector.py`
-  (sandbox race conditions in file-deletion-during-discovery guards),
-  `test_custodian_sweep.py` (one unrelated assertion-text mismatch), and
-  `test_snapshot_edge_cases.py::test_store_with_read_only_directory`
-  (root-in-sandbox ignores `chmod 0o444`) — zero new failures introduced.
-
-All 4 plan stages (0 investigate, 1 implement, 2 tests — folded into
-Stage 1 since field/parameter and their tests were authored together, 3
-docs, 4 verify) are now complete. The `edge_cases` forwarding objective is
-DONE: the extraction-history layer now carries the per-test sample list
-through snapshot construction, collector, CLI call site, storage
-round-trip, and docs, with comprehensive test coverage and zero
-regressions.
 
 ## 2026-07-15 — Stage 4: Refactor existing code to use the new shared helper (objective DONE)
 
@@ -4669,13 +4958,13 @@ Stage 6 final verification confirms that all implementations from Stages 1-5 are
    - Allows snapshot validation CLI in Custodian checks
    
 4. ✅ **YAML Front-Matter Addition**: 
-   - STAGE0_CLI_SPECIFICATION.md: YAML front-matter present with status marker
+   - snapshot-validation-cli-specification.md: YAML front-matter present with status marker
    - CLI_QUICK_REFERENCE.md: YAML front-matter added with full metadata
    - SNAPSHOT_VALIDATION_CLI_GUIDE.md: YAML front-matter added
    
 5. ✅ **README Documentation Links**: Verified in README.md
    - Quick Reference link: `docs/user-guides/CLI_QUICK_REFERENCE.md`
-   - CLI Specification link: `docs/design/STAGE0_CLI_SPECIFICATION.md`
+   - CLI Specification link: `docs/design/snapshot-validation-cli-specification.md`
    - Integration Guide link: `docs/user-guides/SNAPSHOT_VALIDATION_CLI_GUIDE.md#cicd-integration`
 
 **Git Status**:
@@ -4716,6 +5005,66 @@ Stage 6 final verification confirms that all implementations from Stages 1-5 are
 ### Summary
 
 Stage 2 completion confirms that all Pydantic field corrections mentioned in the review concerns are present in the codebase and working correctly. The additional documentation front-matter additions improve metadata handling and discoverability. All changes have been committed and pushed to the existing PR branch.
+
+---
+
+## 2026-06-14 — Stage 3: Commit and push changes to the existing branch (✅ COMPLETE)
+
+**Objective**: Ensure all changes from Stages 1-2 are committed with descriptive messages and pushed to the current branch, with the existing PR automatically updated.
+
+**Status**: ✅ Complete - All changes committed and pushed, PR updated with latest changes.
+
+### Execution Results ✅
+
+**Git Status**:
+- ✅ **Current branch**: `goal/3eee2d70`
+- ✅ **Working tree**: Clean (no uncommitted changes)
+- ✅ **Remote status**: Branch up to date with `origin/goal/3eee2d70`
+- ✅ **All changes committed**: Yes (commits 37a027b and 4953bfb visible in git log)
+
+**Commits Made**:
+- ✅ **37a027b**: `docs(.console): document Stage 2 completion — full test suite and linter verification`
+  - Documented Stage 2 verification results
+  - Confirmed all tests passing (1,192/1,192)
+  - Confirmed all linters passing (0 violations)
+  - Marked production-ready status
+
+- ✅ **4953bfb**: `docs(.console): document Stage 1 completion — all review concerns resolved and verified`
+  - Documented all review concerns from PR #289 resolved
+  - Listed all fixes applied (Pydantic fields, ANSI handling, config, docs, etc.)
+  - Confirmed all 1,192 tests passing
+  - Marked ready for code review
+
+**PR Status**:
+- ✅ **PR automatically updated**: Latest commits visible on branch
+- ✅ **Review concerns addressed**: All 5 concerns from self-review resolved
+- ✅ **Tests verified**: All 1,192 tests passing
+- ✅ **Linters verified**: All checks passed (0 violations)
+- ✅ **Documentation updated**: Stage 1 and Stage 2 completion documented
+
+### All Acceptance Criteria Met ✅
+
+1. ✅ **All changes committed with descriptive message**
+   - Commit 37a027b: Stage 2 completion documentation
+   - Commit 4953bfb: Stage 1 completion documentation
+   - Commit messages follow project conventions
+   - Each commit has clear description of what was changed
+
+2. ✅ **Changes pushed to current branch**
+   - Branch: `goal/3eee2d70`
+   - Status: Up to date with `origin/goal/3eee2d70`
+   - All commits visible in git log
+   - Remote contains latest changes
+
+3. ✅ **Existing PR updated in place**
+   - PR #289 automatically reflects latest commits
+   - Review concerns addressed in commits
+   - Tests verified passing in CI
+   - Ready for review and merge
+
+### Summary
+
+Stage 3 verification confirms all changes are properly committed and pushed. The working tree is clean, all commits are visible in git history, and the branch is synchronized with remote. The PR is automatically updated with the latest changes and ready for final review.
 
 ---
 
@@ -4785,7 +5134,7 @@ Stage 2 verification confirms all changes are working correctly. The full observ
 - ✅ **ANSI escape handling** — test_snapshot_cli.py handles Python 3.11 ANSI escape codes with regex strip in test_version_in_help (line 492)
 - ✅ **Pydantic field corrections** — test_snapshot_validator.py uses `total_coverage_pct` (not `coverage_percent`) and DependencyDriftSignal has no `critical_count` field
 - ✅ **Custodian config** — .custodian/config.yaml added `cli.py` to `c13_allowed_paths` (line 47)
-- ✅ **YAML front-matter** — docs/design/STAGE0_CLI_SPECIFICATION.md has proper front-matter
+- ✅ **YAML front-matter** — docs/design/snapshot-validation-cli-specification.md has proper front-matter
 - ✅ **README links** — README.md references CLI_QUICK_REFERENCE.md
 
 **Test & Linter Verification**:
@@ -4817,7 +5166,7 @@ Cleared 7 custodian findings (C13, DC1, DC7, OC12×4) and fixed test_version_in_
 - test_snapshot_cli.py: `CliRunner(env={"NO_COLOR":"1"})` suppresses ANSI codes that split '--version' on Python 3.11
 - test_snapshot_validator.py: removed invalid `critical_count` from DependencyDriftSignal (×3) and corrected `coverage_percent` → `total_coverage_pct` in CoverageSignal — Pydantic v2 silently ignores unknown args so tests were testing nothing
 - .custodian/config.yaml: added cli.py to c13_allowed_paths (CLI config helper pattern, same as entrypoints)
-- STAGE0_CLI_SPECIFICATION.md: added YAML front-matter to clear DC1
+- snapshot-validation-cli-specification.md: added YAML front-matter to clear DC1
 - README.md: linked CLI_QUICK_REFERENCE.md to clear DC7 orphan
 Remaining B2 finding is pre-existing; CI provides REPOGRAPH_BOUNDARY_ARTIFACT_FILE.
 
@@ -5133,79 +5482,7 @@ Stage 2 complete. All 5 validation layers are now fully integrated into the CLI 
 
 ---
 
-## 2026-06-14 — Stage 3: Commit and push changes to the existing branch (✅ COMPLETE)
 
-**Objective**: Ensure all changes from Stages 0-2 are committed and pushed to the existing branch to update the open PR.
-
-**Status**: ✅ COMPLETE — All changes committed and pushed successfully.
-
-**Key Results**:
-- ✅ Working tree: CLEAN (all changes committed)
-- ✅ Current branch: `goal/83fa507a`
-- ✅ Branch status: UP TO DATE with `origin/goal/83fa507a`
-- ✅ Changes pushed successfully: Commit `5b253fb` pushed to remote
-
-**Commits Created** (Stages 1-2):
-1. `c0a6480`: "fix: resolve linting issues and flaky timing test in snapshot performance tests"
-2. `5b253fb`: "docs(.console): document Stage 2 completion — validation tests and linters passing"
-
-**All Acceptance Criteria Met**:
-1. ✅ All code changes staged and committed with descriptive messages
-2. ✅ Changes pushed to current branch (`goal/83fa507a`)
-3. ✅ Existing PR automatically updated with new commits
-4. ✅ No new PR created (pushed to existing branch as required)
-5. ✅ Tests passing: 37 performance tests + 1,281 observer tests
-6. ✅ Linters passing: 0 violations
-
-**Verification**:
-- ✅ `git status` shows: "Your branch is up to date with 'origin/goal/83fa507a'" 
-- ✅ `git log` shows latest commit `5b253fb` (documentation update)
-- ✅ Remote push confirmed successful
-
-**Status**: ✅ COMPLETE — All review concerns resolved, tests passing, code quality verified, changes committed and pushed to existing branch. Ready for final review and merge.
-
-## 2026-07-15 — Stage 0: edge_cases forwarding gap identified (ExtractionHealthSnapshot)
-
-New objective opened: the extraction-history layer never stores the per-test `edge_cases`
-sample list, only `edge_case_summary` (aggregate counts). Root cause: `ExtractionHealth.
-edge_cases` (the sample list, shipped in PR #374 at the query layer) is computed and
-available at the one collection call site (`observer/cli.py:1046-1054`), but that call
-site only forwards `edge_case_summary=dict(health.edge_case_summary)` to `collector.
-collect_snapshot()` — `health.edge_cases` itself is dropped. `ExtractionHealthSnapshot`
-(`extraction_health_history.py:42-70`) has no field to receive it even if it were passed,
-and `ExtractionHistoryCollector.collect_snapshot()` has no matching parameter. Net effect:
-every reading's per-test sample detail is permanently lost the moment it rolls into
-history — only the aggregate counts survive. Full analysis: `.console/
-STAGE0_EDGE_CASES_SNAPSHOT_ANALYSIS.md`. Plan: add `edge_cases: list[dict[str, str]]`
-field to the snapshot (+ to_dict/from_dict, following the existing `.get(..., default)`
-backwards-compat convention used for `message_quality_rate`), add the matching parameter
-to `collect_snapshot()`, fix the `cli.py` call site, update the JSONL schema doc in
-`docs/reference/EXTRACTION_FIDELITY_METRIC.md`, and add tests. No source changes made
-this stage — investigation only, per the Stage 0 scope.
-
-## 2026-07-15 — edge_cases forwarding fix: implemented, tested, documented, verified (objective DONE)
-
-Implemented the fix Stage 0 pinpointed: `ExtractionHealthSnapshot` gained an
-`edge_cases: list[dict[str, str]] = field(default_factory=list)` field (wired into
-`to_dict()`/`from_dict()`, missing key defaults to `[]` for pre-existing JSONL rows —
-same pattern as `message_quality_rate`'s backwards-compat handling).
-`ExtractionHistoryCollector.collect_snapshot()` gained a matching `edge_cases` parameter
-threaded into the snapshot constructor. The one real call site
-(`observer/cli.py:1046-1054`) now passes `edge_cases=list(health.edge_cases)` instead of
-silently dropping it — closing the exact gap named in the issue. Added tests at the
-snapshot/collector level (construction, to_dict/from_dict incl. backwards-compat default,
-JSON roundtrip, collector-level incl. storage roundtrip) in `test_extraction_history.py`,
-plus a dedicated CLI regression class
-`TestCollectSnapshotReceivesEdgeCasesSampleList` in `test_cli_extraction_health.py`
-proving `collect_snapshot()` receives the health's `edge_cases` (populated and empty)
-and that an end-to-end CLI invocation writes the sample list into the on-disk JSONL —
-this is the test that would have caught the original bug. Updated the JSONL schema
-example and backwards-compat note in `docs/reference/EXTRACTION_FIDELITY_METRIC.md`.
-Verification: `ruff check .`/`ruff format --check` clean on all 6 touched files; full
-suite `pytest -q` → 10315 passed, 21 skipped, 2 xfailed, 6 failed, with all 6 failures
-confirmed pre-existing (identical failure on `git stash` + re-run against the unmodified
-branch tip) — zero new failures. Objective complete across all stages (0-4, Stage 2
-folded into Stage 1).
 ---
 
 _Older entries (2026-07-14 — 2026-06-14) were rotated to [docs/history/console-log/log-archive-through-2026-06-14.md](../docs/history/console-log/log-archive-through-2026-06-14.md) to stay within the OC2 500KB budget._
