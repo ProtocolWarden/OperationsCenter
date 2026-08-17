@@ -1,3 +1,44 @@
+## 2026-08-17 — docs(structure): clear the repo root, add the missing index layer
+
+First slice of the ecosystem documentation restructure (operator ask 2026-08-17),
+modelled on the VideoFoundry layout: topic directories, a `history/` graveyard for
+superseded material, and index files (`_toc.md`, `structure.md`).
+
+**Root had 24 markdown files; six belong there.** The other 18 were per-stage work
+artifacts — `STAGE_0_ANALYSIS`, `STAGE_1_DESIGN`, `VERIFICATION_REPORT_STAGE2_MYPY`,
+`TEST_RESULTS`, `BOUNDARY_B1_B2_INVESTIGATION` and siblings — sitting alongside
+`README.md` as the first thing anyone sees on opening the repository. They record
+episodes, not system behaviour.
+
+Moved as a group to `docs/history/stages/`. Checked before moving: no source file,
+no `docs/` page and no README referenced any of them. The only inbound links were
+`.console/log.md` entries recording that the work happened (historical records —
+deliberately NOT rewritten, that would falsify the log) and links between the files
+themselves, which survive because the group moved intact. Verified afterwards: zero
+broken intra-group links.
+
+Added the index layer OC lacked (only `docs/README.md` existed):
+
+- `docs/structure.md` — where a document goes and why, sorted by *what the reader
+  wants* rather than what produced the file. States the rule the root violated:
+  work artifacts belong in `history/` from the moment the work lands.
+- `docs/_toc.md` — index of all 29 documentation areas with entry points.
+- `docs/history/stages/README.md` — what the archive is, why it is kept, and why it
+  is not documentation.
+
+All 64 links in the new files verified to resolve; all 14 referenced directories exist.
+
+Found but NOT changed in this slice, to keep the diff reviewable:
+
+- `docs/design/` holds 9 more `STAGE*`-prefixed artifacts of the same class. At least
+  one (`STAGE0_CLI_SPECIFICATION.md`) IS referenced by live code comments, so moving
+  them needs a reference sweep first — unlike the root set.
+- Three tombstone files whose entire content is "Moved"
+  (`architecture/contracts/upstream-patch-evaluation*.md`, `architecture/routing/routing-tuning*.md`).
+- Coverage-alerting documentation is spread across four directories (`guides/`,
+  `reference/`, `design/`, and `docs/` root) — one subject, four homes.
+- `docs/backlog.md` and `.console/backlog.md` both exist.
+
 ## 2026-08-13 — fix(reviewer): decouple the D1 fallback pairing from council seating
 
 Caught by rebasing the all-Opus council branch onto main after #486 landed, not
