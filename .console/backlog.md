@@ -4,15 +4,6 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## Up Next
 
-### Migrate running watchers onto supervisor tags
-- Supervisors launched before `oc-watch-supervisor=<role>` existed carry no tag.
-  `reconcile_watch_pid_file` returns 3 for them and `start_watch_role` refuses, so
-  nothing double-runs — but those roles cannot be reconciled until restarted.
-- One-time migration: `scripts/operations-center.sh watch-all-stop` then
-  `watch-all`. Until then a stale pid file for an untagged role needs the manual
-  stop the error message prints.
-- No deadline; the guard is safe indefinitely. This is bookkeeping, not risk.
-
 ### Split extraction_health_history.py, or the C29 exclusion becomes permanent
 - The module was at exactly 500 lines; #478's `edge_cases` field pushed it to 506 and
   it is now on the C29 exclusion list as an explicit deferral, not an exemption.
@@ -98,6 +89,21 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 
 ## Done
+
+### 2026-08-17: Watcher supervisor-tag migration (✅ COMPLETE)
+- **Objective**: get every running supervisor onto the `oc-watch-supervisor=<role>`
+  tag introduced by #499, so pid reconciliation and `watch-all-status` work against
+  the live fleet rather than only in tests.
+- **Carried out**: `watch-all-stop` then `watch-all` from `main` (not from a PR
+  branch). All eight roles — intake, goal, test, improve, propose, review, spec,
+  watchdog — restarted under the tagging launcher.
+- **Verified**: exactly one supervisor per role, all eight tagged, no leftover
+  untagged supervisor from before the migration, ten heartbeats fresh (spec runs
+  three children), reviewer polling again. The one-per-role check is the one that
+  matters: duplicate supervisors are the failure the tagging work exists to prevent.
+- **Also closed by this**: `watch-all-status` had been reporting the pre-migration
+  review watcher as `stopped` while it was running and merging PRs (fixed in #500);
+  with every supervisor now tagged, that path no longer triggers at all.
 
 ### 2026-08-04: Observer CLI flags that lied (✅ COMPLETE)
 - **Objective**: fix the flags the vulture triage exposed as declared-but-never-read.
