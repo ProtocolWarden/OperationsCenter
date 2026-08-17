@@ -1,3 +1,18 @@
+## 2026-08-17 — spec(forgejo): record the operator's three decisions
+
+Single board repo, drain to zero, council review moves to Forgejo PRs at cutover.
+The spec merged (#506) while these were still listed as open questions, and it is
+already being built against — a spec that asks questions someone has answered goes
+stale the moment the next reader trusts it.
+
+What they change: A3 (task ids) drops from a blocking design problem to a
+non-issue, because drain-to-zero means nothing persisted refers to an id that
+stops existing. A1 (state exclusivity) is untouched and remains the central
+hazard. A4 (pagination) gets *worse* — one board repo holding every task is larger
+than any single Plane project was, so a short read hides more. Completion grows an
+item: moving review to Forgejo needs a PR-side adapter, which this board-side spec
+does not cover.
+
 ## 2026-08-17 — spec(forgejo): adversarial spec for the board adapter
 
 Operator chose Forgejo, and asked for the spec to be adversarial about
