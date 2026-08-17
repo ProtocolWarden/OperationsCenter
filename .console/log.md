@@ -1,3 +1,20 @@
+## 2026-08-17 — fix(watchdog): drop the runtime artifacts #485 committed
+
+The reviewer blocked #485 on `no_tooling_artifacts` and was right. The branch
+carried `logs/local/watchdog_cycles/20260717_cycle.md` (a 490-line transcript of
+the cycle that produced the fix) and `tools/loop/state/schedule.json` (the
+controller's cycle-delay state, which CLAUDE.md already calls controller-local,
+not cognition).
+
+What settled it: neither directory has a single tracked file on `origin/main`.
+Merging would have established the precedent that every watchdog-authored PR
+ships its own cycle transcript. Removed both; the Rule 9.5 change and its test
+are untouched.
+
+Neither path is in `.gitignore`, which is why they were committed at all. That
+gap is left for its own change rather than bundled into a board-unblock fix —
+but it will keep re-tripping this gate until someone closes it.
+
 ## 2026-08-13 — fix(reviewer): decouple the D1 fallback pairing from council seating
 
 Caught by rebasing the all-Opus council branch onto main after #486 landed, not
