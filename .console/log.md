@@ -1,3 +1,32 @@
+## 2026-08-17 — refactor(board): the seam ratchet reaches zero
+
+Every caller now goes through `make_board_client`. The list that started at 37
+unmigrated files is empty of migration work.
+
+Two files still name `PlaneClient`, and both should. `entrypoints/smoke/plane.py`
+is a smoke test *for the Plane API* — through the seam it would smoke-test
+whichever backend happens to be configured, which is a different test.
+`entrypoints/setup/main.py` verifies credentials the operator has just typed,
+before any Settings object exists, so `make_board_client(settings)` has nothing
+to build from. Renamed the list to `PLANE_SPECIFIC_BY_DESIGN` and added a test
+that migration work is zero: a burn-down list that never reaches zero stops being
+read, and calling these two "remaining work" would be false.
+
+Shapes handled separately rather than by one regex that half-understands all of
+them: 20 with the uniform four-argument construction, 5 importing only for a type
+hint, one with a *quoted* annotation the unquoted pattern could not see, and one
+whose only mention was a docstring.
+
+Fallout, both expected: ten files imported `BoardClient` without annotating
+anything (F401), and tests patching `mod.PlaneClient` on migrated modules broke.
+The test half was done empirically — run the suite, take the files that actually
+fail — because guessing which test covers which module misled me twice earlier
+today. Two files failed; one needed the patch target moved, the other was the
+known egress flake.
+
+Full suite 8629, ruff clean, ty on src/ still 13. Swapping the board is now a
+change to one factory function.
+
 ## 2026-08-17 — spec(forgejo): record the operator's three decisions
 
 Single board repo, drain to zero, council review moves to Forgejo PRs at cutover.

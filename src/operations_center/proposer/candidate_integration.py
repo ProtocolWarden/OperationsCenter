@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
-from operations_center.adapters.plane import PlaneClient
+from operations_center.adapters.board import BoardClient
 from operations_center.config.settings import Settings
 from operations_center.decision.models import ProposalCandidate
 from operations_center.proposer.artifact_writer import ProposerArtifactWriter
@@ -45,7 +45,7 @@ class CandidateProposerIntegrationService:
         self,
         *,
         settings: Settings,
-        client: PlaneClient,
+        client: BoardClient,
         loader: CandidateLoaderProtocol | None = None,
         mapper: ProposalCandidateMapper | None = None,
         guardrails: ProposerGuardrailAdapter | None = None,

@@ -209,16 +209,11 @@ def main() -> int:
 
     plane_issues: list[dict] = []
     try:
-        from operations_center.adapters.plane import PlaneClient
+        from operations_center.adapters.board import make_board_client
         from operations_center.config import load_settings
 
         settings = load_settings(args.config)
-        client = PlaneClient(
-            base_url=settings.plane.base_url,
-            api_token=settings.plane_token(),
-            workspace_slug=settings.plane.workspace_slug,
-            project_id=settings.plane.project_id,
-        )
+        client = make_board_client(settings)
         try:
             plane_issues = client.list_issues()
         finally:

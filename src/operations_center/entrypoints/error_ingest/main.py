@@ -46,7 +46,7 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-from operations_center.adapters.plane import PlaneClient
+from operations_center.adapters.board import BoardClient, make_board_client
 from operations_center.config import load_settings
 
 _logger = logging.getLogger(__name__)
@@ -105,7 +105,7 @@ def _mark_created(key: str) -> None:
 
 
 def _create_error_task(
-    plane_client: PlaneClient,
+    plane_client: BoardClient,
     *,
     title: str,
     body: str,
@@ -171,7 +171,7 @@ def _create_error_task(
 # ---------------------------------------------------------------------------
 
 
-def _make_webhook_handler(plane_client: PlaneClient, default_repo_key: str):
+def _make_webhook_handler(plane_client: BoardClient, default_repo_key: str):
     class _Handler(http.server.BaseHTTPRequestHandler):
         def log_message(self, format: str, *args: object) -> None:  # noqa: A002
             pass  # suppress default access log; structured logging handles it
@@ -221,7 +221,7 @@ def _make_webhook_handler(plane_client: PlaneClient, default_repo_key: str):
     return _Handler
 
 
-def run_webhook_server(plane_client: PlaneClient, *, port: int, default_repo_key: str) -> None:
+def run_webhook_server(plane_client: BoardClient, *, port: int, default_repo_key: str) -> None:
     handler = _make_webhook_handler(plane_client, default_repo_key)
     server = http.server.ThreadingHTTPServer(("", port), handler)
     _logger.info(
@@ -236,7 +236,7 @@ def run_webhook_server(plane_client: PlaneClient, *, port: int, default_repo_key
 
 
 def _tail_log_file(
-    plane_client: PlaneClient,
+    plane_client: BoardClient,
     *,
     path: str,
     repo_key: str,
@@ -323,12 +323,7 @@ def main() -> None:
         print("error_ingest not configured in settings — nothing to do.")
         return
 
-    client = PlaneClient(
-        base_url=settings.plane.base_url,
-        api_token=settings.plane_token(),
-        workspace_slug=settings.plane.workspace_slug,
-        project_id=settings.plane.project_id,
-    )
+    client = make_board_client(settings)
 
     try:
         if not args.watch:

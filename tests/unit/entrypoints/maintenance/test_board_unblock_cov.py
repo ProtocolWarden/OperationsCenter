@@ -892,7 +892,7 @@ class _FakeClient:
 
 def _patch_main(monkeypatch, *, client, mem=16.0, cooldown_reason=None):
     monkeypatch.setattr(bu, "_mem_available_gb", lambda: mem)
-    monkeypatch.setattr(bu, "PlaneClient", lambda **kw: client)
+    monkeypatch.setattr(bu, "make_board_client", lambda *a, **k: client)
     fake_settings = SimpleNamespace(
         plane=SimpleNamespace(base_url="http://x", workspace_slug="ws", project_id="p"),
         plane_token=lambda: "tok",

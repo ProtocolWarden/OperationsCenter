@@ -27,35 +27,27 @@ import pytest
 
 SRC = pathlib.Path(__file__).resolve().parents[3] / "src" / "operations_center"
 
-#: Files that still import PlaneClient directly. This list may only get shorter.
-#: Deleting an entry as you migrate a file is the point; adding one is not
-#: allowed — route the new caller through `make_board_client` instead.
-STILL_IMPORTING_PLANE = {
-    "entrypoints/autonomy_cycle/main.py",
-    "entrypoints/ci_monitor/main.py",
-    "entrypoints/custodian_sweep/main.py",
-    "entrypoints/error_ingest/main.py",
-    "entrypoints/flow_audit/main.py",
-    "entrypoints/ghost_audit/main.py",
-    "entrypoints/maintenance/board_unblock.py",
-    "entrypoints/maintenance/cleanup_stale_backlog.py",
-    "entrypoints/maintenance/cleanup_state.py",
-    "entrypoints/maintenance/dependency_check.py",
-    "entrypoints/maintenance/orphan_branch_check.py",
-    "entrypoints/maintenance/recover_stale.py",
-    "entrypoints/promote_backlog/main.py",
-    "entrypoints/propagate/main.py",
-    "entrypoints/proposer/main.py",
-    "entrypoints/setup/main.py",
+#: Files that name `PlaneClient` on purpose, and should keep doing so.
+#:
+#: This began as a burn-down list of 37 unmigrated callers. It is now empty of
+#: migration work — every caller goes through the seam. What remains are two
+#: files that exercise Plane *specifically*; routing them through
+#: `make_board_client` would delete the thing they test.
+#:
+#: Adding to this set is not a way to avoid migrating. A new entry needs a reason
+#: of the same kind: "this tests Plane itself", not "this was easier".
+PLANE_SPECIFIC_BY_DESIGN = {
+    # A smoke test *for the Plane API*. Through the seam it would smoke-test
+    # whichever backend happens to be configured, which is a different test.
     "entrypoints/smoke/plane.py",
-    "entrypoints/spec_hygiene/main.py",
-    "entrypoints/spec_trigger/main.py",
-    "propagation/plane_adapter.py",
-    "proposer/candidate_integration.py",
-    "proposer/guardrail_adapter.py",
-    "scheduled_tasks/runner.py",
-    "spec_author/spec_author_task.py",
+    # The setup wizard verifies credentials the operator has just typed, before
+    # any Settings object exists — `make_board_client(settings)` has nothing to
+    # build from, and the point is to validate a Plane endpoint.
+    "entrypoints/setup/main.py",
 }
+
+#: Kept as the old name so the ratchet tests below read unchanged.
+STILL_IMPORTING_PLANE = PLANE_SPECIFIC_BY_DESIGN
 
 _IMPORTS_PLANE = re.compile(
     r"^[ \t]*from operations_center\.adapters\.plane(?:\.client)? import PlaneClient",
@@ -186,16 +178,16 @@ def test_allowlist_has_no_stale_entries():
 
 
 @pytest.mark.parametrize("migrated", [
+    "entrypoints/maintenance/board_unblock.py",
     "entrypoints/maintenance/board_unblock_task.py",
-    "entrypoints/maintenance/detect_convergence_stall.py",
-    "entrypoints/maintenance/drift_monitor_task.py",
-    "entrypoints/maintenance/egress_probe.py",
-    "entrypoints/maintenance/heartbeat_stall.py",
-    "entrypoints/maintenance/outcome_flagger_task.py",
-    "entrypoints/maintenance/parked_unpark_task.py",
-    "entrypoints/maintenance/queue_healing_task.py",
-    "entrypoints/maintenance/reconcile_merged_tasks.py",
     "entrypoints/maintenance/triage_scan.py",
+    "entrypoints/board_worker/main.py",
+    "entrypoints/pr_review_watcher/main.py",
+    "entrypoints/proposer/main.py",
+    "entrypoints/spec_hygiene/main.py",
+    "propagation/plane_adapter.py",
+    "scheduled_tasks/runner.py",
+    "priority_scans.py",
 ])
 def test_migrated_files_stay_migrated(migrated):
     """Pin this slice so it cannot quietly regress."""
@@ -215,4 +207,19 @@ def test_the_hand_rolled_factories_are_gone():
     ]
     assert not remaining, (
         f"{len(remaining)} file(s) still hand-roll the client constructor: {remaining}"
+    )
+
+
+def test_the_migration_is_finished():
+    """No caller should be left to migrate.
+
+    The seam existed to make swapping the board a one-place change. That is only
+    true once every caller goes through it — a seam with stragglers still forces
+    a per-caller change at cutover, which is the cost it was built to remove.
+    """
+    actual = _importers()
+    unmigrated = sorted(actual - PLANE_SPECIFIC_BY_DESIGN)
+    assert not unmigrated, (
+        f"{len(unmigrated)} caller(s) still import PlaneClient without a "
+        f"design reason: {unmigrated}"
     )

@@ -32,7 +32,7 @@ import logging
 import sys
 from pathlib import Path
 
-from operations_center.adapters.plane.client import PlaneClient
+from operations_center.adapters.board import make_board_client
 from operations_center.config.settings import (
     ContractChangePropagationSettings,
     load_settings,
@@ -135,12 +135,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.dry_run:
         task_creator = _DryRunTaskCreator()
     else:
-        plane_client = PlaneClient(
-            base_url=settings.plane.base_url,
-            api_token=settings.plane_token(),
-            workspace_slug=settings.plane.workspace_slug,
-            project_id=settings.plane.project_id,
-        )
+        plane_client = make_board_client(settings)
         task_creator = PlaneTaskCreator(client=plane_client)
 
     propagator = ContractChangePropagator(

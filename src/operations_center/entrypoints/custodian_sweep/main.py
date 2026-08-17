@@ -311,14 +311,9 @@ def main() -> int:
     plane = None
     existing_tasks: dict[str, dict[str, Any]] = {}
     if args.emit:
-        from operations_center.adapters.plane import PlaneClient
+        from operations_center.adapters.board import make_board_client
 
-        plane = PlaneClient(
-            base_url=settings.plane.base_url,
-            api_token=settings.plane_token(),
-            workspace_slug=settings.plane.workspace_slug,
-            project_id=settings.plane.project_id,
-        )
+        plane = make_board_client(settings)
         existing_tasks = _index_open_sweep_tasks(plane)
 
     summary: dict[str, Any] = {

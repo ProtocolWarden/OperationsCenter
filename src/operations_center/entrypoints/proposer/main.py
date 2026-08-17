@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 
-from operations_center.adapters.plane import PlaneClient
+from operations_center.adapters.board import make_board_client
 from operations_center.config import load_settings
 from operations_center.proposer import CandidateProposerIntegrationService
 from operations_center.proposer.candidate_integration import new_proposer_integration_context
@@ -22,12 +22,7 @@ def main() -> None:
     args = parser.parse_args()
 
     settings = load_settings(args.config)
-    client = PlaneClient(
-        base_url=settings.plane.base_url,
-        api_token=settings.plane_token(),
-        workspace_slug=settings.plane.workspace_slug,
-        project_id=settings.plane.project_id,
-    )
+    client = make_board_client(settings)
     try:
         service = CandidateProposerIntegrationService(settings=settings, client=client)
         context = new_proposer_integration_context(

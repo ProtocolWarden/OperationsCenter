@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-"""PlaneClient → propagation `_TaskCreator` adapter.
+"""Board client → propagation `_TaskCreator` adapter.
 
-Wraps the existing `operations_center.adapters.plane.PlaneClient` so
+Wraps a `operations_center.adapters.board.BoardClient` so
 the propagator stays decoupled from Plane's API shape. The adapter
 honors `promote_to_ready` by calling `transition_issue` to "Ready for
 AI" after creation; otherwise the task stays in the default "Backlog"
@@ -13,14 +13,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from operations_center.adapters.plane.client import PlaneClient
+from operations_center.adapters.board import BoardClient
 
 
 @dataclass
 class PlaneTaskCreator:
     """Adapter implementing the propagator's `_TaskCreator` protocol."""
 
-    client: PlaneClient
+    client: BoardClient
     backlog_state: str = "Backlog"
     ready_state: str = "Ready for AI"
 
