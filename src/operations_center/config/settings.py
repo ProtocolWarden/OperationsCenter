@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from typing import Literal
 import shutil
 import subprocess
 from pathlib import Path
@@ -18,6 +19,21 @@ class PlaneSettings(BaseModel):
     api_token_env: str
     workspace_slug: str
     project_id: str
+
+
+class ForgejoSettings(BaseModel):
+    """Self-hosted Forgejo, used as the board (issues) and later the forge.
+
+    One board repo holds every fleet task — see
+    `docs/specs/forgejo-board-adapter.md`. Forgejo numbers issues per repo, so a
+    single repo makes that counter a global task-id sequence. Which *code* repo a
+    task targets stays in the task body, where it already lives.
+    """
+
+    base_url: str
+    api_token_env: str
+    owner: str
+    repo: str
 
 
 class GitSettings(BaseModel):
@@ -668,6 +684,11 @@ class TaskAdmissionSettings(BaseModel):
 
 class Settings(BaseModel):
     plane: PlaneSettings
+    # Which board the fleet talks to. Explicit rather than inferred from whether
+    # `forgejo:` is configured — repointing the board is not something that
+    # should happen as a side effect of adding a config block.
+    board_backend: Literal["plane", "forgejo"] = "plane"
+    forgejo: ForgejoSettings | None = None
     git: GitSettings
     team_executor: TeamExecutorSettings = Field(default_factory=TeamExecutorSettings)
     dag_executor: DAGExecutorSettings = Field(default_factory=DAGExecutorSettings)
@@ -802,6 +823,20 @@ class Settings(BaseModel):
 
     def plane_token(self) -> str:
         return os.environ[self.plane.api_token_env]
+
+    def forgejo_token(self) -> str:
+        """The Forgejo API token.
+
+        Fails loudly when the board is Forgejo but nothing is configured — a
+        board the fleet cannot reach is worse than a startup error, because the
+        symptom is a queue that merely looks empty.
+        """
+        if self.forgejo is None:
+            raise RuntimeError(
+                "board_backend is 'forgejo' but no `forgejo:` settings block is "
+                "configured — the fleet has no board to talk to"
+            )
+        return os.environ[self.forgejo.api_token_env]
 
     def git_token(self) -> str | None:
         if self.git.token_env is None:
