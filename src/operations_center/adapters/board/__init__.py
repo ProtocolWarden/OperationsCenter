@@ -99,6 +99,28 @@ def make_board_client(settings: Any) -> BoardClient:
     it replaces — same four fields, same token accessor — so adopting it cannot
     change behaviour.
     """
+    backend = getattr(settings, "board_backend", "plane")
+
+    if backend == "forgejo":
+        from operations_center.adapters.forgejo import ForgejoClient
+
+        cfg = settings.forgejo
+        if cfg is None:
+            raise RuntimeError(
+                "board_backend is 'forgejo' but no `forgejo:` settings block is "
+                "configured — refusing to fall back to Plane, because a silent "
+                "fallback would point the fleet at the board it is migrating off"
+            )
+        return ForgejoClient(
+            base_url=cfg.base_url,
+            api_token=settings.forgejo_token(),
+            owner=cfg.owner,
+            repo=cfg.repo,
+        )
+
+    if backend != "plane":
+        raise RuntimeError(f"unknown board_backend {backend!r} (plane, forgejo)")
+
     from operations_center.adapters.plane import PlaneClient
 
     board = settings.plane
