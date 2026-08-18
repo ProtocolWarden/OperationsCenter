@@ -18,7 +18,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from operations_center.adapters.github_pr import GitHubPRClient
+    from operations_center.adapters.pr import PRClient
 
 _CONSOLE_TASK_PATH = ".console/task.md"
 # Mirror of the Custodian `.console` budget/structure detector's required sections.
@@ -59,7 +59,7 @@ def repair_task_md(task_md: str) -> str | None:
 
 
 def repair_console_structure(
-    gh_client: GitHubPRClient, owner: str, repo: str, open_prs: list[dict[str, Any]]
+    gh_client: PRClient, owner: str, repo: str, open_prs: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
     """For each open goal/improve PR, restore a dropped required `task.md` section.
 

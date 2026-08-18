@@ -41,8 +41,7 @@ def test_main_posts_no_salvage_comment_before_close(monkeypatch, capsys, tmp_pat
 
     monkeypatch.setattr(close_stale_prs, "load_settings", lambda _: settings)
     mock_cls = MagicMock(return_value=gh)
-    mock_cls.owner_repo_from_clone_url = close_stale_prs.GitHubPRClient.owner_repo_from_clone_url
-    monkeypatch.setattr(close_stale_prs, "GitHubPRClient", mock_cls)
+    monkeypatch.setattr(close_stale_prs, "pr_client_from_token", mock_cls)
     monkeypatch.setattr(
         "sys.argv",
         ["close_stale_prs", "--config", str(tmp_path / "cfg.yaml")],
@@ -85,8 +84,7 @@ def test_main_blocks_close_when_comment_lacks_receipt_and_no_salvage(
 
     monkeypatch.setattr(close_stale_prs, "load_settings", lambda _: settings)
     mock_cls = MagicMock(return_value=gh)
-    mock_cls.owner_repo_from_clone_url = close_stale_prs.GitHubPRClient.owner_repo_from_clone_url
-    monkeypatch.setattr(close_stale_prs, "GitHubPRClient", mock_cls)
+    monkeypatch.setattr(close_stale_prs, "pr_client_from_token", mock_cls)
     monkeypatch.setattr(close_stale_prs, "_no_salvage_close_comment", lambda **_: "stale PR")
     monkeypatch.setattr(
         "sys.argv",

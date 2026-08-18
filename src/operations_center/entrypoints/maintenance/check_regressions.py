@@ -21,7 +21,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from operations_center.adapters.github_pr import GitHubPRClient
+from operations_center.adapters.pr import owner_repo_from_clone_url, pr_client_from_token
 from operations_center.config import load_settings
 from operations_center.post_merge_regression import (
     create_revert_branch,
@@ -46,13 +46,13 @@ def main() -> int:
     if not token:
         print(json.dumps({"error": "no git token"}, ensure_ascii=False))
         return 1
-    gh = GitHubPRClient(token)
+    gh = pr_client_from_token(token)
 
     now = datetime.now(UTC)
     findings: list[dict] = []
     for repo_key, repo_cfg in (settings.repos or {}).items():
         try:
-            owner, repo = GitHubPRClient.owner_repo_from_clone_url(repo_cfg.clone_url)
+            owner, repo = owner_repo_from_clone_url(repo_cfg.clone_url)
         except ValueError:
             continue
         signals = detect_post_merge_regressions(

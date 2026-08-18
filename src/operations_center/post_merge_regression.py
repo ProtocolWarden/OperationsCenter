@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from operations_center.adapters.github_pr import GitHubPRClient
+    from operations_center.adapters.pr import PRClient
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ class RegressionSignal:
 
 
 def detect_post_merge_regressions(
-    gh_client: GitHubPRClient,
+    gh_client: PRClient,
     owner: str,
     repo: str,
     *,

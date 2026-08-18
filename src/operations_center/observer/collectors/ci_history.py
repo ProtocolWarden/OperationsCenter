@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 from collections import defaultdict
 
-from operations_center.adapters.github_pr import GitHubPRClient
+from operations_center.adapters.pr import owner_repo_from_clone_url, pr_client_from_token
 from operations_center.observer.models import CICheckRunRecord, CIHistorySignal
 from operations_center.observer.service import ObserverContext
 
@@ -28,7 +28,7 @@ class CIHistoryCollector:
             return CIHistorySignal(status="unavailable", source="repo_not_configured")
 
         try:
-            owner, repo = GitHubPRClient.owner_repo_from_clone_url(repo_settings.clone_url)
+            owner, repo = owner_repo_from_clone_url(repo_settings.clone_url)
         except ValueError:
             return CIHistorySignal(status="unavailable", source="clone_url_parse_error")
 
@@ -36,7 +36,7 @@ class CIHistoryCollector:
         if not recent_shas:
             return CIHistorySignal(status="unavailable", source="no_recent_commits")
 
-        client = GitHubPRClient(token=token)
+        client = pr_client_from_token(token)
         all_records: list[CICheckRunRecord] = []
 
         for sha in recent_shas:
