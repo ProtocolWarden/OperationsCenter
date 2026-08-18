@@ -9,6 +9,7 @@ import logging
 import shutil
 import subprocess
 import tempfile
+from operations_center.adapters.board import board_project_id
 from pathlib import Path
 
 from ._subprocess import run_executor
@@ -84,7 +85,7 @@ def process_spec_author(
             "--base-branch",
             base_branch,
             "--project-id",
-            settings.plane.project_id,
+            board_project_id(settings),
             "--task-id",
             task_id,
             "--timeout-seconds",
@@ -285,7 +286,7 @@ def handle_spec_author_success(
         base_branch = (
             repo_cfg.sandbox_base_branch if repo_cfg and repo_cfg.sandbox_base_branch else None
         ) or (repo_cfg.default_branch if repo_cfg else "main")
-        builder = CampaignBuilder(client=client, project_id=settings.plane.project_id)
+        builder = CampaignBuilder(client=client, project_id=board_project_id(settings))
         created_ids = builder.build(spec_text=spec_text, repo_key=repo_key, base_branch=base_branch)
     except Exception as exc:
         logger.warning(

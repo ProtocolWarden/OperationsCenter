@@ -18,10 +18,16 @@ swallowed its own failure (`|| echo "0"`) and therefore always reported "safe
 to shut down" against an unreachable board. `start`/`stop` now alias
 watch-all/watch-all-stop. Settings.plane is optional with loud None-guards.
 
+Council follow-up (correctness, #516): the example config went Forgejo-first
+while five sites still read settings.plane.project_id — including dispatch, so
+a Forgejo-only config would AttributeError before executing anything. The seam
+now owns `board_project_id(settings)`: Plane answers its project UUID, Forgejo
+answers `owner/repo`, missing blocks raise loudly. Consumers treat the value as
+opaque (worker CLI metadata; CampaignBuilder stores it without reading it).
+
 Still Plane-coupled, deliberately left: setup/main.py (the onboarding wizard —
-follow-up rewrite) and the spec-campaign paths (spec_author, dispatch,
-spec_hygiene pass settings.plane.project_id), so the local yaml keeps its
-plane: block until that coupling is cut.
+follow-up rewrite). The local yaml no longer needs its plane: block for the
+fleet to run.
 
 ## 2026-08-18 — PR seam: migration finished (17 -> 0)
 

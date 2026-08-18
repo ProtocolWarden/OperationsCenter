@@ -208,6 +208,65 @@ def test_factory_refuses_plane_backend_without_a_plane_block():
         board.make_board_client(_Settings())
 
 
+class _ForgejoBlock:
+    owner = "Operations_Center_Admin"
+    repo = "board"
+
+
+class _PlaneBlock:
+    project_id = "proj-uuid"
+
+
+def test_board_project_id_follows_the_forgejo_backend():
+    """Forgejo's natural identifier is the board repo itself."""
+    from operations_center.adapters.board import board_project_id
+
+    class _Settings:
+        board_backend = "forgejo"
+        forgejo = _ForgejoBlock()
+
+    assert board_project_id(_Settings()) == "Operations_Center_Admin/board"
+
+
+def test_board_project_id_follows_the_plane_backend():
+    from operations_center.adapters.board import board_project_id
+
+    class _Settings:
+        board_backend = "plane"
+        plane = _PlaneBlock()
+
+    assert board_project_id(_Settings()) == "proj-uuid"
+
+
+@pytest.mark.parametrize("backend", ["plane", "forgejo"])
+def test_board_project_id_fails_loudly_without_the_active_block(backend):
+    """The council's #516 concern: `settings.plane.project_id` sat on the
+    dispatch path, so a Forgejo-only config (exactly what the example now
+    recommends) raised AttributeError before any task could execute. The id
+    must come from the active backend, and a missing block must be a loud
+    RuntimeError, not an AttributeError."""
+    from operations_center.adapters.board import board_project_id
+
+    class _Settings:
+        board_backend = backend
+        plane = None
+        forgejo = None
+
+    with pytest.raises(RuntimeError, match="settings block"):
+        board_project_id(_Settings())
+
+
+def test_board_project_id_tolerates_a_settings_double():
+    """Same MagicMock normalisation the factory has (#513)."""
+    from unittest.mock import MagicMock
+
+    from operations_center.adapters.board import board_project_id
+
+    settings = MagicMock()
+    settings.plane.project_id = "proj-uuid"
+    assert board_project_id(settings) == "proj-uuid"
+
+
 # ── the ratchet ──────────────────────────────────────────────────────────────
 
 

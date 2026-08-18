@@ -102,6 +102,7 @@ from operations_center.entrypoints.pr_review_watcher.verdict import (
     verdict_schema_prompt,
 )
 from operations_center.policy.defaults import sensitive_path_patterns
+from operations_center.adapters.board import board_project_id
 
 logger = logging.getLogger(__name__)
 
@@ -837,7 +838,7 @@ def _run_pipeline(
             "--base-branch",
             repo_cfg.default_branch,
             "--project-id",
-            settings.plane.project_id,
+            board_project_id(settings),
             "--task-id",
             state_key,
         ]
