@@ -1,3 +1,21 @@
+## 2026-08-18 — PR seam: migration finished (17 -> 0)
+
+`pr_review_watcher/main.py` — the guardrail remainder — moved onto the seam.
+`_github_client` now delegates to `make_pr_client(settings)`, giving that
+factory the production caller it was written for; `_owner_repo` delegates to
+`owner_repo_from_clone_url`. Only observable change: the missing-token error is
+the seam's forge-neutral "no git token — set GIT_TOKEN in .env" (was "no GitHub
+token — ..."); no test asserts the old string.
+
+Ratchet allowlist is empty and `test_the_migration_is_finished` pins it — the
+board seam's end state, reached the same way. Nothing outside `adapters/`
+imports `GitHubPRClient`. Swapping the forge is now a one-module change on both
+the board and PR sides; the Forgejo PR client itself stays blocked on the B2
+enforce_admins decision (docs/specs/forgejo-pr-adapter.md).
+
+Noted in passing: `test_run_pipeline_updates_propose_heartbeat_during_execution`
+is timing-flaky (1-in-3 failure in isolation on unchanged code).
+
 ## 2026-08-17 — PR seam: 16 of 17 callers migrated
 
 The seam gained `pr_client_from_token()` alongside `make_pr_client(settings)`.
