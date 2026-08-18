@@ -132,6 +132,11 @@ def make_board_client(settings: Any) -> BoardClient:
     from operations_center.adapters.plane import PlaneClient
 
     board = settings.plane
+    if board is None:
+        raise RuntimeError(
+            "board_backend is 'plane' but no `plane:` settings block is "
+            "configured — the fleet has no board to talk to"
+        )
     return PlaneClient(
         base_url=board.base_url,
         api_token=settings.plane_token(),

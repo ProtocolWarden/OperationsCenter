@@ -107,6 +107,8 @@ def executor_backend_status(module: str) -> tuple[bool, str | None]:
 
 
 def current_plane_health(settings: Settings) -> bool:
+    if settings.plane is None:
+        return False
     try:
         response = httpx.get(settings.plane.base_url, timeout=10.0)
     except httpx.HTTPError:

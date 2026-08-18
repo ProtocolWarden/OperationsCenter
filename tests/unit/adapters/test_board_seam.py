@@ -37,12 +37,12 @@ SRC = pathlib.Path(__file__).resolve().parents[3] / "src" / "operations_center"
 #: Adding to this set is not a way to avoid migrating. A new entry needs a reason
 #: of the same kind: "this tests Plane itself", not "this was easier".
 PLANE_SPECIFIC_BY_DESIGN = {
-    # A smoke test *for the Plane API*. Through the seam it would smoke-test
-    # whichever backend happens to be configured, which is a different test.
-    "entrypoints/smoke/plane.py",
     # The setup wizard verifies credentials the operator has just typed, before
     # any Settings object exists — `make_board_client(settings)` has nothing to
-    # build from, and the point is to validate a Plane endpoint.
+    # build from. It still walks a new operator through Plane, which stopped
+    # being the board at the 2026-08-18 Forgejo cutover; rewriting the wizard
+    # for Forgejo is a scoped follow-up, and until then this entry records the
+    # remaining coupling honestly.
     "entrypoints/setup/main.py",
 }
 
@@ -188,6 +188,23 @@ def test_factory_still_rejects_a_real_unknown_backend():
         board_backend = "gitlab"
 
     with pytest.raises(RuntimeError, match="unknown board_backend"):
+        board.make_board_client(_Settings())
+
+
+def test_factory_refuses_plane_backend_without_a_plane_block():
+    """`plane` is optional in Settings since the Forgejo cutover.
+
+    A config that says board_backend: plane but carries no plane block must fail
+    loudly at construction — the same contract the forgejo branch has — because
+    a board the fleet cannot reach looks like an empty queue, not an error.
+    """
+    from operations_center.adapters import board
+
+    class _Settings:
+        board_backend = "plane"
+        plane = None
+
+    with pytest.raises(RuntimeError, match="no `plane:` settings block"):
         board.make_board_client(_Settings())
 
 

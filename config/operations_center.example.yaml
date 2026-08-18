@@ -10,11 +10,12 @@
 # ---------------------------------------------------------------------------
 # Plane board connection
 # ---------------------------------------------------------------------------
-plane:
-  base_url: http://localhost:8080       # URL of your local Plane instance
-  api_token_env: PLANE_API_TOKEN        # env var holding your Plane API token
-  workspace_slug: operations-center         # Plane workspace slug
-  project_id: <your-plane-project-uuid> # Plane project UUID
+board_backend: forgejo                  # the board is a Forgejo repo's issues
+forgejo:
+  base_url: http://localhost:3000       # your Forgejo instance
+  api_token_env: FORGEJO_API_TOKEN      # env var holding the API token
+  owner: <your-forgejo-user>            # who owns the board repo
+  repo: board                           # one repo = one global task counter
 
 # ---------------------------------------------------------------------------
 # Git behaviour
