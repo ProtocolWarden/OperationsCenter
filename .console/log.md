@@ -1,3 +1,23 @@
+## 2026-08-17 — Forgejo PR adapter spec (adversarial)
+
+Specced the PR-side Forgejo adapter (`docs/specs/forgejo-pr-adapter.md`), the
+companion to the board adapter already shipped. Written adversarially like the
+board spec; eight findings, one of which decides the project:
+
+- **B1** Forgejo has no Checks API — only commit statuses. `get_check_runs` and
+  the three helpers on it have no equivalent; `skipped` collapses into `success`
+  unless the translation is deliberate. ~100 test assertions stub these shapes.
+- **B2** `enforce_admins` has no Forgejo equivalent. `_branch_protection_ok`
+  (main.py:1234) fails closed, so the honest mapping stops the fleet merging and
+  the convenient one silently removes a security control. **Operator decision,
+  and it gates everything downstream.**
+- **B7** better than expected: the reviewer names `GitHubPRClient` in only four
+  places behind two factories — the seam is far cheaper than the board's 37.
+
+Recommendation: decide B2 before writing any client. Alternative worth weighing —
+extract the `PRClient` protocol now and stop there, keeping review on GitHub
+through board cutover, since it is the board move that actually removes Plane.
+
 ## 2026-08-17 — refactor(board): the seam ratchet reaches zero
 
 Every caller now goes through `make_board_client`. The list that started at 37
