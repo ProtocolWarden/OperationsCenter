@@ -151,6 +151,46 @@ def test_factory_builds_from_settings_without_naming_a_backend(monkeypatch):
     }, "the factory changed the construction contract the callers relied on"
 
 
+def test_factory_tolerates_a_settings_double(monkeypatch):
+    """A MagicMock settings object must still build the default backend.
+
+    `getattr(settings, "board_backend", "plane")` looks like it defaults, but a
+    MagicMock answers every attribute, so the default is unreachable and the
+    factory raised "unknown board_backend <MagicMock ...>". That is not a
+    hypothetical: it broke
+    `tests/maintenance/test_orphan_branch_check.py::test_emit_plane_task_updates_existing_issue`
+    from #509 until now, and went unnoticed because CI runs `tests/unit` and
+    never `tests/maintenance/`.
+    """
+    from unittest.mock import MagicMock
+
+    from operations_center.adapters import board
+
+    built = {}
+
+    class _Fake:
+        def __init__(self, **kw):
+            built.update(kw)
+
+    monkeypatch.setattr(
+        "operations_center.adapters.plane.PlaneClient", _Fake, raising=False
+    )
+
+    board.make_board_client(MagicMock())
+    assert built, "a settings double no longer builds the default backend"
+
+
+def test_factory_still_rejects_a_real_unknown_backend():
+    """Tolerating a mock must not tolerate a typo in the config."""
+    from operations_center.adapters import board
+
+    class _Settings:
+        board_backend = "gitlab"
+
+    with pytest.raises(RuntimeError, match="unknown board_backend"):
+        board.make_board_client(_Settings())
+
+
 # ── the ratchet ──────────────────────────────────────────────────────────────
 
 
