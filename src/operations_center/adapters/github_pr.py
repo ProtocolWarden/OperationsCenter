@@ -5,7 +5,6 @@ from __future__ import annotations
 import base64
 import json
 import logging
-import re
 import time
 from typing import Any
 
@@ -86,13 +85,17 @@ class GitHubPRClient:
 
     @staticmethod
     def owner_repo_from_clone_url(clone_url: str) -> tuple[str, str]:
-        """Parse owner/repo from an https or ssh clone URL."""
-        # ssh: git@github.com:owner/repo.git
-        # https: https://github.com/owner/repo.git
-        m = re.search(r"[:/]([^/]+)/([^/]+?)(?:\.git)?$", clone_url)
-        if not m:
-            raise ValueError(f"Cannot parse owner/repo from clone URL: {clone_url!r}")
-        return m.group(1), m.group(2)
+        """Parse owner/repo from an https or ssh clone URL.
+
+        The parse is forge-agnostic and now lives at the seam
+        (:func:`operations_center.adapters.pr.owner_repo_from_clone_url`); this
+        stays as a delegate so the callers still reaching it through this class
+        keep working while they migrate. Imported inside the function to keep
+        the two modules free of an import cycle.
+        """
+        from operations_center.adapters.pr import owner_repo_from_clone_url
+
+        return owner_repo_from_clone_url(clone_url)
 
     def create_pr(
         self,
@@ -621,7 +624,10 @@ class GitHubPRClient:
 
     @staticmethod
     def has_thumbs_up(reactions: list[dict]) -> bool:
-        return any(r["content"] == "+1" for r in reactions)
+        """Delegate to the seam — see :meth:`owner_repo_from_clone_url`."""
+        from operations_center.adapters.pr import has_thumbs_up
+
+        return has_thumbs_up(reactions)
 
     def create_and_merge(
         self,

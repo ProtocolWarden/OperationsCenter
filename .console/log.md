@@ -1,3 +1,28 @@
+## 2026-08-17 — PR seam extracted (protocol only, review stays on GitHub)
+
+Operator chose the spec's sequencing alternative: extract `PRClient` now, keep
+review on GitHub until the `enforce_admins` question is settled.
+
+`operations_center.adapters.pr` now holds the protocol (30 operations), the
+`make_pr_client()` factory, and the two pure helpers that were static methods on
+`GitHubPRClient` — `owner_repo_from_clone_url` and `has_thumbs_up`. The class
+keeps both as delegates so the migration is incremental.
+
+Correction to the spec's B7: it counted the *reviewer's* four references and
+called the ratchet trivial. Repo-wide it is **17 files**, and 13 of those want
+only the clone-URL parse — a pure function reached through a forge client. That
+is the cheap half of the migration and the most clearly mis-coupled.
+
+Deliberately no backend switch in the factory: no Forgejo PR client exists, and
+a config knob selecting an unbuildable backend advertises a capability the fleet
+does not have.
+
+Found while verifying: CI runs only `tests/unit`, `tests/test_pr_review_watcher.py`,
+`tests/integration/reviewer` and `tests/integration/observer`. About 1,830 tests
+under `tests/maintenance/`, `tests/observer/` and top-level `tests/test_*.py`
+never run in the gate — 7 of them are currently red on main, one of which is a
+regression from #509 (the board factory rejects a MagicMock `board_backend`).
+
 ## 2026-08-17 — Forgejo PR adapter spec (adversarial)
 
 Specced the PR-side Forgejo adapter (`docs/specs/forgejo-pr-adapter.md`), the
