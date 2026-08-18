@@ -684,6 +684,11 @@ class TaskAdmissionSettings(BaseModel):
 
 class Settings(BaseModel):
     plane: PlaneSettings | None = None
+    # Which forge the PR/review surface talks to. Independent of board_backend:
+    # the board cut over first (#516); review moves only after `audit` exists on
+    # Forgejo Actions (docs/specs/forgejo-pr-adapter.md, B4). Flipping this is
+    # the cutover act, not a side effect.
+    pr_backend: str = "github"
     # Which board the fleet talks to. Explicit rather than inferred from whether
     # `forgejo:` is configured — repointing the board is not something that
     # should happen as a side effect of adding a config block.

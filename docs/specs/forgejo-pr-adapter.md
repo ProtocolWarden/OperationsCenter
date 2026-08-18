@@ -198,6 +198,32 @@ mechanical.
 
 ---
 
+## Live findings — Forgejo 13, 2026-08-18
+
+Probed against the running instance (scratch repo `bp-probe`, kept for
+negative-case verification). Three findings revise the adversarial sections:
+
+1. **B2 mostly dissolves: `apply_to_admins` exists.** The branch-protection
+   rule carries a first-class `apply_to_admins` field — GitHub's
+   `enforce_admins` under Forgejo's name: the rule binds repository admins
+   too. With `enable_status_check` + `status_check_contexts` (which accepted
+   `["audit", "reviewer-verdict"]` verbatim), both paths the fail-closed gate
+   reads map 1:1 and truthfully. What remains of B2 is a cutover checklist
+   item, not a design question: **set `apply_to_admins: true` when protecting
+   the Forgejo repos.** Option (c)'s push-allowlist reconstruction is not
+   needed.
+2. **The status model, precisely.** A status carries its value in a field
+   named `status` (not `state`), and there are **five** values:
+   `pending / success / failure / error / warning` — `warning` has no GitHub
+   equivalent. The adapter's translation (`STATUS_TO_CHECK`): `pending` →
+   in_progress, `success` → success, `failure` and `error` → failure (the
+   original word survives in `output.title`), `warning` → **neutral** —
+   completed, not passed, not failed, which is Forgejo's own semantics. The
+   statuses endpoint returns full posting *history*; ids increase
+   monotonically, so the GitHub-style latest-per-context dedupe carries over.
+3. **`check-runs` is a confirmed 404**, and `GET /pulls/{index}.diff` serves
+   the raw diff.
+
 ## Correctness criteria
 
 1. Status→check translation is explicit about what it loses. A test asserts a
@@ -218,10 +244,10 @@ mechanical.
 
 ## Completion criteria
 
-- [ ] **B2 decided by the operator** — what replaces `enforce_admins`
-- [ ] `PRClient` protocol extracted; reviewer migrated onto it; ratchet test added
-- [ ] `ForgejoPRClient` implementing the protocol
-- [ ] Status→check translation with the losses tested, not papered over
+- [x] **B2 decided** — `apply_to_admins` IS `enforce_admins` (live finding 1); the operator flips it on at cutover
+- [x] `PRClient` protocol extracted; all 17 callers migrated (#512–#515)
+- [x] `ForgejoPRClient` implementing the protocol (`adapters/forgejo/pr_client.py`)
+- [x] Status→check translation with the losses tested (`STATUS_TO_CHECK`; warning→neutral, error→failure with its own name)
 - [ ] `audit` (or its replacement) produced on Forgejo under an identical name
 - [ ] Live verification against a real instance, **negative cases first**
 - [ ] Cutover, GitHub demoted to read-only mirror
