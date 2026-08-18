@@ -282,10 +282,10 @@ def _open_pr_gate_clear(client, issue: dict, settings, task_id: str) -> bool:
         return True
 
     try:
-        from operations_center.adapters.github_pr import GitHubPRClient
+        from operations_center.adapters.pr import owner_repo_from_clone_url, pr_client_from_token
 
-        gh = GitHubPRClient(gh_token)
-        owner, repo_name = GitHubPRClient.owner_repo_from_clone_url(gate_clone_url)
+        gh = pr_client_from_token(gh_token)
+        owner, repo_name = owner_repo_from_clone_url(gate_clone_url)
         open_prs = gh.list_open_prs(owner, repo_name)
 
         def _is_candidate(pr: dict) -> bool:

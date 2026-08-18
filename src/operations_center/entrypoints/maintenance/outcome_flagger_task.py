@@ -27,7 +27,7 @@ from operations_center.eval.outcome_flagger import (
 from operations_center.maintenance.contracts import MaintenanceResult
 
 if TYPE_CHECKING:
-    from operations_center.adapters.github_pr import GitHubPRClient
+    from operations_center.adapters.pr import PRClient
     from operations_center.maintenance.contracts import MaintenanceContext
 
 DEFAULT_INTERVAL_SECONDS = 3600
@@ -65,14 +65,14 @@ class OutcomeFlaggerTask:
 
         return make_board_client(self._settings)
 
-    def _make_gh_client(self) -> GitHubPRClient | None:
-        from operations_center.adapters.github_pr import GitHubPRClient
+    def _make_gh_client(self) -> PRClient | None:
+        from operations_center.adapters.pr import pr_client_from_token
 
         token_env = (
             getattr(getattr(self._settings, "git", None), "token_env", None) or "GITHUB_TOKEN"
         )
         token = os.environ.get(token_env)
-        return GitHubPRClient(token=token) if token else None
+        return pr_client_from_token(token) if token else None
 
     def _resolve_outcome_source(self) -> OutcomeSource | None:
         """Injected source wins; otherwise build the live GitHub source only when

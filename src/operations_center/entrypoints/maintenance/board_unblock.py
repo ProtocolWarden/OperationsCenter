@@ -155,7 +155,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 
-from operations_center.adapters.github_pr import GitHubPRClient
+from operations_center.adapters.pr import PRClient, owner_repo_from_clone_url, pr_client_from_token
 from operations_center.adapters.board import BoardClient, make_board_client
 from operations_center.config import load_settings
 from operations_center.execution.usage_store import UsageStore
@@ -393,7 +393,7 @@ def _open_pr_gate_blocked_repos(
     settings: Any,
     *,
     now: datetime,
-    gh_client: GitHubPRClient | None = None,
+    gh_client: PRClient | None = None,
 ) -> set[str]:
     """Repos whose goal lane is currently blocked by non-stale open PRs.
 
@@ -423,7 +423,7 @@ def _open_pr_gate_blocked_repos(
     if not repo_keys:
         return set()
 
-    client = gh_client or GitHubPRClient(token)
+    client = gh_client or pr_client_from_token(token)
     try:
         stale_hours = float(getattr(settings, "open_pr_gate_stale_hours", 0.0) or 0.0)
     except (TypeError, ValueError):
@@ -437,7 +437,7 @@ def _open_pr_gate_blocked_repos(
         if not clone_url:
             continue
         try:
-            owner, repo_name = GitHubPRClient.owner_repo_from_clone_url(clone_url)
+            owner, repo_name = owner_repo_from_clone_url(clone_url)
             open_prs = client.list_open_prs(owner, repo_name)
         except Exception:
             continue

@@ -26,7 +26,7 @@ from operations_center.post_merge_regression import (
 )
 
 if TYPE_CHECKING:
-    from operations_center.adapters.github_pr import GitHubPRClient
+    from operations_center.adapters.pr import PRClient
 
 # (owner, repo) targets to scan. Defaults to OC's own repo (the one the reviewer
 # self-reviews and where the eval lives); extend as the flagger is pointed wider.
@@ -41,7 +41,7 @@ class GitHubOutcomeSource:
 
     def __init__(
         self,
-        gh_client: GitHubPRClient,
+        gh_client: PRClient,
         *,
         targets: tuple[tuple[str, str], ...] = DEFAULT_TARGETS,
         base_branch: str = "main",
@@ -83,7 +83,7 @@ class GitHubOutcomeSource:
         return outcomes
 
 
-def make_github_outcome_source(settings: Any, gh_client: GitHubPRClient) -> GitHubOutcomeSource:
+def make_github_outcome_source(settings: Any, gh_client: PRClient) -> GitHubOutcomeSource:
     """Build the source from settings (targets/lookback overridable later)."""
     return GitHubOutcomeSource(gh_client)
 

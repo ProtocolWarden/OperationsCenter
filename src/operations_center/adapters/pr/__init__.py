@@ -47,6 +47,7 @@ __all__ = [
     "has_thumbs_up",
     "make_pr_client",
     "owner_repo_from_clone_url",
+    "pr_client_from_token",
 ]
 
 
@@ -244,12 +245,31 @@ def has_thumbs_up(reactions: list[dict]) -> bool:
 # ── construction ─────────────────────────────────────────────────────────────
 
 
-def make_pr_client(settings: Any) -> PRClient:
-    """Build the configured PR client.
+def pr_client_from_token(token: str) -> PRClient:
+    """Build the configured PR client from a token the caller already holds.
 
-    The one place that names a concrete forge. Kept byte-compatible with the
-    construction every caller already performs — `settings.git_token()`, then the
-    client — so adopting it cannot change behaviour.
+    Twelve of the seventeen call sites resolve their own token — from four
+    different environment variables, from a constructor argument, from
+    ``self._token`` — and each does something different when it is missing: print
+    JSON and exit 1, return ``None``, or not check at all. Routing
+    them through :func:`make_pr_client` would unify token resolution *and* error
+    handling, which is a behaviour change wearing a refactor's clothes.
+
+    So the seam takes those callers as they are. This is still one construction
+    site in the sense that matters: swapping the forge changes this module and
+    nothing else.
+    """
+    from operations_center.adapters.github_pr import GitHubPRClient
+
+    return GitHubPRClient(token)
+
+
+def make_pr_client(settings: Any) -> PRClient:
+    """Build the configured PR client from settings.
+
+    For callers that hold a `Settings` object and want the standard "a missing
+    token is fatal" behaviour. Callers that resolve their own token, or report a
+    missing one their own way, use :func:`pr_client_from_token` instead.
 
     There is intentionally no backend switch yet. The board factory has one
     because a Forgejo board client exists; no Forgejo PR client does, and
@@ -261,6 +281,4 @@ def make_pr_client(settings: Any) -> PRClient:
     if not token:
         raise RuntimeError("no git token — set GIT_TOKEN in .env")
 
-    from operations_center.adapters.github_pr import GitHubPRClient
-
-    return GitHubPRClient(token)
+    return pr_client_from_token(token)

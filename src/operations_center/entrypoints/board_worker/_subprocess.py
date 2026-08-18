@@ -255,10 +255,10 @@ def harden_git_token(env: dict, *, settings: Any, clone_url: str) -> dict:
             )
         return env
     from operations_center.adapters.github_app import GitHubAppTokenError, mint_installation_token
-    from operations_center.adapters.github_pr import GitHubPRClient
+    from operations_center.adapters.pr import owner_repo_from_clone_url
 
     try:
-        owner, repo = GitHubPRClient.owner_repo_from_clone_url(clone_url)
+        owner, repo = owner_repo_from_clone_url(clone_url)
         token = mint_installation_token(
             app_id=str(app_id), private_key_path=str(key_path), owner=owner, repo=repo
         )

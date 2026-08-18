@@ -19,7 +19,7 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-from operations_center.adapters.github_pr import GitHubPRClient
+from operations_center.adapters.pr import owner_repo_from_clone_url, pr_client_from_token
 from operations_center.adapters.board import BoardClient, make_board_client
 from operations_center.config import load_settings
 from operations_center.config.settings import Settings
@@ -133,11 +133,11 @@ def run_ci_monitor_cycle(
             continue
 
         try:
-            owner, repo_name = GitHubPRClient.owner_repo_from_clone_url(repo_cfg.clone_url)
+            owner, repo_name = owner_repo_from_clone_url(repo_cfg.clone_url)
         except ValueError:
             continue
 
-        gh = GitHubPRClient(token)
+        gh = pr_client_from_token(token)
         try:
             open_prs = gh.list_open_prs(owner, repo_name)
         except Exception as exc:

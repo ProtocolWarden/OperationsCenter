@@ -24,7 +24,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from operations_center.adapters.github_pr import GitHubPRClient
+from operations_center.adapters.pr import owner_repo_from_clone_url, pr_client_from_token
 from operations_center.close_invariants import close_without_receipt_allowed
 from operations_center.config import load_settings
 
@@ -60,7 +60,7 @@ def main() -> int:
     if not token:
         print(json.dumps({"error": "no git token configured"}, ensure_ascii=False))
         return 1
-    gh = GitHubPRClient(token)
+    gh = pr_client_from_token(token)
 
     now = datetime.now(UTC)
     closed: list[dict] = []
@@ -71,7 +71,7 @@ def main() -> int:
         if threshold_days <= 0:
             continue
         try:
-            owner, repo = GitHubPRClient.owner_repo_from_clone_url(repo_cfg.clone_url)
+            owner, repo = owner_repo_from_clone_url(repo_cfg.clone_url)
         except ValueError:
             skipped.append({"repo_key": repo_key, "reason": "unparseable_clone_url"})
             continue

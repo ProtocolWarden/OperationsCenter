@@ -75,7 +75,7 @@ def test_open_pr_head_branches_returns_branch_names() -> None:
     ]
     client.owner_repo_from_clone_url = MagicMock(return_value=("owner", "repo"))
     with patch(
-        "operations_center.entrypoints.maintenance.orphan_branch_check.GitHubPRClient.owner_repo_from_clone_url",
+        "operations_center.entrypoints.maintenance.orphan_branch_check.owner_repo_from_clone_url",
         return_value=("owner", "repo"),
     ):
         result = _open_pr_head_branches(client, "https://github.com/owner/repo.git")
@@ -87,7 +87,7 @@ def test_open_pr_head_branches_handles_api_error() -> None:
     client = MagicMock()
     client.list_open_prs.side_effect = Exception("network error")
     with patch(
-        "operations_center.entrypoints.maintenance.orphan_branch_check.GitHubPRClient.owner_repo_from_clone_url",
+        "operations_center.entrypoints.maintenance.orphan_branch_check.owner_repo_from_clone_url",
         return_value=("owner", "repo"),
     ):
         result = _open_pr_head_branches(client, "https://github.com/owner/repo.git")
@@ -102,7 +102,7 @@ def test_open_pr_head_branches_skips_prs_without_ref() -> None:
         {"head": {"ref": "valid-branch"}},
     ]
     with patch(
-        "operations_center.entrypoints.maintenance.orphan_branch_check.GitHubPRClient.owner_repo_from_clone_url",
+        "operations_center.entrypoints.maintenance.orphan_branch_check.owner_repo_from_clone_url",
         return_value=("owner", "repo"),
     ):
         result = _open_pr_head_branches(client, "https://github.com/owner/repo.git")
@@ -161,7 +161,7 @@ def test_scan_repo_detects_orphan(tmp_path: Path) -> None:
             side_effect=lambda args, cwd: git_responses.get(tuple(args), ("", 0)),
         ),
         patch(
-            "operations_center.entrypoints.maintenance.orphan_branch_check.GitHubPRClient.owner_repo_from_clone_url",
+            "operations_center.entrypoints.maintenance.orphan_branch_check.owner_repo_from_clone_url",
             return_value=("owner", "repo"),
         ),
     ):
@@ -198,7 +198,7 @@ def test_scan_repo_skips_branch_with_open_pr(tmp_path: Path) -> None:
             side_effect=lambda args, cwd: git_responses.get(tuple(args), ("", 0)),
         ),
         patch(
-            "operations_center.entrypoints.maintenance.orphan_branch_check.GitHubPRClient.owner_repo_from_clone_url",
+            "operations_center.entrypoints.maintenance.orphan_branch_check.owner_repo_from_clone_url",
             return_value=("owner", "repo"),
         ),
     ):
@@ -234,7 +234,7 @@ def test_scan_repo_skips_branch_with_zero_commits_ahead(tmp_path: Path) -> None:
             side_effect=lambda args, cwd: git_responses.get(tuple(args), ("", 0)),
         ),
         patch(
-            "operations_center.entrypoints.maintenance.orphan_branch_check.GitHubPRClient.owner_repo_from_clone_url",
+            "operations_center.entrypoints.maintenance.orphan_branch_check.owner_repo_from_clone_url",
             return_value=("owner", "repo"),
         ),
     ):
@@ -275,7 +275,7 @@ def test_scan_repo_skips_recent_branch(tmp_path: Path) -> None:
             side_effect=lambda args, cwd: git_responses.get(tuple(args), ("", 0)),
         ),
         patch(
-            "operations_center.entrypoints.maintenance.orphan_branch_check.GitHubPRClient.owner_repo_from_clone_url",
+            "operations_center.entrypoints.maintenance.orphan_branch_check.owner_repo_from_clone_url",
             return_value=("owner", "repo"),
         ),
     ):
@@ -310,7 +310,7 @@ def test_scan_repo_skips_protected_branches(tmp_path: Path) -> None:
             side_effect=lambda args, cwd: git_responses.get(tuple(args), ("", 0)),
         ),
         patch(
-            "operations_center.entrypoints.maintenance.orphan_branch_check.GitHubPRClient.owner_repo_from_clone_url",
+            "operations_center.entrypoints.maintenance.orphan_branch_check.owner_repo_from_clone_url",
             return_value=("owner", "repo"),
         ),
     ):
@@ -531,7 +531,7 @@ def test_scan_skips_repos_without_local_path() -> None:
     repo_cfg.local_path = None  # no local path
 
     with patch(
-        "operations_center.entrypoints.maintenance.orphan_branch_check.GitHubPRClient",
+        "operations_center.entrypoints.maintenance.orphan_branch_check.pr_client_from_token",
     ):
         results = scan(settings, min_age_hours=24.0)
 
@@ -543,7 +543,7 @@ def test_scan_returns_list_of_results() -> None:
     settings = _make_settings(repos={"repo_a": repo_cfg})
 
     with patch(
-        "operations_center.entrypoints.maintenance.orphan_branch_check.GitHubPRClient",
+        "operations_center.entrypoints.maintenance.orphan_branch_check.pr_client_from_token",
     ):
         results = scan(settings, min_age_hours=24.0)
 

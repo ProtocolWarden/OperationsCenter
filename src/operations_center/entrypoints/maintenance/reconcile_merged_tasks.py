@@ -44,7 +44,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from operations_center.adapters.board import make_board_client
-from operations_center.adapters.github_pr import GitHubPRClient
+from operations_center.adapters.pr import PRClient, owner_repo_from_clone_url, pr_client_from_token
 from operations_center.config import load_settings
 
 logger = logging.getLogger(__name__)
@@ -134,11 +134,11 @@ def find_closures(issues: list[dict], merged_prs: list[dict], repo_key: str) -> 
 
 
 def _merged_prs_recent(
-    github: GitHubPRClient, clone_url: str, *, days: int, now: datetime
+    github: PRClient, clone_url: str, *, days: int, now: datetime
 ) -> list[dict]:
     """Closed PRs that were merged within the last ``days``."""
     try:
-        owner, repo = GitHubPRClient.owner_repo_from_clone_url(clone_url)
+        owner, repo = owner_repo_from_clone_url(clone_url)
         prs = github.list_closed_prs(owner, repo)
     except Exception as exc:  # noqa: BLE001 — network/transport; treat as no data
         logger.warning("could not list closed PRs for %s: %s", clone_url, exc)
@@ -167,7 +167,7 @@ def scan(
     settings: Any,
     *,
     days: int = 7,
-    github: GitHubPRClient | None = None,
+    github: PRClient | None = None,
     issues: list[dict] | None = None,
     now: datetime | None = None,
 ) -> list[TaskClosure]:
@@ -175,7 +175,7 @@ def scan(
     now = now or datetime.now(UTC)
     if github is None:
         token = os.environ.get("GITHUB_TOKEN", "") or os.environ.get("GH_TOKEN", "")
-        github = GitHubPRClient(token=token)
+        github = pr_client_from_token(token)
 
     if issues is None:
         plane = _plane_client(settings)

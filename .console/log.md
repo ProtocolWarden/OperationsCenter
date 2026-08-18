@@ -1,3 +1,21 @@
+## 2026-08-17 — PR seam: 16 of 17 callers migrated
+
+The seam gained `pr_client_from_token()` alongside `make_pr_client(settings)`.
+Twelve call sites resolve their own token — four different environment
+variables, a constructor argument, `self._token` — and each reports a missing
+one differently (print JSON and exit 1, return None, no check at all). Forcing
+them through the settings factory would have unified error handling too, which
+is a behaviour change disguised as a refactor.
+
+Ratchet 17 -> 1. The remainder is `pr_review_watcher/main.py`, a guardrail path;
+it moves under K=3 council review in its own change rather than riding along
+with a sixteen-file mechanical sweep.
+
+Broke 15 tests and fixed them: they patched `<module>.GitHubPRClient`, a name
+that no longer exists there. Patching the module-level name is what makes a
+seam migration visible in the test suite rather than silent — worth remembering
+when `pr_review_watcher` moves.
+
 ## 2026-08-17 — PR seam extracted (protocol only, review stays on GitHub)
 
 Operator chose the spec's sequencing alternative: extract `PRClient` now, keep

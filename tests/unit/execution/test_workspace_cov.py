@@ -597,11 +597,10 @@ def test_maybe_create_pr_success(tmp_path):
 
     fake_gh = mock.Mock()
     fake_gh.create_pr.return_value = {"html_url": "http://pr/99"}
-    fake_cls = mock.Mock(return_value=fake_gh)
-    fake_cls.owner_repo_from_clone_url.return_value = ("acme", "widget")
-    fake_module = SimpleNamespace(GitHubPRClient=fake_cls)
 
-    with mock.patch.dict("sys.modules", {"operations_center.adapters.github_pr": fake_module}):
+    with mock.patch(
+        "operations_center.adapters.pr.pr_client_from_token", return_value=fake_gh
+    ):
         url = mgr._maybe_create_pr(req)
     assert url == "http://pr/99"
     fake_gh.create_pr.assert_called_once()
@@ -617,10 +616,10 @@ def test_maybe_create_pr_exception_returns_none(tmp_path):
     )
     req = _make_request(tmp_path / "ws")
 
-    fake_cls = mock.Mock()
-    fake_cls.owner_repo_from_clone_url.side_effect = RuntimeError("bad url")
-    fake_module = SimpleNamespace(GitHubPRClient=fake_cls)
-    with mock.patch.dict("sys.modules", {"operations_center.adapters.github_pr": fake_module}):
+    with mock.patch(
+        "operations_center.adapters.pr.owner_repo_from_clone_url",
+        side_effect=RuntimeError("bad url"),
+    ):
         assert mgr._maybe_create_pr(req) is None
 
 

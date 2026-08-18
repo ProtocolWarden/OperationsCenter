@@ -29,34 +29,37 @@ import pytest
 
 SRC = pathlib.Path(__file__).resolve().parents[3] / "src" / "operations_center"
 
-#: Files that still name the concrete client. Burn-down list — entries come off
-#: as callers move to `adapters.pr`; nothing may be added without moving the
-#: boundary backwards.
+#: Files that still name the concrete client.
 #:
-#: Marked with why each one holds the name, because the reason determines how
-#: cheap it is to migrate:
-#:   (parse)  — only wants `owner_repo_from_clone_url`; migrating is an import swap
-#:   (hint)   — type annotation only; becomes `PRClient`
-#:   (build)  — constructs a client; becomes `make_pr_client(settings)`
+#: This began as a burn-down list of 17. Sixteen are migrated; the one that
+#: remains is a guardrail path (`pr_review_watcher/**`), so it moves under K=3
+#: council review in its own change rather than riding along with a sixteen-file
+#: mechanical sweep.
+#:
+#: Adding to this set is not a way to avoid migrating.
 STILL_IMPORTING_GITHUB_PR = {
-    "entrypoints/board_worker/_subprocess.py",           # parse
-    "entrypoints/board_worker/claim.py",                 # parse + build
-    "entrypoints/ci_monitor/main.py",                    # parse + build
-    "entrypoints/maintenance/audit_close_receipts.py",   # parse + build
-    "entrypoints/maintenance/board_unblock.py",          # parse + build + hint
-    "entrypoints/maintenance/board_unblock_task.py",     # parse + build + hint
-    "entrypoints/maintenance/check_regressions.py",      # parse + build
-    "entrypoints/maintenance/close_stale_prs.py",        # parse + build
-    "entrypoints/maintenance/console_repair.py",         # hint
-    "entrypoints/maintenance/orphan_branch_check.py",    # parse + build + hint
-    "entrypoints/maintenance/outcome_flagger_task.py",   # build
-    "entrypoints/maintenance/reconcile_merged_tasks.py", # parse + build + hint
-    "entrypoints/pr_review_watcher/main.py",             # parse + build
-    "eval/outcome_sources.py",                           # hint
-    "execution/workspace.py",                            # parse + build
-    "observer/collectors/ci_history.py",                 # parse + build
-    "post_merge_regression.py",                          # hint
+    "entrypoints/pr_review_watcher/main.py",
 }
+
+#: Migrated in the sweep. Pinned so the boundary cannot quietly erode back.
+MIGRATED = [
+    "entrypoints/board_worker/_subprocess.py",
+    "entrypoints/board_worker/claim.py",
+    "entrypoints/ci_monitor/main.py",
+    "entrypoints/maintenance/audit_close_receipts.py",
+    "entrypoints/maintenance/board_unblock.py",
+    "entrypoints/maintenance/board_unblock_task.py",
+    "entrypoints/maintenance/check_regressions.py",
+    "entrypoints/maintenance/close_stale_prs.py",
+    "entrypoints/maintenance/console_repair.py",
+    "entrypoints/maintenance/orphan_branch_check.py",
+    "entrypoints/maintenance/outcome_flagger_task.py",
+    "entrypoints/maintenance/reconcile_merged_tasks.py",
+    "eval/outcome_sources.py",
+    "execution/workspace.py",
+    "observer/collectors/ci_history.py",
+    "post_merge_regression.py",
+]
 
 _IMPORTS_GITHUB_PR = re.compile(
     r"^[ \t]*from operations_center\.adapters\.github_pr import",
@@ -238,6 +241,65 @@ def test_the_class_helpers_still_delegate():
     assert GitHubPRClient.owner_repo_from_clone_url(url) == pr.owner_repo_from_clone_url(url)
     assert GitHubPRClient.has_thumbs_up([{"content": "+1"}]) is True
     assert GitHubPRClient.has_thumbs_up([{"content": "-1"}]) is False
+
+
+def test_token_factory_builds_the_client(monkeypatch):
+    """pr_client_from_token is the entry point for callers holding a raw token.
+
+    Twelve of the seventeen resolve their own token from four different
+    environment variables, a constructor argument, or `self._token`, and each
+    reports a missing one differently. Forcing them through `make_pr_client`
+    would have unified error handling too — a behaviour change disguised as a
+    refactor.
+    """
+    from operations_center.adapters import pr
+
+    seen = {}
+
+    class _Fake:
+        def __init__(self, token):
+            seen["token"] = token
+
+    monkeypatch.setattr(
+        "operations_center.adapters.github_pr.GitHubPRClient", _Fake, raising=False
+    )
+    pr.pr_client_from_token("raw-tok")
+    assert seen == {"token": "raw-tok"}
+
+
+def test_settings_factory_goes_through_the_token_factory(monkeypatch):
+    """One construction path, so swapping the forge stays a one-place change."""
+    from operations_center.adapters import pr
+
+    calls = []
+    monkeypatch.setattr(pr, "pr_client_from_token", lambda t: calls.append(t))
+
+    class _Settings:
+        def git_token(self):
+            return "tok"
+
+    pr.make_pr_client(_Settings())
+    assert calls == ["tok"], "make_pr_client no longer routes through the token factory"
+
+
+@pytest.mark.parametrize("migrated", MIGRATED)
+def test_migrated_files_stay_migrated(migrated):
+    """Pin the sweep so it cannot quietly regress."""
+    text = (SRC / migrated).read_text(encoding="utf-8")
+    assert "GitHubPRClient" not in text, f"{migrated} names GitHubPRClient again"
+    assert "adapters.pr" in text, f"{migrated} no longer uses the seam"
+
+
+def test_only_the_guardrail_file_is_left():
+    """The remainder is one file, and it is the one that needs council review.
+
+    When `pr_review_watcher/main.py` moves, this test and the allowlist go with
+    it, and the migration is finished.
+    """
+    assert STILL_IMPORTING_GITHUB_PR == {"entrypoints/pr_review_watcher/main.py"}, (
+        "the accepted remainder changed — if a file was migrated, strike it off; "
+        "if one was added, it needs a reason"
+    )
 
 
 # ── the ratchet ──────────────────────────────────────────────────────────────

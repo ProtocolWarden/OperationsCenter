@@ -9,7 +9,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from operations_center.adapters.github_pr import GitHubPRClient
+from operations_center.adapters.pr import owner_repo_from_clone_url, pr_client_from_token
 from operations_center.close_invariants import (
     NO_SALVAGE_PHRASE,
     close_comment_claims_preserved_work,
@@ -87,7 +87,7 @@ def main() -> int:
         print(json.dumps({"error": "no git token configured"}, ensure_ascii=False))
         return 1
 
-    gh = GitHubPRClient(token)
+    gh = pr_client_from_token(token)
     scanned_at = datetime.now(UTC).isoformat()
     findings: list[dict] = []
     repo_summaries: list[dict] = []
@@ -95,7 +95,7 @@ def main() -> int:
 
     for repo_key, repo_cfg in (settings.repos or {}).items():
         try:
-            owner, repo = GitHubPRClient.owner_repo_from_clone_url(repo_cfg.clone_url)
+            owner, repo = owner_repo_from_clone_url(repo_cfg.clone_url)
         except ValueError:
             repo_summaries.append({"repo_key": repo_key, "error": "unparseable_clone_url"})
             continue

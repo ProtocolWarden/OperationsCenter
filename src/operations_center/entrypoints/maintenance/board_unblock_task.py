@@ -29,7 +29,7 @@ import os
 import time
 from datetime import UTC, datetime
 
-from operations_center.adapters.github_pr import GitHubPRClient
+from operations_center.adapters.pr import PRClient, owner_repo_from_clone_url, pr_client_from_token
 from operations_center.adapters.board import BoardClient, make_board_client
 from operations_center.capability_ownership import verify_owner_or_degrade
 from operations_center.config.settings import Settings
@@ -91,7 +91,7 @@ def reconcile_merged_pr_tasks(
     issues: list[dict],
     *,
     settings: Settings,
-    gh_client: GitHubPRClient,
+    gh_client: PRClient,
 ) -> list[dict]:
     """Return Done-transition actions for In-Review/Blocked tasks whose PR merged.
 
@@ -115,7 +115,7 @@ def reconcile_merged_pr_tasks(
             cfg = settings.repos.get(repo_key)
             try:
                 owner_repo_cache[repo_key] = (
-                    GitHubPRClient.owner_repo_from_clone_url(cfg.clone_url) if cfg else None
+                    owner_repo_from_clone_url(cfg.clone_url) if cfg else None
                 )
             except Exception:
                 owner_repo_cache[repo_key] = None
@@ -203,7 +203,7 @@ class BoardUnblockTask:
         stale_running_hours: int = 2,
         clean_blocked_min_minutes: int = 5,
         plane_client: BoardClient | None = None,
-        gh_client: GitHubPRClient | None = None,
+        gh_client: PRClient | None = None,
     ) -> None:
         self._settings = settings
         self.interval_seconds = interval_seconds
@@ -220,16 +220,16 @@ class BoardUnblockTask:
             return self._plane_client
         return make_board_client(self._settings)
 
-    def _make_gh_client(self) -> GitHubPRClient | None:
+    def _make_gh_client(self) -> PRClient | None:
         if self._gh_client is not None:
             return self._gh_client
         token_env = (
             getattr(getattr(self._settings, "git", None), "token_env", None) or "GITHUB_TOKEN"
         )
         token = os.environ.get(token_env)
-        return GitHubPRClient(token=token) if token else None
+        return pr_client_from_token(token) if token else None
 
-    def _repair_console_structure(self, gh: GitHubPRClient) -> list[dict]:
+    def _repair_console_structure(self, gh: PRClient) -> list[dict]:
         """Restore dropped required .console/task.md sections on open goal/improve
         PRs across all configured repos (repos without .console skip). Best-effort."""
         from .console_repair import repair_console_structure
@@ -240,7 +240,7 @@ class BoardUnblockTask:
             if not clone_url:
                 continue
             try:
-                owner, repo = GitHubPRClient.owner_repo_from_clone_url(clone_url)
+                owner, repo = owner_repo_from_clone_url(clone_url)
                 prs = gh.list_open_prs(owner, repo)
                 out.extend(repair_console_structure(gh, owner, repo, prs))
             except Exception:  # noqa: BLE001 — a flaky repo/repair must not break the loop

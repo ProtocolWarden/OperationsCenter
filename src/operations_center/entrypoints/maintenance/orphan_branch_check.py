@@ -38,7 +38,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from operations_center.adapters.github_pr import GitHubPRClient
+from operations_center.adapters.pr import PRClient, owner_repo_from_clone_url, pr_client_from_token
 from operations_center.config import load_settings
 
 logger = logging.getLogger(__name__)
@@ -87,10 +87,10 @@ def _git(args: list[str], cwd: Path) -> tuple[str, int]:
     return result.stdout.strip(), result.returncode
 
 
-def _open_pr_head_branches(github_client: GitHubPRClient, clone_url: str) -> set[str]:
+def _open_pr_head_branches(github_client: PRClient, clone_url: str) -> set[str]:
     """Return the set of head branch names for all open PRs in the repo."""
     try:
-        owner, repo = GitHubPRClient.owner_repo_from_clone_url(clone_url)
+        owner, repo = owner_repo_from_clone_url(clone_url)
         prs = github_client.list_open_prs(owner, repo)
         return {
             str(pr.get("head", {}).get("ref", "")) for pr in prs if pr.get("head", {}).get("ref")
@@ -105,7 +105,7 @@ def _scan_repo(
     local_path: Path,
     clone_url: str,
     sandbox_base_branch: str | None,
-    github_client: GitHubPRClient,
+    github_client: PRClient,
     min_age_hours: float,
     default_branch: str,
 ) -> RepoOrphanResult:
@@ -210,7 +210,7 @@ def scan(settings: Any, min_age_hours: float = 24.0) -> list[RepoOrphanResult]:
         if token:
             break
 
-    github_client = GitHubPRClient(token=token)
+    github_client = pr_client_from_token(token)
     results: list[RepoOrphanResult] = []
 
     for repo_key, repo_cfg in settings.repos.items():

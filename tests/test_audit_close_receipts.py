@@ -34,10 +34,7 @@ def test_audit_close_receipts_flags_unreceipted_salvage(monkeypatch, capsys, tmp
 
     monkeypatch.setattr(audit_close_receipts, "load_settings", lambda _: settings)
     mock_cls = MagicMock(return_value=gh)
-    mock_cls.owner_repo_from_clone_url = (
-        audit_close_receipts.GitHubPRClient.owner_repo_from_clone_url
-    )
-    monkeypatch.setattr(audit_close_receipts, "GitHubPRClient", mock_cls)
+    monkeypatch.setattr(audit_close_receipts, "pr_client_from_token", mock_cls)
     monkeypatch.setattr(
         "sys.argv",
         ["audit_close_receipts", "--config", str(tmp_path / "cfg.yaml")],
@@ -83,10 +80,7 @@ def test_audit_close_receipts_accepts_durable_receipt_comment(
 
     monkeypatch.setattr(audit_close_receipts, "load_settings", lambda _: settings)
     mock_cls = MagicMock(return_value=gh)
-    mock_cls.owner_repo_from_clone_url = (
-        audit_close_receipts.GitHubPRClient.owner_repo_from_clone_url
-    )
-    monkeypatch.setattr(audit_close_receipts, "GitHubPRClient", mock_cls)
+    monkeypatch.setattr(audit_close_receipts, "pr_client_from_token", mock_cls)
     monkeypatch.setattr(
         "sys.argv",
         ["audit_close_receipts", "--config", str(tmp_path / "cfg.yaml")],
