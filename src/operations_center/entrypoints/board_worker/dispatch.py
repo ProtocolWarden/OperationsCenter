@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from operations_center.injection import wrap_untrusted_goal
+from operations_center.adapters.board import board_project_id
 
 from ._subprocess import build_allowlist_env, git_token_passthrough, harden_git_token, run_executor
 from ._subprocess import is_transient_failure, persist_failure_diagnostics, venv_python
@@ -128,7 +129,7 @@ def dispatch_issue(
             "--base-branch",
             base_branch,
             "--project-id",
-            settings.plane.project_id,
+            board_project_id(settings),
             "--task-id",
             task_id,
             "--priority",  # from the issue `priority:` label; absent -> "normal" (order unchanged)

@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 if TYPE_CHECKING:  # pragma: no cover
     from operations_center.domain.models import BoardTask
 
-__all__ = ["BoardClient", "make_board_client"]
+__all__ = ["BoardClient", "board_project_id", "make_board_client"]
 
 
 @runtime_checkable
@@ -99,15 +99,7 @@ def make_board_client(settings: Any) -> BoardClient:
     it replaces — same four fields, same token accessor — so adopting it cannot
     change behaviour.
     """
-    backend = getattr(settings, "board_backend", "plane")
-    if not isinstance(backend, str):
-        # A test double (`MagicMock()`) answers every attribute with a child
-        # mock, so `getattr` never reaches its default and `backend` becomes a
-        # Mock — which matches neither "plane" nor "forgejo" and raised
-        # "unknown board_backend <MagicMock ...>" from deep inside the factory.
-        # Real Settings validates this field as a str, so a non-string here means
-        # "nothing configured this", not "someone chose backend 42".
-        backend = "plane"
+    backend = _backend_name(settings)
 
     if backend == "forgejo":
         from operations_center.adapters.forgejo import ForgejoClient
@@ -132,9 +124,64 @@ def make_board_client(settings: Any) -> BoardClient:
     from operations_center.adapters.plane import PlaneClient
 
     board = settings.plane
+    if board is None:
+        raise RuntimeError(
+            "board_backend is 'plane' but no `plane:` settings block is "
+            "configured — the fleet has no board to talk to"
+        )
     return PlaneClient(
         base_url=board.base_url,
         api_token=settings.plane_token(),
         workspace_slug=board.workspace_slug,
         project_id=board.project_id,
     )
+
+
+def _backend_name(settings: Any) -> str:
+    """The configured backend, normalised.
+
+    A test double (`MagicMock()`) answers every attribute with a child mock, so
+    `getattr` never reaches its default and the value becomes a Mock — which
+    matches neither "plane" nor "forgejo" and used to raise "unknown
+    board_backend <MagicMock ...>" from deep inside the factory. Real Settings
+    validates this field as a str, so a non-string here means "nothing
+    configured this", not "someone chose backend 42".
+    """
+    backend = getattr(settings, "board_backend", "plane")
+    return backend if isinstance(backend, str) else "plane"
+
+
+def board_project_id(settings: Any) -> str:
+    """The board's project identifier, from the *active* backend.
+
+    Callers used to read `settings.plane.project_id` directly. With `plane:`
+    optional and the example config Forgejo-first, that dereference is an
+    `AttributeError` on exactly the config the example recommends — and it sat
+    on the dispatch path, so a Forgejo-only operator could execute nothing.
+
+    The value is opaque to its consumers (worker CLI metadata,
+    `CampaignBuilder` stores it without reading it), so each backend supplies
+    its natural identifier: Plane its project UUID, Forgejo the board's
+    `owner/repo`.
+    """
+    backend = _backend_name(settings)
+
+    if backend == "forgejo":
+        cfg = settings.forgejo
+        if cfg is None:
+            raise RuntimeError(
+                "board_backend is 'forgejo' but no `forgejo:` settings block is "
+                "configured — the fleet has no board to talk to"
+            )
+        return f"{cfg.owner}/{cfg.repo}"
+
+    if backend != "plane":
+        raise RuntimeError(f"unknown board_backend {backend!r} (plane, forgejo)")
+
+    board = settings.plane
+    if board is None:
+        raise RuntimeError(
+            "board_backend is 'plane' but no `plane:` settings block is "
+            "configured — the fleet has no board to talk to"
+        )
+    return board.project_id

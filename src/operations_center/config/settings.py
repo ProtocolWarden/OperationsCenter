@@ -683,7 +683,7 @@ class TaskAdmissionSettings(BaseModel):
 
 
 class Settings(BaseModel):
-    plane: PlaneSettings
+    plane: PlaneSettings | None = None
     # Which board the fleet talks to. Explicit rather than inferred from whether
     # `forgejo:` is configured — repointing the board is not something that
     # should happen as a side effect of adding a config block.
@@ -822,6 +822,11 @@ class Settings(BaseModel):
     pre_pr_custodian_gate: bool = True
 
     def plane_token(self) -> str:
+        if self.plane is None:
+            raise RuntimeError(
+                "board_backend is 'plane' but no `plane:` settings block is "
+                "configured — the fleet has no board to talk to"
+            )
         return os.environ[self.plane.api_token_env]
 
     def forgejo_token(self) -> str:

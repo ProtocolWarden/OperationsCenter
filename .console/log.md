@@ -1,3 +1,34 @@
+## 2026-08-18 — the board is live on Forgejo; Plane retired
+
+Cutover complete. Forgejo 13 runs in WSL docker (localhost:3000, registration
+disabled, SSH off); the board is `Operations_Center_Admin/board` with the six
+state + five priority labels; `board_backend: forgejo` in the local yaml; fleet
+restarted and polling cleanly (0 list failures, 0 Plane 404s).
+
+The drain was vacuous: recon showed Plane was never live on this box. Port 8080
+belongs to an unrelated stack's status-service; the config's project id was the
+all-zeros placeholder; every board worker cycle had been logging `failed to
+list issues`. The fleet's only working surface was GitHub PRs.
+
+Retired in this change: deployment/plane/manage.sh (a delegation wrapper),
+smoke/plane.py + plane_doctor.py (replaced by seam-based smoke/forgejo.py,
+read-only by default, --write for the round-trip), the plane-up/down/status
+subcommands, maybe_open_browser, and dev-down-safe's Running-state poll — which
+swallowed its own failure (`|| echo "0"`) and therefore always reported "safe
+to shut down" against an unreachable board. `start`/`stop` now alias
+watch-all/watch-all-stop. Settings.plane is optional with loud None-guards.
+
+Council follow-up (correctness, #516): the example config went Forgejo-first
+while five sites still read settings.plane.project_id — including dispatch, so
+a Forgejo-only config would AttributeError before executing anything. The seam
+now owns `board_project_id(settings)`: Plane answers its project UUID, Forgejo
+answers `owner/repo`, missing blocks raise loudly. Consumers treat the value as
+opaque (worker CLI metadata; CampaignBuilder stores it without reading it).
+
+Still Plane-coupled, deliberately left: setup/main.py (the onboarding wizard —
+follow-up rewrite). The local yaml no longer needs its plane: block for the
+fleet to run.
+
 ## 2026-08-18 — PR seam: migration finished (17 -> 0)
 
 `pr_review_watcher/main.py` — the guardrail remainder — moved onto the seam.

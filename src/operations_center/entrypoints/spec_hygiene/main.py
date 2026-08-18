@@ -28,7 +28,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from operations_center.adapters.board import BoardClient, make_board_client
+from operations_center.adapters.board import BoardClient, board_project_id, make_board_client
 from operations_center.config import load_settings
 from operations_center.maintenance import (
     MaintenanceContext,
@@ -224,7 +224,7 @@ def _bootstrap_orphan_campaigns(
     active = state_mgr.load()
     builder = CampaignBuilder(
         client=client,
-        project_id=settings.plane.project_id,
+        project_id=board_project_id(settings),
         max_tasks=settings.spec_author.max_tasks_per_campaign,
     )
     for campaign in active.active_campaigns():

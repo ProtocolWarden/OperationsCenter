@@ -9,7 +9,6 @@ BOOTSTRAP_STAMP="${VENV_DIR}/.operations-center-bootstrap"
 LOG_DIR="${ROOT_DIR}/logs/local"
 WATCH_DIR="${LOG_DIR}/watch-all"
 REPORT_DIR="${ROOT_DIR}/tools/report/execution_plane"
-PLANE_MANAGER="${ROOT_DIR}/deployment/plane/manage.sh"
 JANITOR_MAX_AGE_DAYS="${OPERATIONS_CENTER_RETENTION_DAYS:-1}"
 WATCHDOG_LOOP_LOCK="${LOG_DIR}/watchdog_loop.lock"
 
@@ -139,18 +138,6 @@ load_env_file() {
   fi
 }
 
-maybe_open_browser() {
-  if [[ "${OPERATIONS_CENTER_PLANE_OPEN_BROWSER:-}" != "1" ]]; then
-    return 0
-  fi
-  if [[ -z "${OPERATIONS_CENTER_PLANE_URL:-}" ]]; then
-    return 0
-  fi
-  if command -v xdg-open >/dev/null 2>&1; then
-    xdg-open "${OPERATIONS_CENTER_PLANE_URL}" >/dev/null 2>&1 || true
-  fi
-}
-
 timestamp() {
   date +"%Y%m%dT%H%M%S"
 }
@@ -226,12 +213,8 @@ Usage:
   scripts/operations-center.sh watch --role review
   scripts/operations-center.sh watch-stop --role goal
   scripts/operations-center.sh run --task-id TASK-123
-  scripts/operations-center.sh plane-doctor [--task-id TASK-123]
   scripts/operations-center.sh dependency-check [--create-plane-tasks]
   scripts/operations-center.sh janitor
-  scripts/operations-center.sh plane-up
-  scripts/operations-center.sh plane-down
-  scripts/operations-center.sh plane-status
   scripts/operations-center.sh dev-up
   scripts/operations-center.sh dev-down
   scripts/operations-center.sh dev-down-safe
@@ -240,7 +223,7 @@ Usage:
   scripts/operations-center.sh doctor
   scripts/operations-center.sh test
   scripts/operations-center.sh worker --task-id TASK-123
-  scripts/operations-center.sh smoke --task-id TASK-123 --comment-only
+  scripts/operations-center.sh smoke [--write]
   scripts/operations-center.sh observe-repo [--repo /abs/path]
   scripts/operations-center.sh generate-insights [--repo /abs/path]
   scripts/operations-center.sh decide-proposals [--repo /abs/path]
@@ -857,7 +840,7 @@ shift || true
 cd "${ROOT_DIR}"
 # Skip janitor for read-only / stop commands — they're fast and don't need it.
 case "${cmd}" in
-  watch-all-status|dev-status|watch-all-stop|watch-stop|watchdog-stop|plane-status|providers-status|doctor|status|worker-backend-status|worker-backend-probe|loop-start|loop-stop|loop-status|loop-log|budget) ;;
+  watch-all-status|dev-status|watch-all-stop|watch-stop|watchdog-stop|providers-status|doctor|status|worker-backend-status|worker-backend-probe|loop-start|loop-stop|loop-status|loop-log|budget) ;;
   *) run_janitor ;;
 esac
 
@@ -866,24 +849,17 @@ case "${cmd}" in
     ensure_venv
     run_with_log setup "${VENV_DIR}/bin/python" -m operations_center.entrypoints.setup.main "$@"
     ;;
-  start|plane-up)
-    load_env_file
-    run_with_log plane-up "${PLANE_MANAGER}" up
-    maybe_open_browser
+  start)
+    # The board is Forgejo, run as a service (docker) outside this script.
+    # "start" therefore means the fleet itself.
+    exec "$0" watch-all
     ;;
-  stop|plane-down)
-    load_env_file
-    run_with_log plane-down "${PLANE_MANAGER}" down
-    ;;
-  plane-status)
-    load_env_file
-    run_with_log plane-status "${PLANE_MANAGER}" status
+  stop)
+    exec "$0" watch-all-stop
     ;;
   dev-up)
     ensure_venv
     load_env_file
-    run_with_log plane-up "${PLANE_MANAGER}" up
-    maybe_open_browser
     start_watch_role intake
     start_watch_role goal
     start_watch_role test
@@ -892,7 +868,6 @@ case "${cmd}" in
     start_watch_role review
     start_watch_role spec
     start_watchdog
-    run_with_log plane-status "${PLANE_MANAGER}" status
     ;;
   dev-down)
     load_env_file
@@ -904,7 +879,6 @@ case "${cmd}" in
     stop_watch_role propose
     stop_watch_role review
     stop_watch_role spec
-    run_with_log plane-down "${PLANE_MANAGER}" down
     ;;
   dev-down-safe)
     ensure_venv
@@ -919,40 +893,10 @@ case "${cmd}" in
     stop_watch_role propose
     stop_watch_role review
     stop_watch_role spec
-    # Poll until all Running tasks complete or timeout is reached.
-    _safe_timeout="${OPERATIONS_CENTER_SAFE_DOWN_TIMEOUT_SECONDS:-600}"
-    _safe_start=$(date +%s)
-    echo "Waiting for in-flight tasks (timeout: ${_safe_timeout}s)..."
-    while true; do
-      _elapsed=$(( $(date +%s) - _safe_start ))
-      if [[ $_elapsed -ge $_safe_timeout ]]; then
-        echo "Timeout after ${_elapsed}s — proceeding with forced shutdown"
-        break
-      fi
-      _running=$("${VENV_DIR}/bin/python" - <<PYEOF 2>/dev/null || echo "0"
-import sys
-sys.path.insert(0, '${ROOT_DIR}/src')
-from operations_center.settings import load_settings
-from operations_center.adapters.plane.client import PlaneClient
-s = load_settings('${CONFIG_PATH}')
-c = PlaneClient(base_url=s.plane.base_url, api_token=s.plane_token(),
-                workspace_slug=s.plane.workspace_slug, project_id=s.plane.project_id)
-try:
-    issues = c.list_issues()
-    running = [i for i in issues if (i.get('state') or {}).get('name') == 'Running']
-    print(len(running))
-finally:
-    c.close()
-PYEOF
-)
-      if [[ "${_running}" == "0" ]]; then
-        echo "No tasks in Running state — safe to shut down"
-        break
-      fi
-      echo "  ${_running} task(s) still Running (${_elapsed}s elapsed) — waiting 30s..."
-      sleep 30
-    done
-    run_with_log plane-down "${PLANE_MANAGER}" down
+    # In-flight executors are child processes of the watchers; stop_watch_role
+    # signals the supervisor and the current task's subprocess finishes its run.
+    # The old Plane "Running state" poll is gone: it swallowed its own failure
+    # (`|| echo "0"`), so against an unreachable board it always said "safe".
     ;;
   dev-restart)
     load_env_file
@@ -964,10 +908,7 @@ PYEOF
     stop_watch_role propose
     stop_watch_role review
     stop_watch_role spec
-    run_with_log plane-down "${PLANE_MANAGER}" down
     ensure_venv
-    run_with_log plane-up "${PLANE_MANAGER}" up
-    maybe_open_browser
     start_watch_role intake
     start_watch_role goal
     start_watch_role test
@@ -976,11 +917,9 @@ PYEOF
     start_watch_role review
     start_watch_role spec
     start_watchdog
-    run_with_log plane-status "${PLANE_MANAGER}" status
     ;;
   dev-status)
     load_env_file
-    run_with_log plane-status "${PLANE_MANAGER}" status || true
     status_watch_role intake
     status_watch_role goal
     status_watch_role test
@@ -1089,7 +1028,7 @@ PYEOF
   smoke)
     ensure_venv
     load_env_file
-    run_with_log smoke "${VENV_DIR}/bin/python" -m operations_center.entrypoints.smoke.plane --config "${CONFIG_PATH}" "$@"
+    run_with_log smoke "${VENV_DIR}/bin/python" -m operations_center.entrypoints.smoke.forgejo --config "${CONFIG_PATH}" "$@"
     ;;
   observe-repo)
     ensure_venv
@@ -1152,11 +1091,6 @@ PYEOF
     ensure_venv
     load_env_file
     "${VENV_DIR}/bin/python" -m operations_center.lineage.cli "$@"
-    ;;
-  plane-doctor)
-    ensure_venv
-    load_env_file
-    run_with_log plane-doctor "${VENV_DIR}/bin/python" -m operations_center.entrypoints.smoke.plane_doctor --config "${CONFIG_PATH}" "$@"
     ;;
   dependency-check)
     ensure_venv

@@ -1,91 +1,92 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-import json
-import os
-from pathlib import Path
+"""The smoke entrypoint goes through the seam, so it is tested through it too.
 
-import httpx
+Its Plane predecessor mocked `PlaneClient` transport-level; this one fakes the
+board client behind `make_board_client`, which is the boundary the smoke (and
+the fleet) actually depends on.
+"""
 
-from operations_center.entrypoints.smoke import plane
+from types import SimpleNamespace
+
+import pytest
+
+from operations_center.entrypoints.smoke import forgejo
 
 
-def test_smoke_entrypoint_writes_retained_plane_payload(
-    monkeypatch, tmp_path: Path, capsys
-) -> None:
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text(
-        "\n".join(
-            [
-                "plane:",
-                "  base_url: http://plane.local",
-                "  api_token_env: PLANE_API_TOKEN",
-                "  workspace_slug: ws",
-                "  project_id: proj",
-                "git:",
-                "  provider: github",
-                "repos: {}",
-                f"report_root: {tmp_path / 'reports'}",
-            ]
-        )
-    )
-    monkeypatch.setenv("PLANE_API_TOKEN", "token")
+class _FakeBoard:
+    def __init__(self, statuses: list[str]):
+        self._statuses = list(statuses)
+        self.calls: list[tuple] = []
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        if request.method == "GET":
-            return httpx.Response(
-                200,
-                json={
-                    "id": "TASK-9",
-                    "project_id": "proj",
-                    "name": "Smoke Task",
-                    "description": """## Execution
-repo: repo_a
-base_branch: main
-mode: goal
+    def list_states(self):
+        return [{"id": n, "name": n} for n in ("Backlog", "Done")]
 
-## Goal
-Verify Plane access.
-""",
-                    "state": {"name": "Ready for AI"},
-                    "labels": [],
-                },
-            )
-        return httpx.Response(200, json={"ok": True})
+    def list_issues(self):
+        return []
 
-    original_client = plane.PlaneClient
+    def create_issue(self, *, name, description):
+        self.calls.append(("create", name))
+        return {"number": 7}
 
-    class TestPlaneClient(original_client):
-        def __init__(
-            self, base_url: str, api_token: str, workspace_slug: str, project_id: str
-        ) -> None:
-            super().__init__(base_url, api_token, workspace_slug, project_id)
-            self._client = httpx.Client(
-                transport=httpx.MockTransport(handler),
-                base_url=base_url,
-                headers={"X-API-Key": api_token, "Content-Type": "application/json"},
-            )
+    def transition_issue(self, task_id, state):
+        self.calls.append(("transition", task_id, state))
 
-    monkeypatch.setattr(plane, "PlaneClient", TestPlaneClient)
+    def fetch_issue(self, task_id):
+        return {"number": task_id}
+
+    def to_board_task(self, issue):
+        return SimpleNamespace(status=self._statuses.pop(0))
+
+    def comment_issue(self, task_id, body):
+        self.calls.append(("comment", task_id))
+
+    def set_priority(self, task_id, priority):
+        self.calls.append(("priority", task_id, priority))
+
+
+def _wire(monkeypatch, board):
+    monkeypatch.setattr("operations_center.config.load_settings", lambda _: object())
     monkeypatch.setattr(
-        "sys.argv",
-        [
-            "plane-smoke",
-            "--config",
-            str(config_path),
-            "--task-id",
-            "TASK-9",
-            "--comment-only",
-        ],
+        "operations_center.adapters.board.make_board_client", lambda _: board
     )
 
-    plane.main()
 
-    captured = capsys.readouterr()
-    payload = json.loads(captured.out)
-    run_dir = Path(payload["artifacts"][0]).parent
+def test_read_only_smoke_never_writes(monkeypatch, capsys):
+    board = _FakeBoard(statuses=[])
+    _wire(monkeypatch, board)
+    monkeypatch.setattr("sys.argv", ["smoke", "--config", "unused.yaml"])
 
-    assert (run_dir / "plane_work_item.json").exists()
-    assert (run_dir / "smoke_result.json").exists()
-    assert payload["parsed_task"]["task_id"] == "TASK-9"
+    assert forgejo.main() == 0
 
-    os.environ.pop("PLANE_API_TOKEN", None)
+    out = capsys.readouterr().out
+    assert "read-only smoke OK" in out
+    assert board.calls == [], "read-only smoke performed writes"
+
+
+def test_write_smoke_runs_the_fleet_round_trip(monkeypatch, capsys):
+    board = _FakeBoard(statuses=["Ready for AI", "Done"])
+    _wire(monkeypatch, board)
+    monkeypatch.setattr("sys.argv", ["smoke", "--config", "unused.yaml", "--write"])
+
+    assert forgejo.main() == 0
+
+    assert [c[0] for c in board.calls] == [
+        "create",
+        "transition",
+        "comment",
+        "priority",
+        "transition",
+    ]
+    assert ("transition", "7", "Ready for AI") in board.calls
+    assert ("transition", "7", "Done") in board.calls
+    assert "write smoke OK" in capsys.readouterr().out
+
+
+def test_write_smoke_fails_loudly_when_a_transition_does_not_stick(monkeypatch):
+    board = _FakeBoard(statuses=["Backlog"])  # transition did not take
+    _wire(monkeypatch, board)
+    monkeypatch.setattr("sys.argv", ["smoke", "--config", "unused.yaml", "--write"])
+
+    with pytest.raises(RuntimeError, match="expected 'Ready for AI'"):
+        forgejo.main()
