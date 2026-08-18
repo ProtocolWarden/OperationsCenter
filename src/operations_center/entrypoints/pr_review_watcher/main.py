@@ -380,12 +380,9 @@ def _load_settings(config_path: Path):
 
 
 def _github_client(settings):
-    from operations_center.adapters.github_pr import GitHubPRClient
+    from operations_center.adapters.pr import make_pr_client
 
-    token = settings.git_token()
-    if not token:
-        raise RuntimeError("no GitHub token — set GIT_TOKEN in .env")
-    return GitHubPRClient(token)
+    return make_pr_client(settings)
 
 
 def _plane_client(settings):
@@ -395,9 +392,9 @@ def _plane_client(settings):
 
 
 def _owner_repo(clone_url: str) -> tuple[str, str]:
-    from operations_center.adapters.github_pr import GitHubPRClient
+    from operations_center.adapters.pr import owner_repo_from_clone_url
 
-    return GitHubPRClient.owner_repo_from_clone_url(clone_url)
+    return owner_repo_from_clone_url(clone_url)
 
 
 def _venv_python(oc_root: Path) -> str:

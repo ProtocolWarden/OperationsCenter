@@ -2,8 +2,8 @@
 # Copyright (C) 2026 ProtocolWarden
 """Hold the PR seam, and make the remaining coupling shrink rather than drift.
 
-Seventeen files in ``src/`` name :class:`GitHubPRClient` directly. Thirteen of
-them do so only to reach ``owner_repo_from_clone_url``, a pure URL parse that
+Seventeen files in ``src/`` named :class:`GitHubPRClient` directly. Thirteen of
+them only to reach ``owner_repo_from_clone_url``, a pure URL parse that
 never needed a client. That is the shape the board seam had before it was
 migrated, and the same ratchet applies:
 
@@ -15,9 +15,9 @@ migrated, and the same ratchet applies:
 
 Unlike the board, there is no second backend to migrate *to* yet, and
 ``docs/specs/forgejo-pr-adapter.md`` argues there should not be one until the
-``enforce_admins`` question is answered. So there is deliberately no
-``test_the_migration_is_finished`` here: finishing is not yet defined. What these
-tests protect is that the cost of finishing stays flat instead of growing.
+``enforce_admins`` question is answered. "Finished" therefore means what it meant
+for the board: every caller goes through the seam, so a future backend is a
+change in one module. ``test_the_migration_is_finished`` pins that state.
 """
 
 from __future__ import annotations
@@ -29,17 +29,12 @@ import pytest
 
 SRC = pathlib.Path(__file__).resolve().parents[3] / "src" / "operations_center"
 
-#: Files that still name the concrete client.
-#:
-#: This began as a burn-down list of 17. Sixteen are migrated; the one that
-#: remains is a guardrail path (`pr_review_watcher/**`), so it moves under K=3
-#: council review in its own change rather than riding along with a sixteen-file
-#: mechanical sweep.
-#:
-#: Adding to this set is not a way to avoid migrating.
-STILL_IMPORTING_GITHUB_PR = {
-    "entrypoints/pr_review_watcher/main.py",
-}
+#: Files that still name the concrete client. Empty — the burn-down list of 17
+#: reached zero when `pr_review_watcher/main.py` moved (last, and under K=3
+#: council review, because it is a guardrail path). The set stays so the ratchet
+#: keeps holding: unlike the board's `PLANE_SPECIFIC_BY_DESIGN`, there is no
+#: file with a design reason to name a forge client directly.
+STILL_IMPORTING_GITHUB_PR: set[str] = set()
 
 #: Migrated in the sweep. Pinned so the boundary cannot quietly erode back.
 MIGRATED = [
@@ -55,6 +50,7 @@ MIGRATED = [
     "entrypoints/maintenance/orphan_branch_check.py",
     "entrypoints/maintenance/outcome_flagger_task.py",
     "entrypoints/maintenance/reconcile_merged_tasks.py",
+    "entrypoints/pr_review_watcher/main.py",
     "eval/outcome_sources.py",
     "execution/workspace.py",
     "observer/collectors/ci_history.py",
@@ -290,15 +286,17 @@ def test_migrated_files_stay_migrated(migrated):
     assert "adapters.pr" in text, f"{migrated} no longer uses the seam"
 
 
-def test_only_the_guardrail_file_is_left():
-    """The remainder is one file, and it is the one that needs council review.
+def test_the_migration_is_finished():
+    """No caller is left to migrate.
 
-    When `pr_review_watcher/main.py` moves, this test and the allowlist go with
-    it, and the migration is finished.
+    The seam existed to make swapping the forge a one-place change. That is only
+    true once every caller goes through it — a seam with stragglers still forces
+    a per-caller change at cutover, which is the cost it was built to remove.
+    Same end state the board seam reached.
     """
-    assert STILL_IMPORTING_GITHUB_PR == {"entrypoints/pr_review_watcher/main.py"}, (
-        "the accepted remainder changed — if a file was migrated, strike it off; "
-        "if one was added, it needs a reason"
+    actual = _importers()
+    assert not actual, (
+        f"{len(actual)} caller(s) import GitHubPRClient again: {sorted(actual)}"
     )
 
 
