@@ -115,12 +115,13 @@ Nothing else links these together, so start here:
 8. [`design/coverage-threshold-alerting-design.md`](design/coverage-threshold-alerting-design.md) — why it is built this way
 9. [`design/COVERAGE_THRESHOLD_ALERTING_USER_GUIDE.md`](design/COVERAGE_THRESHOLD_ALERTING_USER_GUIDE.md) — long-form guide (overlaps 2–5; consolidation candidate)
 
-## Specs — `specs/` (29)
+## Specs — `specs/` (31)
 
 Scoped work definitions, usually authored for the fleet to execute.
 
 Named specs:
 [Forgejo board adapter](specs/forgejo-board-adapter.md) ·
+[Forgejo PR adapter](specs/forgejo-pr-adapter.md) ·
 [proposer consumes custodian sweep](specs/proposer-consumes-custodian-sweep.md) ·
 [reviewer PR state machine](specs/reviewer-pr-state-machine.md) ·
 [executor adapter unit tests](specs/archive/executor-adapter-unit-tests.md) ·
