@@ -100,6 +100,14 @@ def make_board_client(settings: Any) -> BoardClient:
     change behaviour.
     """
     backend = getattr(settings, "board_backend", "plane")
+    if not isinstance(backend, str):
+        # A test double (`MagicMock()`) answers every attribute with a child
+        # mock, so `getattr` never reaches its default and `backend` becomes a
+        # Mock — which matches neither "plane" nor "forgejo" and raised
+        # "unknown board_backend <MagicMock ...>" from deep inside the factory.
+        # Real Settings validates this field as a str, so a non-string here means
+        # "nothing configured this", not "someone chose backend 42".
+        backend = "plane"
 
     if backend == "forgejo":
         from operations_center.adapters.forgejo import ForgejoClient

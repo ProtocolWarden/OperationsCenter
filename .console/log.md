@@ -22,6 +22,14 @@ Found while verifying: CI runs only `tests/unit`, `tests/test_pr_review_watcher.
 under `tests/maintenance/`, `tests/observer/` and top-level `tests/test_*.py`
 never run in the gate — 7 of them are currently red on main, one of which is a
 regression from #509 (the board factory rejects a MagicMock `board_backend`).
+## 2026-08-17 — board factory rejected a settings double (regression from #509)
+
+`make_board_client` read `getattr(settings, "board_backend", "plane")`. A
+`MagicMock()` answers every attribute, so the default was unreachable and the
+factory raised "unknown board_backend <MagicMock ...>". Broken on main since
+#509; invisible because the test it breaks is in `tests/maintenance/`, which no
+CI job runs. Non-string now means "unconfigured", not "chosen"; a real typo is
+still a hard error. 7 red -> 6 in the non-unit suites.
 
 ## 2026-08-17 — Forgejo PR adapter spec (adversarial)
 
