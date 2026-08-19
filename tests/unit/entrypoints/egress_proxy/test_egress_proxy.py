@@ -86,8 +86,13 @@ class TestExtractSni:
 
 
 
-def test_proxy_denies_then_tunnels():
+def test_proxy_denies_then_tunnels(monkeypatch):
     """Integration: a denied CONNECT host gets 403; an allowed one tunnels."""
+    # Pin the DEFAULT posture: these assert non-strict behaviour, so an
+    # ambient OC_EGRESS_SNI_STRICT=1 (exported by .env.operations-center.local)
+    # must not decide the outcome. Symmetric with
+    # test_strict_sni_pin_denies_allowlisted_mismatch, which sets it.
+    monkeypatch.delenv("OC_EGRESS_SNI_STRICT", raising=False)
     from operations_center.entrypoints.egress_proxy.main import _handle
 
     async def scenario():
@@ -197,9 +202,14 @@ def test_missing_sni_fails_closed():
     asyncio.run(scenario())
 
 
-def test_segmented_client_hello_still_tunnels():
+def test_segmented_client_hello_still_tunnels(monkeypatch):
     """Regression: a ClientHello split across TCP segments must NOT read as 'no SNI'
     and get dropped — the proxy assembles the full record before deciding."""
+    # Pin the DEFAULT posture: these assert non-strict behaviour, so an
+    # ambient OC_EGRESS_SNI_STRICT=1 (exported by .env.operations-center.local)
+    # must not decide the outcome. Symmetric with
+    # test_strict_sni_pin_denies_allowlisted_mismatch, which sets it.
+    monkeypatch.delenv("OC_EGRESS_SNI_STRICT", raising=False)
     from operations_center.entrypoints.egress_proxy.main import _handle
 
     async def scenario():
