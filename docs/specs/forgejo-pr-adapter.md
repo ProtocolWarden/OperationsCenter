@@ -252,17 +252,39 @@ message changes on every push, so under the default configuration branch
 protection can never be satisfied — not "blocks until you rename it", but
 unsatisfiable in principle.
 
-### `run-name:` makes it stable
+### Correction: the middle segment is the JOB, not `run-name`
 
-Setting `run-name: audit` pins the middle segment. Re-run with a deliberately
-different commit message:
+An earlier revision of this section claimed `run-name:` pins the middle
+segment. **That was wrong**, and generalised from a failure case.
+
+A two-job workflow with `run-name: probe` produces two contexts, and `probe`
+appears in neither:
 
 ```
-custodian-audit / audit (push)
+multi / alpha (pull_request)
+multi / beta  (pull_request)
 ```
 
-Stable, deterministic, and independent of the commit. That is the property
-branch protection needs.
+A job carrying `name: Pretty Job Name` produces:
+
+```
+naming / Pretty Job Name (pull_request)
+```
+
+So the format is:
+
+```
+<workflow name:> / <job name:, or the job id when absent> (<event>)
+```
+
+It is **stable by default** — no `run-name:` needed, and each job gets its own
+context exactly as on GitHub, just prefixed by the workflow name.
+
+The commit-message form in the first probe
+(`audit.yml / ci: probe the status context name (push)`) appears only when a run
+fails *before any job starts*: with no job to name, Forgejo falls back to the
+file name and the run title. Reading a fallback as the rule is what produced the
+wrong conclusion.
 
 ### Both events fire on a PR head
 
@@ -280,7 +302,7 @@ trigger on `pull_request` only.
 
 ### Cutover configuration
 
-* workflow: `name: custodian-audit`, `run-name: audit`, `on: pull_request`
+* workflow: `name: custodian-audit`, `on: pull_request` (no `run-name:` needed)
 * branch protection `status_check_contexts`: `custodian-audit / audit (pull_request)`
 * `apply_to_admins: true` (per the earlier live finding)
 
