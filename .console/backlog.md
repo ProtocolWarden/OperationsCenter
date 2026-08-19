@@ -4,6 +4,44 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## Up Next
 
+### CI runs ~1,830 fewer tests than the repo has (caused a red main on 2026-08-19)
+
+CI runs `tests/unit`, `tests/test_pr_review_watcher.py`,
+`tests/integration/reviewer` and `tests/integration/observer`. Everything under
+`tests/maintenance/`, `tests/observer/`, `tests/verdicts/` and most top-level
+`tests/test_*.py` is invisible to the gate — roughly 1,830 tests.
+
+Not hypothetical any more. #521 merged with a **new** failing test in
+`tests/test_dependency_check.py`: CI was green, the council verdict was
+SUCCESS, and main was red until #522. #513 is the same story a week earlier —
+an #509 regression sat in `tests/maintenance/` unnoticed because no job runs it.
+
+Adding the suites is a one-line workflow change. What makes it a decision
+rather than a chore: **6 tests are currently failing in those suites**, so
+turning the gate on blocks every merge until they are fixed:
+
+  - `tests/observer/test_collectors_hardening/test_race_condition_guards.py` (2)
+  - `tests/test_check_signal_collector.py::test_guard_all_files_deleted_during_discovery`
+  - `tests/test_custodian_sweep.py::test_emit_dry_run_reports_zero_finding_skip`
+  - `tests/test_dependency_drift_collector.py::...::test_guard_all_files_deleted_during_discovery`
+  - `tests/test_proposer_entrypoint.py::test_propose_from_candidates_cli_writes_artifact_in_dry_run`
+
+Sensible order: fix those 6, then add the suites in the same PR that proves
+them green. Operator decision — it trades a merge freeze for a real gate.
+
+### `audit` on Forgejo Actions — the last item on the PR-adapter spec
+
+`docs/specs/forgejo-pr-adapter.md` is complete except its final line: branch
+protection requires an `audit` status, produced today by a GitHub Actions
+workflow. Moving review to Forgejo needs that status produced there under an
+**identical context name**, or every PR blocks forever on a status nobody posts.
+
+Blocked on the operator: it needs a `forgejo-runner` binary downloaded and
+registered against the instance. Everything upstream of it is done —
+`ForgejoPRClient` exists and is verified against the live instance, and
+`pr_backend` (default `github`) is the one switch that performs the cutover.
+
+
 ### Split extraction_health_history.py, or the C29 exclusion becomes permanent
 - The module was at exactly 500 lines; #478's `edge_cases` field pushed it to 506 and
   it is now on the C29 exclusion list as an explicit deferral, not an exemption.
@@ -89,6 +127,43 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 
 ## Done
+
+### 2026-08-18/19: Plane → Forgejo board migration (✅ COMPLETE)
+
+The fleet's board is a self-hosted Forgejo instance. Plane is gone from the
+codebase.
+
+Recon first, and it changed the plan: **Plane was never live on this host.**
+Port 8080 belongs to an unrelated stack's status-service, the config carried the
+all-zeros placeholder project id, and every board-worker cycle had been logging
+`failed to list issues` for its entire life. The "drain to zero" the board spec
+planned for was vacuous — there was nothing to migrate. The cutover was
+therefore not "move the board" but "give the fleet a live board for the first
+time".
+
+  - #512-#515  `PRClient` seam extracted; all 17 callers migrated (ratchet 17→0)
+  - #516       Forgejo deployed, board repo + labels bootstrapped, config flipped,
+               fleet restarted; Plane deployment/smoke/subcommands retired
+  - #517       `ForgejoPRClient` — and the spec's hardest finding dissolved:
+               Forgejo 13 has `apply_to_admins`, which IS `enforce_admins`, so the
+               fail-closed merge gate maps 1:1 instead of needing a redesign
+  - #519       setup wizard onboards onto Forgejo; board ratchet reaches 0
+  - #520       egress proxy joined the fleet lifecycle (it was never started by
+               `watch-all`, and containment fails closed per-task — the fleet
+               could look healthy and execute nothing)
+  - #521-#523  `adapters/plane` deleted (−1453 lines); `board_backend` narrowed to
+               `Literal["forgejo"]`
+
+Review stays on GitHub deliberately: `pr_backend` defaults to `github` and
+flipping it is the cutover act, gated on `audit` existing on Forgejo Actions.
+
+Three lessons recorded in `.console/log.md`, all one shape — **a measurement
+that reported something other than the truth**: the "egress flake" was my own
+gate scripts leaking `OC_EGRESS_SNI_STRICT=1` into pytest (the suite was always
+green); worktrees lack the venv, the env file and the editable install, so bare
+`python`/`ty` there measure the *main* checkout; and an empty directory left by
+`git rm` is still an importable PEP 420 namespace package.
+
 
 ### 2026-08-17: Watcher supervisor-tag migration (✅ COMPLETE)
 - **Objective**: get every running supervisor onto the `oc-watch-supervisor=<role>`
