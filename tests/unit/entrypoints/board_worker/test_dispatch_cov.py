@@ -16,7 +16,8 @@ from operations_center.entrypoints.board_worker import labels as labels_mod
 def _make_settings(repos=None):
     return SimpleNamespace(
         repos=repos or {},
-        plane=SimpleNamespace(project_id="proj-1"),
+        board_backend="forgejo",
+        forgejo=SimpleNamespace(owner="protocolwarden", repo="board"),
         team_executor=SimpleNamespace(timeout_seconds=900),
     )
 

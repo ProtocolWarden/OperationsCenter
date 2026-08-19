@@ -75,12 +75,6 @@ def fetch_npm_latest(package_name: str) -> str | None:
     return None
 
 
-def plane_latest_from_env(env: dict[str, str]) -> tuple[str | None, str | None]:
-    pinned = normalize_version(env.get("OPERATIONS_CENTER_PLANE_VERSION"))
-    setup_url = env.get("OPERATIONS_CENTER_PLANE_SETUP_URL") or None
-    return pinned, setup_url
-
-
 def executor_backend_status(module: str) -> tuple[bool, str | None]:
     """Return ``(importable, distribution version)`` for an execute backend module.
 
@@ -106,39 +100,49 @@ def executor_backend_status(module: str) -> tuple[bool, str | None]:
     return True, None
 
 
-def current_plane_health(settings: Settings) -> bool:
-    if settings.plane is None:
-        return False
+def current_board_status(settings: Settings) -> tuple[str | None, bool]:
+    """Version and reachability of the Forgejo instance serving the board.
+
+    Replaces the Plane service row this module used to carry. `/api/v1/version`
+    needs no auth and answers both questions at once, so a failure here is
+    exactly what an operator wants to see in a dependency report: the board is
+    the one service whose absence stops everything.
+    """
+    cfg = getattr(settings, "forgejo", None)
+    if cfg is None:
+        return None, False
     try:
-        response = httpx.get(settings.plane.base_url, timeout=10.0)
+        response = httpx.get(f"{cfg.base_url.rstrip('/')}/api/v1/version", timeout=10.0)
     except httpx.HTTPError:
-        return False
-    return response.status_code < 500
+        return None, False
+    if response.status_code >= 400:
+        return None, False
+    payload = response.json()
+    if not isinstance(payload, dict):
+        return None, True
+    return normalize_version(str(payload.get("version") or "").strip()), True
 
 
 def collect_dependency_statuses(settings: Settings, env: dict[str, str]) -> list[DependencyStatus]:
     statuses: list[DependencyStatus] = []
 
-    plane_pinned, _ = plane_latest_from_env(env)
-    plane_latest = fetch_github_latest_release("makeplane", "plane")
-    plane_notes: list[str] = []
-    plane_healthy = current_plane_health(settings)
-    if not plane_healthy:
-        plane_notes.append("Plane base URL is not reachable.")
-    if plane_pinned and plane_latest and plane_pinned != plane_latest:
-        plane_notes.append(
-            f"Pinned release {plane_pinned} differs from upstream latest {plane_latest}."
-        )
+    board_version, board_healthy = current_board_status(settings)
+    board_notes: list[str] = []
+    if not board_healthy:
+        board_notes.append("Forgejo instance is not reachable — the fleet has no board.")
     statuses.append(
         DependencyStatus(
-            key="plane",
-            label="Plane",
+            key="forgejo",
+            label="Forgejo (board)",
             kind="service",
-            installed_version=None,
-            pinned_version=plane_pinned,
-            upstream_latest=plane_latest,
-            healthy=plane_healthy,
-            notes=plane_notes,
+            installed_version=board_version,
+            pinned_version=None,
+            # Forgejo publishes releases on Codeberg, not the GitHub releases
+            # API the other rows use. Reporting None is honest; inventing a
+            # second fetcher for one row is not this change.
+            upstream_latest=None,
+            healthy=board_healthy,
+            notes=board_notes,
         )
     )
 
@@ -301,7 +305,9 @@ def main() -> None:
         description="Check pinned tool versions against installed state and upstream latest versions"
     )
     parser.add_argument("--config", required=True)
-    parser.add_argument("--create-plane-tasks", action="store_true")
+    # Renamed from --create-plane-tasks: it always went through
+    # make_board_client and was never Plane-specific, only Plane-named.
+    parser.add_argument("--create-board-tasks", action="store_true")
     args = parser.parse_args()
 
     settings = load_settings(args.config)
@@ -315,7 +321,7 @@ def main() -> None:
     statuses = collect_dependency_statuses(settings, env)
     created_task_ids: list[str] = []
 
-    if args.create_plane_tasks:
+    if args.create_board_tasks:
         client = make_board_client(settings)
         try:
             for status in actionable_statuses(statuses):

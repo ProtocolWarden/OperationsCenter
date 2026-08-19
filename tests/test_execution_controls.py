@@ -324,18 +324,11 @@ def test_backend_cap_settings_pydantic_default():
 def test_settings_backend_caps_default_empty():
     from operations_center.config.settings import (
         GitSettings,
-        PlaneSettings,
         Settings,
         TeamExecutorSettings,
     )
 
     s = Settings(
-        plane=PlaneSettings(
-            base_url="http://x",
-            api_token_env="X",
-            workspace_slug="w",
-            project_id="p",
-        ),
         git=GitSettings(),
         team_executor=TeamExecutorSettings(),
         repos={},

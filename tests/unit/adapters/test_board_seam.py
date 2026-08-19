@@ -1,21 +1,18 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-"""Hold the board seam, and make the remaining coupling shrink rather than drift.
+"""Hold the board seam, now that there is one backend behind it.
 
-OC's board is Plane today and will not be. What makes replacing it expensive is
-not the surface — eleven operations — but that callers name `PlaneClient`
-directly, construct it from the same four settings fields, and type-hint against
-the concrete class. Ten of them had independently hand-rolled the identical
-`_make_plane_client()` helper.
+The seam was built to make replacing Plane a one-place change, and it did that:
+37 files named `PlaneClient` directly, then 2, then none, and the adapter is
+gone. What it protects from here is the same boundary aimed at the live
+backend — because the reason a caller must not name a concrete client has
+nothing to do with *which* client it is.
 
-`operations_center.adapters.board` is the seam: a `BoardClient` protocol and one
-`make_board_client()` factory. These tests do two jobs:
-
-* pin the seam itself — the protocol matches what the fleet actually calls, and
-  the concrete client still satisfies it;
-* ratchet the migration — `STILL_IMPORTING_PLANE` is the accepted remainder, and
-  it may only shrink. A new file reaching past the boundary fails here, which is
-  the difference between a boundary and a suggestion.
+* the protocol matches what the fleet actually calls, and the concrete client
+  still satisfies it;
+* the factory is the one place a backend is named, and it refuses to guess;
+* nothing outside ``adapters/`` imports the concrete client, with one
+  allowlisted exception whose reason is recorded below.
 """
 
 from __future__ import annotations
@@ -27,40 +24,36 @@ import pytest
 
 SRC = pathlib.Path(__file__).resolve().parents[3] / "src" / "operations_center"
 
-#: Files that name `PlaneClient` on purpose, and should keep doing so.
+#: Files that construct a concrete board client on purpose.
 #:
-#: This began as a burn-down list of 37 unmigrated callers. It is now empty of
-#: migration work — every caller goes through the seam. What remains are two
-#: files that exercise Plane *specifically*; routing them through
-#: `make_board_client` would delete the thing they test.
+#: The setup wizard validates credentials the operator has just typed, before a
+#: `Settings` object exists for `make_board_client` to build from. That is a
+#: real reason, not a shortcut — and it is the only one. This began as a
+#: 37-entry burn-down list against `PlaneClient`; Plane is gone, so the same
+#: boundary now guards `ForgejoClient`.
 #:
-#: Adding to this set is not a way to avoid migrating. A new entry needs a reason
-#: of the same kind: "this tests Plane itself", not "this was easier".
-#: Empty. The setup wizard was the last entry: it constructs a board client
-#: directly because it validates credentials the operator has just typed, before
-#: any Settings object exists for `make_board_client` to build from. That reason
-#: still holds — but since the wizard now onboards operators onto Forgejo, the
-#: client it constructs is `ForgejoClient`, and nothing imports `PlaneClient`
-#: outside `adapters/` any more.
-PLANE_SPECIFIC_BY_DESIGN: set[str] = set()
+#: Adding an entry needs a reason of the same kind: "this validates config that
+#: does not exist yet", not "this was easier".
+CONSTRUCTS_DIRECTLY_BY_DESIGN = {
+    "entrypoints/setup/main.py",
+}
 
-#: Kept as the old name so the ratchet tests below read unchanged.
-STILL_IMPORTING_PLANE = PLANE_SPECIFIC_BY_DESIGN
-
-_IMPORTS_PLANE = re.compile(
-    r"^[ \t]*from operations_center\.adapters\.plane(?:\.client)? import PlaneClient",
+_IMPORTS_CONCRETE = re.compile(
+    r"^[ \t]*from operations_center\.adapters\.forgejo(?:\.client)? import .*ForgejoClient",
     re.M,
 )
 
 
 def _importers() -> set[str]:
-    """Files outside adapters/ that import the concrete client."""
+    """Files outside adapters/ that import the concrete board client."""
     found = set()
     for path in SRC.rglob("*.py"):
         rel = path.relative_to(SRC).as_posix()
         if rel.startswith("adapters/") or "__pycache__" in rel:
             continue
-        if _IMPORTS_PLANE.search(path.read_text(encoding="utf-8", errors="replace")):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        # The PR-side client lives in the same package and is a different seam.
+        if _IMPORTS_CONCRETE.search(text) and "ForgejoPRClient" not in text:
             found.add(rel)
     return found
 
@@ -89,15 +82,15 @@ def _declared_operations(proto: type) -> set[str]:
 
 
 def test_the_concrete_client_satisfies_the_protocol():
-    """PlaneClient must remain usable as a BoardClient.
+    """ForgejoClient must remain usable as a BoardClient.
 
     If it stops, callers type-hinting the protocol are lying about what they
     accept, and the seam is decorative.
     """
-    from operations_center.adapters.plane import PlaneClient
+    from operations_center.adapters.forgejo import ForgejoClient
 
-    missing = sorted(op for op in BOARD_OPERATIONS if not hasattr(PlaneClient, op))
-    assert not missing, f"PlaneClient no longer provides: {missing}"
+    missing = sorted(op for op in BOARD_OPERATIONS if not hasattr(ForgejoClient, op))
+    assert not missing, f"ForgejoClient no longer provides: {missing}"
 
 
 def test_protocol_declares_every_operation_the_fleet_calls():
@@ -105,14 +98,23 @@ def test_protocol_declares_every_operation_the_fleet_calls():
 
     A protocol missing an operation pushes callers back to the concrete class —
     which is exactly what happened with `set_priority`: it was absent, so
-    triage_scan reached through the adapter's private httpx client to PATCH
-    Plane's URL directly.
+    triage_scan reached through the adapter's private httpx client to PATCH the
+    board's URL directly.
     """
     from operations_center.adapters.board import BoardClient
 
     declared = _declared_operations(BoardClient)
     missing = sorted(BOARD_OPERATIONS - declared)
     assert not missing, f"BoardClient does not declare: {missing}"
+
+
+# ── construction ─────────────────────────────────────────────────────────────
+
+
+class _Forgejo:
+    base_url = "http://forge.local"
+    owner = "protocolwarden"
+    repo = "board"
 
 
 def test_factory_builds_from_settings_without_naming_a_backend(monkeypatch):
@@ -126,39 +128,33 @@ def test_factory_builds_from_settings_without_naming_a_backend(monkeypatch):
             captured.update(kw)
 
     monkeypatch.setattr(
-        "operations_center.adapters.plane.PlaneClient", _Fake, raising=False
+        "operations_center.adapters.forgejo.ForgejoClient", _Fake, raising=False
     )
 
-    class _Board:
-        base_url = "http://board.local"
-        workspace_slug = "ws"
-        project_id = "proj"
-
     class _Settings:
-        plane = _Board()
+        board_backend = "forgejo"
+        forgejo = _Forgejo()
 
-        def plane_token(self):
+        def forgejo_token(self):
             return "tok"
 
     board.make_board_client(_Settings())
     assert captured == {
-        "base_url": "http://board.local",
+        "base_url": "http://forge.local",
         "api_token": "tok",
-        "workspace_slug": "ws",
-        "project_id": "proj",
+        "owner": "protocolwarden",
+        "repo": "board",
     }, "the factory changed the construction contract the callers relied on"
 
 
 def test_factory_tolerates_a_settings_double(monkeypatch):
     """A MagicMock settings object must still build the default backend.
 
-    `getattr(settings, "board_backend", "plane")` looks like it defaults, but a
+    `getattr(settings, "board_backend", ...)` looks like it defaults, but a
     MagicMock answers every attribute, so the default is unreachable and the
-    factory raised "unknown board_backend <MagicMock ...>". That is not a
-    hypothetical: it broke
-    `tests/maintenance/test_orphan_branch_check.py::test_emit_plane_task_updates_existing_issue`
-    from #509 until now, and went unnoticed because CI runs `tests/unit` and
-    never `tests/maintenance/`.
+    factory raised "unknown board_backend <MagicMock ...>". That is not
+    hypothetical: it broke test_orphan_branch_check from #509 until #513, and
+    went unnoticed because CI runs `tests/unit` and never `tests/maintenance/`.
     """
     from unittest.mock import MagicMock
 
@@ -171,11 +167,24 @@ def test_factory_tolerates_a_settings_double(monkeypatch):
             built.update(kw)
 
     monkeypatch.setattr(
-        "operations_center.adapters.plane.PlaneClient", _Fake, raising=False
+        "operations_center.adapters.forgejo.ForgejoClient", _Fake, raising=False
     )
 
     board.make_board_client(MagicMock())
     assert built, "a settings double no longer builds the default backend"
+
+
+def test_factory_refuses_forgejo_without_a_config_block():
+    """No silent fallback: a board the fleet cannot reach must be an error, not
+    an empty-looking queue."""
+    from operations_center.adapters import board
+
+    class _Settings:
+        board_backend = "forgejo"
+        forgejo = None
+
+    with pytest.raises(RuntimeError, match="no `forgejo:` settings block"):
+        board.make_board_client(_Settings())
 
 
 def test_factory_still_rejects_a_real_unknown_backend():
@@ -189,68 +198,45 @@ def test_factory_still_rejects_a_real_unknown_backend():
         board.make_board_client(_Settings())
 
 
-def test_factory_refuses_plane_backend_without_a_plane_block():
-    """`plane` is optional in Settings since the Forgejo cutover.
+def test_asking_for_plane_says_it_was_removed():
+    """A config left on the retired backend deserves a straight answer.
 
-    A config that says board_backend: plane but carries no plane block must fail
-    loudly at construction — the same contract the forgejo branch has — because
-    a board the fleet cannot reach looks like an empty queue, not an error.
+    "unknown board_backend 'plane'" would read as a typo. It was a real backend
+    until the 2026-08-18 cutover, and an operator with an old config is asking a
+    reasonable question.
     """
     from operations_center.adapters import board
 
     class _Settings:
         board_backend = "plane"
-        plane = None
 
-    with pytest.raises(RuntimeError, match="no `plane:` settings block"):
+    with pytest.raises(RuntimeError, match="removed"):
         board.make_board_client(_Settings())
 
 
-class _ForgejoBlock:
-    owner = "Operations_Center_Admin"
-    repo = "board"
+# ── the project id ───────────────────────────────────────────────────────────
 
 
-class _PlaneBlock:
-    project_id = "proj-uuid"
-
-
-def test_board_project_id_follows_the_forgejo_backend():
-    """Forgejo's natural identifier is the board repo itself."""
+def test_board_project_id_comes_from_the_active_backend():
     from operations_center.adapters.board import board_project_id
 
     class _Settings:
         board_backend = "forgejo"
-        forgejo = _ForgejoBlock()
+        forgejo = _Forgejo()
 
-    assert board_project_id(_Settings()) == "Operations_Center_Admin/board"
+    assert board_project_id(_Settings()) == "protocolwarden/board"
 
 
-def test_board_project_id_follows_the_plane_backend():
+def test_board_project_id_fails_loudly_without_a_config_block():
+    """#516's concern: this sits on the dispatch path, so an AttributeError here
+    means a correctly-configured-looking fleet executes nothing."""
     from operations_center.adapters.board import board_project_id
 
     class _Settings:
-        board_backend = "plane"
-        plane = _PlaneBlock()
-
-    assert board_project_id(_Settings()) == "proj-uuid"
-
-
-@pytest.mark.parametrize("backend", ["plane", "forgejo"])
-def test_board_project_id_fails_loudly_without_the_active_block(backend):
-    """The council's #516 concern: `settings.plane.project_id` sat on the
-    dispatch path, so a Forgejo-only config (exactly what the example now
-    recommends) raised AttributeError before any task could execute. The id
-    must come from the active backend, and a missing block must be a loud
-    RuntimeError, not an AttributeError."""
-    from operations_center.adapters.board import board_project_id
-
-    class _Settings:
-        board_backend = backend
-        plane = None
+        board_backend = "forgejo"
         forgejo = None
 
-    with pytest.raises(RuntimeError, match="settings block"):
+    with pytest.raises(RuntimeError, match="no `forgejo:` settings block"):
         board_project_id(_Settings())
 
 
@@ -261,19 +247,25 @@ def test_board_project_id_tolerates_a_settings_double():
     from operations_center.adapters.board import board_project_id
 
     settings = MagicMock()
-    settings.plane.project_id = "proj-uuid"
-    assert board_project_id(settings) == "proj-uuid"
+    settings.forgejo.owner = "o"
+    settings.forgejo.repo = "r"
+    assert board_project_id(settings) == "o/r"
 
 
-# ── the ratchet ──────────────────────────────────────────────────────────────
+# ── the boundary ─────────────────────────────────────────────────────────────
 
 
-def test_no_new_file_reaches_past_the_boundary():
-    """The accepted remainder may shrink, never grow."""
+def test_no_file_reaches_past_the_boundary():
+    """Callers depend on `BoardClient`, never on the concrete class.
+
+    This is the ratchet that took Plane from 37 importers to zero, aimed now at
+    the backend that actually exists. The reason it existed never depended on
+    which backend it was.
+    """
     actual = _importers()
-    added = sorted(actual - STILL_IMPORTING_PLANE)
+    added = sorted(actual - CONSTRUCTS_DIRECTLY_BY_DESIGN)
     assert not added, (
-        f"{len(added)} file(s) import PlaneClient directly without being on the "
+        f"{len(added)} file(s) import ForgejoClient directly without being on the "
         f"accepted list: {added}. Use "
         "`from operations_center.adapters.board import BoardClient, make_board_client` "
         "instead — the point of the seam is that swapping the board is one change, "
@@ -282,58 +274,58 @@ def test_no_new_file_reaches_past_the_boundary():
 
 
 def test_allowlist_has_no_stale_entries():
-    """A migrated file must be struck off, so the list measures real remaining work."""
+    """A file that stops constructing directly must be struck off, so the list
+    measures real remaining coupling."""
     actual = _importers()
-    stale = sorted(STILL_IMPORTING_PLANE - actual)
+    stale = sorted(CONSTRUCTS_DIRECTLY_BY_DESIGN - actual)
     assert not stale, (
-        f"{len(stale)} file(s) no longer import PlaneClient but are still listed: "
-        f"{stale}. Remove them from STILL_IMPORTING_PLANE."
+        f"{len(stale)} file(s) no longer import ForgejoClient but are still "
+        f"listed: {stale}. Remove them from CONSTRUCTS_DIRECTLY_BY_DESIGN."
     )
-
-
-@pytest.mark.parametrize("migrated", [
-    "entrypoints/maintenance/board_unblock.py",
-    "entrypoints/maintenance/board_unblock_task.py",
-    "entrypoints/maintenance/triage_scan.py",
-    "entrypoints/board_worker/main.py",
-    "entrypoints/pr_review_watcher/main.py",
-    "entrypoints/proposer/main.py",
-    "entrypoints/spec_hygiene/main.py",
-    "propagation/plane_adapter.py",
-    "scheduled_tasks/runner.py",
-    "priority_scans.py",
-])
-def test_migrated_files_stay_migrated(migrated):
-    """Pin this slice so it cannot quietly regress."""
-    text = (SRC / migrated).read_text(encoding="utf-8")
-    assert "PlaneClient" not in text, f"{migrated} names PlaneClient again"
-    assert "adapters.board" in text, f"{migrated} no longer uses the seam"
 
 
 def test_the_hand_rolled_factories_are_gone():
-    """Ten copies of the same constructor was the evidence the seam was missing."""
-    remaining = [
+    """Ten copies of the same constructor was the evidence the seam was missing.
+
+    Kept pointed at the current backend so the pattern cannot grow back under a
+    new name.
+    """
+    remaining = []
+    for p in SRC.rglob("*.py"):
+        rel = p.relative_to(SRC).as_posix()
+        if rel.startswith("adapters/") or "__pycache__" in rel:
+            continue
+        text = p.read_text(encoding="utf-8", errors="replace")
+        if re.search(r"def _(?:make_)?(?:board|forgejo)_client\b", text) and re.search(
+            r"ForgejoClient\(", text
+        ):
+            remaining.append(rel)
+    assert not remaining, (
+        f"{len(remaining)} file(s) hand-roll the client constructor: {remaining}"
+    )
+
+
+def test_the_retired_backend_is_actually_gone():
+    """The adapter package, not just its callers.
+
+    Leaving 382 lines of unreachable client behind would be a second source of
+    truth about how the fleet talks to a board — one nothing exercises, and so
+    one nothing keeps honest.
+    """
+    assert not (SRC / "adapters" / "plane").exists(), (
+        "adapters/plane is back; the board backend is Forgejo"
+    )
+    # Deliberately importers, not every mention: several docstrings narrate the
+    # migration ("callers imported PlaneClient by name..."), and that history is
+    # why the seam exists. What must not come back is a live dependency.
+    importers = sorted(
         p.relative_to(SRC).as_posix()
         for p in SRC.rglob("*.py")
         if "__pycache__" not in p.as_posix()
-        and re.search(r"def _(?:make_)?plane_client\b", p.read_text(encoding="utf-8", errors="replace"))
-        and re.search(r"PlaneClient\(", p.read_text(encoding="utf-8", errors="replace"))
-    ]
-    assert not remaining, (
-        f"{len(remaining)} file(s) still hand-roll the client constructor: {remaining}"
+        and re.search(
+            r"^[ \t]*(from operations_center\.adapters\.plane|import operations_center\.adapters\.plane)",
+            p.read_text(encoding="utf-8", errors="replace"),
+            re.M,
+        )
     )
-
-
-def test_the_migration_is_finished():
-    """No caller should be left to migrate.
-
-    The seam existed to make swapping the board a one-place change. That is only
-    true once every caller goes through it — a seam with stragglers still forces
-    a per-caller change at cutover, which is the cost it was built to remove.
-    """
-    actual = _importers()
-    unmigrated = sorted(actual - PLANE_SPECIFIC_BY_DESIGN)
-    assert not unmigrated, (
-        f"{len(unmigrated)} caller(s) still import PlaneClient without a "
-        f"design reason: {unmigrated}"
-    )
+    assert not importers, f"files still import the removed adapter: {importers}"

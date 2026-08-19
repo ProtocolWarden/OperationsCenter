@@ -2,12 +2,16 @@
 # Copyright (C) 2026 ProtocolWarden
 """The board seam: what the fleet needs from a task board, and one place to build it.
 
-OC's board is Plane today and will not be. Replacing it is currently a 37-file
-change, not because the surface is large — it is eleven operations — but because
-every one of those files imports `PlaneClient` by name, constructs it from the
-same four settings fields, and type-hints against the concrete class. Ten of them
-have independently hand-rolled the identical `_make_plane_client()` helper, which
-is the clearest possible evidence that the missing piece is a shared one.
+OC's board was Plane, and replacing it was a 37-file change — not because the
+surface is large (it is eleven operations) but because every one of those files
+imported `PlaneClient` by name, constructed it from the same four settings
+fields, and type-hinted against the concrete class. Ten had independently
+hand-rolled the identical `_make_plane_client()` helper, which was the clearest
+possible evidence that the missing piece was a shared one.
+
+The migration finished on 2026-08-18 and the Plane adapter is gone. What remains
+is the property that made it finishable: callers name this module, not a
+backend.
 
 This module is that piece:
 
@@ -21,7 +25,7 @@ rename at each call site, not a behavioural change. That is deliberate: the
 migration should be boring and reviewable, and any behaviour change should be its
 own commit.
 
-Nothing outside ``adapters/`` should import `PlaneClient` directly.
+Nothing outside ``adapters/`` should import a concrete client directly.
 ``tests/unit/adapters/test_board_seam.py`` enforces that against a shrinking
 allowlist, so the boundary tightens instead of eroding.
 """
@@ -92,7 +96,7 @@ def make_board_client(settings: Any) -> BoardClient:
     """Build the configured board client.
 
     The one place that names a concrete backend. Every caller that used to
-    construct `PlaneClient` from `settings.plane.*` calls this instead, so
+    construct a concrete client from its settings block calls this instead, so
     pointing the fleet at a different board is a change here and nowhere else.
 
     Kept byte-compatible with the ten hand-rolled `_make_plane_client()` helpers
@@ -100,40 +104,24 @@ def make_board_client(settings: Any) -> BoardClient:
     change behaviour.
     """
     backend = _backend_name(settings)
+    _reject_retired(backend)
 
-    if backend == "forgejo":
-        from operations_center.adapters.forgejo import ForgejoClient
+    if backend != "forgejo":
+        raise RuntimeError(f"unknown board_backend {backend!r} (forgejo)")
 
-        cfg = settings.forgejo
-        if cfg is None:
-            raise RuntimeError(
-                "board_backend is 'forgejo' but no `forgejo:` settings block is "
-                "configured — refusing to fall back to Plane, because a silent "
-                "fallback would point the fleet at the board it is migrating off"
-            )
-        return ForgejoClient(
-            base_url=cfg.base_url,
-            api_token=settings.forgejo_token(),
-            owner=cfg.owner,
-            repo=cfg.repo,
-        )
+    from operations_center.adapters.forgejo import ForgejoClient
 
-    if backend != "plane":
-        raise RuntimeError(f"unknown board_backend {backend!r} (plane, forgejo)")
-
-    from operations_center.adapters.plane import PlaneClient
-
-    board = settings.plane
-    if board is None:
+    cfg = getattr(settings, "forgejo", None)
+    if cfg is None:
         raise RuntimeError(
-            "board_backend is 'plane' but no `plane:` settings block is "
+            "board_backend is 'forgejo' but no `forgejo:` settings block is "
             "configured — the fleet has no board to talk to"
         )
-    return PlaneClient(
-        base_url=board.base_url,
-        api_token=settings.plane_token(),
-        workspace_slug=board.workspace_slug,
-        project_id=board.project_id,
+    return ForgejoClient(
+        base_url=cfg.base_url,
+        api_token=settings.forgejo_token(),
+        owner=cfg.owner,
+        repo=cfg.repo,
     )
 
 
@@ -147,8 +135,23 @@ def _backend_name(settings: Any) -> str:
     validates this field as a str, so a non-string here means "nothing
     configured this", not "someone chose backend 42".
     """
-    backend = getattr(settings, "board_backend", "plane")
-    return backend if isinstance(backend, str) else "plane"
+    backend = getattr(settings, "board_backend", "forgejo")
+    return backend if isinstance(backend, str) else "forgejo"
+
+
+def _reject_retired(backend: str) -> None:
+    """Answer an old config honestly.
+
+    "unknown board_backend 'plane'" reads as a typo. Plane was a real backend
+    until the 2026-08-18 cutover, so an operator whose config still says it is
+    asking a reasonable question and deserves the actual answer.
+    """
+    if backend == "plane":
+        raise RuntimeError(
+            "board_backend 'plane' was removed — the Plane adapter is gone as of "
+            "the 2026-08-18 Forgejo cutover. Set `board_backend: forgejo` and a "
+            "`forgejo:` block (see config/operations_center.example.yaml)."
+        )
 
 
 def board_project_id(settings: Any) -> str:
@@ -165,23 +168,15 @@ def board_project_id(settings: Any) -> str:
     `owner/repo`.
     """
     backend = _backend_name(settings)
+    _reject_retired(backend)
 
-    if backend == "forgejo":
-        cfg = settings.forgejo
-        if cfg is None:
-            raise RuntimeError(
-                "board_backend is 'forgejo' but no `forgejo:` settings block is "
-                "configured — the fleet has no board to talk to"
-            )
-        return f"{cfg.owner}/{cfg.repo}"
+    if backend != "forgejo":
+        raise RuntimeError(f"unknown board_backend {backend!r} (forgejo)")
 
-    if backend != "plane":
-        raise RuntimeError(f"unknown board_backend {backend!r} (plane, forgejo)")
-
-    board = settings.plane
-    if board is None:
+    cfg = getattr(settings, "forgejo", None)
+    if cfg is None:
         raise RuntimeError(
-            "board_backend is 'plane' but no `plane:` settings block is "
+            "board_backend is 'forgejo' but no `forgejo:` settings block is "
             "configured — the fleet has no board to talk to"
         )
-    return board.project_id
+    return f"{cfg.owner}/{cfg.repo}"

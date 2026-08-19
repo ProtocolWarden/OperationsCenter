@@ -292,19 +292,12 @@ def test_factory_registers_aider_local(tmp_path: Path) -> None:
     from operations_center.backends.factory import CanonicalBackendRegistry
     from operations_center.config.settings import (
         GitSettings,
-        PlaneSettings,
         Settings,
         TeamExecutorSettings,
     )
     from operations_center.contracts.enums import BackendName
 
     settings = Settings(
-        plane=PlaneSettings(
-            base_url="http://plane.local",
-            api_token_env="PLANE_TOKEN",
-            workspace_slug="eng",
-            project_id="proj-1",
-        ),
         git=GitSettings(),
         team_executor=TeamExecutorSettings(),
         repos={},

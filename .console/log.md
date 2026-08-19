@@ -1,3 +1,34 @@
+## 2026-08-19 — the Plane adapter is deleted
+
+Point 3 of the migration. `adapters/plane` (382 lines) and its 1,068 lines of
+tests are gone; `PlaneSettings`, `Settings.plane` and `plane_token()` with
+them. `board_backend` narrows to `Literal["forgejo"]`, and a config still
+naming the retired backend gets an explanation rather than "Input should be
+'forgejo'", which would read as a typo.
+
+`dependency_check` traded its Plane service row for a Forgejo one — the board
+is the one service whose absence stops everything, so a dependency report
+without it would be blind where it matters most. `--create-plane-tasks` becomes
+`--create-board-tasks`; it always went through `make_board_client` and was
+never Plane-specific, only Plane-named.
+
+The board-seam ratchet is retargeted rather than retired: the reason a caller
+must not name a concrete client never depended on which client it was, so it
+now guards `ForgejoClient`, with the setup wizard as the single allowlisted
+direct constructor.
+
+Fallout worth recording: 30 unit tests broke, all fixtures describing a
+Plane-shaped settings object. Fixing them exposed a real gap — `settings.forgejo`
+raised AttributeError on a stub lacking the attribute instead of the explained
+"no `forgejo:` settings block" error sitting right below it. Both factory paths
+use `getattr` now.
+
+Measurement note, fourth instance this session: a bare `python -c` from a
+worktree resolves `operations_center` through the editable install to the MAIN
+checkout, so my first check of the new validator reported "no error" against
+code that did not have it. pytest is fine (pyproject sets `pythonpath`); bare
+python needs PYTHONPATH.
+
 ## 2026-08-19 — council round 2: unset is not the same as misconfigured
 
 #520 again, and the reviewer was right again. `egress_proxy_hostport` returned
