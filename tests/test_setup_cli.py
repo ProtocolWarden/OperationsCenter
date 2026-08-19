@@ -32,15 +32,11 @@ from operations_center.entrypoints.setup.providers import (
 
 def test_render_settings_yaml_contains_local_repo_bootstrap_defaults() -> None:
     answers = SetupAnswers(
-        plane_base_url="http://plane.local",
-        plane_workspace_slug="engineering",
-        plane_project_id="project-123",
-        plane_api_token_env="PLANE_API_TOKEN",
-        plane_api_token_value="plane-secret",
-        plane_version=None,
-        plane_setup_url=None,
-        plane_start_command="docker compose up -d",
-        plane_open_browser=True,
+        forgejo_base_url="http://forge.local",
+        forgejo_owner="protocolwarden",
+        forgejo_repo="board",
+        forgejo_api_token_env="FORGEJO_API_TOKEN",
+        forgejo_api_token_value="forge-secret",
         git_provider="github",
         git_token_env="GITHUB_TOKEN",
         git_token_value="gh-secret",
@@ -77,7 +73,9 @@ def test_render_settings_yaml_contains_local_repo_bootstrap_defaults() -> None:
 
     rendered = render_settings_yaml(answers)
 
-    assert "api_token_env: PLANE_API_TOKEN" in rendered
+    assert "api_token_env: FORGEJO_API_TOKEN" in rendered
+    assert "board_backend: forgejo" in rendered
+    assert "owner: protocolwarden" in rendered
     assert "token_env: GITHUB_TOKEN" in rendered
     assert "sign_commits: true" in rendered
     assert "signing_key: ABC12345" in rendered
@@ -134,15 +132,11 @@ def test_default_orchestrator_for_statuses_uses_preferred_smart_provider() -> No
 
 def test_render_env_file_for_subscription_mode_skips_provider_secret_export() -> None:
     answers = SetupAnswers(
-        plane_base_url="http://plane.local",
-        plane_workspace_slug="engineering",
-        plane_project_id="project-123",
-        plane_api_token_env="PLANE_API_TOKEN",
-        plane_api_token_value="plane-secret",
-        plane_version="v1.2.3",
-        plane_setup_url=None,
-        plane_start_command="docker compose up -d",
-        plane_open_browser=True,
+        forgejo_base_url="http://forge.local",
+        forgejo_owner="protocolwarden",
+        forgejo_repo="board",
+        forgejo_api_token_env="FORGEJO_API_TOKEN",
+        forgejo_api_token_value="forge-secret",
         git_provider="github",
         git_token_env="GITHUB_TOKEN",
         git_token_value="gh-secret",
@@ -179,11 +173,11 @@ def test_render_env_file_for_subscription_mode_skips_provider_secret_export() ->
 
     rendered = render_env_file(answers)
 
-    assert "export PLANE_API_TOKEN='plane-secret'" in rendered
-    assert "export OPERATIONS_CENTER_PLANE_URL='http://plane.local'" in rendered
-    assert "export OPERATIONS_CENTER_PLANE_START_COMMAND='docker compose up -d'" in rendered
-    assert "export OPERATIONS_CENTER_PLANE_VERSION='v1.2.3'" in rendered
-    assert "export OPERATIONS_CENTER_PLANE_OPEN_BROWSER='1'" in rendered
+    assert "export FORGEJO_API_TOKEN='forge-secret'" in rendered
+    # The board is a service the operator runs; setup no longer writes
+    # start-command / browser / version exports for it.
+    assert "PLANE" not in rendered
+    assert "OPERATIONS_CENTER_PLANE_START_COMMAND" not in rendered
     assert "export OPERATIONS_CENTER_EXECUTOR_INSTALL_REF='v0.4.272'" in rendered
     assert "export GITHUB_TOKEN='gh-secret'" in rendered
     assert "export OPERATIONS_CENTER_PROVIDER_CODEX_VERSION='0.117.0'" in rendered
@@ -197,15 +191,11 @@ def test_render_env_file_for_subscription_mode_skips_provider_secret_export() ->
 
 def test_render_settings_yaml_supports_multiple_repos() -> None:
     answers = SetupAnswers(
-        plane_base_url="http://plane.local",
-        plane_workspace_slug="engineering",
-        plane_project_id="project-123",
-        plane_api_token_env="PLANE_API_TOKEN",
-        plane_api_token_value="plane-secret",
-        plane_version=None,
-        plane_setup_url=None,
-        plane_start_command=None,
-        plane_open_browser=False,
+        forgejo_base_url="http://forge.local",
+        forgejo_owner="protocolwarden",
+        forgejo_repo="board",
+        forgejo_api_token_env="FORGEJO_API_TOKEN",
+        forgejo_api_token_value="forge-secret",
         git_provider="github",
         git_token_env="GITHUB_TOKEN",
         git_token_value="gh-secret",
@@ -261,15 +251,11 @@ def test_render_settings_yaml_supports_multiple_repos() -> None:
 
 def test_render_task_template_uses_default_repo() -> None:
     answers = SetupAnswers(
-        plane_base_url="http://plane.local",
-        plane_workspace_slug="engineering",
-        plane_project_id="project-123",
-        plane_api_token_env="PLANE_API_TOKEN",
-        plane_api_token_value="plane-secret",
-        plane_version=None,
-        plane_setup_url=None,
-        plane_start_command=None,
-        plane_open_browser=False,
+        forgejo_base_url="http://forge.local",
+        forgejo_owner="protocolwarden",
+        forgejo_repo="board",
+        forgejo_api_token_env="FORGEJO_API_TOKEN",
+        forgejo_api_token_value="forge-secret",
         git_provider="github",
         git_token_env="GITHUB_TOKEN",
         git_token_value="gh-secret",

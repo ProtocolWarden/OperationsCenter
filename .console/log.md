@@ -1,3 +1,26 @@
+## 2026-08-19 — setup wizard onboards onto Forgejo; board ratchet at zero
+
+The wizard was the last file importing `PlaneClient`. It now walks a new
+operator through a Forgejo instance and board repo instead: base URL, owner,
+board repo name, token env var, token — then verifies against the live instance
+before writing anything. It still constructs a client directly (that is why it
+was allowlisted): the whole point is to validate values the operator has just
+typed, before any Settings object exists for `make_board_client` to build from.
+The reason survives; the client it builds is now `ForgejoClient`.
+
+Dropped with the Plane deployment: the start-command prompt, the browser-open
+prompt, the release-tag/setup-URL pins, `run_local_command`, `maybe_open_url`.
+The board is a service the operator runs; setup does not boot it. Net -166
+lines.
+
+`PLANE_SPECIFIC_BY_DESIGN` is now empty — nothing outside `adapters/` imports
+`PlaneClient`. `adapters/plane` can be deleted whenever the factory's default
+backend flips, which is the next change.
+
+Left alone deliberately: `report_root: tools/report/execution_plane`. That is
+"execution plane" in the control-plane sense, not Plane the product — renaming
+it would be a keyword-match mistake.
+
 ## 2026-08-19 — env leakage, not a flake: suite is fully green
 
 Two egress-proxy tests failed on every gate run this session. I twice explained
