@@ -213,6 +213,9 @@ class TestDependencyDriftGuardMechanism:
                     )
             return original_stat(self)
 
+        # No glob patching needed: the collector walks with iterdir(), which
+        # stats nothing, so this counter sees only the collector's own calls on
+        # any CPython version.
         with patch.object(PathlibPath, "stat", counting_stat):
             ctx = _make_context(tmp_path)
             signal = DependencyDriftCollector().collect(ctx)

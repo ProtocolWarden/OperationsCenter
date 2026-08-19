@@ -368,6 +368,10 @@ class TestDependencyDriftCollectorRaceCondition:
                 stat_call_count[0] += 1
             return original_stat(self)
 
+        # The collector walks with iterdir(), which stats nothing, so this
+        # counts only the collector's own calls — on 3.11 and 3.12 alike. It
+        # used to count glob()'s internal exists() probe as well, which is why
+        # it passed locally on 3.12 and failed on CI's 3.11.
         with patch.object(Path, "stat", counting_stat):
             context = MagicMock()
             context.settings.report_root = tmp_artifact_dir

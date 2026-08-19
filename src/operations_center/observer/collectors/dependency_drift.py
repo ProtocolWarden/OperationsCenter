@@ -76,9 +76,38 @@ class DependencyDriftCollector:
         )
 
     def _latest_dependency_report(self, report_root: Path) -> tuple[Path, float] | None:
+        """Newest dependency report under *report_root*, or None.
+
+        Walks with `iterdir()` rather than `glob("*/dependency_report.json")`,
+        for two reasons that turned out to be the same reason:
+
+        * **One bad run directory must not hide the others.** A report dir that
+          is unreadable (EACCES/EIO — pathlib swallows only ENOENT, ENOTDIR,
+          EBADF and ELOOP) should be skipped, not abort discovery. `glob()`
+          cannot offer that: it is a generator, so the first error closes it and
+          the remaining entries are unreachable.
+        * **`glob()` probes differently across versions.** CPython 3.11 stats
+          every matched path through `exists()`; 3.12 does not. Anything built
+          on those internals behaves differently on the two interpreters — which
+          is precisely how this went green locally on 3.12 and red on CI's 3.11.
+
+        `iterdir()` stats nothing, so each entry's failure is isolated and the
+        interpreter's internals stay out of it.
+        """
         candidates_with_mtime = []
-        for path in report_root.glob("*/dependency_report.json"):
+        try:
+            entries = list(report_root.iterdir())
+        except OSError:
+            logger.debug(
+                "Dependency report discovery walk failed for %s", report_root, exc_info=True
+            )
+            return None
+
+        for entry in entries:
+            path = entry / "dependency_report.json"
             try:
+                if not entry.is_dir():
+                    continue
                 mtime = path.stat().st_mtime
                 candidates_with_mtime.append((path, mtime))
             except (FileNotFoundError, OSError):
