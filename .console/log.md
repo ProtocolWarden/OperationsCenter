@@ -1,3 +1,57 @@
+## 2026-08-19 — CI found what 3.12 could not
+
+The new `test-rest` job went red on its first run, which is the job doing its
+job. Three failures, all in `dependency_drift`, all invisible locally:
+**CPython 3.11's `glob()` stats every matched path via `exists()`; 3.12's does
+not.** Anything built on those internals behaves differently on the two
+interpreters.
+
+Two of them were assertions counting `Path.stat` calls to prove the collector
+does not re-stat after discovery — a fair question, but the counter was also
+counting the interpreter's probing. The third was a guard test where one
+unreadable run directory has to be skipped while the others are still read.
+
+My first fix made that worse: wrapping the walk in `list(glob(...))` meant a
+single bad entry aborted discovery entirely, turning "skip run1, use run2" into
+"not_available". `glob()` is a generator — the first error closes it, so
+per-entry recovery inside it is not possible at all.
+
+`_latest_dependency_report` now walks with `iterdir()`, which stats nothing.
+Each entry's failure is isolated, and the interpreter's glob internals stay out
+of it. All three pass on 3.11 and 3.12.
+
+Method note: I reproduced CI's 3.11 in a container to iterate. It also showed 2
+failures CI does not report (`test_resolve_repos_root_falls_back_to_checkout_layout`,
+`test_loader_reads_latest_snapshot_with_bounded_history`) — the container mounts
+a flat worktree with no sibling checkouts, which is what those two probe. CI is
+the authority for CI; the container is a proxy that was right about the 3 that
+mattered.
+
+## 2026-08-19 — the CI gap is closed
+
+~1,830 tests had no CI job. Fixed the 6 failures that made switching the gate on
+a decision, then added `test-rest` (`pytest tests/ --ignore=tests/unit`).
+
+The 6, and what they actually were:
+
+* **4 were bad mocks, not bugs.** They raised `FileNotFoundError("msg")` — no
+  errno. pathlib's predicates swallow only ignorable errnos, so the fabricated
+  error escaped `is_file()`/`is_dir()`, which a *real* vanished path never does.
+  Verified on 3.11 and 3.12: deleting a directory mid-scan makes `glob()` return
+  `[]`. My first fix guarded the walk against deletion — defending against
+  something that cannot happen — and I reverted it.
+* **1 was a real gap the bad mock was hiding.** EACCES/EIO are NOT ignorable, so
+  a log directory that becomes *unreadable* (not deleted) does raise out of the
+  walk. The guard is warranted for that, and now says so.
+* **1 was a real production bug**: `_emit`'s dry-run branch for zero findings sat
+  below an early return that already answered, so it was unreachable and a dry
+  run reported "skipped-zero-findings" — the past tense, for something it had not
+  done. Two tests asserted opposite labels for the same call; the module's own
+  `would-` convention and the dead branch settle it.
+* **1 was a stale patch target** from the board migration weeks ago
+  (`proposer.main.PlaneClient`), failing that whole time unnoticed — which is the
+  gap in miniature.
+
 ## 2026-08-19 — an empty directory is still an importable package
 
 After #521 merged, `tests/unit/adapters/test_board_seam.py::test_the_retired_backend_is_actually_gone`

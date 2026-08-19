@@ -7,6 +7,7 @@ and stat() calls (TOCTOU race condition) with graceful degradation and
 proper error handling.
 """
 
+import errno
 import json
 import os
 import threading
@@ -69,16 +70,20 @@ class TestLatestMatchingFileRaceCondition:
         file2 = tmp_artifact_dir / "deleted.log"
         file2.write_text("will be deleted")
 
-        # Patch stat() to delete file2 on first call, succeed on second
+        # Patch stat() so file2 vanishes the moment it is stat'd.
+        #
+        # This used to gate on `call_count == 1`, which silently never fired:
+        # `glob()` stats the parent directory internally (via is_dir()), so the
+        # first call was pathlib's, not ours, and file2 was never deleted. The
+        # identity check is what the test actually meant.
         original_stat = Path.stat
-        call_count = [0]
+        deleted = []
 
         def stat_with_deletion(self):
-            call_count[0] += 1
-            if self == file2 and call_count[0] == 1:
-                # Delete the file on first stat attempt
+            if self == file2 and not deleted:
+                deleted.append(True)
                 file2.unlink()
-                raise FileNotFoundError(f"No such file: {self}")
+                raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(self))
             return original_stat(self)
 
         with patch.object(Path, "stat", stat_with_deletion):
@@ -102,7 +107,7 @@ class TestLatestMatchingFileRaceCondition:
 
         def stat_with_deletion(self):
             if str(self).endswith(".log"):
-                raise FileNotFoundError(f"No such file: {self}")
+                raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(self))
             return original_stat(self)
 
         with patch.object(Path, "stat", stat_with_deletion):
@@ -363,6 +368,10 @@ class TestDependencyDriftCollectorRaceCondition:
                 stat_call_count[0] += 1
             return original_stat(self)
 
+        # The collector walks with iterdir(), which stats nothing, so this
+        # counts only the collector's own calls — on 3.11 and 3.12 alike. It
+        # used to count glob()'s internal exists() probe as well, which is why
+        # it passed locally on 3.12 and failed on CI's 3.11.
         with patch.object(Path, "stat", counting_stat):
             context = MagicMock()
             context.settings.report_root = tmp_artifact_dir
@@ -392,7 +401,7 @@ class TestDependencyDriftCollectorRaceCondition:
 
         def stat_with_deletion(self):
             if "dependency_report.json" in str(self):
-                raise FileNotFoundError(f"File deleted: {self}")
+                raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(self))
             return original_stat(self)
 
         with patch.object(Path, "stat", stat_with_deletion):
@@ -503,7 +512,7 @@ class TestEdgeCases:
 
         def stat_fail_symlinks(self):
             if self.name == "link.log":
-                raise FileNotFoundError(f"Symlink deleted: {self}")
+                raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(self))
             return original_stat(self)
 
         with patch.object(Path, "stat", stat_fail_symlinks):

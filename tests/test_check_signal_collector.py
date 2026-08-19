@@ -2,6 +2,8 @@
 # Copyright (C) 2026 ProtocolWarden
 from __future__ import annotations
 
+import errno
+import os
 import subprocess
 import sys
 from datetime import UTC, datetime
@@ -249,7 +251,7 @@ def test_guard_single_file_deleted_during_discovery(tmp_path: Path) -> None:
     def mock_stat(self):
         """Raise FileNotFoundError for log1, normal stat for log2."""
         if self.name == "unit_test.log":
-            raise FileNotFoundError(f"File deleted: {self}")
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(self))
         return original_stat(self)
 
     with patch.object(Path, "glob", mock_glob):
@@ -278,7 +280,7 @@ def test_guard_all_files_deleted_during_discovery(tmp_path: Path) -> None:
 
     def mock_stat(self):
         """Always raise FileNotFoundError."""
-        raise FileNotFoundError(f"File deleted: {self}")
+        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(self))
 
     with patch.object(Path, "glob", mock_glob):
         with patch.object(Path, "stat", mock_stat):
