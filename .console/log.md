@@ -1,3 +1,16 @@
+## 2026-08-19 — council: a health probe must not be able to throw
+
+The Forgejo row I added to `dependency_check` called `response.json()`
+unguarded. A 200 carrying non-JSON — a reverse-proxy error page, a login
+interstitial — would raise out of a function whose entire job is to *report*
+health, taking the whole dependency report down over one row. The Plane probe
+it replaced never parsed a body, so I introduced the failure mode while
+replacing something that did not have it.
+
+Guarded, and it returns unhealthy rather than healthy: something answering on
+that URL that is not the API means the fleet has no board. Five tests cover the
+probe, including the non-JSON path.
+
 ## 2026-08-19 — stale custodian exclusion caught by CI, not by me
 
 The Plane deletion PR went red on `custodian-doctor --strict`:

@@ -117,9 +117,18 @@ def current_board_status(settings: Settings) -> tuple[str | None, bool]:
         return None, False
     if response.status_code >= 400:
         return None, False
-    payload = response.json()
+    try:
+        payload = response.json()
+    except ValueError:
+        # Something answered on that URL, but it is not Forgejo's API — a
+        # reverse-proxy error page, a login interstitial, a captive portal.
+        # Letting the decode error escape would take down the whole dependency
+        # report over one row, and this function exists to *report* health, not
+        # to have it. "Up" would also be wrong: the fleet cannot use that as a
+        # board.
+        return None, False
     if not isinstance(payload, dict):
-        return None, True
+        return None, False
     return normalize_version(str(payload.get("version") or "").strip()), True
 
 
@@ -129,7 +138,10 @@ def collect_dependency_statuses(settings: Settings, env: dict[str, str]) -> list
     board_version, board_healthy = current_board_status(settings)
     board_notes: list[str] = []
     if not board_healthy:
-        board_notes.append("Forgejo instance is not reachable — the fleet has no board.")
+        board_notes.append(
+            "Forgejo did not answer /api/v1/version — unreachable, or not "
+            "the API. The fleet has no board."
+        )
     statuses.append(
         DependencyStatus(
             key="forgejo",
