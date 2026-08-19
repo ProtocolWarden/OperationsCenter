@@ -134,7 +134,11 @@ jobs:
       # report upload is gone; the reports are kept as artifacts below.
       - name: Upload coverage reports as artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        # v3, not v4: Forgejo implements the v3 artifact protocol. v4 fails
+        # with `GHESNotSupportedError: @actions/artifact v2.0.0+ ... not
+        # currently supported on GHES` — and it fails as a WARNING, so the
+        # step goes green while storing nothing, which is the worst of both.
+        uses: actions/upload-artifact@v3
         with:
           name: coverage-reports-${{ github.event_name }}
           path: |
@@ -278,7 +282,11 @@ jobs:
         run: pytest -q tests/integration/observer -m "integration" --no-header -rN
       - name: Upload snapshot validation reports
         if: always()
-        uses: actions/upload-artifact@v4
+        # v3, not v4: Forgejo implements the v3 artifact protocol. v4 fails
+        # with `GHESNotSupportedError: @actions/artifact v2.0.0+ ... not
+        # currently supported on GHES` — and it fails as a WARNING, so the
+        # step goes green while storing nothing, which is the worst of both.
+        uses: actions/upload-artifact@v3
         with:
           name: snapshot-validation-reports-${{ github.event_name }}
           path: |
@@ -323,7 +331,11 @@ jobs:
           "
       - name: Upload flaky test metrics
         if: always()
-        uses: actions/upload-artifact@v4
+        # v3, not v4: Forgejo implements the v3 artifact protocol. v4 fails
+        # with `GHESNotSupportedError: @actions/artifact v2.0.0+ ... not
+        # currently supported on GHES` — and it fails as a WARNING, so the
+        # step goes green while storing nothing, which is the worst of both.
+        uses: actions/upload-artifact@v3
         with:
           name: flaky-test-metrics-${{ github.run_id }}
           path: |

@@ -1246,7 +1246,7 @@ pytest tests/unit \
 
 ### CI/CD Test Execution
 
-The GitHub Actions CI pipeline (`.github/workflows/ci.yml`) enforces six quality gates:
+The Forgejo Actions CI pipeline (`.forgejo/workflows/ci.yml`) enforces six quality gates:
 
 #### 1. **Lint Check** (ruff)
 - **Command**: `ruff check .`
@@ -1397,7 +1397,7 @@ The **snapshot validation system** validates repository state through a 5-layer 
 ### Configuration Files
 
 **Key configuration files:**
-- `.github/workflows/ci.yml` — CI/CD pipeline definition
+- `.forgejo/workflows/ci.yml` — CI/CD pipeline definition
 - `pyproject.toml` — pytest configuration, markers, xdist settings
 - `.coveragerc` — coverage thresholds and exclusions
 - `ruff.toml` or `[tool.ruff]` in pyproject.toml — linting rules
@@ -1407,7 +1407,7 @@ The **snapshot validation system** validates repository state through a 5-layer 
 1. **Change coverage threshold**: Edit `fail_under` in `[report]` section of `.coveragerc`
 2. **Add pytest marker**: Add to `markers` list in `[tool.pytest.ini_options]` of `pyproject.toml`
 3. **Exclude files from coverage**: Edit `omit` list in `[run]` section of `.coveragerc`
-4. **Change CI trigger conditions**: Edit `.github/workflows/ci.yml` (on/if conditions)
+4. **Change CI trigger conditions**: Edit `.forgejo/workflows/ci.yml` (on/if conditions)
 
 ### Documentation and Guides
 

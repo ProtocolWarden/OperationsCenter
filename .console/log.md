@@ -1,3 +1,40 @@
+## 2026-08-19 — what a slower runner found: a real heartbeat race
+
+Forgejo CI ran the full unit suite for the first time: 8,603 passed, coverage
+85.97% (gate 85%), **7 failed**. Three distinct causes, only one of which was a
+test problem:
+
+**Five were mine.** `tests/unit/test_documentation_accuracy.py` asserts that
+`.github/workflows/ci.yml` exists — and this branch deletes it. Repointed at
+`.forgejo/workflows/ci.yml`, and fixed the three README references to the old
+path, which is precisely what those tests exist to police. Note `.github/`
+itself stays: it holds CODEOWNERS and the issue/PR templates, which GitHub
+still serves for the mirror.
+
+**One was the runner's privileges.** `test_store_with_read_only_directory`
+chmods a directory to 0444 and asserts the write raises. Root ignores directory
+permission bits, and act runs job containers as root — GitHub's hosted runners
+execute as the unprivileged `runner` user, which is why this only ever passed
+there. It asserts an OS guarantee that does not hold for uid 0, so it is now
+skipped when `geteuid() == 0` rather than pretended away.
+
+**One was a genuine production race** — `pipeline_trigger._run_pipeline`. The
+liveness thread writes `status="executing"` every tick, and `stop_event.set()`
+lived in the `finally`, i.e. AFTER the terminal `_write_heartbeat(status="idle")`.
+A tick landing in that window overwrites "idle", and the heartbeat then claims
+the pipeline is executing for ever after — which the watchdog reads as a live
+run and acts on. The window spans a `json.dumps` logging call, so it is not
+theoretical: under four CPU spinners the pre-fix code failed **2 of 25** runs,
+the fixed code 0 of 25. Every terminal path now stops the thread before writing
+its final status; the `finally` remains as an idempotent safety net.
+
+This is the value of running the gates somewhere slower than GitHub's runners:
+the race was always there, and hosted CI was fast enough to hide it.
+
+Also switched the three `actions/upload-artifact@v4` steps to `@v3`. Forgejo
+implements the v3 artifact protocol; v4 fails with `GHESNotSupportedError` —
+and fails as a *warning*, so the step went green while storing nothing.
+
 ## 2026-08-19 — Forgejo CI: the two things that actually blocked every job
 
 Checkout was fixed by `container.network: host` (job containers on a bridge
