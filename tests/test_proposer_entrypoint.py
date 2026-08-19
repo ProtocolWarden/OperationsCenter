@@ -115,7 +115,14 @@ def test_propose_from_candidates_cli_writes_artifact_in_dry_run(
         def close(self) -> None:
             return None
 
-    monkeypatch.setattr("operations_center.entrypoints.proposer.main.PlaneClient", FakeClient)
+    # Patched at the seam: proposer.main has called make_board_client since the
+    # board migration, and `PlaneClient` stopped existing there entirely. This
+    # test has been failing since then — invisible because no CI job runs it,
+    # which is the gap this change closes.
+    monkeypatch.setattr(
+        "operations_center.entrypoints.proposer.main.make_board_client",
+        lambda *a, **k: FakeClient(),
+    )
     monkeypatch.setattr(
         "sys.argv",
         ["propose-from-candidates", "--config", str(_write_config(tmp_path)), "--dry-run"],

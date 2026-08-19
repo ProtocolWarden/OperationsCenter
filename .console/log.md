@@ -1,3 +1,28 @@
+## 2026-08-19 — the CI gap is closed
+
+~1,830 tests had no CI job. Fixed the 6 failures that made switching the gate on
+a decision, then added `test-rest` (`pytest tests/ --ignore=tests/unit`).
+
+The 6, and what they actually were:
+
+* **4 were bad mocks, not bugs.** They raised `FileNotFoundError("msg")` — no
+  errno. pathlib's predicates swallow only ignorable errnos, so the fabricated
+  error escaped `is_file()`/`is_dir()`, which a *real* vanished path never does.
+  Verified on 3.11 and 3.12: deleting a directory mid-scan makes `glob()` return
+  `[]`. My first fix guarded the walk against deletion — defending against
+  something that cannot happen — and I reverted it.
+* **1 was a real gap the bad mock was hiding.** EACCES/EIO are NOT ignorable, so
+  a log directory that becomes *unreadable* (not deleted) does raise out of the
+  walk. The guard is warranted for that, and now says so.
+* **1 was a real production bug**: `_emit`'s dry-run branch for zero findings sat
+  below an early return that already answered, so it was unreachable and a dry
+  run reported "skipped-zero-findings" — the past tense, for something it had not
+  done. Two tests asserted opposite labels for the same call; the module's own
+  `would-` convention and the dead branch settle it.
+* **1 was a stale patch target** from the board migration weeks ago
+  (`proposer.main.PlaneClient`), failing that whole time unnoticed — which is the
+  gap in miniature.
+
 ## 2026-08-19 — an empty directory is still an importable package
 
 After #521 merged, `tests/unit/adapters/test_board_seam.py::test_the_retired_backend_is_actually_gone`

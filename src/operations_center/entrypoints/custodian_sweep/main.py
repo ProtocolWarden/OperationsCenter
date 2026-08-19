@@ -240,12 +240,14 @@ def _emit(
 ) -> str:
     """Create-or-comment one Plane task per repo. Returns action label."""
     if not sweep.error and sweep.total == 0:
-        return "skipped-zero-findings"
+        # dry_run has to be answered HERE. The dry-run-aware version of this
+        # same condition sat ~5 lines below and was unreachable, so a dry run
+        # reported "skipped-zero-findings" — the past tense, for something it
+        # had not done.
+        return "would-skip-zero-findings" if dry_run else "skipped-zero-findings"
     title = f"[{sweep.repo_key}] custodian sweep: {sweep.total} findings"
     body = _render_body(sweep, deltas)
     existing = existing_tasks.get(sweep.repo_key)
-    if sweep.error is None and sweep.total == 0:
-        return "skipped-zero-findings" if not dry_run else "would-skip-zero-findings"
     if dry_run:
         return "would-comment" if existing else "would-create"
     if existing:

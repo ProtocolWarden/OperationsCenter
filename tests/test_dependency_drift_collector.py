@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 from datetime import UTC, datetime
@@ -139,7 +140,7 @@ class TestDependencyDriftGuardMechanism:
         def mock_stat(self):
             """Raise FileNotFoundError for old_report (simulating deletion)."""
             if "run_old" in str(self):
-                raise FileNotFoundError(f"File deleted during discovery: {self}")
+                raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(self))
             return original_stat(self)
 
         with patch.object(PathlibPath, "stat", mock_stat):
@@ -164,7 +165,7 @@ class TestDependencyDriftGuardMechanism:
 
         def mock_stat(self):
             """Always raise FileNotFoundError."""
-            raise FileNotFoundError(f"File deleted during discovery: {self}")
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(self))
 
         with patch.object(PathlibPath, "stat", mock_stat):
             ctx = _make_context(tmp_path)
@@ -285,7 +286,7 @@ class TestDependencyDriftGuardMechanism:
             """Fail for run0 and run1."""
             path_str = str(self)
             if "run0" in path_str or "run1" in path_str:
-                raise FileNotFoundError(f"File deleted: {self}")
+                raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(self))
             return original_stat(self)
 
         with patch.object(PathlibPath, "stat", mock_stat):
@@ -312,7 +313,7 @@ class TestDependencyDriftGuardMechanism:
         def mock_read_text(self, **kwargs):
             """Fail on read after successful stat."""
             if "dependency_report.json" in str(self):
-                raise FileNotFoundError(f"File deleted before read: {self}")
+                raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(self))
             return original_read_text(self, **kwargs)
 
         with patch.object(PathlibPath, "read_text", mock_read_text):

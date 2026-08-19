@@ -110,7 +110,14 @@ def test_emit_skips_plane_mutation_for_zero_findings() -> None:
     assert action == "skipped-zero-findings"
 
 
-def test_emit_still_reports_zero_findings_skip_in_dry_run() -> None:
+def test_emit_reports_the_would_form_of_zero_findings_skip_in_dry_run() -> None:
+    """A dry run must not answer in the past tense.
+
+    This asserted "skipped-zero-findings" and passed only because the dry-run
+    branch below it was unreachable — the early return fired first. Its twin
+    (test_emit_dry_run_reports_zero_finding_skip) asserted the opposite and had
+    always failed. `would-` is what the rest of _emit uses for dry runs.
+    """
     plane = SimpleNamespace(
         comment_issue=lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("unexpected")),
         create_issue=lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("unexpected")),
@@ -119,7 +126,7 @@ def test_emit_still_reports_zero_findings_skip_in_dry_run() -> None:
 
     action = _emit(sweep, {}, plane, existing_tasks={}, dry_run=True)
 
-    assert action == "skipped-zero-findings"
+    assert action == "would-skip-zero-findings"
 
 
 def test_index_open_sweep_tasks_maps_repo_key_to_issue() -> None:

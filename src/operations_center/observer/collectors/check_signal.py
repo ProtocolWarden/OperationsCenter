@@ -19,8 +19,32 @@ logger = logging.getLogger(__name__)
 
 
 def latest_matching_file(root: Path, pattern: str) -> tuple[Path, float] | None:
+    """Newest file matching *pattern* under *root*, or None if there is none.
+
+    Two different failures, guarded for two different reasons:
+
+    * The per-file `stat()` is a genuine TOCTOU race — a file can vanish
+      between the walk yielding it and us stating it, and `stat()` does not
+      swallow that.
+    * The walk is guarded for I/O errors, NOT for deletion. `glob()` resolves
+      the root through `is_dir()`, which swallows only pathlib's ignorable
+      errnos (ENOENT, ENOTDIR, EBADF, ELOOP) — so a *deleted* root already
+      yields [] with no help from us. EACCES and EIO are not on that list, so
+      a log directory that becomes unreadable raises straight out of the walk
+      and takes the collector with it. This function's contract is "None when
+      nothing is discoverable"; an unreadable directory is that.
+
+    Verified on 3.11 and 3.12: deleting the root mid-scan returns [], while a
+    non-ignorable errno propagates.
+    """
     candidates_with_mtime = []
-    for path in root.glob(pattern):
+    try:
+        discovered = list(root.glob(pattern))
+    except OSError:
+        logger.debug("Log discovery walk failed for %s", root, exc_info=True)
+        return None
+
+    for path in discovered:
         try:
             mtime = path.stat().st_mtime
             candidates_with_mtime.append((path, mtime))
