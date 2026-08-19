@@ -1,3 +1,31 @@
+## 2026-08-19 — env leakage, not a flake: suite is fully green
+
+Two egress-proxy tests failed on every gate run this session. I twice explained
+them as a socket collision with the live proxy on :8889 — both times wrong. The
+proxy's domain-fronting guard (`OC_EGRESS_SNI_STRICT`, opt-in, added #379/#382)
+pins SNI == CONNECT host; `.env.operations-center.local` exports it as `1`; my
+gate scripts sourced that file before running pytest. The two tests asserting
+*default* (non-strict) behaviour never pinned the variable, so they inherited
+production posture and failed. CI never sets it, so CI was always green.
+
+Fixed by pinning the default posture with `monkeypatch.delenv` — symmetric with
+`test_strict_sni_pin_denies_allowlisted_mismatch`, which already sets it. Green
+now with the variable set, unset, or the fleet env sourced.
+
+Correcting earlier entries and PR bodies: the "8 pre-existing failures" baseline
+quoted in #512/#514/#515/#516/#517 was 6 real + 2 self-inflicted, and the phrase
+"known egress flake" above is wrong. Those PRs' comparisons still hold (same
+polluted env on both sides) but the number did not. `tests/unit` is 8703 passed,
+0 failed.
+
+Also: the fleet died with the host around 19:53 (all 8 roles at once, stale
+pidfiles; Forgejo survived on its docker restart policy). Restarted it, cleared
+#517's `reviewer_backend_unavailable` escalation — the cause was a Claude
+session limit plus a DNS blip, not the code — and the reviewer immediately
+re-reviewed, LGTM'd and merged it. The egress proxy is NOT part of `watch-all`
+and needed a separate restart; worth wiring in, since containment fails closed
+per-task without it.
+
 ## 2026-08-18 — Forgejo PR client implemented; B2 dissolved by a live probe
 
 Probing the live instance rewrote the spec's hardest finding: Forgejo 13 has
