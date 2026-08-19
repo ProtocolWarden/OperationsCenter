@@ -25,6 +25,25 @@ for two reasons that had nothing to do with the network:
    this migration is moving off. The coverage *gate* is unchanged:
    `--cov-fail-under=85` is in the pytest command, not the upload step.
 
+A third thing surfaced only once the tool cache worked: the console scripts
+(`pip`, `wheel`, ...) carry an absolute shebang from the image they were built
+in — `#!/usr/local/bin/python3.11`. At the relocated prefix that path does not
+exist, the kernel fails the exec with ENOENT, and bash reports
+
+    /opt/hostedtoolcache/Python/3.11.16/x64/bin/pip: cannot execute: required file not found
+
+which names `pip` while the file actually missing is the *interpreter*. The
+image rewrites those shebangs. CPython itself needs no patching — it derives
+`sys.prefix` from `argv[0]` at runtime, so it relocates cleanly.
+
+The Dockerfile now proves both interpreters at BUILD time (import ssl/sqlite3/
+lzma/ctypes, `pip --version`, `python -m venv`). That check earned its keep
+immediately: it caught that my first version used `$$` for the venv scratch dir,
+which is the shell PID and therefore identical on both loop iterations, so the
+3.12 venv was created on top of the 3.11 one and failed at ensurepip. A broken
+image now fails in `docker build` instead of in a CI job ten minutes later.
+
+
 Also deleted `.github/workflows/`. Beyond being the point of the cutover, they
 were actively harmful: Forgejo runs `.github/workflows/` too, and the ported
 copies produce **identical** status contexts, so the two sets raced and

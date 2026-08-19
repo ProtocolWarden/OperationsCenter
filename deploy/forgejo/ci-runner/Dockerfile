@@ -25,8 +25,34 @@ COPY --from=py312 /usr/local /tmp/py312
 RUN set -eux; \
     for p in 311 312; do \
       V="$(/tmp/py$p/bin/python3 -c 'import sys;print("%d.%d.%d"%sys.version_info[:3])')"; \
+      D="/opt/hostedtoolcache/Python/$V/x64"; \
       mkdir -p "/opt/hostedtoolcache/Python/$V"; \
-      mv "/tmp/py$p" "/opt/hostedtoolcache/Python/$V/x64"; \
+      mv "/tmp/py$p" "$D"; \
+      grep -rlI '^#!/usr/local/bin/' "$D/bin" | while read -r f; do \
+        sed -i "1s|^#!/usr/local/bin/|#!$D/bin/|" "$f"; \
+      done; \
       touch "/opt/hostedtoolcache/Python/$V/x64.complete"; \
     done; \
     ls -la /opt/hostedtoolcache/Python
+
+# The console scripts (pip, wheel, ...) carry an absolute shebang from the image
+# they were built in: `#!/usr/local/bin/python3.11`. That path does not exist at
+# the relocated prefix, so the kernel fails the exec with ENOENT and bash
+# reports the thoroughly misleading
+#
+#     /opt/hostedtoolcache/Python/3.11.16/x64/bin/pip: cannot execute: required file not found
+#
+# which names pip, while the file actually missing is the INTERPRETER. The
+# rewrite above fixes that. The interpreter itself needs no patching: CPython
+# derives sys.prefix from argv[0] at runtime, so it relocates cleanly.
+
+# Prove the relocated interpreters are usable at BUILD time, so a broken image
+# fails here instead of in a CI job ten minutes later.
+RUN set -eux; \
+    for d in /opt/hostedtoolcache/Python/*/x64; do \
+      "$d/bin/python3" -c 'import sys,ssl,sqlite3,lzma,ctypes; print(sys.version.split()[0], sys.prefix)'; \
+      "$d/bin/pip" --version; \
+      V="$(basename "$(dirname "$d")")"; \
+      "$d/bin/python3" -m venv "/tmp/vcheck-$V"; \
+      "/tmp/vcheck-$V/bin/python" -c 'import sys; print("venv ok", sys.version.split()[0])'; \
+    done
