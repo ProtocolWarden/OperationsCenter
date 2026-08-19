@@ -76,3 +76,67 @@ def test_dependency_task_description_uses_default_repo_and_context() -> None:
     assert "base_branch: main" in description
     assert "mode: goal" in description
     assert "dependency: codex" in description
+
+
+# ── board health probe ───────────────────────────────────────────────────────
+
+
+class _Resp:
+    def __init__(self, status_code, payload=None, raises=False):
+        self.status_code = status_code
+        self._payload = payload
+        self._raises = raises
+
+    def json(self):
+        if self._raises:
+            raise ValueError("Expecting value: line 1 column 1 (char 0)")
+        return self._payload
+
+
+class _Settings:
+    class forgejo:
+        base_url = "http://forge.local"
+
+
+def _probe(monkeypatch, response):
+    from operations_center.entrypoints.maintenance import dependency_check
+
+    monkeypatch.setattr(
+        dependency_check.httpx, "get", lambda *a, **k: response, raising=True
+    )
+    return dependency_check.current_board_status(_Settings())
+
+
+def test_board_status_reports_version_and_health(monkeypatch):
+    assert _probe(monkeypatch, _Resp(200, {"version": "13.0.5+gitea-1.22.0"})) == (
+        "13.0.5",
+        True,
+    )
+
+
+def test_board_status_survives_a_non_json_body(monkeypatch):
+    """A 200 carrying HTML — a proxy interstitial, a login page.
+
+    The decode error must not escape: this function is how the dependency
+    report *learns* the board is unusable, so raising here would take down the
+    whole report over one row. And "healthy" would be the wrong answer, because
+    the fleet cannot use that as a board.
+    """
+    assert _probe(monkeypatch, _Resp(200, raises=True)) == (None, False)
+
+
+def test_board_status_rejects_a_non_object_payload(monkeypatch):
+    assert _probe(monkeypatch, _Resp(200, ["not", "an", "object"])) == (None, False)
+
+
+def test_board_status_reports_http_errors_as_unhealthy(monkeypatch):
+    assert _probe(monkeypatch, _Resp(503)) == (None, False)
+
+
+def test_board_status_without_a_forgejo_block_is_unhealthy(monkeypatch):
+    from operations_center.entrypoints.maintenance import dependency_check
+
+    class _NoBoard:
+        forgejo = None
+
+    assert dependency_check.current_board_status(_NoBoard()) == (None, False)

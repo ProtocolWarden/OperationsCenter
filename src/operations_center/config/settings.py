@@ -14,13 +14,6 @@ from pydantic import BaseModel, Field, model_validator
 from operations_center.execution.models import ExecutionControlSettings
 
 
-class PlaneSettings(BaseModel):
-    base_url: str
-    api_token_env: str
-    workspace_slug: str
-    project_id: str
-
-
 class ForgejoSettings(BaseModel):
     """Self-hosted Forgejo, used as the board (issues) and later the forge.
 
@@ -683,7 +676,25 @@ class TaskAdmissionSettings(BaseModel):
 
 
 class Settings(BaseModel):
-    plane: PlaneSettings | None = None
+    @model_validator(mode="before")
+    @classmethod
+    def _explain_retired_board_backend(cls, data):
+        """Answer a config left on the retired backend.
+
+        Narrowing `board_backend` to a single-value Literal makes pydantic
+        reject `plane` with "Input should be 'forgejo'", which reads as a typo.
+        It was a real backend until the 2026-08-18 Forgejo cutover, so an
+        operator whose config still names it is asking a reasonable question.
+        """
+        if isinstance(data, dict) and data.get("board_backend") == "plane":
+            raise ValueError(
+                "board_backend 'plane' was removed at the 2026-08-18 Forgejo "
+                "cutover — the Plane adapter is gone. Set "
+                "`board_backend: forgejo` and add a `forgejo:` block; see "
+                "config/operations_center.example.yaml."
+            )
+        return data
+
     # Which forge the PR/review surface talks to. Independent of board_backend:
     # the board cut over first (#516); review moves only after `audit` exists on
     # Forgejo Actions (docs/specs/forgejo-pr-adapter.md, B4). Flipping this is
@@ -692,7 +703,7 @@ class Settings(BaseModel):
     # Which board the fleet talks to. Explicit rather than inferred from whether
     # `forgejo:` is configured — repointing the board is not something that
     # should happen as a side effect of adding a config block.
-    board_backend: Literal["plane", "forgejo"] = "plane"
+    board_backend: Literal["forgejo"] = "forgejo"
     forgejo: ForgejoSettings | None = None
     git: GitSettings
     team_executor: TeamExecutorSettings = Field(default_factory=TeamExecutorSettings)
@@ -825,14 +836,6 @@ class Settings(BaseModel):
     # to the prior behavior (warn + proceed to push/PR); only a clean findings
     # exit blocks. False disables the gate entirely → prior (pre-gate) behavior.
     pre_pr_custodian_gate: bool = True
-
-    def plane_token(self) -> str:
-        if self.plane is None:
-            raise RuntimeError(
-                "board_backend is 'plane' but no `plane:` settings block is "
-                "configured — the fleet has no board to talk to"
-            )
-        return os.environ[self.plane.api_token_env]
 
     def forgejo_token(self) -> str:
         """The Forgejo API token.

@@ -1,3 +1,59 @@
+## 2026-08-19 — council: a health probe must not be able to throw
+
+The Forgejo row I added to `dependency_check` called `response.json()`
+unguarded. A 200 carrying non-JSON — a reverse-proxy error page, a login
+interstitial — would raise out of a function whose entire job is to *report*
+health, taking the whole dependency report down over one row. The Plane probe
+it replaced never parsed a body, so I introduced the failure mode while
+replacing something that did not have it.
+
+Guarded, and it returns unhealthy rather than healthy: something answering on
+that URL that is not the API means the fleet has no board. Five tests cover the
+probe, including the non-JSON path.
+
+## 2026-08-19 — stale custodian exclusion caught by CI, not by me
+
+The Plane deletion PR went red on `custodian-doctor --strict`:
+`audit.exclude_paths.D11: glob 'src/operations_center/adapters/plane/**'
+matches no files (stale exclusion?)`. Correct — and exactly the residue the
+deletion should have swept.
+
+Local/CI gap worth remembering: the pinned custodian in `.venv` reports that as
+a WARN and exits 0; CI installs `.[dev]` fresh and its `--strict` treats the
+same warning as fatal. This is the one gate where running the exact CI command
+locally still produced a green CI would not give.
+
+## 2026-08-19 — the Plane adapter is deleted
+
+Point 3 of the migration. `adapters/plane` (382 lines) and its 1,068 lines of
+tests are gone; `PlaneSettings`, `Settings.plane` and `plane_token()` with
+them. `board_backend` narrows to `Literal["forgejo"]`, and a config still
+naming the retired backend gets an explanation rather than "Input should be
+'forgejo'", which would read as a typo.
+
+`dependency_check` traded its Plane service row for a Forgejo one — the board
+is the one service whose absence stops everything, so a dependency report
+without it would be blind where it matters most. `--create-plane-tasks` becomes
+`--create-board-tasks`; it always went through `make_board_client` and was
+never Plane-specific, only Plane-named.
+
+The board-seam ratchet is retargeted rather than retired: the reason a caller
+must not name a concrete client never depended on which client it was, so it
+now guards `ForgejoClient`, with the setup wizard as the single allowlisted
+direct constructor.
+
+Fallout worth recording: 30 unit tests broke, all fixtures describing a
+Plane-shaped settings object. Fixing them exposed a real gap — `settings.forgejo`
+raised AttributeError on a stub lacking the attribute instead of the explained
+"no `forgejo:` settings block" error sitting right below it. Both factory paths
+use `getattr` now.
+
+Measurement note, fourth instance this session: a bare `python -c` from a
+worktree resolves `operations_center` through the editable install to the MAIN
+checkout, so my first check of the new validator reported "no error" against
+code that did not have it. pytest is fine (pyproject sets `pythonpath`); bare
+python needs PYTHONPATH.
+
 ## 2026-08-19 — council round 2: unset is not the same as misconfigured
 
 #520 again, and the reviewer was right again. `egress_proxy_hostport` returned

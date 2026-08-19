@@ -16,9 +16,10 @@ from operations_center.entrypoints.board_worker.labels import STATE_DONE
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _make_settings(repos=None, project_id="proj-1"):
+def _make_settings(repos=None):
     return SimpleNamespace(
-        plane=SimpleNamespace(project_id=project_id),
+        board_backend="forgejo",
+        forgejo=SimpleNamespace(owner="protocolwarden", repo="board"),
         repos=repos or {},
     )
 

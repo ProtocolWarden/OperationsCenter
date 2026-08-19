@@ -364,15 +364,7 @@ def test_require_capability_owner_default_is_true():
 
 def test_require_capability_owner_true_on_constructed_settings():
     # Belt-and-suspenders: a fully constructed Settings carries the True default.
-    from operations_center.config.settings import GitSettings, PlaneSettings, Settings
+    from operations_center.config.settings import GitSettings, Settings
 
-    s = Settings(
-        plane=PlaneSettings(
-            base_url="http://x",
-            api_token_env="T",
-            workspace_slug="w",
-            project_id="p",
-        ),
-        git=GitSettings(),
-    )
+    s = Settings(git=GitSettings())
     assert s.require_capability_owner is True

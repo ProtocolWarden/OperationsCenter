@@ -216,7 +216,7 @@ Usage:
   scripts/operations-center.sh watch --role review
   scripts/operations-center.sh watch-stop --role goal
   scripts/operations-center.sh run --task-id TASK-123
-  scripts/operations-center.sh dependency-check [--create-plane-tasks]
+  scripts/operations-center.sh dependency-check [--create-board-tasks]
   scripts/operations-center.sh janitor
   scripts/operations-center.sh dev-up
   scripts/operations-center.sh dev-down

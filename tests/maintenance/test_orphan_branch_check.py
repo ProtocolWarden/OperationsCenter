@@ -500,10 +500,8 @@ def test_emit_plane_task_updates_existing_issue() -> None:
         age_hours=50.0,
     )
     settings = _make_settings()
-    settings.plane = MagicMock(base_url="http://plane", workspace_slug="ws", project_id="proj")
-    settings.plane_token = MagicMock(return_value="token")
-    plane = MagicMock()
-    plane.list_issues.return_value = [
+    board = MagicMock()
+    board.list_issues.return_value = [
         {
             "id": "task-123",
             "name": "Orphan branch: MyRepo/feat/old (1 commits ahead)",
@@ -512,14 +510,20 @@ def test_emit_plane_task_updates_existing_issue() -> None:
         }
     ]
 
-    with patch("operations_center.adapters.plane.PlaneClient", return_value=plane):
+    # Patched at the seam, not at a concrete client: `_emit_plane_task` calls
+    # `make_board_client`, so this stays true whichever backend is configured.
+    # It previously patched `adapters.plane.PlaneClient`, which the Forgejo
+    # cutover deleted.
+    with patch(
+        "operations_center.adapters.board.make_board_client", return_value=board
+    ):
         from operations_center.entrypoints.maintenance.orphan_branch_check import _emit_plane_task
 
         _emit_plane_task(settings, orphan)
 
-    plane.create_issue.assert_not_called()
-    plane.update_issue_description.assert_called_once()
-    plane.update_issue_labels.assert_called_once_with("task-123", ["orphan-branch", "repo:MyRepo"])
+    board.create_issue.assert_not_called()
+    board.update_issue_description.assert_called_once()
+    board.update_issue_labels.assert_called_once_with("task-123", ["orphan-branch", "repo:MyRepo"])
 
 
 # ── scan() integration-level ──────────────────────────────────────────────────
