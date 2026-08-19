@@ -1,3 +1,16 @@
+## 2026-08-18 — Forgejo PR client implemented; B2 dissolved by a live probe
+
+Probing the live instance rewrote the spec's hardest finding: Forgejo 13 has
+`apply_to_admins` — `enforce_admins` under another name — so the fail-closed
+gate's two required paths map 1:1. `ForgejoPRClient` now fills the PRClient
+protocol: statuses→check-runs under an explicit translation (warning→neutral,
+error→failure keeping its own name, pending→in_progress; history deduped
+latest-per-context), branch protection translated to exactly what
+`_branch_protection_ok` reads with the raw rule under `_forgejo`, pagination to
+exhaustion everywhere. `make_pr_client` gained the `pr_backend` switch
+(default github). Review stays on GitHub: flipping `pr_backend` is the cutover
+act, gated on `audit` existing on Forgejo Actions.
+
 ## 2026-08-18 — the board is live on Forgejo; Plane retired
 
 Cutover complete. Forgejo 13 runs in WSL docker (localhost:3000, registration

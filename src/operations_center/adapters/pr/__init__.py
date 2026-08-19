@@ -271,12 +271,32 @@ def make_pr_client(settings: Any) -> PRClient:
     token is fatal" behaviour. Callers that resolve their own token, or report a
     missing one their own way, use :func:`pr_client_from_token` instead.
 
-    There is intentionally no backend switch yet. The board factory has one
-    because a Forgejo board client exists; no Forgejo PR client does, and
-    ``docs/specs/forgejo-pr-adapter.md`` argues it should not be written before
-    the ``enforce_admins`` question is settled. A config knob selecting a backend
-    that cannot be built would advertise a capability the fleet does not have.
+    `pr_backend` selects the forge, and it is independent of `board_backend` on
+    purpose: the board cut over to Forgejo first (#516), while review stays on
+    GitHub until `audit` is produced by Forgejo Actions and the live gate
+    verification in ``docs/specs/forgejo-pr-adapter.md`` passes. Flipping this
+    setting is the cutover act, not a side effect. The earlier "no backend
+    switch yet" stance ended when `ForgejoPRClient` became real — a knob may
+    only exist once the thing it selects does.
     """
+    backend = getattr(settings, "pr_backend", "github")
+    if not isinstance(backend, str):
+        backend = "github"
+
+    if backend == "forgejo":
+        from operations_center.adapters.forgejo.pr_client import ForgejoPRClient
+
+        cfg = settings.forgejo
+        if cfg is None:
+            raise RuntimeError(
+                "pr_backend is 'forgejo' but no `forgejo:` settings block is "
+                "configured — the reviewer has no forge to talk to"
+            )
+        return ForgejoPRClient(cfg.base_url, settings.forgejo_token())
+
+    if backend != "github":
+        raise RuntimeError(f"unknown pr_backend {backend!r} (github, forgejo)")
+
     token = settings.git_token()
     if not token:
         raise RuntimeError("no git token — set GIT_TOKEN in .env")

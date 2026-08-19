@@ -187,6 +187,57 @@ def test_factory_refuses_without_a_token():
         pr.make_pr_client(_Settings())
 
 
+def test_factory_builds_forgejo_when_selected(monkeypatch):
+    from operations_center.adapters import pr
+
+    built = {}
+
+    class _Fake:
+        def __init__(self, base_url, token):
+            built["base_url"] = base_url
+            built["token"] = token
+
+    monkeypatch.setattr(
+        "operations_center.adapters.forgejo.pr_client.ForgejoPRClient",
+        _Fake,
+        raising=False,
+    )
+
+    class _Forgejo:
+        base_url = "http://forge.local"
+
+    class _Settings:
+        pr_backend = "forgejo"
+        forgejo = _Forgejo()
+
+        def forgejo_token(self):
+            return "ftok"
+
+    pr.make_pr_client(_Settings())
+    assert built == {"base_url": "http://forge.local", "token": "ftok"}
+
+
+def test_factory_refuses_forgejo_backend_without_a_block():
+    from operations_center.adapters import pr
+
+    class _Settings:
+        pr_backend = "forgejo"
+        forgejo = None
+
+    with pytest.raises(RuntimeError, match="no `forgejo:` settings block"):
+        pr.make_pr_client(_Settings())
+
+
+def test_factory_rejects_an_unknown_pr_backend():
+    from operations_center.adapters import pr
+
+    class _Settings:
+        pr_backend = "gitlab"
+
+    with pytest.raises(RuntimeError, match="unknown pr_backend"):
+        pr.make_pr_client(_Settings())
+
+
 # ── the pure helpers ─────────────────────────────────────────────────────────
 
 
