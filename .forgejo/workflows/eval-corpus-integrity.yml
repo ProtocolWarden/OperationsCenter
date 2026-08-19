@@ -1,0 +1,56 @@
+# Ported from .github/workflows/eval-corpus-integrity.yml for the Forgejo cutover.
+#
+# Two deliberate differences from the GitHub original:
+#
+# * `on:` is pull_request only. On Forgejo a `push` trigger produces a SECOND,
+#   separate status context on the same head ("... (push)") alongside the
+#   pull_request one — duplicating every job on a single self-hosted runner and
+#   leaving an extra check outstanding for any gate that requires nothing
+#   incomplete.
+# * Nothing else. The steps are byte-identical, because a gate that runs a
+#   different command is not the same gate.
+#
+# Status context format is `<workflow name:> / <job name:> (<event>)`, so the
+# contexts these produce are listed in docs/specs/forgejo-pr-adapter.md and are
+# what Forgejo branch protection must require.
+
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# EVAL corpus integrity + answer-key gate (HARNESS_TRUST_HARDENING §4.2, D-OP-3).
+#
+# This is constitution surface #1: the required, non-bypassable check that makes
+# corpus tampering structurally visible and runs the answer-key replay gate. It
+# must be added to branch protection as a required status check (constitution
+# surface #2) so the fleet cannot disarm it.
+name: EVAL corpus integrity
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  corpus-integrity:
+    name: EVAL corpus integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need the base ref too, to enforce the monotonic baseline floor.
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install (cryptography only — verifier has no heavy deps)
+        run: pip install "cryptography>=42"
+
+      - name: Extract the base ref's baseline floor (for the monotonic ratchet)
+        if: github.base_ref != ''
+        run: |
+          git show "origin/${{ github.base_ref }}:eval/constitution/baseline_floor.json" \
+            > /tmp/base_floor.json 2>/dev/null || rm -f /tmp/base_floor.json
+
+      - name: Verify chain + signatures + answer-key gate + monotonic floor
+        run: |
+          PYTHONPATH=src python -m operations_center.eval.verify \
+            --corpus eval/corpus/ledger.jsonl \
+            --constitution eval/constitution \
+            $([ -f /tmp/base_floor.json ] && echo "--base-floor /tmp/base_floor.json")

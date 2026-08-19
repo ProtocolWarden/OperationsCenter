@@ -1,3 +1,26 @@
+## 2026-08-19 — correcting myself: the status context is the JOB name
+
+#526 said `run-name:` pins Forgejo's status context. Wrong, and I generalised
+it from a failure case. A two-job workflow with `run-name: probe` produces
+`multi / alpha` and `multi / beta` — `probe` appears in neither. A job with
+`name: Pretty Job Name` produces `naming / Pretty Job Name`. The format is
+`<workflow name> / <job name, or id> (<event>)`, **stable by default**.
+
+The commit-message form I saw first (`audit.yml / ci: probe the... (push)`)
+only happens when a run fails *before any job starts*: with no job to name,
+Forgejo falls back to the file name and run title. I read a fallback as the
+rule.
+
+Also found while porting: Forgejo executes `.github/workflows/` as well as
+`.forgejo/`, so pushing OC to Forgejo handed one local runner the entire GitHub
+CI suite — 27 tasks, most failing. Operator chose: port everything to
+`.forgejo/` and delete `.github/`.
+
+Ordering constraint that falls out: **the deletion cannot merge on GitHub.** It
+removes the `audit` status branch protection requires, with enforce_admins on,
+so that PR could never go green. The port must land additively first, the fleet
+cuts over, and the deletion merges on Forgejo afterwards.
+
 ## 2026-08-19 — B4 resolved: the audit context cannot match GitHub's
 
 Forgejo Actions is running: runner 6.3.1 registered against the live instance,
