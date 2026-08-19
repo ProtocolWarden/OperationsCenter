@@ -1129,6 +1129,11 @@ case "${cmd}" in
     stop_watch_role spec
     ;;
   watch-all-status)
+    # Containment lives in the env file, so read it before reporting on it:
+    # without this, status_egress_proxy sees an unset OC_EGRESS_PROXY and says
+    # "not configured" about a proxy that is configured and running. Reporting a
+    # live guardrail as absent is the same class of lie this change removes.
+    load_env_file
     status_egress_proxy
     status_watch_role intake
     status_watch_role goal
@@ -1140,6 +1145,7 @@ case "${cmd}" in
     status_watchdog
     ;;
   status)
+    load_env_file
     status_watchdog
     status_egress_proxy
     ;;

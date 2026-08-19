@@ -1,3 +1,17 @@
+## 2026-08-19 — council caught the status line lying about containment
+
+#520's correctness reviewer found that `watch-all-status` and `status` never
+called `load_env_file`, so `status_egress_proxy` read an unset OC_EGRESS_PROXY
+and printed "not configured" about a proxy that was configured and listening —
+the same class of lie the status line was added to prevent. Both branches now
+load the env; all four status paths do.
+
+Method note: my first attempt to prove the fix "failed" because the worktree
+has no `.env.operations-center.local`, so `load_env_file` had nothing to
+source. Same measurement-environment trap as the missing venv and the phantom
+ty diagnostics. Re-verified with OPERATIONS_CENTER_ENV_FILE pointed at the real
+file: before "not configured", after "running (pid ..., 127.0.0.1:8889)".
+
 ## 2026-08-19 — the egress proxy joins the fleet lifecycle
 
 Found while recovering from the host dropping the fleet: `watch-all` starts
