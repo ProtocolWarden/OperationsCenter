@@ -1,3 +1,35 @@
+## 2026-08-19 — Forgejo CI: the two things that actually blocked every job
+
+Checkout was fixed by `container.network: host` (job containers on a bridge
+network cannot reach `localhost:3000`). With that in, 11 of 13 jobs still failed,
+for two reasons that had nothing to do with the network:
+
+1. **`actions/setup-python` cannot work on a self-hosted forge as-is.** It
+   resolves interpreters from the *forge's own* `actions/python-versions` repo —
+   it reads `GITHUB_API_URL`, which on a Forgejo runner points at
+   `localhost:3000`. That repo does not exist here, so every job died with
+   `The version '3.11' ... was not found`. Fixed by pre-seeding
+   `/opt/hostedtoolcache` with CPython 3.11 and 3.12 in a purpose-built job
+   image (`deploy/forgejo/ci-runner/Dockerfile`), mapped via the runner's
+   `ubuntu-latest:docker://oc-ci-runner:latest` label. setup-python checks the
+   tool cache first, so the workflows stay byte-identical.
+
+   Baked into the image, *not* bind-mounted from the host: jobs run
+   `pip install -e ".[dev]"`, which writes into the interpreter's site-packages.
+   A host mount would persist those writes into every later job.
+
+2. **`codecov/codecov-action` is not mirrored on data.forgejo.org.** act
+   resolves every `uses:` *before* the job starts, so the clone failure killed
+   the job before checkout ran and `fail_ci_if_error: false` never applied.
+   Removed from the Forgejo copy — it is also a third-party SaaS, which is what
+   this migration is moving off. The coverage *gate* is unchanged:
+   `--cov-fail-under=85` is in the pytest command, not the upload step.
+
+Also deleted `.github/workflows/`. Beyond being the point of the cutover, they
+were actively harmful: Forgejo runs `.github/workflows/` too, and the ported
+copies produce **identical** status contexts, so the two sets raced and
+whichever finished last decided the check.
+
 ## 2026-08-19 — correcting myself: the status context is the JOB name
 
 #526 said `run-name:` pins Forgejo's status context. Wrong, and I generalised
