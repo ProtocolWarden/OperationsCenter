@@ -688,12 +688,23 @@ stop_watch_role() {
 # Skipped entirely when OC_EGRESS_PROXY is unset: containment is opt-in, and
 # starting a proxy nobody routes through would be its own kind of lie.
 
+# Three outcomes, deliberately distinct — collapsing the last two into "not
+# configured" tells an operator their variable is unset when it is set and
+# wrong, which is the same misreporting this whole change removes.
+#
+#   rc 0 + "host:port"  usable endpoint
+#   rc 1                OC_EGRESS_PROXY unset/empty — containment is opt-in
+#   rc 2                set, but no usable host:port — a misconfiguration
 egress_proxy_hostport() {
   local url="${OC_EGRESS_PROXY:-}"
   [[ -n "${url}" ]] || return 1
   url="${url#*://}"
   url="${url%%/*}"
-  [[ "${url}" == *:* ]] || return 1
+  local host="${url%%:*}"
+  local port="${url##*:}"
+  [[ "${url}" == *:* ]] || return 2
+  [[ -n "${host}" ]] || return 2
+  [[ "${port}" =~ ^[0-9]+$ ]] || return 2
   printf '%s' "${url}"
 }
 
@@ -714,7 +725,19 @@ egress_proxy_live_pid() {
 
 start_egress_proxy() {
   local hostport
-  hostport="$(egress_proxy_hostport)" || return 0   # containment not configured
+  local rc=0
+  hostport="$(egress_proxy_hostport)" || rc=$?
+  if [[ "${rc}" -eq 1 ]]; then
+    return 0                      # containment not configured — opt-in
+  fi
+  if [[ "${rc}" -ne 0 ]]; then
+    # Returning 0 here would start the fleet with no proxy and no warning, and
+    # every executor would then fail closed against an endpoint that never
+    # existed. Refuse loudly instead of guessing a port.
+    echo "egress-proxy: OC_EGRESS_PROXY='${OC_EGRESS_PROXY}' is not a usable host:port" >&2
+    echo "egress-proxy: refusing to guess — executors will fail closed until this is fixed" >&2
+    return 1
+  fi
   local pid
   if pid="$(egress_proxy_live_pid)"; then
     echo "egress-proxy already running with PID ${pid}"
@@ -769,8 +792,14 @@ stop_egress_proxy() {
 
 status_egress_proxy() {
   local hostport
-  if ! hostport="$(egress_proxy_hostport)"; then
+  local rc=0
+  hostport="$(egress_proxy_hostport)" || rc=$?
+  if [[ "${rc}" -eq 1 ]]; then
     echo "egress-proxy: not configured (OC_EGRESS_PROXY unset)"
+    return 0
+  fi
+  if [[ "${rc}" -ne 0 ]]; then
+    echo "egress-proxy: MISCONFIGURED — OC_EGRESS_PROXY='${OC_EGRESS_PROXY}' is not a usable host:port; executors will refuse to run"
     return 0
   fi
   local pid

@@ -1,3 +1,20 @@
+## 2026-08-19 — council round 2: unset is not the same as misconfigured
+
+#520 again, and the reviewer was right again. `egress_proxy_hostport` returned
+failure for two different situations — OC_EGRESS_PROXY unset, and set but
+unparseable — and both printed "not configured (OC_EGRESS_PROXY unset)". So an
+operator with `OC_EGRESS_PROXY=http://host` (no port) was told their variable
+was unset when it was set and wrong. Worse, `start_egress_proxy` returned 0 on
+that path, so the fleet would boot with no proxy and no warning and every
+executor would fail closed against an endpoint that never existed.
+
+Now three outcomes: rc 0 usable, rc 1 unset (opt-in no-op), rc 2 misconfigured
+(loud, and start refuses rather than guessing a port). Verified across six
+shapes: unset, valid, no port, non-numeric port, no host, and no scheme.
+
+Third instance in this PR of the same root theme — a status surface that
+reported something other than what was true. The council caught two of them.
+
 ## 2026-08-19 — council caught the status line lying about containment
 
 #520's correctness reviewer found that `watch-all-status` and `status` never
