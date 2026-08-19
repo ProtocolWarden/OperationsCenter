@@ -1,3 +1,28 @@
+## 2026-08-19 — B4 resolved: the audit context cannot match GitHub's
+
+Forgejo Actions is running: runner 6.3.1 registered against the live instance,
+a probe workflow executed end to end (pulled node:20-bookworm, success in 91s).
+
+The spec's B4 assumed `audit` "must be reproduced under an identical context
+name". It cannot be. Forgejo composes the context as
+`<workflow name> / <run-name> (<event>)`, and with no `run-name:` the middle
+segment is the COMMIT MESSAGE — so the default context changes every push and
+is unsatisfiable as a required check, not merely mismatched. Setting
+`run-name: audit` pins it to `custodian-audit / audit (push)`, stable across
+commit messages.
+
+Also: `push` and `pull_request` each produce their own context on a PR head, so
+the GitHub workflow's dual trigger doubles the work and leaves a second context
+outstanding. The Forgejo workflow should trigger on `pull_request` only.
+
+Cutover config is therefore: `run-name: audit`, `on: pull_request`, and
+branch protection requiring `custodian-audit / audit (pull_request)` —
+Forgejo's string, not GitHub's.
+
+Bonus: the probe live-validated #517's translation against real status data —
+`completed: ['...(pull_request)']`, `incomplete: ['...(push)']`, resolved from
+a three-entry posting history by the latest-per-context dedupe.
+
 ## 2026-08-19 — CI found what 3.12 could not
 
 The new `test-rest` job went red on its first run, which is the job doing its

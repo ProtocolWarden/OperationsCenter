@@ -224,6 +224,83 @@ negative-case verification). Three findings revise the adversarial sections:
 3. **`check-runs` is a confirmed 404**, and `GET /pulls/{index}.diff` serves
    the raw diff.
 
+## B4 resolved — `audit` on Forgejo Actions, 2026-08-19
+
+Actions enabled on the live instance, `forgejo-runner` 6.3.1 registered, and a
+probe workflow run end to end. B4 said the `audit` status "must be reproduced
+under an identical context name, or every PR blocks forever". **The identical
+name is not achievable**, and the reason matters more than the inconvenience.
+
+### The context format is not the job name
+
+GitHub uses the job id, so OC's required context is the bare string `audit`.
+Forgejo composes it:
+
+```
+<workflow name:> / <run-name> (<event>)
+```
+
+With no `run-name:`, the middle segment is **the commit message**. The probe's
+first run produced:
+
+```
+audit.yml / ci: probe the status context name (push)
+```
+
+A required status check must be a fixed string. A context containing the commit
+message changes on every push, so under the default configuration branch
+protection can never be satisfied — not "blocks until you rename it", but
+unsatisfiable in principle.
+
+### `run-name:` makes it stable
+
+Setting `run-name: audit` pins the middle segment. Re-run with a deliberately
+different commit message:
+
+```
+custodian-audit / audit (push)
+```
+
+Stable, deterministic, and independent of the commit. That is the property
+branch protection needs.
+
+### Both events fire on a PR head
+
+`push` and `pull_request` each produce their own context, so the GitHub
+workflow's dual trigger yields **two** runs and two contexts per PR head:
+
+```
+custodian-audit / audit (pull_request)  -> success
+custodian-audit / audit (push)          -> pending
+```
+
+Two consequences: the work is done twice, and a gate that requires "nothing
+incomplete" sees the slower run as outstanding. The Forgejo workflow should
+trigger on `pull_request` only.
+
+### Cutover configuration
+
+* workflow: `name: custodian-audit`, `run-name: audit`, `on: pull_request`
+* branch protection `status_check_contexts`: `custodian-audit / audit (pull_request)`
+* `apply_to_admins: true` (per the earlier live finding)
+
+The required-context string is therefore **Forgejo's format, not a copy of
+GitHub's**. Any cutover checklist that says "use the same name" is wrong.
+
+### Live validation of the adapter
+
+The same probe confirmed `ForgejoPRClient` reads real status data correctly —
+not fixtures:
+
+```
+failed:     []
+incomplete: ['custodian-audit / audit (push)']
+completed:  ['custodian-audit / audit (pull_request)']
+```
+
+The statuses endpoint returned the full posting history (pending, pending,
+success) for one job, and the latest-per-context dedupe resolved it as designed.
+
 ## Correctness criteria
 
 1. Status→check translation is explicit about what it loses. A test asserts a
@@ -248,8 +325,8 @@ negative-case verification). Three findings revise the adversarial sections:
 - [x] `PRClient` protocol extracted; all 17 callers migrated (#512–#515)
 - [x] `ForgejoPRClient` implementing the protocol (`adapters/forgejo/pr_client.py`)
 - [x] Status→check translation with the losses tested (`STATUS_TO_CHECK`; warning→neutral, error→failure with its own name)
-- [ ] `audit` (or its replacement) produced on Forgejo under an identical name
-- [ ] Live verification against a real instance, **negative cases first**
+- [x] `audit` produced on Forgejo — under Forgejo's context format, which *cannot* be identical (see B4 resolved)
+- [x] Live verification against a real instance, negative cases first (#517, and the Actions probe above)
 - [ ] Cutover, GitHub demoted to read-only mirror
 
 ## Phasing
