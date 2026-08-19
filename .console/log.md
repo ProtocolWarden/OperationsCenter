@@ -1,3 +1,18 @@
+## 2026-08-19 — an empty directory is still an importable package
+
+After #521 merged, `tests/unit/adapters/test_board_seam.py::test_the_retired_backend_is_actually_gone`
+failed in the live checkout while passing in CI. Not a flake: git removes
+tracked files, not directories that still hold an untracked `__pycache__`, so
+`src/operations_center/adapters/plane/` survived as an empty dir. An empty
+directory is a PEP 420 namespace package — `import
+operations_center.adapters.plane` still succeeded, returning a module with
+`__file__` of None. Any `except ImportError` fallback would have taken the
+wrong branch silently.
+
+CI never sees it (fresh checkout), but anyone pulling the deletion with a
+populated `__pycache__` will. The assertion now names the trap and prints the
+`rmdir` that fixes it.
+
 ## 2026-08-19 — pushed a red test, caught it one command later
 
 Shipping the council fix for #521 I added five probe tests and pushed before
