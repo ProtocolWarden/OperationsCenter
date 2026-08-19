@@ -1,3 +1,16 @@
+## 2026-08-19 — pushed a red test, caught it one command later
+
+Shipping the council fix for #521 I added five probe tests and pushed before
+reading the result: one asserted `normalize_version("13.0.5+gitea-1.22.0")`
+yields `"13.0.5"`. It does not — that helper strips a leading tool name
+("codex-cli 0.117.0"), not a build suffix. My assertion was wrong, not the
+code, and keeping the suffix is better anyway: "+gitea-1.22.0" tells an
+operator which Gitea API generation their Forgejo speaks.
+
+The lesson is ordering, not the assertion: the gate output and the push were in
+one script, so the push did not wait on the result. Gate first, read, then
+push.
+
 ## 2026-08-19 — council: a health probe must not be able to throw
 
 The Forgejo row I added to `dependency_check` called `response.json()`
