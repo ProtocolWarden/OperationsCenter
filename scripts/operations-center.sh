@@ -205,6 +205,9 @@ Usage:
   scripts/operations-center.sh watch-all
   scripts/operations-center.sh watch-all-stop
   scripts/operations-center.sh watch-all-status
+  scripts/operations-center.sh egress-proxy-status
+  scripts/operations-center.sh egress-proxy-start
+  scripts/operations-center.sh egress-proxy-stop
   scripts/operations-center.sh intake [--once]
   scripts/operations-center.sh status
   scripts/operations-center.sh watchdog
@@ -673,6 +676,115 @@ stop_watch_role() {
   rm -f "${pid_file}"
 }
 
+# ── egress proxy ─────────────────────────────────────────────────────────────
+# The L7/SNI allowlist proxy is part of the fleet's containment posture, not a
+# side service an operator is expected to remember. Per-task enforcement fails
+# CLOSED (EgressContainmentRequiredError), so whenever OC_EGRESS_PROXY points at
+# nothing listening, every executor refuses to run and the boot-time
+# containment self-check logs "configured but unreachable". Until now the proxy
+# lived outside watch-all, so a host reboot left the fleet up but unable to
+# execute anything — which is how it was found.
+#
+# Skipped entirely when OC_EGRESS_PROXY is unset: containment is opt-in, and
+# starting a proxy nobody routes through would be its own kind of lie.
+
+egress_proxy_hostport() {
+  local url="${OC_EGRESS_PROXY:-}"
+  [[ -n "${url}" ]] || return 1
+  url="${url#*://}"
+  url="${url%%/*}"
+  [[ "${url}" == *:* ]] || return 1
+  printf '%s' "${url}"
+}
+
+egress_proxy_live_pid() {
+  # Not a bare `kill -0`: the kernel recycles pids, and reporting a stranger's
+  # pid as "the proxy" is the same lie #499 fixed for the watch roles.
+  local pid_file="${WATCH_DIR}/egress-proxy.pid"
+  [[ -f "${pid_file}" ]] || return 1
+  local pid
+  pid="$(cat "${pid_file}" 2>/dev/null)" || return 1
+  [[ -n "${pid}" ]] || return 1
+  if tr '\0' ' ' < "/proc/${pid}/cmdline" 2>/dev/null | grep -q 'egress_proxy'; then
+    printf '%s' "${pid}"
+    return 0
+  fi
+  return 1
+}
+
+start_egress_proxy() {
+  local hostport
+  hostport="$(egress_proxy_hostport)" || return 0   # containment not configured
+  local pid
+  if pid="$(egress_proxy_live_pid)"; then
+    echo "egress-proxy already running with PID ${pid}"
+    return 0
+  fi
+  rm -f "${WATCH_DIR}/egress-proxy.pid"
+  mkdir -p "${WATCH_DIR}"
+  local host="${hostport%%:*}"
+  local port="${hostport##*:}"
+  # Someone else already holds the port (a systemd unit, a manual run). Adopting
+  # it is wrong — we did not start it and must not claim its pid — but killing it
+  # is worse. Leave it and say so.
+  if ss -ltn 2>/dev/null | awk '{print $4}' | grep -q ":${port}$"; then
+    echo "egress-proxy: ${hostport} is already served by another process — leaving it alone"
+    return 0
+  fi
+  local log_file="${WATCH_DIR}/$(timestamp)_egress-proxy.log"
+  setsid "${VENV_DIR}/bin/python" -m operations_center.entrypoints.egress_proxy.main \
+    --host "${host}" --port "${port}" >"${log_file}" 2>&1 </dev/null &
+  # `setsid` may fork, so $! can be a wrapper that has already exited. Resolve
+  # the pid that actually holds the socket instead of recording a guess.
+  local started=""
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    sleep 0.3
+    started="$(pgrep -f "egress_proxy.main --host ${host} --port ${port}" | head -1)"
+    [[ -n "${started}" ]] && break
+  done
+  if [[ -z "${started}" ]]; then
+    echo "egress-proxy FAILED to start — see ${log_file}" >&2
+    return 1
+  fi
+  echo "${started}" > "${WATCH_DIR}/egress-proxy.pid"
+  echo "egress-proxy started: pid=${started} endpoint=${hostport} log=${log_file}"
+}
+
+stop_egress_proxy() {
+  local pid_file="${WATCH_DIR}/egress-proxy.pid"
+  if [[ ! -f "${pid_file}" ]]; then
+    echo "egress-proxy is not running"
+    return 0
+  fi
+  local pid
+  pid="$(egress_proxy_live_pid)" || pid=""
+  rm -f "${pid_file}"
+  if [[ -n "${pid}" ]]; then
+    kill "${pid}" >/dev/null 2>&1 || true
+    echo "egress-proxy stopped (pid ${pid})"
+  else
+    echo "egress-proxy was not running (stale pid file)"
+  fi
+}
+
+status_egress_proxy() {
+  local hostport
+  if ! hostport="$(egress_proxy_hostport)"; then
+    echo "egress-proxy: not configured (OC_EGRESS_PROXY unset)"
+    return 0
+  fi
+  local pid
+  if pid="$(egress_proxy_live_pid)"; then
+    echo "egress-proxy: running (pid ${pid}, ${hostport})"
+  elif ss -ltn 2>/dev/null | awk '{print $4}' | grep -q ":${hostport##*:}$"; then
+    echo "egress-proxy: served by another process on ${hostport} (not started by watch-all)"
+  else
+    # Not cosmetic: executors fail closed against this, so "stopped" means the
+    # fleet cannot execute, however healthy the watchers look.
+    echo "egress-proxy: STOPPED — ${hostport} unreachable, executors will refuse to run"
+  fi
+}
+
 start_watchdog() {
   local pid_file="${WATCH_DIR}/watchdog.pid"
   if [[ -f "${pid_file}" ]] && kill -0 "$(cat "${pid_file}")" >/dev/null 2>&1; then
@@ -840,7 +952,7 @@ shift || true
 cd "${ROOT_DIR}"
 # Skip janitor for read-only / stop commands — they're fast and don't need it.
 case "${cmd}" in
-  watch-all-status|dev-status|watch-all-stop|watch-stop|watchdog-stop|providers-status|doctor|status|worker-backend-status|worker-backend-probe|loop-start|loop-stop|loop-status|loop-log|budget) ;;
+  watch-all-status|dev-status|watch-all-stop|watch-stop|watchdog-stop|egress-proxy-status|egress-proxy-stop|providers-status|doctor|status|worker-backend-status|worker-backend-probe|loop-start|loop-stop|loop-status|loop-log|budget) ;;
   *) run_janitor ;;
 esac
 
@@ -860,6 +972,7 @@ case "${cmd}" in
   dev-up)
     ensure_venv
     load_env_file
+    start_egress_proxy
     start_watch_role intake
     start_watch_role goal
     start_watch_role test
@@ -872,6 +985,7 @@ case "${cmd}" in
   dev-down)
     load_env_file
     stop_watchdog
+    stop_egress_proxy
     stop_watch_role intake
     stop_watch_role goal
     stop_watch_role test
@@ -901,6 +1015,7 @@ case "${cmd}" in
   dev-restart)
     load_env_file
     stop_watchdog
+    stop_egress_proxy
     stop_watch_role intake
     stop_watch_role goal
     stop_watch_role test
@@ -909,6 +1024,7 @@ case "${cmd}" in
     stop_watch_role review
     stop_watch_role spec
     ensure_venv
+    start_egress_proxy
     start_watch_role intake
     start_watch_role goal
     start_watch_role test
@@ -920,6 +1036,7 @@ case "${cmd}" in
     ;;
   dev-status)
     load_env_file
+    status_egress_proxy
     status_watch_role intake
     status_watch_role goal
     status_watch_role test
@@ -988,6 +1105,9 @@ case "${cmd}" in
   watch-all)
     ensure_venv
     load_env_file
+    # Before the roles: each logs a containment self-check at boot, and the
+    # answer should be the truth after the proxy is up, not before.
+    start_egress_proxy
     start_watch_role intake
     start_watch_role goal
     start_watch_role test
@@ -999,6 +1119,7 @@ case "${cmd}" in
     ;;
   watch-all-stop)
     stop_watchdog
+    stop_egress_proxy
     stop_watch_role intake
     stop_watch_role goal
     stop_watch_role test
@@ -1008,6 +1129,7 @@ case "${cmd}" in
     stop_watch_role spec
     ;;
   watch-all-status)
+    status_egress_proxy
     status_watch_role intake
     status_watch_role goal
     status_watch_role test
@@ -1019,6 +1141,20 @@ case "${cmd}" in
     ;;
   status)
     status_watchdog
+    status_egress_proxy
+    ;;
+  egress-proxy-status)
+    load_env_file
+    status_egress_proxy
+    ;;
+  egress-proxy-start)
+    ensure_venv
+    load_env_file
+    start_egress_proxy
+    ;;
+  egress-proxy-stop)
+    load_env_file
+    stop_egress_proxy
     ;;
   worker)
     ensure_venv

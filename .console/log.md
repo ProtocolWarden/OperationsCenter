@@ -1,3 +1,22 @@
+## 2026-08-19 — the egress proxy joins the fleet lifecycle
+
+Found while recovering from the host dropping the fleet: `watch-all` starts
+seven roles and the watchdog, but never the L7/SNI egress proxy. Per-task
+enforcement fails CLOSED, so with `OC_EGRESS_PROXY` pointing at nothing every
+executor refuses to run — the fleet looks healthy and cannot execute. The only
+signal was one ERROR line per role at boot.
+
+`start/stop/status_egress_proxy` now mirror the watchdog, wired into
+watch-all / -stop / -status and dev-up / -down / -status / -restart, plus
+`egress-proxy-{start,stop,status}` for repairing it without restarting
+everything. Started before the roles so their containment self-check reports
+the truth. No-op when `OC_EGRESS_PROXY` is unset — containment is opt-in, and
+starting a proxy nobody routes through is its own kind of lie. Refuses to adopt
+a port another process already serves.
+
+PID handling follows #499: match the recorded pid's cmdline, never a bare
+`kill -0`, so a recycled pid cannot be reported as the proxy.
+
 ## 2026-08-19 — setup wizard onboards onto Forgejo; board ratchet at zero
 
 The wizard was the last file importing `PlaneClient`. It now walks a new
