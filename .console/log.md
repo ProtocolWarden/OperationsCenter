@@ -1,3 +1,53 @@
+## 2026-08-19 — council round 2: unset is not the same as misconfigured
+
+#520 again, and the reviewer was right again. `egress_proxy_hostport` returned
+failure for two different situations — OC_EGRESS_PROXY unset, and set but
+unparseable — and both printed "not configured (OC_EGRESS_PROXY unset)". So an
+operator with `OC_EGRESS_PROXY=http://host` (no port) was told their variable
+was unset when it was set and wrong. Worse, `start_egress_proxy` returned 0 on
+that path, so the fleet would boot with no proxy and no warning and every
+executor would fail closed against an endpoint that never existed.
+
+Now three outcomes: rc 0 usable, rc 1 unset (opt-in no-op), rc 2 misconfigured
+(loud, and start refuses rather than guessing a port). Verified across six
+shapes: unset, valid, no port, non-numeric port, no host, and no scheme.
+
+Third instance in this PR of the same root theme — a status surface that
+reported something other than what was true. The council caught two of them.
+
+## 2026-08-19 — council caught the status line lying about containment
+
+#520's correctness reviewer found that `watch-all-status` and `status` never
+called `load_env_file`, so `status_egress_proxy` read an unset OC_EGRESS_PROXY
+and printed "not configured" about a proxy that was configured and listening —
+the same class of lie the status line was added to prevent. Both branches now
+load the env; all four status paths do.
+
+Method note: my first attempt to prove the fix "failed" because the worktree
+has no `.env.operations-center.local`, so `load_env_file` had nothing to
+source. Same measurement-environment trap as the missing venv and the phantom
+ty diagnostics. Re-verified with OPERATIONS_CENTER_ENV_FILE pointed at the real
+file: before "not configured", after "running (pid ..., 127.0.0.1:8889)".
+
+## 2026-08-19 — the egress proxy joins the fleet lifecycle
+
+Found while recovering from the host dropping the fleet: `watch-all` starts
+seven roles and the watchdog, but never the L7/SNI egress proxy. Per-task
+enforcement fails CLOSED, so with `OC_EGRESS_PROXY` pointing at nothing every
+executor refuses to run — the fleet looks healthy and cannot execute. The only
+signal was one ERROR line per role at boot.
+
+`start/stop/status_egress_proxy` now mirror the watchdog, wired into
+watch-all / -stop / -status and dev-up / -down / -status / -restart, plus
+`egress-proxy-{start,stop,status}` for repairing it without restarting
+everything. Started before the roles so their containment self-check reports
+the truth. No-op when `OC_EGRESS_PROXY` is unset — containment is opt-in, and
+starting a proxy nobody routes through is its own kind of lie. Refuses to adopt
+a port another process already serves.
+
+PID handling follows #499: match the recorded pid's cmdline, never a bare
+`kill -0`, so a recycled pid cannot be reported as the proxy.
+
 ## 2026-08-19 — setup wizard onboards onto Forgejo; board ratchet at zero
 
 The wizard was the last file importing `PlaneClient`. It now walks a new
