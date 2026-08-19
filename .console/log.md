@@ -1,3 +1,15 @@
+## 2026-08-19 — stale custodian exclusion caught by CI, not by me
+
+The Plane deletion PR went red on `custodian-doctor --strict`:
+`audit.exclude_paths.D11: glob 'src/operations_center/adapters/plane/**'
+matches no files (stale exclusion?)`. Correct — and exactly the residue the
+deletion should have swept.
+
+Local/CI gap worth remembering: the pinned custodian in `.venv` reports that as
+a WARN and exits 0; CI installs `.[dev]` fresh and its `--strict` treats the
+same warning as fatal. This is the one gate where running the exact CI command
+locally still produced a green CI would not give.
+
 ## 2026-08-19 — the Plane adapter is deleted
 
 Point 3 of the migration. `adapters/plane` (382 lines) and its 1,068 lines of
