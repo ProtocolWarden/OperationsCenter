@@ -6,7 +6,6 @@ import os
 import shutil
 import subprocess
 import sys
-import webbrowser
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -31,8 +30,8 @@ from operations_center.entrypoints.setup.providers import (
 app = typer.Typer(help="Interactive local setup for Operations Center.")
 console = Console()
 
-DEFAULT_PLANE_URL = "http://localhost:8080"
-DEFAULT_PLANE_START_COMMAND = "./deployment/plane/manage.sh up"
+DEFAULT_FORGEJO_URL = "http://localhost:3000"
+DEFAULT_FORGEJO_BOARD_REPO = "board"
 DEFAULT_SSH_KEY_PATH = Path.home() / ".ssh" / "id_ed25519"
 SSH_KEY_CANDIDATES = [
     Path.home() / ".ssh" / "id_ed25519",
@@ -79,15 +78,11 @@ class RepoDiscoveryChoice:
 
 @dataclass
 class SetupAnswers:
-    plane_base_url: str
-    plane_workspace_slug: str
-    plane_project_id: str
-    plane_api_token_env: str
-    plane_api_token_value: str
-    plane_version: str | None
-    plane_setup_url: str | None
-    plane_start_command: str | None
-    plane_open_browser: bool
+    forgejo_base_url: str
+    forgejo_owner: str
+    forgejo_repo: str
+    forgejo_api_token_env: str
+    forgejo_api_token_value: str
     git_provider: str
     git_token_env: str
     git_token_value: str
@@ -138,7 +133,7 @@ def print_banner() -> None:
     width = max(60, min(shutil.get_terminal_size((80, 20)).columns, 100))
     rule = "=" * width
     title = "Operations Center Setup"
-    subtitle = "Plane + executor local operator bootstrap"
+    subtitle = "Forgejo + executor local operator bootstrap"
     console.print(f"[blue]{rule}[/blue]")
     console.print(f"[bold green]{title.center(width)}[/bold green]")
     console.print(f"[bright_black]{subtitle.center(width)}[/bright_black]")
@@ -274,35 +269,45 @@ def ensure_executor_backends_installed(repo_root: Path, python_binary: str | Non
     typer.echo("[executor] backends installed successfully")
 
 
-def verify_plane_configuration(
+def verify_forgejo_configuration(
     base_url: str,
     api_token: str,
-    workspace_slug: str,
-    project_id: str,
+    owner: str,
+    repo: str,
 ) -> bool:
-    from operations_center.adapters.plane import PlaneClient
+    """Check the operator's just-typed credentials against the live instance.
 
-    client = PlaneClient(
+    Constructs `ForgejoClient` directly rather than going through
+    `make_board_client`: the whole point of this step is to validate values the
+    operator has entered but not yet written to a config file, so there is no
+    `Settings` object for the factory to build from. That is why this module is
+    the board seam's one allowlisted direct-construction site.
+    """
+    from operations_center.adapters.forgejo import ForgejoClient
+
+    client = ForgejoClient(
         base_url=base_url,
         api_token=api_token,
-        workspace_slug=workspace_slug,
-        project_id=project_id,
+        owner=owner,
+        repo=repo,
     )
     try:
         project = client.fetch_project()
     except Exception as exc:
-        console.print(f"[red]Plane API verification failed:[/red] {exc}")
+        console.print(f"[red]Forgejo API verification failed:[/red] {exc}")
         console.print(
-            "[bright_black]Check that the Plane API workspace slug and project id match a real project in your Plane instance.[/bright_black]"
+            "[bright_black]Check that the board repo exists and the token has "
+            "read/write access to its issues. The board repo is created by you "
+            "(or by setup) on the Forgejo instance; it is not created "
+            "automatically here.[/bright_black]"
         )
         return False
     finally:
         client.close()
 
-    project_name = str(project.get("name", project_id))
+    full_name = str(project.get("full_name") or f"{owner}/{repo}")
     console.print(
-        f"[green]Plane API verified.[/green] Workspace slug [cyan]{workspace_slug}[/cyan], "
-        f"project [cyan]{project_name}[/cyan] ([cyan]{project_id}[/cyan])."
+        f"[green]Forgejo API verified.[/green] Board repo [cyan]{full_name}[/cyan]."
     )
     return True
 
@@ -447,21 +452,6 @@ def prompt_branch_selection(clone_url: str, default_branch: str) -> tuple[str, l
         typer.prompt("Allowed base branches (comma separated)", default=allowed_default)
     )
     return selected, allowed_base_branches
-
-
-def run_local_command(command: str) -> None:
-    proc = subprocess.run(command, shell=True, check=False)
-    if proc.returncode != 0:
-        raise typer.BadParameter(
-            f"Plane start command failed with exit code {proc.returncode}: {command}"
-        )
-
-
-def maybe_open_url(url: str) -> None:
-    try:
-        webbrowser.open(url)
-    except Exception:
-        return
 
 
 def load_env_exports(env_path: Path) -> dict[str, str]:
@@ -649,20 +639,6 @@ def ensure_github_ssh_setup(git_email: str, repo_root: Path) -> None:
                 typer.echo(f"[git] origin updated to {ssh_remote}")
 
 
-def read_saved_plane_start_command(env_path: Path) -> str | None:
-    return load_env_exports(env_path).get("OPERATIONS_CENTER_PLANE_START_COMMAND")
-
-
-def resolve_default_plane_start_command(env_path: Path) -> str | None:
-    env_value = os.environ.get("OPERATIONS_CENTER_PLANE_START_COMMAND")
-    if env_value:
-        return env_value
-    saved_value = read_saved_plane_start_command(env_path)
-    if saved_value:
-        return saved_value
-    return DEFAULT_PLANE_START_COMMAND
-
-
 def render_settings_yaml(answers: SetupAnswers) -> str:
     repos: dict[str, dict[str, object]] = {}
     for repo in answers.repos:
@@ -679,11 +655,12 @@ def render_settings_yaml(answers: SetupAnswers) -> str:
         }
 
     config = {
-        "plane": {
-            "base_url": answers.plane_base_url,
-            "api_token_env": answers.plane_api_token_env,
-            "workspace_slug": answers.plane_workspace_slug,
-            "project_id": answers.plane_project_id,
+        "board_backend": "forgejo",
+        "forgejo": {
+            "base_url": answers.forgejo_base_url,
+            "api_token_env": answers.forgejo_api_token_env,
+            "owner": answers.forgejo_owner,
+            "repo": answers.forgejo_repo,
         },
         "git": {
             "provider": answers.git_provider,
@@ -733,24 +710,13 @@ def render_env_file(answers: SetupAnswers) -> str:
         "# Local Operations Center environment",
         "# Source this file before running worker/api/smoke commands.",
         "",
-        f"export {answers.plane_api_token_env}={shell_quote(answers.plane_api_token_value)}",
-        f"export OPERATIONS_CENTER_PLANE_URL={shell_quote(answers.plane_base_url)}",
+        f"export {answers.forgejo_api_token_env}={shell_quote(answers.forgejo_api_token_value)}",
         f"export {answers.git_token_env}={shell_quote(answers.git_token_value)}",
         f"export OPERATIONS_CENTER_PROVIDER_PREFERRED_SMART={shell_quote(answers.preferred_smart_provider or '')}",
         f"export OPERATIONS_CENTER_PROVIDER_PREFERRED_FAST={shell_quote(answers.preferred_fast_provider or '')}",
         f"export OPERATIONS_CENTER_ALLOWED_PROVIDERS={shell_quote(','.join(answers.allowed_providers))}",
         f"export OPERATIONS_CENTER_PROVIDER_HEADLESS_REQUIRED={'1' if answers.headless_required else '0'}",
     ]
-    if answers.plane_start_command:
-        lines.append(
-            f"export OPERATIONS_CENTER_PLANE_START_COMMAND={shell_quote(answers.plane_start_command)}"
-        )
-    if answers.plane_version:
-        lines.append(f"export OPERATIONS_CENTER_PLANE_VERSION={shell_quote(answers.plane_version)}")
-    if answers.plane_setup_url:
-        lines.append(
-            f"export OPERATIONS_CENTER_PLANE_SETUP_URL={shell_quote(answers.plane_setup_url)}"
-        )
     if answers.executor_install_ref:
         lines.append(
             f"export OPERATIONS_CENTER_EXECUTOR_INSTALL_REF={shell_quote(answers.executor_install_ref)}"
@@ -764,8 +730,6 @@ def render_env_file(answers: SetupAnswers) -> str:
         version = answers.provider_versions.get(key, "")
         if version:
             lines.append(f"export {env_key}={shell_quote(version)}")
-    if answers.plane_open_browser:
-        lines.append("export OPERATIONS_CENTER_PLANE_OPEN_BROWSER='1'")
     lines.append(
         "# Provider auth is handled by provider-specific CLIs or env vars on this machine."
     )
@@ -912,8 +876,8 @@ def main(
         help="Path to write the local env exports file.",
     ),
     task_template_path: Path = typer.Option(
-        Path("config/plane_task_template.local.md"),
-        help="Path to write a starter Plane task template.",
+        Path("config/task_template.local.md"),
+        help="Path to write a starter board task template.",
     ),
 ) -> None:
     print_banner()
@@ -921,175 +885,65 @@ def main(
     existing_config = load_existing_config(config_path)
 
     print_section(
-        "Plane",
-        "Local Plane service plus the Plane API workspace/project values used by the wrapper.",
+        "Forgejo",
+        "The self-hosted Forgejo instance and the repo whose issues are the board.",
     )
     advanced_mode = typer.confirm("Advanced setup?", default=False)
-    plane_base_default = (
-        existing_env.get("OPERATIONS_CENTER_PLANE_URL")
-        or existing_config_value(existing_config, "plane", "base_url")
-        or DEFAULT_PLANE_URL
+    forgejo_base_default = (
+        existing_config_value(existing_config, "forgejo", "base_url") or DEFAULT_FORGEJO_URL
     )
-    plane_base_url = prompt_with_default(
-        "Plane base URL",
-        plane_base_default,
+    forgejo_base_url = prompt_with_default(
+        "Forgejo base URL",
+        forgejo_base_default,
         note="Using saved value."
-        if existing_env.get("OPERATIONS_CENTER_PLANE_URL")
-        or existing_config_value(existing_config, "plane", "base_url")
-        else None,
+        if existing_config_value(existing_config, "forgejo", "base_url")
+        else "The instance itself is a service you run (for example a container "
+        "on this host); setup does not start it.",
     )
-    plane_workspace_default = (
-        existing_config_value(existing_config, "plane", "workspace_slug") or "engineering"
+    forgejo_owner = prompt_with_default(
+        "Forgejo user or org that owns the board repo",
+        existing_config_value(existing_config, "forgejo", "owner") or "",
     )
-    plane_workspace_slug = prompt_with_default(
-        "Plane API workspace slug",
-        plane_workspace_default,
-        note=(
-            "Used for Plane API paths like /api/v1/workspaces/{workspace_slug}/... Not used for the browser open URL."
-            if existing_config_value(existing_config, "plane", "workspace_slug")
-            else "Used for Plane API paths like /api/v1/workspaces/{workspace_slug}/... Not used for the browser open URL."
-        ),
+    forgejo_repo = prompt_with_default(
+        "Board repo name",
+        existing_config_value(existing_config, "forgejo", "repo") or DEFAULT_FORGEJO_BOARD_REPO,
+        note="One repo holds every fleet task. Forgejo numbers issues per repo, "
+        "so a single repo makes that counter a global task-id sequence.",
     )
-    plane_project_default = existing_config_value(existing_config, "plane", "project_id") or "1"
-    plane_project_id = prompt_with_default(
-        "Plane API project id",
-        plane_project_default,
-        note=(
-            "Used for Plane API paths like /api/v1/workspaces/{workspace_slug}/projects/{project_id}/... Not used for the browser open URL."
-            if existing_config_value(existing_config, "plane", "project_id")
-            else "Used for Plane API paths like /api/v1/workspaces/{workspace_slug}/projects/{project_id}/... Not used for the browser open URL."
-        ),
-    )
-    plane_api_token_env = (
-        existing_config_value(existing_config, "plane", "api_token_env") or "PLANE_API_TOKEN"
+    forgejo_api_token_env = (
+        existing_config_value(existing_config, "forgejo", "api_token_env") or "FORGEJO_API_TOKEN"
     )
     if advanced_mode:
-        plane_api_token_env = typer.prompt(
-            "Plane token env var name (required)", default="PLANE_API_TOKEN"
-        )
-    default_plane_start_command = resolve_default_plane_start_command(env_path)
-    plane_start_command = default_plane_start_command
-    plane_open_browser = False
-    plane_version = existing_env.get("OPERATIONS_CENTER_PLANE_VERSION") or None
-    plane_setup_url = existing_env.get("OPERATIONS_CENTER_PLANE_SETUP_URL") or None
-    if advanced_mode:
-        print_section(
-            "Version Pins",
-            "Optional install refs or versions for Plane, executor, and provider CLIs.",
-        )
-        plane_version = (
-            typer.prompt(
-                "Plane release tag (optional; pins repo-managed setup download)",
-                default=plane_version or "",
-            ).strip()
-            or None
-        )
-        plane_setup_url = (
-            typer.prompt(
-                "Plane setup URL override (optional; takes precedence over release tag)",
-                default=plane_setup_url or "",
-            ).strip()
-            or None
-        )
-    if advanced_mode and default_plane_start_command:
-        typer.echo(f"Using saved Plane start command: {default_plane_start_command}")
-        change_plane_start_command = typer.confirm(
-            "Change the saved Plane start command?",
-            default=False,
-        )
-        if change_plane_start_command:
-            plane_start_command = (
-                typer.prompt(
-                    "Plane start command",
-                    default=default_plane_start_command,
-                ).strip()
-                or None
-            )
-        plane_open_browser = typer.confirm(
-            "Try to open the Plane URL in a browser after running `plane-up`?",
-            default=True,
-        )
-    elif advanced_mode:
-        save_plane_start_command = typer.confirm(
-            "Save a local command that starts your Plane instance?",
-            default=True,
-        )
-        if save_plane_start_command:
-            plane_start_command = (
-                typer.prompt("Plane start command", default=DEFAULT_PLANE_START_COMMAND).strip()
-                or None
-            )
-            plane_open_browser = typer.confirm(
-                "Try to open the Plane URL in a browser after running `plane-up`?",
-                default=True,
-            )
-
-    if not advanced_mode:
-        typer.echo("Using repo-managed local Plane deployment under deployment/plane/.")
-        plane_open_browser = True
-
-    if plane_start_command and not plane_open_browser and advanced_mode:
-        plane_open_browser = typer.confirm(
-            "Try to open the Plane URL in a browser after running `plane-up`?",
-            default=True,
+        forgejo_api_token_env = typer.prompt(
+            "Forgejo token env var name (required)", default=forgejo_api_token_env
         )
 
-    if plane_start_command:
-        start_plane_now = typer.confirm(
-            "Start/open Plane now before asking for the token?",
-            default=True,
-        )
+    typer.echo("")
+    typer.echo(f"Create a token at {forgejo_base_url.rstrip('/')}/user/settings/applications")
+    typer.echo("It needs read/write on repository and issue scopes.")
+
+    existing_forgejo_token = existing_env.get(forgejo_api_token_env, "")
+    if existing_forgejo_token and typer.confirm(
+        "Reuse existing Forgejo API token from local env?", default=True
+    ):
+        forgejo_api_token_value = existing_forgejo_token
+        typer.secho("Reusing existing Forgejo API token.", fg=typer.colors.BRIGHT_BLACK)
     else:
-        typer.echo(
-            "No Plane start command is configured. Start Plane separately, then paste the token."
-        )
-        start_plane_now = False
-
-    if start_plane_now:
-        if plane_start_command is None:
-            raise RuntimeError("start_plane_now is True but plane_start_command was not set")
-        typer.echo("Starting Plane...")
-        run_local_command(plane_start_command)
-        typer.echo("Plane start command finished.")
-        if plane_open_browser:
-            typer.echo(f"Opening {plane_base_url} ...")
-            maybe_open_url(plane_base_url)
-        typer.echo("Log into Plane in the browser, then create a personal access token.")
-        typer.echo("Plane path: Profile Settings -> Personal Access Tokens")
-    else:
-        typer.echo("Plane was not started by setup.")
-
-    existing_plane_token = existing_env.get(plane_api_token_env, "")
-    if existing_plane_token:
-        reuse_plane_token = typer.confirm(
-            "Reuse existing Plane API token from local env?", default=True
-        )
-        if reuse_plane_token:
-            plane_api_token_value = existing_plane_token
-            typer.secho("Reusing existing Plane API token.", fg=typer.colors.BRIGHT_BLACK)
-        else:
-            plane_api_token_value = typer.prompt(
-                "Paste Plane API token",
-                hide_input=True,
-                default="",
-            )
-    else:
-        plane_api_token_value = typer.prompt(
-            "Paste Plane API token",
+        forgejo_api_token_value = typer.prompt(
+            "Paste Forgejo API token",
             hide_input=True,
             default="",
         )
-    verify_now = typer.confirm("Verify Plane API workspace/project now?", default=True)
-    if verify_now:
-        verified = verify_plane_configuration(
-            plane_base_url,
-            plane_api_token_value,
-            plane_workspace_slug,
-            plane_project_id,
+
+    if typer.confirm("Verify the board repo now?", default=True):
+        verified = verify_forgejo_configuration(
+            forgejo_base_url,
+            forgejo_api_token_value,
+            forgejo_owner,
+            forgejo_repo,
         )
-        if not verified:
-            if not typer.confirm("Continue setup anyway?", default=False):
-                raise typer.Abort()
+        if not verified and not typer.confirm("Continue setup anyway?", default=False):
+            raise typer.Abort()
 
     print_section("Git", "Remote host, authentication, commit identity, and SSH access.")
     git_provider = typer.prompt(
@@ -1343,15 +1197,11 @@ def main(
         )
 
     answers = SetupAnswers(
-        plane_base_url=plane_base_url,
-        plane_workspace_slug=plane_workspace_slug,
-        plane_project_id=plane_project_id,
-        plane_api_token_env=plane_api_token_env,
-        plane_api_token_value=plane_api_token_value,
-        plane_version=plane_version,
-        plane_setup_url=plane_setup_url,
-        plane_start_command=plane_start_command,
-        plane_open_browser=plane_open_browser,
+        forgejo_base_url=forgejo_base_url,
+        forgejo_owner=forgejo_owner,
+        forgejo_repo=forgejo_repo,
+        forgejo_api_token_env=forgejo_api_token_env,
+        forgejo_api_token_value=forgejo_api_token_value,
         git_provider=git_provider,
         git_token_env=git_token_env,
         git_token_value=git_token_value,

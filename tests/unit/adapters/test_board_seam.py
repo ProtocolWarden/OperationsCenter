@@ -36,15 +36,13 @@ SRC = pathlib.Path(__file__).resolve().parents[3] / "src" / "operations_center"
 #:
 #: Adding to this set is not a way to avoid migrating. A new entry needs a reason
 #: of the same kind: "this tests Plane itself", not "this was easier".
-PLANE_SPECIFIC_BY_DESIGN = {
-    # The setup wizard verifies credentials the operator has just typed, before
-    # any Settings object exists — `make_board_client(settings)` has nothing to
-    # build from. It still walks a new operator through Plane, which stopped
-    # being the board at the 2026-08-18 Forgejo cutover; rewriting the wizard
-    # for Forgejo is a scoped follow-up, and until then this entry records the
-    # remaining coupling honestly.
-    "entrypoints/setup/main.py",
-}
+#: Empty. The setup wizard was the last entry: it constructs a board client
+#: directly because it validates credentials the operator has just typed, before
+#: any Settings object exists for `make_board_client` to build from. That reason
+#: still holds — but since the wizard now onboards operators onto Forgejo, the
+#: client it constructs is `ForgejoClient`, and nothing imports `PlaneClient`
+#: outside `adapters/` any more.
+PLANE_SPECIFIC_BY_DESIGN: set[str] = set()
 
 #: Kept as the old name so the ratchet tests below read unchanged.
 STILL_IMPORTING_PLANE = PLANE_SPECIFIC_BY_DESIGN
