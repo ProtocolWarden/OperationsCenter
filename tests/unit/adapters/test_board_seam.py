@@ -312,8 +312,15 @@ def test_the_retired_backend_is_actually_gone():
     truth about how the fleet talks to a board — one nothing exercises, and so
     one nothing keeps honest.
     """
-    assert not (SRC / "adapters" / "plane").exists(), (
-        "adapters/plane is back; the board backend is Forgejo"
+    plane_dir = SRC / "adapters" / "plane"
+    assert not plane_dir.exists(), (
+        f"{plane_dir} exists. If it is EMPTY, git left it behind when the "
+        "deletion landed — it removes tracked files, not directories that still "
+        "held a __pycache__. That matters more than it looks: an empty directory "
+        "is a PEP 420 namespace package, so `import "
+        "operations_center.adapters.plane` still succeeds, with __file__ None, "
+        "and any `except ImportError` fallback silently takes the wrong branch. "
+        f"Fix with: rmdir {plane_dir}"
     )
     # Deliberately importers, not every mention: several docstrings narrate the
     # migration ("callers imported PlaneClient by name..."), and that history is
