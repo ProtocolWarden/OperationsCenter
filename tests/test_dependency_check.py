@@ -108,8 +108,14 @@ def _probe(monkeypatch, response):
 
 
 def test_board_status_reports_version_and_health(monkeypatch):
+    """The full version string survives, gitea-compat suffix and all.
+
+    `normalize_version` strips a leading tool name ("codex-cli 0.117.0"), not a
+    build suffix — and the suffix is worth keeping: it is how an operator tells
+    which Gitea API generation their Forgejo speaks.
+    """
     assert _probe(monkeypatch, _Resp(200, {"version": "13.0.5+gitea-1.22.0"})) == (
-        "13.0.5",
+        "13.0.5+gitea-1.22.0",
         True,
     )
 
