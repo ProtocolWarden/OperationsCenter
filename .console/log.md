@@ -1,3 +1,40 @@
+## 2026-08-19 — every "latest artifact" lookup was decided by the filesystem
+
+`tests/test_insights.py::test_loader_reads_latest_snapshot_with_bounded_history`
+failed on the self-hosted runner and passed on GitHub's. The code was identical;
+only the timing differed.
+
+`SnapshotLoader._all_snapshots` sorted *paths* by `st_mtime`. Two snapshots
+written in the same instant tie, Python's sort is stable, so the order fell
+through to whatever `glob()` yielded — "the latest snapshot" was decided by the
+filesystem. Now ordered by the snapshot's own `observed_at`, tie-broken by
+`run_id`. It costs nothing: every file was parsed either way, so the sort just
+moved after the parse instead of before it.
+
+The original test could only catch this by luck, since a tie comes out backwards
+only sometimes. Added a regression test that forces the two to disagree — the
+semantically NEWER snapshot gets an OLDER mtime — so mtime-ordering must be wrong
+and `observed_at`-ordering must be right. It fails deterministically against the
+old loader.
+
+Auditing the pattern found the same defect in six more places, all of them
+choosing WHICH artifact answers a question, not merely how old it is:
+
+* `proposer/guardrail_adapter._last_created_at` — drives the proposer's cooldown
+* `autonomy_cycle` quiet-window slice — a tie at the boundary decided which cycle
+  entered the window
+* `analyze._load_decision_artifacts` and `_load_proposer_artifacts`
+* `observer/collectors/check_signal.latest_matching_file`
+* `observer/collectors/dependency_drift._latest_dependency_report`
+* `insights/loader.latest_snapshot_age_hours`
+
+The last two used `max(..., key=mtime)`, which returns the FIRST maximal element
+— so a tie resolved to `iterdir()`/`glob()` order. All seven keys are now total:
+mtime, then path. There are no untied mtime sort keys left in `src/`.
+
+None of this was new. It was simply never observed, because hosted runners are
+fast enough that two writes rarely share a timestamp tick.
+
 ## 2026-08-19 — what a slower runner found: a real heartbeat race
 
 Forgejo CI ran the full unit suite for the first time: 8,603 passed, coverage

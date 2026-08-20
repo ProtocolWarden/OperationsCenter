@@ -193,9 +193,12 @@ def _write_quiet_diagnosis(
     """
     from collections import Counter
 
+    # Tie-break on the path so the order is TOTAL: this slices the newest
+    # `quiet_window` reports, and with mtime alone a tie at the boundary decided
+    # which cycle entered the window by filesystem order.
     cycle_reports = sorted(
         report_dir.glob("cycle_*.json"),
-        key=lambda p: p.stat().st_mtime,
+        key=lambda p: (p.stat().st_mtime, p),
         reverse=True,
     )[:quiet_window]
 
@@ -285,7 +288,9 @@ def _write_quiet_diagnosis(
     }
     diag_path = report_dir / "quiet_diagnosis.json"
     diag_path.write_text(json.dumps(diag, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"\n  [warn] Proposer created 0 tasks for {quiet_window} cycles — diagnosis → {diag_path}")
+    print(
+        f"\n  [warn] Proposer created 0 tasks for {quiet_window} cycles — diagnosis → {diag_path}"
+    )
     # S7-7: Fire escalation webhook when proposer goes silent.
     if escalation_webhook:
         try:
