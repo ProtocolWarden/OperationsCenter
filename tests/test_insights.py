@@ -2,6 +2,8 @@
 # Copyright (C) 2026 ProtocolWarden
 from __future__ import annotations
 
+import json
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -90,6 +92,41 @@ def test_loader_reads_latest_snapshot_with_bounded_history(tmp_path: Path) -> No
 
     snapshots = SnapshotLoader(tmp_path / "observer").load(
         repo="operations-center", snapshot_run_id=None, history_limit=1
+    )
+
+    assert [snapshot.run_id for snapshot in snapshots] == ["obs_new", "obs_old"]
+
+
+def test_loader_orders_by_observed_at_not_file_mtime(tmp_path: Path) -> None:
+    """Snapshot order must follow observed_at even when mtimes disagree.
+
+    The loader used to sort paths by st_mtime. Two snapshots written in the
+    same instant tie on mtime, and because Python's sort is stable the order
+    then fell through to whatever glob() yielded — so "the latest snapshot"
+    was decided by the filesystem. That is why the bounded-history test above
+    passed on GitHub's runners and failed on the self-hosted one.
+
+    Repetition cannot pin this down, because a tie only *sometimes* comes out
+    backwards. So force the two to disagree outright: give the semantically
+    NEWER snapshot an OLDER mtime. Ordering by mtime then has to be wrong,
+    and ordering by observed_at has to be right.
+    """
+    writer = ObserverArtifactWriter(tmp_path / "observer")
+    oldest = _make_snapshot(run_id="obs_old", observed_at=datetime(2026, 3, 31, 10, tzinfo=UTC))
+    newest = _make_snapshot(run_id="obs_new", observed_at=datetime(2026, 3, 31, 12, tzinfo=UTC))
+    writer.write(oldest)
+    writer.write(newest)
+
+    paths = {
+        json.loads(path.read_text(encoding="utf-8"))["run_id"]: path
+        for path in (tmp_path / "observer").glob("*/repo_state_snapshot.json")
+    }
+    assert set(paths) == {"obs_old", "obs_new"}
+    os.utime(paths["obs_new"], (1_000_000, 1_000_000))
+    os.utime(paths["obs_old"], (2_000_000, 2_000_000))
+
+    snapshots = SnapshotLoader(tmp_path / "observer").load(
+        repo="operations-center", snapshot_run_id=None, history_limit=5
     )
 
     assert [snapshot.run_id for snapshot in snapshots] == ["obs_new", "obs_old"]

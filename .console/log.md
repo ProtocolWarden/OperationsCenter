@@ -1,3 +1,250 @@
+## 2026-08-20 — a ratio of two sub-millisecond numbers
+
+`test_large_simple_scalability_ratio` failed CI at **10.73x** against a 4.29x
+bound. Nothing got slower. It timed ONE collection of a 7-dep report and one of
+a 20-dep report and divided them — both sub-millisecond, so a single
+descheduling event inflates the quotient. This box shares four cores with an
+unrelated media pipeline running at ~160% CPU, so descheduling is routine.
+
+Two tempting non-fixes: widen the bound (the test goes blind) or skip when the
+baseline is too fast (the test becomes dead weight — and it skipped 20/20 when
+I tried it, so the assertion would never have run again).
+
+Instead it now times a BATCH of 200 collections and takes the fastest of 3
+blocks. The batch is long enough to dominate timer granularity, and min() is
+the correct statistic for "how long does this take": interference can only make
+a sample slower, so the fastest block is the least contaminated one, while mean
+and median both drag upward under load. 20/20 green on the loaded box, and
+10/10 with six extra CPU hogs on top.
+
+Sixth in this family. Worth noting what it says about the old setup: the
+correctness gate contained wall-clock assertions that only held because hosted
+runners are dedicated and quiet. `Test (pytest)` runs `-m "not slow"`, which
+does not exclude `perf`, so these ran inside the general gate as well as in the
+dedicated `performance` job.
+
+## 2026-08-19 — a test that assumed the clock moves
+
+`test_mtime_from_discovery_time_returned` failed in CI as
+
+    assert 1787193855.8150523 > 1787193855.8150523
+
+The assertion under test (line 158 — the returned mtime came from discovery,
+not a second `stat()`) was fine. The line that failed was the *sanity check*
+that the file had actually changed, and it worked by sleeping 10ms and assuming
+the new mtime would be larger. A 10ms sleep is not guaranteed to exceed the
+filesystem's timestamp granularity, so when both writes landed in the same tick
+it compared a value to itself.
+
+Now sets the new mtime explicitly with `os.utime` instead of hoping the clock
+moved. 30/30 runs green; it had passed locally, which is exactly what made it
+flaky rather than broken.
+
+Same family as the other four this cutover surfaced: the code and tests carried
+timing assumptions that hosted runners were fast — or coarse — enough to never
+violate.
+
+## 2026-08-19 — the cutover quietly took CI out of the blast-radius set
+
+Auditing the docs for the machine move turned up something that was not a docs
+problem. `policy/defaults.py` marks high-blast-radius paths `review_required`,
+and one of them was `.github/workflows/**`. CI moved to `.forgejo/workflows/`
+in this branch — so that rule stopped matching anything, and the pipeline that
+gates every other change quietly became an ordinary autonomous edit. Added
+`.forgejo/workflows/**`.
+
+While checking it, a second hole: these are **fnmatch** patterns
+(`policy/engine.py`), which must match the WHOLE path, so `docker-compose*.yml`
+covers only a root-level file. `deploy/forgejo/docker-compose.yml` — which I
+added in this same branch, and which defines the forge the fleet reviews
+through — matched nothing. Added `**/docker-compose*.yml`.
+
+Both regression tests assert on real PATHS rather than on pattern strings,
+because the bug was precisely that a pattern existed and matched nothing.
+Verified they fail without the fix.
+
+CI also caught a test I should have caught locally:
+`tests/unit/insights/test_loader_cov.py::test_load_all_sorted_newest_first`
+encoded the OLD mtime ordering. I had run `tests/test_insights.py` and the
+observer suites but not `tests/unit/insights/`. It now sets `observed_at`
+explicitly and INVERTS the mtimes, so ordering by mtime produces exactly the
+wrong answer and the test cannot pass by accident — which is what it was doing
+before. Full local run this time: 8,621 unit + 1,831 non-unit, zero failures.
+
+Docs brought in line for the move:
+
+* `deploy/forgejo/README.md` — the runner registration was stale in two ways
+  that each cost real debugging time: it mapped `ubuntu-latest` to
+  `node:20-bookworm` (no Python tool cache ⇒ every job fails setup-python) and
+  started the daemon without `--config`, so `container.network: host` was never
+  read. Added a from-scratch install path distinct from the migration one.
+* `.env.operations-center.example` had no `FORGEJO_API_TOKEN` at all — a new
+  machine had no way to know it was needed. Documented, with the warning that
+  it must be a literal value: the watchers are started under `setsid`, and
+  command substitution that wants a tty hangs the daemon with no error.
+* `docs/operator/setup.md` still walked the operator through Plane, including a
+  `plane-doctor` command, on a fleet where Plane never ran.
+* On keeping secrets in a private repo: fine if ENCRYPTED (sops+age, git-crypt).
+  Plaintext in git is effectively permanent — rotation becomes history rewriting
+  everywhere it was pushed.
+
+## 2026-08-19 — the deployment existed nowhere but this machine
+
+The fleet is moving to another box, which exposed the real gap: both forge
+containers were created with raw `docker run`. Nothing in the repo recorded the
+ports, the volumes, or the `FORGEJO__*` settings, and branch protection existed
+only inside the forge's SQLite DB. `docker inspect` is not a migration plan —
+if the machine is gone, so is the answer.
+
+Now committed:
+
+* `deploy/forgejo/docker-compose.yml` — reproduced from the live containers and
+  **verified against them** field by field (image, env keys): zero mismatches.
+* `deploy/forgejo/branch-protection.json` — exported from the live instance
+  rather than written from memory.
+* `deploy/forgejo/apply-branch-protection.sh` — applies it, and `--check`
+  reports drift. Proved the check actually detects drift by feeding it three
+  distinct mutations (extra required context, `apply_to_admins` flipped, an
+  unknown branch); each exited 1 with a specific diagnosis, and the unmodified
+  file exits 0. A checker that only ever says "matches" is worth nothing.
+* A "Moving to another machine" runbook covering what CANNOT be committed: the
+  two docker volumes and the two gitignored files holding live tokens.
+
+The script had a real bug that `bash -n` passed: two stdin redirects on one
+command (`python3 - "$RULES" <<'PY' <<<"$live"`). The last redirect wins, so
+python received the JSON *as its program* and died on `name 'false' is not
+defined`. Only running it caught that. The live data now goes through the
+environment instead.
+
+Also recorded the coupling that is easy to break later: `ROOT_URL` and
+`container.network: host` are a pair, because the runner hands that URL to job
+containers for `actions/checkout` and it has to resolve *inside* the job.
+
+## 2026-08-19 — every "latest artifact" lookup was decided by the filesystem
+
+`tests/test_insights.py::test_loader_reads_latest_snapshot_with_bounded_history`
+failed on the self-hosted runner and passed on GitHub's. The code was identical;
+only the timing differed.
+
+`SnapshotLoader._all_snapshots` sorted *paths* by `st_mtime`. Two snapshots
+written in the same instant tie, Python's sort is stable, so the order fell
+through to whatever `glob()` yielded — "the latest snapshot" was decided by the
+filesystem. Now ordered by the snapshot's own `observed_at`, tie-broken by
+`run_id`. It costs nothing: every file was parsed either way, so the sort just
+moved after the parse instead of before it.
+
+The original test could only catch this by luck, since a tie comes out backwards
+only sometimes. Added a regression test that forces the two to disagree — the
+semantically NEWER snapshot gets an OLDER mtime — so mtime-ordering must be wrong
+and `observed_at`-ordering must be right. It fails deterministically against the
+old loader.
+
+Auditing the pattern found the same defect in six more places, all of them
+choosing WHICH artifact answers a question, not merely how old it is:
+
+* `proposer/guardrail_adapter._last_created_at` — drives the proposer's cooldown
+* `autonomy_cycle` quiet-window slice — a tie at the boundary decided which cycle
+  entered the window
+* `analyze._load_decision_artifacts` and `_load_proposer_artifacts`
+* `observer/collectors/check_signal.latest_matching_file`
+* `observer/collectors/dependency_drift._latest_dependency_report`
+* `insights/loader.latest_snapshot_age_hours`
+
+The last two used `max(..., key=mtime)`, which returns the FIRST maximal element
+— so a tie resolved to `iterdir()`/`glob()` order. All seven keys are now total:
+mtime, then path. There are no untied mtime sort keys left in `src/`.
+
+None of this was new. It was simply never observed, because hosted runners are
+fast enough that two writes rarely share a timestamp tick.
+
+## 2026-08-19 — what a slower runner found: a real heartbeat race
+
+Forgejo CI ran the full unit suite for the first time: 8,603 passed, coverage
+85.97% (gate 85%), **7 failed**. Three distinct causes, only one of which was a
+test problem:
+
+**Five were mine.** `tests/unit/test_documentation_accuracy.py` asserts that
+`.github/workflows/ci.yml` exists — and this branch deletes it. Repointed at
+`.forgejo/workflows/ci.yml`, and fixed the three README references to the old
+path, which is precisely what those tests exist to police. Note `.github/`
+itself stays: it holds CODEOWNERS and the issue/PR templates, which GitHub
+still serves for the mirror.
+
+**One was the runner's privileges.** `test_store_with_read_only_directory`
+chmods a directory to 0444 and asserts the write raises. Root ignores directory
+permission bits, and act runs job containers as root — GitHub's hosted runners
+execute as the unprivileged `runner` user, which is why this only ever passed
+there. It asserts an OS guarantee that does not hold for uid 0, so it is now
+skipped when `geteuid() == 0` rather than pretended away.
+
+**One was a genuine production race** — `pipeline_trigger._run_pipeline`. The
+liveness thread writes `status="executing"` every tick, and `stop_event.set()`
+lived in the `finally`, i.e. AFTER the terminal `_write_heartbeat(status="idle")`.
+A tick landing in that window overwrites "idle", and the heartbeat then claims
+the pipeline is executing for ever after — which the watchdog reads as a live
+run and acts on. The window spans a `json.dumps` logging call, so it is not
+theoretical: under four CPU spinners the pre-fix code failed **2 of 25** runs,
+the fixed code 0 of 25. Every terminal path now stops the thread before writing
+its final status; the `finally` remains as an idempotent safety net.
+
+This is the value of running the gates somewhere slower than GitHub's runners:
+the race was always there, and hosted CI was fast enough to hide it.
+
+Also switched the three `actions/upload-artifact@v4` steps to `@v3`. Forgejo
+implements the v3 artifact protocol; v4 fails with `GHESNotSupportedError` —
+and fails as a *warning*, so the step went green while storing nothing.
+
+## 2026-08-19 — Forgejo CI: the two things that actually blocked every job
+
+Checkout was fixed by `container.network: host` (job containers on a bridge
+network cannot reach `localhost:3000`). With that in, 11 of 13 jobs still failed,
+for two reasons that had nothing to do with the network:
+
+1. **`actions/setup-python` cannot work on a self-hosted forge as-is.** It
+   resolves interpreters from the *forge's own* `actions/python-versions` repo —
+   it reads `GITHUB_API_URL`, which on a Forgejo runner points at
+   `localhost:3000`. That repo does not exist here, so every job died with
+   `The version '3.11' ... was not found`. Fixed by pre-seeding
+   `/opt/hostedtoolcache` with CPython 3.11 and 3.12 in a purpose-built job
+   image (`deploy/forgejo/ci-runner/Dockerfile`), mapped via the runner's
+   `ubuntu-latest:docker://oc-ci-runner:latest` label. setup-python checks the
+   tool cache first, so the workflows stay byte-identical.
+
+   Baked into the image, *not* bind-mounted from the host: jobs run
+   `pip install -e ".[dev]"`, which writes into the interpreter's site-packages.
+   A host mount would persist those writes into every later job.
+
+2. **`codecov/codecov-action` is not mirrored on data.forgejo.org.** act
+   resolves every `uses:` *before* the job starts, so the clone failure killed
+   the job before checkout ran and `fail_ci_if_error: false` never applied.
+   Removed from the Forgejo copy — it is also a third-party SaaS, which is what
+   this migration is moving off. The coverage *gate* is unchanged:
+   `--cov-fail-under=85` is in the pytest command, not the upload step.
+
+A third thing surfaced only once the tool cache worked: the console scripts
+(`pip`, `wheel`, ...) carry an absolute shebang from the image they were built
+in — `#!/usr/local/bin/python3.11`. At the relocated prefix that path does not
+exist, the kernel fails the exec with ENOENT, and bash reports
+
+    /opt/hostedtoolcache/Python/3.11.16/x64/bin/pip: cannot execute: required file not found
+
+which names `pip` while the file actually missing is the *interpreter*. The
+image rewrites those shebangs. CPython itself needs no patching — it derives
+`sys.prefix` from `argv[0]` at runtime, so it relocates cleanly.
+
+The Dockerfile now proves both interpreters at BUILD time (import ssl/sqlite3/
+lzma/ctypes, `pip --version`, `python -m venv`). That check earned its keep
+immediately: it caught that my first version used `$$` for the venv scratch dir,
+which is the shell PID and therefore identical on both loop iterations, so the
+3.12 venv was created on top of the 3.11 one and failed at ensurepip. A broken
+image now fails in `docker build` instead of in a CI job ten minutes later.
+
+
+Also deleted `.github/workflows/`. Beyond being the point of the cutover, they
+were actively harmful: Forgejo runs `.github/workflows/` too, and the ported
+copies produce **identical** status contexts, so the two sets raced and
+whichever finished last decided the check.
+
 ## 2026-08-19 — correcting myself: the status context is the JOB name
 
 #526 said `run-name:` pins Forgejo's status context. Wrong, and I generalised

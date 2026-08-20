@@ -70,9 +70,29 @@ _SENSITIVE_PATHS = [
         notes="Infrastructure definition",
     ),
     PathScopeRule(
+        # These are fnmatch patterns (policy/engine.py), where `*` DOES cross
+        # directory separators but the pattern must still match the whole path
+        # — so "docker-compose*.yml" matches only a compose file at the repo
+        # root. deploy/forgejo/docker-compose.yml, which defines the forge the
+        # fleet reviews through, matched nothing until this rule.
+        path_pattern="**/docker-compose*.yml",
+        access_mode="review_required",
+        notes="Infrastructure definition (nested)",
+    ),
+    PathScopeRule(
         path_pattern=".github/workflows/**",
         access_mode="review_required",
         notes="CI/CD pipeline definitions",
+    ),
+    PathScopeRule(
+        # OC's CI moved here at the 2026-08-19 Forgejo cutover. Without this
+        # rule the cutover silently REMOVED CI definitions from the
+        # blast-radius set: `.github/workflows/**` stopped matching anything,
+        # and the workflows that gate every other change became an ordinary
+        # autonomous edit.
+        path_pattern=".forgejo/workflows/**",
+        access_mode="review_required",
+        notes="CI/CD pipeline definitions (Forgejo Actions)",
     ),
     PathScopeRule(
         path_pattern="Dockerfile*",

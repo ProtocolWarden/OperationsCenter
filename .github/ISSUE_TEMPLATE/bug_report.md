@@ -49,4 +49,4 @@ If a run completed partially, include the contents of the `.runs/<id>/` director
 
 ## Additional Context
 
-Config, environment variables, or Plane task IDs that might be relevant.
+Config, environment variables, or board task IDs that might be relevant.

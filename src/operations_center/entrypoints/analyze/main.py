@@ -27,8 +27,11 @@ ALL_FAMILIES = frozenset(
 def _load_decision_artifacts(
     root: Path, repo: str | None, limit: int
 ) -> list[ProposalCandidatesArtifact]:
+    # Tie-break on the path so the order is TOTAL (see _load_proposer_artifacts).
     paths = sorted(
-        root.glob("*/proposal_candidates.json"), key=lambda p: p.stat().st_mtime, reverse=True
+        root.glob("*/proposal_candidates.json"),
+        key=lambda p: (p.stat().st_mtime, p),
+        reverse=True,
     )
     artifacts = []
     for path in paths:
@@ -47,8 +50,13 @@ def _load_decision_artifacts(
 
 
 def _load_proposer_artifacts(root: Path, limit: int) -> list[ProposalResultsArtifact]:
+    # Tie-break on the path so the order is TOTAL. mtime alone leaves
+    # same-instant writes tied, and the stable sort then preserved glob order —
+    # so `paths[:limit]` silently depended on the filesystem.
     paths = sorted(
-        root.glob("*/proposal_results.json"), key=lambda p: p.stat().st_mtime, reverse=True
+        root.glob("*/proposal_results.json"),
+        key=lambda p: (p.stat().st_mtime, p),
+        reverse=True,
     )
     artifacts = []
     for path in paths[:limit]:

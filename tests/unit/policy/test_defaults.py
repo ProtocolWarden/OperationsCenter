@@ -11,6 +11,8 @@ Verifies that DEFAULT_REPO_POLICY and DEFAULT_POLICY_CONFIG are:
 
 from __future__ import annotations
 
+import fnmatch
+
 from operations_center.policy.defaults import (
     DEFAULT_POLICY_CONFIG,
     DEFAULT_REPO_POLICY,
@@ -171,3 +173,28 @@ class TestSensitivePathPatterns:
 
     def test_all_patterns_are_nonempty_strings(self):
         assert all(isinstance(p, str) and p for p in sensitive_path_patterns())
+
+    def test_ci_definitions_are_covered_on_the_forge_oc_actually_uses(self):
+        """The Forgejo cutover moved CI and must not have moved it out of scope.
+
+        `.github/workflows/**` stopped matching anything when the workflows
+        moved to `.forgejo/`, which would have quietly demoted the pipeline
+        that gates every other change to an ordinary autonomous edit. Asserting
+        on real paths rather than on the pattern strings, because the bug was
+        that a pattern existed and matched nothing.
+        """
+        patterns = sensitive_path_patterns()
+        for path in (".forgejo/workflows/ci.yml", ".github/workflows/ci.yml"):
+            assert any(fnmatch.fnmatch(path, pat) for pat in patterns), (
+                f"{path} matches no blast-radius pattern"
+            )
+
+    def test_nested_compose_files_are_covered(self):
+        """fnmatch requires the whole path to match, so "docker-compose*.yml"
+        covers only a root-level file. deploy/forgejo/docker-compose.yml
+        defines the forge the fleet reviews through and matched nothing."""
+        patterns = sensitive_path_patterns()
+        for path in ("docker-compose.yml", "deploy/forgejo/docker-compose.yml"):
+            assert any(fnmatch.fnmatch(path, pat) for pat in patterns), (
+                f"{path} matches no blast-radius pattern"
+            )

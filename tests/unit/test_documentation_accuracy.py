@@ -265,27 +265,27 @@ class TestCIDefined:
     """Verify CI/CD pipeline is configured as documented."""
 
     def test_ci_workflow_file_exists(self):
-        """GitHub Actions CI workflow file exists."""
-        ci_path = Path(".github/workflows/ci.yml")
-        assert ci_path.exists(), ".github/workflows/ci.yml does not exist"
+        """Forgejo Actions CI workflow file exists."""
+        ci_path = Path(".forgejo/workflows/ci.yml")
+        assert ci_path.exists(), ".forgejo/workflows/ci.yml does not exist"
 
     def test_ci_workflow_contains_pytest(self):
         """CI workflow contains pytest steps."""
-        ci_path = Path(".github/workflows/ci.yml")
+        ci_path = Path(".forgejo/workflows/ci.yml")
         content = ci_path.read_text()
 
         assert "pytest" in content, "pytest not found in CI workflow"
 
     def test_ci_workflow_contains_ruff(self):
         """CI workflow contains ruff lint check."""
-        ci_path = Path(".github/workflows/ci.yml")
+        ci_path = Path(".forgejo/workflows/ci.yml")
         content = ci_path.read_text()
 
         assert "ruff" in content, "ruff not found in CI workflow"
 
     def test_ci_workflow_contains_coverage(self):
         """CI workflow enforces coverage checking."""
-        ci_path = Path(".github/workflows/ci.yml")
+        ci_path = Path(".forgejo/workflows/ci.yml")
         content = ci_path.read_text()
 
         assert "cov" in content.lower(), "coverage not found in CI workflow"
@@ -415,9 +415,15 @@ class TestConfigurationFileIntegrity:
         """pyproject.toml file exists in repository root."""
         assert Path("pyproject.toml").exists(), "pyproject.toml file does not exist"
 
-    def test_github_workflows_directory_exists(self):
-        """.github/workflows/ directory exists."""
-        assert Path(".github/workflows").is_dir(), ".github/workflows/ directory does not exist"
+    def test_workflows_directory_exists(self):
+        """.forgejo/workflows/ directory exists.
+
+        CI moved off GitHub Actions at the 2026-08-19 Forgejo cutover; the
+        workflows are now under .forgejo/. `.github/` itself still exists and
+        is still checked below — it holds CODEOWNERS and the issue/PR
+        templates, which GitHub still serves for the mirror.
+        """
+        assert Path(".forgejo/workflows").is_dir(), ".forgejo/workflows/ directory does not exist"
 
     def test_readme_file_exists(self):
         """README.md file exists in repository root."""
@@ -502,7 +508,7 @@ class TestDocumentationAgainstRealArtifacts:
             Path("tests/unit"),
             Path("tests/integration"),
             Path("tests/integration/observer"),
-            Path(".github/workflows"),
+            Path(".forgejo/workflows"),
             Path(".github"),
         ]
 

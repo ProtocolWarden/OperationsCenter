@@ -150,11 +150,16 @@ class TestLatestMatchingFileRaceCondition:
         assert result is not None
         _, returned_mtime = result
 
-        # Modify file after discovery (simulate time passing)
-        time.sleep(0.01)
+        # Modify the file after discovery. Set the new mtime EXPLICITLY rather
+        # than sleeping and hoping the clock moved: a 10ms sleep is not
+        # guaranteed to exceed the filesystem's timestamp granularity, and when
+        # both writes landed in the same tick this line failed as
+        # `assert 1787193855.8150523 > 1787193855.8150523`. That is a flaw in
+        # the test's setup, not in the behaviour under test.
         test_file.write_text("modified")
+        os.utime(test_file, (original_mtime + 10, original_mtime + 10))
 
-        # Returned mtime should be original, not new mtime
+        # The real assertion: the mtime came from discovery, not a second stat().
         assert returned_mtime == original_mtime
         assert test_file.stat().st_mtime > original_mtime
 

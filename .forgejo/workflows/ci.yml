@@ -1,14 +1,17 @@
 # Ported from .github/workflows/ci.yml for the Forgejo cutover.
 #
-# Two deliberate differences from the GitHub original:
+# Three deliberate differences from the GitHub original:
 #
 # * `on:` is pull_request only. On Forgejo a `push` trigger produces a SECOND,
 #   separate status context on the same head ("... (push)") alongside the
 #   pull_request one — duplicating every job on a single self-hosted runner and
 #   leaving an extra check outstanding for any gate that requires nothing
 #   incomplete.
-# * Nothing else. The steps are byte-identical, because a gate that runs a
-#   different command is not the same gate.
+# * The Codecov upload step is removed — see the comment at its old site in
+#   the `test` job. It could not resolve on this forge, and it reported to a
+#   third-party service.
+# * Nothing else. Every step that decides pass/fail is byte-identical, because
+#   a gate that runs a different command is not the same gate.
 #
 # Status context format is `<workflow name:> / <job name:> (<event>)`, so the
 # contexts these produce are listed in docs/specs/forgejo-pr-adapter.md and are
@@ -116,18 +119,26 @@ jobs:
         # CI will fail until coverage improves to meet this target.
         # -p no:flaky-detection — see PR-validation step above.
         run: pytest -q tests/unit -p no:flaky-detection --cov=src --cov-report=html --cov-report=xml --cov-report=term-missing --cov-fail-under=85
-      - name: Upload coverage to Codecov
-        if: always()
-        uses: codecov/codecov-action@v4
-        with:
-          file: ./coverage.xml
-          flags: unittests
-          name: codecov-umbrella
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
+      # The GitHub original uploads coverage to Codecov here. Dropped on
+      # Forgejo for two reasons:
+      #
+      # * It cannot run. `codecov/codecov-action` is not mirrored on
+      #   data.forgejo.org, and act resolves every `uses:` BEFORE the job
+      #   starts — so the clone failure killed the whole job before checkout,
+      #   and `fail_ci_if_error: false` never got a chance to apply.
+      # * Codecov is a third-party SaaS, which is what this migration is
+      #   moving off.
+      #
+      # The coverage GATE is unchanged: --cov-fail-under=85 lives in the
+      # pytest command above and still fails the job. Only the external
+      # report upload is gone; the reports are kept as artifacts below.
       - name: Upload coverage reports as artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        # v3, not v4: Forgejo implements the v3 artifact protocol. v4 fails
+        # with `GHESNotSupportedError: @actions/artifact v2.0.0+ ... not
+        # currently supported on GHES` — and it fails as a WARNING, so the
+        # step goes green while storing nothing, which is the worst of both.
+        uses: actions/upload-artifact@v3
         with:
           name: coverage-reports-${{ github.event_name }}
           path: |
@@ -271,7 +282,11 @@ jobs:
         run: pytest -q tests/integration/observer -m "integration" --no-header -rN
       - name: Upload snapshot validation reports
         if: always()
-        uses: actions/upload-artifact@v4
+        # v3, not v4: Forgejo implements the v3 artifact protocol. v4 fails
+        # with `GHESNotSupportedError: @actions/artifact v2.0.0+ ... not
+        # currently supported on GHES` — and it fails as a WARNING, so the
+        # step goes green while storing nothing, which is the worst of both.
+        uses: actions/upload-artifact@v3
         with:
           name: snapshot-validation-reports-${{ github.event_name }}
           path: |
@@ -316,7 +331,11 @@ jobs:
           "
       - name: Upload flaky test metrics
         if: always()
-        uses: actions/upload-artifact@v4
+        # v3, not v4: Forgejo implements the v3 artifact protocol. v4 fails
+        # with `GHESNotSupportedError: @actions/artifact v2.0.0+ ... not
+        # currently supported on GHES` — and it fails as a WARNING, so the
+        # step goes green while storing nothing, which is the worst of both.
+        uses: actions/upload-artifact@v3
         with:
           name: flaky-test-metrics-${{ github.run_id }}
           path: |

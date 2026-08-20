@@ -100,6 +100,16 @@ class TestSnapshotRepositoryEdgeCases:
         with pytest.raises(FileNotFoundError):
             repository.load("nonexistent_run_id")
 
+    @pytest.mark.skipif(
+        hasattr(os, "geteuid") and os.geteuid() == 0,
+        reason=(
+            "root bypasses directory permission bits, so chmod 0444 does not "
+            "make the write fail. GitHub's hosted runners execute as the "
+            "unprivileged `runner` user; the self-hosted Forgejo runner "
+            "executes job containers as root, where this test asserted an OS "
+            "guarantee that does not apply and failed with 'DID NOT RAISE'."
+        ),
+    )
     def test_store_with_read_only_directory(
         self, tmp_path: Path, test_snapshot: RepoStateSnapshot
     ) -> None:

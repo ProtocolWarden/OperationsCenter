@@ -1,0 +1,21 @@
+log:
+  level: info
+
+runner:
+  capacity: 1
+  timeout: 3h
+  # Map the workflows' `runs-on: ubuntu-latest` to the image built by
+  # deploy/forgejo/ci-runner/Dockerfile. That image pre-seeds
+  # /opt/hostedtoolcache with CPython 3.11 and 3.12 so `actions/setup-python`
+  # resolves from the local tool cache instead of asking this Forgejo instance
+  # for an `actions/python-versions` repo that does not exist here.
+  labels:
+    - "ubuntu-latest:docker://oc-ci-runner:latest"
+
+container:
+  # Job containers default to a bridge network, where `localhost:3000` is the
+  # CONTAINER's localhost — so actions/checkout could not reach the Forgejo
+  # instance and every job died at `git exit 128`. Host networking makes the
+  # instance URL mean the same thing inside the job as outside it.
+  network: host
+  privileged: false
