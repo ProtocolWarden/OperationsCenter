@@ -693,9 +693,9 @@ class TestSnapshotMemoryEfficiency:
         large_snapshot = create_snapshot(0, test_count=50000)
         repository.store(large_snapshot, SnapshotFormat.JSON)
 
-        # Load multiple times and verify consistent performance
+        # Load repeatedly and look for DEGRADATION, not jitter.
         times = []
-        for _ in range(5):
+        for _ in range(9):
             start = time.perf_counter()
             loaded = repository.load(large_snapshot.run_id)
             end = time.perf_counter()
@@ -703,13 +703,24 @@ class TestSnapshotMemoryEfficiency:
             times.append(end - start)
             assert loaded is not None
 
-        # Times should be consistent (no degradation)
-        avg_time = sum(times) / len(times)
-        max_time = max(times)
+        # The thing worth catching here is later loads becoming systematically
+        # slower — a leak, an unbounded cache, accumulating state. That shows
+        # up in the MINIMA, which interference cannot fake: a descheduled
+        # sample can only ever be slower, never faster.
+        #
+        # The previous form, `max(times) < avg * 3`, measured scheduler jitter
+        # instead. One descheduling event failed it with nothing degraded —
+        # in CI, 4.33ms max against a 1.14ms average, on a box sharing its
+        # cores with unrelated work.
+        best_early = min(times[:3])
+        best_late = min(times[-3:])
+        median_time = sorted(times)[len(times) // 2]
 
-        assert avg_time < 0.05
-        # Max should not be significantly higher than average
-        assert max_time < avg_time * 3
+        assert median_time < 0.05, f"load too slow: median {median_time * 1000:.2f}ms"
+        assert best_late < best_early * 3, (
+            f"load degraded across repeats: best-early {best_early * 1000:.2f}ms "
+            f"-> best-late {best_late * 1000:.2f}ms"
+        )
 
 
 @pytest.mark.perf

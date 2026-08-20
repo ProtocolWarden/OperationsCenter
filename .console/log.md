@@ -1,3 +1,27 @@
+## 2026-08-20 — measuring jitter and calling it degradation
+
+`test_load_large_snapshot_memory_efficient` failed the perf job with
+
+    assert 0.004325387009885162 < (0.001139728000271134 * 3)
+
+i.e. `max(times) < avg(times) * 3` over five loads. That assertion cannot
+distinguish a performance regression from one descheduling event, and this box
+shares four cores with an unrelated pipeline, so descheduling is normal.
+
+What the test actually wants to catch is later loads becoming *systematically*
+slower — a leak, an unbounded cache, accumulating state. That shows up in the
+MINIMA, which interference cannot fake: a disturbed sample can only ever be
+slower, never faster. It now takes nine samples and compares the fastest of the
+first three with the fastest of the last three, plus a median absolute bound.
+
+Measured both forms under six CPU hogs: the old assertion failed **10 of 12**,
+the new one passed **12 of 12**, and 15/15 on a quiet box. Same defect class as
+the scalability-ratio test earlier — the correctness of the code was never in
+question, only the statistic used to observe it.
+
+(Committed on the log-rotation branch because the perf job blocked it and the
+fix is a single test file. Noting it so the mixing is deliberate, not sloppy.)
+
 ## 2026-08-20 — a ratio of two sub-millisecond numbers
 
 `test_large_simple_scalability_ratio` failed CI at **10.73x** against a 4.29x
