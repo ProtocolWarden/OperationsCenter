@@ -1,3 +1,33 @@
+## 2026-08-20 — the deployment docs assumed one host
+
+The fleet is moving to its own machine while a managed repo (VideoFoundry)
+stays behind on the GPU box. That turns a co-location assumption nobody had
+written down into a hard blocker: the board has to be reachable from a host that
+is not running it, and nothing else can carry work across that gap —
+`board_backend` is `Literal["forgejo"]`, Plane went away at the cutover, and
+`~/.console/queue/` is an inotify-watched local directory with no network
+listener.
+
+`deploy/forgejo/LAN-ACCESS.md` documents that boundary. Two things in it are
+worth knowing before hitting them:
+
+`docker-compose.yml` already publishes `3000:3000` on `0.0.0.0`, which makes the
+problem look solved. It is not. `ROOT_URL` on `localhost` hands every remote
+caller a URL pointing back at itself, and on **WSL2** the port is unreachable
+from the LAN regardless of what it is bound to — the NAT presents as a healthy
+instance, `ss` and `docker port` both reporting correct, and a remote client that
+times out. `networkingMode=mirrored` fixes it; a `netsh portproxy` rule also
+works but has to be re-applied whenever WSL's IP moves.
+
+The doc also records what makes a remote submission claimable — the four labels,
+why they must pre-exist (Forgejo's create-issue API takes label IDs, not names),
+and the 40-char `_MIN_GOAL_TEXT_CHARS` floor below which a task is claimed and
+instantly blocked, which from the submitting side is indistinguishable from being
+ignored.
+
+README got a pointer beside the existing `ROOT_URL` section rather than a second
+copy of the `container.network: host` explanation, which it already covers well.
+
 ## 2026-08-20 — measuring jitter and calling it degradation
 
 `test_load_large_snapshot_memory_efficient` failed the perf job with
