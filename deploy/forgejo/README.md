@@ -234,6 +234,18 @@ registered address mean the same thing as `ROOT_URL` and as
 so the address is whatever the *old* machine used -- keeping host networking is
 what lets the same registration keep working instead of re-registering.
 
+### Serving the forge to other machines
+
+Everything above assumes one host. When something that needs the board lives
+elsewhere — a managed repo pinned to a GPU box, an operator submitting from a
+laptop — `ROOT_URL` on `localhost` is no longer merely cosmetic: it hands remote
+callers URLs pointing back at themselves, and on WSL2 the port is not reachable
+from the LAN at all regardless of what it is bound to.
+
+See **[LAN-ACCESS.md](LAN-ACCESS.md)** — addressing, the WSL2 NAT trap, firewall
+rules, scoped submitter accounts, the labels a remote submission needs to be
+claimable, and a symptom-to-cause table.
+
 ### Known operational wrinkles
 
 * **`capacity: 1` is deliberate.** Jobs share the host network namespace, so
