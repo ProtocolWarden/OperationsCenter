@@ -1,3 +1,35 @@
+## 2026-08-19 — the deployment existed nowhere but this machine
+
+The fleet is moving to another box, which exposed the real gap: both forge
+containers were created with raw `docker run`. Nothing in the repo recorded the
+ports, the volumes, or the `FORGEJO__*` settings, and branch protection existed
+only inside the forge's SQLite DB. `docker inspect` is not a migration plan —
+if the machine is gone, so is the answer.
+
+Now committed:
+
+* `deploy/forgejo/docker-compose.yml` — reproduced from the live containers and
+  **verified against them** field by field (image, env keys): zero mismatches.
+* `deploy/forgejo/branch-protection.json` — exported from the live instance
+  rather than written from memory.
+* `deploy/forgejo/apply-branch-protection.sh` — applies it, and `--check`
+  reports drift. Proved the check actually detects drift by feeding it three
+  distinct mutations (extra required context, `apply_to_admins` flipped, an
+  unknown branch); each exited 1 with a specific diagnosis, and the unmodified
+  file exits 0. A checker that only ever says "matches" is worth nothing.
+* A "Moving to another machine" runbook covering what CANNOT be committed: the
+  two docker volumes and the two gitignored files holding live tokens.
+
+The script had a real bug that `bash -n` passed: two stdin redirects on one
+command (`python3 - "$RULES" <<'PY' <<<"$live"`). The last redirect wins, so
+python received the JSON *as its program* and died on `name 'false' is not
+defined`. Only running it caught that. The live data now goes through the
+environment instead.
+
+Also recorded the coupling that is easy to break later: `ROOT_URL` and
+`container.network: host` are a pair, because the runner hands that URL to job
+containers for `actions/checkout` and it has to resolve *inside* the job.
+
 ## 2026-08-19 — every "latest artifact" lookup was decided by the filesystem
 
 `tests/test_insights.py::test_loader_reads_latest_snapshot_with_bounded_history`

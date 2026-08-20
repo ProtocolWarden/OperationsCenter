@@ -1,0 +1,57 @@
+# The self-hosted Forgejo that OC's review loop runs against.
+#
+# This file exists because both containers were originally created with raw
+# `docker run`, which left the whole deployment unreproducible: nothing outside
+# this directory recorded the ports, the volumes, or the FORGEJO__* settings.
+# Moving the fleet to another machine would have meant reconstructing them from
+# `docker inspect` on a box you no longer have.
+#
+# Reproduced verbatim from the live containers on Poyopo, 2026-08-19.
+#
+# The DATA is not here and cannot be: it lives in the two named volumes below.
+# See "Moving to another machine" in README.md.
+
+services:
+  forgejo:
+    image: codeberg.org/forgejo/forgejo:13
+    container_name: forgejo
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - forgejo-data:/data
+    environment:
+      USER_UID: "1000"
+      USER_GID: "1000"
+      FORGEJO__database__DB_TYPE: sqlite3
+      FORGEJO__service__DISABLE_REGISTRATION: "true"
+      FORGEJO__actions__ENABLED: "true"
+      # ROOT_URL is load-bearing for CI, not cosmetic. The runner hands this URL
+      # to job containers for `actions/checkout`, so it must resolve INSIDE a
+      # job container — which is why jobs run on the host network. Change this
+      # and you must change `container.network` in runner-config.yml to match.
+      FORGEJO__server__ROOT_URL: http://localhost:3000/
+      FORGEJO__server__DISABLE_SSH: "true"
+
+  runner:
+    image: code.forgejo.org/forgejo/runner:6.3.1
+    container_name: forgejo-runner
+    restart: unless-stopped
+    depends_on: [forgejo]
+    command: ["forgejo-runner", "daemon", "--config", "/data/config.yml"]
+    environment:
+      HOME: /data
+    volumes:
+      - forgejo-runner-data:/data
+      # The runner creates SIBLING containers on the host daemon rather than
+      # nesting them, so it needs the host's docker socket. This is
+      # root-equivalent access to the host: anything that can reach this socket
+      # can start a privileged container. Acceptable only because this runner
+      # executes code from a repo whose PRs are already trusted to merge.
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  forgejo-data:
+    external: true
+  forgejo-runner-data:
+    external: true

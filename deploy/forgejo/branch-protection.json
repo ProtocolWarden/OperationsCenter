@@ -1,0 +1,13 @@
+[
+  {
+    "branch_name": "main",
+    "rule_name": "main",
+    "enable_status_check": true,
+    "status_check_contexts": [
+      "custodian-audit / audit (pull_request)",
+      "reviewer-verdict"
+    ],
+    "apply_to_admins": true,
+    "block_on_rejected_reviews": true
+  }
+]
