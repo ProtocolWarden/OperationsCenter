@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 ProtocolWarden
-"""Parent-child link metadata embedded in every propagated Plane task.
+"""Parent-child link metadata embedded in every propagated board task.
 
 When the propagator creates a downstream task, it appends a structured
 HTML-comment block to the task body. Operators (and a future

@@ -1556,7 +1556,7 @@ The repo-aware autonomy loop is behaving well when:
 - [Repo-Aware Autonomy Layer](docs/design/autonomy/repo_aware_autonomy.md)
 - [Self-Tuning Regulator](docs/design/autonomy/autonomy_self_tuning_regulator.md)
 - [Execution Budget And Safety Controls](docs/design/execution_budget_and_safety_controls.md)
-- [Execution Plane Design](docs/design/plane_kodo_wrapper.md) — Historical: original Plane/kodo integration design
+- [Plane + Kodo Wrapper Design](docs/history/plane-kodo-wrapper.md) — Superseded: the original Plane/kodo integration design
 - [Roadmap](docs/design/roadmap.md)
 
 ### Operator Guides

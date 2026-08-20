@@ -9,12 +9,12 @@ Inputs:
     - PropagationPolicy (decides per-pair: skip / backlog / ready)
     - PropagationRegistry (task title/body/labels per pair)
     - PropagationDedupStore (idempotency)
-    - TaskCreator (Plane client adapter — Protocol, so tests inject a fake)
+    - TaskCreator (board client adapter — Protocol, so tests inject a fake)
 
 Output:
     PropagationRecord — structured artifact written to state/propagation/.
     Operators read these to answer "why did/didn't propagation fire?"
-    even when no Plane tasks were created.
+    even when no board tasks were created.
 """
 
 from __future__ import annotations
@@ -39,9 +39,9 @@ logger = logging.getLogger(__name__)
 
 @runtime_checkable
 class _TaskCreator(Protocol):
-    """Minimal Plane-client interface the propagator needs.
+    """Minimal board-client interface the propagator needs.
 
-    Real adapter wraps `PlaneClient.create_issue` plus an optional
+    Real adapter wraps `BoardClient.create_issue` plus an optional
     transition to "Ready for AI" state when the policy says so.
     """
 
@@ -53,7 +53,7 @@ class _TaskCreator(Protocol):
         labels: tuple[str, ...],
         promote_to_ready: bool,
     ) -> str:
-        """Create the issue. Returns Plane's issue ID."""
+        """Create the issue. Returns the board's issue ID."""
         ...
 
 
@@ -65,7 +65,7 @@ class PropagationOutcome:
     consumer_canonical: str
     decision_action: str  # "skip" | "backlog" | "ready_for_ai"
     decision_reason: str
-    issue_id: str | None = None  # Plane issue when fired; None when skipped
+    issue_id: str | None = None  # board issue when fired; None when skipped
     error: str | None = None  # populated only if create_issue raised
 
 
