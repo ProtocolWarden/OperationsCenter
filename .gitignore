@@ -85,3 +85,6 @@ operator_priv.pem
 *operator_priv*.pem
 eval/**/operator_priv*
 build/
+
+# Machine-local DOCKER_GID for deploy/forgejo/docker-compose.yml (per-host GID)
+deploy/forgejo/.env
