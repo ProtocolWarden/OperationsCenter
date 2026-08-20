@@ -15,14 +15,40 @@ docker run --rm -v forgejo-runner-data:/data --network host \
     --instance http://localhost:3000 \
     --token "$TOKEN" \
     --name oc-local-runner \
-    --labels docker:docker://node:20-bookworm,ubuntu-latest:docker://node:20-bookworm
+    --labels ubuntu-latest:docker://oc-ci-runner:latest
+
+# The label mapping and the job network live in config.yml, so install it
+# BEFORE starting the daemon and pass --config. A daemon started without it
+# silently uses defaults: bridge networking (every checkout dies at
+# `git exit 128`) and no image mapping.
+docker cp deploy/forgejo/runner-config.yml forgejo-runner-data-helper:/data/config.yml \
+  2>/dev/null || docker run --rm -v forgejo-runner-data:/data -v "$PWD/deploy/forgejo":/src \
+  alpine cp /src/runner-config.yml /data/config.yml
+
+docker build -t oc-ci-runner:latest deploy/forgejo/ci-runner/
 
 docker run -d --name forgejo-runner --restart unless-stopped \
   -v forgejo-runner-data:/data \
   -v /var/run/docker.sock:/var/run/docker.sock \
   --group-add "$(getent group docker | cut -d: -f3)" \
-  --network host \
-  code.forgejo.org/forgejo/runner:6.3.1 forgejo-runner daemon
+  code.forgejo.org/forgejo/runner:6.3.1 \
+  forgejo-runner daemon --config /data/config.yml
+```
+
+Two things that were wrong in an earlier version of this section and cost real
+debugging time:
+
+* The label mapped `ubuntu-latest` to `node:20-bookworm`. That image has no
+  Python tool cache, so `actions/setup-python` fails every job with
+  `The version '3.11' with architecture 'x64' was not found` — see
+  `ci-runner/Dockerfile` for why. Map it to `oc-ci-runner:latest`.
+* The daemon was started without `--config`, so `runner-config.yml` — which is
+  what sets `container.network: host` — was never read.
+
+Confirm the mapping took effect before trusting anything:
+
+```bash
+docker logs forgejo-runner 2>&1 | grep 'declared successfully'
 ```
 
 `--group-add` rather than `--user 0:0`: the runner needs the docker socket to
@@ -60,6 +86,49 @@ See `docs/specs/forgejo-pr-adapter.md` for the evidence behind both points.
 
 ---
 
+## Standing one up from scratch
+
+The section below moves an EXISTING instance. This is the other case: a new
+machine with no forge to restore. Order matters — each step produces something
+the next one needs.
+
+```bash
+# 1. the instance
+docker volume create forgejo-data
+docker compose -f deploy/forgejo/docker-compose.yml up -d forgejo
+```
+
+2. Create the admin user and the repo through the web UI at
+   `http://localhost:3000`. Registration is disabled by default
+   (`DISABLE_REGISTRATION=true`), so the FIRST account created through the
+   install screen is the admin — there is no second chance without a CLI
+   password reset.
+
+3. Mint an API token at `<instance>/user/settings/applications` with
+   `read:user`, `write:repository`, `write:issue`. Put it in
+   `.env.operations-center.local` as `FORGEJO_API_TOKEN`, as a **literal
+   value** — see that file's example for why command substitution hangs the
+   daemons.
+
+4. Register the runner and start it — the "Runner" section above. Build
+   `oc-ci-runner:latest` before starting the daemon, or every job fails at
+   image pull.
+
+5. Apply branch protection. It is not in any backup and a fresh instance starts
+   **unprotected**, which is the failure mode that looks fine:
+
+```bash
+./deploy/forgejo/apply-branch-protection.sh
+```
+
+6. Point OC at it — `board_backend: forgejo`, `pr_backend: forgejo`, the
+   `forgejo:` block, and a `clone_url` carrying the token — see
+   `config/operations_center.example.yaml` and `docs/operator/setup.md`.
+
+7. Open a throwaway PR and confirm three things before trusting the fleet: the
+   `custodian-audit / audit (pull_request)` context appears, the reviewer posts
+   `reviewer-verdict`, and the merge is refused while either is pending.
+
 ## Moving to another machine
 
 Everything in this directory is reproducible. The two things that matter most
@@ -90,6 +159,24 @@ docker start forgejo forgejo-runner
 Copy both tarballs, plus `config/operations_center.local.yaml` and
 `.env.operations-center.local`, over a channel you would send a password
 through — they contain live tokens.
+
+**On keeping the secret files in a private repo.** Tempting, and fine *if they
+are encrypted*. Plaintext secrets in git are effectively permanent: every
+clone, reflog and backup keeps them, so "rotate the token" becomes "rewrite
+history everywhere it was ever pushed", and private repos get forked, mirrored
+and cloned to laptops like any other. Encrypt them instead — `sops` with an
+`age` key, or `git-crypt` — so the repo holds ciphertext and only the key
+travels out of band:
+
+```bash
+age-keygen -o ~/.config/sops/age/keys.txt          # once, per operator
+sops --encrypt --age <public-key> .env.operations-center.local > env.enc.yaml
+```
+
+Then the private repo carries `env.enc.yaml`, and the machine move needs one
+age key moved by hand rather than two plaintext files. If that is more
+machinery than this deployment warrants, a password manager entry is a
+perfectly good answer — the thing to avoid specifically is plaintext in git.
 
 ### 2. On the new machine — restore
 

@@ -4,7 +4,7 @@
 
 It prepares:
 
-- local Plane API config
+- local Forgejo API config (board + PRs + CI)
 - local repo config
 - provider readiness
 - executor (TeamExecutor) install/verification
@@ -16,7 +16,6 @@ Setup writes (all gitignored):
 
 - `config/operations_center.local.yaml`
 - `.env.operations-center.local`
-- `config/plane_task_template.local.md`
 - `config/managed_repos/local/*.yaml` — per-repo managed repo entries
 
 ## Backup and Restore (SS)
@@ -53,13 +52,26 @@ source .env.operations-center.local
 
 ## What Setup Covers
 
-### Plane
+### Forgejo
 
-- base URL
-- workspace identifier
-- project id
-- API token
+The forge OC runs against: it hosts the board (repo issues), the pull requests,
+and the CI that produces the `audit` status branch protection requires.
+
+- base URL (e.g. `http://localhost:3000`)
+- owner and board repo
+- API token, via `FORGEJO_API_TOKEN` (see `.env.operations-center.example` —
+  it must be a literal value, not command substitution)
 - optional live API verification
+
+Standing the instance itself up on a new machine — containers, runner
+registration, the CI job image, and branch protection — is
+`deploy/forgejo/README.md`, not this guide. Note that branch protection is NOT
+part of any backup: it lives in the forge's own database, so a fresh instance
+starts unprotected. Re-apply it with
+`deploy/forgejo/apply-branch-protection.sh` and verify with `--check`.
+
+**Plane was retired at the 2026-08-19 cutover** and never ran on this fleet.
+`board_backend` accepts only `forgejo`.
 
 ### Git
 
@@ -137,7 +149,6 @@ are actually missing. `scripts/operations-center.sh` runs the same self-heal
 
 Advanced mode also exposes optional version pins for:
 
-- Plane
 - TeamExecutor (`OPERATIONS_CENTER_EXECUTOR_INSTALL_REF`)
 - supported provider CLIs
 
@@ -163,10 +174,12 @@ repos:
 
 When every failing check matches an entry in this list, the PR is auto-merged (with `allow_unstable=True`). This prevents orphaned PRs from being blocked indefinitely by broken CI that predates the PR. The merge is logged as `reason: ci_ignored_checks_all_clear`.
 
-Substrings are matched case-sensitively against the GitHub check run name. Use the most specific prefix or suffix that uniquely identifies the check to avoid unintentional matches.
+Substrings are matched case-sensitively against the check run name. On Forgejo a
+context is `<workflow name> / <job name> (<event>)`, e.g.
+`CI / Lint (ruff) (pull_request)`. Use the most specific prefix or suffix that uniquely identifies the check to avoid unintentional matches.
 
 ## Notes
 
 - The setup wizard is for local operator use, not production secret management.
 - The local environment is still single-machine and polling-based after setup completes.
-- Re-run readiness checks later with `providers-status`, `plane-doctor`, or `dependency-check`.
+- Re-run readiness checks later with `providers-status` or `dependency-check`.

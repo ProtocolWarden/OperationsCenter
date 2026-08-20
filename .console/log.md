@@ -1,3 +1,47 @@
+## 2026-08-19 — the cutover quietly took CI out of the blast-radius set
+
+Auditing the docs for the machine move turned up something that was not a docs
+problem. `policy/defaults.py` marks high-blast-radius paths `review_required`,
+and one of them was `.github/workflows/**`. CI moved to `.forgejo/workflows/`
+in this branch — so that rule stopped matching anything, and the pipeline that
+gates every other change quietly became an ordinary autonomous edit. Added
+`.forgejo/workflows/**`.
+
+While checking it, a second hole: these are **fnmatch** patterns
+(`policy/engine.py`), which must match the WHOLE path, so `docker-compose*.yml`
+covers only a root-level file. `deploy/forgejo/docker-compose.yml` — which I
+added in this same branch, and which defines the forge the fleet reviews
+through — matched nothing. Added `**/docker-compose*.yml`.
+
+Both regression tests assert on real PATHS rather than on pattern strings,
+because the bug was precisely that a pattern existed and matched nothing.
+Verified they fail without the fix.
+
+CI also caught a test I should have caught locally:
+`tests/unit/insights/test_loader_cov.py::test_load_all_sorted_newest_first`
+encoded the OLD mtime ordering. I had run `tests/test_insights.py` and the
+observer suites but not `tests/unit/insights/`. It now sets `observed_at`
+explicitly and INVERTS the mtimes, so ordering by mtime produces exactly the
+wrong answer and the test cannot pass by accident — which is what it was doing
+before. Full local run this time: 8,621 unit + 1,831 non-unit, zero failures.
+
+Docs brought in line for the move:
+
+* `deploy/forgejo/README.md` — the runner registration was stale in two ways
+  that each cost real debugging time: it mapped `ubuntu-latest` to
+  `node:20-bookworm` (no Python tool cache ⇒ every job fails setup-python) and
+  started the daemon without `--config`, so `container.network: host` was never
+  read. Added a from-scratch install path distinct from the migration one.
+* `.env.operations-center.example` had no `FORGEJO_API_TOKEN` at all — a new
+  machine had no way to know it was needed. Documented, with the warning that
+  it must be a literal value: the watchers are started under `setsid`, and
+  command substitution that wants a tty hangs the daemon with no error.
+* `docs/operator/setup.md` still walked the operator through Plane, including a
+  `plane-doctor` command, on a fleet where Plane never ran.
+* On keeping secrets in a private repo: fine if ENCRYPTED (sops+age, git-crypt).
+  Plaintext in git is effectively permanent — rotation becomes history rewriting
+  everywhere it was pushed.
+
 ## 2026-08-19 — the deployment existed nowhere but this machine
 
 The fleet is moving to another box, which exposed the real gap: both forge

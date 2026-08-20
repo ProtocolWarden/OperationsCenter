@@ -162,7 +162,8 @@ operations-center-observer-snapshot validate snapshot.json --format text
 
 ### CI/CD Integration Examples
 
-**GitHub Actions (fast path)**:
+**CI (fast path)** — the snippets below are plain shell and work on Forgejo
+Actions, GitHub Actions, or any runner:
 ```yaml
 - name: Validate snapshot
   run: |
@@ -172,7 +173,7 @@ operations-center-observer-snapshot validate snapshot.json --format text
       --output report.json
 ```
 
-**GitHub Actions (full validation)**:
+**CI (full validation)**:
 ```yaml
 - name: Full validation with regression detection
   run: |
@@ -1532,7 +1533,7 @@ The repo-aware autonomy loop is behaving well when:
 - Polling watchers, not webhooks.
 - No queue cluster or distributed scheduler.
 - No multi-machine lock manager or cross-host deduplication.
-- PR automation is opt-in per repo; branch protection rules on GitHub may block auto-merge if required status checks are not satisfied.
+- PR automation is opt-in per repo; branch protection rules on the forge (Forgejo since the 2026-08-19 cutover) may block auto-merge if required status checks are not satisfied.
 - No multi-repo orchestration yet.
 - No production-grade supervisor beyond local `watch-all`.
 - No unlimited autonomous self-generated work; proposer is bounded by guardrails.
