@@ -1,3 +1,22 @@
+## 2026-08-20 — the sweep committed two scripts non-executable
+
+Rebasing `chore/retire-plane-leftovers` onto main for the machine move surfaced
+a mode change nobody asked for: `scripts/backup-secrets.sh` and
+`scripts/setup-secrets.sh` go in at **100644**, and they were **100755** at the
+merge-base. `git diff --raw` against 9ec7e5b0 is unambiguous —
+`:100755 100644 ... M` on both.
+
+It is not a rebase artifact. The original commit carries it, and the rebase
+faithfully preserved it. Every other file in `scripts/` is still 755, and
+`docs/operator/setup.md` — a file this same commit edits — tells the operator to
+run `scripts/backup-secrets.sh` directly, which fails outright without +x.
+
+Almost certainly the POSIX-modes trap: a file that passes through a filesystem
+with no mode bits comes back 644, and the sweep picked that up as a real change.
+
+Restored as its own commit rather than folded into the sweep, so the mode change
+is visible in review instead of buried in a 16-file chore. Content untouched.
+
 ## 2026-08-20 — measuring jitter and calling it degradation
 
 `test_load_large_snapshot_memory_efficient` failed the perf job with
