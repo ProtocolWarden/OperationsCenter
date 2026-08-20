@@ -4,43 +4,49 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## Up Next
 
-### CI runs ~1,830 fewer tests than the repo has (caused a red main on 2026-08-19)
+### The reviewer posts a green verdict without CI (guardrail path — needs K=3 council)
 
-CI runs `tests/unit`, `tests/test_pr_review_watcher.py`,
-`tests/integration/reviewer` and `tests/integration/observer`. Everything under
-`tests/maintenance/`, `tests/observer/`, `tests/verdicts/` and most top-level
-`tests/test_*.py` is invisible to the gate — roughly 1,830 tests.
+`_phase0_ci_fix` (`entrypoints/pr_review_watcher/main.py:2360`) is a bare
+`if not failed:`. No pending guard, no completed-non-empty guard. On Forgejo PR
+#2 it logged "PR #2 CI green, advancing to self_review" **two seconds** after
+discovering the PR, before Actions had posted anything terminal, and a SUCCESS
+`reviewer-verdict` followed.
 
-Not hypothetical any more. #521 merged with a **new** failing test in
-`tests/test_dependency_check.py`: CI was green, the council verdict was
-SUCCESS, and main was red until #522. #513 is the same story a week earlier —
-an #509 regression sat in `tests/maintenance/` unnoticed because no job runs it.
+Nothing bad merged: the last-resort gate at `main.py:1441` fetches CI and
+refused. But everything upstream of that gate is wrong, in three ways:
 
-Adding the suites is a one-line workflow change. What makes it a decision
-rather than a chore: **6 tests are currently failing in those suites**, so
-turning the gate on blocks every merge until they are fixed:
+* `_ci_checks_failing:2181` — `except Exception: return []`, so an API error is
+  indistinguishable from green. Its docstring asserts the false equivalence.
+* `:2988` (escalation retraction) has the same zero-contexts hole.
+* The correct gate at `:3128` is skipped entirely for any branch that is not
+  `goal/`, `test/`, `improve/`, `spec-author/` — a prefix allowlist deciding
+  whether CI gates a verdict at all. Worth a deliberate decision, not an accident.
 
-  - `tests/observer/test_collectors_hardening/test_race_condition_guards.py` (2)
-  - `tests/test_check_signal_collector.py::test_guard_all_files_deleted_during_discovery`
-  - `tests/test_custodian_sweep.py::test_emit_dry_run_reports_zero_finding_skip`
-  - `tests/test_dependency_drift_collector.py::...::test_guard_all_files_deleted_during_discovery`
-  - `tests/test_proposer_entrypoint.py::test_propose_from_candidates_cli_writes_artifact_in_dry_run`
+The same regression was fixed three times in `_phase1` (#269, #405/#406, #503)
+and never propagated, because **no test covers the green branch** at 2360. Fix
+should mirror `:3128` (`not failed and not pending and completed`), ideally as
+one shared `_ci_is_green()` used by all four call sites.
 
-Sensible order: fix those 6, then add the suites in the same PR that proves
-them green. Operator decision — it trades a merge freeze for a real gate.
+`pr_review_watcher/**` is a guardrail path, so this needs the K=3 council.
 
-### `audit` on Forgejo Actions — the last item on the PR-adapter spec
+### Run the CI stress hunt on an idle runner
 
-`docs/specs/forgejo-pr-adapter.md` is complete except its final line: branch
-protection requires an `audit` status, produced today by a GitHub Actions
-workflow. Moving review to Forgejo needs that status produced there under an
-**identical context name**, or every PR blocks forever on a status nobody posts.
+Two attempts this session produced nothing usable. The first copied `.venv`
+into the container, so `tests/conftest.py`'s venv guard aborted all 18 runs
+before a single test ran. The second was faithful (clean clone, `CI=true`) but
+had to be killed: 6 CPU spinners on a **4-core** box starved the live runner —
+load hit 8.8 and a `ty` job took 5 minutes — so any failure it produced would
+have been contention, not a finding.
 
-Blocked on the operator: it needs a `forgejo-runner` binary downloaded and
-registered against the instance. Everything upstream of it is done —
-`ForgejoPRClient` exists and is verified against the live instance, and
-`pr_backend` (default `github`) is the one switch that performs the cutover.
+Needs an idle runner, or a machine with cores to spare. The four bugs found so
+far all came from real CI runs, not from the hunt.
 
+### `git.provider` is documented but does not exist
+
+`config/operations_center.example.yaml:24` advertises `git.provider: github`.
+There is no `provider` field on `GitSettings` (`config/settings.py:32`), so the
+key is silently ignored — the example promises configuration that does nothing.
+Either add the field or delete the line.
 
 ### Split extraction_health_history.py, or the C29 exclusion becomes permanent
 - The module was at exactly 500 lines; #478's `edge_cases` field pushed it to 506 and
@@ -127,6 +133,82 @@ registered against the instance. Everything upstream of it is done —
 
 
 ## Done
+
+### 2026-08-19: Forgejo Actions CI + the bugs GitHub's runners hid (✅ COMPLETE)
+
+Closes both "CI runs ~1,830 fewer tests" and "`audit` on Forgejo Actions" — the
+last item on the PR-adapter spec. Workflows ported to `.forgejo/`,
+`.github/workflows/` deleted, branch protection requiring
+`custodian-audit / audit (pull_request)` + `reviewer-verdict` with
+`apply_to_admins`.
+
+Three things blocked every job, none of them CI breakage:
+
+1. Job containers default to a bridge network, where `localhost:3000` is the
+   container's own localhost — every checkout died at `git exit 128`.
+   `container.network: host`.
+2. `actions/setup-python` resolves interpreters from the **forge's own**
+   `actions/python-versions` repo (it reads `GITHUB_API_URL`). Fixed by
+   pre-seeding the tool cache in a purpose-built job image. Baked into the
+   image, not bind-mounted: jobs `pip install -e ".[dev]"` into site-packages
+   and a host mount would leak that into every later job.
+3. `codecov/codecov-action` is not mirrored on data.forgejo.org, and act
+   resolves every `uses:` before the job starts — so it killed the job before
+   checkout and `fail_ci_if_error: false` never applied.
+
+Running the gates on slower hardware then found four real bugs that hosted
+runners were fast enough to hide — see log.md 2026-08-19. The heartbeat one
+was a genuine production race (watchdog would see a finished pipeline as
+permanently executing), verified 2/25 → 0/25 under load.
+
+Deployment is now reproducible: `deploy/forgejo/docker-compose.yml` (the
+containers were raw `docker run` before, recorded nowhere),
+`branch-protection.json` + `apply-branch-protection.sh --check`, and a
+"Moving to another machine" runbook in `deploy/forgejo/README.md`.
+
+<details><summary>Original backlog entries (retired)</summary>
+
+### CI runs ~1,830 fewer tests than the repo has (caused a red main on 2026-08-19)
+
+CI runs `tests/unit`, `tests/test_pr_review_watcher.py`,
+`tests/integration/reviewer` and `tests/integration/observer`. Everything under
+`tests/maintenance/`, `tests/observer/`, `tests/verdicts/` and most top-level
+`tests/test_*.py` is invisible to the gate — roughly 1,830 tests.
+
+Not hypothetical any more. #521 merged with a **new** failing test in
+`tests/test_dependency_check.py`: CI was green, the council verdict was
+SUCCESS, and main was red until #522. #513 is the same story a week earlier —
+an #509 regression sat in `tests/maintenance/` unnoticed because no job runs it.
+
+Adding the suites is a one-line workflow change. What makes it a decision
+rather than a chore: **6 tests are currently failing in those suites**, so
+turning the gate on blocks every merge until they are fixed:
+
+  - `tests/observer/test_collectors_hardening/test_race_condition_guards.py` (2)
+  - `tests/test_check_signal_collector.py::test_guard_all_files_deleted_during_discovery`
+  - `tests/test_custodian_sweep.py::test_emit_dry_run_reports_zero_finding_skip`
+  - `tests/test_dependency_drift_collector.py::...::test_guard_all_files_deleted_during_discovery`
+  - `tests/test_proposer_entrypoint.py::test_propose_from_candidates_cli_writes_artifact_in_dry_run`
+
+Sensible order: fix those 6, then add the suites in the same PR that proves
+them green. Operator decision — it trades a merge freeze for a real gate.
+
+### `audit` on Forgejo Actions — the last item on the PR-adapter spec
+
+`docs/specs/forgejo-pr-adapter.md` is complete except its final line: branch
+protection requires an `audit` status, produced today by a GitHub Actions
+workflow. Moving review to Forgejo needs that status produced there under an
+**identical context name**, or every PR blocks forever on a status nobody posts.
+
+Blocked on the operator: it needs a `forgejo-runner` binary downloaded and
+registered against the instance. Everything upstream of it is done —
+`ForgejoPRClient` exists and is verified against the live instance, and
+`pr_backend` (default `github`) is the one switch that performs the cutover.
+
+
+
+</details>
+
 
 ### 2026-08-18/19: Plane → Forgejo board migration (✅ COMPLETE)
 

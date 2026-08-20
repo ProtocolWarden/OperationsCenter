@@ -156,6 +156,26 @@ def _run_pipeline(config_path: str, *, execute: bool, status_dir: Path | None = 
     )
     stop_event = threading.Event()
     heartbeat_thread: threading.Thread | None = None
+
+    def _stop_heartbeat() -> None:
+        """Stop the liveness thread BEFORE writing the terminal heartbeat.
+
+        The thread writes status="executing" on every tick. If it is still
+        running when the terminal write lands, its next tick overwrites "idle"
+        (or "error") and the heartbeat claims the pipeline is still executing
+        for ever after — which the watchdog reads as a live run and acts on.
+
+        Stopping it in `finally` was not enough: the window between the
+        terminal _write_heartbeat and the teardown spans a json.dumps logging
+        call, which is more than long enough to lose the race on a loaded
+        machine. Idempotent, so the `finally` below stays as a safety net.
+        """
+        nonlocal heartbeat_thread
+        stop_event.set()
+        if heartbeat_thread is not None:
+            heartbeat_thread.join(timeout=1)
+            heartbeat_thread = None
+
     try:
         if status_dir is not None:
             touch_liveness(status_dir, "propose", status="executing")
@@ -165,6 +185,7 @@ def _run_pipeline(config_path: str, *, execute: bool, status_dir: Path | None = 
             heartbeat_thread.start()
         result = subprocess.run(cmd, timeout=600, capture_output=False)
         success = result.returncode == 0
+        _stop_heartbeat()
         _write_heartbeat(
             status_dir,
             success=success,
@@ -183,6 +204,7 @@ def _run_pipeline(config_path: str, *, execute: bool, status_dir: Path | None = 
         )
         return success
     except subprocess.TimeoutExpired:
+        _stop_heartbeat()
         _write_heartbeat(
             status_dir,
             success=False,
@@ -192,15 +214,14 @@ def _run_pipeline(config_path: str, *, execute: bool, status_dir: Path | None = 
         logger.warning(json.dumps({"event": "pipeline_trigger_timeout"}, ensure_ascii=False))
         return False
     except Exception as exc:
+        _stop_heartbeat()
         _write_heartbeat(status_dir, success=False, status="error", error=str(exc))
         logger.warning(
             json.dumps({"event": "pipeline_trigger_error", "error": str(exc)}, ensure_ascii=False)
         )
         return False
     finally:
-        stop_event.set()
-        if heartbeat_thread is not None:
-            heartbeat_thread.join(timeout=1)
+        _stop_heartbeat()
 
 
 def run_trigger_loop(

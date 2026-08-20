@@ -55,7 +55,10 @@ def latest_matching_file(root: Path, pattern: str) -> tuple[Path, float] | None:
     if not candidates_with_mtime:
         return None
 
-    latest_path, latest_mtime = max(candidates_with_mtime, key=lambda x: x[1])
+    # Tie-break on the path so the order is TOTAL. `max` returns the FIRST
+    # maximal element, so with two logs sharing an mtime the winner was decided
+    # by glob() iteration order.
+    latest_path, latest_mtime = max(candidates_with_mtime, key=lambda x: (x[1], x[0]))
     return (latest_path, latest_mtime)
 
 

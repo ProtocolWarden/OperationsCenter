@@ -157,9 +157,14 @@ class ProposerGuardrailAdapter:
         return None
 
     def _last_created_at(self, dedup_key: str) -> datetime | None:
+        # Tie-break on the path so the order is TOTAL. Sorting on mtime alone
+        # leaves same-instant writes tied, and Python's sort is stable, so which
+        # artifact answered "when was this dedup key last created?" came down to
+        # whatever glob() happened to yield first — and that answer drives the
+        # proposer's cooldown.
         paths = sorted(
             self.proposer_root.glob("*/proposal_results.json"),
-            key=lambda path: path.stat().st_mtime,
+            key=lambda path: (path.stat().st_mtime, path),
             reverse=True,
         )
         for path in paths:

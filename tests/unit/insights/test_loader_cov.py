@@ -74,12 +74,20 @@ def test_load_no_snapshots_raises(tmp_path: Path) -> None:
 
 
 def test_load_all_sorted_newest_first(tmp_path: Path) -> None:
-    older = _make_snapshot(run_id="old")
-    newer = _make_snapshot(run_id="new")
+    """Newest-first means newest by observed_at, not by file mtime.
+
+    This test used to express "newest" purely as a larger mtime, which passed
+    for the wrong reason: the loader sorted paths by st_mtime, so two snapshots
+    written in the same instant tied and the order fell through to glob(). The
+    mtimes here are deliberately INVERTED relative to observed_at, so ordering
+    by mtime would produce exactly the wrong answer and cannot pass by accident.
+    """
+    older = _make_snapshot(run_id="old", observed_at=datetime(2026, 1, 1, 10, tzinfo=timezone.utc))
+    newer = _make_snapshot(run_id="new", observed_at=datetime(2026, 1, 1, 12, tzinfo=timezone.utc))
     p_old = _write_snapshot(tmp_path, "a", older)
     p_new = _write_snapshot(tmp_path, "b", newer)
-    _set_mtime(p_old, 1000.0)
-    _set_mtime(p_new, 2000.0)
+    _set_mtime(p_old, 2000.0)  # the OLDER snapshot gets the NEWER mtime
+    _set_mtime(p_new, 1000.0)
     loader = SnapshotLoader(root=tmp_path)
     result = loader.load(repo=None, snapshot_run_id=None, history_limit=10)
     assert [s.run_id for s in result] == ["new", "old"]

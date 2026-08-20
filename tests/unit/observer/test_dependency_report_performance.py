@@ -137,17 +137,35 @@ class TestDependencyReportPerformanceRegression:
         baseline_ctx = _make_observer_context(baseline_root)
         large_ctx = _make_observer_context(large_root)
 
-        # Measure baseline collection time
-        with Timing() as timer:
-            baseline_signal = DependencyDriftCollector().collect(baseline_ctx)
-        baseline_time = timer.elapsed()
-        assert baseline_signal.status == "available"
+        # One collection is sub-millisecond, and a RATIO of two sub-millisecond
+        # samples measures the machine rather than the code: a single
+        # descheduling event inflates the quotient without anything having got
+        # slower. This test failed in CI at 10.73x against a 4.29x bound on a
+        # box sharing its CPUs with unrelated work.
+        #
+        # Timing a BATCH fixes that properly instead of widening the bound
+        # (which would only make the test blind) or skipping (which would make
+        # it dead weight): the batch is long enough to dominate timer
+        # granularity, and the fastest of several batches is the sample least
+        # contaminated by interference — interference can only ever make a
+        # sample slower, so min() is the right statistic here, where mean and
+        # median both drag upward with load.
+        BATCH = 200
+        BLOCKS = 3
 
-        # Measure large-simple collection time
-        with Timing() as timer:
-            large_signal = DependencyDriftCollector().collect(large_ctx)
-        large_time = timer.elapsed()
-        assert large_signal.status == "available"
+        def _batch_best(ctx) -> float:
+            best = float("inf")
+            for _ in range(BLOCKS):
+                collector = DependencyDriftCollector()
+                with Timing() as timer:
+                    for _ in range(BATCH):
+                        signal = collector.collect(ctx)
+                best = min(best, timer.elapsed())
+            assert signal.status == "available"
+            return best
+
+        baseline_time = _batch_best(baseline_ctx)
+        large_time = _batch_best(large_ctx)
 
         # Verify roughly linear scaling: 20 deps / 7 deps ≈ 2.86x
         if baseline_time > 0:

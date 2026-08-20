@@ -162,7 +162,8 @@ operations-center-observer-snapshot validate snapshot.json --format text
 
 ### CI/CD Integration Examples
 
-**GitHub Actions (fast path)**:
+**CI (fast path)** — the snippets below are plain shell and work on Forgejo
+Actions, GitHub Actions, or any runner:
 ```yaml
 - name: Validate snapshot
   run: |
@@ -172,7 +173,7 @@ operations-center-observer-snapshot validate snapshot.json --format text
       --output report.json
 ```
 
-**GitHub Actions (full validation)**:
+**CI (full validation)**:
 ```yaml
 - name: Full validation with regression detection
   run: |
@@ -1246,7 +1247,7 @@ pytest tests/unit \
 
 ### CI/CD Test Execution
 
-The GitHub Actions CI pipeline (`.github/workflows/ci.yml`) enforces six quality gates:
+The Forgejo Actions CI pipeline (`.forgejo/workflows/ci.yml`) enforces six quality gates:
 
 #### 1. **Lint Check** (ruff)
 - **Command**: `ruff check .`
@@ -1397,7 +1398,7 @@ The **snapshot validation system** validates repository state through a 5-layer 
 ### Configuration Files
 
 **Key configuration files:**
-- `.github/workflows/ci.yml` — CI/CD pipeline definition
+- `.forgejo/workflows/ci.yml` — CI/CD pipeline definition
 - `pyproject.toml` — pytest configuration, markers, xdist settings
 - `.coveragerc` — coverage thresholds and exclusions
 - `ruff.toml` or `[tool.ruff]` in pyproject.toml — linting rules
@@ -1407,7 +1408,7 @@ The **snapshot validation system** validates repository state through a 5-layer 
 1. **Change coverage threshold**: Edit `fail_under` in `[report]` section of `.coveragerc`
 2. **Add pytest marker**: Add to `markers` list in `[tool.pytest.ini_options]` of `pyproject.toml`
 3. **Exclude files from coverage**: Edit `omit` list in `[run]` section of `.coveragerc`
-4. **Change CI trigger conditions**: Edit `.github/workflows/ci.yml` (on/if conditions)
+4. **Change CI trigger conditions**: Edit `.forgejo/workflows/ci.yml` (on/if conditions)
 
 ### Documentation and Guides
 
@@ -1532,7 +1533,7 @@ The repo-aware autonomy loop is behaving well when:
 - Polling watchers, not webhooks.
 - No queue cluster or distributed scheduler.
 - No multi-machine lock manager or cross-host deduplication.
-- PR automation is opt-in per repo; branch protection rules on GitHub may block auto-merge if required status checks are not satisfied.
+- PR automation is opt-in per repo; branch protection rules on the forge (Forgejo since the 2026-08-19 cutover) may block auto-merge if required status checks are not satisfied.
 - No multi-repo orchestration yet.
 - No production-grade supervisor beyond local `watch-all`.
 - No unlimited autonomous self-generated work; proposer is bounded by guardrails.
