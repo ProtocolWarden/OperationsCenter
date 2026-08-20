@@ -1,3 +1,24 @@
+## 2026-08-19 — a test that assumed the clock moves
+
+`test_mtime_from_discovery_time_returned` failed in CI as
+
+    assert 1787193855.8150523 > 1787193855.8150523
+
+The assertion under test (line 158 — the returned mtime came from discovery,
+not a second `stat()`) was fine. The line that failed was the *sanity check*
+that the file had actually changed, and it worked by sleeping 10ms and assuming
+the new mtime would be larger. A 10ms sleep is not guaranteed to exceed the
+filesystem's timestamp granularity, so when both writes landed in the same tick
+it compared a value to itself.
+
+Now sets the new mtime explicitly with `os.utime` instead of hoping the clock
+moved. 30/30 runs green; it had passed locally, which is exactly what made it
+flaky rather than broken.
+
+Same family as the other four this cutover surfaced: the code and tests carried
+timing assumptions that hosted runners were fast — or coarse — enough to never
+violate.
+
 ## 2026-08-19 — the cutover quietly took CI out of the blast-radius set
 
 Auditing the docs for the machine move turned up something that was not a docs
