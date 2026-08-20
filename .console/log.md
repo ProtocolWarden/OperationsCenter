@@ -1,3 +1,28 @@
+## 2026-08-20 — a ratio of two sub-millisecond numbers
+
+`test_large_simple_scalability_ratio` failed CI at **10.73x** against a 4.29x
+bound. Nothing got slower. It timed ONE collection of a 7-dep report and one of
+a 20-dep report and divided them — both sub-millisecond, so a single
+descheduling event inflates the quotient. This box shares four cores with an
+unrelated media pipeline running at ~160% CPU, so descheduling is routine.
+
+Two tempting non-fixes: widen the bound (the test goes blind) or skip when the
+baseline is too fast (the test becomes dead weight — and it skipped 20/20 when
+I tried it, so the assertion would never have run again).
+
+Instead it now times a BATCH of 200 collections and takes the fastest of 3
+blocks. The batch is long enough to dominate timer granularity, and min() is
+the correct statistic for "how long does this take": interference can only make
+a sample slower, so the fastest block is the least contaminated one, while mean
+and median both drag upward under load. 20/20 green on the loaded box, and
+10/10 with six extra CPU hogs on top.
+
+Sixth in this family. Worth noting what it says about the old setup: the
+correctness gate contained wall-clock assertions that only held because hosted
+runners are dedicated and quiet. `Test (pytest)` runs `-m "not slow"`, which
+does not exclude `perf`, so these ran inside the general gate as well as in the
+dedicated `performance` job.
+
 ## 2026-08-19 — a test that assumed the clock moves
 
 `test_mtime_from_discovery_time_returned` failed in CI as
