@@ -22,7 +22,7 @@ fi
 # Flat files: flat backup filename → repo target path
 declare -A flat_files=(
     ["oc__config__operations_center.local.yaml"]="config/operations_center.local.yaml"
-    ["oc__config__plane_task_template.local.md"]="config/plane_task_template.local.md"
+    ["oc__config__task_template.local.md"]="config/task_template.local.md"
     ["oc__.env.operations-center.local"]=".env.operations-center.local"
 )
 

@@ -2,7 +2,7 @@
 # Copyright (C) 2026 ProtocolWarden
 """Task templates per (target_repo_id, consumer_repo_id).
 
-Each consumer that fires gets a Plane task with a templated title +
+Each consumer that fires gets a board task with a templated title +
 body + label set. The registry holds the templates; lookup is by
 (target, consumer) with a sensible default fallback.
 
@@ -69,7 +69,7 @@ class TaskTemplate:
 
 @dataclass(frozen=True)
 class RenderedTask:
-    """Concrete title/body/labels — what a Plane client receives.
+    """Concrete title/body/labels — what a board client receives.
 
     The propagator builds the *full* body by combining ``body_prelude``
     with the parent-link block (see ``links.py``). The registry only
