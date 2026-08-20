@@ -4,6 +4,30 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## Up Next
 
+### Verify the restored forge on the new machine, before trusting any gate
+
+The fleet was archived on 2026-08-20 and moves to a different host. Restoring a
+volume backup brings back the repos, PRs, API tokens, runner registration AND
+branch protection — but "it came back" is an assumption until checked, and an
+unprotected `main` looks exactly like a protected one until something merges that
+should not have.
+
+On arrival, in this order:
+
+1. `./deploy/forgejo/apply-branch-protection.sh --check` — expect
+   "matches branch-protection.json". Apply only if it reports drift.
+2. `docker logs forgejo-runner 2>&1 | grep 'declared successfully'` — the runner
+   must come up with the `ubuntu-latest` label, or nothing is ever scheduled.
+3. Open a throwaway PR and confirm all three: the
+   `custodian-audit / audit (pull_request)` context appears and goes green, the
+   review watcher posts `reviewer-verdict` on its own, and the merge is REFUSED
+   while either is pending. The third is the one worth being fussy about — a gate
+   that never blocks anything is indistinguishable from a gate that works.
+
+Also outstanding on arrival: rebase PR #4 (`chore/retire-plane-leftovers`), which
+is behind main with stale CI, and rotate the Forgejo and GitHub tokens — both
+travelled on removable media during the move.
+
 ### The reviewer posts a green verdict without CI (guardrail path — needs K=3 council)
 
 `_phase0_ci_fix` (`entrypoints/pr_review_watcher/main.py:2360`) is a bare
