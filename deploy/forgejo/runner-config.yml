@@ -9,8 +9,20 @@ runner:
   # /opt/hostedtoolcache with CPython 3.11 and 3.12 so `actions/setup-python`
   # resolves from the local tool cache instead of asking this Forgejo instance
   # for an `actions/python-versions` repo that does not exist here.
+  #
+  # Addressed by REGISTRY PATH, not by bare name, so a missing image self-heals.
+  # The runner sets forcePull=false: it pulls only when the image is absent
+  # locally. Under the bare name `oc-ci-runner:latest` that pull could never
+  # succeed -- the image lived in no registry -- so anything that emptied the
+  # daemon's image store failed every job in about a second with a misleading
+  # "pull access denied ... may require 'docker login'". Publishing to Forgejo's
+  # own registry (deploy/forgejo/push-ci-runner.sh) makes that fallback real.
+  #
+  # The host:port here must match FORGEJO__server__ROOT_URL in
+  # docker-compose.yml -- same instance, same port. See "If the host name or
+  # port changes" in README.md.
   labels:
-    - "ubuntu-latest:docker://oc-ci-runner:latest"
+    - "ubuntu-latest:docker://localhost:3000/operations_center_admin/oc-ci-runner:latest"
 
 container:
   # Job containers default to a bridge network, where `localhost:3000` is the
