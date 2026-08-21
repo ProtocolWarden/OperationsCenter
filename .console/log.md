@@ -44,6 +44,97 @@ instead of repeated:
 What is actually open is narrower than the item said: 589 findings live between
 60 and 80 and nobody has read them. Rewritten as a decision — triage the band or
 record that it is deliberately out of scope — instead of a fix.
+## 2026-08-21 — reconciling the two histories WITHOUT a force push
+
+The push mirror to GitHub was configured today. Its first sync moved eleven
+branches but `main` was rejected:
+
+    GH006: Protected branch update failed for refs/heads/main
+           - Cannot force-push to this branch
+
+The obvious reading is "turn off branch protection so the mirror can force".
+That would have destroyed work. GitHub's `main` was five commits ahead of what
+the forge knew, and two of those exist nowhere else:
+
+* `39795136 docs(forgejo): how to serve the forge to another machine (#528)`
+* `e4ccf016 docs: branch protection IS in the backup — correct both runbooks (#530)`
+
+The other three (`#2`, `#3`, `#529`) are content-duplicates of forge commits
+under different hashes — the same two-clone divergence recorded earlier today.
+
+So the reconciliation is a real merge, not a force: bring GitHub's side INTO the
+forge, which makes the forge a descendant and lets the mirror fast-forward from
+then on. Protection stays on, at both ends, and nothing is discarded.
+
+Five files conflicted. How each was decided, because "the forge is authoritative"
+is the right default and was NOT right everywhere:
+
+* `runner-config.yml`, `docker-compose.yml` — **forge**. GitHub still had the
+  bare `oc-ci-runner:latest` label that caused the 2026-08-20 outage, and lacked
+  the compose project-name pin, `network_mode: host` and `group_add`. Taking
+  GitHub here would have reverted a fix verified against live CI the same day.
+* `deploy/forgejo/README.md` — **mixed, per hunk.** Five hunks are the same
+  registry-vs-bare-name split and went to the forge. Two did not:
+  - Step 5 of "Standing one up from scratch" took GITHUB's text, because #530
+    corrected it: protection is not "in no backup", it lives in the database and
+    therefore returns with a volume restore. The forge still carried the wrong
+    claim.
+  - The "Serving the forge to other machines" section is #528 and exists only on
+    GitHub, so it was kept ALONGSIDE the forge's `network_mode: host` note. Both
+    are true and neither replaces the other. `LAN-ACCESS.md` came across as a new
+    file with no conflict.
+* `docs/operator/setup.md` — **GitHub**, same #530 correction, same reason.
+* `.console/backlog.md` — **mixed.** GitHub's "Verify the restored forge on the
+  new machine" section was kept; everything else took the forge, which has the
+  newer text for the item both sides carry. Two hunks looked like additions on
+  opposite sides but were the SAME two sections at different positions — a move,
+  not a change — so they were taken once. Taking both would have silently
+  duplicated them.
+
+The general shape: an authoritative-source rule resolves most of a divergence and
+is actively wrong for the parts where the other side fixed something. Hunks where
+GitHub was correcting a false claim are exactly the hunks a blanket "ours" would
+have thrown away.
+## 2026-08-21 — the volumes are per-instance state, not an artifact to hand over
+
+README covers taking YOUR OWN state to a new machine. It does not say what a
+SECOND person does, and the obvious reading — copy the volumes — does not work.
+`deploy/forgejo/VOLUMES.md` records why, because the answer shapes any sync
+mechanism built on top of it later.
+
+Three things bind the contents to one instance:
+
+* `forgejo-runner-data` holds `.runner`, whose keys are `id uuid name token
+  address labels`. That token was minted by one forge and names the address it
+  registered against, so it does not survive being handed over.
+* Everything in `forgejo-data` is owned by a numeric user id, so copying the
+  volume copies the accounts — including the admin. That is credential-adjacent
+  state, not data.
+* The registry path IS the account name
+  (`localhost:3000/operations_center_admin/oc-ci-runner:latest`), so a different
+  owner is a different path and `runner-config.yml` has to say so.
+
+What travels between people is this repo — the code and the procedure. What each
+person builds locally is the state. Conflating the two is what makes "sync the
+volumes" sound simpler than it is.
+
+The doc also names the three separate places the API token hides: the env file,
+the `clone_url` in `config/operations_center.local.yaml`, and the working
+clone's git remote. Rotating it means all three. Miss the remote and the API
+keeps working while `git push` starts failing, which reads as a network fault
+rather than a credential one.
+
+Sizing, recorded because it is easy to be wrong by an order of magnitude:
+`forgejo-data` went from 78 MB to 618 MB when the CI job image was published
+into the forge's own registry. The image is ~2 GB uncompressed and lands as
+roughly 540 MB of blobs. That is deliberate — it is what lets the image travel
+with the forge instead of being rebuilt on arrival — but every backup archive
+now carries it, and the containers must be stopped before one is taken or the
+archive captures SQLite mid-write.
+
+Deliberately unanswered: keeping ONE person's volumes in step across their own
+machines. Different problem, different mechanism; this only establishes what is
+per-instance so that design does not try to move state that cannot move.
 
 ## 2026-08-21 — four answers to "is CI green", three of them wrong
 
@@ -201,6 +292,52 @@ with no mode bits comes back 644, and the sweep picked that up as a real change.
 
 Restored as its own commit rather than folded into the sweep, so the mode change
 is visible in review instead of buried in a 16-file chore. Content untouched.
+## 2026-08-20 — the deployment docs assumed one host
+
+The fleet is moving to its own machine while a managed repo (VideoFoundry)
+stays behind on the GPU box. That turns a co-location assumption nobody had
+written down into a hard blocker: the board has to be reachable from a host that
+is not running it, and nothing else can carry work across that gap —
+`board_backend` is `Literal["forgejo"]`, Plane went away at the cutover, and
+`~/.console/queue/` is an inotify-watched local directory with no network
+listener.
+
+`deploy/forgejo/LAN-ACCESS.md` documents that boundary. Two things in it are
+worth knowing before hitting them:
+
+`docker-compose.yml` already publishes `3000:3000` on `0.0.0.0`, which makes the
+problem look solved. It is not. `ROOT_URL` on `localhost` hands every remote
+caller a URL pointing back at itself, and on **WSL2** the port is unreachable
+from the LAN regardless of what it is bound to — the NAT presents as a healthy
+instance, `ss` and `docker port` both reporting correct, and a remote client that
+times out. `networkingMode=mirrored` fixes it; a `netsh portproxy` rule also
+works but has to be re-applied whenever WSL's IP moves.
+
+The doc also records what makes a remote submission claimable — the four labels,
+why they must pre-exist (Forgejo's create-issue API takes label IDs, not names),
+and the 40-char `_MIN_GOAL_TEXT_CHARS` floor below which a task is claimed and
+instantly blocked, which from the submitting side is indistinguishable from being
+ignored.
+
+README got a pointer beside the existing `ROOT_URL` section rather than a second
+copy of the `container.network: host` explanation, which it already covers well.
+## 2026-08-20 — two runbooks claiming protection is not backed up
+
+Both `docs/operator/setup.md` and `deploy/forgejo/README.md` said branch
+protection is "NOT part of any backup". That is false, and it matters on exactly
+the path being taken right now: protection lives in `gitea.db`, which is inside
+`forgejo-data.tgz`, so restoring a volume backup brings it back along with the
+repos, the PRs and the API tokens.
+
+The intent was "it is not in the git repo, so cloning gets you none of it" —
+true, and a different statement. Left as written it sends someone restoring an
+instance to re-apply a rule that is already correct, and, worse, implies the
+restore left them exposed when it did not.
+
+Both now split the two procedures explicitly: restoring a backup means VERIFY
+with `--check`; a fresh instance means APPLY. Filed the corresponding
+new-machine verification task in backlog.md, since "protection came back" is an
+assumption until something checks it.
 
 ## 2026-08-20 — measuring jitter and calling it degradation
 
