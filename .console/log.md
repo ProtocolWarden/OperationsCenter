@@ -195,6 +195,25 @@ with no mode bits comes back 644, and the sweep picked that up as a real change.
 
 Restored as its own commit rather than folded into the sweep, so the mode change
 is visible in review instead of buried in a 16-file chore. Content untouched.
+README got a pointer beside the existing `ROOT_URL` section rather than a second
+copy of the `container.network: host` explanation, which it already covers well.
+## 2026-08-20 — two runbooks claiming protection is not backed up
+
+Both `docs/operator/setup.md` and `deploy/forgejo/README.md` said branch
+protection is "NOT part of any backup". That is false, and it matters on exactly
+the path being taken right now: protection lives in `gitea.db`, which is inside
+`forgejo-data.tgz`, so restoring a volume backup brings it back along with the
+repos, the PRs and the API tokens.
+
+The intent was "it is not in the git repo, so cloning gets you none of it" —
+true, and a different statement. Left as written it sends someone restoring an
+instance to re-apply a rule that is already correct, and, worse, implies the
+restore left them exposed when it did not.
+
+Both now split the two procedures explicitly: restoring a backup means VERIFY
+with `--check`; a fresh instance means APPLY. Filed the corresponding
+new-machine verification task in backlog.md, since "protection came back" is an
+assumption until something checks it.
 
 ## 2026-08-20 — measuring jitter and calling it degradation
 
