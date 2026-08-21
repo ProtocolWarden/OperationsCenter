@@ -67,6 +67,35 @@ one shared `_ci_is_green()` used by all four call sites.
 - Setting it to the two contexts branch protection already requires
   (`custodian-audit / audit`, `reviewer-verdict`) would make the guard real.
 
+### The review member subprocess inherits the entire fleet environment
+
+- `_run_member_review` (`pr_review_watcher/main.py`) calls `subprocess.run(argv, cwd=tmp,
+  ...)` with no `env=`, so the `claude` process that reads the PR diff — the
+  least-trusted input the fleet handles — gets every variable the watcher was
+  started with, including the forge token.
+- The executor path on the same file already solved this: it builds
+  `build_allowlist_env()` precisely because "the reviewer's `_build_env` leaks the
+  full os.environ". The direct-review path never got the same treatment.
+- Not a wide-open hole: the invocation is `--permission-mode acceptEdits`, chosen
+  deliberately over `--dangerously-skip-permissions` because of this exact threat,
+  so an injected instruction gets file writes in a temp cwd and not Bash
+  (`member_runner.py` documents the reasoning and a verified escape attempt).
+  The gap is env minimization, not permissions.
+- Fixing it needs a host with `bwrap` available to test the wrapped path end to
+  end; on a box without it the change is unverifiable, which is how the stale
+  fail-open comments corrected in this commit got there.
+
+### Containment binaries are missing on the current host (operator action)
+
+- `bwrap` and `pasta` are both absent, so every executor/fix-pass dispatch fails
+  closed with `ContainmentRequiredError` and the boot self-check logs two ERROR
+  lines that nothing acts on. The egress proxy is in-repo and is running again.
+- `sudo apt install bubblewrap passt` — needs a password, so it cannot be done by
+  an agent session.
+- The stale `.env.operations-center.local` comment claiming "bwrap and pasta are
+  both installed on this machine" came from the old box and should be corrected
+  when they are installed.
+
 ### Run the CI stress hunt on an idle runner
 
 Two attempts this session produced nothing usable. The first copied `.venv`
@@ -146,12 +175,19 @@ misleads — but it is a migration, not a cleanup.
 - Vulture will keep reporting these params. That is correct — do not whitelist them; the
   finding disappears when the commands are implemented.
 
-### Vulture gate is false-green — ~620 real findings land on the next Custodian pin bump
-- OC's pinned Custodian (`d6ba8ab`) has a vulture adapter that appends tests/whitelist
-  paths AFTER `--min-confidence=`; vulture's argparse rejects that, exits 2 with empty
-  stdout, and the adapter reports clean. **Vulture has never actually run in CI.**
-- Fixed upstream in Custodian (paths before flags + returncode check). Once OC bumps the
-  pin, ~620 findings appear at once.
+### Vulture: the gate is real now — 589 findings sit below the threshold, unexamined
+- **The false-green is closed** (verified 2026-08-21). OC now pins Custodian
+  `7a780b7`, whose vulture adapter puts every PATH before the flags and checks the
+  return code — the comment explaining why is in `adapters/vulture.py`. Vulture
+  really runs: at `--min-confidence=60` it emits 589 findings on this tree, so an
+  empty report at the configured threshold is now evidence, not silence.
+- `.custodian/config.yaml` sets `vulture_min_confidence: 80`, where the repo is
+  clean. That is Custodian's own documented default rather than a number picked to
+  unblock a push (the config comment says so), but it does mean the 589 findings
+  between 60 and 80 have never been read by anyone.
+- What is left is a decision, not a bug: triage that band by confidence, or write
+  down that 80 is the standard and the band is deliberately out of scope. What must
+  not happen is the number quietly becoming a level nobody re-examines.
 - Triaged: 426 in `src/`, 195 in `tests/`; 32 at 100% confidence, 589 at 60%. By kind:
   302 variable, 127 attribute, 99 method, 86 function, 4 class, 3 property. The
   100%-confidence set splits into framework-signature false positives (`exc_val` in
@@ -394,7 +430,7 @@ green); worktrees lack the venv, the env file and the editable install, so bare
   all five behaviours smoke-tested through the real CLI. The 18 remaining failures in
   `tests/unit/observer/` reproduce with these changes stashed — pre-existing Windows
   `PermissionError: [WinError 32]` in tempfile handling, unrelated.
-### Vulture has never actually run in the audit gate (⚠️ OPEN — needs a decision)
+### Vulture has never actually run in the audit gate (✅ RESOLVED 2026-08-21 — pin 7a780b7 fixed the adapter; see the Up Next entry)
 - **Discovered**: 2026-08-04, while pinning vulture (below).
 - **Symptom**: the `audit` gate reports `VULTURE: status=pass count=0`. Run the same
   tool by hand and it emits **621 findings** and exits 3.
