@@ -215,6 +215,39 @@ def test_all_zero_contradicting_findings_is_rejected() -> None:
     assert "all_zero" in str(exc.value)
 
 
+def test_not_all_zero_without_findings_is_rejected() -> None:
+    """The other half of the contradiction, and the more dangerous half.
+
+    ``findings`` defaults to empty, so an omitted key lands here: PHASE 2 would
+    be told the sweep is not clean and handed nothing to act on.
+    """
+    payload = _valid_payload()
+    payload["custodian"] = {"all_zero": False, "findings": []}
+    with pytest.raises(CollectorReportError) as exc:
+        _parse(payload)
+    assert "all_zero" in str(exc.value)
+
+
+def test_omitted_findings_key_is_rejected_not_defaulted() -> None:
+    payload = _valid_payload()
+    payload["custodian"] = {"all_zero": False}
+    with pytest.raises(CollectorReportError):
+        _parse(payload)
+
+
+def test_watchers_total_has_no_silent_default() -> None:
+    """A fleet that grew past 8 must not read as fully healthy.
+
+    With a default of 8, a collector that stopped emitting the field would give
+    PHASE 2 "8 running of 8" while two watchers were in fact dead.
+    """
+    payload = _valid_payload()
+    del payload["preflight"]["watchers_total"]
+    with pytest.raises(CollectorReportError) as exc:
+        _parse(payload)
+    assert "watchers_total" in str(exc.value)
+
+
 def test_extracted_count_cannot_exceed_total() -> None:
     payload = _valid_payload()
     payload["extraction"]["extracted_count"] = 99

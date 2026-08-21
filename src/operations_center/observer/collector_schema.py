@@ -91,7 +91,11 @@ class Preflight(_Section):
     plane: str
     switchboard: str
     watchers_running: int = Field(ge=0)
-    watchers_total: int = Field(default=8, ge=0)
+    # No default. The OUTPUT SCHEMA always emits this, and defaulting it to
+    # today's fleet size would mean that a collector which stopped reporting it
+    # after the fleet grew past 8 would read as full health (8 running of a
+    # defaulted 8) instead of as a degraded 8-of-10.
+    watchers_total: int = Field(ge=0)
 
 
 class CustodianFinding(_Section):
@@ -108,14 +112,25 @@ class Custodian(_Section):
     def _all_zero_agrees_with_findings(self) -> Custodian:
         """``all_zero`` is what PHASE 2 branches on; findings are what it reads.
 
-        Both come from the same sweep, so a report claiming all_zero while
-        carrying non-zero deltas is self-contradictory — and the contradiction
-        resolves the dangerous way, with Sonnet trusting the boolean and never
-        reading the findings.
+        Both come from the same sweep, so the two must agree, and BOTH ways of
+        disagreeing are dangerous:
+
+        - ``all_zero`` true with findings present — Sonnet trusts the boolean
+          and never reads the list.
+        - ``all_zero`` false with no findings — Sonnet is told something is
+          non-zero but handed nothing to act on. This is the shape an omitted
+          ``findings`` key produces, since it defaults to empty, so leaving it
+          unguarded would reintroduce exactly the silent-default failure this
+          module exists to remove.
         """
         if self.all_zero and self.findings:
             raise ValueError(
                 f"custodian.all_zero is true but {len(self.findings)} finding(s) present"
+            )
+        if not self.all_zero and not self.findings:
+            raise ValueError(
+                "custodian.all_zero is false but no findings were reported — "
+                "the sweep cannot be both non-clean and empty"
             )
         return self
 

@@ -79,6 +79,18 @@ existing `MetricUnit` Enum entry — the config warns against adding names to
 dodge a gate, so it is worth being explicit that these classes are covered by
 `test_collector_schema.py` driving all of them through `parse_report`.
 
+Reviewing the diff on the PR turned up two holes of the same class the gate was
+built to close. The custodian contradiction check guarded only one direction —
+`all_zero` true with findings present — and left `all_zero` false with an empty
+findings list unguarded, which is the more dangerous half: `findings` defaults to
+empty, so an omitted key produced exactly that shape, telling PHASE 2 the sweep
+was unclean while handing it nothing to act on. And `watchers_total` carried a
+default of 8, so a collector that stopped emitting the field after the fleet grew
+would have reported eight-of-eight full health instead of eight-of-ten degraded.
+Both are now hard errors. Writing a silent default into a signal-bearing field
+while writing the module whose entire purpose is to remove silent defaults is
+worth recording, not quietly fixing.
+
 Worth noting where that audit had to run. Another session checked out its own
 branch in the shared clone seconds after this commit landed, so the first
 pre-push audit read a working tree that was not this branch — it reported an
