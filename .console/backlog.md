@@ -29,6 +29,19 @@ one shared `_ci_is_green()` used by all four call sites.
 
 `pr_review_watcher/**` is a guardrail path, so this needs the K=3 council.
 
+### A private repo name sits in a tracked file RC2 does not scan
+
+- RC2 scans `.console/**`. The same scrub-target name the gate caught in the log is
+  also in `tools/audit/report/final_verification/managed_repo_audit_system_final_verification.json`
+  — tracked, on both the forge and the public GitHub mirror, and passing a clean
+  audit because of the path scope.
+- Two decisions, not one: whether that audit artifact should carry managed-repo
+  identities at all, and whether RC2's scope should widen beyond `.console/**`
+  (a name is no less disclosed for being in `tools/`).
+- Scrubbing forward will not remove it from GitHub's published history. The
+  mirror force-push would, for the `.console` occurrence, since it replaces that
+  commit — the `tools/` one predates the divergence and would survive.
+
 ### Run the CI stress hunt on an idle runner
 
 Two attempts this session produced nothing usable. The first copied `.venv`

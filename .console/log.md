@@ -1,3 +1,57 @@
+## 2026-08-21 — the mirror push would have deleted a file
+
+Asked to push GitHub `main` as a mirror of the forge, I compared the two first.
+They diverge at `9ec7e5b0` (#527), and not only by hash:
+
+* GitHub's #2 (`4a4eeb96`) and #3 (`0f11e3f6`) are content-IDENTICAL to the
+  forge's (`e76026c4`, `cc540e45`) — same trees, same commit timestamps, different
+  parents. Replacing them costs nothing.
+* GitHub also carries `39795136` (#528), which the forge has never had. It adds
+  `deploy/forgejo/LAN-ACCESS.md` — 188 lines on serving the forge to other
+  machines, the WSL2 NAT trap, firewall rules, scoped submitter accounts — plus
+  its log entry. A mirror push would have deleted both, silently.
+
+So the push is blocked on rescuing it first, which is this commit: `cherry-pick -x`
+onto `origin/main`. One conflict, in `deploy/forgejo/README.md`, where #6 added the
+host-networking paragraph and #528 added the LAN section immediately after it.
+Both are additive and unrelated; both kept, ours first.
+
+This is the SECOND commit found stranded on the GitHub side in one day (the
+first was the CI registry fix, rescued this morning). The pattern is not a
+coincidence: sessions that run in the Windows checkout can only reach GitHub,
+and nothing reports the divergence in either direction. Until that checkout is
+repointed at the forge or deleted, assume anything committed there is invisible
+here.
+
+The push itself is still blocked on a second thing, which is not mine to change:
+GitHub's `main` has `allow_force_pushes: false` with `enforce_admins: true` — the
+posture the operator deliberately kept on 2026-08-19 when the required status
+checks were dropped. Because the histories diverge, a mirror push must be a
+force push. Two ways out, and they are a real choice: lift force-push protection
+for the length of one push and end up with hash-identical mirrors forever after,
+or rebase the forge's unique commits onto GitHub's head and fast-forward, which
+needs no setting changed but leaves a third hash line to maintain.
+
+Rescuing it also caught a boundary leak. The pre-push gate refused the push with
+one MED RC2 finding: the entry #528 added to `.console/log.md` named a private
+repo literally. Scrubbed to a generic reference, the same treatment the earlier
+B1 scrub used — the identity was never the point of the sentence.
+
+Note where that leak has been living. #2 deleted `.github/workflows`, so nothing
+gated the push that put #528 on GitHub, and GitHub's `main` is public: the name
+has been readable there since 2026-08-20. Scrubbing forward does not remove it
+from published history — but the mirror force-push does, because it replaces
+that commit with this one. That is an argument for the force-push option rather
+than the rebase one.
+
+Second occurrence, and the gate does not see it: the same name is in
+`tools/audit/report/final_verification/managed_repo_audit_system_final_verification.json`,
+which is tracked on both sides. RC2's scope is `.console/**`, so a private name in
+`tools/**` passes a clean audit. Backlogged rather than swept up here — that file
+is an audit artifact and scrubbing it is a decision about the artifact, not a
+typo fix.
+
+
 ## 2026-08-20 — the compose file had never actually been run
 
 Standing the fleet up on the new machine failed twice at the runner, both times
@@ -58,9 +112,10 @@ with no mode bits comes back 644, and the sweep picked that up as a real change.
 
 Restored as its own commit rather than folded into the sweep, so the mode change
 is visible in review instead of buried in a 16-file chore. Content untouched.
+
 ## 2026-08-20 — the deployment docs assumed one host
 
-The fleet is moving to its own machine while a managed repo (VideoFoundry)
+The fleet is moving to its own machine while a managed repo
 stays behind on the GPU box. That turns a co-location assumption nobody had
 written down into a hard blocker: the board has to be reachable from a host that
 is not running it, and nothing else can carry work across that gap —
