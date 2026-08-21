@@ -16,6 +16,7 @@ Setup writes (all gitignored):
 
 - `config/operations_center.local.yaml`
 - `.env.operations-center.local`
+- `config/task_template.local.md`
 - `config/managed_repos/local/*.yaml` — per-repo managed repo entries
 
 ## Backup and Restore (SS)
@@ -65,10 +66,19 @@ and the CI that produces the `audit` status branch protection requires.
 
 Standing the instance itself up on a new machine — containers, runner
 registration, the CI job image, and branch protection — is
-`deploy/forgejo/README.md`, not this guide. Note that branch protection is NOT
-part of any backup: it lives in the forge's own database, so a fresh instance
-starts unprotected. Re-apply it with
-`deploy/forgejo/apply-branch-protection.sh` and verify with `--check`.
+`deploy/forgejo/README.md`, not this guide.
+
+Branch protection lives in the forge's own database, not in this repo, so
+cloning gets you none of it. Which of the two procedures you are running decides
+what that means:
+
+* **Restoring a volume backup** (moving an instance): protection comes back with
+  the database, along with the repos, PRs and API tokens. Verify with
+  `deploy/forgejo/apply-branch-protection.sh --check`; only apply if that reports
+  drift.
+* **A fresh instance**: nothing is there and it starts **unprotected**, which is
+  the failure mode that looks completely fine. Apply it with
+  `deploy/forgejo/apply-branch-protection.sh`, then `--check`.
 
 **Plane was retired at the 2026-08-19 cutover** and never ran on this fleet.
 `board_backend` accepts only `forgejo`.

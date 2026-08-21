@@ -101,6 +101,300 @@ else is in it.
 
 Full suite green: 8661 passed, 9 skipped, 2 xfailed, including all 1856 in the
 `injection.py` blast radius. 40 new tests. custodian-multi clean.
+## 2026-08-21 — reconciling the two histories WITHOUT a force push
+
+The push mirror to GitHub was configured today. Its first sync moved eleven
+branches but `main` was rejected:
+
+    GH006: Protected branch update failed for refs/heads/main
+           - Cannot force-push to this branch
+
+The obvious reading is "turn off branch protection so the mirror can force".
+That would have destroyed work. GitHub's `main` was five commits ahead of what
+the forge knew, and two of those exist nowhere else:
+
+* `39795136 docs(forgejo): how to serve the forge to another machine (#528)`
+* `e4ccf016 docs: branch protection IS in the backup — correct both runbooks (#530)`
+
+The other three (`#2`, `#3`, `#529`) are content-duplicates of forge commits
+under different hashes — the same two-clone divergence recorded earlier today.
+
+So the reconciliation is a real merge, not a force: bring GitHub's side INTO the
+forge, which makes the forge a descendant and lets the mirror fast-forward from
+then on. Protection stays on, at both ends, and nothing is discarded.
+
+Five files conflicted. How each was decided, because "the forge is authoritative"
+is the right default and was NOT right everywhere:
+
+* `runner-config.yml`, `docker-compose.yml` — **forge**. GitHub still had the
+  bare `oc-ci-runner:latest` label that caused the 2026-08-20 outage, and lacked
+  the compose project-name pin, `network_mode: host` and `group_add`. Taking
+  GitHub here would have reverted a fix verified against live CI the same day.
+* `deploy/forgejo/README.md` — **mixed, per hunk.** Five hunks are the same
+  registry-vs-bare-name split and went to the forge. Two did not:
+  - Step 5 of "Standing one up from scratch" took GITHUB's text, because #530
+    corrected it: protection is not "in no backup", it lives in the database and
+    therefore returns with a volume restore. The forge still carried the wrong
+    claim.
+  - The "Serving the forge to other machines" section is #528 and exists only on
+    GitHub, so it was kept ALONGSIDE the forge's `network_mode: host` note. Both
+    are true and neither replaces the other. `LAN-ACCESS.md` came across as a new
+    file with no conflict.
+* `docs/operator/setup.md` — **GitHub**, same #530 correction, same reason.
+* `.console/backlog.md` — **mixed.** GitHub's "Verify the restored forge on the
+  new machine" section was kept; everything else took the forge, which has the
+  newer text for the item both sides carry. Two hunks looked like additions on
+  opposite sides but were the SAME two sections at different positions — a move,
+  not a change — so they were taken once. Taking both would have silently
+  duplicated them.
+
+The general shape: an authoritative-source rule resolves most of a divergence and
+is actively wrong for the parts where the other side fixed something. Hunks where
+GitHub was correcting a false claim are exactly the hunks a blanket "ours" would
+have thrown away.
+## 2026-08-21 — the volumes are per-instance state, not an artifact to hand over
+
+README covers taking YOUR OWN state to a new machine. It does not say what a
+SECOND person does, and the obvious reading — copy the volumes — does not work.
+`deploy/forgejo/VOLUMES.md` records why, because the answer shapes any sync
+mechanism built on top of it later.
+
+Three things bind the contents to one instance:
+
+* `forgejo-runner-data` holds `.runner`, whose keys are `id uuid name token
+  address labels`. That token was minted by one forge and names the address it
+  registered against, so it does not survive being handed over.
+* Everything in `forgejo-data` is owned by a numeric user id, so copying the
+  volume copies the accounts — including the admin. That is credential-adjacent
+  state, not data.
+* The registry path IS the account name
+  (`localhost:3000/operations_center_admin/oc-ci-runner:latest`), so a different
+  owner is a different path and `runner-config.yml` has to say so.
+
+What travels between people is this repo — the code and the procedure. What each
+person builds locally is the state. Conflating the two is what makes "sync the
+volumes" sound simpler than it is.
+
+The doc also names the three separate places the API token hides: the env file,
+the `clone_url` in `config/operations_center.local.yaml`, and the working
+clone's git remote. Rotating it means all three. Miss the remote and the API
+keeps working while `git push` starts failing, which reads as a network fault
+rather than a credential one.
+
+Sizing, recorded because it is easy to be wrong by an order of magnitude:
+`forgejo-data` went from 78 MB to 618 MB when the CI job image was published
+into the forge's own registry. The image is ~2 GB uncompressed and lands as
+roughly 540 MB of blobs. That is deliberate — it is what lets the image travel
+with the forge instead of being rebuilt on arrival — but every backup archive
+now carries it, and the containers must be stopped before one is taken or the
+archive captures SQLite mid-write.
+
+Deliberately unanswered: keeping ONE person's volumes in step across their own
+machines. Different problem, different mechanism; this only establishes what is
+per-instance so that design does not try to move state that cannot move.
+
+## 2026-08-21 — four answers to "is CI green", three of them wrong
+
+`_phase0_ci_fix` decided CI was green with a bare `if not failed:`. It logged
+"PR #6 CI green, advancing to self_review" two seconds after discovering the PR,
+before Actions had posted anything at all, and a SUCCESS `reviewer-verdict`
+followed. Nothing bad merged — the last-resort gate in `_merge_and_done` refetches
+CI and refused — but a green verdict on a build that had not started is a
+guardrail reporting a result it did not have.
+
+The same defect was fixed three times in the self-review precondition (#269,
+#405/#406, #503) and never propagated, because the four sites had each derived
+their own rule and no test covered this one. Now there is one definition,
+`_ci_status` / `_CIStatus.green`, and it is the strict one:
+
+* nothing FAILED, and
+* nothing PENDING — no failure yet is not a pass, and
+* at least one COMPLETED check on THIS head — a freshly pushed or auto-rebased
+  head has no results, so empty-failed plus empty-pending would otherwise read
+  as green on a commit CI never saw, and
+* every configured required check REGISTERED, and
+* the query itself did not raise.
+
+That last one was its own bug. `_ci_checks_failing` caught every exception and
+returned `[]`, and its docstring asserted the equivalence outright ("or [] if all
+green"), so an API outage was indistinguishable from a passing build. `error` is
+now a field: not green, and not red either — there is nothing for a fix pass to
+act on, so the caller waits and asks again.
+
+Applied at three sites. The fourth — the self-review precondition — keeps its
+inline form: it is the version that was already correct, and each of its four
+guards escalates differently (adaptive wait thresholds, distinct escalation
+reasons), which does not collapse into a boolean. The helper is that gate's rule
+extracted, and its docstring says so.
+
+Liveness, because fail-closed can also mean fail-stuck: phase 0 now waits at
+most `_MAX_CI_SETTLE_CYCLES` (10 polls) for CI to settle, then advances to review
+with a WARNING naming the reason. Without the bound, a repo with no CI at all —
+indistinguishable from "CI has not started" unless `required_checks` is
+configured, and OC does not configure it — would park every PR forever.
+Advancing costs a review pass, never a merge: the merge gate re-checks CI.
+
+Tests: 12, in `tests/unit/reviewer/test_ci_green_definition.py`. Verified they
+catch the defect — stashing the source fix fails 11 of them. Existing reviewer
+suites unchanged: 198 unit + 101 integration pass.
+
+## 2026-08-21 — what the fleet's own logs said when it came back up
+
+Restarting the review watcher to unblock PR #6 turned up three things the
+migration left behind, none of which announce themselves at startup:
+
+* **The executor repos are not on this machine, and not on the forge.**
+  `ensure_executor_backends()` warned for all three — TeamExecutor, DAGExecutor,
+  CritiqueExecutor — and its self-heal reinstalls from SIBLING CHECKOUTS that do
+  not exist here. The forge hosts OperationsCenter, PlatformManifest and
+  PrivateManifest only, so "no GitHub access is required" in the migration
+  bundle holds for review and breaks for execution. Review works because it
+  shells out to `claude` directly.
+* **SwitchBoard is not running.** The fix pass for PR #6 died on "SwitchBoard
+  unreachable at http://localhost:20401 ... Connection refused" and logged
+  "pushed no changes". The reviewer treats that as a no-progress fix attempt and
+  burns a ladder rung on it, so an infrastructure outage is being counted as an
+  unfixable PR.
+* **The containment self-check fails and nothing stops.** `bwrap` and `pasta` are
+  absent from this box; the watcher logs two ERROR lines and reviews anyway,
+  unsandboxed. The egress proxy is now up (it is in-repo and needs no root), so
+  that third failure is cleared. See the separate entry on the self-check.
+
+Also observed, worth its own investigation rather than a claim: the reviewer
+returned CONCERNS on PR #6's rebased head at 05:45, dispatched a fix pass that
+pushed nothing (SwitchBoard), and then returned LGTM on the SAME unchanged head
+at 05:48. Same diff, two verdicts, three minutes apart.
+## 2026-08-21 — a fix that existed in only one of two clones
+
+The registry commit below was written on 2026-08-20 in a SECOND checkout of this
+repo — `/mnt/c/Users/void/Documents/GitHub/OperationsCenter`, whose only remote
+is GitHub — and never reached the forge. It sat on a local branch there while
+the fleet clone in `~/GitHub` carried on without it, so the CI job image was
+still addressed by bare name in the config the runner actually reads.
+
+Two clones is not the problem by itself. What makes it one:
+
+* The same commits have DIFFERENT hashes in the two clones (`#3` is `0f11e3f6`
+  on GitHub and `cc540e45` on Forgejo), so "mirror" is aspirational — nothing
+  can be compared by SHA, and `git log` in one is not evidence about the other.
+* The GitHub side is a commit behind (no `#4`), and nothing reports that.
+* The Windows clone has no Forgejo remote at all, so work committed there has no
+  path to `main` except a hand-carried patch. This is that patch, applied with
+  `git am` onto `origin/main` so authorship and the original message survive.
+
+The forge is authoritative. Treat the Windows checkout as read-only history
+until it is repointed or deleted.
+
+Verified before pushing: the image really is in the forge's own registry
+(`Operations_Center_Admin/oc-ci-runner:latest`, two digests), so the fallback
+the commit describes is live and not just documented.
+
+## 2026-08-20 — the compose file had never actually been run
+
+Standing the fleet up on the new machine failed twice at the runner, both times
+on something `deploy/forgejo/docker-compose.yml` was missing. The file says it
+was "reproduced verbatim from the live containers" via `docker inspect` — but
+inspect only shows you what you thought to look for, and the runner was
+originally created by hand with `docker run`. Two flags did not survive the
+reconstruction, so the compose path had never been exercised end to end.
+
+**`--group-add` was dropped.** The daemon crash-looped on `permission denied
+... /var/run/docker.sock`. The README documents the flag for the `docker run`
+path and even explains why it is preferable to `--user 0:0`; compose just never
+got it. Restored as `group_add`, sourced from `DOCKER_GID` in a gitignored
+`.env`, because the docker group's GID differs per machine — 1001 here. It uses
+`${DOCKER_GID:?...}` so a missing value fails at `compose config` with the
+command that produces it, rather than at runtime with a permission error.
+
+**The daemon needed host networking, and nothing said so.** With the socket
+fixed it got one step further and died on
+
+    fail to invoke Declare ... dial tcp [::1]:3000: connect: connection refused
+
+`.runner` in the restored volume registers the daemon against
+`http://localhost:3000`, which on a bridge network is the runner's own
+localhost. We had this documented as a *pair* — `ROOT_URL` and
+`container.network: host` — but that pair is about JOB containers and shows up
+as `git exit 128`. This is a third member at a different layer, with a different
+error, and the `docker run` in the README does not carry `--network host`
+either, so how the old box ever satisfied it is unclear. Host networking on the
+runner service is what lets the restored registration keep working as
+`oc-local-runner` instead of re-registering.
+
+Verified on the rebased PR #4: runner `declared successfully`, 13/13 contexts
+green including `custodian-audit / audit (pull_request)`.
+
+A third thing, found while checking the first two: compose derives the project
+name from the invoking DIRECTORY, so this file produced project `deploy-forgejo`
+when run from the migration bundle and would produce `forgejo` when run from the
+repo. Both want the same fixed `container_name`s, so the second invocation dies
+on "container name is already in use" rather than adopting what is already
+running — which means the restore instructions in the README would fail on any
+machine brought up from a bundle. Pinned with a top-level `name:`.
+## 2026-08-20 — the sweep committed two scripts non-executable
+
+Rebasing `chore/retire-plane-leftovers` onto main for the machine move surfaced
+a mode change nobody asked for: `scripts/backup-secrets.sh` and
+`scripts/setup-secrets.sh` go in at **100644**, and they were **100755** at the
+merge-base. `git diff --raw` against 9ec7e5b0 is unambiguous —
+`:100755 100644 ... M` on both.
+
+It is not a rebase artifact. The original commit carries it, and the rebase
+faithfully preserved it. Every other file in `scripts/` is still 755, and
+`docs/operator/setup.md` — a file this same commit edits — tells the operator to
+run `scripts/backup-secrets.sh` directly, which fails outright without +x.
+
+Almost certainly the POSIX-modes trap: a file that passes through a filesystem
+with no mode bits comes back 644, and the sweep picked that up as a real change.
+
+Restored as its own commit rather than folded into the sweep, so the mode change
+is visible in review instead of buried in a 16-file chore. Content untouched.
+## 2026-08-20 — the deployment docs assumed one host
+
+The fleet is moving to its own machine while a managed repo (VideoFoundry)
+stays behind on the GPU box. That turns a co-location assumption nobody had
+written down into a hard blocker: the board has to be reachable from a host that
+is not running it, and nothing else can carry work across that gap —
+`board_backend` is `Literal["forgejo"]`, Plane went away at the cutover, and
+`~/.console/queue/` is an inotify-watched local directory with no network
+listener.
+
+`deploy/forgejo/LAN-ACCESS.md` documents that boundary. Two things in it are
+worth knowing before hitting them:
+
+`docker-compose.yml` already publishes `3000:3000` on `0.0.0.0`, which makes the
+problem look solved. It is not. `ROOT_URL` on `localhost` hands every remote
+caller a URL pointing back at itself, and on **WSL2** the port is unreachable
+from the LAN regardless of what it is bound to — the NAT presents as a healthy
+instance, `ss` and `docker port` both reporting correct, and a remote client that
+times out. `networkingMode=mirrored` fixes it; a `netsh portproxy` rule also
+works but has to be re-applied whenever WSL's IP moves.
+
+The doc also records what makes a remote submission claimable — the four labels,
+why they must pre-exist (Forgejo's create-issue API takes label IDs, not names),
+and the 40-char `_MIN_GOAL_TEXT_CHARS` floor below which a task is claimed and
+instantly blocked, which from the submitting side is indistinguishable from being
+ignored.
+
+README got a pointer beside the existing `ROOT_URL` section rather than a second
+copy of the `container.network: host` explanation, which it already covers well.
+## 2026-08-20 — two runbooks claiming protection is not backed up
+
+Both `docs/operator/setup.md` and `deploy/forgejo/README.md` said branch
+protection is "NOT part of any backup". That is false, and it matters on exactly
+the path being taken right now: protection lives in `gitea.db`, which is inside
+`forgejo-data.tgz`, so restoring a volume backup brings it back along with the
+repos, the PRs and the API tokens.
+
+The intent was "it is not in the git repo, so cloning gets you none of it" —
+true, and a different statement. Left as written it sends someone restoring an
+instance to re-apply a rule that is already correct, and, worse, implies the
+restore left them exposed when it did not.
+
+Both now split the two procedures explicitly: restoring a backup means VERIFY
+with `--check`; a fresh instance means APPLY. Filed the corresponding
+new-machine verification task in backlog.md, since "protection came back" is an
+assumption until something checks it.
 
 ## 2026-08-20 — measuring jitter and calling it degradation
 
@@ -398,6 +692,41 @@ while keeping 2026-06-18 ones.
 
 Result: 271 entries / 417,089 bytes → 169 entries /
 237,189 bytes, 46% of budget.
+## 2026-08-19 — Plane leftovers: a dead name is only cosmetic until something points at it
+
+Swept the Plane vocabulary the cutover left behind. Most of it was what it looked
+like — a module, a class, a test file and a design doc named for a system that no
+longer exists, each with one importer or none. Details in `.console/backlog.md`.
+
+One wasn't cosmetic. `config/plane_task_template.example.md` was dead in the sense
+that no code read it — `oc setup` writes `config/task_template.local.md` from
+`render_task_template()`. But `.gitignore`, `docs/operator/setup.md`,
+`backup-secrets.sh` and `setup-secrets.sh` all still named the old
+`plane_task_template.local.md` path. So `backup-secrets.sh` has been faithfully
+backing up a file that cannot exist, and the template the operator actually has
+was in no backup at all. The lesson generalises past this file: **grep for the
+name before calling it unused — "nothing reads it" and "nothing references it"
+are different claims,** and the gap between them is where silent data loss lives.
+
+Deliberately did not rename the Plane names that are wire formats:
+`plane_task_id` (read from on-disk review state), `plane_issue_id` (read from
+proposer artifacts), and `"plane"` as an alert-channel name (validated against
+operator config). Those are a write-both/read-both migration, not a cleanup;
+filed in Up Next. Renaming them in place would have orphaned every in-flight
+review at deploy time.
+
+Process note, and it is a trap worth remembering: **the fleet executes out of the
+live working tree.** Every supervisor runs
+`/home/diane/GitHub/OperationsCenter/.venv/bin/python -m operations_center...`
+with `cd` into that checkout and re-execs its child every 30s, so editing `src/`
+there — or switching its branch — changes what the running fleet does on the next
+restart. Did the work in `git worktree` at `~/GitHub/oc-plane-cleanup` instead.
+That collides with the already-recorded worktree trap (a worktree has no venv and
+no editable install, so bare `python` there measures the *main* checkout);
+defeated it by running the main venv's interpreter with
+`PYTHONPATH=<worktree>/src`, and **proved** it rather than assuming —
+`operations_center.__file__` resolved to the worktree before running anything.
+67 targeted tests pass; ruff clean.
 
 ## 2026-08-19 — correcting myself: the status context is the JOB name
 

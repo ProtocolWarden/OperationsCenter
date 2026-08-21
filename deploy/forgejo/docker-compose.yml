@@ -11,6 +11,14 @@
 # The DATA is not here and cannot be: it lives in the two named volumes below.
 # See "Moving to another machine" in README.md.
 
+# Pin the compose project name. Without this compose derives it from the
+# DIRECTORY it is invoked from, so the same file run from a migration bundle
+# (`deploy-forgejo/`) and from the repo (`deploy/forgejo/`) produces two
+# different projects that both want the fixed container_names below — the
+# second invocation fails with "container name is already in use" instead of
+# adopting the running stack. Pinning it makes the file location irrelevant.
+name: forgejo
+
 services:
   forgejo:
     image: codeberg.org/forgejo/forgejo:13
@@ -39,6 +47,21 @@ services:
     restart: unless-stopped
     depends_on: [forgejo]
     command: ["forgejo-runner", "daemon", "--config", "/data/config.yml"]
+    # The runner registers against the address in .runner, which is
+    # http://localhost:3000. On a bridge network that resolves to the runner's
+    # OWN localhost, so the daemon cannot reach the forge and dies before it
+    # ever polls: "fail to invoke Declare ... dial tcp [::1]:3000: connect:
+    # connection refused". Host networking makes that address mean the same
+    # thing as FORGEJO__server__ROOT_URL above and as container.network: host
+    # in runner-config.yml. All three are one decision; change one, change all.
+    network_mode: host
+    # Job containers are siblings on the host daemon, so the runner needs the
+    # host docker socket (mounted below). That socket is root:docker 0660, and
+    # the docker group's GID differs per machine -- so it comes from the
+    # environment (deploy/forgejo/.env, gitignored) rather than being baked in.
+    # Without it the daemon crash-loops on "permission denied ... docker.sock".
+    group_add:
+      - "${DOCKER_GID:?DOCKER_GID must be set: getent group docker | cut -d: -f3}"
     environment:
       HOME: /data
     volumes:
