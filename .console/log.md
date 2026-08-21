@@ -4298,6 +4298,49 @@ Full suite: 10348 passed, 6 failed (same pre-existing sandbox/timing baseline as
 prior stage), 21 skipped, 2 xfailed — zero new failures. `ruff check`/`ruff format --check`
 clean on the new file. Nothing committed yet.
 
+## 2026-08-21 — fix(containment): a missing iptables made egress confinement a no-op
+
+Found on this host: `iptables` had never been installed, and nothing in OC installs
+it. The in-netns firewall block in `board_worker/netns.py` guarded on a bare
+`command -v iptables`, so the test failed, the `OUTPUT DROP` was skipped, and the
+pasta netns ran with unrestricted egress. Nothing reported a problem: pasta and the
+egress proxy were both healthy, so `maybe_netns` returned a wrapped command and
+`verify_containment` returned zero problems. The HTTPS_PROXY wiring survived, which
+means egress was back on the honor system — `unset HTTPS_PROXY` plus a raw socket was
+not blocked. That is precisely the hole the netns layer was written to close (#411,
+#423), silently reopened by an absent package.
+
+Decisions:
+
+- **iptables absence now fails closed, like pasta absence.** `containment.iptables_path()`
+  resolves through PATH and then `/usr/sbin`, `/sbin` (the worker's minimized PATH drops
+  sbin dirs, so an *installed* binary was not necessarily findable either);
+  `verify_containment` reports it at boot; `maybe_netns` logs `netns_degraded` with
+  `reason=iptables_unavailable` and raises `EgressContainmentRequiredError` unless the
+  operator opts out. Rejected leaving it fail-open: a netns with no `OUTPUT DROP` is
+  indistinguishable from no netns at all, so it has the same standing as a missing pasta.
+- **The script takes a resolved absolute path.** `_FIREWALL_SETUP` became
+  `_firewall_setup(iptables_bin)`. The probe and the code that actually runs can no
+  longer disagree about what is installed — the shell string had no way to signal back
+  to Python, which is why "the firewall did not apply" was the one containment failure
+  that could not fail closed.
+- **`scripts/install-system-deps.sh` (new, apt-only).** `oc setup` installs uv, provider
+  CLIs and executor backends but has never touched system packages, so bwrap / pasta /
+  iptables / setpriv were hand-installed or absent. The script also probes a real pasta
+  netns after installing: presence is not enforcement, and a host with the binary but
+  without the netfilter modules degrades the same silent way.
+- **Corrected the uid-0 comments.** The pasta netns keeps the caller's uid (with a full
+  capability set — that is what lets it install rules); it is bwrap's *own* user namespace
+  that maps to root. The old comment credited the netns, which implied `IS_SANDBOX=1`
+  could be dropped when `OC_EGRESS_NETNS=0`. It cannot.
+
+Verified on this host: before the rules an outbound connection returns 301, after them
+1.1.1.1:443 and github's raw IP both return 000 with `HTTPS_PROXY` unset, while the
+loopback proxy stays reachable and allowlisted egress through it still works.
+`test_kernel_enforcement_end_to_end` had been auto-skipping wherever iptables was absent
+(its `_HAVE_TOOLS` guard) — it runs and passes now. 396 passed in
+`tests/unit/entrypoints/board_worker/`, `ruff check` clean.
+
 ---
 
 _Older entries were rotated out to stay within the OC2 500KB budget:
