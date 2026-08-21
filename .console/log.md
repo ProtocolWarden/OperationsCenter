@@ -1,3 +1,54 @@
+## 2026-08-21 — reconciling the two histories WITHOUT a force push
+
+The push mirror to GitHub was configured today. Its first sync moved eleven
+branches but `main` was rejected:
+
+    GH006: Protected branch update failed for refs/heads/main
+           - Cannot force-push to this branch
+
+The obvious reading is "turn off branch protection so the mirror can force".
+That would have destroyed work. GitHub's `main` was five commits ahead of what
+the forge knew, and two of those exist nowhere else:
+
+* `39795136 docs(forgejo): how to serve the forge to another machine (#528)`
+* `e4ccf016 docs: branch protection IS in the backup — correct both runbooks (#530)`
+
+The other three (`#2`, `#3`, `#529`) are content-duplicates of forge commits
+under different hashes — the same two-clone divergence recorded earlier today.
+
+So the reconciliation is a real merge, not a force: bring GitHub's side INTO the
+forge, which makes the forge a descendant and lets the mirror fast-forward from
+then on. Protection stays on, at both ends, and nothing is discarded.
+
+Five files conflicted. How each was decided, because "the forge is authoritative"
+is the right default and was NOT right everywhere:
+
+* `runner-config.yml`, `docker-compose.yml` — **forge**. GitHub still had the
+  bare `oc-ci-runner:latest` label that caused the 2026-08-20 outage, and lacked
+  the compose project-name pin, `network_mode: host` and `group_add`. Taking
+  GitHub here would have reverted a fix verified against live CI the same day.
+* `deploy/forgejo/README.md` — **mixed, per hunk.** Five hunks are the same
+  registry-vs-bare-name split and went to the forge. Two did not:
+  - Step 5 of "Standing one up from scratch" took GITHUB's text, because #530
+    corrected it: protection is not "in no backup", it lives in the database and
+    therefore returns with a volume restore. The forge still carried the wrong
+    claim.
+  - The "Serving the forge to other machines" section is #528 and exists only on
+    GitHub, so it was kept ALONGSIDE the forge's `network_mode: host` note. Both
+    are true and neither replaces the other. `LAN-ACCESS.md` came across as a new
+    file with no conflict.
+* `docs/operator/setup.md` — **GitHub**, same #530 correction, same reason.
+* `.console/backlog.md` — **mixed.** GitHub's "Verify the restored forge on the
+  new machine" section was kept; everything else took the forge, which has the
+  newer text for the item both sides carry. Two hunks looked like additions on
+  opposite sides but were the SAME two sections at different positions — a move,
+  not a change — so they were taken once. Taking both would have silently
+  duplicated them.
+
+The general shape: an authoritative-source rule resolves most of a divergence and
+is actively wrong for the parts where the other side fixed something. Hunks where
+GitHub was correcting a false claim are exactly the hunks a blanket "ours" would
+have thrown away.
 ## 2026-08-21 — the volumes are per-instance state, not an artifact to hand over
 
 README covers taking YOUR OWN state to a new machine. It does not say what a
@@ -195,6 +246,33 @@ with no mode bits comes back 644, and the sweep picked that up as a real change.
 
 Restored as its own commit rather than folded into the sweep, so the mode change
 is visible in review instead of buried in a 16-file chore. Content untouched.
+## 2026-08-20 — the deployment docs assumed one host
+
+The fleet is moving to its own machine while a managed repo (VideoFoundry)
+stays behind on the GPU box. That turns a co-location assumption nobody had
+written down into a hard blocker: the board has to be reachable from a host that
+is not running it, and nothing else can carry work across that gap —
+`board_backend` is `Literal["forgejo"]`, Plane went away at the cutover, and
+`~/.console/queue/` is an inotify-watched local directory with no network
+listener.
+
+`deploy/forgejo/LAN-ACCESS.md` documents that boundary. Two things in it are
+worth knowing before hitting them:
+
+`docker-compose.yml` already publishes `3000:3000` on `0.0.0.0`, which makes the
+problem look solved. It is not. `ROOT_URL` on `localhost` hands every remote
+caller a URL pointing back at itself, and on **WSL2** the port is unreachable
+from the LAN regardless of what it is bound to — the NAT presents as a healthy
+instance, `ss` and `docker port` both reporting correct, and a remote client that
+times out. `networkingMode=mirrored` fixes it; a `netsh portproxy` rule also
+works but has to be re-applied whenever WSL's IP moves.
+
+The doc also records what makes a remote submission claimable — the four labels,
+why they must pre-exist (Forgejo's create-issue API takes label IDs, not names),
+and the 40-char `_MIN_GOAL_TEXT_CHARS` floor below which a task is claimed and
+instantly blocked, which from the submitting side is indistinguishable from being
+ignored.
+
 README got a pointer beside the existing `ROOT_URL` section rather than a second
 copy of the `container.network: host` explanation, which it already covers well.
 ## 2026-08-20 — two runbooks claiming protection is not backed up
