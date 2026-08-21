@@ -115,8 +115,11 @@ docker compose -f deploy/forgejo/docker-compose.yml up -d forgejo
    job image with `./deploy/forgejo/push-ci-runner.sh` before starting the
    daemon, or every job fails at image pull.
 
-5. Apply branch protection. It is not in any backup and a fresh instance starts
-   **unprotected**, which is the failure mode that looks fine:
+5. Apply branch protection. It lives in the forge's database, so a FRESH instance
+   like this one starts **unprotected** — the failure mode that looks completely
+   fine. (Restoring a volume backup is different: protection comes back with the
+   database. See "Moving to another machine" below, where you verify rather than
+   apply.)
 
 ```bash
 ./deploy/forgejo/apply-branch-protection.sh
@@ -236,6 +239,18 @@ registered address mean the same thing as `ROOT_URL` and as
 `container.network: host`. Restoring a volume brings the old `.runner` with it,
 so the address is whatever the *old* machine used -- keeping host networking is
 what lets the same registration keep working instead of re-registering.
+
+### Serving the forge to other machines
+
+Everything above assumes one host. When something that needs the board lives
+elsewhere — a managed repo pinned to a GPU box, an operator submitting from a
+laptop — `ROOT_URL` on `localhost` is no longer merely cosmetic: it hands remote
+callers URLs pointing back at themselves, and on WSL2 the port is not reachable
+from the LAN at all regardless of what it is bound to.
+
+See **[LAN-ACCESS.md](LAN-ACCESS.md)** — addressing, the WSL2 NAT trap, firewall
+rules, scoped submitter accounts, the labels a remote submission needs to be
+claimable, and a symptom-to-cause table.
 
 ### Known operational wrinkles
 
