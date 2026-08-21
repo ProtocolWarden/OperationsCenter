@@ -1,3 +1,45 @@
+## 2026-08-20 — the compose file had never actually been run
+
+Standing the fleet up on the new machine failed twice at the runner, both times
+on something `deploy/forgejo/docker-compose.yml` was missing. The file says it
+was "reproduced verbatim from the live containers" via `docker inspect` — but
+inspect only shows you what you thought to look for, and the runner was
+originally created by hand with `docker run`. Two flags did not survive the
+reconstruction, so the compose path had never been exercised end to end.
+
+**`--group-add` was dropped.** The daemon crash-looped on `permission denied
+... /var/run/docker.sock`. The README documents the flag for the `docker run`
+path and even explains why it is preferable to `--user 0:0`; compose just never
+got it. Restored as `group_add`, sourced from `DOCKER_GID` in a gitignored
+`.env`, because the docker group's GID differs per machine — 1001 here. It uses
+`${DOCKER_GID:?...}` so a missing value fails at `compose config` with the
+command that produces it, rather than at runtime with a permission error.
+
+**The daemon needed host networking, and nothing said so.** With the socket
+fixed it got one step further and died on
+
+    fail to invoke Declare ... dial tcp [::1]:3000: connect: connection refused
+
+`.runner` in the restored volume registers the daemon against
+`http://localhost:3000`, which on a bridge network is the runner's own
+localhost. We had this documented as a *pair* — `ROOT_URL` and
+`container.network: host` — but that pair is about JOB containers and shows up
+as `git exit 128`. This is a third member at a different layer, with a different
+error, and the `docker run` in the README does not carry `--network host`
+either, so how the old box ever satisfied it is unclear. Host networking on the
+runner service is what lets the restored registration keep working as
+`oc-local-runner` instead of re-registering.
+
+Verified on the rebased PR #4: runner `declared successfully`, 13/13 contexts
+green including `custodian-audit / audit (pull_request)`.
+
+A third thing, found while checking the first two: compose derives the project
+name from the invoking DIRECTORY, so this file produced project `deploy-forgejo`
+when run from the migration bundle and would produce `forgejo` when run from the
+repo. Both want the same fixed `container_name`s, so the second invocation dies
+on "container name is already in use" rather than adopting what is already
+running — which means the restore instructions in the README would fail on any
+machine brought up from a bundle. Pinned with a top-level `name:`.
 ## 2026-08-20 — the sweep committed two scripts non-executable
 
 Rebasing `chore/retire-plane-leftovers` onto main for the machine move surfaced
