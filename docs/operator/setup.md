@@ -16,6 +16,7 @@ Setup writes (all gitignored):
 
 - `config/operations_center.local.yaml`
 - `.env.operations-center.local`
+- `config/task_template.local.md`
 - `config/managed_repos/local/*.yaml` — per-repo managed repo entries
 
 ## Backup and Restore (SS)

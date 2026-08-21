@@ -1,7 +1,14 @@
 ---
-status: implemented
+status: superseded
 ---
 # Plane + Kodo Wrapper Design
+
+> **Superseded.** Both halves of this design are retired: the board moved from
+> Plane to a self-hosted Forgejo instance in the 2026-08-18 cutover (the Plane
+> adapter was deleted in OperationsCenter#521), and kodo is no longer the coding
+> engine — executors are selected per task via `worker_backend`. Kept as a record
+> of the original integration design. Not maintained; see `docs/architecture/`
+> for current behavior.
 
 ## Purpose
 
