@@ -1,3 +1,22 @@
+## 2026-08-20 — the sweep committed two scripts non-executable
+
+Rebasing `chore/retire-plane-leftovers` onto main for the machine move surfaced
+a mode change nobody asked for: `scripts/backup-secrets.sh` and
+`scripts/setup-secrets.sh` go in at **100644**, and they were **100755** at the
+merge-base. `git diff --raw` against 9ec7e5b0 is unambiguous —
+`:100755 100644 ... M` on both.
+
+It is not a rebase artifact. The original commit carries it, and the rebase
+faithfully preserved it. Every other file in `scripts/` is still 755, and
+`docs/operator/setup.md` — a file this same commit edits — tells the operator to
+run `scripts/backup-secrets.sh` directly, which fails outright without +x.
+
+Almost certainly the POSIX-modes trap: a file that passes through a filesystem
+with no mode bits comes back 644, and the sweep picked that up as a real change.
+
+Restored as its own commit rather than folded into the sweep, so the mode change
+is visible in review instead of buried in a 16-file chore. Content untouched.
+
 ## 2026-08-20 — measuring jitter and calling it degradation
 
 `test_load_large_snapshot_memory_efficient` failed the perf job with
@@ -294,6 +313,41 @@ while keeping 2026-06-18 ones.
 
 Result: 271 entries / 417,089 bytes → 169 entries /
 237,189 bytes, 46% of budget.
+## 2026-08-19 — Plane leftovers: a dead name is only cosmetic until something points at it
+
+Swept the Plane vocabulary the cutover left behind. Most of it was what it looked
+like — a module, a class, a test file and a design doc named for a system that no
+longer exists, each with one importer or none. Details in `.console/backlog.md`.
+
+One wasn't cosmetic. `config/plane_task_template.example.md` was dead in the sense
+that no code read it — `oc setup` writes `config/task_template.local.md` from
+`render_task_template()`. But `.gitignore`, `docs/operator/setup.md`,
+`backup-secrets.sh` and `setup-secrets.sh` all still named the old
+`plane_task_template.local.md` path. So `backup-secrets.sh` has been faithfully
+backing up a file that cannot exist, and the template the operator actually has
+was in no backup at all. The lesson generalises past this file: **grep for the
+name before calling it unused — "nothing reads it" and "nothing references it"
+are different claims,** and the gap between them is where silent data loss lives.
+
+Deliberately did not rename the Plane names that are wire formats:
+`plane_task_id` (read from on-disk review state), `plane_issue_id` (read from
+proposer artifacts), and `"plane"` as an alert-channel name (validated against
+operator config). Those are a write-both/read-both migration, not a cleanup;
+filed in Up Next. Renaming them in place would have orphaned every in-flight
+review at deploy time.
+
+Process note, and it is a trap worth remembering: **the fleet executes out of the
+live working tree.** Every supervisor runs
+`/home/diane/GitHub/OperationsCenter/.venv/bin/python -m operations_center...`
+with `cd` into that checkout and re-execs its child every 30s, so editing `src/`
+there — or switching its branch — changes what the running fleet does on the next
+restart. Did the work in `git worktree` at `~/GitHub/oc-plane-cleanup` instead.
+That collides with the already-recorded worktree trap (a worktree has no venv and
+no editable install, so bare `python` there measures the *main* checkout);
+defeated it by running the main venv's interpreter with
+`PYTHONPATH=<worktree>/src`, and **proved** it rather than assuming —
+`operations_center.__file__` resolved to the worktree before running anything.
+67 targeted tests pass; ruff clean.
 
 ## 2026-08-19 — correcting myself: the status context is the JOB name
 
