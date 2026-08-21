@@ -17,7 +17,7 @@ mkdir -p "$DEST"
 # Flat files: repo path → flat backup filename
 declare -A flat_files=(
     ["config/operations_center.local.yaml"]="oc__config__operations_center.local.yaml"
-    ["config/plane_task_template.local.md"]="oc__config__plane_task_template.local.md"
+    ["config/task_template.local.md"]="oc__config__task_template.local.md"
     [".env.operations-center.local"]="oc__.env.operations-center.local"
 )
 

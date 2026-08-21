@@ -3,7 +3,7 @@
 """Board client → propagation `_TaskCreator` adapter.
 
 Wraps a `operations_center.adapters.board.BoardClient` so
-the propagator stays decoupled from Plane's API shape. The adapter
+the propagator stays decoupled from the board's API shape. The adapter
 honors `promote_to_ready` by calling `transition_issue` to "Ready for
 AI" after creation; otherwise the task stays in the default "Backlog"
 state.
@@ -17,7 +17,7 @@ from operations_center.adapters.board import BoardClient
 
 
 @dataclass
-class PlaneTaskCreator:
+class BoardTaskCreator:
     """Adapter implementing the propagator's `_TaskCreator` protocol."""
 
     client: BoardClient
@@ -32,7 +32,7 @@ class PlaneTaskCreator:
         labels: tuple[str, ...],
         promote_to_ready: bool,
     ) -> str:
-        """Create the Plane issue. Promote to Ready if the policy says so."""
+        """Create the board issue. Promote to Ready if the policy says so."""
         result = self.client.create_issue(
             name=title,
             description=body,
@@ -48,4 +48,4 @@ class PlaneTaskCreator:
         return issue_id
 
 
-__all__ = ["PlaneTaskCreator"]
+__all__ = ["BoardTaskCreator"]

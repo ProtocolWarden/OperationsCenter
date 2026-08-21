@@ -48,6 +48,30 @@ There is no `provider` field on `GitSettings` (`config/settings.py:32`), so the
 key is silently ignored — the example promises configuration that does nothing.
 Either add the field or delete the line.
 
+### Retire the Plane wire names — they outlived the adapter
+
+The 2026-08-18 cutover deleted the Plane adapter but left its vocabulary in
+live code. The cosmetic half is done (see Done, 2026-08-19); what remains are
+names that are **not** cosmetic because something outside the process reads
+them, so each needs a compatibility shim rather than a rename:
+
+  - `plane_task_id` — `pr_review_watcher/main.py` reads it out of the
+    **on-disk review state** (`state.get("plane_task_id")`, ~8 sites). A bare
+    rename orphans every in-flight review at the moment it deploys.
+  - `plane_issue_id` — written into **proposer artifacts** and read back by
+    `decision/service.py` (`item.get("plane_issue_id")`). Same problem across
+    artifacts already on disk.
+  - `"plane"` as an **alert channel name** — `observer/alert_channels.py`
+    (`self.name = "plane"`), and `alert_config.py` both validates against
+    `{"operator_log", "plane", "slack", "pagerduty"}` and ships four default
+    routes using it. Operator alert config names this channel, so renaming it
+    is a config break.
+  - `entry["plane"]` — an emitted key in the `custodian_sweep` report.
+
+Shape of the fix: write the new key, read both, drop the old read a release
+later. Worth doing — `plane_task_id` in a Forgejo-only system actively
+misleads — but it is a migration, not a cleanup.
+
 ### Split extraction_health_history.py, or the C29 exclusion becomes permanent
 - The module was at exactly 500 lines; #478's `edge_cases` field pushed it to 506 and
   it is now on the C29 exclusion list as an explicit deferral, not an exemption.
@@ -167,6 +191,55 @@ containers were raw `docker run` before, recorded nowhere),
 "Moving to another machine" runbook in `deploy/forgejo/README.md`.
 
 <details><summary>Original backlog entries (retired)</summary>
+
+### 2026-08-19: Plane leftovers swept, and two Up Next items closed as already-done (✅ COMPLETE)
+
+Follow-up to the cutover. Three separate things, all found by asking why the
+codebase still says "Plane" 2,000 times.
+
+**Cosmetic leftovers removed** (no behavior change — every rename below had
+exactly one importer or none):
+
+  - `propagation/plane_adapter.py` → `board_adapter.py`, `PlaneTaskCreator` →
+    `BoardTaskCreator`; sole importer is `entrypoints/propagate/main.py`.
+    Docstrings in `propagator.py` referenced `PlaneClient.create_issue` — a
+    class deleted in #521.
+  - `tests/test_plane_parsing.py` → `test_task_parsing.py`. It never tested
+    Plane; it tests `TaskParser`.
+  - `docs/design/plane_kodo_wrapper.md` → `docs/history/plane-kodo-wrapper.md`,
+    `status: implemented` → `superseded`. It sat in `design/` (live docs)
+    describing both a retired board and a retired engine.
+
+**A real bug behind one of them.** `config/plane_task_template.example.md` was
+a stale copy of what `render_task_template()` generates (it still told the
+operator to describe the change "you want Kodo to make"). Nothing read it —
+`oc setup` writes `config/task_template.local.md`. But `.gitignore`,
+`docs/operator/setup.md`, and **both secrets scripts** still pointed at the
+dead `plane_task_template.local.md` path, so `backup-secrets.sh` was backing
+up a file that never exists and the template the operator actually has was in
+no backup at all. All four repointed at the real path; the stale example
+deleted. Also dropped three `.gitignore` entries for `deployment/plane/**` and
+`tools/report/kodo_plane/` — none of those directories exist.
+
+**Both Up Next items were already done, just unrecorded:**
+
+  - *CI runs ~1,830 fewer tests* — closed by #525, and the coverage survived
+    the #527 port: `.forgejo/workflows/ci.yml` job `test-rest`
+    ("Test (suites outside tests/unit)") runs `pytest -q tests/ --ignore=tests/unit`.
+  - *`audit` on Forgejo Actions* — the runner is installed and registered
+    (`forgejo-runner` container up, Actions jobs executing), the workflow is
+    ported as `.forgejo/workflows/custodian-audit.yml`, and live branch
+    protection on `main` requires
+    `['custodian-audit / audit (pull_request)', 'reviewer-verdict']` with
+    `apply_to_admins: true`. Note the spec's "identical context name"
+    requirement was met the other way round — the required-context list was
+    updated to the Forgejo name rather than the name being preserved. The
+    cutover is live: `pr_backend: forgejo` in `operations_center.local.yaml`.
+
+What was deliberately **not** touched: the Plane names that are wire formats
+(`plane_task_id`, `plane_issue_id`, the `"plane"` alert channel). Those read
+persisted state and operator config, so they need a shim, not a rename — see
+Up Next.
 
 ### CI runs ~1,830 fewer tests than the repo has (caused a red main on 2026-08-19)
 

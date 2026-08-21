@@ -11,7 +11,7 @@ Usage::
 
 Composes the EffectiveRepoGraph from the configured platform_manifest
 block, walks the contract-impact set for the target, and (per the
-contract_change_propagation policy) creates Plane tasks for downstream
+contract_change_propagation policy) creates board tasks for downstream
 consumers. Always writes a structured PropagationRecord to
 ``<settings.contract_change_propagation.record_dir>/<run_id>.json``.
 
@@ -44,7 +44,7 @@ from operations_center.propagation import (
     PropagationRegistry,
     PropagationSettings,
 )
-from operations_center.propagation.plane_adapter import PlaneTaskCreator
+from operations_center.propagation.board_adapter import BoardTaskCreator
 from operations_center.propagation.policy import _Action, _PairOverride
 from operations_center.repo_graph_factory import (
     build_effective_repo_graph_from_settings,
@@ -82,7 +82,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--dry-run",
         action="store_true",
-        help="Skip Plane API calls; record what would be created. Forces a "
+        help="Skip board API calls; record what would be created. Forces a "
         "fake task creator that returns synthetic IDs.",
     )
     p.add_argument(
@@ -135,8 +135,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.dry_run:
         task_creator = _DryRunTaskCreator()
     else:
-        plane_client = make_board_client(settings)
-        task_creator = PlaneTaskCreator(client=plane_client)
+        board_client = make_board_client(settings)
+        task_creator = BoardTaskCreator(client=board_client)
 
     propagator = ContractChangePropagator(
         policy=policy,
@@ -189,7 +189,7 @@ def _build_policy(pcfg: ContractChangePropagationSettings) -> PropagationPolicy:
 
 
 class _DryRunTaskCreator:
-    """Stand-in task creator that doesn't hit Plane. Used for --dry-run."""
+    """Stand-in task creator that doesn't hit the board. Used for --dry-run."""
 
     def __init__(self) -> None:
         self._next = 0

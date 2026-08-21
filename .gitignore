@@ -23,11 +23,8 @@ __pycache__/
 .ruff_cache/
 .env.operations-center.local
 config/operations_center.local.yaml
-config/plane_task_template.local.md
+config/task_template.local.md
 logs/
-deployment/plane/runtime/
-deployment/plane/logs/
-tools/report/kodo_plane/
 tools/report/operations_center/
 state/
 .review/

@@ -23,3 +23,6 @@ and [PlatformDeployment/docs/architecture/](https://github.com/ProtocolWarden/Pl
   logs from the autonomous-spec-driven-chain era.
 - **runtime-truth-remediation-summary.md** — Summary of the runtime-truth
   remediation pass.
+- **[plane-kodo-wrapper.md](plane-kodo-wrapper.md)** — The original Plane board +
+  kodo engine integration design. Superseded on both halves: the board is
+  Forgejo, and the engine is selected per task.
