@@ -1,3 +1,74 @@
+## 2026-08-21 — four answers to "is CI green", three of them wrong
+
+`_phase0_ci_fix` decided CI was green with a bare `if not failed:`. It logged
+"PR #6 CI green, advancing to self_review" two seconds after discovering the PR,
+before Actions had posted anything at all, and a SUCCESS `reviewer-verdict`
+followed. Nothing bad merged — the last-resort gate in `_merge_and_done` refetches
+CI and refused — but a green verdict on a build that had not started is a
+guardrail reporting a result it did not have.
+
+The same defect was fixed three times in the self-review precondition (#269,
+#405/#406, #503) and never propagated, because the four sites had each derived
+their own rule and no test covered this one. Now there is one definition,
+`_ci_status` / `_CIStatus.green`, and it is the strict one:
+
+* nothing FAILED, and
+* nothing PENDING — no failure yet is not a pass, and
+* at least one COMPLETED check on THIS head — a freshly pushed or auto-rebased
+  head has no results, so empty-failed plus empty-pending would otherwise read
+  as green on a commit CI never saw, and
+* every configured required check REGISTERED, and
+* the query itself did not raise.
+
+That last one was its own bug. `_ci_checks_failing` caught every exception and
+returned `[]`, and its docstring asserted the equivalence outright ("or [] if all
+green"), so an API outage was indistinguishable from a passing build. `error` is
+now a field: not green, and not red either — there is nothing for a fix pass to
+act on, so the caller waits and asks again.
+
+Applied at three sites. The fourth — the self-review precondition — keeps its
+inline form: it is the version that was already correct, and each of its four
+guards escalates differently (adaptive wait thresholds, distinct escalation
+reasons), which does not collapse into a boolean. The helper is that gate's rule
+extracted, and its docstring says so.
+
+Liveness, because fail-closed can also mean fail-stuck: phase 0 now waits at
+most `_MAX_CI_SETTLE_CYCLES` (10 polls) for CI to settle, then advances to review
+with a WARNING naming the reason. Without the bound, a repo with no CI at all —
+indistinguishable from "CI has not started" unless `required_checks` is
+configured, and OC does not configure it — would park every PR forever.
+Advancing costs a review pass, never a merge: the merge gate re-checks CI.
+
+Tests: 12, in `tests/unit/reviewer/test_ci_green_definition.py`. Verified they
+catch the defect — stashing the source fix fails 11 of them. Existing reviewer
+suites unchanged: 198 unit + 101 integration pass.
+
+## 2026-08-21 — what the fleet's own logs said when it came back up
+
+Restarting the review watcher to unblock PR #6 turned up three things the
+migration left behind, none of which announce themselves at startup:
+
+* **The executor repos are not on this machine, and not on the forge.**
+  `ensure_executor_backends()` warned for all three — TeamExecutor, DAGExecutor,
+  CritiqueExecutor — and its self-heal reinstalls from SIBLING CHECKOUTS that do
+  not exist here. The forge hosts OperationsCenter, PlatformManifest and
+  PrivateManifest only, so "no GitHub access is required" in the migration
+  bundle holds for review and breaks for execution. Review works because it
+  shells out to `claude` directly.
+* **SwitchBoard is not running.** The fix pass for PR #6 died on "SwitchBoard
+  unreachable at http://localhost:20401 ... Connection refused" and logged
+  "pushed no changes". The reviewer treats that as a no-progress fix attempt and
+  burns a ladder rung on it, so an infrastructure outage is being counted as an
+  unfixable PR.
+* **The containment self-check fails and nothing stops.** `bwrap` and `pasta` are
+  absent from this box; the watcher logs two ERROR lines and reviews anyway,
+  unsandboxed. The egress proxy is now up (it is in-repo and needs no root), so
+  that third failure is cleared. See the separate entry on the self-check.
+
+Also observed, worth its own investigation rather than a claim: the reviewer
+returned CONCERNS on PR #6's rebased head at 05:45, dispatched a fix pass that
+pushed nothing (SwitchBoard), and then returned LGTM on the SAME unchanged head
+at 05:48. Same diff, two verdicts, three minutes apart.
 ## 2026-08-21 — a fix that existed in only one of two clones
 
 The registry commit below was written on 2026-08-20 in a SECOND checkout of this

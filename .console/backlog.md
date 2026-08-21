@@ -6,6 +6,13 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ### The reviewer posts a green verdict without CI (guardrail path — needs K=3 council)
 
+**Fix in review** on `fix/ci-green-one-definition`: `_ci_status`/`_CIStatus.green`
+is now the single definition, applied at phase 0, the escalation retraction and
+the no-progress merge; the self-review precondition keeps its inline form (see
+the 2026-08-21 log entry for why). Twelve tests cover the branch that had none.
+The prefix-allowlist question below is NOT addressed by that PR and still wants
+a deliberate decision.
+
 `_phase0_ci_fix` (`entrypoints/pr_review_watcher/main.py:2360`) is a bare
 `if not failed:`. No pending guard, no completed-non-empty guard. On Forgejo PR
 #2 it logged "PR #2 CI green, advancing to self_review" **two seconds** after
@@ -28,6 +35,37 @@ should mirror `:3128` (`not failed and not pending and completed`), ideally as
 one shared `_ci_is_green()` used by all four call sites.
 
 `pr_review_watcher/**` is a guardrail path, so this needs the K=3 council.
+
+### The three executor backends are on neither this machine nor the forge
+
+- `ensure_executor_backends()` (`scripts/operations-center.sh`) warns for TeamExecutor,
+  DAGExecutor and CritiqueExecutor on every fleet command here, and its self-heal
+  reinstalls from sibling checkouts (`../TeamExecutor` etc.) that do not exist.
+- The forge hosts three repos and none of them is an executor, so the migration
+  bundle's "no GitHub access is required" is true for review and false for
+  execution. Any goal/test/improve task will fail at execute.
+- Decide where they live: mirrored onto the forge (consistent with the cutover),
+  or documented as a GitHub dependency the fleet still has. The current state is
+  the third option — neither — and it only shows up as a warning nobody reads.
+
+### SwitchBoard is down, and the reviewer counts that as the PR's fault
+
+- The PR #6 fix pass died on `SwitchBoard unreachable at http://localhost:20401 ...
+  Connection refused` and logged "pushed no changes" — which the ladder counts as a
+  no-progress attempt (2/6) against the PR.
+- Two separate things: start the service on this box, and stop attributing an
+  infrastructure outage to the PR. A fix pass that could not plan should not
+  consume a fix attempt.
+
+### OC configures no required_checks, so Guard D is inert on its own PRs
+
+- `required_checks` is a `RepoSettings` field (`config/settings.py:477`) and
+  `config/operations_center.local.yaml` sets it for no repo.
+- Consequence: the "every required check has registered" guard compares against an
+  empty list and always passes, and phase 0 cannot tell "this repo has no CI" from
+  "CI has not started yet" — which is why its settle-wait has to be bounded.
+- Setting it to the two contexts branch protection already requires
+  (`custodian-audit / audit`, `reviewer-verdict`) would make the guard real.
 
 ### Run the CI stress hunt on an idle runner
 
