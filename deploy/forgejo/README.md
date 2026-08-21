@@ -186,6 +186,12 @@ for v in forgejo-data forgejo-runner-data; do
   docker volume create "$v"
   docker run --rm -v "$v":/to -v "$PWD":/from alpine tar xzf "/from/$v.tgz" -C /to
 done
+
+# The runner joins the host docker group to reach the socket, and that GID
+# differs per machine -- so compose reads it from a gitignored .env here.
+printf 'DOCKER_GID=%s
+' "$(getent group docker | cut -d: -f3)" > deploy/forgejo/.env
+
 docker compose -f deploy/forgejo/docker-compose.yml up -d
 ./deploy/forgejo/push-ci-runner.sh
 ```
@@ -215,6 +221,21 @@ hands that URL to job containers for `actions/checkout`, so it must resolve
 the container's own localhost, and every job dies at `git exit 128`.
 
 Change one and you must change the other. They are a pair.
+
+There is a third member of that pair, and it bites at a different layer. The
+runner *daemon* connects to the address recorded in `.runner` inside
+`forgejo-runner-data`, which is `http://localhost:3000`. On a bridge network
+that is the runner's own localhost, so the daemon never reaches the forge at
+all -- it dies before polling, with
+
+    fail to invoke Declare ... dial tcp [::1]:3000: connect: connection refused
+
+which looks nothing like the `git exit 128` the job containers give you. That is
+why the runner service sets `network_mode: host` as well: it makes the daemon's
+registered address mean the same thing as `ROOT_URL` and as
+`container.network: host`. Restoring a volume brings the old `.runner` with it,
+so the address is whatever the *old* machine used -- keeping host networking is
+what lets the same registration keep working instead of re-registering.
 
 ### Known operational wrinkles
 
