@@ -15,7 +15,7 @@ docker run --rm -v forgejo-runner-data:/data --network host \
     --instance http://localhost:3000 \
     --token "$TOKEN" \
     --name oc-local-runner \
-    --labels ubuntu-latest:docker://oc-ci-runner:latest
+    --labels ubuntu-latest:docker://localhost:3000/operations_center_admin/oc-ci-runner:latest
 
 # The label mapping and the job network live in config.yml, so install it
 # BEFORE starting the daemon and pass --config. A daemon started without it
@@ -25,7 +25,7 @@ docker cp deploy/forgejo/runner-config.yml forgejo-runner-data-helper:/data/conf
   2>/dev/null || docker run --rm -v forgejo-runner-data:/data -v "$PWD/deploy/forgejo":/src \
   alpine cp /src/runner-config.yml /data/config.yml
 
-docker build -t oc-ci-runner:latest deploy/forgejo/ci-runner/
+./deploy/forgejo/push-ci-runner.sh   # builds the image AND publishes it to Forgejo
 
 docker run -d --name forgejo-runner --restart unless-stopped \
   -v forgejo-runner-data:/data \
@@ -41,7 +41,8 @@ debugging time:
 * The label mapped `ubuntu-latest` to `node:20-bookworm`. That image has no
   Python tool cache, so `actions/setup-python` fails every job with
   `The version '3.11' with architecture 'x64' was not found` — see
-  `ci-runner/Dockerfile` for why. Map it to `oc-ci-runner:latest`.
+  `ci-runner/Dockerfile` for why. Map it to `localhost:3000/operations_center_admin/oc-ci-runner:latest` --
+  the registry path, not the bare name, so a missing image can re-pull.
 * The daemon was started without `--config`, so `runner-config.yml` — which is
   what sets `container.network: host` — was never read.
 
@@ -110,9 +111,9 @@ docker compose -f deploy/forgejo/docker-compose.yml up -d forgejo
    value** — see that file's example for why command substitution hangs the
    daemons.
 
-4. Register the runner and start it — the "Runner" section above. Build
-   `oc-ci-runner:latest` before starting the daemon, or every job fails at
-   image pull.
+4. Register the runner and start it — the "Runner" section above. Publish the
+   job image with `./deploy/forgejo/push-ci-runner.sh` before starting the
+   daemon, or every job fails at image pull.
 
 5. Apply branch protection. It is not in any backup and a fresh instance starts
    **unprotected**, which is the failure mode that looks fine:
@@ -192,12 +193,14 @@ printf 'DOCKER_GID=%s
 ' "$(getent group docker | cut -d: -f3)" > deploy/forgejo/.env
 
 docker compose -f deploy/forgejo/docker-compose.yml up -d
-docker build -t oc-ci-runner:latest deploy/forgejo/ci-runner/
+./deploy/forgejo/push-ci-runner.sh
 ```
 
-The `oc-ci-runner` image must be **built**, not restored — it is in no volume,
-and `runner-config.yml` maps `runs-on: ubuntu-latest` to it by name. If it is
-missing, every job fails at image pull.
+The `oc-ci-runner` image no longer has to be rebuilt from scratch here. It is
+published to this Forgejo's own container registry, so its blobs ride along
+inside `forgejo-data` and the runner re-pulls them on the first job. Running
+`push-ci-runner.sh` at this point is belt-and-braces — it is strictly required
+only if you restored without that volume, or changed `ci-runner/Dockerfile`.
 
 ### 3. Verify before trusting it
 
@@ -250,3 +253,14 @@ what lets the same registration keep working instead of re-registering.
   an `actions/python-versions` repo that does not exist. The tool cache baked
   into `ci-runner/Dockerfile` is what makes it a no-op. Do not "simplify" that
   image away.
+* **The job image is pulled anonymously, and that depends on owner visibility.**
+  `runner-config.yml` points `ubuntu-latest` at
+  `localhost:3000/operations_center_admin/oc-ci-runner:latest`, and the runner
+  fetches it with no credentials because that owner is public. Flip the account
+  to private and every job starts failing at image pull with a 401 — the same
+  class of misleading auth error this setup exists to prevent. Only
+  `push-ci-runner.sh` needs a login; the runner never does.
+* **Publishing the image is a manual step, deliberately.** A workflow cannot
+  rebuild it: the workflow itself `runs-on: ubuntu-latest`, which *is* this
+  image, so a CI-driven rebuild cannot run when the image is what is missing.
+  After changing `ci-runner/Dockerfile`, run `push-ci-runner.sh` by hand.

@@ -69,6 +69,30 @@ Also observed, worth its own investigation rather than a claim: the reviewer
 returned CONCERNS on PR #6's rebased head at 05:45, dispatched a fix pass that
 pushed nothing (SwitchBoard), and then returned LGTM on the SAME unchanged head
 at 05:48. Same diff, two verdicts, three minutes apart.
+## 2026-08-21 — a fix that existed in only one of two clones
+
+The registry commit below was written on 2026-08-20 in a SECOND checkout of this
+repo — `/mnt/c/Users/void/Documents/GitHub/OperationsCenter`, whose only remote
+is GitHub — and never reached the forge. It sat on a local branch there while
+the fleet clone in `~/GitHub` carried on without it, so the CI job image was
+still addressed by bare name in the config the runner actually reads.
+
+Two clones is not the problem by itself. What makes it one:
+
+* The same commits have DIFFERENT hashes in the two clones (`#3` is `0f11e3f6`
+  on GitHub and `cc540e45` on Forgejo), so "mirror" is aspirational — nothing
+  can be compared by SHA, and `git log` in one is not evidence about the other.
+* The GitHub side is a commit behind (no `#4`), and nothing reports that.
+* The Windows clone has no Forgejo remote at all, so work committed there has no
+  path to `main` except a hand-carried patch. This is that patch, applied with
+  `git am` onto `origin/main` so authorship and the original message survive.
+
+The forge is authoritative. Treat the Windows checkout as read-only history
+until it is repointed or deleted.
+
+Verified before pushing: the image really is in the forge's own registry
+(`Operations_Center_Admin/oc-ci-runner:latest`, two digests), so the fallback
+the commit describes is live and not just documented.
 
 ## 2026-08-20 — the compose file had never actually been run
 
