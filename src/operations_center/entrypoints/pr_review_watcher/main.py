@@ -51,7 +51,7 @@ import tempfile
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from operations_center.close_invariants import (
     branch_delete_allowed_after_close,
@@ -2099,6 +2099,14 @@ def _custodian_findings(oc_root: Path, repo_key: str, settings) -> str:
 _MAX_CI_FIX_ATTEMPTS = 3
 _CI_FIX_WAIT_SECONDS = 120  # wait after pushing before re-checking CI
 
+# How many polls phase 0 waits for CI to SETTLE (nothing failing, nothing
+# running, something reported) before giving up and reviewing anyway. Bounded
+# because "no check has reported" is indistinguishable from "this repo has no
+# CI" without a configured required_checks list, and a repo without CI must not
+# park forever. Advancing costs a review pass, never a merge: the merge gate
+# re-checks CI independently.
+_MAX_CI_SETTLE_CYCLES = 10
+
 # Checks whose failure we fix with a local ruff codemod (deterministic, no agent).
 _AUTOFIX_CHECK_NAMES = {"lint (ruff)", "ruff", "lint"}
 
@@ -2178,14 +2186,122 @@ def _format_audit_concerns(findings: list[str]) -> str:
     )
 
 
-def _ci_checks_failing(
-    gh_client, owner: str, repo: str, pr_number: int, ignored: list[str]
-) -> list[str]:
-    """Return names of currently failing (non-ignored) checks, or [] if all green."""
+class _CIStatus(NamedTuple):
+    """The CI picture for one PR head, and the single definition of "green".
+
+    Four automated decisions turn on whether CI is green: advancing out of
+    ``ci_fix``, retracting a CI-green escalation, the self-review
+    precondition,
+    and the no-progress merge. Each had re-derived its own answer, and the same
+    defect — treating "nothing has failed" as "everything has passed" — was
+    fixed three times in the self-review gate (#269, #405/#406, #503) without
+    reaching the other three. This type is that gate's rule, extracted, so
+    there is one place to be right.
+
+    A head is green only when all five hold:
+
+    * ``failed`` empty — no check reported a failure.
+    * ``pending`` empty — nothing is still queued or running. No failure YET
+      is not a pass.
+    * ``completed`` non-empty — CI has actually reported on THIS head. A
+      freshly pushed or auto-rebased head has no results at all, and
+      empty-failed plus empty-pending would otherwise read as green on a
+      commit CI never saw.
+    * ``missing_required`` empty — every configured required check
+      registered. A required job in a separate workflow that has not started
+      yet is invisible to both ``failed`` and ``pending``.
+    * ``error`` is None — the query itself succeeded.
+
+    ``error`` is a field rather than an empty ``failed`` list because those
+    two were indistinguishable: the old helper returned an empty list from its
+    except branch, so an API outage was reported as a green build.
+    """
+
+    failed: list[str]
+    pending: list[str]
+    completed: list[str]
+    missing_required: list[str]
+    error: str | None
+
+    @property
+    def green(self) -> bool:
+        """True only when CI has SETTLED on this head with everything passing."""
+        return not (self.error or self.failed or self.pending or self.missing_required) and bool(
+            self.completed
+        )
+
+    @property
+    def why_not_green(self) -> str:
+        """A short, specific reason — for logs that must not say "CI green" vaguely."""
+        if self.error:
+            return f"CI query failed ({self.error}) — unknown, not green"
+        if self.failed:
+            return f"{len(self.failed)} failing: {', '.join(self.failed[:5])}"
+        if self.pending:
+            return f"{len(self.pending)} still running: {', '.join(self.pending[:5])}"
+        if not self.completed:
+            return "no checks have reported on the current head yet"
+        if self.missing_required:
+            return f"required checks not registered: {', '.join(self.missing_required)}"
+        return "green"
+
+
+def _ci_status(
+    gh_client,
+    owner: str,
+    repo: str,
+    pr_number: int,
+    *,
+    pr_data: dict | None = None,
+    ignored: list[str] | None = None,
+    required: list[str] | None = None,
+) -> _CIStatus:
+    """Fetch failed/pending/completed checks for a PR head as one settled answer.
+
+    Fails CLOSED: any exception from the client is captured in error and the
+    result is never green. Callers must not treat an errored status as red
+    either — there is nothing to fix — they should wait and ask again.
+    """
+    ignored = list(ignored or [])
+    required = list(required or [])
     try:
-        return gh_client.get_failed_checks(owner, repo, pr_number, ignored_checks=ignored) or []
-    except Exception:
-        return []
+        failed = list(
+            gh_client.get_failed_checks(
+                owner, repo, pr_number, pr_data=pr_data, ignored_checks=ignored
+            )
+            or []
+        )
+        pending = list(
+            gh_client.get_incomplete_checks(
+                owner, repo, pr_number, pr_data=pr_data, ignored_checks=ignored
+            )
+            or []
+        )
+        completed = list(
+            gh_client.get_completed_checks(
+                owner, repo, pr_number, pr_data=pr_data, ignored_checks=ignored
+            )
+            or []
+        )
+    except Exception as exc:  # noqa: BLE001 - any client error means "unknown"
+        return _CIStatus(
+            failed=[],
+            pending=[],
+            completed=[],
+            missing_required=[],
+            error=f"{type(exc).__name__}: {exc}",
+        )
+
+    missing_required = [
+        rc for rc in required if not any(rc.lower() in name.lower() for name in completed)
+    ]
+    return _CIStatus(
+        failed=failed,
+        pending=pending,
+        completed=completed,
+        missing_required=missing_required,
+        error=None,
+    )
 
 
 def _phase0_audit_autofix(
@@ -2355,14 +2471,60 @@ def _phase0_ci_fix(
         return
 
     ignored = list(getattr(repo_cfg, "ci_ignored_checks", []) or [])
-    failed = _ci_checks_failing(gh_client, owner, repo, pr_number, ignored)
+    required = list(getattr(repo_cfg, "required_checks", []) or [])
+    ci = _ci_status(
+        gh_client,
+        owner,
+        repo,
+        pr_number,
+        pr_data=pr_data,
+        ignored=ignored,
+        required=required,
+    )
 
-    if not failed:
-        # CI is green — move straight to self_review
-        logger.info("pr_review_watcher: PR #%d CI green, advancing to self_review", pr_number)
+    if ci.green:
+        logger.info(
+            "pr_review_watcher: PR #%d CI settled green on this head, advancing to self_review",
+            pr_number,
+        )
         state["phase"] = "self_review"
+        state.pop("ci_settle_cycles", None)
         _save_state(state_path, state)
         return
+
+    if not ci.failed:
+        # Not green, but nothing has FAILED either: the query errored, checks are
+        # still running, nothing has reported on this head, or a required check
+        # has not registered. None of those is fixable by a fix pass, and none of
+        # them is evidence of green — which is exactly what this branch used to
+        # claim. Wait, bounded, and log the actual reason.
+        cycles = int(state.get("ci_settle_cycles", 0)) + 1
+        state["ci_settle_cycles"] = cycles
+        if cycles < _MAX_CI_SETTLE_CYCLES:
+            logger.info(
+                "pr_review_watcher: PR #%d CI not settled-green (%s, wait %d/%d) — "
+                "deferring self_review",
+                pr_number,
+                ci.why_not_green,
+                cycles,
+                _MAX_CI_SETTLE_CYCLES,
+            )
+            _save_state(state_path, state)
+            return
+        logger.warning(
+            "pr_review_watcher: PR #%d CI never settled after %d polls (%s) — advancing to "
+            "self_review anyway; the merge gate still re-checks CI, so this cannot merge red",
+            pr_number,
+            cycles,
+            ci.why_not_green,
+        )
+        state["phase"] = "self_review"
+        state.pop("ci_settle_cycles", None)
+        _save_state(state_path, state)
+        return
+
+    state.pop("ci_settle_cycles", None)
+    failed = ci.failed
 
     # If we pushed a fix recently, wait for CI to re-run before acting again.
     last_push = state.get("ci_fix_last_push_at")
@@ -2969,23 +3131,23 @@ def _phase1(
                     _rhead = ((pr_data.get("head") or {}).get("ref") or "").lower()
                     if _rhead.startswith(("goal/", "test/", "improve/", "spec-author/")):
                         _rignored = list(getattr(_rcfg, "ci_ignored_checks", []) or [])
+                        _rrequired = list(getattr(_rcfg, "required_checks", []) or [])
                         try:
-                            _rfailed = gh_client.get_failed_checks(
+                            # Settled-and-green only, via the shared definition. The
+                            # old test here was 'no failures and nothing pending',
+                            # which a head with NO reported checks satisfies —
+                            # retracting a human escalation on a build that never
+                            # ran.
+                            _rci = _ci_status(
+                                gh_client,
                                 owner,
                                 repo,
                                 pr_number,
                                 pr_data=pr_data,
-                                ignored_checks=_rignored,
+                                ignored=_rignored,
+                                required=_rrequired,
                             )
-                            # Settled-and-green only: don't retract while checks run.
-                            _rpending = gh_client.get_incomplete_checks(
-                                owner,
-                                repo,
-                                pr_number,
-                                pr_data=pr_data,
-                                ignored_checks=_rignored,
-                            )
-                            if not _rfailed and not _rpending:
+                            if _rci.green:
                                 _retract_flag(
                                     state,
                                     gh_client,
@@ -3823,26 +3985,20 @@ def _dispatch_verdict_outcome(
             ):
                 try:
                     _ign_np = list(getattr(_rcfg_np, "ci_ignored_checks", []) or [])
-                    _failed_np = gh_client.get_failed_checks(
-                        owner, repo, pr_number, pr_data=pr_data, ignored_checks=_ign_np
-                    )
-                    # Only merge on CI that has SETTLED — never while checks are still
-                    # running (no failure yet != green) and never on a head with no
-                    # reported checks at all (Guard C: gating green must be on THIS head).
-                    _pending_np = gh_client.get_incomplete_checks(
-                        owner, repo, pr_number, pr_data=pr_data, ignored_checks=_ign_np
-                    )
-                    _completed_np = gh_client.get_completed_checks(
-                        owner, repo, pr_number, pr_data=pr_data, ignored_checks=_ign_np
-                    )
-                    # Guard D: every required check must be present and passing too.
                     _required_np = list(getattr(_rcfg_np, "required_checks", []) or [])
-                    _missing_np = [
-                        rc
-                        for rc in _required_np
-                        if not any(rc.lower() in name.lower() for name in _completed_np)
-                    ]
-                    if not _failed_np and not _pending_np and _completed_np and not _missing_np:
+                    # Only merge on CI that has SETTLED on THIS head with every
+                    # required check present — the shared definition, so this path
+                    # cannot drift from the self-review precondition again.
+                    _ci_np = _ci_status(
+                        gh_client,
+                        owner,
+                        repo,
+                        pr_number,
+                        pr_data=pr_data,
+                        ignored=_ign_np,
+                        required=_required_np,
+                    )
+                    if _ci_np.green:
                         logger.info(
                             "pr_review_watcher: PR #%d repeated no-progress after "
                             "CI-green retraction budget exhausted; CI still green — "

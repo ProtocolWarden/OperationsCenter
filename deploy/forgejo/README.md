@@ -115,8 +115,11 @@ docker compose -f deploy/forgejo/docker-compose.yml up -d forgejo
    job image with `./deploy/forgejo/push-ci-runner.sh` before starting the
    daemon, or every job fails at image pull.
 
-5. Apply branch protection. It is not in any backup and a fresh instance starts
-   **unprotected**, which is the failure mode that looks fine:
+5. Apply branch protection. It lives in the forge's database, so a FRESH instance
+   like this one starts **unprotected** — the failure mode that looks completely
+   fine. (Restoring a volume backup is different: protection comes back with the
+   database. See "Moving to another machine" below, where you verify rather than
+   apply.)
 
 ```bash
 ./deploy/forgejo/apply-branch-protection.sh
