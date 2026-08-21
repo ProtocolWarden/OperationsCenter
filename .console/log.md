@@ -1,3 +1,44 @@
+## 2026-08-21 — the volumes are per-instance state, not an artifact to hand over
+
+README covers taking YOUR OWN state to a new machine. It does not say what a
+SECOND person does, and the obvious reading — copy the volumes — does not work.
+`deploy/forgejo/VOLUMES.md` records why, because the answer shapes any sync
+mechanism built on top of it later.
+
+Three things bind the contents to one instance:
+
+* `forgejo-runner-data` holds `.runner`, whose keys are `id uuid name token
+  address labels`. That token was minted by one forge and names the address it
+  registered against, so it does not survive being handed over.
+* Everything in `forgejo-data` is owned by a numeric user id, so copying the
+  volume copies the accounts — including the admin. That is credential-adjacent
+  state, not data.
+* The registry path IS the account name
+  (`localhost:3000/operations_center_admin/oc-ci-runner:latest`), so a different
+  owner is a different path and `runner-config.yml` has to say so.
+
+What travels between people is this repo — the code and the procedure. What each
+person builds locally is the state. Conflating the two is what makes "sync the
+volumes" sound simpler than it is.
+
+The doc also names the three separate places the API token hides: the env file,
+the `clone_url` in `config/operations_center.local.yaml`, and the working
+clone's git remote. Rotating it means all three. Miss the remote and the API
+keeps working while `git push` starts failing, which reads as a network fault
+rather than a credential one.
+
+Sizing, recorded because it is easy to be wrong by an order of magnitude:
+`forgejo-data` went from 78 MB to 618 MB when the CI job image was published
+into the forge's own registry. The image is ~2 GB uncompressed and lands as
+roughly 540 MB of blobs. That is deliberate — it is what lets the image travel
+with the forge instead of being rebuilt on arrival — but every backup archive
+now carries it, and the containers must be stopped before one is taken or the
+archive captures SQLite mid-write.
+
+Deliberately unanswered: keeping ONE person's volumes in step across their own
+machines. Different problem, different mechanism; this only establishes what is
+per-instance so that design does not try to move state that cannot move.
+
 ## 2026-08-21 — four answers to "is CI green", three of them wrong
 
 `_phase0_ci_fix` decided CI was green with a bare `if not failed:`. It logged
