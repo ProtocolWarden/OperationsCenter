@@ -4,6 +4,19 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## Up Next
 
+### The watchdog prompts point at a home directory that does not exist
+
+`.console/watchdog_loop_prompt.md` and `.console/haiku_collector_prompt.md` both
+hardcode `/home/dev/Documents/GitHub/OperationsCenter`. On this box there is no
+`/home/dev` — the only home is `/home/void`, with the repo at
+`/home/void/GitHub/OperationsCenter`. If the loop runs here, its first `Read`
+fails before STEP 0.
+
+Left alone during the capture-gate work because it is unclear whether the loop
+executes on this host, in a container, or on another machine; the paths may be
+correct somewhere. Someone who knows the runtime should either fix them or
+record where `/home/dev` is real. The capture-gate additions use repo-relative
+paths, which the collector prompt's own STEP 0 already does.
 ### Verify the restored forge on the new machine, before trusting any gate
 
 The fleet was archived on 2026-08-20 and moves to a different host. Restoring a
@@ -60,6 +73,18 @@ one shared `_ci_is_green()` used by all four call sites.
 
 `pr_review_watcher/**` is a guardrail path, so this needs the K=3 council.
 
+### A private repo name sits in a tracked file RC2 does not scan
+
+- RC2 scans `.console/**`. The same scrub-target name the gate caught in the log is
+  also in `tools/audit/report/final_verification/managed_repo_audit_system_final_verification.json`
+  — tracked, on both the forge and the public GitHub mirror, and passing a clean
+  audit because of the path scope.
+- Two decisions, not one: whether that audit artifact should carry managed-repo
+  identities at all, and whether RC2's scope should widen beyond `.console/**`
+  (a name is no less disclosed for being in `tools/`).
+- Scrubbing forward will not remove it from GitHub's published history. The
+  mirror force-push would, for the `.console` occurrence, since it replaces that
+  commit — the `tools/` one predates the divergence and would survive.
 ### The three executor backends are on neither this machine nor the forge
 
 - `ensure_executor_backends()` (`scripts/operations-center.sh`) warns for TeamExecutor,
@@ -90,6 +115,35 @@ one shared `_ci_is_green()` used by all four call sites.
   "CI has not started yet" — which is why its settle-wait has to be bounded.
 - Setting it to the two contexts branch protection already requires
   (`custodian-audit / audit`, `reviewer-verdict`) would make the guard real.
+
+### The review member subprocess inherits the entire fleet environment
+
+- `_run_member_review` (`pr_review_watcher/main.py`) calls `subprocess.run(argv, cwd=tmp,
+  ...)` with no `env=`, so the `claude` process that reads the PR diff — the
+  least-trusted input the fleet handles — gets every variable the watcher was
+  started with, including the forge token.
+- The executor path on the same file already solved this: it builds
+  `build_allowlist_env()` precisely because "the reviewer's `_build_env` leaks the
+  full os.environ". The direct-review path never got the same treatment.
+- Not a wide-open hole: the invocation is `--permission-mode acceptEdits`, chosen
+  deliberately over `--dangerously-skip-permissions` because of this exact threat,
+  so an injected instruction gets file writes in a temp cwd and not Bash
+  (`member_runner.py` documents the reasoning and a verified escape attempt).
+  The gap is env minimization, not permissions.
+- Fixing it needs a host with `bwrap` available to test the wrapped path end to
+  end; on a box without it the change is unverifiable, which is how the stale
+  fail-open comments corrected in this commit got there.
+
+### Containment binaries are missing on the current host (operator action)
+
+- `bwrap` and `pasta` are both absent, so every executor/fix-pass dispatch fails
+  closed with `ContainmentRequiredError` and the boot self-check logs two ERROR
+  lines that nothing acts on. The egress proxy is in-repo and is running again.
+- `sudo apt install bubblewrap passt` — needs a password, so it cannot be done by
+  an agent session.
+- The stale `.env.operations-center.local` comment claiming "bwrap and pasta are
+  both installed on this machine" came from the old box and should be corrected
+  when they are installed.
 
 ### Run the CI stress hunt on an idle runner
 
@@ -170,12 +224,19 @@ misleads — but it is a migration, not a cleanup.
 - Vulture will keep reporting these params. That is correct — do not whitelist them; the
   finding disappears when the commands are implemented.
 
-### Vulture gate is false-green — ~620 real findings land on the next Custodian pin bump
-- OC's pinned Custodian (`d6ba8ab`) has a vulture adapter that appends tests/whitelist
-  paths AFTER `--min-confidence=`; vulture's argparse rejects that, exits 2 with empty
-  stdout, and the adapter reports clean. **Vulture has never actually run in CI.**
-- Fixed upstream in Custodian (paths before flags + returncode check). Once OC bumps the
-  pin, ~620 findings appear at once.
+### Vulture: the gate is real now — 589 findings sit below the threshold, unexamined
+- **The false-green is closed** (verified 2026-08-21). OC now pins Custodian
+  `7a780b7`, whose vulture adapter puts every PATH before the flags and checks the
+  return code — the comment explaining why is in `adapters/vulture.py`. Vulture
+  really runs: at `--min-confidence=60` it emits 589 findings on this tree, so an
+  empty report at the configured threshold is now evidence, not silence.
+- `.custodian/config.yaml` sets `vulture_min_confidence: 80`, where the repo is
+  clean. That is Custodian's own documented default rather than a number picked to
+  unblock a push (the config comment says so), but it does mean the 589 findings
+  between 60 and 80 have never been read by anyone.
+- What is left is a decision, not a bug: triage that band by confidence, or write
+  down that 80 is the standard and the band is deliberately out of scope. What must
+  not happen is the number quietly becoming a level nobody re-examines.
 - Triaged: 426 in `src/`, 195 in `tests/`; 32 at 100% confidence, 589 at 60%. By kind:
   302 variable, 127 attribute, 99 method, 86 function, 4 class, 3 property. The
   100%-confidence set splits into framework-signature false positives (`exc_val` in
@@ -219,6 +280,38 @@ misleads — but it is a migration, not a cleanup.
 
 
 ## Done
+
+### 2026-08-21: Capture gate for the watchdog collector handoff (✅ COMPLETE)
+
+PHASE 1 of `.console/watchdog_loop_prompt.md` now routes the Haiku sub-agent's
+output through `operations-center-collect` before PHASE 2 may read it. Closes
+the failure where a sub-agent dying after STEP 0 emitted `{"lock": "acquired"}`,
+which parsed cleanly and left PHASE 2 reading zero findings across every signal
+as a healthy fleet.
+
+Two independent layers, deliberately not conflated: validation (the report is
+shaped right) and fencing (the report has no authority). A schema-valid report
+still carries task titles and error strings from 17 repos into a prompt where
+Sonnet acts.
+
+* `observer/collector_schema.py` — OUTPUT SCHEMA as a fail-closed model
+  (`extra="forbid"`). `lock` carries the completeness contract: all sections
+  required unless it starts with `aborted:`, the one partial STEP 0 documents.
+* `entrypoints/collector/main.py` — `operations-center-collect`. Exit 0 / 1 / 5;
+  stdout is empty on rejection so PHASE 2 cannot misread a failed collection.
+  `--strict` fails on recovered drift (markdown fence, stray prose), which is
+  otherwise reported but tolerated.
+* `injection.py` — `COLLECTOR_PREAMBLE` + `wrap_untrusted_report`, a third
+  ingestion point alongside the reviewer and worker. Hostile text is fenced, not
+  scrubbed: scrubbing hides the attack, and the preamble makes an
+  instruction-shaped value a finding to report.
+
+Invariants pinned from the real inputs: `success_rate` is a percentage (0..100,
+matching `extraction_health_history.py:83`), `custodian.all_zero` may not
+contradict its own findings, `extracted_count <= total_count`.
+
+40 tests. Full suite 8659 passed, 11 skipped, 2 xfailed. Rationale and the
+rejected `cl`-side design in log.md 2026-08-21.
 
 ### 2026-08-19: Forgejo Actions CI + the bugs GitHub's runners hid (✅ COMPLETE)
 
@@ -418,7 +511,7 @@ green); worktrees lack the venv, the env file and the editable install, so bare
   all five behaviours smoke-tested through the real CLI. The 18 remaining failures in
   `tests/unit/observer/` reproduce with these changes stashed — pre-existing Windows
   `PermissionError: [WinError 32]` in tempfile handling, unrelated.
-### Vulture has never actually run in the audit gate (⚠️ OPEN — needs a decision)
+### Vulture has never actually run in the audit gate (✅ RESOLVED 2026-08-21 — pin 7a780b7 fixed the adapter; see the Up Next entry)
 - **Discovered**: 2026-08-04, while pinning vulture (below).
 - **Symptom**: the `audit` gate reports `VULTURE: status=pass count=0`. Run the same
   tool by hand and it emits **621 findings** and exits 3.

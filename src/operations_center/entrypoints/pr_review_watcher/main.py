@@ -915,8 +915,11 @@ def _run_pipeline(
         # battle-tested MINIMIZED env (build_allowlist_env strips the Plane token,
         # sibling-repo tokens and host secrets — the reviewer's _build_env leaks
         # the full os.environ, so without this the sandbox would just --setenv the
-        # crown-jewel tokens back in). Fail-open at every layer (§0.1): a missing
-        # bwrap degrades maybe_sandbox to the unwrapped cmd, never a halt.
+        # crown-jewel tokens back in). Fail-CLOSED since audit Track A3: a missing
+        # bwrap makes maybe_sandbox RAISE ContainmentRequiredError (unless
+        # OC_SANDBOX_REQUIRED=0), which fails this task with a visible fault
+        # rather than running it un-contained. §0.1 holds at fleet level, not at
+        # this call: the fleet keeps serving, this dispatch does not.
         if _sandbox_enabled():
             exec_env = build_allowlist_env(
                 oc_root, passthrough=git_token_passthrough(settings, repo_cfg)

@@ -1,3 +1,35 @@
+## 2026-08-22 — containment branch caught up to main, and the merge that could have eaten a live hotpatch
+
+Merged `origin/main` (218d11eb, all four of #13/#15/#10/#9 landed) into
+`fix/containment-iptables-gate`. Clean — no conflicts, `.console/backlog.md` and
+`.console/log.md` both auto-merged. The union driver was added to
+`.git/info/attributes` as instructed but was not needed.
+
+The part worth recording is what nearly went wrong. `~/GitHub/OperationsCenter`
+carries an UNCOMMITTED hotpatch to `pr_review_watcher/main.py` (the
+`OC_MERGE_METHOD` override that stops ancestry PRs being squashed), and this merge
+wanted to write that same file — main had picked up #9's corrected `fail-CLOSED`
+comment ~550 lines above the hotpatch. Git refuses a merge that would overwrite
+local changes, so the naive fixes are `git checkout -- <file>` (silently destroys
+the hotpatch) or `git add -A` (silently commits it into an unrelated PR). Both were
+avoided:
+
+1. `git diff -- <file> > /tmp/hotpatch.diff` plus a full copy of the file,
+2. drop the working-tree change, merge, then `git apply` the patch back,
+3. verify the split: index holds main's clean version (0 occurrences of
+   `OC_MERGE_METHOD`), working tree holds the patch (2). The commit therefore
+   cannot carry it, and the running fleet still gets it.
+
+On the window where the file briefly lacked the patch: a running Python process
+does not re-read a module from disk, so the watcher (holding it in memory) was
+never affected. Only a restart inside those seconds would have mattered, and the
+sole open PR is #16 — a content scrub whose value is not its second parent, so a
+squash of it would have been harmless anyway.
+
+This is the same trap as the editable-install finding, from the other direction:
+that clone's working tree is simultaneously a git workspace and live production
+code. `git add -A` there is never safe.
+
 ## 2026-08-21 — fix(containment): a missing iptables made egress confinement a no-op
 
 Found on this host: `iptables` had never been installed, and nothing in OC installs
@@ -47,6 +79,244 @@ driver needed). This entry was originally appended at the BOTTOM of this file, n
 the rotated 2026-06 entries; the file is newest-first, so it has been moved to the top
 where it belongs. Nothing about the entry's content changed.
 
+## 2026-08-21 — two comments that described the containment we used to have
+
+Chasing the boot-time `containment_selfcheck_failed` lines on the new host turned
+up documentation drift on the decision point itself, which is worse than the
+missing binaries.
+
+`maybe_sandbox`'s docstring ends "otherwise return `inner_cmd` unchanged
+(fail-open) ... never a halt (§0.1)". Its body has raised `ContainmentRequiredError`
+since audit Track A3 whenever `OC_SANDBOX_REQUIRED` is not explicitly `0`. The
+reviewer's call site repeats the same stale claim in a comment. Both now say what
+the code does: fail-CLOSED per task, with §0.1 holding at FLEET level — the task
+fails visibly, the fleet keeps serving.
+
+This is not academic on this box: `bwrap` and `pasta` are absent, so every
+executor and fix-pass dispatch fails closed. Anyone reading either comment would
+have concluded the opposite — that dispatches were silently running un-contained
+— and gone looking for the wrong problem.
+
+The review path is a separate story and is NOT sandboxed at all: `_run_member_review`
+runs `claude` directly, with no `env=`, so it inherits the whole fleet environment.
+That is deliberate to a point — `--permission-mode acceptEdits` was chosen over
+`--dangerously-skip-permissions` for exactly this threat, and `member_runner.py`
+records a verified Bash-escape refusal — but the env minimization the executor path
+does with `build_allowlist_env()` was never applied here. Backlogged rather than
+fixed: without `bwrap` on this host the wrapped path cannot be tested, and an
+unverifiable change to the code that produces every verdict is how the stale
+comments above happened in the first place.
+
+## 2026-08-21 — the vulture gate is real, and the backlog said otherwise
+
+The backlog claimed vulture had never run in CI, that OC pinned Custodian
+`d6ba8ab`, and that ~620 findings would land on the next pin bump. Checked
+instead of repeated:
+
+* OC pins `7a780b7`. Its `adapters/vulture.py` puts every path before the flags
+  and checks the return code, with a comment naming the exact bug (argparse
+  rejecting a positional after `--min-confidence=`, exit 2, empty stdout).
+* Run directly: `--min-confidence=60` → 589 findings, `--min-confidence=80` → none.
+  So the detector executes, and a clean report at the configured threshold is
+  evidence rather than silence.
+* `.custodian/config.yaml` sets 80, which its own comment defends as Custodian's
+  documented default rather than a number chosen to unblock a push.
+
+What is actually open is narrower than the item said: 589 findings live between
+60 and 80 and nobody has read them. Rewritten as a decision — triage the band or
+record that it is deliberately out of scope — instead of a fix.
+## 2026-08-21 — the mirror push would have deleted a file
+
+Asked to push GitHub `main` as a mirror of the forge, I compared the two first.
+They diverge at `9ec7e5b0` (#527), and not only by hash:
+
+* GitHub's #2 (`4a4eeb96`) and #3 (`0f11e3f6`) are content-IDENTICAL to the
+  forge's (`e76026c4`, `cc540e45`) — same trees, same commit timestamps, different
+  parents. Replacing them costs nothing.
+* GitHub also carries `39795136` (#528), which the forge has never had. It adds
+  `deploy/forgejo/LAN-ACCESS.md` — 188 lines on serving the forge to other
+  machines, the WSL2 NAT trap, firewall rules, scoped submitter accounts — plus
+  its log entry. A mirror push would have deleted both, silently.
+
+So the push is blocked on rescuing it first, which is this commit: `cherry-pick -x`
+onto `origin/main`. One conflict, in `deploy/forgejo/README.md`, where #6 added the
+host-networking paragraph and #528 added the LAN section immediately after it.
+Both are additive and unrelated; both kept, ours first.
+
+This is the SECOND commit found stranded on the GitHub side in one day (the
+first was the CI registry fix, rescued this morning). The pattern is not a
+coincidence: sessions that run in the Windows checkout can only reach GitHub,
+and nothing reports the divergence in either direction. Until that checkout is
+repointed at the forge or deleted, assume anything committed there is invisible
+here.
+
+The push itself is still blocked on a second thing, which is not mine to change:
+GitHub's `main` has `allow_force_pushes: false` with `enforce_admins: true` — the
+posture the operator deliberately kept on 2026-08-19 when the required status
+checks were dropped. Because the histories diverge, a mirror push must be a
+force push. Two ways out, and they are a real choice: lift force-push protection
+for the length of one push and end up with hash-identical mirrors forever after,
+or rebase the forge's unique commits onto GitHub's head and fast-forward, which
+needs no setting changed but leaves a third hash line to maintain.
+
+Rescuing it also caught a boundary leak. The pre-push gate refused the push with
+one MED RC2 finding: the entry #528 added to `.console/log.md` named a private
+repo literally. Scrubbed to a generic reference, the same treatment the earlier
+B1 scrub used — the identity was never the point of the sentence.
+
+Note where that leak has been living. #2 deleted `.github/workflows`, so nothing
+gated the push that put #528 on GitHub, and GitHub's `main` is public: the name
+has been readable there since 2026-08-20. Scrubbing forward does not remove it
+from published history — but the mirror force-push does, because it replaces
+that commit with this one. That is an argument for the force-push option rather
+than the rebase one.
+
+Second occurrence, and the gate does not see it: the same name is in
+`tools/audit/report/final_verification/managed_repo_audit_system_final_verification.json`,
+which is tracked on both sides. RC2's scope is `.console/**`, so a private name in
+`tools/**` passes a clean audit. Backlogged rather than swept up here — that file
+is an audit artifact and scrubbing it is a decision about the artifact, not a
+typo fix.
+## 2026-08-21 — the squash that quietly undid the reconciliation
+
+The reconciliation merge landed and the mirror still failed. PR #14 was merged
+with **squash**, which collapsed its two-parent commit to a single parent
+carrying the same tree. Everything looked merged. `github/main` stopped being an
+ancestor, so GH006 came straight back, and nothing in the PR view hinted at why.
+
+The cause was one line: `pr_review_watcher/main.py` hard-coded
+`merge_method="squash"` at its merge call, with no way to override it.
+
+Two things made this hard to see coming, and both are worth writing down.
+
+The fleet spent hours guarding the wrong thing. Several sessions had agreed that
+`_attempt_auto_rebase` would flatten the merge and coordinated to keep it away
+from #14. That function is misnamed: it runs `git merge --no-edit` in a
+throwaway worktree and only ever creates merge commits — its own docstring says
+"branch moves forward only — no force-push, no history rewrite". It was never
+the risk. The squash at the merge call was, and nobody had read it.
+
+Escalating the PR to "needs human" would not have saved it either. The watcher
+retracts that flag by itself once CI is green on an unchanged head, then resumes
+automated review and merges.
+
+Recovery was cheap because nothing was lost: the original two-parent commit was
+still sitting on `chore/reconcile-github-history`. Merging it back into `main`
+restores the ancestry and changes zero files.
+
+Which surfaced the last surprise. A reconciliation PR has an **empty diff**, and
+the watcher skips those — `empty diff PR #15, skipping` — so it never publishes
+`reviewer-verdict`, which is a required check. A correct, necessary PR was
+structurally unable to merge. The ancestry rules are now written down in
+`deploy/forgejo/MIRROR-ANCESTRY.md`, which also gives such a PR a real diff to
+review.
+
+The merge method is no longer hard-coded; it reads `OC_MERGE_METHOD` and still
+defaults to `squash`, so ordinary PRs are unaffected.
+
+## 2026-08-21 — a watchdog that cannot tell silence from health
+
+Started as a question about [amake](https://github.com/dottorblaster/amake), a
+make-like task runner for AI CLIs. Not integrating it: 3 stars, 32 commits, and
+`workers.yaml` already declares a strict superset of its feature set — backend
+ladder, retries, timeouts, budget guard, health-state scheduling, path
+allowlists. Two mismatches settle it beyond the checklist. Its unit is a
+one-shot prompt that returns and exits; ours is a 45-minute session iterating up
+to 200 times. And its containment story is `auto_approve = true` (which maps to
+`--dangerously-skip-permissions`) plus a container, where ours is a policy
+boundary *inside* the agent. Adopting it would flatten a distinction we built on
+purpose.
+
+One idea in it was worth taking. amake makes a task declare `capture = true`
+before a downstream task may read its output, which makes data flow between
+agent steps explicit and auditable. We had exactly one place crying out for
+that: PHASE 1 of the watchdog loop spawns a Haiku sub-agent and hands its stdout
+to PHASE 2, and the entire contract between them was a sentence of prose —
+"Emit exactly this JSON (no fences, no extra text)" — with PHASE 2 parsing
+whatever came back.
+
+The failure that enables is the specific one a watchdog must never have. A
+sub-agent that dies after STEP 0 emits `{"lock": "acquired"}`. That parsed. PHASE
+2 would then read zero custodian findings, zero ghosts, zero regressions and
+conclude the fleet was healthy. Absent signal and clean signal were literally
+the same bytes. `operations-center-collect` now validates against the OUTPUT
+SCHEMA and exits 1 on that input, writing **nothing** to stdout so PHASE 2 has
+nothing to misread. `lock` carries the completeness contract: every section is
+required unless `lock` starts with `aborted:`, which is the one partial STEP 0
+documents.
+
+Validation and fencing went in as two independent layers, because they are two
+different guarantees. Validation says the report is *shaped* right; the fence
+says it has no *authority*. A schema-valid report still carries task titles, PR
+text and error strings harvested from 17 repos into a prompt where Sonnet then
+commits code and transitions tasks — the threat `injection.py` exists for, and
+what #483 was about. Hostile text is fenced, deliberately **not** scrubbed:
+scrubbing hides the attack, while `COLLECTOR_PREAMBLE` tells PHASE 2 that a
+fenced value reading like an instruction is itself a finding to report.
+
+Three semantic invariants came out of reading the collector's real inputs rather
+than its schema. `success_rate` is a **percentage**, not a fraction — pinned to
+the 0..100 bound `extraction_health_history.py:83` already enforces, because a
+collector switching to fractions would emit 0.87 for 87% and trip a false
+extraction alarm every cycle. `custodian.all_zero` may not contradict its own
+findings, since PHASE 2 branches on the boolean and would never read the list.
+And `extracted_count` cannot exceed `total_count`.
+
+Two things I got wrong on the way. `exclude_none=True` on the re-serialization
+stripped `"error": null`, `"exit_code": null` and `"memory_free_gb": null` —
+nulls the OUTPUT SCHEMA documents as *values*, so the fix silently changed the
+shape PHASE 2 was written against; now only absent top-level sections drop. And
+a `.gitignore` block for `.console/tmp/` was pure dead weight: line 1 is already
+`.console/*`, and a `!` negation cannot fire inside an ignored directory. PHASE
+1 does `mkdir -p` instead.
+
+Deliberately NOT in `cl`, though that is where the request pointed. Three
+reasons. ContextLifecycle is an external dep pinned at v0.4.3, so a change there
+means clone, tag, and a pin bump across consumers. `cl ledger capture` already
+exists and means something unrelated (operator-intervention candidates), so the
+verb was taken. Most decisively, `cl` runs *sessions* and the collector is
+spawned *inside* one by the parent's own `Agent()` call — the engine cannot see
+it, so capture added there would not have reached the collector at all.
+`pseudo_operator/config.py` states the rule directly: the engine is shared
+mechanism, repo-specific policy lives in the consuming repo. A generic
+pre-session step DAG upstream is the right home only once a second repo wants
+one.
+
+The pre-push guard then found three things, and only one was a false positive.
+C41 caught `json.dumps()` without `ensure_ascii=False` — a real bug, since the
+report carries task titles and error strings from across the fleet and any
+em-dash or non-Latin text would have reached PHASE 2 as `\uXXXX`. T2 caught a
+test whose only assertion was "model_validate did not raise"; there is an
+exclusion list for exactly that pattern, but adding two real asserts was cheaper
+than a config entry. D6 flagged all 19 section models as never constructed,
+which is genuine: pydantic builds them inside `model_validate`, never by a
+direct call. That one went to the exclusions with a comment, matching the
+existing `MetricUnit` Enum entry — the config warns against adding names to
+dodge a gate, so it is worth being explicit that these classes are covered by
+`test_collector_schema.py` driving all of them through `parse_report`.
+
+Reviewing the diff on the PR turned up two holes of the same class the gate was
+built to close. The custodian contradiction check guarded only one direction —
+`all_zero` true with findings present — and left `all_zero` false with an empty
+findings list unguarded, which is the more dangerous half: `findings` defaults to
+empty, so an omitted key produced exactly that shape, telling PHASE 2 the sweep
+was unclean while handing it nothing to act on. And `watchers_total` carried a
+default of 8, so a collector that stopped emitting the field after the fleet grew
+would have reported eight-of-eight full health instead of eight-of-ten degraded.
+Both are now hard errors. Writing a silent default into a signal-bearing field
+while writing the module whose entire purpose is to remove silent defaults is
+worth recording, not quietly fixing.
+
+Worth noting where that audit had to run. Another session checked out its own
+branch in the shared clone seconds after this commit landed, so the first
+pre-push audit read a working tree that was not this branch — it reported an
+orphaned `entrypoints/collector/` because only `__pycache__` survived the
+switch while `pyproject.toml` was the other branch's copy. The real audit needed
+a worktree. Anything auditing the working tree in this clone is racing whoever
+else is in it.
+
+Full suite green: 8661 passed, 9 skipped, 2 xfailed, including all 1856 in the
+`injection.py` blast radius. 40 new tests. custodian-multi clean.
 ## 2026-08-21 — reconciling the two histories WITHOUT a force push
 
 The push mirror to GitHub was configured today. Its first sync moved eleven
@@ -341,6 +611,36 @@ Both now split the two procedures explicitly: restoring a backup means VERIFY
 with `--check`; a fresh instance means APPLY. Filed the corresponding
 new-machine verification task in backlog.md, since "protection came back" is an
 assumption until something checks it.
+
+## 2026-08-20 — the deployment docs assumed one host
+
+The fleet is moving to its own machine while a managed repo
+stays behind on the GPU box. That turns a co-location assumption nobody had
+written down into a hard blocker: the board has to be reachable from a host that
+is not running it, and nothing else can carry work across that gap —
+`board_backend` is `Literal["forgejo"]`, Plane went away at the cutover, and
+`~/.console/queue/` is an inotify-watched local directory with no network
+listener.
+
+`deploy/forgejo/LAN-ACCESS.md` documents that boundary. Two things in it are
+worth knowing before hitting them:
+
+`docker-compose.yml` already publishes `3000:3000` on `0.0.0.0`, which makes the
+problem look solved. It is not. `ROOT_URL` on `localhost` hands every remote
+caller a URL pointing back at itself, and on **WSL2** the port is unreachable
+from the LAN regardless of what it is bound to — the NAT presents as a healthy
+instance, `ss` and `docker port` both reporting correct, and a remote client that
+times out. `networkingMode=mirrored` fixes it; a `netsh portproxy` rule also
+works but has to be re-applied whenever WSL's IP moves.
+
+The doc also records what makes a remote submission claimable — the four labels,
+why they must pre-exist (Forgejo's create-issue API takes label IDs, not names),
+and the 40-char `_MIN_GOAL_TEXT_CHARS` floor below which a task is claimed and
+instantly blocked, which from the submitting side is indistinguishable from being
+ignored.
+
+README got a pointer beside the existing `ROOT_URL` section rather than a second
+copy of the `container.network: host` explanation, which it already covers well.
 
 ## 2026-08-20 — measuring jitter and calling it degradation
 

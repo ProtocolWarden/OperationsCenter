@@ -378,10 +378,18 @@ def maybe_sandbox(
     chdir: Path | None = None,
 ) -> list[str]:
     """Return the bwrap-wrapped command when sandboxing is enabled AND available
-    AND the workspace exists; otherwise return ``inner_cmd`` unchanged (fail-open).
+    AND the workspace exists; otherwise DEGRADE — which by default means RAISE.
 
-    This is the single decision point: a wrong/unavailable sandbox degrades to
-    the prior un-sandboxed behavior, never a halt (§0.1).
+    This is the single decision point, and it is fail-CLOSED by default since
+    audit Track A3: when containment is unavailable and ``OC_SANDBOX_REQUIRED`` is
+    not explicitly ``0``, ``_degrade`` raises ``ContainmentRequiredError`` rather than
+    returning the unwrapped command. Dispatch turns that into a blocked task
+    with a visible fault, so §0.1 (degrade-never-halt) still holds at FLEET
+    level — the task fails, the fleet keeps serving.
+
+    Only with an explicit ``OC_SANDBOX_REQUIRED=0`` does it return ``inner_cmd``
+    unchanged, which is the pre-A3 fail-open behavior and runs the token-holding
+    backend un-contained.
     """
     if not enabled:
         return list(inner_cmd)
