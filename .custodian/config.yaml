@@ -452,6 +452,12 @@ audit:
       # MetricUnit is an Enum — values are accessed as MetricUnit.X, not via constructor.
       # D6 is a false positive for Enum classes used only in type annotations and method signatures.
       - src/operations_center/observer/metrics.py
+      # The collector report's section models are constructed by pydantic inside
+      # CollectorReport.model_validate(), never by a direct call, so every one of
+      # them reads as unconstructed to a static scan. They are covered — see
+      # tests/unit/observer/test_collector_schema.py, which drives all of them
+      # through parse_report(). Same false-positive family as the Enum above.
+      - src/operations_center/observer/collector_schema.py
     D11:
       # The local backends (aider_local, direct_local, team_executor) share a
       # common lifecycle by design — _read_capture, _discover_changed_files,
