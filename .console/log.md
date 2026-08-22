@@ -78,6 +78,24 @@ PR (clean — `.console/backlog.md` and `.console/log.md` both auto-merged, no u
 driver needed). This entry was originally appended at the BOTTOM of this file, next to
 the rotated 2026-06 entries; the file is newest-first, so it has been moved to the top
 where it belongs. Nothing about the entry's content changed.
+## 2026-08-22 — a private name in the log was blocking every push
+
+`.console/log.md` carried a managed repo's name in a 2026-08-20 entry. The
+custodian gate flags it as RC2 scrub-target, which means no correctly-located
+checkout can push: the finding is on a line already on `main`, so it fires for
+every branch regardless of what that branch changed. Two sessions finished work
+and could not land it for this reason.
+
+Scrubbed to match how the same repo is referred to everywhere else in this file
+— "a managed repo", with no parenthetical. Seven other mentions already read
+that way, so this is the outlier being brought into line, not a new convention.
+
+Worth being clear about what this does and does not fix: the name is already on
+the public mirror, both in the current file and in history. Removing it here
+stops it being in the file going forward and unblocks the gate. It does not
+retract what has already been published — that would need a history rewrite and
+a force-push, which the branch protection refuses and which would break the
+`github/main` ancestry that was just restored.
 
 ## 2026-08-21 — two comments that described the containment we used to have
 
@@ -567,7 +585,7 @@ Restored as its own commit rather than folded into the sweep, so the mode change
 is visible in review instead of buried in a 16-file chore. Content untouched.
 ## 2026-08-20 — the deployment docs assumed one host
 
-The fleet is moving to its own machine while a managed repo (VideoFoundry)
+The fleet is moving to its own machine while a managed repo
 stays behind on the GPU box. That turns a co-location assumption nobody had
 written down into a hard blocker: the board has to be reachable from a host that
 is not running it, and nothing else can carry work across that gap —
