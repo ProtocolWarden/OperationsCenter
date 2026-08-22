@@ -1,3 +1,40 @@
+## 2026-08-21 — the squash that quietly undid the reconciliation
+
+The reconciliation merge landed and the mirror still failed. PR #14 was merged
+with **squash**, which collapsed its two-parent commit to a single parent
+carrying the same tree. Everything looked merged. `github/main` stopped being an
+ancestor, so GH006 came straight back, and nothing in the PR view hinted at why.
+
+The cause was one line: `pr_review_watcher/main.py` hard-coded
+`merge_method="squash"` at its merge call, with no way to override it.
+
+Two things made this hard to see coming, and both are worth writing down.
+
+The fleet spent hours guarding the wrong thing. Several sessions had agreed that
+`_attempt_auto_rebase` would flatten the merge and coordinated to keep it away
+from #14. That function is misnamed: it runs `git merge --no-edit` in a
+throwaway worktree and only ever creates merge commits — its own docstring says
+"branch moves forward only — no force-push, no history rewrite". It was never
+the risk. The squash at the merge call was, and nobody had read it.
+
+Escalating the PR to "needs human" would not have saved it either. The watcher
+retracts that flag by itself once CI is green on an unchanged head, then resumes
+automated review and merges.
+
+Recovery was cheap because nothing was lost: the original two-parent commit was
+still sitting on `chore/reconcile-github-history`. Merging it back into `main`
+restores the ancestry and changes zero files.
+
+Which surfaced the last surprise. A reconciliation PR has an **empty diff**, and
+the watcher skips those — `empty diff PR #15, skipping` — so it never publishes
+`reviewer-verdict`, which is a required check. A correct, necessary PR was
+structurally unable to merge. The ancestry rules are now written down in
+`deploy/forgejo/MIRROR-ANCESTRY.md`, which also gives such a PR a real diff to
+review.
+
+The merge method is no longer hard-coded; it reads `OC_MERGE_METHOD` and still
+defaults to `squash`, so ordinary PRs are unaffected.
+
 ## 2026-08-21 — a watchdog that cannot tell silence from health
 
 Started as a question about [amake](https://github.com/dottorblaster/amake), a
