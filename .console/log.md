@@ -17,6 +17,52 @@ retract what has already been published — that would need a history rewrite an
 a force-push, which the branch protection refuses and which would break the
 `github/main` ancestry that was just restored.
 
+## 2026-08-21 — two comments that described the containment we used to have
+
+Chasing the boot-time `containment_selfcheck_failed` lines on the new host turned
+up documentation drift on the decision point itself, which is worse than the
+missing binaries.
+
+`maybe_sandbox`'s docstring ends "otherwise return `inner_cmd` unchanged
+(fail-open) ... never a halt (§0.1)". Its body has raised `ContainmentRequiredError`
+since audit Track A3 whenever `OC_SANDBOX_REQUIRED` is not explicitly `0`. The
+reviewer's call site repeats the same stale claim in a comment. Both now say what
+the code does: fail-CLOSED per task, with §0.1 holding at FLEET level — the task
+fails visibly, the fleet keeps serving.
+
+This is not academic on this box: `bwrap` and `pasta` are absent, so every
+executor and fix-pass dispatch fails closed. Anyone reading either comment would
+have concluded the opposite — that dispatches were silently running un-contained
+— and gone looking for the wrong problem.
+
+The review path is a separate story and is NOT sandboxed at all: `_run_member_review`
+runs `claude` directly, with no `env=`, so it inherits the whole fleet environment.
+That is deliberate to a point — `--permission-mode acceptEdits` was chosen over
+`--dangerously-skip-permissions` for exactly this threat, and `member_runner.py`
+records a verified Bash-escape refusal — but the env minimization the executor path
+does with `build_allowlist_env()` was never applied here. Backlogged rather than
+fixed: without `bwrap` on this host the wrapped path cannot be tested, and an
+unverifiable change to the code that produces every verdict is how the stale
+comments above happened in the first place.
+
+## 2026-08-21 — the vulture gate is real, and the backlog said otherwise
+
+The backlog claimed vulture had never run in CI, that OC pinned Custodian
+`d6ba8ab`, and that ~620 findings would land on the next pin bump. Checked
+instead of repeated:
+
+* OC pins `7a780b7`. Its `adapters/vulture.py` puts every path before the flags
+  and checks the return code, with a comment naming the exact bug (argparse
+  rejecting a positional after `--min-confidence=`, exit 2, empty stdout).
+* Run directly: `--min-confidence=60` → 589 findings, `--min-confidence=80` → none.
+  So the detector executes, and a clean report at the configured threshold is
+  evidence rather than silence.
+* `.custodian/config.yaml` sets 80, which its own comment defends as Custodian's
+  documented default rather than a number chosen to unblock a push.
+
+What is actually open is narrower than the item said: 589 findings live between
+60 and 80 and nobody has read them. Rewritten as a decision — triage the band or
+record that it is deliberately out of scope — instead of a fix.
 ## 2026-08-21 — the mirror push would have deleted a file
 
 Asked to push GitHub `main` as a mirror of the forge, I compared the two first.
