@@ -44,6 +44,95 @@ instead of repeated:
 What is actually open is narrower than the item said: 589 findings live between
 60 and 80 and nobody has read them. Rewritten as a decision — triage the band or
 record that it is deliberately out of scope — instead of a fix.
+## 2026-08-21 — the mirror push would have deleted a file
+
+Asked to push GitHub `main` as a mirror of the forge, I compared the two first.
+They diverge at `9ec7e5b0` (#527), and not only by hash:
+
+* GitHub's #2 (`4a4eeb96`) and #3 (`0f11e3f6`) are content-IDENTICAL to the
+  forge's (`e76026c4`, `cc540e45`) — same trees, same commit timestamps, different
+  parents. Replacing them costs nothing.
+* GitHub also carries `39795136` (#528), which the forge has never had. It adds
+  `deploy/forgejo/LAN-ACCESS.md` — 188 lines on serving the forge to other
+  machines, the WSL2 NAT trap, firewall rules, scoped submitter accounts — plus
+  its log entry. A mirror push would have deleted both, silently.
+
+So the push is blocked on rescuing it first, which is this commit: `cherry-pick -x`
+onto `origin/main`. One conflict, in `deploy/forgejo/README.md`, where #6 added the
+host-networking paragraph and #528 added the LAN section immediately after it.
+Both are additive and unrelated; both kept, ours first.
+
+This is the SECOND commit found stranded on the GitHub side in one day (the
+first was the CI registry fix, rescued this morning). The pattern is not a
+coincidence: sessions that run in the Windows checkout can only reach GitHub,
+and nothing reports the divergence in either direction. Until that checkout is
+repointed at the forge or deleted, assume anything committed there is invisible
+here.
+
+The push itself is still blocked on a second thing, which is not mine to change:
+GitHub's `main` has `allow_force_pushes: false` with `enforce_admins: true` — the
+posture the operator deliberately kept on 2026-08-19 when the required status
+checks were dropped. Because the histories diverge, a mirror push must be a
+force push. Two ways out, and they are a real choice: lift force-push protection
+for the length of one push and end up with hash-identical mirrors forever after,
+or rebase the forge's unique commits onto GitHub's head and fast-forward, which
+needs no setting changed but leaves a third hash line to maintain.
+
+Rescuing it also caught a boundary leak. The pre-push gate refused the push with
+one MED RC2 finding: the entry #528 added to `.console/log.md` named a private
+repo literally. Scrubbed to a generic reference, the same treatment the earlier
+B1 scrub used — the identity was never the point of the sentence.
+
+Note where that leak has been living. #2 deleted `.github/workflows`, so nothing
+gated the push that put #528 on GitHub, and GitHub's `main` is public: the name
+has been readable there since 2026-08-20. Scrubbing forward does not remove it
+from published history — but the mirror force-push does, because it replaces
+that commit with this one. That is an argument for the force-push option rather
+than the rebase one.
+
+Second occurrence, and the gate does not see it: the same name is in
+`tools/audit/report/final_verification/managed_repo_audit_system_final_verification.json`,
+which is tracked on both sides. RC2's scope is `.console/**`, so a private name in
+`tools/**` passes a clean audit. Backlogged rather than swept up here — that file
+is an audit artifact and scrubbing it is a decision about the artifact, not a
+typo fix.
+## 2026-08-21 — the squash that quietly undid the reconciliation
+
+The reconciliation merge landed and the mirror still failed. PR #14 was merged
+with **squash**, which collapsed its two-parent commit to a single parent
+carrying the same tree. Everything looked merged. `github/main` stopped being an
+ancestor, so GH006 came straight back, and nothing in the PR view hinted at why.
+
+The cause was one line: `pr_review_watcher/main.py` hard-coded
+`merge_method="squash"` at its merge call, with no way to override it.
+
+Two things made this hard to see coming, and both are worth writing down.
+
+The fleet spent hours guarding the wrong thing. Several sessions had agreed that
+`_attempt_auto_rebase` would flatten the merge and coordinated to keep it away
+from #14. That function is misnamed: it runs `git merge --no-edit` in a
+throwaway worktree and only ever creates merge commits — its own docstring says
+"branch moves forward only — no force-push, no history rewrite". It was never
+the risk. The squash at the merge call was, and nobody had read it.
+
+Escalating the PR to "needs human" would not have saved it either. The watcher
+retracts that flag by itself once CI is green on an unchanged head, then resumes
+automated review and merges.
+
+Recovery was cheap because nothing was lost: the original two-parent commit was
+still sitting on `chore/reconcile-github-history`. Merging it back into `main`
+restores the ancestry and changes zero files.
+
+Which surfaced the last surprise. A reconciliation PR has an **empty diff**, and
+the watcher skips those — `empty diff PR #15, skipping` — so it never publishes
+`reviewer-verdict`, which is a required check. A correct, necessary PR was
+structurally unable to merge. The ancestry rules are now written down in
+`deploy/forgejo/MIRROR-ANCESTRY.md`, which also gives such a PR a real diff to
+review.
+
+The merge method is no longer hard-coded; it reads `OC_MERGE_METHOD` and still
+defaults to `squash`, so ordinary PRs are unaffected.
+
 ## 2026-08-21 — a watchdog that cannot tell silence from health
 
 Started as a question about [amake](https://github.com/dottorblaster/amake), a
@@ -441,6 +530,36 @@ Both now split the two procedures explicitly: restoring a backup means VERIFY
 with `--check`; a fresh instance means APPLY. Filed the corresponding
 new-machine verification task in backlog.md, since "protection came back" is an
 assumption until something checks it.
+
+## 2026-08-20 — the deployment docs assumed one host
+
+The fleet is moving to its own machine while a managed repo
+stays behind on the GPU box. That turns a co-location assumption nobody had
+written down into a hard blocker: the board has to be reachable from a host that
+is not running it, and nothing else can carry work across that gap —
+`board_backend` is `Literal["forgejo"]`, Plane went away at the cutover, and
+`~/.console/queue/` is an inotify-watched local directory with no network
+listener.
+
+`deploy/forgejo/LAN-ACCESS.md` documents that boundary. Two things in it are
+worth knowing before hitting them:
+
+`docker-compose.yml` already publishes `3000:3000` on `0.0.0.0`, which makes the
+problem look solved. It is not. `ROOT_URL` on `localhost` hands every remote
+caller a URL pointing back at itself, and on **WSL2** the port is unreachable
+from the LAN regardless of what it is bound to — the NAT presents as a healthy
+instance, `ss` and `docker port` both reporting correct, and a remote client that
+times out. `networkingMode=mirrored` fixes it; a `netsh portproxy` rule also
+works but has to be re-applied whenever WSL's IP moves.
+
+The doc also records what makes a remote submission claimable — the four labels,
+why they must pre-exist (Forgejo's create-issue API takes label IDs, not names),
+and the 40-char `_MIN_GOAL_TEXT_CHARS` floor below which a task is claimed and
+instantly blocked, which from the submitting side is indistinguishable from being
+ignored.
+
+README got a pointer beside the existing `ROOT_URL` section rather than a second
+copy of the `container.network: host` explanation, which it already covers well.
 
 ## 2026-08-20 — measuring jitter and calling it degradation
 
