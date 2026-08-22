@@ -267,10 +267,22 @@ def _merge_method_for(gh_client: Any, owner: str, repo: str, head_sha: str) -> s
         return override
 
     counter = getattr(gh_client, "commit_parent_count", None)
-    parents = None
+    parents: int | None = None
     if counter is not None:
         try:
-            parents = counter(owner, repo, head_sha)
+            candidate = counter(owner, repo, head_sha)
+            # Guard the TYPE as well as the call. A client that answers with
+            # something unexpected — a stub, a test double, an error payload —
+            # would otherwise raise on the comparison below, and this function
+            # is on the merge path. bool is excluded because it is an int.
+            if isinstance(candidate, int) and not isinstance(candidate, bool):
+                parents = candidate
+            elif candidate is not None:
+                logger.warning(
+                    "pr_review_watcher: parent count for %s came back as %s, not an int",
+                    head_sha[:10],
+                    type(candidate).__name__,
+                )
         except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "pr_review_watcher: could not read parent count for %s — %s", head_sha[:10], exc
@@ -1565,8 +1577,13 @@ def _merge_and_done(
         result="success",
         description=f"reviewer approved ({reason})",
     )
+    # Choose the method BEFORE the try that guards merging. Inside it, any
+    # failure while *selecting* a method aborted the *merge* — the PR silently
+    # did not merge and only logged an error. Selection must never be able to
+    # block merging: a wrong-but-safe method is recoverable, a merge that never
+    # happens is not.
+    _method = _merge_method_for(gh_client, owner, repo, _pr_head_sha(_pr_data))
     try:
-        _method = _merge_method_for(gh_client, owner, repo, _pr_head_sha(_pr_data))
         gh_client.merge_pr(owner, repo, pr_number, merge_method=_method)
         logger.info(
             "pr_review_watcher: merged PR #%d repo=%s reason=%s",

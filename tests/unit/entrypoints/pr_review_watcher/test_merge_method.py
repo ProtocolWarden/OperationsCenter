@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 ProtocolWarden
 """The merge method must be decided by the head's parent count, not by memory.
 
 PR #14 reconciled github/main into the forge and was squash-merged. The API
