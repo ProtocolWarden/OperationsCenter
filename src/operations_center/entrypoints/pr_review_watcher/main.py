@@ -204,6 +204,99 @@ def _save_state(path: Path, state: dict) -> None:
     path.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+def _log_provenance() -> None:
+    """Record which code is actually running, at startup.
+
+    An editable install resolves imports through a .pth, and any PYTHONPATH
+    entry precedes it, so the tree that executes is decided by an environment
+    variable that nothing records. A fix was applied to the wrong checkout and
+    believed live for six hours because the logs could not answer "what code is
+    this?". Four facts settle it: module path, commit, dirty flag, and the
+    merge method actually in force.
+    """
+    module_path = Path(__file__).resolve()
+    sha, dirty = "unknown", "unknown"
+    try:
+        root = module_path.parents[4]
+        sha = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=10,
+        ).stdout.strip() or "unknown"
+        porcelain = subprocess.run(
+            ["git", "-C", str(root), "status", "--porcelain"],
+            capture_output=True, text=True, timeout=10,
+        ).stdout
+        dirty = "DIRTY" if porcelain.strip() else "clean"
+    except Exception:  # noqa: BLE001
+        pass
+
+    logger.info(
+        "pr_review_watcher: provenance — module=%s commit=%s tree=%s "
+        "merge_method=%s(%s) PYTHONPATH=%s",
+        module_path,
+        sha,
+        dirty,
+        os.environ.get("OC_MERGE_METHOD", "auto"),
+        "override" if os.environ.get("OC_MERGE_METHOD") else "by parent count",
+        os.environ.get("PYTHONPATH") or "(unset)",
+    )
+    if dirty == "DIRTY":
+        logger.warning(
+            "pr_review_watcher: running from a DIRTY tree at %s — uncommitted "
+            "changes are executing and will vanish on any checkout",
+            module_path.parents[4],
+        )
+
+
+def _merge_method_for(gh_client: Any, owner: str, repo: str, head_sha: str) -> str:
+    """Pick the merge method for this PR.
+
+    The repo convention is ``squash`` (``subject (#N)``) and that stays the
+    default. The exception is a head that is itself a merge commit: squashing
+    collapses it to a single parent, so any ancestry the PR existed to
+    establish is silently discarded. That is exactly how the reconciliation in
+    PR #14 was undone -- the merge succeeded, returned 200, and destroyed the
+    property it delivered.
+
+    Deciding from the head's parent count rather than an environment variable
+    means the safe choice needs no operator to remember it. ``OC_MERGE_METHOD``
+    remains as an explicit override.
+    """
+    override = os.environ.get("OC_MERGE_METHOD")
+    if override:
+        return override
+
+    counter = getattr(gh_client, "commit_parent_count", None)
+    parents = None
+    if counter is not None:
+        try:
+            parents = counter(owner, repo, head_sha)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "pr_review_watcher: could not read parent count for %s — %s", head_sha[:10], exc
+            )
+
+    if parents is None:
+        # Say so rather than silently assuming. Squash keeps the convention, but
+        # an undetected merge head would be flattened, so this must be visible.
+        logger.warning(
+            "pr_review_watcher: parent count for %s is unknown — using squash; "
+            "an ancestry PR merged now would be flattened",
+            head_sha[:10],
+        )
+        return "squash"
+
+    if parents > 1:
+        logger.info(
+            "pr_review_watcher: head %s has %d parents — merging rather than squashing "
+            "so the ancestry survives",
+            head_sha[:10],
+            parents,
+        )
+        return "merge"
+    return "squash"
+
+
 def _pr_head_sha(pr_data: dict[str, Any]) -> str:
     """Return the PR head SHA when GitHub provided one, else empty string."""
     return str(((pr_data.get("head") or {}).get("sha") or "")).strip()
@@ -1142,7 +1235,13 @@ def _attempt_auto_rebase(repo_cfg, head_ref: str, settings, pr_number: int) -> s
         # isolated worktree too — and writing it touches no working tree/HEAD.
         info_dir = local_path / ".git" / "info"
         info_dir.mkdir(parents=True, exist_ok=True)
-        (info_dir / "attributes").write_text(".console/log.md merge=union\n", encoding="utf-8")
+        # Both append-only journals need the union driver. backlog.md was
+        # missing, and it is the file that actually conflicted in practice --
+        # three PRs stuck on it at once, none of which the watcher could resolve.
+        (info_dir / "attributes").write_text(
+            ".console/log.md merge=union\n.console/backlog.md merge=union\n",
+            encoding="utf-8",
+        )
 
         # Fetch base too (the worktree CM fetches head); harmless on the primary
         # git dir — updates remote-tracking refs only.
@@ -1464,7 +1563,8 @@ def _merge_and_done(
         description=f"reviewer approved ({reason})",
     )
     try:
-        gh_client.merge_pr(owner, repo, pr_number, merge_method="squash")
+        _method = _merge_method_for(gh_client, owner, repo, _pr_head_sha(_pr_data))
+        gh_client.merge_pr(owner, repo, pr_number, merge_method=_method)
         logger.info(
             "pr_review_watcher: merged PR #%d repo=%s reason=%s",
             pr_number,
@@ -3526,8 +3626,23 @@ def _phase1(
 
     diff = gh_client.get_pr_diff(owner, repo, pr_number)
     if not diff:
-        logger.warning("pr_review_watcher: empty diff PR #%d, skipping", pr_number)
-        return
+        # A pull request can be correct AND change no files: an ancestry
+        # reconciliation merges an already-mirrored history back in, moving no
+        # content by design. Returning here made such a PR structurally
+        # unmergeable -- reviewer-verdict is a REQUIRED status and this watcher
+        # is its only producer, so "skip" means "never merges" while the PR
+        # looks healthy in the UI. Review it on its metadata instead.
+        logger.info(
+            "pr_review_watcher: PR #%d changes no files — reviewing as a no-content "
+            "change rather than skipping (a skip would leave it unmergeable)",
+            pr_number,
+        )
+        diff = (
+            "(This pull request changes no files.\n"
+            "It is a no-content change -- typically a merge that reconciles history\n"
+            "without moving content. Judge it on its title, description and commit\n"
+            "structure rather than on a diff.)\n"
+        )
     if diff.startswith("[DIFF_TOO_LARGE"):
         logger.warning(
             "pr_review_watcher: PR #%d diff exceeds GitHub API limit — reviewing file list only",
@@ -4702,6 +4817,7 @@ def main() -> int:
         return 0
 
     logger.info("pr_review_watcher: starting — poll_interval=%ds", args.poll_interval)
+    _log_provenance()
 
     # Containment self-check (audit Track A3): surface a broken posture at boot.
     for problem in verify_containment():

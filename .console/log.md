@@ -1,3 +1,47 @@
+## 2026-08-22 — four ways the fleet could not see what it was doing
+
+PR #14 reconciled github/main into the forge so the push mirror could
+fast-forward. It merged, returned 200, and destroyed the exact property it
+delivered: `merge_method` was hard-coded to `"squash"`, which collapsed the
+merge to one parent. `git merge-base --is-ancestor github/main origin/main`
+went back to false and nobody noticed for hours, because the only way to see it
+is to count parents after the fact. #13 then went the same way.
+
+Four fixes, one theme — the fleet acting on assumptions it never checked.
+
+**The merge method now follows the head, not an operator's memory.** A hotpatch
+made it read `OC_MERGE_METHOD`, which works but has to be remembered, is
+process-wide, and reverts on any restart that drops the variable. The head's
+parent count is the actual signal: if the head is itself a merge, squashing
+discards its ancestry, so squash is refused there and used everywhere else. The
+`subject (#N)` convention is unchanged for ordinary PRs. The override remains.
+Where the parent count cannot be determined it still squashes — but says so at
+WARNING, because that is the case that silently does damage.
+
+**An empty diff no longer means "skip".** `reviewer-verdict` is a REQUIRED
+status and this watcher is its sole producer, so skipping a PR does not defer
+it — it makes it permanently unmergeable while it looks healthy in the UI. An
+ancestry reconciliation changes zero files by design, so the one PR shape that
+most needs merging was the one shape guaranteed never to be reviewed. It is now
+reviewed on its metadata.
+
+**`.console/backlog.md` gets the union merge driver.** Only `log.md` had it.
+backlog.md is the append-only file that actually conflicted — three PRs stuck
+on that single file simultaneously, none of which the watcher could resolve
+itself. Added to the tracked `.gitattributes` as well as the runtime write.
+
+**The watcher now records what code it is running.** This is the one that cost
+the most: an editable install resolves through a `.pth`, and any PYTHONPATH
+entry precedes it, so *an environment variable decides which checkout
+executes*. A fix was applied to one tree, the watcher restarted, the variable
+confirmed — and it ran the other tree unchanged for six hours while looking
+fixed. Startup now logs module path, commit, dirty flag, effective merge method
+and PYTHONPATH, and warns loudly when running from a dirty tree. Those are
+precisely the four facts that misled three sessions this week.
+
+What is deliberately not here: the ancestry repair itself (PR #15), and the
+scrub of the private name still on main. Both belong to whoever owns them.
+
 ## 2026-08-21 — a watchdog that cannot tell silence from health
 
 Started as a question about [amake](https://github.com/dottorblaster/amake), a
