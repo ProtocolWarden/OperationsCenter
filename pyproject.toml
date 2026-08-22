@@ -52,6 +52,12 @@ operations-center-fixtures = "operations_center.entrypoints.fixtures.main:app"
 operations-center-replay = "operations_center.entrypoints.replay.main:app"
 operations-center-regression = "operations_center.entrypoints.regression.main:app"
 operations-center-governance = "operations_center.entrypoints.governance.main:app"
+# Watchdog collector capture gate. PHASE 1 of .console/watchdog_loop_prompt.md
+# pipes the Haiku sub-agent's stdout through this; it validates against the
+# OUTPUT SCHEMA (observer/collector_schema.py) and fences the result before
+# PHASE 2 reads it. Exits non-zero on a malformed or truncated report so a
+# failed collection cannot be mistaken for a clean cycle.
+operations-center-collect           = "operations_center.entrypoints.collector.main:main"
 # Audit + maintenance trinity (added 2026-04-28). See docs/architecture/
 # {ghost_work,flow,code_health}_audit.md for the catalogs each scanner enforces.
 operations-center-ghost-audit       = "operations_center.entrypoints.ghost_audit.main:main"
