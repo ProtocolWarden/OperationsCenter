@@ -35,6 +35,109 @@ review.
 The merge method is no longer hard-coded; it reads `OC_MERGE_METHOD` and still
 defaults to `squash`, so ordinary PRs are unaffected.
 
+## 2026-08-21 — a watchdog that cannot tell silence from health
+
+Started as a question about [amake](https://github.com/dottorblaster/amake), a
+make-like task runner for AI CLIs. Not integrating it: 3 stars, 32 commits, and
+`workers.yaml` already declares a strict superset of its feature set — backend
+ladder, retries, timeouts, budget guard, health-state scheduling, path
+allowlists. Two mismatches settle it beyond the checklist. Its unit is a
+one-shot prompt that returns and exits; ours is a 45-minute session iterating up
+to 200 times. And its containment story is `auto_approve = true` (which maps to
+`--dangerously-skip-permissions`) plus a container, where ours is a policy
+boundary *inside* the agent. Adopting it would flatten a distinction we built on
+purpose.
+
+One idea in it was worth taking. amake makes a task declare `capture = true`
+before a downstream task may read its output, which makes data flow between
+agent steps explicit and auditable. We had exactly one place crying out for
+that: PHASE 1 of the watchdog loop spawns a Haiku sub-agent and hands its stdout
+to PHASE 2, and the entire contract between them was a sentence of prose —
+"Emit exactly this JSON (no fences, no extra text)" — with PHASE 2 parsing
+whatever came back.
+
+The failure that enables is the specific one a watchdog must never have. A
+sub-agent that dies after STEP 0 emits `{"lock": "acquired"}`. That parsed. PHASE
+2 would then read zero custodian findings, zero ghosts, zero regressions and
+conclude the fleet was healthy. Absent signal and clean signal were literally
+the same bytes. `operations-center-collect` now validates against the OUTPUT
+SCHEMA and exits 1 on that input, writing **nothing** to stdout so PHASE 2 has
+nothing to misread. `lock` carries the completeness contract: every section is
+required unless `lock` starts with `aborted:`, which is the one partial STEP 0
+documents.
+
+Validation and fencing went in as two independent layers, because they are two
+different guarantees. Validation says the report is *shaped* right; the fence
+says it has no *authority*. A schema-valid report still carries task titles, PR
+text and error strings harvested from 17 repos into a prompt where Sonnet then
+commits code and transitions tasks — the threat `injection.py` exists for, and
+what #483 was about. Hostile text is fenced, deliberately **not** scrubbed:
+scrubbing hides the attack, while `COLLECTOR_PREAMBLE` tells PHASE 2 that a
+fenced value reading like an instruction is itself a finding to report.
+
+Three semantic invariants came out of reading the collector's real inputs rather
+than its schema. `success_rate` is a **percentage**, not a fraction — pinned to
+the 0..100 bound `extraction_health_history.py:83` already enforces, because a
+collector switching to fractions would emit 0.87 for 87% and trip a false
+extraction alarm every cycle. `custodian.all_zero` may not contradict its own
+findings, since PHASE 2 branches on the boolean and would never read the list.
+And `extracted_count` cannot exceed `total_count`.
+
+Two things I got wrong on the way. `exclude_none=True` on the re-serialization
+stripped `"error": null`, `"exit_code": null` and `"memory_free_gb": null` —
+nulls the OUTPUT SCHEMA documents as *values*, so the fix silently changed the
+shape PHASE 2 was written against; now only absent top-level sections drop. And
+a `.gitignore` block for `.console/tmp/` was pure dead weight: line 1 is already
+`.console/*`, and a `!` negation cannot fire inside an ignored directory. PHASE
+1 does `mkdir -p` instead.
+
+Deliberately NOT in `cl`, though that is where the request pointed. Three
+reasons. ContextLifecycle is an external dep pinned at v0.4.3, so a change there
+means clone, tag, and a pin bump across consumers. `cl ledger capture` already
+exists and means something unrelated (operator-intervention candidates), so the
+verb was taken. Most decisively, `cl` runs *sessions* and the collector is
+spawned *inside* one by the parent's own `Agent()` call — the engine cannot see
+it, so capture added there would not have reached the collector at all.
+`pseudo_operator/config.py` states the rule directly: the engine is shared
+mechanism, repo-specific policy lives in the consuming repo. A generic
+pre-session step DAG upstream is the right home only once a second repo wants
+one.
+
+The pre-push guard then found three things, and only one was a false positive.
+C41 caught `json.dumps()` without `ensure_ascii=False` — a real bug, since the
+report carries task titles and error strings from across the fleet and any
+em-dash or non-Latin text would have reached PHASE 2 as `\uXXXX`. T2 caught a
+test whose only assertion was "model_validate did not raise"; there is an
+exclusion list for exactly that pattern, but adding two real asserts was cheaper
+than a config entry. D6 flagged all 19 section models as never constructed,
+which is genuine: pydantic builds them inside `model_validate`, never by a
+direct call. That one went to the exclusions with a comment, matching the
+existing `MetricUnit` Enum entry — the config warns against adding names to
+dodge a gate, so it is worth being explicit that these classes are covered by
+`test_collector_schema.py` driving all of them through `parse_report`.
+
+Reviewing the diff on the PR turned up two holes of the same class the gate was
+built to close. The custodian contradiction check guarded only one direction —
+`all_zero` true with findings present — and left `all_zero` false with an empty
+findings list unguarded, which is the more dangerous half: `findings` defaults to
+empty, so an omitted key produced exactly that shape, telling PHASE 2 the sweep
+was unclean while handing it nothing to act on. And `watchers_total` carried a
+default of 8, so a collector that stopped emitting the field after the fleet grew
+would have reported eight-of-eight full health instead of eight-of-ten degraded.
+Both are now hard errors. Writing a silent default into a signal-bearing field
+while writing the module whose entire purpose is to remove silent defaults is
+worth recording, not quietly fixing.
+
+Worth noting where that audit had to run. Another session checked out its own
+branch in the shared clone seconds after this commit landed, so the first
+pre-push audit read a working tree that was not this branch — it reported an
+orphaned `entrypoints/collector/` because only `__pycache__` survived the
+switch while `pyproject.toml` was the other branch's copy. The real audit needed
+a worktree. Anything auditing the working tree in this clone is racing whoever
+else is in it.
+
+Full suite green: 8661 passed, 9 skipped, 2 xfailed, including all 1856 in the
+`injection.py` blast radius. 40 new tests. custodian-multi clean.
 ## 2026-08-21 — reconciling the two histories WITHOUT a force push
 
 The push mirror to GitHub was configured today. Its first sync moved eleven

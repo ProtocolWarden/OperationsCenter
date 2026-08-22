@@ -4,6 +4,19 @@ _Durable work inventory. Update after each meaningful chunk of progress._
 
 ## Up Next
 
+### The watchdog prompts point at a home directory that does not exist
+
+`.console/watchdog_loop_prompt.md` and `.console/haiku_collector_prompt.md` both
+hardcode `/home/dev/Documents/GitHub/OperationsCenter`. On this box there is no
+`/home/dev` — the only home is `/home/void`, with the repo at
+`/home/void/GitHub/OperationsCenter`. If the loop runs here, its first `Read`
+fails before STEP 0.
+
+Left alone during the capture-gate work because it is unclear whether the loop
+executes on this host, in a container, or on another machine; the paths may be
+correct somewhere. Someone who knows the runtime should either fix them or
+record where `/home/dev` is real. The capture-gate additions use repo-relative
+paths, which the collector prompt's own STEP 0 already does.
 ### Verify the restored forge on the new machine, before trusting any gate
 
 The fleet was archived on 2026-08-20 and moves to a different host. Restoring a
@@ -219,6 +232,38 @@ misleads — but it is a migration, not a cleanup.
 
 
 ## Done
+
+### 2026-08-21: Capture gate for the watchdog collector handoff (✅ COMPLETE)
+
+PHASE 1 of `.console/watchdog_loop_prompt.md` now routes the Haiku sub-agent's
+output through `operations-center-collect` before PHASE 2 may read it. Closes
+the failure where a sub-agent dying after STEP 0 emitted `{"lock": "acquired"}`,
+which parsed cleanly and left PHASE 2 reading zero findings across every signal
+as a healthy fleet.
+
+Two independent layers, deliberately not conflated: validation (the report is
+shaped right) and fencing (the report has no authority). A schema-valid report
+still carries task titles and error strings from 17 repos into a prompt where
+Sonnet acts.
+
+* `observer/collector_schema.py` — OUTPUT SCHEMA as a fail-closed model
+  (`extra="forbid"`). `lock` carries the completeness contract: all sections
+  required unless it starts with `aborted:`, the one partial STEP 0 documents.
+* `entrypoints/collector/main.py` — `operations-center-collect`. Exit 0 / 1 / 5;
+  stdout is empty on rejection so PHASE 2 cannot misread a failed collection.
+  `--strict` fails on recovered drift (markdown fence, stray prose), which is
+  otherwise reported but tolerated.
+* `injection.py` — `COLLECTOR_PREAMBLE` + `wrap_untrusted_report`, a third
+  ingestion point alongside the reviewer and worker. Hostile text is fenced, not
+  scrubbed: scrubbing hides the attack, and the preamble makes an
+  instruction-shaped value a finding to report.
+
+Invariants pinned from the real inputs: `success_rate` is a percentage (0..100,
+matching `extraction_health_history.py:83`), `custodian.all_zero` may not
+contradict its own findings, `extracted_count <= total_count`.
+
+40 tests. Full suite 8659 passed, 11 skipped, 2 xfailed. Rationale and the
+rejected `cl`-side design in log.md 2026-08-21.
 
 ### 2026-08-19: Forgejo Actions CI + the bugs GitHub's runners hid (✅ COMPLETE)
 
